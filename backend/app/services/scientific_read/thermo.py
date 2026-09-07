@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
+    CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationSCFStability,
 )
@@ -45,6 +46,7 @@ from app.schemas.reads.scientific_common import (
     CalculationEvidenceSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
+    ScientificLevelsSummary,
     SelectionPolicy,
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
@@ -64,6 +66,7 @@ from app.schemas.reads.scientific_thermo import (
     ThermoRecord,
     ThermoWilhoitBlock,
 )
+from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -331,6 +334,22 @@ def get_species_thermo(
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
     calc_refs = _calc_refs(session, all_source_calc_ids)
+    # Which of those calcs carry frequency results -- R1's "an opt with no
+    # separate freq link but that itself has frequencies" case. Bulk, same
+    # id set as calc_meta above, so this never grows the query count with
+    # the number of records.
+    freq_calc_ids = _calc_ids_with_freq_result(session, all_source_calc_ids)
+    # calc_meta keyed the other way round -- by lot_id rather than calc_id
+    # -- so ``derive_levels``'s bare lot ids can be turned back into a full
+    # LevelOfTheorySummary with no further query. Built once per request,
+    # not per record. A lot_id shared by several calcs (opt and sp at the
+    # same level, say) collides harmlessly: every calc at that lot_id
+    # carries identical method/basis/dispersion/solvent fields.
+    calc_meta_by_lot_id = {
+        meta["lot_id"]: meta
+        for meta in calc_meta.values()
+        if meta["lot_id"] is not None
+    }
     # The conformer this thermo record traces to, resolved one hop past
     # the primary calculation. Loaded for every calc the primary picker
     # can possibly land on (same id set as calc_meta/calc_refs above).
@@ -433,6 +452,13 @@ def get_species_thermo(
             ),
             conformer_links=conformer_links,
         )
+        levels = _build_levels_thermo(
+            sources=sources,
+            statmech_sources=record_statmech_sources,
+            calc_meta=calc_meta,
+            calc_meta_by_lot_id=calc_meta_by_lot_id,
+            freq_calc_ids=freq_calc_ids,
+        )
 
         record = ThermoRecord(
             thermo_id=t.id,
@@ -481,6 +507,7 @@ def get_species_thermo(
             temperature_coverage=coverage,
             evidence_completeness=evidence,
             provenance=provenance,
+            levels=levels,
             group_additivity=_build_group_additivity_block(ga_by_thermo.get(t.id)),
             trust=(
                 build_thermo_trust_fragment(
@@ -1177,6 +1204,125 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
         dispersion=meta["lot_dispersion"],
         solvent=meta["lot_solvent"],
         label="/".join(p for p in label_parts if p),
+    )
+
+
+#: Roles :func:`derive_levels` (R1) knows about. Mirrors the identically
+#: named constant in ``app.services.scientific_read.statmech`` -- kept as
+#: two copies rather than a shared import because each is scoped to its
+#: own module's role-collection helper and a shared constant here would
+#: only save one line while adding a cross-module dependency for it.
+_LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
+
+
+def _calc_ids_by_role(
+    rows: list[ThermoSourceCalculation] | list[StatmechSourceCalculation],
+) -> dict[str, list[int]]:
+    """Role -> every linked calculation id, lowest first, restricted to the
+    R1 roles. Every id, not only the lowest -- ``derive_levels`` needs the
+    full set to detect (and report as ``"ambiguous"``) linked ``sp``s that
+    disagree on level of theory."""
+    by_role: dict[str, list[int]] = {}
+    for row in rows:
+        role = row.role.value
+        if role in _LEVELS_ROLES:
+            by_role.setdefault(role, []).append(row.calculation_id)
+    for ids in by_role.values():
+        ids.sort()
+    return by_role
+
+
+def _thermo_role_calc_id_lists(
+    sources: list[ThermoSourceCalculation],
+    statmech_sources: list[StatmechSourceCalculation],
+) -> dict[str, list[int]]:
+    """Role -> calc id list for R1, thermo's own links winning per role.
+
+    Mirrors the fallback style ``_build_provenance`` already uses for its
+    ``freq_calculation_id`` / ``sp_calculation_id`` fields (thermo's own
+    ``ThermoSourceCalculation`` wins; the statmech basis fills in any role
+    thermo does not cover) -- R6's "inherit the statmech's levels" in the
+    common case where a computed thermo declares none of its own. "Wins"
+    is per role and all-or-nothing: if thermo links any calculation under
+    a role, its list for that role replaces the statmech basis's entirely
+    (never merged), the same way the single-calc-id version did.
+    """
+    role_calc_ids = _calc_ids_by_role(statmech_sources)
+    role_calc_ids.update(_calc_ids_by_role(sources))
+    return role_calc_ids
+
+
+def _lot_summary_from_id(
+    calc_meta_by_lot_id: dict[int, dict], lot_id: int | None
+) -> LevelOfTheorySummary | None:
+    if lot_id is None:
+        return None
+    meta = calc_meta_by_lot_id.get(lot_id)
+    return _lot_summary(meta) if meta is not None else None
+
+
+def _build_levels_thermo(
+    *,
+    sources: list[ThermoSourceCalculation],
+    statmech_sources: list[StatmechSourceCalculation],
+    calc_meta: dict[int, dict],
+    calc_meta_by_lot_id: dict[int, dict],
+    freq_calc_ids: set[int],
+) -> ScientificLevelsSummary:
+    """R1 for one thermo record: derive its geometry/frequency/energy levels.
+
+    Delegates the actual priority decision to
+    :func:`app.services.calculation_levels.derive_levels` -- the same
+    function ``scientific_read.statmech._build_levels`` calls -- so the
+    two products cannot silently disagree about what "the energy level"
+    means. Only the *lookup* differs: this module already has a bulk
+    calc-metadata dict in hand (``calc_meta`` / ``calc_meta_by_lot_id``),
+    so it turns the derived lot ids back into full
+    :class:`LevelOfTheorySummary` objects without a further query.
+    """
+    role_calc_ids = _thermo_role_calc_id_lists(sources, statmech_sources)
+
+    def infos(role: str) -> list[RoleCalcInfo]:
+        return [
+            RoleCalcInfo(
+                lot_id=calc_meta[cid]["lot_id"],
+                carries_frequencies=cid in freq_calc_ids,
+            )
+            for cid in role_calc_ids.get(role, [])
+            if cid in calc_meta
+        ]
+
+    derived = derive_levels(
+        opts=infos("opt"),
+        freqs=infos("freq"),
+        sps=infos("sp"),
+        composites=infos("composite"),
+        importeds=infos("imported"),
+    )
+    return ScientificLevelsSummary(
+        geometry=_lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id),
+        frequency=_lot_summary_from_id(calc_meta_by_lot_id, derived.frequency_lot_id),
+        energy=_lot_summary_from_id(calc_meta_by_lot_id, derived.energy_lot_id),
+        energy_source=derived.energy_source,
+    )
+
+
+def _calc_ids_with_freq_result(session: Session, calc_ids: set[int]) -> set[int]:
+    """Which of *calc_ids* have a ``calc_freq_result`` row.
+
+    R1's "opt carries frequencies" test: an optimisation and its
+    frequencies were sometimes computed in a single combined job, so the
+    calculation linked under the 'opt' role may itself have frequency
+    results even with no separate 'freq' link.
+    """
+    if not calc_ids:
+        return set()
+    return set(
+        session.scalars(
+            select(CalculationFreqResult.calculation_id).where(
+                CalculationFreqResult.calculation_id.in_(calc_ids)
+            )
+        ).all()
     )
 
 

@@ -47,6 +47,7 @@ from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
     RecordReviewBadge,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     SupersessionNotice,
     WorkflowToolReleaseSummary,
@@ -69,6 +70,7 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTorsionSummary,
     StatmechTransitionStateContext,
 )
+from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -324,6 +326,7 @@ def build_statmech_record(
         has_conformer_context=has_conformer_context,
         sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
     )
+    levels = _build_levels(session, source_rows)
     available = AvailableStatmechSections(
         has_source_calculations=bool(source_rows),
         has_torsions=bool(torsion_rows),
@@ -405,6 +408,7 @@ def build_statmech_record(
         literature=lit_summary,
         evidence_summary=evidence,
         available_sections=available,
+        levels=levels,
         source_calculations=source_block,
         torsions=torsions_block,
         electronic_levels=electronic_levels_block,
@@ -460,6 +464,64 @@ def _load_electronic_level_rows(
         .where(StatmechElectronicLevel.statmech_id == statmech_id)
         .order_by(StatmechElectronicLevel.level_index.asc())
     ).all()
+
+
+_LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
+
+
+def _build_levels(
+    session: Session, source_rows: list[StatmechSourceCalculation]
+) -> ScientificLevelsSummary:
+    """R1: derive geometry/frequency/energy levels from this record's links.
+
+    ``source_rows`` is already ordered ``role.asc(), calculation_id.asc()``
+    by :func:`_load_source_rows`, so appending in order already gives
+    :func:`derive_levels` each role's calculations lowest-id first --
+    including every linked ``sp``, so it can detect (and report as
+    ``energy_source="ambiguous"``) a multi-conformer ensemble whose
+    ``sp``s disagree on level of theory, a legitimate shape on the
+    bundle paths.
+    """
+    role_calc_ids: dict[str, list[int]] = {}
+    for row in source_rows:
+        role = row.role.value
+        if role in _LEVELS_ROLES:
+            role_calc_ids.setdefault(role, []).append(row.calculation_id)
+    if not role_calc_ids:
+        return ScientificLevelsSummary()
+
+    all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
+    calcs = {
+        calc.id: calc
+        for calc in session.scalars(
+            select(Calculation)
+            .where(Calculation.id.in_(all_ids))
+            .options(selectinload(Calculation.freq_result))
+        ).all()
+    }
+
+    def infos(role: str) -> list[RoleCalcInfo]:
+        return [
+            RoleCalcInfo(
+                lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
+            )
+            for cid in role_calc_ids.get(role, [])
+            if (calc := calcs.get(cid)) is not None
+        ]
+
+    derived = derive_levels(
+        opts=infos("opt"),
+        freqs=infos("freq"),
+        sps=infos("sp"),
+        composites=infos("composite"),
+        importeds=infos("imported"),
+    )
+    return ScientificLevelsSummary(
+        geometry=_build_lot_summary(session, derived.geometry_lot_id),
+        frequency=_build_lot_summary(session, derived.frequency_lot_id),
+        energy=_build_lot_summary(session, derived.energy_lot_id),
+        energy_source=derived.energy_source,
+    )
 
 
 def _exists_review_for(

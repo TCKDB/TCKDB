@@ -18,6 +18,7 @@ from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
+    LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
@@ -89,6 +90,12 @@ class ConformerUploadStatmechPayload(SchemaBase):
     source_calculations: list[StatmechSourceCalcIn] = Field(default_factory=list)
     torsions: list[StatmechTorsionIn] = Field(default_factory=list)
     electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
+
+    # Depositor-declared level of theory the record's energy is claimed
+    # to stand at. Checked against the resolved role links (opt/sp) the
+    # same way the standalone statmech upload's field is -- see
+    # ``app.services.calculation_levels`` on the backend. Never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
 
     @model_validator(mode="after")
     def normalize_optional_text_fields(self) -> Self:

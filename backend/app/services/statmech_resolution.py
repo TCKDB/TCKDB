@@ -50,11 +50,23 @@ from app.db.models.statmech import (
 )
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
+from app.services.calculation_levels import (
+    W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+    W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+    W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ROLE_DUPLICATE,
+    W_STATMECH_SP_GEOMETRY_MISMATCH,
+    RoleLink,
+    assert_role_consistency,
+)
 from app.services.calculation_ownership import (
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
 )
-from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.calculation_resolution import (
+    resolve_level_of_theory_ref,
+    resolve_workflow_tool_release_ref,
+)
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
@@ -342,7 +354,10 @@ def resolve_or_create_statmech(
     supporting calculations explicitly via ``payload.source_calculations``.
 
     :param session: Active SQLAlchemy session.
-    :param payload: Workflow-facing statmech payload.
+    :param payload: Workflow-facing statmech payload. ``payload.
+        energy_level_of_theory``, when set, is resolved here (may create
+        a new ``level_of_theory`` row via the standard dedupe-by-hash
+        lookup) and checked against the resolved role links.
     :param species_entry_id: Resolved owner species-entry id.
     :param uploaded_calculation_id: Optional calculation id produced by
         the caller workflow; linked as a source calculation only when
@@ -356,8 +371,13 @@ def resolve_or_create_statmech(
     :raises ValueError: If ``uploaded_calculation_role`` is set but
         ``uploaded_calculation_id`` is not supplied.
     :raises CodedValueError: If a local calculation key does not resolve,
-        or if a declared role contradicts the resolved calculation's type
-        — whichever way the calculation was named.
+        if a declared role contradicts the resolved calculation's type —
+        whichever way the calculation was named — or if the role links
+        violate R2'/R3'/Coverage/R4' (see ``calculation_levels``). These
+        checks are unconditional: they are correct for both a single
+        evidence chain and a genuine multi-conformer ensemble, so every
+        caller of this function gets them, not only the standalone
+        upload.
     :raises NotFoundError: If an ``existing_calculation_id`` names a row
         that does not exist. Only the standalone statmech upload can
         produce this; the conformer and bundle payloads carry the
@@ -365,6 +385,7 @@ def resolve_or_create_statmech(
         own request.
     """
     key_map: Mapping[str, int] = calculations_by_key or {}
+    role_links: list[RoleLink] = []
 
     literature = (
         resolve_or_create_literature(session, payload.literature)
@@ -387,6 +408,119 @@ def resolve_or_create_statmech(
         )
         fsf_id = fsf.id
 
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, payload.energy_level_of_theory)
+        if payload.energy_level_of_theory is not None
+        else None
+    )
+
+    # Resolve every source-calculation link -- role/type compatibility and
+    # R2'/R3'/Coverage/R4' -- entirely BEFORE the ``Statmech`` row
+    # exists. This is deliberate, not incidental ordering: every check
+    # here can raise, and a check that raises after ``session.add(
+    # statmech)`` would leave a flushed-but-unreferenced row for the
+    # caller's transaction to discard on rollback. Real requests always
+    # roll back cleanly on a raised exception, so this only matters for
+    # what a test can observe mid-transaction -- but "what a test can
+    # observe mid-transaction" is exactly how "nothing was persisted on
+    # rejection" gets checked, so it is resolved this way rather than
+    # relying on a rollback nothing in this function controls.
+    #
+    # Attach source calculations. Every link is role/type checked here
+    # rather than in each calling workflow, so all three statmech upload
+    # paths -- nested conformer, standalone statmech, and the bundle via
+    # ``_persist_statmech_block`` -- inherit the same refusal.
+    if payload.uploaded_calculation_role is not None:
+        if uploaded_calculation_id is None:
+            raise ValueError(
+                "uploaded_calculation_role is set but no uploaded_calculation_id "
+                "was provided to resolve_or_create_statmech."
+            )
+        _assert_role_compatible_by_id(
+            session,
+            uploaded_calculation_id,
+            role=payload.uploaded_calculation_role,
+            context="statmech.uploaded_calculation_role",
+        )
+        uploaded_calc = session.get(Calculation, uploaded_calculation_id)
+        if uploaded_calc is None:
+            # Never actually reachable: ``uploaded_calculation_id`` is a
+            # row the calling workflow just created in this same
+            # transaction (see the docstring), so a miss here means a
+            # caller passed a stale/foreign id, not a user-input error.
+            # A silent skip would drop this link out of ``role_links``
+            # without a trace, which is worse than a loud failure of an
+            # invariant that should be unbreakable.
+            raise ValueError(
+                "uploaded_calculation_id does not resolve to a calculation "
+                "row in the current session; resolve_or_create_statmech "
+                "expects the caller to have already persisted it."
+            )
+        role_links.append(
+            RoleLink(payload.uploaded_calculation_role.value, uploaded_calc)
+        )
+
+    # Not annotated as ``list[tuple[StatmechCalculationRole, int]]``: each
+    # ``source.role`` is actually ``tckdb_schemas.enums.
+    # StatmechCalculationRole`` (the wire package's copy), a pre-existing
+    # mismatch with the app-side enum of the same name that predates this
+    # function (see the same widening on ``_assert_role_compatible_by_id``
+    # calls above) -- not this change's to fix.
+    resolved_sources = []
+    for index, source in enumerate(payload.source_calculations):
+        context = f"statmech.source_calculations[{index}]"
+        calculation: Calculation | None
+        chained_id = _chained_calculation_id(source)
+        if chained_id is not None:
+            context = f"{context}.existing_calculation_id"
+            calculation = _resolve_existing_calculation(
+                session,
+                chained_id,
+                species_entry_id=species_entry_id,
+                context=context,
+            )
+            calculation_id = calculation.id
+            # Same function, same map, same refusal as the local path.
+            # Routing the chained citation around this check is exactly
+            # how it would become the way to deposit an unchecked link.
+            assert_statmech_role_compatible(
+                calculation, role=source.role, context=context
+            )
+        else:
+            calculation_id = _resolve_calculation_key(
+                source.calculation_key,
+                key_map,
+                context=context,
+            )
+            _assert_role_compatible_by_id(
+                session,
+                calculation_id,
+                role=source.role,
+                context=f"{context}.calculation_key='{source.calculation_key}'",
+            )
+            calculation = session.get(Calculation, calculation_id)
+        resolved_sources.append((source.role, calculation_id))
+        if calculation is not None:
+            role_links.append(RoleLink(source.role.value, calculation))
+
+    # Unconditional: correct for both a single evidence chain (the
+    # standalone upload) and a genuine multi-conformer ensemble (nested
+    # conformer statmech blocks can legitimately carry several opt/freq
+    # links, one per conformer), because the rules themselves are
+    # ensemble-aware -- see the module docstring on ``calculation_levels``.
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_STATMECH_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_STATMECH_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        subject="statmech",
+    )
+
+    # Every check above has passed: only now does the row (and anything
+    # that references it) get created.
     statmech = Statmech(
         species_entry_id=species_entry_id,
         scientific_origin=payload.scientific_origin,
@@ -421,22 +555,7 @@ def resolve_or_create_statmech(
             )
         )
 
-    # Attach source calculations. Every link is role/type checked here
-    # rather than in each calling workflow, so all three statmech upload
-    # paths -- nested conformer, standalone statmech, and the bundle via
-    # ``_persist_statmech_block`` -- inherit the same refusal.
     if payload.uploaded_calculation_role is not None:
-        if uploaded_calculation_id is None:
-            raise ValueError(
-                "uploaded_calculation_role is set but no uploaded_calculation_id "
-                "was provided to resolve_or_create_statmech."
-            )
-        _assert_role_compatible_by_id(
-            session,
-            uploaded_calculation_id,
-            role=payload.uploaded_calculation_role,
-            context="statmech.uploaded_calculation_role",
-        )
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,
@@ -445,41 +564,12 @@ def resolve_or_create_statmech(
             )
         )
 
-    for index, source in enumerate(payload.source_calculations):
-        context = f"statmech.source_calculations[{index}]"
-        chained_id = _chained_calculation_id(source)
-        if chained_id is not None:
-            context = f"{context}.existing_calculation_id"
-            calculation = _resolve_existing_calculation(
-                session,
-                chained_id,
-                species_entry_id=species_entry_id,
-                context=context,
-            )
-            calculation_id = calculation.id
-            # Same function, same map, same refusal as the local path.
-            # Routing the chained citation around this check is exactly
-            # how it would become the way to deposit an unchecked link.
-            assert_statmech_role_compatible(
-                calculation, role=source.role, context=context
-            )
-        else:
-            calculation_id = _resolve_calculation_key(
-                source.calculation_key,
-                key_map,
-                context=context,
-            )
-            _assert_role_compatible_by_id(
-                session,
-                calculation_id,
-                role=source.role,
-                context=f"{context}.calculation_key='{source.calculation_key}'",
-            )
+    for role, calculation_id in resolved_sources:
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,
                 calculation_id=calculation_id,
-                role=source.role,
+                role=role,
             )
         )
 

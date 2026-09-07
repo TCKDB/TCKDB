@@ -66,9 +66,13 @@ live on that class. What belongs here is the part a reader of *this list*
 needs -- the borderline calls -- because a classification whose hard cases
 are undocumented is one the next person re-litigates from scratch.
 
-Measured on this file: 73 entries (71 distinct codes) are relationships,
+Measured on this file: 83 entries (81 distinct codes) are relationships,
 98 are things. The cap family moved eight of them across on 2026-08-18 --
-see the first borderline group below.
+see the first borderline group below. (The ten statmech_*/thermo_*
+levels-of-theory codes added for the R1-R6 rule set in
+``app/services/calculation_levels.py`` are all relationships too --
+each names two calculations, two levels of theory, or a role and a
+count that its own code does not already state.)
 
 The groups where the call was genuinely arguable, and the argument:
 
@@ -1465,11 +1469,44 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("statmech_calculation_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("statmech_energy_level_ambiguous", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "Two or more linked 'sp' calculations (a multi-conformer "
+                "ensemble's per-conformer single points) disagree on "
+                "level of theory, so this statmech record's energy level "
+                "has no single answer -- distinct from "
+                "statmech_energy_level_contradiction (a declared level "
+                "disagreeing with what IS agreed) because here nothing "
+                "the depositor declared is at fault; the linked sps "
+                "themselves disagree."
+            )),
+    ApiCode("statmech_energy_level_contradiction", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "A declared statmech energy_level_of_theory disagrees "
+                "with the linked 'sp' calculation's own level -- distinct "
+                "from statmech_energy_level_requires_sp (no 'sp' linked "
+                "at all) because the repair differs: here the depositor "
+                "must reconcile two levels they already named, there they "
+                "must supply a missing calculation."
+            )),
+    ApiCode("statmech_energy_level_requires_sp", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship),
+    ApiCode("statmech_role_duplicate", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship),
     ApiCode("statmech_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship),
     ApiCode("statmech_source_role_type_mismatch", 422, Surface.coded_exception,
             "backend/app/services/statmech_resolution.py",
+            shape=Shape.relationship),
+    ApiCode("statmech_sp_geometry_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
     ApiCode("statmech_subject_not_exactly_one", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
@@ -1491,11 +1528,39 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("tckdb_client_version_unsupported", 426, Surface.detail_object,
             "backend/app/api/client_version.py",
             shape=Shape.relationship),
+    ApiCode("thermo_energy_level_ambiguous", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "Thermo's mirror of statmech_energy_level_ambiguous -- "
+                "same rule (app/services/calculation_levels.py), own "
+                "code per product per the house convention."
+            )),
+    ApiCode("thermo_energy_level_contradiction", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship,
+            note=(
+                "Thermo's mirror of statmech_energy_level_contradiction -- "
+                "same rule (app/services/calculation_levels.py), own code "
+                "per product per the house convention "
+                "(statmech_source_role_type_mismatch / "
+                "thermo_source_role_type_mismatch) so a client branching "
+                "on code never has to know which product it asked about."
+            )),
+    ApiCode("thermo_energy_level_requires_sp", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship),
+    ApiCode("thermo_role_duplicate", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
+            shape=Shape.relationship),
     ApiCode("thermo_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship),
     ApiCode("thermo_source_role_type_mismatch", 422, Surface.coded_exception,
             "backend/app/workflows/thermo.py",
+            shape=Shape.relationship),
+    ApiCode("thermo_sp_geometry_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_levels.py",
             shape=Shape.relationship),
     ApiCode("thermo_statmech_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",

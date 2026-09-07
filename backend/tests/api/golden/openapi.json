@@ -2903,8 +2903,18 @@
       },
       "BundleStatmechIn": {
         "additionalProperties": false,
-        "description": "Statistical mechanics properties for a species in this bundle.\n\nThe reaction route's statmech carries the same fields the species\nroute's ``StatmechInBundle`` carries, for the reason\n:class:`BundleThermoIn` gives: it is the same claim about the same\nkind of row, written against the same table.\n\nThe gap this closes had two distinct causes, and only one of them is\nthe same as thermo's. This model was born narrow in ``17706cf7`` --\ncongenital, like ``BundleThermoIn``. But the three rotational\nconstants were added to ``StatmechInBundle`` **only**, by\n``264519f1``, two days after ``0ea9182f`` had correctly updated both\nmodels in one commit. The habit was right and then it lapsed, and\nnothing in the tree could notice: no test compared the two field\nsets, so a one-sided addition read exactly like a deliberate one.\n``tests/schemas/test_bundle_root_model_symmetry.py`` is now that\ntest, and an intentional divergence has to be written down in its\nallowlist with a reason rather than merely happening.\n\nNothing is deliberately withheld here. ``applied_energy_corrections``\n-- the one field :class:`BundleThermoIn` refuses, because\n:class:`BundleSpeciesIn` already declares it against the same species\nentry -- is not on ``StatmechInBundle`` either, so it is not part of\nthis divergence and needs no exception.\n\n``literature``, ``software_release`` and ``workflow_tool_release``\nare per-species overrides of the bundle-level\n``analysis_software_release`` / ``workflow_tool_release`` /\n``literature``, exactly as thermo's are. Before this, a reaction\nbundle's statmech took the bundle-level values with no way to say\nthat one species' partition function came from a different analysis\ncode -- which is the ordinary case when one participant is taken\nfrom a paper and the rest were computed here.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this statmech.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param torsions: Torsional modes.\n:param note: Optional note.",
+        "description": "Statistical mechanics properties for a species in this bundle.\n\nThe reaction route's statmech carries the same fields the species\nroute's ``StatmechInBundle`` carries, for the reason\n:class:`BundleThermoIn` gives: it is the same claim about the same\nkind of row, written against the same table.\n\nThe gap this closes had two distinct causes, and only one of them is\nthe same as thermo's. This model was born narrow in ``17706cf7`` --\ncongenital, like ``BundleThermoIn``. But the three rotational\nconstants were added to ``StatmechInBundle`` **only**, by\n``264519f1``, two days after ``0ea9182f`` had correctly updated both\nmodels in one commit. The habit was right and then it lapsed, and\nnothing in the tree could notice: no test compared the two field\nsets, so a one-sided addition read exactly like a deliberate one.\n``tests/schemas/test_bundle_root_model_symmetry.py`` is now that\ntest, and an intentional divergence has to be written down in its\nallowlist with a reason rather than merely happening.\n\nNothing is deliberately withheld here. ``applied_energy_corrections``\n-- the one field :class:`BundleThermoIn` refuses, because\n:class:`BundleSpeciesIn` already declares it against the same species\nentry -- is not on ``StatmechInBundle`` either, so it is not part of\nthis divergence and needs no exception.\n\n``literature``, ``software_release`` and ``workflow_tool_release``\nare per-species overrides of the bundle-level\n``analysis_software_release`` / ``workflow_tool_release`` /\n``literature``, exactly as thermo's are. Before this, a reaction\nbundle's statmech took the bundle-level values with no way to say\nthat one species' partition function came from a different analysis\ncode -- which is the ordinary case when one participant is taken\nfrom a paper and the rest were computed here.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this statmech.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param torsions: Torsional modes.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. See\n    ``app.services.calculation_levels`` on the backend for the exact\n    rule; never persisted.\n:param note: Optional note.",
         "properties": {
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "external_symmetry": {
             "anyOf": [
               {
@@ -3200,8 +3210,18 @@
       },
       "BundleThermoIn": {
         "additionalProperties": false,
-        "description": "Thermo data attached to a species in this bundle.\n\nThe reaction route's thermo carries the same provenance the species\nroute's ``ThermoInBundle`` carries, because it is the same claim about\nthe same kind of row. The two models were written three days apart in\nApril 2026 and diverged from the start — this one first, with eight\nfields, and never touched since; ``ThermoInBundle`` three days later\nwith fifteen. Nothing recorded a reason, and the gap was not visible\nfrom either model, so a depositor putting thermo on a reaction bundle\nsilently lost the record of which calculations produced it while the\nsame deposit on the species route kept it.\n\n``applied_energy_corrections`` is deliberately **not** here. The\nreaction bundle already declares applied corrections one level up, on\n:class:`BundleSpeciesIn`, against the same resolved species entry.\nAdding a second place to say it would let one deposit make the claim\ntwice, and the answer to \"which one counts\" would have to be invented.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this thermo.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.\n:param s298_uncertainty_j_mol_k: Optional uncertainty on\n    ``s298_j_mol_k``.\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param source_calculations: Thermo → calc links by bundle-local\n    calculation key. Each key must resolve in the bundle's global\n    calc-key namespace and must name a calculation owned by this\n    species entry; the workflow rejects both failures.\n:param note: Optional note.",
+        "description": "Thermo data attached to a species in this bundle.\n\nThe reaction route's thermo carries the same provenance the species\nroute's ``ThermoInBundle`` carries, because it is the same claim about\nthe same kind of row. The two models were written three days apart in\nApril 2026 and diverged from the start — this one first, with eight\nfields, and never touched since; ``ThermoInBundle`` three days later\nwith fifteen. Nothing recorded a reason, and the gap was not visible\nfrom either model, so a depositor putting thermo on a reaction bundle\nsilently lost the record of which calculations produced it while the\nsame deposit on the species route kept it.\n\n``applied_energy_corrections`` is deliberately **not** here. The\nreaction bundle already declares applied corrections one level up, on\n:class:`BundleSpeciesIn`, against the same resolved species entry.\nAdding a second place to say it would let one deposit make the claim\ntwice, and the answer to \"which one counts\" would have to be invented.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this thermo.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.\n:param s298_uncertainty_j_mol_k: Optional uncertainty on\n    ``s298_j_mol_k``.\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param source_calculations: Thermo → calc links by bundle-local\n    calculation key. Each key must resolve in the bundle's global\n    calc-key namespace and must name a calculation owned by this\n    species entry; the workflow rejects both failures.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links; never persisted.\n:param note: Optional note.",
         "properties": {
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -12487,6 +12507,16 @@
             },
             "title": "Electronic Levels",
             "type": "array"
+          },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "external_symmetry": {
             "anyOf": [
@@ -33633,6 +33663,61 @@
         "title": "ScientificKineticsSearchResponse",
         "type": "object"
       },
+      "ScientificLevelsSummary": {
+        "description": "Geometry / frequency / energy levels of theory, derived at read time.\n\nNever stored, and never behind an ``include=`` token: recomputed on\nevery read from whichever ``opt``/``freq``/``sp``/``composite``/\n``imported`` source calculations the record links right now, per\n``app.services.calculation_levels.derive_levels`` (R1):\n\n* ``geometry`` — the ``opt`` role's level of theory.\n* ``frequency`` — the ``freq`` role's level, or the ``opt``'s own\n  level when no separate ``freq`` is linked but the optimisation\n  calculation itself carries frequency results.\n* ``energy`` — the linked ``sp``s' shared level when they agree;\n  otherwise the ``opt``'s own level (an optimisation's final energy\n  *is* the single-point value at its own level of theory); otherwise\n  a linked ``composite``/``imported`` calculation's level; ``null``\n  when linked ``sp``s disagree on level of theory (see\n  ``energy_source=\"ambiguous\"`` below).\n* ``energy_source`` names which role answered ``energy`` -- ``'sp'``,\n  ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``'ambiguous'``\n  when two or more linked ``sp`` calculations (a multi-conformer\n  ensemble's per-conformer single points, say) run at different\n  levels of theory, so no single energy level of theory can be\n  reported for the record as a whole; or ``null`` when nothing\n  linked can answer it.\n\nAny field may be ``null`` independently of the others: a record with\nonly a ``freq`` link, for instance, reports a ``frequency`` level and\n``geometry``/``energy`` both ``null``.",
+        "properties": {
+          "energy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "energy_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sp",
+                  "opt",
+                  "composite",
+                  "imported",
+                  "ambiguous"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Source"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ScientificLevelsSummary",
+        "type": "object"
+      },
       "ScientificLiteratureDetailResponse": {
         "description": "Response envelope for ``GET /scientific/literature/{handle}``.",
         "properties": {
@@ -35363,6 +35448,9 @@
                 "type": "null"
               }
             ]
+          },
+          "levels": {
+            "$ref": "#/components/schemas/ScientificLevelsSummary"
           },
           "literature": {
             "anyOf": [
@@ -38408,8 +38496,18 @@
       },
       "StatmechInBundle": {
         "additionalProperties": false,
-        "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param torsions: Torsional mode metadata.\n:param note: Optional free-text note.",
+        "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links; never persisted.\n:param note: Optional free-text note.",
         "properties": {
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "external_symmetry": {
             "anyOf": [
               {
@@ -39975,7 +40073,7 @@
       },
       "StatmechUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing standalone statmech upload payload.\n\nThe backend resolves the target species entry, persists any inline\nsupporting calculations, resolves provenance references, and routes\nthe resulting scientific payload through the canonical statmech\nresolution service. Statmech is append-only — repeated uploads\nagainst the same species entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param scientific_origin: Scientific origin category for this record.\n:param literature: Optional literature submission payload.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param software_release: Optional software provenance.\n:param external_symmetry: Optional external symmetry number.\n:param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).\n:param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).\n:param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).\n:param point_group: Optional point-group label.\n:param is_linear: Optional linearity flag.\n:param rigid_rotor_kind: Optional rigid-rotor classification.\n:param statmech_treatment: Optional treatment classification.\n:param freq_scale_factor: Optional frequency scale factor ref.\n:param uses_projected_frequencies: Optional projected-frequency flag.\n:param note: Optional free-text note.\n:param calculations: Inline supporting calculations declared by key.\n:param source_calculations: Statmech → calculation links by key/role.\n:param torsions: Torsion definitions (source scans addressed by key).",
+        "description": "Workflow-facing standalone statmech upload payload.\n\nThe backend resolves the target species entry, persists any inline\nsupporting calculations, resolves provenance references, and routes\nthe resulting scientific payload through the canonical statmech\nresolution service. Statmech is append-only — repeated uploads\nagainst the same species entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param scientific_origin: Scientific origin category for this record.\n:param literature: Optional literature submission payload.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param software_release: Optional software provenance.\n:param external_symmetry: Optional external symmetry number.\n:param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).\n:param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).\n:param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).\n:param point_group: Optional point-group label.\n:param is_linear: Optional linearity flag.\n:param rigid_rotor_kind: Optional rigid-rotor classification.\n:param statmech_treatment: Optional treatment classification.\n:param freq_scale_factor: Optional frequency scale factor ref.\n:param uses_projected_frequencies: Optional projected-frequency flag.\n:param note: Optional free-text note.\n:param calculations: Inline supporting calculations declared by key.\n:param source_calculations: Statmech → calculation links by key/role.\n:param torsions: Torsion definitions (source scans addressed by key).\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. A depositor\n    may run the optimisation and the single point at two different\n    levels; when declared, this must agree with what is actually\n    linked (the linked 'sp' calculation's level, or the linked 'opt's\n    own level when no separate 'sp' is linked) — see\n    ``app.services.calculation_levels`` for the exact rule (R4/R5).\n    Never persisted: it is checked once, at upload time, against the\n    source calculations this same request links; the read-time\n    ``levels`` block is always re-derived from those links directly.",
         "properties": {
           "calculations": {
             "items": {
@@ -39990,6 +40088,16 @@
             },
             "title": "Electronic Levels",
             "type": "array"
+          },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "external_symmetry": {
             "anyOf": [
@@ -41597,6 +41705,16 @@
             "title": "Applied Energy Corrections",
             "type": "array"
           },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -43111,6 +43229,9 @@
             ],
             "title": "H298 Uncertainty Kj Mol"
           },
+          "levels": {
+            "$ref": "#/components/schemas/ScientificLevelsSummary"
+          },
           "model_kind": {
             "$ref": "#/components/schemas/ThermoModelKindQuery"
           },
@@ -43686,6 +43807,16 @@
             },
             "title": "Calculations",
             "type": "array"
+          },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "enthalpy_formation_0k_kj_mol": {
             "anyOf": [

@@ -194,8 +194,13 @@ class RejectionCode(str, Enum):
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
     STATE_CONFLICT = "state_conflict"
     STATMECH_CALCULATION_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
+    STATMECH_ENERGY_LEVEL_AMBIGUOUS = "statmech_energy_level_ambiguous"
+    STATMECH_ENERGY_LEVEL_CONTRADICTION = "statmech_energy_level_contradiction"
+    STATMECH_ENERGY_LEVEL_REQUIRES_SP = "statmech_energy_level_requires_sp"
+    STATMECH_ROLE_DUPLICATE = "statmech_role_duplicate"
     STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = "statmech_source_calculation_owner_mismatch"
     STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
+    STATMECH_SP_GEOMETRY_MISMATCH = "statmech_sp_geometry_mismatch"
     STATMECH_SUBJECT_NOT_EXACTLY_ONE = "statmech_subject_not_exactly_one"
     STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = "statmech_torsion_scan_calculation_owner_mismatch"
     STORED_SPECIES_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
@@ -204,8 +209,13 @@ class RejectionCode(str, Enum):
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
+    THERMO_ENERGY_LEVEL_AMBIGUOUS = "thermo_energy_level_ambiguous"
+    THERMO_ENERGY_LEVEL_CONTRADICTION = "thermo_energy_level_contradiction"
+    THERMO_ENERGY_LEVEL_REQUIRES_SP = "thermo_energy_level_requires_sp"
+    THERMO_ROLE_DUPLICATE = "thermo_role_duplicate"
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
+    THERMO_SP_GEOMETRY_MISMATCH = "thermo_sp_geometry_mismatch"
     THERMO_STATMECH_OWNER_MISMATCH = "thermo_statmech_owner_mismatch"
     TOO_MANY_ELEMENT_SYMBOLS = "too_many_element_symbols"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
@@ -334,14 +344,24 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SPECIES_KIND_CONFLICT,
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
         RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED,
+        RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION,
+        RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        RejectionCode.STATMECH_ROLE_DUPLICATE,
         RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH,
+        RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH,
         RejectionCode.STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
         RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE,
         RejectionCode.SUBJECT_TYPE_MISMATCH,
         RejectionCode.SUPERSEDES_SAME_RECORD,
+        RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION,
+        RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        RejectionCode.THERMO_ROLE_DUPLICATE,
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+        RejectionCode.THERMO_SP_GEOMETRY_MISMATCH,
         RejectionCode.THERMO_STATMECH_OWNER_MISMATCH,
         RejectionCode.TOO_MANY_ELEMENT_SYMBOLS,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
@@ -518,8 +538,13 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.STATE_CONFLICT: frozenset({409}),
     RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.STATMECH_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
+    RejectionCode.STATMECH_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
+    RejectionCode.STATMECH_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
+    RejectionCode.STATMECH_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.STATMECH_SP_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE: frozenset({409}),
     RejectionCode.STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE: frozenset({422}),
@@ -528,8 +553,13 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
+    RejectionCode.THERMO_ENERGY_LEVEL_AMBIGUOUS: frozenset({422}),
+    RejectionCode.THERMO_ENERGY_LEVEL_CONTRADICTION: frozenset({422}),
+    RejectionCode.THERMO_ENERGY_LEVEL_REQUIRES_SP: frozenset({422}),
+    RejectionCode.THERMO_ROLE_DUPLICATE: frozenset({422}),
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.THERMO_SP_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.TOO_MANY_ELEMENT_SYMBOLS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),

@@ -20,6 +20,15 @@ from app.schemas.workflows.thermo_upload import (
     ThermoSourceCalculationIn,
     ThermoUploadRequest,
 )
+from app.services.calculation_levels import (
+    W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+    W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+    W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ROLE_DUPLICATE,
+    W_THERMO_SP_GEOMETRY_MISMATCH,
+    RoleLink,
+    assert_role_consistency,
+)
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -28,7 +37,10 @@ from app.services.calculation_ownership import (
     assert_statmech_owned_by,
 )
 from app.services.calculation_resolution import (
+    attach_calculation_input_geometries,
+    attach_calculation_output_geometries,
     resolve_and_persist_calculation_with_results,
+    resolve_level_of_theory_ref,
 )
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
@@ -319,6 +331,29 @@ def persist_thermo_upload(
             context=f"thermo calculation '{calc_in.key}'",
             species_entry_id=species_entry.id,
         )
+        # ``resolve_and_persist_calculation_with_results`` never attaches
+        # geometry (no conformer geometry to fall back to on this
+        # standalone path) -- only a producer-declared
+        # input_geometries/output_geometries on the calc itself. Without
+        # this, R3'/Coverage (app.services.calculation_levels) never see
+        # any geometry data for an inline calc. ``fallback_geometry_id=
+        # None`` because there is no such fallback here; a calc that
+        # declares neither field keeps carrying no geometry, as before.
+        context = f"thermo calculation '{calc_in.key}'"
+        attach_calculation_output_geometries(
+            session,
+            calc=calc_row,
+            explicit_output_geometries=calc_in.calculation.output_geometries,
+            fallback_geometry_id=None,
+            context=context,
+        )
+        attach_calculation_input_geometries(
+            session,
+            calc=calc_row,
+            explicit_input_geometries=calc_in.calculation.input_geometries,
+            fallback_geometry_id=None,
+            context=context,
+        )
         calculations_by_key[calc_in.key] = calc_row
 
     # Resolve source_calculation links. Each entry uses either a local
@@ -327,6 +362,7 @@ def persist_thermo_upload(
     # conformer step). Both paths run owner-consistency and role/type
     # compatibility checks before becoming a thermo_source_calculation row.
     resolved_source_calcs: list[ThermoSourceCalculationCreate] = []
+    role_links: list[RoleLink] = []
     for index, sc in enumerate(request.source_calculations):
         calc_row = _resolve_source_calculation(
             session,
@@ -341,6 +377,7 @@ def persist_thermo_upload(
                 role=sc.role,
             )
         )
+        role_links.append(RoleLink(sc.role.value, calc_row))
 
     # Resolve the optional statmech basis for this (computed) thermo. The
     # upload carries it as an existing-row reference (programmatic path,
@@ -350,6 +387,34 @@ def persist_thermo_upload(
         session,
         request.existing_statmech_id,
         species_entry_id=species_entry.id,
+    )
+
+    # R2'/R3'/Coverage/R4' (app.services.calculation_levels), unconditional
+    # on the record's own role_links -- a thermo that links its own opt
+    # calculations makes a claim about those calculations regardless of
+    # whether it *also* names a statmech basis, so R2'/R3'/Coverage always
+    # run (they do nothing when role_links is empty). Only R4' (the
+    # declared-energy-level check) is meaningfully gated to "no statmech
+    # basis": ``declared_energy_lot`` is always None when
+    # ``existing_statmech_id`` is set, because the schema already refuses
+    # combining ``energy_level_of_theory`` with it (R6 -- the record's
+    # levels are then the statmech's, inherited wholesale at read time
+    # rather than re-checked here), so R4' is automatically a no-op in
+    # that case without a separate branch here.
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, request.energy_level_of_theory)
+        if request.energy_level_of_theory is not None
+        else None
+    )
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_THERMO_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_THERMO_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        subject="thermo",
     )
 
     thermo_create = resolve_thermo_upload(
