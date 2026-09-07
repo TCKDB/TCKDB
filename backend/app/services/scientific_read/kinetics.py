@@ -1254,15 +1254,27 @@ def _resolve_ts_opt_via_dependency(
     Both ``freq_on`` and ``single_point_on`` enforce at most one parent
     per child (partial unique indexes on ``calculation_dependency``), so
     each id maps to exactly one opt when present.
+
+    The parent is also required to actually be ``CalculationType.opt`` --
+    the resolver does not simply trust the edge's role name. Nothing in
+    the schema constrains what type a ``freq_on``/``single_point_on``
+    parent carries; the invariant is upheld only by the upload-time
+    validator (``app/services/calculation_resolution.py``). Checking it
+    again here means a defect or a future relaxation in that validator
+    degrades this resolver to "no match" rather than silently reporting
+    a non-opt calculation's level of theory as ``levels.geometry``.
     """
     child_ids = freq_calc_ids | sp_calc_ids
     if not child_ids:
         return {}
+    parent = aliased(Calculation)
     rows = session.execute(
         select(
             CalculationDependency.child_calculation_id,
             CalculationDependency.parent_calculation_id,
-        ).where(
+        )
+        .join(parent, parent.id == CalculationDependency.parent_calculation_id)
+        .where(
             CalculationDependency.child_calculation_id.in_(child_ids),
             CalculationDependency.dependency_role.in_(
                 (
@@ -1270,6 +1282,7 @@ def _resolve_ts_opt_via_dependency(
                     CalculationDependencyRole.single_point_on,
                 )
             ),
+            parent.type == CalculationType.opt,
         )
     ).all()
     return dict(rows)

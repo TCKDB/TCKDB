@@ -233,22 +233,16 @@ def test_offset_and_limit_page_results(client, db_session):
 # ---------------------------------------------------------------------------
 
 
-def test_default_sort_matches_search(client, db_session):
-    _entry(db_session)
-    body = client.get(_browse_url()).json()
-    assert body["request"]["sort"] == (
-        "review_rank,has_kinetics,has_transition_state,created_at,id"
-    )
-
-
 def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_session):
-    """The echoed sort string is a label; this asserts the actual row order.
+    """Asserts both the echoed sort label and the actual row order it names.
 
     Three entries, distinguished on the sort key's first two axes:
     ``review_rank`` (approved beats not_reviewed) beats ``has_kinetics``
     (a not_reviewed entry with kinetics still sorts after an approved
     entry with none), and among equal review rank, ``has_kinetics``
-    breaks the tie.
+    breaks the tie. The echoed string alone (asserted first) is a label a
+    caller can display; it is not proof of the order actually served, so
+    every assertion below checks real row positions.
     """
     best = _entry(db_session, reactant_smiles="[2H]", product_smiles="N")
     set_review(
@@ -262,6 +256,10 @@ def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_se
     worst = _entry(db_session, reactant_smiles="[4H]", product_smiles="N")
 
     body = client.get(_browse_url(limit=200)).json()
+    assert body["request"]["sort"] == (
+        "review_rank,has_kinetics,has_transition_state,created_at,id"
+    )
+
     refs = [r["reaction_entry_ref"] for r in body["records"]]
     positions = {ref: i for i, ref in enumerate(refs)}
 

@@ -309,6 +309,21 @@ class KineticsProvenance(BaseModel):
     TS-chain fields populated only for TS-backed computational kinetics. The
     service must never fabricate TS links for non-TS-backed records.
 
+    **``ts_opt_calculation_id``/``ts_opt_calculation_ref`` are always
+    ``null``, even on a TS-backed record.** ``_KINETICS_ROLE_COMPATIBILITY``
+    (``app/services/kinetics_resolution.py``) permits only ``sp`` under the
+    ``ts_energy`` role and only ``freq`` under the ``freq`` role -- no
+    kinetics source-calculation role accepts an optimisation, so no legal
+    upload can ever cite one here. This is a deliberate, narrow claim
+    ("which calculation did this record's own citations name"), not a data
+    gap: the optimisation's level of theory is not lost, just not reachable
+    through a direct citation. It is resolved one hop further -- via the
+    cited ``freq``'s ``freq_on`` or the cited ``sp``'s ``single_point_on``
+    ``calculation_dependency`` parent edge -- into
+    ``KineticsRecord.levels.geometry`` instead; see that field and
+    :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
+    for the mechanism.
+
     Phase B: ``*_ref`` siblings carry the public stable handles for each
     integer ``*_id`` field. The nested summary objects (path_search,
     primary_level_of_theory, primary_software, etc.) carry their own
@@ -317,6 +332,9 @@ class KineticsProvenance(BaseModel):
 
     transition_state_entry_id: int | None = None
     transition_state_entry_ref: str | None = None
+    #: Always ``null`` -- see the class docstring. Kept as a direct-citation
+    #: field rather than removed or backfilled: it answers "what did this
+    #: record's own source links cite," which is honestly ``null`` here.
     ts_opt_calculation_id: int | None = None
     ts_opt_calculation_ref: str | None = None
     ts_freq_calculation_id: int | None = None
