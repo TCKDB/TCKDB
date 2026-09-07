@@ -1352,8 +1352,11 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText("Conformer")).not.toBeInTheDocument()
     })
 
-    // Item 2: the stage sentence, derived from the eager dependencies.
-    it("reads 'Coarse pass; refined by <link>' from a parent-side optimized_from edge on an opt calculation", async () => {
+    // Item 1/2: the title, kicker, and stage strip all name the stage,
+    // reading the SAME wording table (`domain/optimisationStage.ts`).
+    // Owner complaint this replaces: "Coarse pass; refined by …" read as
+    // if the coarse molecule had been refined BY the other one.
+    it("names the coarse pass in the title/kicker and renders the stage strip, from a parent-side optimized_from edge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1364,14 +1367,26 @@ describe("CalculationDetailPage", () => {
             }),
         })))
         page()
-        await findLoaded("Optimisation")
-        expect(screen.getByText("Stage")).toBeVisible()
-        const stageRow = screen.getByText("Stage").closest("div") as HTMLElement
-        expect(within(stageRow).getByText(/Coarse pass; refined by/)).toBeVisible()
-        expect(within(stageRow).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
+        const h1 = await findLoaded("Coarse optimisation")
+        expect(h1).toHaveTextContent("Coarse optimisation of CH3")
+        expect(screen.getByText("Optimisation calculation · coarse pass")).toBeVisible()
+        expect(screen.getByText("Optimisation stages")).toBeVisible()
+
+        const strip = screen.getByTestId("opt-stage-strip")
+        const coarseBox = within(strip).getByTestId("opt-stage-box-coarse")
+        expect(within(coarseBox).getByText("Coarse optimisation")).toBeVisible()
+        expect(coarseBox).toHaveClass("card--selected")
+        expect(within(coarseBox).getByText("calc_freq_one")).toBeVisible()
+        expect(within(coarseBox).queryByRole("link")).not.toBeInTheDocument()
+
+        const fineBox = within(strip).getByTestId("opt-stage-box-fine")
+        expect(fineBox).not.toHaveClass("card--selected")
+        expect(within(fineBox).getByRole("link", { name: "calc_fine_stage" })).toHaveAttribute("href", "/calculations/calc_fine_stage")
+
+        expect(screen.queryByText(/Coarse pass; refined by/)).not.toBeInTheDocument()
     })
 
-    it("reads 'Refinement of <link>' from a child-side optimized_from edge on an opt calculation", async () => {
+    it("names the fine pass in the title/kicker and renders the stage strip, from a child-side optimized_from edge", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1382,19 +1397,28 @@ describe("CalculationDetailPage", () => {
             }),
         })))
         page()
-        await findLoaded("Optimisation")
-        const stageRow = screen.getByText("Stage").closest("div") as HTMLElement
-        expect(within(stageRow).getByText(/Refinement of/)).toBeVisible()
-        expect(within(stageRow).getByRole("link", { name: "calc_coarse_stage" })).toHaveAttribute("href", "/calculations/calc_coarse_stage")
+        const h1 = await findLoaded("Fine optimisation")
+        expect(h1).toHaveTextContent("Fine optimisation of CH3")
+        expect(screen.getByText("Optimisation calculation · fine pass")).toBeVisible()
+
+        const strip = screen.getByTestId("opt-stage-strip")
+        const fineBox = within(strip).getByTestId("opt-stage-box-fine")
+        expect(fineBox).toHaveClass("card--selected")
+        expect(within(fineBox).getByText("calc_freq_one")).toBeVisible()
+        expect(within(fineBox).queryByRole("link")).not.toBeInTheDocument()
+
+        const coarseBox = within(strip).getByTestId("opt-stage-box-coarse")
+        expect(coarseBox).not.toHaveClass("card--selected")
+        expect(within(coarseBox).getByRole("link", { name: "calc_coarse_stage" })).toHaveAttribute("href", "/calculations/calc_coarse_stage")
+
+        expect(screen.queryByText(/Refinement of/)).not.toBeInTheDocument()
     })
 
-    // Review finding (SHOULD-FIX-3): the old "Single-pass optimisation"
-    // text asserted a stage from an absence of edges -- including on a
-    // calculation with no dependency edges at all, which has no evidence
-    // either way. "No refinement stage recorded" says exactly what the
-    // page knows: not that there's confidently one pass, only that it has
-    // no edge saying otherwise.
-    it("reads 'No refinement stage recorded' when no optimized_from edge exists on an opt calculation", async () => {
+    // Review finding (kept): an absent optimized_from edge is not
+    // evidence of a single pass -- the old "Single-pass optimisation"
+    // text asserted a stage the archive never actually reported.
+    // "Refinement stage: not recorded" says exactly what the page knows.
+    it("renders the muted 'not recorded' fact and no strip when no optimized_from edge exists on an opt calculation", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1404,14 +1428,25 @@ describe("CalculationDetailPage", () => {
             }),
         })))
         page()
-        await findLoaded("Optimisation")
-        const stageRow = screen.getByText("Stage").closest("div") as HTMLElement
-        expect(within(stageRow).getByText("No refinement stage recorded")).toBeVisible()
-        expect(within(stageRow).queryByText("Single-pass optimisation")).not.toBeInTheDocument()
+        const h1 = await findLoaded("Optimisation")
+        expect(h1).toHaveTextContent("Optimisation of CH3")
+        expect(screen.getByText("Optimisation calculation · deposited evidence")).toBeVisible()
+
+        expect(screen.getByText("Refinement stage")).toBeVisible()
+        const stageRow = screen.getByText("Refinement stage").closest("div") as HTMLElement
+        const pill = within(stageRow).getByText("not recorded")
+        expect(pill).toHaveClass("value-pill", "value-pill--muted")
+
+        expect(screen.queryByTestId("opt-stage-strip")).not.toBeInTheDocument()
+        expect(screen.queryByText("Optimisation stages")).not.toBeInTheDocument()
+        expect(screen.queryByText("Single-pass optimisation")).not.toBeInTheDocument()
+        expect(screen.queryByText("No refinement stage recorded")).not.toBeInTheDocument()
     })
 
-    // Item 5: input == output collapses to one card.
-    it("renders one card, not two identical ones, when the input and output geometry are the same stored ref", async () => {
+    // Item 3: input == output collapses to one card, now framed as the
+    // output (owner ask: "if we have no input geom for the coarse, then
+    // we just say output geom").
+    it("renders 'Output geometry' with the deposited-only note when the input and output geometry are the same stored ref", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 input_geometries: [{ geometry_ref: "geom_same", input_order: 1, output_order: null, role: null, natoms: 6, geom_hash: "x" }],
@@ -1420,7 +1455,41 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         await findLoaded("Frequency")
-        expect(screen.getByText("Input and output are the same stored geometry.")).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Output geometry" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Input and output" })).not.toBeInTheDocument()
+        expect(screen.getByText(
+            "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited.",
+        )).toBeVisible()
+        expect(screen.queryByText("Input and output are the same stored geometry.")).not.toBeInTheDocument()
+        expect(screen.queryByText("extracted from the deposited input file")).not.toBeInTheDocument()
+        expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
+    })
+
+    // Post-review (#384 backfill): the sameGeometry branch used to say
+    // "The starting geometry was not deposited" unconditionally -- false
+    // once a coarse pass's extracted starting geometry dedupes to the
+    // same row as its output (`input[0].source === "extracted_from_artifact"`).
+    // That case gets the pill and a note that says a starting geometry
+    // WAS deposited (extracted from the artifact), and happens to be
+    // identical to the output.
+    it("shows the extracted-from-artifact pill and note when the same-geometry input was extracted from a deposited artifact", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                input_geometries: [{ geometry_ref: "geom_same", input_order: 1, output_order: null, role: null, natoms: 6, geom_hash: "x", source: "extracted_from_artifact" }],
+                output_geometries: [{ geometry_ref: "geom_same", input_order: null, output_order: 1, role: "final", natoms: 6, geom_hash: "x" }],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByRole("heading", { name: "Output geometry" })).toBeVisible()
+        const pill = screen.getByText("extracted from the deposited input file")
+        expect(pill).toHaveClass("value-pill", "value-pill--muted")
+        expect(screen.getByText(
+            "The starting geometry extracted from the deposited input file is identical to the output geometry.",
+        )).toBeVisible()
+        expect(screen.queryByText(
+            "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited.",
+        )).not.toBeInTheDocument()
         expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
     })
 
@@ -1431,6 +1500,37 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText("Input and output are the same stored geometry.")).not.toBeInTheDocument()
         expect(screen.getByRole("link", { name: "geom_input_one" })).toBeVisible()
         expect(screen.getByRole("link", { name: "geom_output_one" })).toBeVisible()
+    })
+
+    // Item 3: the "extracted from the deposited input file" pill -- a
+    // concurrent backend PR's optional `source` field on the input-
+    // geometry link summary.
+    it("shows the 'extracted from the deposited input file' pill under an input geometry whose source is extracted_from_artifact", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                input_geometries: [
+                    { geometry_ref: "geom_input_one", input_order: 1, output_order: null, role: null, natoms: 4, geom_hash: "abc", source: "extracted_from_artifact" },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const inputHeading = screen.getByRole("heading", { name: "Input" })
+        const inputSection = inputHeading.closest("div") as HTMLElement
+        const pill = within(inputSection).getByText("extracted from the deposited input file")
+        expect(pill).toHaveClass("value-pill", "value-pill--muted")
+        // The Output list's own link renders no pill -- `source` on that
+        // fixture's output row is absent.
+        const outputHeading = screen.getByRole("heading", { name: "Output" })
+        const outputSection = outputHeading.closest("div") as HTMLElement
+        expect(within(outputSection).queryByText("extracted from the deposited input file")).not.toBeInTheDocument()
+    })
+
+    it("shows no extracted-from-artifact pill when the geometry link carries no source field", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.queryByText("extracted from the deposited input file")).not.toBeInTheDocument()
     })
 
     describe("headline energy", () => {

@@ -36,6 +36,12 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
+import {
+    OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX,
+    OPTIMISATION_STAGE_WORDS,
+    optimisationStage,
+    type OptimisationStage,
+} from "../domain/optimisationStage"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
@@ -313,6 +319,19 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     const ownerTS = owner.kind === "transition_state_entry" ? (owner.transition_state_entry ?? null) : null
     const identity = identityFromCalculationOwner(owner)
     const headline = headlineEnergy(core.type, calculation.results)
+
+    // See `optimisationStage`'s own docstring (`domain/optimisationStage.ts`)
+    // for the "unknown" vs. single-pass distinction. Computed ONCE here
+    // (never twice from the same `dependencies` payload) and threaded to
+    // both the identity header (title/kicker) and `StageAndConformerNote`
+    // (the stage strip), so the two can never name the stage two
+    // different ways.
+    const stage: OptimisationStage | null = core.type === "opt" && dependenciesAvailability !== "not-requested"
+        ? optimisationStage(dependencies)
+        : null
+    const stageWords = stage && stage.kind !== "unknown" ? OPTIMISATION_STAGE_WORDS[stage.kind] : null
+    const titleTypeLabel = stageWords ? stageWords.label : typeLabel(core.type)
+    const kickerText = `${typeLabel(core.type)} calculation · ${stageWords ? stageWords.kickerSuffix : OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX}`
     // `provenance.submission_ref` is `string | null | undefined` on the
     // wire: `undefined` means the KEY ITSELF was omitted (an anonymous
     // caller — see `CalculationEvidenceProvenanceSummary`'s own
@@ -423,9 +442,9 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             see that component's own docstring for the shared
                             header order every record page now follows. */}
                         <RecordIdentityHeader
-                            kicker={`${typeLabel(core.type)} calculation · deposited evidence`}
+                            kicker={kickerText}
                             pill={<span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
-                            title={<>{typeLabel(core.type)} of {titleSubject}</>}
+                            title={<>{titleTypeLabel} of {titleSubject}</>}
                             identity={identity}
                             ownRef={{ label: "Calculation ref", value: core.calculation_ref }}
                         />
@@ -460,9 +479,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         )}
 
                         <StageAndConformerNote
-                            calcType={core.type}
-                            dependencies={dependencies}
-                            dependenciesAvailability={dependenciesAvailability}
+                            ownRef={core.calculation_ref}
+                            stage={stage}
                             conformer={conformer ?? null}
                         />
 
@@ -600,48 +618,33 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 }
 
 /**
- * The dependency-derived stage sentence (for `opt` calculations) plus the
+ * The dependency-derived stage strip (for `opt` calculations) plus the
  * conformer-context links (for species-entry-owned calculations), stacked
  * as one small block right under the identity header. Both read the
- * already-fetched eager data -- no extra request for either.
+ * already-fetched eager data -- no extra request for either. `stage` is
+ * computed once, in `CalculationDetail`, and shared with the identity
+ * header's title/kicker -- see the comment there.
  */
-function StageAndConformerNote({ calcType, dependencies, dependenciesAvailability, conformer }: {
-    calcType: string
-    dependencies: CalculationDependency[]
-    dependenciesAvailability: SectionAvailability
+function StageAndConformerNote({ ownRef, stage, conformer }: {
+    ownRef: string
+    stage: OptimisationStage | null
     conformer: CalculationConformer | null
 }) {
-    // "empty" (the archive was asked and returned no edges) and
-    // "populated" with no matching edge both go through optimisationStage,
-    // which reads them as "No refinement stage recorded" -- an absence of
-    // evidence, not evidence of a single pass (review finding: the old
-    // text asserted a stage the archive never actually reported). Only
-    // "not-requested" (the wire key itself absent) skips the call
-    // entirely -- there the page never even asked, so it renders no Stage
-    // row at all rather than a "not recorded" one.
-    const stage = calcType === "opt" && dependenciesAvailability !== "not-requested"
-        ? optimisationStage(dependencies)
-        : null
     if (!stage && !conformer) return null
     return (
         <dl className="kv-list record-context--compact">
             {stage && (
-                <div>
-                    <dt>Stage</dt>
-                    <dd>
-                        {/* SHOULD-FIX-4 (PR B review): a calculation ref is
-                            an identifier -- `<code className="data">`,
-                            like every other ref on these five pages, same
-                            treatment inside a link as outside one. The
-                            conformer-group link just below is NOT
-                            code-wrapped when it shows the producer's own
-                            LABEL rather than the ref -- a label is a human
-                            word, not an identifier. */}
-                        {stage.linkRef
-                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{stage.linkRef}</code></Link></>
-                            : stage.text}
-                    </dd>
-                </div>
+                stage.kind === "unknown" ? (
+                    <div>
+                        <dt>Refinement stage</dt>
+                        <dd><span className="value-pill value-pill--muted">not recorded</span></dd>
+                    </div>
+                ) : (
+                    <div className="kv-list--wide">
+                        <dt>Optimisation stages</dt>
+                        <dd><OptimisationStageStrip ownRef={ownRef} stage={stage} /></dd>
+                    </div>
+                )
             )}
             {conformer && (
                 <div>
@@ -664,27 +667,46 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
 }
 
 /**
- * "Which of N optimisations is this" for an opt calculation, read from the
- * SAME `dependencies` payload the Related-calculations section renders
- * below -- never a second, independently-derived graph read. A parent-side
- * `optimized_from` edge means this calculation was later refined further
- * (it is the coarse pass); a child-side one means this calculation IS the
- * refinement.
- *
- * Neither present does NOT mean this is confidently a single pass -- review
- * finding: the old "Single-pass optimisation" text asserted a stage from an
- * absence of edges, including on a calculation with no dependency edges at
- * all (nothing to read a stage from, one way or the other). An edge that
- * doesn't exist in the archive is not evidence there is no refinement
- * stage, only that this page has no evidence of one -- so the no-edge case
- * says exactly that, and reads as "not recorded", not as an asserted fact.
+ * Owner ask ("present stages better like they flow"): two boxes, coarse
+ * then fine (the data-flow order -- the coarse pass feeds the fine one),
+ * joined by the SAME arrow-connector recipe `.linkage-flow`/
+ * `.linkage-connector` (`species-entry.css`) already draws for the
+ * conformer evidence linkage -- see `calculation-detail.css`'s own
+ * `.opt-stage-flow` comment for why this is that pattern's CSS, not a
+ * third arrow style. The box for THIS calculation's own stage is
+ * `.card--selected` (accent fill, no link -- a page never links to
+ * itself); the other box links out to its calculation, with both refs in
+ * the `.data` mono face underneath their box, matching every other ref on
+ * this page.
  */
-function optimisationStage(dependencies: CalculationDependency[]): { text: string; linkRef?: string } {
-    const parentEdge = dependencies.find((dep) => dep.direction === "parent" && dep.role === "optimized_from")
-    if (parentEdge) return { text: "Coarse pass; refined by", linkRef: parentEdge.child_calculation_ref }
-    const childEdge = dependencies.find((dep) => dep.direction === "child" && dep.role === "optimized_from")
-    if (childEdge) return { text: "Refinement of", linkRef: childEdge.parent_calculation_ref }
-    return { text: "No refinement stage recorded" }
+function OptimisationStageStrip({ ownRef, stage }: {
+    ownRef: string
+    stage: { kind: "coarse" | "fine"; otherRef: string }
+}) {
+    const coarseRef = stage.kind === "coarse" ? ownRef : stage.otherRef
+    const fineRef = stage.kind === "coarse" ? stage.otherRef : ownRef
+    return (
+        <div className="opt-stage-flow" data-testid="opt-stage-strip">
+            <OptimisationStageBox kind="coarse" calcRef={coarseRef} selected={stage.kind === "coarse"} />
+            <span className="opt-stage-connector" aria-hidden="true">→</span>
+            <OptimisationStageBox kind="fine" calcRef={fineRef} selected={stage.kind === "fine"} />
+        </div>
+    )
+}
+
+function OptimisationStageBox({ kind, calcRef, selected }: {
+    kind: "coarse" | "fine"
+    calcRef: string
+    selected: boolean
+}) {
+    return (
+        <div className={`card opt-stage-box${selected ? " card--selected" : ""}`} data-testid={`opt-stage-box-${kind}`}>
+            <span className="opt-stage-box-label">{OPTIMISATION_STAGE_WORDS[kind].label}</span>
+            {selected
+                ? <code className="data">{calcRef}</code>
+                : <Link to={`/calculations/${calcRef}`}><code className="data">{calcRef}</code></Link>}
+        </div>
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -898,14 +920,36 @@ function GeometriesSection({
             </SectionHeading>
             {sameGeometry ? (
                 <div>
-                    <h3 className="t-heading-2">Input and output</h3>
-                    <p className="note">Input and output are the same stored geometry.</p>
+                    {/* Owner complaint: "if we have no input geom for the
+                        coarse, then we just say output geom." A coarse
+                        optimisation stage stores its input and output as
+                        the same geometry row -- either because only ONE
+                        geometry was ever deposited for that pass, or
+                        (#384, its backfill) because the starting geometry
+                        was extracted from a deposited ESS artifact and
+                        happens to dedupe to the same stored row as the
+                        output. Calling this "Input and output" implied a
+                        start-and-end pair that (in the first case) was
+                        never recorded, so this reads as the output card
+                        the rest of this page already renders elsewhere,
+                        with the note below stating which of the two
+                        actually happened -- never "not deposited" when a
+                        starting geometry genuinely was. */}
+                    <h3 className="t-heading-2">Output geometry</h3>
                     <div className="geometry-links">
-                        <div className="geometry-link" key={input[0].geometry_ref}>
-                            <Link to={`/geometries/${input[0].geometry_ref}`}>{input[0].geometry_ref}</Link>
-                            <span>{input[0].natoms != null ? `${input[0].natoms} atoms` : "atom count not recorded"}</span>
+                        <div className="geometry-link" key={output[0].geometry_ref}>
+                            <Link to={`/geometries/${output[0].geometry_ref}`}>{output[0].geometry_ref}</Link>
+                            <span>{output[0].natoms != null ? `${output[0].natoms} atoms` : "atom count not recorded"}</span>
+                            {input[0].source === "extracted_from_artifact" && (
+                                <span className="value-pill value-pill--muted">extracted from the deposited input file</span>
+                            )}
                         </div>
                     </div>
+                    <p className="note">
+                        {input[0].source === "extracted_from_artifact"
+                            ? "The starting geometry extracted from the deposited input file is identical to the output geometry."
+                            : "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited."}
+                    </p>
                     {validationRow && <GeometryValidationBanner row={validationRow} />}
                 </div>
             ) : (
@@ -959,6 +1003,14 @@ function GeometryLinkList({ title, links, emptyText, availability, contradicted 
                                 {link.role ? `${statusLabel(link.role)} · ` : ""}
                                 {link.natoms != null ? `${link.natoms} atoms` : "atom count not recorded"}
                             </span>
+                            {/* A concurrent backend PR adds `source` to the
+                                input-geometry link summary only -- optional
+                                on the wire (`geometryLinkSchema` in
+                                `api/calculationApi.ts`), so this renders
+                                nothing on every build/link that predates it. */}
+                            {link.source === "extracted_from_artifact" && (
+                                <span className="value-pill value-pill--muted">extracted from the deposited input file</span>
+                            )}
                         </div>
                     ))}
                 </div>
