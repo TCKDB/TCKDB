@@ -40,7 +40,6 @@ from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, StatmechCalculationRole
 from app.db.models.energy_correction import FrequencyScaleFactor
-from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import (
     Statmech,
@@ -52,20 +51,22 @@ from app.db.models.statmech import (
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.services.calculation_levels import (
+    W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
     W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
     W_STATMECH_ROLE_DUPLICATE,
     W_STATMECH_SP_GEOMETRY_MISMATCH,
     RoleLink,
-    assert_energy_level_consistent,
-    assert_no_duplicate_roles,
-    assert_sp_geometry_matches_opt,
+    assert_role_consistency,
 )
 from app.services.calculation_ownership import (
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
 )
-from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.calculation_resolution import (
+    resolve_level_of_theory_ref,
+    resolve_workflow_tool_release_ref,
+)
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
@@ -341,8 +342,6 @@ def resolve_or_create_statmech(
     uploaded_calculation_id: int | None = None,
     calculations_by_key: Mapping[str, int] | None = None,
     created_by: int | None = None,
-    energy_level_of_theory: LevelOfTheory | None = None,
-    enforce_role_consistency: bool = False,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
 
@@ -355,7 +354,10 @@ def resolve_or_create_statmech(
     supporting calculations explicitly via ``payload.source_calculations``.
 
     :param session: Active SQLAlchemy session.
-    :param payload: Workflow-facing statmech payload.
+    :param payload: Workflow-facing statmech payload. ``payload.
+        energy_level_of_theory``, when set, is resolved here (may create
+        a new ``level_of_theory`` row via the standard dedupe-by-hash
+        lookup) and checked against the resolved role links.
     :param species_entry_id: Resolved owner species-entry id.
     :param uploaded_calculation_id: Optional calculation id produced by
         the caller workflow; linked as a source calculation only when
@@ -365,30 +367,17 @@ def resolve_or_create_statmech(
         whenever the payload carries ``source_calculations`` or a torsion
         ``source_scan_calculation_key``.
     :param created_by: Optional application user id for newly created rows.
-    :param energy_level_of_theory: Optional depositor-declared level of
-        theory the record's energy should stand at (standalone statmech
-        upload only). Checked by :func:`app.services.calculation_levels.
-        assert_energy_level_consistent` only when ``enforce_role_
-        consistency`` is also true; ignored otherwise.
-    :param enforce_role_consistency: Opt-in gate for the R2/R3/R4 checks in
-        ``app.services.calculation_levels`` (at most one opt/freq/sp; a
-        linked sp must share the linked opt's geometry; a declared energy
-        level must agree with what is linked). Left ``False`` by default
-        so the nested-conformer and bundle callers of this function are
-        unaffected — those paths legitimately link several ``opt``/
-        ``freq`` calculations (one per conformer) to one ensemble
-        record, which R2 would wrongly refuse. Only the standalone
-        ``/uploads/statmech`` workflow passes ``True``: it is the one
-        shape where "the statmech" means one depositor's single chain of
-        evidence.
     :returns: Newly created ``Statmech`` row with linked sources/torsions.
     :raises ValueError: If ``uploaded_calculation_role`` is set but
         ``uploaded_calculation_id`` is not supplied.
     :raises CodedValueError: If a local calculation key does not resolve,
         if a declared role contradicts the resolved calculation's type —
-        whichever way the calculation was named — or (when
-        ``enforce_role_consistency`` is true) if the role links violate
-        R2/R3/R4.
+        whichever way the calculation was named — or if the role links
+        violate R2'/R3'/Coverage/R4' (see ``calculation_levels``). These
+        checks are unconditional: they are correct for both a single
+        evidence chain and a genuine multi-conformer ensemble, so every
+        caller of this function gets them, not only the standalone
+        upload.
     :raises NotFoundError: If an ``existing_calculation_id`` names a row
         that does not exist. Only the standalone statmech upload can
         produce this; the conformer and bundle payloads carry the
@@ -419,8 +408,14 @@ def resolve_or_create_statmech(
         )
         fsf_id = fsf.id
 
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, payload.energy_level_of_theory)
+        if payload.energy_level_of_theory is not None
+        else None
+    )
+
     # Resolve every source-calculation link -- role/type compatibility and
-    # (when enforced) R2/R3/R4 -- entirely BEFORE the ``Statmech`` row
+    # R2'/R3'/Coverage/R4' -- entirely BEFORE the ``Statmech`` row
     # exists. This is deliberate, not incidental ordering: every check
     # here can raise, and a check that raises after ``session.add(
     # statmech)`` would leave a flushed-but-unreferenced row for the
@@ -448,10 +443,22 @@ def resolve_or_create_statmech(
             context="statmech.uploaded_calculation_role",
         )
         uploaded_calc = session.get(Calculation, uploaded_calculation_id)
-        if uploaded_calc is not None:
-            role_links.append(
-                RoleLink(payload.uploaded_calculation_role.value, uploaded_calc)
+        if uploaded_calc is None:
+            # Never actually reachable: ``uploaded_calculation_id`` is a
+            # row the calling workflow just created in this same
+            # transaction (see the docstring), so a miss here means a
+            # caller passed a stale/foreign id, not a user-input error.
+            # A silent skip would drop this link out of ``role_links``
+            # without a trace, which is worse than a loud failure of an
+            # invariant that should be unbreakable.
+            raise ValueError(
+                "uploaded_calculation_id does not resolve to a calculation "
+                "row in the current session; resolve_or_create_statmech "
+                "expects the caller to have already persisted it."
             )
+        role_links.append(
+            RoleLink(payload.uploaded_calculation_role.value, uploaded_calc)
+        )
 
     # Not annotated as ``list[tuple[StatmechCalculationRole, int]]``: each
     # ``source.role`` is actually ``tckdb_schemas.enums.
@@ -496,20 +503,21 @@ def resolve_or_create_statmech(
         if calculation is not None:
             role_links.append(RoleLink(source.role.value, calculation))
 
-    if enforce_role_consistency:
-        assert_no_duplicate_roles(
-            role_links, code=W_STATMECH_ROLE_DUPLICATE, subject="statmech"
-        )
-        assert_sp_geometry_matches_opt(
-            role_links, code=W_STATMECH_SP_GEOMETRY_MISMATCH, subject="statmech"
-        )
-        assert_energy_level_consistent(
-            role_links,
-            energy_level_of_theory,
-            requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
-            contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
-            subject="statmech",
-        )
+    # Unconditional: correct for both a single evidence chain (the
+    # standalone upload) and a genuine multi-conformer ensemble (nested
+    # conformer statmech blocks can legitimately carry several opt/freq
+    # links, one per conformer), because the rules themselves are
+    # ensemble-aware -- see the module docstring on ``calculation_levels``.
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_STATMECH_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_STATMECH_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        subject="statmech",
+    )
 
     # Every check above has passed: only now does the row (and anything
     # that references it) get created.

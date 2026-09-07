@@ -475,43 +475,46 @@ def _build_levels(
     """R1: derive geometry/frequency/energy levels from this record's links.
 
     ``source_rows`` is already ordered ``role.asc(), calculation_id.asc()``
-    by :func:`_load_source_rows`, so the first row seen per role is
-    already the lowest-id one -- the same deterministic tie-break
-    :func:`derive_levels` documents for a role linked more than once (a
-    legitimate shape on the multi-conformer bundle paths, which do not run
-    the upload-time R2 uniqueness check).
+    by :func:`_load_source_rows`, so appending in order already gives
+    :func:`derive_levels` each role's calculations lowest-id first --
+    including every linked ``sp``, so it can detect (and report as
+    ``energy_source="ambiguous"``) a multi-conformer ensemble whose
+    ``sp``s disagree on level of theory, a legitimate shape on the
+    bundle paths.
     """
-    role_calc_ids: dict[str, int] = {}
+    role_calc_ids: dict[str, list[int]] = {}
     for row in source_rows:
         role = row.role.value
         if role in _LEVELS_ROLES:
-            role_calc_ids.setdefault(role, row.calculation_id)
+            role_calc_ids.setdefault(role, []).append(row.calculation_id)
     if not role_calc_ids:
         return ScientificLevelsSummary()
 
+    all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
     calcs = {
         calc.id: calc
         for calc in session.scalars(
             select(Calculation)
-            .where(Calculation.id.in_(role_calc_ids.values()))
+            .where(Calculation.id.in_(all_ids))
             .options(selectinload(Calculation.freq_result))
         ).all()
     }
 
-    def info(role: str) -> RoleCalcInfo | None:
-        calc = calcs.get(role_calc_ids.get(role, -1))
-        if calc is None:
-            return None
-        return RoleCalcInfo(
-            lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
-        )
+    def infos(role: str) -> list[RoleCalcInfo]:
+        return [
+            RoleCalcInfo(
+                lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
+            )
+            for cid in role_calc_ids.get(role, [])
+            if (calc := calcs.get(cid)) is not None
+        ]
 
     derived = derive_levels(
-        opt=info("opt"),
-        freq=info("freq"),
-        sp=info("sp"),
-        composite=info("composite"),
-        imported=info("imported"),
+        opts=infos("opt"),
+        freqs=infos("freq"),
+        sps=infos("sp"),
+        composites=infos("composite"),
+        importeds=infos("imported"),
     )
     return ScientificLevelsSummary(
         geometry=_build_lot_summary(session, derived.geometry_lot_id),

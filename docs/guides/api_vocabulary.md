@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
 | Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 166 | `backend/app/api/code_catalogue.py` |
-| **total** | **451** | |
+| Refusal codes a caller can receive | 168 | `backend/app/api/code_catalogue.py` |
+| **total** | **453** | |
 
 ## How a record is named
 
@@ -684,7 +684,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (123 codes)
+### HTTP 422 (125 codes)
 
 | Code | Names |
 | --- | --- |
@@ -776,6 +776,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `species_kind_conflict` | a relationship — read `context` |
 | `species_smiles_charge_mismatch` | a relationship — read `context` |
 | `statmech_calculation_key_undeclared` | a thing |
+| `statmech_energy_level_ambiguous` | a relationship — read `context` |
 | `statmech_energy_level_contradiction` | a relationship — read `context` |
 | `statmech_energy_level_requires_sp` | a relationship — read `context` |
 | `statmech_role_duplicate` | a relationship — read `context` |
@@ -786,6 +787,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `stored_species_smiles_unparseable` | a thing |
 | `subject_type_mismatch` | a relationship — read `context` |
 | `supersedes_same_record` | a relationship — read `context` |
+| `thermo_energy_level_ambiguous` | a relationship — read `context` |
 | `thermo_energy_level_contradiction` | a relationship — read `context` |
 | `thermo_energy_level_requires_sp` | a relationship — read `context` |
 | `thermo_role_duplicate` | a relationship — read `context` |

@@ -24,7 +24,6 @@ from app.services.calculation_ownership import (
 )
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
-    resolve_level_of_theory_ref,
 )
 from app.services.record_review import (
     RecordRef,
@@ -128,18 +127,9 @@ def persist_statmech_upload(
         source_calculations=request.source_calculations,
         torsions=request.torsions,
         electronic_levels=request.electronic_levels,
-    )
-
-    # Optional depositor-declared energy level (R4/R5, see
-    # app.services.calculation_levels). Resolved here (may create a new
-    # level_of_theory row via the standard dedupe-by-hash lookup) so the
-    # role-consistency check below compares actual LevelOfTheory rows,
-    # not raw refs. Only the standalone upload has this field, so it is
-    # always None on the nested-conformer and bundle paths.
-    declared_energy_lot = (
-        resolve_level_of_theory_ref(session, request.energy_level_of_theory)
-        if request.energy_level_of_theory is not None
-        else None
+        # R4'/R5 (app.services.calculation_levels): resolved and checked
+        # against the resolved role links inside resolve_or_create_statmech.
+        energy_level_of_theory=request.energy_level_of_theory,
     )
 
     statmech = resolve_or_create_statmech(
@@ -151,11 +141,6 @@ def persist_statmech_upload(
             key: calc.id for key, calc in calculations_by_key.items()
         },
         created_by=created_by,
-        energy_level_of_theory=declared_energy_lot,
-        # One depositor's single chain of evidence -- see the parameter's
-        # docstring on resolve_or_create_statmech for why this is the one
-        # caller that opts in.
-        enforce_role_consistency=True,
     )
 
     # First-class rotational constants (cm⁻¹). These live only on the

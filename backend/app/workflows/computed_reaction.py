@@ -45,6 +45,20 @@ from app.schemas.workflows.computed_reaction_upload import (
     calculation_in_to_with_results_payload,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.calculation_levels import (
+    W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+    W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+    W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ROLE_DUPLICATE,
+    W_STATMECH_SP_GEOMETRY_MISMATCH,
+    W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+    W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+    W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ROLE_DUPLICATE,
+    W_THERMO_SP_GEOMETRY_MISMATCH,
+    RoleLink,
+    assert_role_consistency,
+)
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -62,6 +76,7 @@ from app.services.calculation_resolution import (
     attach_calculation_output_geometries,
     collect_converged_opt_energy_warnings,
     resolve_and_persist_calculation_with_results,
+    resolve_level_of_theory_ref,
     resolve_software_release_ref,
     resolve_workflow_tool_release_ref,
 )
@@ -1031,6 +1046,65 @@ def persist_computed_reaction_upload(
                 else None
             )
 
+            # Which calculations produced this number. The schema also
+            # refuses a key that names nothing in the bundle; the refusal
+            # is stated here too because the schema lives in a different
+            # package and the two have drifted before. Ownership is
+            # checked here because this is the layer that knows which
+            # species entry each key resolved to. Resolved entirely
+            # before the ``Thermo`` row exists below, so R2'/R3'/Coverage/
+            # R4' (app.services.calculation_levels) can raise without
+            # leaving a flushed-but-unreferenced row behind.
+            thermo_resolved_sources: list[tuple[object, int]] = []
+            thermo_role_links: list[RoleLink] = []
+            for index, sc in enumerate(t.source_calculations):
+                source_calc_id = resolve_calculation_key(
+                    sc.calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"species['{sp.key}'].thermo.source_calculations"
+                        f"[{index}].calculation_key"
+                    ),
+                )
+                source_calc = session.get(Calculation, source_calc_id)
+                assert_calculation_owned_by(
+                    source_calc,
+                    code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="thermo",
+                    context=(
+                        f"species[{sp.key!r}].thermo.source_calculations"
+                        f"[{index}].calculation_key='{sc.calculation_key}'"
+                    ),
+                    species_entry_id=species_entry.id,
+                )
+                assert_thermo_role_matches_calculation_type(
+                    source_calc,
+                    role=sc.role,
+                    context=(
+                        f"species[{sp.key!r}].thermo.source_calculations"
+                        f"[{index}].calculation_key='{sc.calculation_key}'"
+                    ),
+                )
+                thermo_resolved_sources.append((sc.role, source_calc_id))
+                if source_calc is not None:
+                    thermo_role_links.append(RoleLink(sc.role.value, source_calc))
+
+            thermo_declared_energy_lot = (
+                resolve_level_of_theory_ref(session, t.energy_level_of_theory)
+                if t.energy_level_of_theory is not None
+                else None
+            )
+            assert_role_consistency(
+                thermo_role_links,
+                thermo_declared_energy_lot,
+                duplicate_code=W_THERMO_ROLE_DUPLICATE,
+                geometry_mismatch_code=W_THERMO_SP_GEOMETRY_MISMATCH,
+                requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+                contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+                ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+                subject="thermo",
+            )
+
             thermo = Thermo(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
@@ -1061,45 +1135,15 @@ def persist_computed_reaction_upload(
             thermo_ids.append(thermo.id)
             thermo_by_species_key[sp.key] = thermo
 
-            # Which calculations produced this number. The schema also
-            # refuses a key that names nothing in the bundle; the refusal
-            # is stated here too because the schema lives in a different
-            # package and the two have drifted before. Ownership is
-            # checked here because this is the layer that knows which
-            # species entry each key resolved to.
-            for index, sc in enumerate(t.source_calculations):
-                source_calc_id = resolve_calculation_key(
-                    sc.calculation_key,
-                    calculation_key_to_id,
-                    field=(
-                        f"species['{sp.key}'].thermo.source_calculations"
-                        f"[{index}].calculation_key"
-                    ),
-                )
-                source_calc = session.get(Calculation, source_calc_id)
-                assert_calculation_owned_by(
-                    source_calc,
-                    code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
-                    target="thermo",
-                    context=(
-                        f"species[{sp.key!r}].thermo.source_calculations"
-                        f"[{index}].calculation_key='{sc.calculation_key}'"
-                    ),
-                    species_entry_id=species_entry.id,
-                )
-                assert_thermo_role_matches_calculation_type(
-                    source_calc,
-                    role=sc.role,
-                    context=(
-                        f"species[{sp.key!r}].thermo.source_calculations"
-                        f"[{index}].calculation_key='{sc.calculation_key}'"
-                    ),
-                )
+            # Every source-calculation link was already resolved, role/
+            # type- and role-consistency-checked above, before this row
+            # existed.
+            for role, calc_id in thermo_resolved_sources:
                 session.add(
                     ThermoSourceCalculation(
                         thermo_id=thermo.id,
-                        calculation_id=source_calc_id,
-                        role=sc.role,
+                        calculation_id=calc_id,
+                        role=role,
                     )
                 )
 
@@ -1149,6 +1193,65 @@ def persist_computed_reaction_upload(
                 else None
             )
 
+            # Statmech → calculation links. Producer-declared by local
+            # key; resolved against the bundle's global calc namespace.
+            # Owner-consistency: each referenced calc must be owned by
+            # THIS species entry — a TS-owned or sibling-species-owned
+            # calc is rejected with 422 (mirrors the AEC ownership
+            # check above). Resolved here, entirely before the
+            # ``Statmech`` row exists below, so R2'/R3'/Coverage
+            # (app.services.calculation_levels; no declared-energy-level
+            # field on this bundle's ``BundleStatmechIn`` -- ``declared``
+            # is always ``None`` here) can raise without leaving a
+            # flushed-but-unreferenced row behind.
+            statmech_resolved_sources: list[tuple[object, int]] = []
+            statmech_role_links: list[RoleLink] = []
+            for i, sc in enumerate(s.source_calculations):
+                calc_id = resolve_calculation_key(
+                    sc.calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"species['{sp.key}'].statmech.source_calculations"
+                        f"[{i}].calculation_key"
+                    ),
+                )
+                calc_row = session.get(Calculation, calc_id)
+                assert_calculation_owned_by(
+                    calc_row,
+                    code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="statmech",
+                    context=(
+                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
+                        f"calculation_key='{sc.calculation_key}'"
+                    ),
+                    species_entry_id=species_entry.id,
+                )
+                # The fourth statmech write path, and the one ARC actually
+                # deposits through. Same DR-0028 Requirement 1 as the other
+                # three, from the same shared service.
+                assert_statmech_role_compatible(
+                    calc_row,
+                    role=sc.role,
+                    context=(
+                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
+                        f"calculation_key='{sc.calculation_key}'"
+                    ),
+                )
+                statmech_resolved_sources.append((sc.role, calc_id))
+                if calc_row is not None:
+                    statmech_role_links.append(RoleLink(sc.role.value, calc_row))
+
+            assert_role_consistency(
+                statmech_role_links,
+                None,
+                duplicate_code=W_STATMECH_ROLE_DUPLICATE,
+                geometry_mismatch_code=W_STATMECH_SP_GEOMETRY_MISMATCH,
+                requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+                contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+                ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+                subject="statmech",
+            )
+
             statmech = Statmech(
                 species_entry_id=species_entry.id,
                 scientific_origin=s.scientific_origin,
@@ -1193,48 +1296,15 @@ def persist_computed_reaction_upload(
             ):
                 linked.statmech_id = statmech.id
 
-            # Statmech → calculation links. Producer-declared by local
-            # key; resolved against the bundle's global calc namespace.
-            # Owner-consistency: each referenced calc must be owned by
-            # THIS species entry — a TS-owned or sibling-species-owned
-            # calc is rejected with 422 (mirrors the AEC ownership
-            # check above).
-            for i, sc in enumerate(s.source_calculations):
-                calc_id = resolve_calculation_key(
-                    sc.calculation_key,
-                    calculation_key_to_id,
-                    field=(
-                        f"species['{sp.key}'].statmech.source_calculations"
-                        f"[{i}].calculation_key"
-                    ),
-                )
-                calc_row = session.get(Calculation, calc_id)
-                assert_calculation_owned_by(
-                    calc_row,
-                    code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
-                    target="statmech",
-                    context=(
-                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
-                        f"calculation_key='{sc.calculation_key}'"
-                    ),
-                    species_entry_id=species_entry.id,
-                )
-                # The fourth statmech write path, and the one ARC actually
-                # deposits through. Same DR-0028 Requirement 1 as the other
-                # three, from the same shared service.
-                assert_statmech_role_compatible(
-                    calc_row,
-                    role=sc.role,
-                    context=(
-                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
-                        f"calculation_key='{sc.calculation_key}'"
-                    ),
-                )
+            # Every source-calculation link was already resolved, role/
+            # type- and role-consistency-checked above, before this row
+            # existed.
+            for role, calc_id in statmech_resolved_sources:
                 session.add(
                     StatmechSourceCalculation(
                         statmech_id=statmech.id,
                         calculation_id=calc_id,
-                        role=sc.role,
+                        role=role,
                     )
                 )
 

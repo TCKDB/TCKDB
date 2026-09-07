@@ -48,6 +48,20 @@ from app.services.artifact_persistence import (
     persist_artifact_batch,
     validate_and_decode_all_artifacts,
 )
+from app.services.calculation_levels import (
+    W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+    W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+    W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+    W_STATMECH_ROLE_DUPLICATE,
+    W_STATMECH_SP_GEOMETRY_MISMATCH,
+    W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+    W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+    W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ROLE_DUPLICATE,
+    W_THERMO_SP_GEOMETRY_MISMATCH,
+    RoleLink,
+    assert_role_consistency,
+)
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -67,6 +81,7 @@ from app.services.calculation_resolution import (
     attach_calculation_output_geometries,
     collect_converged_opt_energy_warnings,
     resolve_and_persist_calculation_with_results,
+    resolve_level_of_theory_ref,
     resolve_software_release_ref,
     resolve_workflow_tool_release_ref,
 )
@@ -802,6 +817,7 @@ def _persist_thermo_block(
 
     # Resolve source_calculations by local key with role/type checks.
     resolved_sources: list[ThermoSourceCalculationCreate] = []
+    role_links: list[RoleLink] = []
     for index, sc in enumerate(thermo_in.source_calculations):
         calc_row = resolve_calculation_key(
             sc.calculation_key,
@@ -832,6 +848,25 @@ def _persist_thermo_block(
                 role=sc.role,
             )
         )
+        role_links.append(RoleLink(sc.role.value, calc_row))
+
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, thermo_in.energy_level_of_theory)
+        if thermo_in.energy_level_of_theory is not None
+        else None
+    )
+    # R2'/R3'/Coverage/R4' (app.services.calculation_levels), entirely
+    # before ``persist_thermo`` creates the row below.
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_THERMO_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_THERMO_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        subject="thermo",
+    )
 
     synthetic = _build_synthetic_thermo_upload_request(
         thermo_in,
@@ -1021,6 +1056,64 @@ def _persist_statmech_block(
         )
         fsf_id = fsf.id
 
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, s.energy_level_of_theory)
+        if s.energy_level_of_theory is not None
+        else None
+    )
+
+    # Resolve every source-calculation link -- role/type compatibility and
+    # R2'/R3'/Coverage/R4' (app.services.calculation_levels) -- entirely
+    # BEFORE the ``Statmech`` row exists, the same discipline
+    # ``resolve_or_create_statmech`` follows and for the same reason: a
+    # check that raises after the row is created leaves a flushed row a
+    # test (or, mid-transaction, anything else in the same request) can
+    # see before the eventual rollback discards it.
+    resolved_sources: list[tuple[object, int]] = []
+    role_links: list[RoleLink] = []
+    for index, sc in enumerate(s.source_calculations):
+        calc_row = resolve_calculation_key(
+            sc.calculation_key,
+            calc_keys_to_id,
+            field=f"statmech.source_calculations[{index}].calculation_key",
+        )
+        assert_calculation_owned_by(
+            calc_row,
+            code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="statmech",
+            context=(
+                f"statmech.source_calculations calculation_key="
+                f"'{sc.calculation_key}'"
+            ),
+            species_entry_id=species_entry_id,
+            transition_state_entry_id=transition_state_entry_id,
+        )
+        # The third statmech write path, and the third to need DR-0028
+        # Requirement 1: a declared role must match the type of the job it
+        # names. Shared with the conformer and standalone paths through
+        # the statmech resolution service so all three refuse alike.
+        assert_statmech_role_compatible(
+            calc_row,
+            role=sc.role,
+            context=(
+                f"statmech.source_calculations.calculation_key="
+                f"'{sc.calculation_key}'"
+            ),
+        )
+        resolved_sources.append((sc.role, calc_row.id))
+        role_links.append(RoleLink(sc.role.value, calc_row))
+
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_STATMECH_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_STATMECH_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
+        subject="statmech",
+    )
+
     statmech = Statmech(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
@@ -1058,49 +1151,14 @@ def _persist_statmech_block(
             )
         )
 
-    # The one seam in this file that two routes reach with two different
-    # namespaces, and the reason the lookup below cannot be a subscript.
-    # ``/uploads/computed-species`` hands it one species entry's own keys
-    # and its schema has already refused an undeclared one;
-    # ``/uploads/networks/pdep`` hands it a map spanning every species and
-    # every transition state, and ``NetworkPDepUploadRequest`` narrows a
-    # *species* statmech's keys and not a *transition state*'s. So a TS
-    # statmech naming nothing declared arrives here, and used to leave as
-    # a ``KeyError``.
-    for index, sc in enumerate(s.source_calculations):
-        calc_row = resolve_calculation_key(
-            sc.calculation_key,
-            calc_keys_to_id,
-            field=f"statmech.source_calculations[{index}].calculation_key",
-        )
-        assert_calculation_owned_by(
-            calc_row,
-            code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
-            target="statmech",
-            context=(
-                f"statmech.source_calculations calculation_key="
-                f"'{sc.calculation_key}'"
-            ),
-            species_entry_id=species_entry_id,
-            transition_state_entry_id=transition_state_entry_id,
-        )
-        # The third statmech write path, and the third to need DR-0028
-        # Requirement 1: a declared role must match the type of the job it
-        # names. Shared with the conformer and standalone paths through
-        # the statmech resolution service so all three refuse alike.
-        assert_statmech_role_compatible(
-            calc_row,
-            role=sc.role,
-            context=(
-                f"statmech.source_calculations.calculation_key="
-                f"'{sc.calculation_key}'"
-            ),
-        )
+    # Every source-calculation link was already resolved, role/type- and
+    # role-consistency-checked above, before this row existed.
+    for role, calc_id in resolved_sources:
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,
-                calculation_id=calc_row.id,
-                role=sc.role,
+                calculation_id=calc_id,
+                role=role,
             )
         )
 

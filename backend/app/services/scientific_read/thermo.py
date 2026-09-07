@@ -1215,32 +1215,40 @@ def _lot_summary(meta: dict) -> LevelOfTheorySummary | None:
 _LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
 
 
-def _first_calc_id_by_role(
+def _calc_ids_by_role(
     rows: list[ThermoSourceCalculation] | list[StatmechSourceCalculation],
-) -> dict[str, int]:
-    """Role -> lowest-id linked calculation, restricted to the R1 roles."""
+) -> dict[str, list[int]]:
+    """Role -> every linked calculation id, lowest first, restricted to the
+    R1 roles. Every id, not only the lowest -- ``derive_levels`` needs the
+    full set to detect (and report as ``"ambiguous"``) linked ``sp``s that
+    disagree on level of theory."""
     by_role: dict[str, list[int]] = {}
     for row in rows:
         role = row.role.value
         if role in _LEVELS_ROLES:
             by_role.setdefault(role, []).append(row.calculation_id)
-    return {role: min(ids) for role, ids in by_role.items()}
+    for ids in by_role.values():
+        ids.sort()
+    return by_role
 
 
-def _thermo_role_calc_ids(
+def _thermo_role_calc_id_lists(
     sources: list[ThermoSourceCalculation],
     statmech_sources: list[StatmechSourceCalculation],
-) -> dict[str, int]:
-    """Role -> calc id for R1, thermo's own links winning per role.
+) -> dict[str, list[int]]:
+    """Role -> calc id list for R1, thermo's own links winning per role.
 
     Mirrors the fallback style ``_build_provenance`` already uses for its
     ``freq_calculation_id`` / ``sp_calculation_id`` fields (thermo's own
     ``ThermoSourceCalculation`` wins; the statmech basis fills in any role
     thermo does not cover) -- R6's "inherit the statmech's levels" in the
-    common case where a computed thermo declares none of its own.
+    common case where a computed thermo declares none of its own. "Wins"
+    is per role and all-or-nothing: if thermo links any calculation under
+    a role, its list for that role replaces the statmech basis's entirely
+    (never merged), the same way the single-calc-id version did.
     """
-    role_calc_ids = _first_calc_id_by_role(statmech_sources)
-    role_calc_ids.update(_first_calc_id_by_role(sources))
+    role_calc_ids = _calc_ids_by_role(statmech_sources)
+    role_calc_ids.update(_calc_ids_by_role(sources))
     return role_calc_ids
 
 
@@ -1272,23 +1280,24 @@ def _build_levels_thermo(
     so it turns the derived lot ids back into full
     :class:`LevelOfTheorySummary` objects without a further query.
     """
-    role_calc_ids = _thermo_role_calc_ids(sources, statmech_sources)
+    role_calc_ids = _thermo_role_calc_id_lists(sources, statmech_sources)
 
-    def info(role: str) -> RoleCalcInfo | None:
-        calc_id = role_calc_ids.get(role)
-        if calc_id is None or calc_id not in calc_meta:
-            return None
-        return RoleCalcInfo(
-            lot_id=calc_meta[calc_id]["lot_id"],
-            carries_frequencies=calc_id in freq_calc_ids,
-        )
+    def infos(role: str) -> list[RoleCalcInfo]:
+        return [
+            RoleCalcInfo(
+                lot_id=calc_meta[cid]["lot_id"],
+                carries_frequencies=cid in freq_calc_ids,
+            )
+            for cid in role_calc_ids.get(role, [])
+            if cid in calc_meta
+        ]
 
     derived = derive_levels(
-        opt=info("opt"),
-        freq=info("freq"),
-        sp=info("sp"),
-        composite=info("composite"),
-        imported=info("imported"),
+        opts=infos("opt"),
+        freqs=infos("freq"),
+        sps=infos("sp"),
+        composites=infos("composite"),
+        importeds=infos("imported"),
     )
     return ScientificLevelsSummary(
         geometry=_lot_summary_from_id(calc_meta_by_lot_id, derived.geometry_lot_id),

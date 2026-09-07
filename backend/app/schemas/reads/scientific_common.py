@@ -272,13 +272,19 @@ class ScientificLevelsSummary(BaseModel):
     * ``frequency`` — the ``freq`` role's level, or the ``opt``'s own
       level when no separate ``freq`` is linked but the optimisation
       calculation itself carries frequency results.
-    * ``energy`` — the ``sp`` role's level when an ``sp`` is linked;
+    * ``energy`` — the linked ``sp``s' shared level when they agree;
       otherwise the ``opt``'s own level (an optimisation's final energy
       *is* the single-point value at its own level of theory); otherwise
-      a linked ``composite``/``imported`` calculation's level.
+      a linked ``composite``/``imported`` calculation's level; ``null``
+      when linked ``sp``s disagree on level of theory (see
+      ``energy_source="ambiguous"`` below).
     * ``energy_source`` names which role answered ``energy`` -- ``'sp'``,
-      ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``null`` when
-      nothing linked can answer it.
+      ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``'ambiguous'``
+      when two or more linked ``sp`` calculations (a multi-conformer
+      ensemble's per-conformer single points, say) run at different
+      levels of theory, so no single energy level of theory can be
+      reported for the record as a whole; or ``null`` when nothing
+      linked can answer it.
 
     Any field may be ``null`` independently of the others: a record with
     only a ``freq`` link, for instance, reports a ``frequency`` level and
@@ -288,7 +294,9 @@ class ScientificLevelsSummary(BaseModel):
     geometry: LevelOfTheorySummary | None = None
     frequency: LevelOfTheorySummary | None = None
     energy: LevelOfTheorySummary | None = None
-    energy_source: Literal["sp", "opt", "composite", "imported"] | None = None
+    energy_source: (
+        Literal["sp", "opt", "composite", "imported", "ambiguous"] | None
+    ) = None
 
 
 class SoftwareReleaseSummary(BaseModel):

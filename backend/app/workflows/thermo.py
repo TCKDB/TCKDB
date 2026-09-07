@@ -21,14 +21,13 @@ from app.schemas.workflows.thermo_upload import (
     ThermoUploadRequest,
 )
 from app.services.calculation_levels import (
+    W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
     W_THERMO_ENERGY_LEVEL_CONTRADICTION,
     W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
     W_THERMO_ROLE_DUPLICATE,
     W_THERMO_SP_GEOMETRY_MISMATCH,
     RoleLink,
-    assert_energy_level_consistent,
-    assert_no_duplicate_roles,
-    assert_sp_geometry_matches_opt,
+    assert_role_consistency,
 )
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -365,34 +364,33 @@ def persist_thermo_upload(
         species_entry_id=species_entry.id,
     )
 
-    # R2/R3/R4 (app.services.calculation_levels): a depositor linking
-    # opt/freq/sp calculations directly declares a single chain of
-    # evidence, so at most one of each is allowed, a linked sp must share
-    # the linked opt's geometry, and a declared energy_level_of_theory
-    # must agree with what is linked. Skipped entirely when the record
-    # instead derives from a statmech basis (R6): the schema already
-    # refuses combining energy_level_of_theory with existing_statmech_id,
-    # and the record's levels are then the statmech's, inherited wholesale
-    # at read time rather than re-checked here.
-    if resolved_statmech_id is None:
-        declared_energy_lot = (
-            resolve_level_of_theory_ref(session, request.energy_level_of_theory)
-            if request.energy_level_of_theory is not None
-            else None
-        )
-        assert_no_duplicate_roles(
-            role_links, code=W_THERMO_ROLE_DUPLICATE, subject="thermo"
-        )
-        assert_sp_geometry_matches_opt(
-            role_links, code=W_THERMO_SP_GEOMETRY_MISMATCH, subject="thermo"
-        )
-        assert_energy_level_consistent(
-            role_links,
-            declared_energy_lot,
-            requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
-            contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
-            subject="thermo",
-        )
+    # R2'/R3'/Coverage/R4' (app.services.calculation_levels), unconditional
+    # on the record's own role_links -- a thermo that links its own opt
+    # calculations makes a claim about those calculations regardless of
+    # whether it *also* names a statmech basis, so R2'/R3'/Coverage always
+    # run (they do nothing when role_links is empty). Only R4' (the
+    # declared-energy-level check) is meaningfully gated to "no statmech
+    # basis": ``declared_energy_lot`` is always None when
+    # ``existing_statmech_id`` is set, because the schema already refuses
+    # combining ``energy_level_of_theory`` with it (R6 -- the record's
+    # levels are then the statmech's, inherited wholesale at read time
+    # rather than re-checked here), so R4' is automatically a no-op in
+    # that case without a separate branch here.
+    declared_energy_lot = (
+        resolve_level_of_theory_ref(session, request.energy_level_of_theory)
+        if request.energy_level_of_theory is not None
+        else None
+    )
+    assert_role_consistency(
+        role_links,
+        declared_energy_lot,
+        duplicate_code=W_THERMO_ROLE_DUPLICATE,
+        geometry_mismatch_code=W_THERMO_SP_GEOMETRY_MISMATCH,
+        requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+        contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+        ambiguous_code=W_THERMO_ENERGY_LEVEL_AMBIGUOUS,
+        subject="thermo",
+    )
 
     thermo_create = resolve_thermo_upload(
         session,

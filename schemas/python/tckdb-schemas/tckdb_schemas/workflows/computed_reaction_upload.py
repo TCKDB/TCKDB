@@ -55,6 +55,7 @@ from tckdb_schemas.fragments.identity import (
 )
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
+    LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
@@ -327,6 +328,9 @@ class BundleThermoIn(SchemaBase):
         calculation key. Each key must resolve in the bundle's global
         calc-key namespace and must name a calculation owned by this
         species entry; the workflow rejects both failures.
+    :param energy_level_of_theory: Optional depositor-declared level of
+        theory the record's energy is claimed to stand at. Checked
+        against the resolved role links; never persisted.
     :param note: Optional note.
     """
 
@@ -347,6 +351,10 @@ class BundleThermoIn(SchemaBase):
     source_calculations: list[ThermoSourceCalcInBundle] = Field(
         default_factory=list
     )
+    # Depositor-declared level of theory the record's energy is claimed
+    # to stand at. See ``app.services.calculation_levels`` on the backend
+    # for the exact rule; never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 
     @model_validator(mode="after")

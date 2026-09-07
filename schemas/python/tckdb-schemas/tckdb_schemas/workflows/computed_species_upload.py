@@ -385,6 +385,11 @@ class ThermoInBundle(SchemaBase):
         default_factory=list
     )
 
+    # Depositor-declared level of theory the record's energy is claimed
+    # to stand at. See ``app.services.calculation_levels`` on the backend
+    # for the exact rule; never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
+
     @model_validator(mode="after")
     def validate_temperature_range(self) -> Self:
         if (
@@ -532,6 +537,9 @@ class StatmechInBundle(SchemaBase):
     :param source_calculations: Statmech → calc links by bundle-local
         calculation key.
     :param torsions: Torsional mode metadata.
+    :param energy_level_of_theory: Optional depositor-declared level of
+        theory the record's energy is claimed to stand at. Checked
+        against the resolved role links; never persisted.
     :param note: Optional free-text note.
     """
 
@@ -558,6 +566,11 @@ class StatmechInBundle(SchemaBase):
 
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[StatmechTorsionInBundle] = Field(default_factory=list)
+
+    # Depositor-declared level of theory the record's energy is claimed
+    # to stand at. See ``app.services.calculation_levels`` on the backend
+    # for the exact rule; never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
 
     note: str | None = None
 
