@@ -57,6 +57,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     PathSearchSummary,
     SCFStabilitySummary,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     ValidationSummary,
     WorkflowToolReleaseSummary,
@@ -79,6 +80,7 @@ from app.schemas.reads.scientific_kinetics import (
     ScientificReactionKineticsResponse,
     ThirdBodyEfficiencyBlock,
 )
+from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -521,9 +523,18 @@ def get_reaction_kinetics(
 
         ts_opt_calc_id = provenance.ts_opt_calculation_id
         ts_sp_calc_id = provenance.ts_sp_calculation_id
-        # NOTE: provenance.ts_freq_calculation_id is intentionally not yet
-        # fed into the evidence breakdown — see plan.md discovered-issues
+        ts_freq_calc_id = provenance.ts_freq_calculation_id
+        # NOTE: ts_freq_calc_id is intentionally not yet fed into the
+        # evidence breakdown below — see plan.md discovered-issues
         # 2026-07-02 (TS frequency evidence omitted from kinetics trust).
+        # It IS fed into ``levels`` (see _build_kinetics_levels).
+
+        levels = _build_kinetics_levels(
+            ts_opt_calc_id=ts_opt_calc_id,
+            ts_freq_calc_id=ts_freq_calc_id,
+            ts_sp_calc_id=ts_sp_calc_id,
+            calc_meta=calc_meta,
+        )
 
         evidence = _evidence_breakdown(
             kinetics=k,
@@ -575,6 +586,7 @@ def get_reaction_kinetics(
                 ),
                 temperature_coverage=coverage,
                 evidence_completeness=evidence,
+                levels=levels,
                 provenance=provenance,
                 trust=(
                     build_kinetics_trust_fragment(
@@ -1469,6 +1481,96 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
         label="/".join(p for p in label_parts if p),
+    )
+
+
+def _build_kinetics_levels(
+    *,
+    ts_opt_calc_id: int | None,
+    ts_freq_calc_id: int | None,
+    ts_sp_calc_id: int | None,
+    calc_meta: dict[int, "_CalcMeta"],
+) -> ScientificLevelsSummary:
+    """R1 kinetics mapping: ``ts_opt``/``ts_freq``/``ts_sp`` -> derive_levels' opt/freq/sp.
+
+    ``KineticsCalculationRole`` has no ``opt``/``freq``/``sp`` members of
+    its own (``reactant_energy``/``product_energy``/``ts_energy``/
+    ``freq``/``irc``/``master_equation``/``fit_source``) -- the three
+    calculation ids read here are the ones :func:`_build_provenance`
+    already resolved by *calculation type* among this record's linked
+    source calculations (``ts_opt_calculation_id`` /
+    ``ts_freq_calculation_id`` / ``ts_sp_calculation_id``), not by a role
+    name. Each becomes exactly one of
+    :func:`app.services.calculation_levels.derive_levels`'s input roles:
+    ``ts_opt`` -> ``opts``, ``ts_freq`` -> ``freqs``, ``ts_sp`` -> ``sps``.
+    No ``composites``/``importeds`` are fed (kinetics provenance has no
+    such concept), and the opt-carries-frequencies fallback is never
+    triggered here (every ``RoleCalcInfo`` below is built with
+    ``carries_frequencies=False``): ``frequency`` answers "is there a
+    ``ts_freq``-typed calculation on this chain", not "does *some* level
+    happen to be available", so it stays ``null`` when no ``ts_freq`` is
+    linked even though the ``ts_opt`` calculation might itself carry
+    frequency results.
+
+    A record with no TS chain at all (e.g. an experimental or literature
+    kinetics row) has all three ids ``None`` and returns an all-``null``
+    summary with ``energy_source=None``.
+
+    **Known divergence from TS-entry evidence.** ``ts_opt_calculation_id``
+    (and therefore ``geometry`` here) can be ``null`` even when the
+    record's transition-state entry has ``evidence_summary.has_opt=True``
+    (``kin_spkzatwjlvmmnja3i5im4fl7hq`` on the hosted archive is the
+    observed case). This is not a bug: ``ts_opt_calculation_id`` answers
+    "which calculation did *this kinetics record's own source-calculation
+    links* cite", a per-record, precise evidence chain built only from
+    :class:`~app.db.models.kinetics.KineticsSourceCalculation` rows this
+    record carries. ``has_opt`` answers "does the transition-state entry
+    itself have an optimisation calculation *at all*", scanned directly
+    off ``calculation.transition_state_entry_id`` regardless of which
+    kinetics record (if any) cited it. A TS entry legitimately
+    accumulates calculations across deposits that a given rate constant's
+    own citations never re-link -- matching the established house policy
+    that calculation DAG edges are opportunistic enrichment, not required
+    (an unlinked calculation is not evidence of a missing one). Falling
+    back to a TS-entry-wide scan here would misattribute a level of
+    theory to a calculation this specific fit may never have used, so the
+    two surfaces are left to report what each actually knows; see
+    ``tests/services/scientific_read/test_get_reaction_kinetics.py::test_ts_opt_calculation_ref_can_be_null_while_ts_entry_has_opt``
+    for the reproduction, including what ``levels`` reports in that
+    shape (``geometry`` null, ``energy``/``energy_source`` still
+    resolved from the linked ``sp``).
+    """
+
+    def _info(calc_id: int | None) -> RoleCalcInfo | None:
+        if calc_id is None:
+            return None
+        meta = calc_meta.get(calc_id)
+        if meta is None:
+            return None
+        return RoleCalcInfo(lot_id=meta.lot_id, carries_frequencies=False)
+
+    opt = _info(ts_opt_calc_id)
+    freq = _info(ts_freq_calc_id)
+    sp = _info(ts_sp_calc_id)
+
+    derived = derive_levels(
+        opts=[opt] if opt is not None else [],
+        freqs=[freq] if freq is not None else [],
+        sps=[sp] if sp is not None else [],
+    )
+
+    if derived.energy_source == "sp":
+        energy_meta = calc_meta.get(ts_sp_calc_id)
+    elif derived.energy_source == "opt":
+        energy_meta = calc_meta.get(ts_opt_calc_id)
+    else:
+        energy_meta = None
+
+    return ScientificLevelsSummary(
+        geometry=_lot_summary_for_calc(calc_meta.get(ts_opt_calc_id)),
+        frequency=_lot_summary_for_calc(calc_meta.get(ts_freq_calc_id)),
+        energy=_lot_summary_for_calc(energy_meta),
+        energy_source=derived.energy_source,
     )
 
 

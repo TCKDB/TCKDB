@@ -195,12 +195,24 @@ class ReactionFullSpeciesParticipant(BaseModel):
     participants. Changing it would change a served value that
     consumers parse, so it is left alone here; render from
     ``species_entry_label`` if you need the equation to be unambiguous.
+
+    ``formula`` is the Hill-notation formula RDKit derives from ``smiles``
+    (``app.services.scientific_read.common.molecular_formula_expr``, the
+    same expression the species surface serves); ``null`` when ``smiles``
+    fails to parse. ``stoichiometry`` is the graph-identity coefficient
+    from ``chem_reaction.reaction_participant`` -- the reaction-level fact
+    ("this equation consumes two of this species"), joined by
+    ``(reaction_id, species_id, role)`` and *not* a property of this
+    particular deposit's structure-participant row, which lists a
+    repeated species once regardless of how many times it reacts.
     """
 
     species_entry_id: int
     species_entry_ref: str
     species_entry_label: str | None = None
     smiles: str
+    formula: str | None = None
+    stoichiometry: int
     participant_index: int
     review: RecordReviewBadge
 
@@ -421,6 +433,36 @@ class ReactionFullSpeciesConformers(BaseModel):
     conformer_groups: list[ReactionFullConformerGroupItem] = Field(default_factory=list)
 
 
+class ReactionFullNetworkMembership(BaseModel):
+    """One pressure-dependent network this reaction entry is admitted to.
+
+    Built from ``network_reaction`` rows for the entry via
+    :func:`app.services.scientific_read.networks.build_network_record` (the
+    same builder ``GET /scientific/networks/{ref}`` uses), so
+    ``solve_temperature_min_k`` / ``solve_temperature_max_k`` /
+    ``solve_pressure_min_bar`` / ``solve_pressure_max_bar`` are the union
+    envelope over that network's ``network_solve`` rows and
+    ``channel_count`` is the network's total channel count -- not scoped
+    to channels this particular reaction entry participates in, because a
+    channel does not carry a single reaction-entry owner.
+
+    ``[]`` means the entry has been checked against every network in the
+    archive and admitted to none; the section is entirely absent when
+    ``include=networks`` was not requested. See
+    :class:`ScientificReactionFullResponse`'s docstring for the
+    absent/null/populated contract this section follows.
+    """
+
+    network_ref: str
+    name: str | None = None
+    solve_temperature_min_k: float | None = None
+    solve_temperature_max_k: float | None = None
+    solve_pressure_min_bar: float | None = None
+    solve_pressure_max_bar: float | None = None
+    channel_count: int
+    review: RecordReviewBadge
+
+
 class ReviewRecordEntry(BaseModel):
     """Audit-array entry returned only when ``include_review=full``."""
 
@@ -443,19 +485,19 @@ class ScientificReactionFullResponse(BaseModel):
     Sections that are not in the ``include`` set are omitted entirely.
     Sections that are in the ``include`` set are always present (collections
     as ``[]``, objects as ``null`` when empty). This document said so for a
-    long time before it was true; the ten include-gated sections below are
-    stripped at the response seam by ``REACTION_FULL_SECTIONS``, which needs
-    the ``document`` scope because they sit at the root rather than under a
-    ``record`` key.
+    long time before it was true; the eleven include-gated sections below
+    are stripped at the response seam by ``REACTION_FULL_SECTIONS``, which
+    needs the ``document`` scope because they sit at the root rather than
+    under a ``record`` key.
 
     ``include`` **replaces** the defaults rather than extending them: a bare
-    request resolves to ``species``, ``kinetics`` and ``transition_states``,
-    and ``?include=irc`` resolves to ``irc`` alone. Under the old shape that
-    silently nulled three sections a caller was still expecting; now they are
-    absent and ``request.include`` says why.
+    request resolves to ``species``, ``kinetics``, ``transition_states`` and
+    ``networks``, and ``?include=irc`` resolves to ``irc`` alone. Under the
+    old shape that silently nulled three sections a caller was still
+    expecting; now they are absent and ``request.include`` says why.
 
     ``review_records`` is the one exception and is deliberately not one of
-    the ten. It is produced by the separate ``include_review`` query
+    the eleven. It is produced by the separate ``include_review`` query
     parameter, not by any include token, so it keeps its ``null`` when the
     caller asked for ``include_review=summary`` — an include-driven strip has
     nothing true to say about a field a different parameter governs, and
@@ -481,6 +523,9 @@ class ScientificReactionFullResponse(BaseModel):
     # map exists and how it was obtained; this section is the map itself, which
     # is per-atom and therefore opt-in.
     atom_map: list[ReactionAtomMapDetail] | None = None
+    # Pressure-dependent network admission (DR-0001/DR-0036 territory). See
+    # ReactionFullNetworkMembership for the three-state contract.
+    networks: list[ReactionFullNetworkMembership] | None = None
 
     # Present only when include_review=full.
     review_records: list[ReviewRecordEntry] | None = None

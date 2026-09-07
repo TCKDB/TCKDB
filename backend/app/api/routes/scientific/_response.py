@@ -294,6 +294,7 @@ REACTION_FULL_SECTIONS = IncludeGatedSections(
         "conformers": ("conformers",),
         "artifacts": ("artifacts",),
         "atom_map": ("atom_map",),
+        "networks": ("networks",),
     },
 )
 

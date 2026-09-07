@@ -19165,6 +19165,9 @@
             "title": "Kinetics Ref",
             "type": "string"
           },
+          "levels": {
+            "$ref": "#/components/schemas/ScientificLevelsSummary"
+          },
           "model_kind": {
             "$ref": "#/components/schemas/KineticsModelKind"
           },
@@ -19327,6 +19330,7 @@
           "parameters",
           "uncertainty",
           "evidence_completeness",
+          "levels",
           "provenance"
         ],
         "title": "KineticsRecord",
@@ -29830,6 +29834,84 @@
         "title": "ReactionFullIRCItem",
         "type": "object"
       },
+      "ReactionFullNetworkMembership": {
+        "description": "One pressure-dependent network this reaction entry is admitted to.\n\nBuilt from ``network_reaction`` rows for the entry via\n:func:`app.services.scientific_read.networks.build_network_record` (the\nsame builder ``GET /scientific/networks/{ref}`` uses), so\n``solve_temperature_min_k`` / ``solve_temperature_max_k`` /\n``solve_pressure_min_bar`` / ``solve_pressure_max_bar`` are the union\nenvelope over that network's ``network_solve`` rows and\n``channel_count`` is the network's total channel count -- not scoped\nto channels this particular reaction entry participates in, because a\nchannel does not carry a single reaction-entry owner.\n\n``[]`` means the entry has been checked against every network in the\narchive and admitted to none; the section is entirely absent when\n``include=networks`` was not requested. See\n:class:`ScientificReactionFullResponse`'s docstring for the\nabsent/null/populated contract this section follows.",
+        "properties": {
+          "channel_count": {
+            "title": "Channel Count",
+            "type": "integer"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/RecordReviewBadge"
+          },
+          "solve_pressure_max_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Pressure Max Bar"
+          },
+          "solve_pressure_min_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Pressure Min Bar"
+          },
+          "solve_temperature_max_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Temperature Max K"
+          },
+          "solve_temperature_min_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solve Temperature Min K"
+          }
+        },
+        "required": [
+          "network_ref",
+          "channel_count",
+          "review"
+        ],
+        "title": "ReactionFullNetworkMembership",
+        "type": "object"
+      },
       "ReactionFullPathSearchItem": {
         "description": "One path-search calculation embedded under ``/full?include=path_search``.\n\n``summary`` is byte-identical to\n``GET /scientific/calculations/{ref}?include=path_search`` under\n``record.path_search``. Per-point arrays live behind the\nspecialized ``/path-search`` endpoint.",
         "properties": {
@@ -29997,8 +30079,19 @@
         "type": "object"
       },
       "ReactionFullSpeciesParticipant": {
-        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.",
+        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` is the Hill-notation formula RDKit derives from ``smiles``\n(``app.services.scientific_read.common.molecular_formula_expr``, the\nsame expression the species surface serves); ``null`` when ``smiles``\nfails to parse. ``stoichiometry`` is the graph-identity coefficient\nfrom ``chem_reaction.reaction_participant`` -- the reaction-level fact\n(\"this equation consumes two of this species\"), joined by\n``(reaction_id, species_id, role)`` and *not* a property of this\nparticular deposit's structure-participant row, which lists a\nrepeated species once regardless of how many times it reacts.",
         "properties": {
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
           "participant_index": {
             "title": "Participant Index",
             "type": "integer"
@@ -30029,11 +30122,16 @@
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
+          },
+          "stoichiometry": {
+            "title": "Stoichiometry",
+            "type": "integer"
           }
         },
         "required": [
           "species_entry_ref",
           "smiles",
+          "stoichiometry",
           "participant_index",
           "review"
         ],
@@ -30050,8 +30148,19 @@
         "type": "string"
       },
       "ReactionParticipantSummary": {
-        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.",
+        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.\n\n``formula`` and ``stoichiometry`` mirror\n``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``) — the\nsame RDKit Hill-notation expression and the same\n``chem_reaction.reaction_participant`` coefficient, so a search row and\na ``/full`` participant row render identically.",
         "properties": {
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
           "participant_index": {
             "title": "Participant Index",
             "type": "integer"
@@ -30079,11 +30188,16 @@
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
+          },
+          "stoichiometry": {
+            "title": "Stoichiometry",
+            "type": "integer"
           }
         },
         "required": [
           "species_entry_ref",
           "smiles",
+          "stoichiometry",
           "participant_index"
         ],
         "title": "ReactionParticipantSummary",
@@ -34440,7 +34554,7 @@
         "type": "string"
       },
       "ScientificReactionFullResponse": {
-        "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/full.\n\nSections that are not in the ``include`` set are omitted entirely.\nSections that are in the ``include`` set are always present (collections\nas ``[]``, objects as ``null`` when empty). This document said so for a\nlong time before it was true; the ten include-gated sections below are\nstripped at the response seam by ``REACTION_FULL_SECTIONS``, which needs\nthe ``document`` scope because they sit at the root rather than under a\n``record`` key.\n\n``include`` **replaces** the defaults rather than extending them: a bare\nrequest resolves to ``species``, ``kinetics`` and ``transition_states``,\nand ``?include=irc`` resolves to ``irc`` alone. Under the old shape that\nsilently nulled three sections a caller was still expecting; now they are\nabsent and ``request.include`` says why.\n\n``review_records`` is the one exception and is deliberately not one of\nthe ten. It is produced by the separate ``include_review`` query\nparameter, not by any include token, so it keeps its ``null`` when the\ncaller asked for ``include_review=summary`` — an include-driven strip has\nnothing true to say about a field a different parameter governs, and\n``request.include_review`` is echoed beside ``request.include`` so a\nreader can tell the two states apart.",
+        "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/full.\n\nSections that are not in the ``include`` set are omitted entirely.\nSections that are in the ``include`` set are always present (collections\nas ``[]``, objects as ``null`` when empty). This document said so for a\nlong time before it was true; the eleven include-gated sections below\nare stripped at the response seam by ``REACTION_FULL_SECTIONS``, which\nneeds the ``document`` scope because they sit at the root rather than\nunder a ``record`` key.\n\n``include`` **replaces** the defaults rather than extending them: a bare\nrequest resolves to ``species``, ``kinetics``, ``transition_states`` and\n``networks``, and ``?include=irc`` resolves to ``irc`` alone. Under the\nold shape that silently nulled three sections a caller was still\nexpecting; now they are absent and ``request.include`` says why.\n\n``review_records`` is the one exception and is deliberately not one of\nthe eleven. It is produced by the separate ``include_review`` query\nparameter, not by any include token, so it keeps its ``null`` when the\ncaller asked for ``include_review=summary`` — an include-driven strip has\nnothing true to say about a field a different parameter governs, and\n``request.include_review`` is echoed beside ``request.include`` so a\nreader can tell the two states apart.",
         "properties": {
           "artifacts": {
             "anyOf": [
@@ -34531,6 +34645,21 @@
             ],
             "title": "Kinetics",
             "x-tckdb-include-gated": "kinetics"
+          },
+          "networks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReactionFullNetworkMembership"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Networks",
+            "x-tckdb-include-gated": "networks"
           },
           "path_search": {
             "anyOf": [
@@ -71268,6 +71397,214 @@
           }
         },
         "summary": "Reaction Kinetics",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/reactions/browse": {
+      "get": {
+        "description": "List reaction entries with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/reactions/search``\n(:class:`~app.schemas.reads.scientific_reactions.ReactionScientificRecord`)\n-- equation, participants (with ``formula``/``stoichiometry``),\nreview, availability -- so a browse row and a search row render\nidentically. Unlike search, no filter is required: with none\nsupplied, every reaction entry in the corpus is a candidate.\n\n``limit`` is capped at 200 (default 50, matching\n``/reactions/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, has_kinetics DESC,\nhas_transition_state DESC, created_at DESC, id DESC`` -- the same\norder ``/reactions/search`` uses, in the species-browse style of\n\"review rank, then an availability flag, then recency, then id\".\nThere is no client-supplied ``sort=`` parameter to reject; this\noperation has none to accept.",
+        "operationId": "scientific_reactions_browse_api_v1_scientific_reactions_browse_get",
+        "parameters": [
+          {
+            "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+              "title": "Family"
+            }
+          },
+          {
+            "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+            "in": "query",
+            "name": "reactant_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+              "title": "Reactant Smiles"
+            }
+          },
+          {
+            "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+            "in": "query",
+            "name": "product_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+              "title": "Product Smiles"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_kinetics",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Kinetics"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_transition_state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Transition State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificReactionSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Reactions Browse",
         "tags": [
           "scientific"
         ]

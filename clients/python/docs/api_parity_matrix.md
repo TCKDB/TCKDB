@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 96 |
+| typed | 97 |
 | raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **241** |
+| **total** | **242** |
 
 ## Typed coverage
 
@@ -87,6 +87,7 @@ A first-class client method exists for these operations.
 | `POST /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` | yes | `get_reaction_full` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics` | yes | `get_reaction_kinetics` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
+| `GET /api/v1/scientific/reactions/browse` | yes | `browse_reactions` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/reactions/search` | yes | `search_reactions` | `iter_reactions` | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `POST /api/v1/scientific/reactions/search` | yes | `search_reactions` | `iter_reactions` | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species-calculations/search` | yes | `search_species_calculations` | `iter_species_calculations` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |

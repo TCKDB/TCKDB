@@ -27,7 +27,7 @@ import re
 from typing import Any
 
 from rdkit import Chem, RDLogger
-from sqlalchemy import Text, and_, case, func, not_, or_, select, text
+from sqlalchemy import and_, case, func, not_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
@@ -74,6 +74,7 @@ from app.services.scientific_read.calculation_provenance_filters import (
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
+    molecular_formula_expr,
     reject_client_sort,
     review_summary,
     validate_includes,
@@ -180,8 +181,12 @@ def _formula_expr():
     before any table exists, so a database this code can talk to has it.
     Deriving the string in Python instead would reach for the ``rdkit``
     wheel, which ``pyproject.toml`` declares as an opt-in ``[rdkit]`` extra.
+
+    Delegates to :func:`app.services.scientific_read.common.molecular_formula_expr`
+    — the shared expression every formula-deriving read module now uses —
+    fixed to ``Species.smiles`` for this module's callers.
     """
-    return func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
+    return molecular_formula_expr(Species.smiles)
 
 
 def _heavy_atom_count_expr():

@@ -1320,6 +1320,61 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
+    def browse_reactions(
+        self,
+        *,
+        family: str | None = None,
+        reactant_smiles: str | None = None,
+        product_smiles: str | None = None,
+        has_kinetics: bool | None = None,
+        has_transition_state: bool | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> ReactionSearchResponse:
+        """``GET /scientific/reactions/browse`` -- list reaction entries, no filter required.
+
+        The sibling of :meth:`search_reactions` for "what does this
+        archive hold" rather than "find this reaction": no parameter here
+        is required, unlike ``search_reactions``, which 422s
+        (``missing_reaction_search_filter``) on a request with neither a
+        chemistry filter nor an explicit ref. ``reactant_smiles`` /
+        ``product_smiles`` are single exact-match SMILES filters -- the
+        browse analogue of ``search_reactions``'s ``reactants`` /
+        ``products`` lists, narrowing one side of an open listing rather
+        than building a multi-species equation query. There is no
+        ``reaction_ref`` / ``reaction_entry_ref`` parameter here; a caller
+        who already has one wants :meth:`search_reactions`.
+
+        Returns the parsed ``ScientificReactionSearchResponse`` JSON
+        envelope -- field-for-field identical to ``search_reactions``'s
+        response (see :data:`tckdb_client.scientific_types.ReactionRecord`,
+        which now also carries ``formula``/``stoichiometry`` per
+        participant).
+        """
+        params = {
+            "family": family,
+            "reactant_smiles": reactant_smiles,
+            "product_smiles": product_smiles,
+            "has_kinetics": has_kinetics,
+            "has_transition_state": has_transition_state,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/reactions/browse",
+            params=params,
+            authenticated=False,
+        ).data
+
     def get_reaction_kinetics(
         self,
         reaction_entry_id: int | str,

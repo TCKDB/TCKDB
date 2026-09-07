@@ -143,6 +143,35 @@ class ReactionSearchRequest(BaseModel):
         return value
 
 
+class ReactionsBrowseRequest(BaseModel):
+    """Service-layer request model for the identifier-free reaction browse.
+
+    Sibling to :class:`ReactionSearchRequest`, not a relaxation of it: no
+    field here is required, mirroring
+    ``TransitionStatesBrowseRequest``'s relationship to
+    ``TransitionStatesSearchRequest``. ``reactant_smiles`` / ``product_smiles``
+    are single exact-match SMILES filters (unlike search's ``reactants`` /
+    ``products`` lists) -- narrowing an open listing by one structure per
+    side, not building a multi-species equation query. There is
+    deliberately no ``reaction_ref`` / ``reaction_entry_ref`` field: a
+    caller who already has one of those wants
+    ``/scientific/reactions/search``, an exact lookup.
+    """
+
+    family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
+    reactant_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    product_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    has_kinetics: bool | None = None
+    has_transition_state: bool | None = None
+
+    min_review_status: RecordReviewStatus | None = None
+    include_rejected: bool = False
+    include_deprecated: bool = False
+
+    offset: int = 0
+    limit: int = 50
+
+
 # ---------------------------------------------------------------------------
 # Per-record shapes
 # ---------------------------------------------------------------------------
@@ -169,12 +198,20 @@ class ReactionParticipantSummary(BaseModel):
     participants. Changing it would change a served value that
     consumers parse, so it is left alone here; render from
     ``species_entry_label`` if you need the equation to be unambiguous.
+
+    ``formula`` and ``stoichiometry`` mirror
+    ``ReactionFullSpeciesParticipant`` (``scientific_provenance.py``) — the
+    same RDKit Hill-notation expression and the same
+    ``chem_reaction.reaction_participant`` coefficient, so a search row and
+    a ``/full`` participant row render identically.
     """
 
     species_entry_id: int
     species_entry_ref: str
     species_entry_label: str | None = None
     smiles: str
+    formula: str | None = None
+    stoichiometry: int
     participant_index: int
 
 

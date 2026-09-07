@@ -28,11 +28,13 @@ from app.db.models.common import (
 from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.network import Network, NetworkReaction
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
     ReactionEntryStructureParticipant,
     ReactionFamily,
+    ReactionParticipant,
 )
 from app.db.models.reaction_atom_map import (
     ReactionAtomMap,
@@ -58,6 +60,7 @@ from app.schemas.reads.scientific_provenance import (
     ReactionFullCalculationEvidenceSummary,
     ReactionFullConformerGroupItem,
     ReactionFullIRCItem,
+    ReactionFullNetworkMembership,
     ReactionFullPathSearchItem,
     ReactionFullReadRequest,
     ReactionFullScanItem,
@@ -85,6 +88,7 @@ from app.services.scientific_read.calculations import (
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    molecular_formula_expr,
     reject_client_sort,
     review_summary,
     validate_includes,
@@ -95,6 +99,7 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.networks import build_network_record
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
@@ -122,11 +127,17 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "internal_ids",
     "trust",
+    "networks",
     "all",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "trust"}
 
-_DEFAULT_INCLUDES: set[str] = {"species", "kinetics", "transition_states"}
+_DEFAULT_INCLUDES: set[str] = {
+    "species",
+    "kinetics",
+    "transition_states",
+    "networks",
+}
 
 
 def get_reaction_full(
@@ -277,6 +288,10 @@ def get_reaction_full(
         artifacts_block = _build_artifacts_section(session, reaction_entry_id)
     atom_map_block: list[ReactionAtomMapDetail] | None = atom_map_details
 
+    networks_block: list[ReactionFullNetworkMembership] | None = None
+    if "networks" in includes:
+        networks_block = _build_networks_section(session, reaction_entry_id)
+
     # Hosted abuse-control caps: reject responses that would expand
     # beyond the configured public limits. ``include=all`` is what
     # most often pushes a heavily-studied reaction over the edge, but
@@ -349,6 +364,7 @@ def get_reaction_full(
         conformers=conformers_block,
         artifacts=artifacts_block,
         atom_map=atom_map_block,
+        networks=networks_block,
         review_records=review_records_block,
     )
 
@@ -558,13 +574,18 @@ def _build_species_section(
     reaction_entry_id: int,
     visible_review_statuses: set,
 ) -> ReactionFullSpecies:
+    entry = session.get(ReactionEntry, reaction_entry_id)
+    reaction_id = entry.reaction_id if entry is not None else None
+
     rows = session.execute(
         select(
             ReactionEntryStructureParticipant.species_entry_id,
             SpeciesEntry.public_ref,
             ReactionEntryStructureParticipant.role,
             ReactionEntryStructureParticipant.participant_index,
+            Species.id,
             Species.smiles,
+            molecular_formula_expr(Species.smiles),
             SpeciesEntry.stereo_label,
             SpeciesEntry.electronic_state_kind,
             SpeciesEntry.electronic_state_label,
@@ -587,6 +608,24 @@ def _build_species_section(
         record_ids=[r[0] for r in rows],
     )
 
+    # Graph-identity stoichiometry lives on ``chem_reaction.reaction_participant``,
+    # keyed by (reaction_id, species_id, role) -- not on the per-deposit
+    # structure-participant row, which lists a repeated species once
+    # regardless of how many times it reacts (see ReactionFullSpeciesParticipant's
+    # docstring).
+    stoichiometry_by_key: dict[tuple[int, ReactionRole], int] = {}
+    if reaction_id is not None:
+        stoichiometry_by_key = {
+            (species_id, role): stoichiometry
+            for species_id, role, stoichiometry in session.execute(
+                select(
+                    ReactionParticipant.species_id,
+                    ReactionParticipant.role,
+                    ReactionParticipant.stoichiometry,
+                ).where(ReactionParticipant.reaction_id == reaction_id)
+            ).all()
+        }
+
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
     for row in rows:
@@ -600,6 +639,8 @@ def _build_species_section(
             species_entry_ref=row.public_ref,
             species_entry_label=species_entry_label_for(row),
             smiles=row.smiles,
+            formula=row[6],
+            stoichiometry=stoichiometry_by_key.get((row[4], role), 1),
             participant_index=row.participant_index,
             review=badge,
         )
@@ -1080,6 +1121,55 @@ def _build_artifacts_section(
                 calculation_ref=cref,
                 calculation_type=ctype,
                 artifacts=artifacts,
+            )
+        )
+    return out
+
+
+def _build_networks_section(
+    session: Session, reaction_entry_id: int
+) -> list[ReactionFullNetworkMembership]:
+    """Pressure-dependent networks this reaction entry is admitted to.
+
+    Built from ``network_reaction`` rows joined to ``network``, reusing
+    :func:`app.services.scientific_read.networks.build_network_record` with
+    an empty ``includes`` set so only the record's unconditional core +
+    evidence blocks are materialised — the same ``NetworkCoreBlock``
+    (name, solve T/P envelope) and evidence ``channel_count`` that
+    ``GET /scientific/networks/{ref}`` serves, byte-identical because it
+    is the same builder. ``[]`` when the entry belongs to no network;
+    ordered by ``network_id`` ascending for determinism.
+    """
+    network_rows = session.execute(
+        select(Network)
+        .join(NetworkReaction, NetworkReaction.network_id == Network.id)
+        .where(NetworkReaction.reaction_entry_id == reaction_entry_id)
+        .order_by(Network.id.asc())
+    ).scalars().all()
+    if not network_rows:
+        return []
+
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.network,
+        record_ids=[n.id for n in network_rows],
+    )
+
+    out: list[ReactionFullNetworkMembership] = []
+    for n in network_rows:
+        record = build_network_record(
+            session, n=n, badge=badges[n.id], includes=set()
+        )
+        out.append(
+            ReactionFullNetworkMembership(
+                network_ref=record.network.network_ref,
+                name=record.network.name,
+                solve_temperature_min_k=record.network.solve_temperature_min_k,
+                solve_temperature_max_k=record.network.solve_temperature_max_k,
+                solve_pressure_min_bar=record.network.solve_pressure_min_bar,
+                solve_pressure_max_bar=record.network.solve_pressure_max_bar,
+                channel_count=record.evidence_summary.channel_count,
+                review=record.network.review,
             )
         )
     return out

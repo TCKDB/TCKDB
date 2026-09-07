@@ -16,7 +16,7 @@ See ``backend/docs/specs/scientific_conformer_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import Text, and_, exists, func, select
+from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import not_found
@@ -80,6 +80,7 @@ from app.schemas.reads.scientific_conformer import (
 from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
+    molecular_formula_expr,
     review_summary,
     validate_includes,
 )
@@ -640,17 +641,16 @@ def _build_group_fingerprint(
 def _formula_expr(smiles_column):
     """Hill-notation formula for *smiles_column*, via the RDKit cartridge.
 
-    Same expression as ``app.services.scientific_read.species._formula_expr``
-    / ``app.services.scientific_read.geometry._formula_expr`` (see either
-    docstring for the full rationale), redefined locally rather than
-    imported across a private (leading-underscore) module boundary — the
-    same "one expression, redefined at each call site" precedent
-    ``geometry.py`` and ``calculations.py`` already established for this
-    exact string. ``species`` has no stored formula column;
-    ``mol_from_smiles()`` returns SQL NULL for an unparseable SMILES, so
-    an unparseable species yields a NULL formula rather than raising.
+    Thin wrapper over
+    :func:`app.services.scientific_read.common.molecular_formula_expr` (see
+    its docstring for the full rationale) — the shared expression that
+    replaced the locally-redefined copies this module, ``geometry.py`` and
+    ``calculations.py`` each used to carry. ``species`` has no stored
+    formula column; ``mol_from_smiles()`` returns SQL NULL for an
+    unparseable SMILES, so an unparseable species yields a NULL formula
+    rather than raising.
     """
-    return func.mol_formula(func.mol_from_smiles(smiles_column)).cast(Text)
+    return molecular_formula_expr(smiles_column)
 
 
 def _build_species_context(

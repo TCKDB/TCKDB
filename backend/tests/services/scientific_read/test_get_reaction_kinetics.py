@@ -6,6 +6,8 @@ import pytest
 
 from app.api.errors import NotFoundError
 from app.db.models.common import (
+    CalculationType,
+    KineticsCalculationRole,
     KineticsDegeneracyConvention,
     KineticsModelKind,
     PressureContext,
@@ -13,15 +15,23 @@ from app.db.models.common import (
     ScientificOriginKind,
     SubmissionRecordType,
 )
-from app.db.models.kinetics import KineticsInterpretationAssignment, KineticsTunnelingApplication
+from app.db.models.kinetics import (
+    KineticsInterpretationAssignment,
+    KineticsSourceCalculation,
+    KineticsTunnelingApplication,
+)
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics import KineticsReadRequest
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.transition_states import (
+    _build_entry_evidence_summary,
+)
 from tests.services.scientific_read._factories import (
     attach_artifact,
     make_calculation,
     make_chem_reaction,
     make_kinetics,
+    make_lot,
     make_reaction_entry,
     make_species,
     make_species_entry,
@@ -31,6 +41,17 @@ from tests.services.scientific_read._factories import (
     next_inchi_key,
     set_review,
 )
+
+
+def _link(db_session, *, kinetics, calculation, role):
+    db_session.add(
+        KineticsSourceCalculation(
+            kinetics_id=kinetics.id,
+            calculation_id=calculation.id,
+            role=role,
+        )
+    )
+    db_session.flush()
 
 
 def _setup_entry(db_session):
@@ -382,6 +403,169 @@ def test_non_ts_backed_kinetics_has_null_ts_provenance(db_session):
     assert p.literature is None
     assert p.software_release is None
     assert p.workflow_tool_release is None
+    # ``levels`` is always present, and is all-null with a null
+    # energy_source for a record with no TS chain at all.
+    assert record.levels.geometry is None
+    assert record.levels.frequency is None
+    assert record.levels.energy is None
+    assert record.levels.energy_source is None
+
+
+# ---------------------------------------------------------------------------
+# ``levels`` (TS-chain derivation) + the ts_opt provenance/TS-evidence
+# divergence
+# ---------------------------------------------------------------------------
+
+
+def _ts_backed_kinetics(db_session, *, opt_lot, freq_lot, sp_lot):
+    """Build a TS entry with opt/freq/sp calcs, all linked to one kinetics row.
+
+    Roles are ``ts_energy``/``freq``/``ts_energy`` -- provenance resolves
+    ``ts_opt``/``ts_sp`` by *calculation type* among whatever role a
+    calculation is linked under (see ``_first_calc_with_type``), not by a
+    role literally named ``opt``/``sp``.
+    """
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry)
+    ts_entry = make_transition_state_entry(
+        db_session,
+        transition_state=make_transition_state(db_session, reaction_entry=entry),
+    )
+    opt_calc = make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=opt_lot.id,
+    )
+    freq_calc = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=freq_lot.id,
+    )
+    sp_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=sp_lot.id,
+    )
+    _link(db_session, kinetics=kinetics, calculation=opt_calc, role=KineticsCalculationRole.ts_energy)
+    _link(db_session, kinetics=kinetics, calculation=freq_calc, role=KineticsCalculationRole.freq)
+    _link(db_session, kinetics=kinetics, calculation=sp_calc, role=KineticsCalculationRole.ts_energy)
+    return entry, kinetics, ts_entry, opt_calc, freq_calc, sp_calc
+
+
+def test_kinetics_levels_derived_from_full_ts_chain(db_session):
+    opt_lot = make_lot(db_session, method="b3lyp", basis="6-31g")
+    freq_lot = make_lot(db_session, method="b3lyp", basis="6-31g")
+    sp_lot = make_lot(db_session, method="ccsd(t)", basis="cc-pvtz")
+    entry, kinetics, ts_entry, opt_calc, freq_calc, sp_calc = _ts_backed_kinetics(
+        db_session, opt_lot=opt_lot, freq_lot=freq_lot, sp_lot=sp_lot
+    )
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    record = response.records[0]
+
+    assert record.provenance.ts_opt_calculation_ref == opt_calc.public_ref
+    assert record.provenance.ts_freq_calculation_ref == freq_calc.public_ref
+    assert record.provenance.ts_sp_calculation_ref == sp_calc.public_ref
+
+    assert record.levels.geometry is not None
+    assert record.levels.geometry.level_of_theory_id == opt_lot.id
+    assert record.levels.frequency is not None
+    assert record.levels.frequency.level_of_theory_id == freq_lot.id
+    assert record.levels.energy is not None
+    assert record.levels.energy.level_of_theory_id == sp_lot.id
+    assert record.levels.energy_source == "sp"
+
+
+def test_kinetics_levels_energy_falls_back_to_opt_when_no_sp_linked(db_session):
+    opt_lot = make_lot(db_session, method="b3lyp", basis="6-31g")
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry)
+    ts_entry = make_transition_state_entry(
+        db_session,
+        transition_state=make_transition_state(db_session, reaction_entry=entry),
+    )
+    opt_calc = make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=opt_lot.id,
+    )
+    _link(db_session, kinetics=kinetics, calculation=opt_calc, role=KineticsCalculationRole.ts_energy)
+
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    record = response.records[0]
+
+    assert record.levels.geometry is not None
+    assert record.levels.geometry.level_of_theory_id == opt_lot.id
+    assert record.levels.frequency is None
+    assert record.levels.energy is not None
+    assert record.levels.energy.level_of_theory_id == opt_lot.id
+    assert record.levels.energy_source == "opt"
+
+
+def test_ts_opt_calculation_ref_can_be_null_while_ts_entry_has_opt(db_session):
+    """Reproduces the live disagreement noted in the reaction-entry-page plan.
+
+    ``kin_spkzatwjlvmmnja3i5im4fl7hq`` on the hosted archive reports
+    ``ts_opt_calculation_ref: null`` in its kinetics provenance while its
+    transition-state entry's own evidence summary reports ``has_opt:
+    True``. This reproduces the shape: a TS entry carries an ``opt``-type
+    calculation that this particular kinetics record's own
+    ``KineticsSourceCalculation`` links never cite -- only a separate
+    ``sp``-type calculation is linked. See
+    ``app.services.scientific_read.kinetics._build_kinetics_levels`` for
+    why this is a legitimate divergence (per-record citation vs.
+    TS-entry-wide existence, matching the house policy that calculation
+    DAG edges are opportunistic enrichment) rather than a resolver bug.
+    """
+    entry = _setup_entry(db_session)
+    kinetics = make_kinetics(db_session, reaction_entry=entry)
+    ts_entry = make_transition_state_entry(
+        db_session,
+        transition_state=make_transition_state(db_session, reaction_entry=entry),
+    )
+    # The TS entry has an opt calculation on file ...
+    make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=make_lot(db_session, method="b3lyp", basis="6-31g").id,
+    )
+    # ... but this kinetics record only links a separate sp calculation,
+    # never the opt one.
+    sp_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        transition_state_entry_id=ts_entry.id,
+        lot_id=make_lot(db_session, method="ccsd(t)", basis="cc-pvtz").id,
+    )
+    _link(db_session, kinetics=kinetics, calculation=sp_calc, role=KineticsCalculationRole.ts_energy)
+
+    # The TS entry's own evidence sees the opt calculation.
+    ts_evidence = _build_entry_evidence_summary(db_session, ts_entry.id)
+    assert ts_evidence.has_opt is True
+
+    # This kinetics record's provenance does not, because it never linked it.
+    response = get_reaction_kinetics(
+        db_session, reaction_entry_id=entry.id, request=KineticsReadRequest()
+    )
+    record = response.records[0]
+    assert record.provenance.ts_opt_calculation_ref is None
+    assert record.provenance.ts_opt_calculation_id is None
+
+    # ``levels`` reflects the record's own citations, not the TS entry's
+    # full evidence: geometry is null even though the TS is optimized.
+    assert record.levels.geometry is None
+    # The sp calculation IS linked, so energy still resolves from it.
+    assert record.levels.energy is not None
+    assert record.levels.energy_source == "sp"
 
 
 def test_non_ts_backed_kinetics_not_rejected_by_ts_evidence_false(db_session):

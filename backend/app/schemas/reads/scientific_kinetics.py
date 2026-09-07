@@ -40,6 +40,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
@@ -376,6 +377,37 @@ class KineticsRecord(BaseModel):
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
+    #: Geometry / frequency / energy levels of theory, derived at read time
+    #: from this record's resolved TS chain (``provenance.ts_opt_calculation_id``
+    #: / ``ts_freq_calculation_id`` / ``ts_sp_calculation_id``) via
+    #: ``app.services.calculation_levels.derive_levels``. Always present,
+    #: never behind an ``include=`` token.
+    #:
+    #: ``KineticsCalculationRole`` (``reactant_energy`` / ``product_energy``
+    #: / ``ts_energy`` / ``freq`` / ``irc`` / ``master_equation`` /
+    #: ``fit_source``) has no ``opt``/``freq``/``sp`` members, so this is a
+    #: mapping onto ``derive_levels``' role vocabulary, not a direct role
+    #: pass-through: ``ts_opt_calculation_id`` -> ``opts``,
+    #: ``ts_freq_calculation_id`` -> ``freqs``, ``ts_sp_calculation_id`` ->
+    #: ``sps``. Concretely: ``geometry`` is the ``ts_opt`` calculation's
+    #: level; ``frequency`` is the ``ts_freq`` calculation's level (``null``
+    #: when none is linked -- the opt calculation's own carried-frequencies
+    #: fallback that ``derive_levels`` offers elsewhere is deliberately not
+    #: used here); ``energy`` is the ``ts_sp`` calculation's level with
+    #: ``energy_source="sp"`` when a ``ts_sp`` is linked, otherwise the
+    #: ``ts_opt`` calculation's own level with ``energy_source="opt"``.
+    #: All four fields are ``null`` (``energy_source=None``) for a record
+    #: with no TS chain at all (experimental, estimated, imported, fitted,
+    #: network-derived, or literature-derived kinetics).
+    #:
+    #: Because the three ``ts_*_calculation_id`` fields answer "which
+    #: calculation did *this kinetics record's own source links* cite"
+    #: rather than "what does the transition-state entry as a whole have
+    #: on file", ``levels`` can under-report relative to
+    #: ``TransitionStateInFull.evidence_summary`` for the same TS entry --
+    #: see :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
+    #: for the full explanation and the pinned reproduction test.
+    levels: ScientificLevelsSummary
     provenance: KineticsProvenance
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None

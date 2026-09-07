@@ -244,6 +244,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "iter_reactions", "examples/scientific_reads.py", "tests/test_scientific.py",
     ),
     (
+        "GET", "/api/v1/scientific/reactions/browse", "browse_reactions",
+        None, None, _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/reaction-entries/{reaction_entry_id}/full",
         "get_reaction_full", None, "examples/scientific_reads.py",
         "tests/test_scientific.py",
