@@ -1142,6 +1142,11 @@ def test_computed_species_statmech_forgot_sp_is_refused(client):
     assert "uncovered_opt_calculation_refs" in body["context"]
     assert len(body["context"]["uncovered_opt_calculation_refs"]) == 1
     _assert_context_values_are_refs(body)
+    # Singular subject: verb and pronoun must agree ("has ... its"), not
+    # the plural "have ... their" the message uses for >1 uncovered opt.
+    assert "1 optimisation (" in body["detail"]
+    assert "has no 'sp' calculation linked at its geometry" in body["detail"]
+    assert "have no 'sp' calculation linked at their geometry" not in body["detail"]
 
 
 def test_computed_species_statmech_sp_on_other_geometry_is_refused(client):

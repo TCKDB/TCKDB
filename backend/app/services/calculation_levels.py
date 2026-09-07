@@ -420,6 +420,8 @@ def assert_role_consistency(
         if uncovered:
             refs = [opt.public_ref for opt in uncovered]
             noun = "optimisation" if len(refs) == 1 else "optimisations"
+            verb = "has" if len(refs) == 1 else "have"
+            pronoun = "its" if len(refs) == 1 else "their"
             sp_refs = [sp.public_ref for sp in sps]
             if len(uncovered) == len(opts):
                 # No sp could be matched to *any* linked optimisation's
@@ -431,7 +433,7 @@ def assert_role_consistency(
                 raise CodedValueError(
                     requires_sp_code,
                     f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
-                    f"have no 'sp' calculation linked at their geometry, "
+                    f"{verb} no 'sp' calculation linked at {pronoun} geometry, "
                     "and none of the linked 'sp' calculations "
                     f"({', '.join(sp_refs)}) could be matched to any "
                     "linked optimisation's output geometry. Link an 'sp' "
@@ -446,7 +448,7 @@ def assert_role_consistency(
             raise CodedValueError(
                 requires_sp_code,
                 f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
-                "have no 'sp' calculation linked at their geometry, but "
+                f"{verb} no 'sp' calculation linked at {pronoun} geometry, but "
                 "at least one other optimisation in this record does. "
                 "Link an 'sp' for every optimisation this record's "
                 "energy claims, or none.",
