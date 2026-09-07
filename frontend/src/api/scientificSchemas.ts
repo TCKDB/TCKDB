@@ -25,6 +25,29 @@ export function lotLabel(value: { method: string; basis?: string | null; display
     return value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
 }
 
+export type LevelOfTheory = z.infer<typeof levelOfTheorySchema>
+
+/**
+ * A statmech/thermo record's up-to-three levels of theory — geometry
+ * (the `opt` role), frequencies (the `freq` role, or the opt's when this
+ * record has no dedicated frequency job), and energy (the `sp` role when a
+ * single point is linked, else the opt's — an optimisation's final energy
+ * is its own single-point energy). Additive on both surfaces: `null` when
+ * the server hasn't shipped this yet, in which case
+ * `domain/productLevels.ts` derives the same three from the record's own
+ * `source_calculations[]` roles instead. `energy_source` names which of
+ * the two energy cases applied, plus the two evidence-free classifications
+ * (`composite`/`imported`) a record can also declare.
+ */
+export const productLevelsSchema = z.object({
+    geometry: levelOfTheorySchema.nullable().optional(),
+    frequency: levelOfTheorySchema.nullable().optional(),
+    energy: levelOfTheorySchema.nullable().optional(),
+    energy_source: z.string().nullable().optional(),
+}).passthrough()
+
+export type ProductLevelsWire = z.infer<typeof productLevelsSchema>
+
 export const recordReviewSchema = z.object({ status: z.string() }).passthrough()
 
 export const geometrySummarySchema = z.object({

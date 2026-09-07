@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema } from "./scientificSchemas"
+import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -239,6 +239,12 @@ const statmechRecordSchema = z.object({
     literature: literatureSchema.nullable().optional(),
     evidence_summary: evidenceSummarySchema,
     available_sections: availableSectionsSchema,
+    // Additive (owner decision, 2026-09): geometry/frequency/energy can each
+    // be at a different level of theory. Absent on an older API response —
+    // `domain/productLevels.ts`'s `resolveProductLevels` derives the same
+    // three from `source_calculations[]` below when this is missing, so
+    // every caller renders identically either way.
+    levels: productLevelsSchema.nullable().optional(),
     source_calculations: z.array(sourceCalculationSummarySchema).nullable().optional(),
     torsions: z.array(torsionSchema).nullable().optional(),
     electronic_levels: z.array(electronicLevelSchema).nullable().optional(),

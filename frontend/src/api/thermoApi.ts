@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { levelOfTheorySchema } from "./scientificSchemas"
+import { levelOfTheorySchema, productLevelsSchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
@@ -173,6 +173,22 @@ const thermoProvenanceSchema = z.object({
     conformer_group_ref: z.string().nullable().optional(),
 }).passthrough()
 
+// Additive (owner decision, 2026-09): a thermo record's opt/freq/sp source
+// calculations, each with its OWN level of theory — the same
+// role/calculation_ref/level_of_theory shape `statmechApi.ts`'s
+// `sourceCalculationSummarySchema` already carries (narrowed here to what
+// `domain/productLevels.ts` actually reads; `.passthrough()` keeps any
+// extra fields the server sends). Absent on an older API response, in
+// which case `resolveProductLevels` derives nothing from it and this
+// record's geometry/frequency/energy fall back further, to
+// `provenance.level_of_theory` alone (see `EntryThermoSection.tsx`'s
+// `thermoRecordProductLevels`).
+const thermoSourceCalculationSchema = z.object({
+    role: z.string(),
+    calculation_ref: z.string(),
+    level_of_theory: levelOfTheorySchema.nullable().optional(),
+}).passthrough()
+
 const groupAdditivityComponentSchema = z.object({
     component_kind: z.string(),
     group_label: z.string(),
@@ -211,6 +227,13 @@ const thermoRecordSchema = z.object({
     evidence_completeness: evidenceCompletenessSchema.optional(),
     provenance: thermoProvenanceSchema.optional(),
     group_additivity: groupAdditivitySchema.nullable().optional(),
+    // Additive (owner decision, 2026-09): geometry/frequency/energy can
+    // each be at a different level of theory. Absent on an older API
+    // response — `domain/productLevels.ts`'s `resolveProductLevels`
+    // derives the same three from `source_calculations` below when this is
+    // missing.
+    levels: productLevelsSchema.nullable().optional(),
+    source_calculations: z.array(thermoSourceCalculationSchema).nullable().optional(),
 }).passthrough()
 
 const reviewStatusSummarySchema = z.object({
