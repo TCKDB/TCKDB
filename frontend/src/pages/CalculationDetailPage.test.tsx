@@ -575,11 +575,13 @@ describe("CalculationDetailPage", () => {
         // sentence has a verb ("was run on") -- review finding: it used to
         // read "single point on this geometry" with no verb at all.
         const spItem = within(depSection).getByRole("link", { name: "calc_osrf4pnfcesq6s6somn7nr5hly" }).closest("li") as HTMLElement
-        expect(spItem.textContent).toBe("calc_osrf4pnfcesq6s6somn7nr5hly single point was run on this geometry")
+        expect(spItem.textContent).toBe("The single point was computed on this geometry by calc_osrf4pnfcesq6s6somn7nr5hly")
 
         // Child-side optimized_from: THIS calculation is the subject, fixed sentence.
         const optFromItem = within(depSection).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" }).closest("li") as HTMLElement
-        expect(optFromItem.textContent).toBe("This was optimized from calc_htgb7s5nakuw52eqhcxpvilpoq")
+        expect(optFromItem.textContent).toBe(
+            "This is the fine optimisation; its starting geometry came from calc_htgb7s5nakuw52eqhcxpvilpoq",
+        )
 
         // The old backwards "feeds into | optimized from | ref" table is gone.
         expect(within(depSection).queryByText("feeds into")).not.toBeInTheDocument()
@@ -601,7 +603,7 @@ describe("CalculationDetailPage", () => {
         await findLoaded("Frequency")
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
         const item = within(depSection).getByRole("link", { name: "calc_rypxkxvsku5x2nk6sqbhhmfcla" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("calc_rypxkxvsku5x2nk6sqbhhmfcla (frequency) was run on this geometry")
+        expect(item.textContent).toBe("Frequencies were computed on this geometry by calc_rypxkxvsku5x2nk6sqbhhmfcla")
     })
 
     // Review finding (BLOCKING-1): child-side edges used to say "This was
@@ -626,7 +628,7 @@ describe("CalculationDetailPage", () => {
         await findLoaded("Frequency")
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
         const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("This frequency calculation was run on the geometry from calc_ts0_opt")
+        expect(item.textContent).toBe("This frequency calculation was computed on the geometry from calc_ts0_opt")
         expect(item.textContent).not.toMatch(/optimized from/)
     })
 
@@ -645,7 +647,7 @@ describe("CalculationDetailPage", () => {
         await findLoaded("Frequency")
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
         const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
-        expect(item.textContent).toBe("This single point was run on the geometry from calc_ts0_opt")
+        expect(item.textContent).toBe("This single point was computed on the geometry from calc_ts0_opt")
         expect(item.textContent).not.toMatch(/optimized from/)
     })
 
