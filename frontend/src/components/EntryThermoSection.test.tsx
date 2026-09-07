@@ -1056,7 +1056,7 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // Query the dl by its own aria-label: the collapsed per-record detail
         // also contains a <dt>Geometry</dt> inside each ProvenanceBlock, so a
         // text query alone would match twice.
-        const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement | null
+        const shared = groupCard.querySelector('dl[aria-label="Shared levels of theory"]') as HTMLElement | null
         expect(shared).not.toBeNull()
         expect(within(shared as HTMLElement).getByText("Geometry", { selector: "dt" })).toBeInTheDocument()
         expect(within(shared as HTMLElement).getByText("Frequencies", { selector: "dt" })).toBeInTheDocument()
@@ -1215,6 +1215,39 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
         expect(within(card).getByText("all at the same level")).toBeInTheDocument()
     })
 
+    // Review finding: `productLevelsAgree` alone treats all-three-`null` as
+    // agreeing (a shared "not recorded" fact, correct for its OTHER
+    // callers) -- reachable here via a literature-origin thermo record
+    // with no `levels`, no `source_calculations`, and no
+    // `provenance.level_of_theory` at all (`thermoRecordProductLevels`'s
+    // own fallback chain bottoms out at `EMPTY_PRODUCT_LEVELS` in that
+    // case). Without the extra non-null guard, this would print "not
+    // recorded" three times followed by "all at the same level" -- a
+    // claim ("compared and found equal") this case never actually
+    // established.
+    it("shows three 'not recorded' facts but NO 'all at the same level' note when the record carries no levels at all", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: [levelsRecord({
+                provenance: {
+                    primary_calculation: null,
+                    level_of_theory: null,
+                    software_release: null,
+                    workflow_tool_release: null,
+                    statmech_ref: null,
+                    freq_calculation_ref: null,
+                    sp_calculation_ref: null,
+                },
+            })],
+        }))))
+        page()
+        const card = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("not recorded")
+        expect(ddFor(card, "Frequencies")).toBe("not recorded")
+        expect(ddFor(card, "Energy")).toBe("not recorded")
+        expect(within(card).queryByText("all at the same level")).not.toBeInTheDocument()
+    })
+
     it("expands to Geometry/Frequencies/Energy facts, with a note under Energy, when source_calculations puts sp at a different level than opt/freq", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             records: [levelsRecord({
@@ -1307,7 +1340,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             page()
             await screen.findByText("3 records with identical values")
             const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
-            const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement
+            const shared = groupCard.querySelector('dl[aria-label="Shared levels of theory"]') as HTMLElement
             expect(shared).not.toBeNull()
             expect(within(shared).getByText("Geometry", { selector: "dt" })).toBeInTheDocument()
             expect(ddFor(shared, "Geometry")).toBe("b3lyp/def2tzvp")
@@ -1339,7 +1372,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
 
             // No lifted shared fact -- the group's members don't all agree.
-            expect(groupCard.querySelector('dl[aria-label="Shared level of theory"]')).toBeNull()
+            expect(groupCard.querySelector('dl[aria-label="Shared levels of theory"]')).toBeNull()
 
             const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)

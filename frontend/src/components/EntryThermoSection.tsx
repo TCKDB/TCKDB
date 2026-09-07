@@ -491,7 +491,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 below instead -- never a representative's value presented as
                 though it held for records that may not share it. */}
             {allProductLevelsAgree(records.map(thermoRecordProductLevels)) && (
-                <dl className="kv-list" aria-label="Shared level of theory">
+                <dl className="kv-list" aria-label="Shared levels of theory">
                     <ProductLevelsFact levels={thermoRecordProductLevels(representative)} />
                 </dl>
             )}

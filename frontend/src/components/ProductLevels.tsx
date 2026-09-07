@@ -40,10 +40,10 @@ function energyValueText(level: ProductLevels["energy"], source: ProductLevels["
 
 /** The reader-facing explanation for `energy_source`, or `null` when the
  *  label alone already says everything (`"opt"`: the energy line already
- *  reads identically to Geometry's, nothing more to add). Only ever shown
- *  when this record's own three levels actually disagree — see the
- *  `agree` guard at each call site; an agreeing record never gets this
- *  note, matching the collapsed single-fact display it renders instead. */
+ *  reads identically to Geometry's, nothing more to add). Shown on EVERY
+ *  sp-sourced row/fact, agreeing or not -- Geometry/Frequencies/Energy are
+ *  always rendered separately now (see this module's own header comment),
+ *  so there is no longer a "collapsed" case for this to be exclusive to. */
 function energySourceNote(source: ProductLevels["energy_source"]): string | null {
     return source === "sp" ? "single point on the optimised geometry" : null
 }
@@ -67,10 +67,13 @@ function isOtherEnergySource(source: ProductLevels["energy_source"]): boolean {
  * an existing `<dl className="kv-list">` (a fragment, not its own `<dl>` —
  * every caller already owns the wrapping list). ALWAYS renders three
  * facts — Geometry/Frequencies/Energy — never collapsed to one, even when
- * all three agree; when they do agree, an optional muted note ("all at the
- * same level") renders under the block, on its own full-width row
- * (`.kv-list--wide`, `design-system.css`), rather than folding the three
- * facts back into one.
+ * all three agree; when they do agree AND at least one is actually
+ * recorded, an optional muted note ("all at the same level") renders
+ * under the block, on its own full-width row (`.kv-list--wide`,
+ * `design-system.css`), rather than folding the three facts back into
+ * one. A record with no levels recorded at all does NOT get this note —
+ * "not recorded" three times over is not the same claim as "compared and
+ * found equal".
  */
 export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
     const note = energySourceNote(levels.energy_source)
@@ -93,7 +96,18 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
                     {note && <div className="note">{note}</div>}
                 </dd>
             </div>
-            {productLevelsAgree(levels) && (
+            {/* `productLevelsAgree` alone treats all-three-`null` as
+                agreeing (one shared "not recorded" fact) -- correct for
+                that function's OTHER callers, but wrong here: a record
+                with no levels recorded at all (e.g. a literature-origin
+                thermo record, `EntryThermoSection.tsx`'s own
+                `thermoRecordProductLevels` fallback) would otherwise print
+                "not recorded" three times followed by "all at the same
+                level", which claims a fact (they were compared and found
+                equal) that was never established. The extra `!= null`
+                guard requires an actual recorded level before this note
+                is safe to show. */}
+            {productLevelsAgree(levels) && levels.geometry != null && (
                 <div className="kv-list--wide">
                     <div className="note">all at the same level</div>
                 </div>
