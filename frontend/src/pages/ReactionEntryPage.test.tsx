@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionEntryPage from "./ReactionEntryPage"
 
@@ -128,19 +128,26 @@ function handleFull(payload: object) {
 }
 
 /**
- * Refs that have no structural reason to repeat -- `kin_`/`spe_`/`net_` --
- * must appear EXACTLY once outside the References disclosure. `tse_`/
- * `calc_` refs are excluded from the strict count: the approved design
+ * Refs that have no structural reason to repeat -- `spe_`/`net_` -- must
+ * appear EXACTLY once outside the References disclosure. `tse_`/`calc_`/
+ * `kin_` refs are excluded from the strict count: the approved design
  * (plan §2's mock, and the brief's own "dependency-graph child nodes link
  * to /calculations/{ref}" + "SpeciesEntryLink per participant" rules)
  * deliberately re-surfaces a calculation ref in BOTH the "Calculations by
  * stage" table AND the dependency graph that draws the same calculations
  * as nodes -- a real, intentional second mention, not a duplication bug.
- * This fixture keeps kin_/spe_/net_ refs collision-free by construction
- * (e.g. the kinetics record's own `ts_*_calculation_ref` links point at
- * DIFFERENT calc refs than the TS entry's own `calculations` map, per the
- * plan §7 "resolver disagreement" case) so the strict count is meaningful
- * for those three prefixes.
+ * `kin_` joined this carve-out in PR 3 (`ArrheniusChart.tsx`): the same
+ * kinetics ref legitimately re-surfaces in the chart's own legend chip and
+ * its k(T)-table `Disclosure` heading, alongside the record card's own
+ * "Kinetics ref" fact -- the SAME "intentional second mention naming what
+ * it draws" shape as the calc-ref carve-out, not a duplication bug either.
+ * (Both `ArrheniusChart.tsx` nodes fold the ref into a single combined text
+ * run -- "series N — kin_…", "k(T) table — kin_…" -- rather than a bare
+ * `<code>{ref}</code>` leaf, precisely so `findByText(ref)`'s EXACT-match
+ * uniqueness assumption below still resolves to the one card fact; the
+ * substring-based count here still (correctly) sees all three mentions.)
+ * This fixture keeps spe_/net_ refs collision-free by construction so the
+ * strict count is meaningful for those two prefixes.
  */
 function occurrencesOutsideRefs(container: HTMLElement, value: string): number {
     const full = container.textContent ?? ""
@@ -150,12 +157,12 @@ function occurrencesOutsideRefs(container: HTMLElement, value: string): number {
 }
 
 describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
-    it("every kin_/spe_/net_ ref in the fixture appears exactly once outside References", async () => {
+    it("every spe_/net_ ref in the fixture appears exactly once outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
 
-        for (const ref of ["kin_test1", "spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
+        for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
             expect(occurrencesOutsideRefs(container, ref), `${ref} should appear exactly once outside References`).toBe(1)
         }
     })
@@ -170,6 +177,21 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         }
     })
 
+    // Review finding: `toBeGreaterThanOrEqual(1)` here verifies nothing that
+    // `findByText("kin_test1")` two lines above didn't already establish --
+    // `kin_test1` (unlike tse_/calc_, whose multiplicities genuinely vary
+    // with how many stages/dependency edges a fixture happens to carry) has
+    // an EXACT, known count on this fixture: the kinetics card's own
+    // "Kinetics ref" fact, the Arrhenius chart's legend chip
+    // ("series 1 — kin_test1"), and the k(T) table's Disclosure heading
+    // ("k(T) table — kin_test1") -- three sites, never more, never fewer.
+    it("kin_test1 appears exactly 3 times outside References: the card fact, the chart legend chip, and the k(T) table heading", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(occurrencesOutsideRefs(container, "kin_test1")).toBe(3)
+    })
+
     it("every A/n/Ea/T value from the kinetics record is present, string-equal to the payload", async () => {
         handleFull(mockFull())
         const { container } = page()
@@ -178,6 +200,24 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         for (const value of ["3025.44", "3.11242", "39.9711", "300", "3000"]) {
             expect(text).toContain(value)
         }
+    })
+})
+
+// Review finding (blocking #3): the ONE call site wiring `ArrheniusChart`
+// into `ReactionKineticsSection.tsx` had no page-level guard -- reverting
+// that file to `main` (which never called the component at all) removed
+// the chart from the page entirely and this whole test file stayed
+// 25/25 green, because nothing here ever asked the page itself for the
+// Arrhenius SVG.
+describe("ReactionEntryPage -- the Arrhenius chart actually renders on the page", () => {
+    it("the kinetics section contains an Arrhenius plot SVG for a plottable record", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const kineticsSection = container.querySelector('section[aria-labelledby="kinetics-heading"]')!
+        const svg = within(kineticsSection as HTMLElement).getByRole("img", { name: /Arrhenius plot/ })
+        expect(svg).toBeInTheDocument()
+        expect(svg.querySelector("polyline")).not.toBeNull()
     })
 })
 

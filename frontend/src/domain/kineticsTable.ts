@@ -32,9 +32,17 @@ export interface KineticsTableRow {
  * Ea=39.9711 kJ/mol, 300–3000 K), k(300 K) = 1.7029×10⁴, k(3000 K) =
  * 4.0467×10¹³ -- the same figures the PR 0 design-review mock's own
  * hand-computed table cited.
+ *
+ * A third-body record is gated out here too (PR 3 review finding): its
+ * rate depends on bath-gas concentration, not on temperature alone, so
+ * `arrheniusTermK`'s T-only formula is not this record's actual k(T)
+ * either. `ArrheniusChart.tsx` already excludes a third-body record from
+ * the CHART with that exact reason -- this table is that same record's
+ * one remaining surface, and it must refuse the same numbers for the same
+ * reason rather than hand them out one row lower on the page.
  */
-export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "temperature_coverage" | "multi_arrhenius" | "parameters">): KineticsTableRow[] | null {
-    if (record.plog_entries || record.chebyshev || record.falloff) return null
+export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body" | "temperature_coverage" | "multi_arrhenius" | "parameters">): KineticsTableRow[] | null {
+    if (record.plog_entries || record.chebyshev || record.falloff || record.is_third_body) return null
     const min = record.temperature_coverage?.record_min_k
     const max = record.temperature_coverage?.record_max_k
     if (min == null || max == null || !(max > min)) return null

@@ -1,0 +1,177 @@
+/*
+ * `ArrheniusChart.tsx` -- the kinetics section's Arrhenius plot(s) and its
+ * text-equivalent tables. Its own stylesheet per this project's convention
+ * (see the header comment in `thermo-cp-chart.css`): a component's styling
+ * should not depend on another file's stylesheet having loaded first, and
+ * Vite never unloads a route chunk's CSS once injected. Every colour below
+ * is `var(--token)` -- see `theme.css` for the palette (`theme.css.test.ts`
+ * enforces this against every stylesheet in `src/`, this one included).
+ *
+ * FIXED-WIDTH SVG, not `width: 100%`: `thermo-cp-chart.css`'s own
+ * `.cp-chart-svg` scales its viewBox-driven text down whenever its
+ * container is narrower than the SVG's own intrinsic size -- at a narrow
+ * viewport that pushed tick labels below the 11.52px accessibility floor
+ * (a round-2 review finding on the design-review mock this chart's own
+ * spec calls out explicitly). `.arrhenius-chart-svg` below carries no
+ * `width`/`height` rule at all -- the component sets both as real SVG
+ * attributes (`width={720} height={340}`), which the browser never scales
+ * down on its own. `.arrhenius-chart-scroll` gives the fixed-size SVG (and
+ * its axis title, pinned to the SAME width) somewhere to overflow into
+ * instead: a narrow viewport scrolls the CHART horizontally, the page
+ * itself never grows past the viewport (`documentElement.scrollWidth ==
+ * innerWidth` at every width this component is verified at), and no text
+ * inside the SVG is ever resized.
+ */
+
+.arrhenius-chart-section {
+    margin-top: 2rem;
+}
+
+.arrhenius-chart-panel-wrap + .arrhenius-chart-panel-wrap {
+    margin-top: 2rem;
+}
+
+/* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
+   (design-system.css) is `uppercase` -- every OTHER caller of this token is
+   an English prose label, where case carries no meaning. This heading's own
+   text is a unit string (`arrheniusUnitLabel`, e.g. "s⁻¹"), and upper-casing
+   it renders "S⁻¹" -- SIEMENS per second, a different physical quantity,
+   not "seconds⁻¹" with a capital letter. `text-transform: none` is scoped
+   to this ONE class, never a page-wide override of `--type-label` itself. */
+.arrhenius-chart-panel-heading {
+    margin: 0 0 .5rem;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: none;
+    color: var(--muted);
+}
+
+.arrhenius-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .9rem;
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.arrhenius-chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font: var(--type-data-font);
+    color: var(--ink-2);
+}
+
+.arrhenius-chart-swatch {
+    display: inline-block;
+    width: .65rem;
+    height: .65rem;
+    border-radius: 50%;
+    flex: none;
+}
+
+/* Grid: a fixed-width first column for the vertical y-axis title, same
+   shape `.cp-chart-panel` uses and for the same reason (that file's own
+   comment) -- the title gets a column it OWNS, never painted space it has
+   to hope is there. */
+.arrhenius-chart-panel {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    column-gap: .3rem;
+    margin: 0 0 .75rem;
+}
+
+/* The one rule that makes the fixed-width SVG safe on a narrow page: this
+   track scrolls its own overflow rather than forcing the grid track (and
+   therefore the page) wider. `overflow-x: auto` on a block container does
+   not grow its own containing block to fit an overflowing child -- the
+   child is clipped/scrolled within this element's own box. */
+.arrhenius-chart-scroll {
+    grid-column: 2;
+    overflow-x: auto;
+}
+
+.arrhenius-chart-svg {
+    display: block;
+}
+
+.arrhenius-chart-gridline {
+    stroke: var(--line-2);
+    stroke-width: 1;
+}
+
+.arrhenius-chart-axis-line {
+    stroke: var(--line);
+    stroke-width: 1.25;
+}
+
+.arrhenius-chart-tick-label {
+    fill: var(--muted);
+    font: var(--type-data-font);
+}
+
+.arrhenius-chart-tick-label--y {
+    text-anchor: end;
+    dominant-baseline: middle;
+}
+
+.arrhenius-chart-tick-label--x {
+    text-anchor: middle;
+    dominant-baseline: hanging;
+}
+
+.arrhenius-chart-axis-title {
+    margin: .3rem 0 0;
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+
+/* Pinned to the PLOT box's own width/offset via an inline `style={{
+   marginLeft, width}}` at the call site (`left`/`plotWidth`, the SAME
+   values the ticks and curve are drawn with) -- never centred in a grid
+   track that can be wider than the chart it describes (the mock's other
+   round-2 defect: its x-axis title centred in the grid COLUMN, not under
+   the plotted chart), and never centred on the full SVG box either (a
+   later review finding: the SVG's own left/right margins are NOT
+   symmetric, so centring on the full width sat the title ~19px off from
+   the plotted curve's actual centre). Sitting inside
+   `.arrhenius-chart-scroll` alongside the SVG, this paragraph scrolls in
+   lockstep with it, so the title is always directly under the axis it
+   names regardless of how far the container has been scrolled. */
+.arrhenius-chart-axis-title--x {
+    text-align: center;
+}
+
+.arrhenius-chart-axis-title--y {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    justify-self: center;
+    margin: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+}
+
+.arrhenius-chart-excluded-notes {
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.arrhenius-chart-excluded-notes li {
+    margin: .3rem 0;
+}
+
+.arrhenius-chart-tables {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+}
