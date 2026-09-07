@@ -320,21 +320,12 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     const identity = identityFromCalculationOwner(owner)
     const headline = headlineEnergy(core.type, calculation.results)
 
-    // Owner complaint (calc_c5uammsbatk6rkfiz7tsk46jse / calc_e3v64c4zdp6i4n7lsnhh6n57mq):
-    // "Coarse pass; refined by …" read as if the COARSE molecule had been
-    // refined BY the other one, not as two stages of the same
-    // optimisation. Computed ONCE here (never twice from the same
-    // `dependencies` payload) and threaded to both the identity
-    // header (title/kicker) and `StageAndConformerNote` (the stage
-    // strip), so the two can never name the stage two different ways.
-    // "empty" (the archive was asked and returned no edges) and
-    // "populated" with no matching edge both resolve to `"unknown"` --
-    // an absence of evidence, not evidence of a single pass (review
-    // finding, kept: the old text asserted a stage the archive never
-    // actually reported). Only "not-requested" (the wire key itself
-    // absent) skips the call entirely -- there the page never even
-    // asked, so it renders no stage fact at all rather than an "unknown"
-    // one.
+    // See `optimisationStage`'s own docstring (`domain/optimisationStage.ts`)
+    // for the "unknown" vs. single-pass distinction. Computed ONCE here
+    // (never twice from the same `dependencies` payload) and threaded to
+    // both the identity header (title/kicker) and `StageAndConformerNote`
+    // (the stage strip), so the two can never name the stage two
+    // different ways.
     const stage: OptimisationStage | null = core.type === "opt" && dependenciesAvailability !== "not-requested"
         ? optimisationStage(dependencies)
         : null
@@ -932,25 +923,32 @@ function GeometriesSection({
                     {/* Owner complaint: "if we have no input geom for the
                         coarse, then we just say output geom." A coarse
                         optimisation stage stores its input and output as
-                        the same geometry row because only ONE geometry
-                        was ever deposited for that pass -- calling it
-                        "Input and output" implied a start-and-end pair
-                        that was never recorded. The archive's own record
-                        of that one geometry is the OUTPUT (`role:
-                        "final"`), so this reads as the output card the
-                        rest of this page already renders elsewhere, with
-                        the note below explaining why there is no
-                        separate input card. */}
+                        the same geometry row -- either because only ONE
+                        geometry was ever deposited for that pass, or
+                        (#384, its backfill) because the starting geometry
+                        was extracted from a deposited ESS artifact and
+                        happens to dedupe to the same stored row as the
+                        output. Calling this "Input and output" implied a
+                        start-and-end pair that (in the first case) was
+                        never recorded, so this reads as the output card
+                        the rest of this page already renders elsewhere,
+                        with the note below stating which of the two
+                        actually happened -- never "not deposited" when a
+                        starting geometry genuinely was. */}
                     <h3 className="t-heading-2">Output geometry</h3>
                     <div className="geometry-links">
                         <div className="geometry-link" key={output[0].geometry_ref}>
                             <Link to={`/geometries/${output[0].geometry_ref}`}>{output[0].geometry_ref}</Link>
                             <span>{output[0].natoms != null ? `${output[0].natoms} atoms` : "atom count not recorded"}</span>
+                            {input[0].source === "extracted_from_artifact" && (
+                                <span className="value-pill value-pill--muted">extracted from the deposited input file</span>
+                            )}
                         </div>
                     </div>
                     <p className="note">
-                        Only one geometry was deposited for this pass; the archive records it as the output. The
-                        starting geometry was not deposited.
+                        {input[0].source === "extracted_from_artifact"
+                            ? "The starting geometry extracted from the deposited input file is identical to the output geometry."
+                            : "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited."}
                     </p>
                     {validationRow && <GeometryValidationBanner row={validationRow} />}
                 </div>

@@ -263,13 +263,18 @@ const geometryLinkSchema = z.object({
     role: z.string().nullable().optional(),
     natoms: z.number().nullable().optional(),
     geom_hash: z.string().nullable().optional(),
-    // Optional: a concurrent backend PR adds this to the input-geometry
-    // link summary only (`"extracted_from_artifact"` when the coordinates
-    // were parsed out of a deposited ESS artifact rather than deposited
-    // as their own geometry row). Absent on every other geometry link and
-    // on any build that predates the backend change, so this must stay
-    // optional/nullable rather than required.
-    source: z.string().nullable().optional(),
+    // #384 (merged, `bc3fd2d2`) adds this to the input-geometry link
+    // summary only -- the two values of the backend's
+    // `CalculationInputGeometrySource` enum (`backend/app/db/models/
+    // common.py`): `"deposited"` (the default -- a producer-declared
+    // geometry row) or `"extracted_from_artifact"` (the coordinates were
+    // parsed out of a deposited ESS artifact rather than deposited as
+    // their own row). Enum-typed, not a bare string, so an unexpected
+    // third value fails validation visibly instead of silently matching
+    // neither branch this client checks it against. Absent on every
+    // output-geometry link and on any build that predates the backend
+    // change, so this must stay optional/nullable rather than required.
+    source: z.enum(["deposited", "extracted_from_artifact"]).nullable().optional(),
 }).passthrough()
 
 // ---------------------------------------------------------------------------

@@ -1461,6 +1461,35 @@ describe("CalculationDetailPage", () => {
             "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited.",
         )).toBeVisible()
         expect(screen.queryByText("Input and output are the same stored geometry.")).not.toBeInTheDocument()
+        expect(screen.queryByText("extracted from the deposited input file")).not.toBeInTheDocument()
+        expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
+    })
+
+    // Post-review (#384 backfill): the sameGeometry branch used to say
+    // "The starting geometry was not deposited" unconditionally -- false
+    // once a coarse pass's extracted starting geometry dedupes to the
+    // same row as its output (`input[0].source === "extracted_from_artifact"`).
+    // That case gets the pill and a note that says a starting geometry
+    // WAS deposited (extracted from the artifact), and happens to be
+    // identical to the output.
+    it("shows the extracted-from-artifact pill and note when the same-geometry input was extracted from a deposited artifact", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                input_geometries: [{ geometry_ref: "geom_same", input_order: 1, output_order: null, role: null, natoms: 6, geom_hash: "x", source: "extracted_from_artifact" }],
+                output_geometries: [{ geometry_ref: "geom_same", input_order: null, output_order: 1, role: "final", natoms: 6, geom_hash: "x" }],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        expect(screen.getByRole("heading", { name: "Output geometry" })).toBeVisible()
+        const pill = screen.getByText("extracted from the deposited input file")
+        expect(pill).toHaveClass("value-pill", "value-pill--muted")
+        expect(screen.getByText(
+            "The starting geometry extracted from the deposited input file is identical to the output geometry.",
+        )).toBeVisible()
+        expect(screen.queryByText(
+            "Only one geometry was deposited for this pass; the archive records it as the output. The starting geometry was not deposited.",
+        )).not.toBeInTheDocument()
         expect(screen.getAllByRole("link", { name: "geom_same" })).toHaveLength(1)
     })
 
