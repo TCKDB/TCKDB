@@ -163,7 +163,9 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText("R Addition MultipleBond")).toBeVisible()
         expect(screen.getByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" }))
             .toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
-        expect(screen.getByText("(record view not yet available)")).toBeVisible()
+        // `/reactions/:ref` is a real chooser page now (`ReactionOverviewPage`)
+        // -- no "record view not yet available" caveat any more.
+        expect(screen.queryByText("(record view not yet available)")).not.toBeInTheDocument()
 
         // No duplicate "Equation" fact in the Reaction section -- the h1
         // above already IS the rendered equation.

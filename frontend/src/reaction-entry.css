@@ -1,0 +1,25 @@
+/*
+ * `ReactionEntryPage`/`ReactionOverviewPage` -- tokens only, no restyle of
+ * shared primitives (`.card`, `.data-table`, `.kv-list`, `.value-pill`, ...
+ * all come from `design-system.css`/`index.css` unchanged; see
+ * `dead-css-class.test.ts`/`value-pill-scope.css.test.ts`). This file adds
+ * only the page-scoped layout these two pages need beyond what the shared
+ * primitives already give them.
+ */
+
+/* One kinetics record per card, in served order, with breathing room
+   between cards -- `ReactionKineticsSection.tsx`. */
+.kinetics-record-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Separates one transition-state entry's whole block (identity, status
+   strip, calculation table, dependency graph) from the next when a
+   reaction entry carries more than one TS entry -- `ReactionTransitionStatesSection.tsx`. */
+.reaction-ts-block + .reaction-ts-block {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line-2);
+}

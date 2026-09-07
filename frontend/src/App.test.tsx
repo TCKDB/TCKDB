@@ -287,7 +287,12 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/calculations/calc_abc", "Single-point of H2O", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined],
-    ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
+    // `/reactions/:reactionRef` is a real chooser page now (`ReactionOverviewPage`,
+    // not `RecordPlaceholderPage`) -- its own dedicated test below builds a
+    // realistic `reactions/search` fixture and asserts the rendered
+    // equation heading, rather than forcing it through this shared table's
+    // generic `heading`/`ref` string-equality checks (which assumed the
+    // old placeholder's fixed "Reaction" title).
     ["/methods", "Methods", undefined],
 ]
 
@@ -455,6 +460,56 @@ it("routes a transition-state-entry ref to its detail page (finding #1)", async 
     window.history.replaceState({}, "", "/transition-state-entries/tse_abc")
     render(<App />)
     expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
+})
+
+it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () => {
+    server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json({
+        review_summary: { total: 1, not_reviewed: 1, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+        records: [{
+            reaction_ref: "rxn_abc",
+            reaction_entry_ref: "rxe_abc",
+            equation: "A <=> B",
+            reversible: true,
+            family: null,
+            review: { status: "not_reviewed" },
+            reactants: [{ species_entry_ref: "spe_a", smiles: "A", participant_index: 0 }],
+            products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
+            availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
+        }],
+    })))
+    window.history.replaceState({}, "", "/reactions/rxn_abc")
+    render(<App />)
+    // Waits for a fact that only the LOADED chooser document renders (the
+    // loading state's own `<h1>`, "Loading reaction…", would satisfy a
+    // bare `findByRole("heading", {level: 1})` immediately and race the
+    // real content).
+    expect(await screen.findByText("rxn_abc")).toBeVisible()
+    // The arrow glyph sits inside a span with its own `aria-label`
+    // ("reacts reversibly with") -- that label REPLACES the glyph in the
+    // accessible NAME `getByRole`'s `name` option matches against, so this
+    // asserts against the h1's visible `textContent` instead.
+    const h1 = document.querySelector("h1")
+    expect(h1?.textContent).toContain("⇌")
+    expect(screen.getByRole("link", { name: "rxe_abc" })).toHaveAttribute("href", "/reaction-entries/rxe_abc")
+})
+
+it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref with no reactions/search request", async () => {
+    // No handler is registered for reactions/search at all; `server.listen`
+    // is configured `onUnhandledRequest: "error"` at the top of this file,
+    // so a fallthrough to the chooser (rather than the prefix-check
+    // redirect) would fail this test outright on that request alone.
+    server.use(http.get("/api/v1/scientific/reaction-entries/rxe_abc/full", () => HttpResponse.json({
+        reaction_entry: {
+            reaction_entry_ref: "rxe_abc", reaction_ref: "rxn_abc", equation: "A <=> B",
+            reversible: true, family: null, review: { status: "not_reviewed" }, atom_maps: [],
+        },
+        review_summary: { total: 0, not_reviewed: 0, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+        species: { reactants: [], products: [] },
+        kinetics: [], transition_states: [], calculations: [], networks: [],
+    })))
+    window.history.replaceState({}, "", "/reactions/rxe_abc")
+    render(<App />)
+    expect(await screen.findByText("rxe_abc")).toBeVisible()
 })
 
 describe("unmatched routes (finding #12)", () => {
