@@ -14,6 +14,12 @@ import {
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } from "../domain/conformerEvidence"
 import { groupByFingerprint, statmechRecordFingerprint } from "../domain/identicalRecordGroups"
+import {
+    allProductLevelsAgree,
+    productLevelsTableNeedsThreeColumns,
+    resolveProductLevels,
+    type ProductLevels,
+} from "../domain/productLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
@@ -23,12 +29,32 @@ import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
+import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
 import { TorsionsTable } from "./StatmechTorsionsTable"
 import { SupersessionNotice } from "./SupersessionNotice"
+
+/**
+ * A record's own geometry/frequency/energy levels of theory: the server's
+ * additive `levels` field when present, else derived from this record's
+ * own `source_calculations[]` roles (`domain/productLevels.ts`) once that
+ * entry-scoped include has resolved. `source_calculations` is fetched
+ * eagerly for the whole entry (see `StatmechList`'s own effect) — while it
+ * is still in flight, this returns `"loading"`, matching
+ * `DerivedConformerNote`'s own status handling for the same shared fetch.
+ */
+function statmechRecordProductLevels(
+    record: StatmechRecord,
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>,
+): ProductLevels | "loading" | "error" {
+    if (record.levels) return resolveProductLevels(record.levels, null)
+    if (sourceCalcsState.status === "idle" || sourceCalcsState.status === "loading") return "loading"
+    if (sourceCalcsState.status === "error") return "error"
+    return resolveProductLevels(null, sourceCalcsState.dataByRef.get(record.statmech.statmech_ref))
+}
 
 // ---------------------------------------------------------------------------
 // Same entry-scoped-LIST shape as `EntryThermoSection.tsx`, but statmech has
@@ -363,7 +389,13 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
                 <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
                 <code className="data">{core.statmech_ref}</code>
             </div>
-            <StatmechRecordBody record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
+            <StatmechRecordBody
+                record={record}
+                conformers={conformers}
+                sourceCalcsState={sourceCalcsState}
+                frequenciesState={frequenciesState}
+                productLevels={statmechRecordProductLevels(record, sourceCalcsState)}
+            />
         </article>
     )
 }
@@ -388,12 +420,19 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
  * calculation, software, and workflow tool per ref instead. Every other
  * caller shows this, unchanged.
  */
-function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesState, showRecordEvidence = true }: {
+function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesState, showRecordEvidence = true, productLevels }: {
     record: StatmechRecord
     conformers: ConformerProjection[]
     sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
     showRecordEvidence?: boolean
+    /** This card's own geometry/frequency/energy levels of theory, resolved
+     *  by the CALLER (`StatmechRecordCard`/`IdenticalStatmechRecordsCard`) --
+     *  not computed here, because the group's shared body needs a
+     *  DIFFERENT answer than "this representative's own levels" (see
+     *  `IdenticalStatmechRecordsCard`'s own comment: `null` there means
+     *  "the group's members don't all agree, so nothing is shown here"). */
+    productLevels: ProductLevels | "loading" | "error" | null
 }) {
     const core = record.statmech
     return (
@@ -447,7 +486,11 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                 </>
             )}
 
-            <FrequencyScaleFactorDetail core={core} fsf={record.frequency_scale_factor} />
+            <FrequencyScaleFactorDetail
+                core={core}
+                fsf={record.frequency_scale_factor}
+                productLevels={productLevels}
+            />
         </>
     )
 }
@@ -552,6 +595,19 @@ const STATMECH_GROUP_ID_SUFFIX = "-group"
  * false), and `IdenticalStatmechGroupRefs` prints every member's own
  * source calculations, frequency calculation, software, and workflow
  * tool, per ref, directly on the card -- never behind "Show all".
+ *
+ * Level of theory is likewise NOT trusted from the representative alone:
+ * geometry/frequency/energy are not part of `statmechRecordFingerprint`
+ * (unlike the frequency scale factor's own level of theory, which is), so
+ * two group members can share every fingerprinted value while citing
+ * different source calculations at different levels. `sharedProductLevels`
+ * below checks the real thing across every member
+ * (`allProductLevelsAgree`) before showing anything here at all -- `null`
+ * when they don't all agree, `"loading"`/`"error"` while any member's own
+ * fetch hasn't resolved, and only the representative's (now confirmed
+ * shared) levels otherwise. A member whose own levels genuinely differ is
+ * never hidden by this -- `IdenticalStatmechGroupRefs` always shows every
+ * member's own levels, per ref, regardless of what this shared body decides.
  */
 function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, frequenciesState }: {
     records: StatmechRecord[]
@@ -561,6 +617,15 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
 }) {
     const representative = records[0]
     const anchorId = `statmech-heading-${representative.statmech.statmech_ref}${STATMECH_GROUP_ID_SUFFIX}`
+    const memberLevels = records.map((member) => statmechRecordProductLevels(member, sourceCalcsState))
+    const readyMemberLevels = memberLevels.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
+    const sharedProductLevels: ProductLevels | "loading" | "error" | null = memberLevels.some((levels) => levels === "loading")
+        ? "loading"
+        : memberLevels.some((levels) => levels === "error")
+            ? "error"
+            : allProductLevelsAgree(readyMemberLevels)
+                ? readyMemberLevels[0]
+                : null
     return (
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
@@ -580,6 +645,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
                 sourceCalcsState={sourceCalcsState}
                 frequenciesState={frequenciesState}
                 showRecordEvidence={false}
+                productLevels={sharedProductLevels}
             />
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
             <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
@@ -634,6 +700,24 @@ function freqCalcRefs(
     return frequenciesState.dataByRef.get(statmechRef)?.source_freq_calculation_refs ?? []
 }
 
+/** One row's level-of-theory cell(s) in `IdenticalStatmechGroupRefs` --
+ *  `"loading…"`/`"—"` placeholders matching `showThree`'s column count
+ *  while `statmechRecordProductLevels` hasn't resolved yet, matching
+ *  `RecordCalcRefsCell`'s own loading convention. */
+function StatmechLevelsRowCells({ levels, showThree }: { levels: ProductLevels | "loading" | "error"; showThree: boolean }) {
+    if (levels === "loading") {
+        return showThree
+            ? <><td data-label="Geometry">loading…</td><td data-label="Frequencies">loading…</td><td data-label="Energy">loading…</td></>
+            : <td data-label="Level of theory">loading…</td>
+    }
+    if (levels === "error") {
+        return showThree
+            ? <><td data-label="Geometry">—</td><td data-label="Frequencies">—</td><td data-label="Energy">—</td></>
+            : <td data-label="Level of theory">—</td>
+    }
+    return <ProductLevelsTableCells levels={levels} showThree={showThree} />
+}
+
 /**
  * Every ref in an identical-values group, with its OWN provenance -- see
  * `EntryThermoSection.tsx`'s `IdenticalThermoGroupRefs` for the identical
@@ -645,6 +729,18 @@ function freqCalcRefs(
  * (`frequenciesState`) -- both are fetched eagerly for the whole entry
  * already (see `StatmechList`), so no extra request is made rendering this
  * table.
+ *
+ * Level of theory gets its own column(s) too, per record -- deliberately
+ * NOT lifted to the group's shared body the way `IdenticalStatmechRecordsCard`
+ * lifts point group/symmetry/scale-factor facts, because geometry/
+ * frequency/energy levels are NOT part of `statmechRecordFingerprint`
+ * (unlike the scale factor's own level of theory, which is): two records in
+ * this same identical-values group can still cite different source
+ * calculations at different levels of theory while reporting byte-identical
+ * scientific values. One "Level of theory" column when every row's own
+ * three agree with itself; three (Geometry/Frequencies/Energy) the moment
+ * any row's own three disagree -- `productLevelsTableNeedsThreeColumns`,
+ * shared with `EntryThermoSection.tsx`'s identical table.
  */
 function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesState }: {
     records: StatmechRecord[]
@@ -652,6 +748,10 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
     frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
     const headingId = `identical-refs-${records[0].statmech.statmech_ref}`
+    const levelsByRecord = records.map((record) => statmechRecordProductLevels(record, sourceCalcsState))
+    const readyLevels = levelsByRecord.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
+    const showThreeLevelColumns = productLevelsTableNeedsThreeColumns(readyLevels)
+    const levelColumnCount = showThreeLevelColumns ? 3 : 1
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -661,15 +761,16 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                     last one clipped at the `.table-scroll` edge ("WORKFL / TOOL",
                     "not recorde", MEASURED, no scrollbar affordance visible).
                     "Record software" and "Workflow tool" move to a second row per
-                    record (spanning the 6 remaining columns, same `.note` weight
+                    record (spanning the remaining columns, same `.note` weight
                     as every other secondary provenance line on this page) rather
-                    than a 7th/8th column -- the table itself now fits at 1920 and
-                    still scrolls, rather than clips, at 680. */}
+                    than a 7th/8th column -- the table itself scrolls, rather than
+                    clips, at 680. */}
                 <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
+                            <ProductLevelsTableHead showThree={showThreeLevelColumns} />
                             <th scope="col">Opt calc</th>
                             <th scope="col">Freq calc</th>
                             <th scope="col">SP calc</th>
@@ -677,19 +778,20 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                         </tr>
                     </thead>
                     <tbody>
-                        {records.flatMap((record) => {
+                        {records.flatMap((record, index) => {
                             const ref = record.statmech.statmech_ref
                             return [
                                 <tr key={ref}>
                                     <td data-label="Ref"><code className="data">{ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
+                                    <StatmechLevelsRowCells levels={levelsByRecord[index]} showThree={showThreeLevelColumns} />
                                     <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
                                     <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
                                     <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
                                     <td data-label="Frequencies"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
                                 </tr>,
                                 <tr key={`${ref}-provenance`} className="data-table-provenance-row">
-                                    <td colSpan={6}>
+                                    <td colSpan={6 + levelColumnCount}>
                                         Software: {softwareLabel(record.software_release) ?? "not recorded"}
                                         {" · "}Workflow tool: {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
                                     </td>
@@ -733,36 +835,58 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
  * exactly one "Frequency scale factor" row on this card. The `!fsf` branch
  * exists only as a defensive fallback should that invariant ever not hold,
  * not as a second normal path.
+ *
+ * `productLevels` -- this record's own geometry/frequency/energy levels of
+ * theory (`statmechRecordProductLevels`, above) -- renders as the FIRST
+ * rows of this SAME `<dl>`, ahead of "Frequency scale factor" itself,
+ * deliberately: the scale factor's own "Scale factor level of theory" row
+ * a few lines below is frequency evidence, and a reader comparing it
+ * against this record's Frequencies level needs the two side by side, not
+ * one at the top of the card (next to point group / symmetry -- geometry
+ * facts) and the other down here. `null` renders no levels fact at all --
+ * the caller's own way of saying nothing safe to show here (see
+ * `StatmechRecordBody`'s `productLevels` doc).
  */
-function FrequencyScaleFactorDetail({ core, fsf }: {
+function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
     core: StatmechRecord["statmech"]
     fsf: StatmechRecord["frequency_scale_factor"]
+    productLevels: ProductLevels | "loading" | "error" | null
 }) {
+    const loadingLevels = productLevels === "loading"
+    const levels = productLevels === "loading" || productLevels === "error" || productLevels === null ? null : productLevels
     if (!fsf) {
         return (
-            <dl className="kv-list">
-                <div>
-                    <dt>Frequency scale factor</dt>
-                    <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", core.frequency_scale_factor_value)} /></dd>
-                </div>
-            </dl>
+            <>
+                {loadingLevels && <p className="note" role="status">Loading level of theory…</p>}
+                <dl className="kv-list">
+                    {levels && <ProductLevelsFact levels={levels} />}
+                    <div>
+                        <dt>Frequency scale factor</dt>
+                        <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", core.frequency_scale_factor_value)} /></dd>
+                    </div>
+                </dl>
+            </>
         )
     }
     const lot = fsf.level_of_theory ? lotLabel(fsf.level_of_theory) : null
     const fsfSoftwareLabel = fsf.software ? softwareLabel(fsf.software) : null
     return (
-        <dl className="kv-list">
-            <div>
-                <dt>Frequency scale factor</dt>
-                <dd>
-                    <QuantityValue value={formatQuantity("statmech_frequency_scale_factor", fsf.value)} />{" "}
-                    <span className="value-pill">{statusLabel(fsf.scale_kind)}</span>
-                </dd>
-            </div>
-            {lot && <div><dt>Scale factor level of theory</dt><dd>{lot}</dd></div>}
-            {fsfSoftwareLabel && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
-            <div><dt>Frequency scale factor ref</dt><dd><code>{fsf.frequency_scale_factor_ref}</code></dd></div>
-        </dl>
+        <>
+            {loadingLevels && <p className="note" role="status">Loading level of theory…</p>}
+            <dl className="kv-list">
+                {levels && <ProductLevelsFact levels={levels} />}
+                <div>
+                    <dt>Frequency scale factor</dt>
+                    <dd>
+                        <QuantityValue value={formatQuantity("statmech_frequency_scale_factor", fsf.value)} />{" "}
+                        <span className="value-pill">{statusLabel(fsf.scale_kind)}</span>
+                    </dd>
+                </div>
+                {lot && <div><dt>Scale factor level of theory</dt><dd>{lot}</dd></div>}
+                {fsfSoftwareLabel && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
+                <div><dt>Frequency scale factor ref</dt><dd><code>{fsf.frequency_scale_factor_ref}</code></dd></div>
+            </dl>
+        </>
     )
 }
 

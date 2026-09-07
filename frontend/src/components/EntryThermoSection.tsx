@@ -2,11 +2,17 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
-import { lotLabel } from "../api/scientificSchemas"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
 import { conformerLabel, partitionByConformerLink, thermoConformerGroupRef } from "../domain/conformerEvidence"
 import { groupByFingerprint, thermoRecordFingerprint } from "../domain/identicalRecordGroups"
+import {
+    allProductLevelsAgree,
+    productLevelsAgree,
+    productLevelsTableNeedsThreeColumns,
+    resolveProductLevels,
+    type ProductLevels,
+} from "../domain/productLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
@@ -14,11 +20,33 @@ import { useRegisteredSection } from "../hooks/usePageSections"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
+import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
 import { ThermoCpChart } from "./ThermoCpChart"
+
+/**
+ * A thermo record's own geometry/frequency/energy levels of theory: the
+ * server's additive `levels` field when present; else derived from this
+ * record's own `source_calculations[]` roles when THAT is present (an
+ * older API shipping the roles but not yet the derived field); else the
+ * oldest fallback -- `provenance.level_of_theory` alone, reused for all
+ * three, exactly the single value this page showed before any of the
+ * three was split out. Unlike statmech's `source_calculations` (a lazy,
+ * include-gated fetch), thermo's is always eager -- nothing on this
+ * surface is request-gated (see the module docstring on `api/thermoApi.ts`)
+ * -- so this is a plain synchronous function, never a "loading" state.
+ */
+function thermoRecordProductLevels(record: ThermoRecord): ProductLevels {
+    if (record.levels) return resolveProductLevels(record.levels, null)
+    if (record.source_calculations && record.source_calculations.length > 0) {
+        return resolveProductLevels(null, record.source_calculations)
+    }
+    const lot = record.provenance?.level_of_theory ?? null
+    return { geometry: lot, frequency: lot, energy: lot, energy_source: lot ? "opt" : null }
+}
 
 // ---------------------------------------------------------------------------
 // The thermo/statmech/transport read surfaces are ENTRY-SCOPED LISTS
@@ -367,7 +395,14 @@ function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
             <ModelBlock record={record} idSuffix={idSuffix} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
-            {showProvenance && <ProvenanceBlock provenance={record.provenance ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />}
+            {showProvenance && (
+                <ProvenanceBlock
+                    provenance={record.provenance ?? null}
+                    productLevels={thermoRecordProductLevels(record)}
+                    thermoRef={record.thermo_ref}
+                    idSuffix={idSuffix}
+                />
+            )}
             <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         </>
     )
@@ -443,17 +478,24 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 another.
             </p>
             <ThermoRecordBody record={representative} idSuffix={GROUP_ID_SUFFIX} showProvenance={false} />
-            {/* Level of theory is part of the identity fingerprint, so every
-                record in this group shares it -- showing it once here is
-                safe, and a chemist reading H298 needs the LoT beside it. The
-                rest of provenance differs per record and lives in the table
-                below; never lift it up here. */}
-            <dl className="kv-list" aria-label="Shared level of theory">
-                <div>
-                    <dt>Level of theory</dt>
-                    <dd>{representative.provenance?.level_of_theory ? lotLabel(representative.provenance.level_of_theory) : "not recorded"}</dd>
-                </div>
-            </dl>
+            {/* `provenance.level_of_theory` alone is part of the identity
+                fingerprint, so every record in this group shares IT -- but
+                geometry/frequency/energy (this record's FULL product levels)
+                are not, now that a record can use different levels for each.
+                `allProductLevelsAgree` checks the real thing directly, over
+                every member, rather than trusting the fingerprint to have
+                covered a fact it doesn't compare: only when every member's
+                own three levels genuinely match every other member's does
+                this lift one shared fact here (safe, a chemist reading H298
+                needs the LoT beside it); otherwise nothing is shown here and
+                each member's own levels are read per ref from the table
+                below instead -- never a representative's value presented as
+                though it held for records that may not share it. */}
+            {allProductLevelsAgree(records.map(thermoRecordProductLevels)) && (
+                <dl className="kv-list" aria-label="Shared level of theory">
+                    <ProductLevelsFact levels={thermoRecordProductLevels(representative)} />
+                </dl>
+            )}
             <IdenticalThermoGroupRefs records={records} />
             <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
@@ -476,9 +518,20 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
  * "Record software: not recorded" and one saying "Arkane" -- every one of
  * those differences gets its own column, its own row, per ref; nothing
  * here is summarized from "the group" or from any one representative.
+ *
+ * Level of theory joins the same per-record treatment, for the same
+ * reason -- see `IdenticalThermoRecordsCard`'s own comment: geometry/
+ * frequency/energy are not part of `thermoRecordFingerprint`, so this
+ * table is where a group member's genuinely different levels stay visible
+ * even when `IdenticalThermoRecordsCard` couldn't safely lift one shared
+ * fact above. One "Level of theory" column when every row's own three
+ * agree with itself; three (Geometry/Frequencies/Energy) the moment any
+ * row's own three disagree.
  */
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     const headingId = `identical-refs-${records[0].thermo_ref}`
+    const levelsByRecord = records.map(thermoRecordProductLevels)
+    const showThreeLevelColumns = productLevelsTableNeedsThreeColumns(levelsByRecord)
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -488,6 +541,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
+                            <ProductLevelsTableHead showThree={showThreeLevelColumns} />
                             <th scope="col">Primary calculation</th>
                             <th scope="col">Freq calculation</th>
                             <th scope="col">SP calculation</th>
@@ -497,13 +551,14 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {records.map((record) => {
+                        {records.map((record, index) => {
                             const provenance = record.provenance ?? null
                             const primaryRef = provenance?.primary_calculation?.calculation_ref ?? null
                             return (
                                 <tr key={record.thermo_ref}>
                                     <td data-label="Ref"><code className="data">{record.thermo_ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
+                                    <ProductLevelsTableCells levels={levelsByRecord[index]} showThree={showThreeLevelColumns} />
                                     <td data-label="Primary calculation">
                                         <CalculationRefCell calculationRef={primaryRef} />
                                     </td>
@@ -855,8 +910,9 @@ function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<The
     )
 }
 
-function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
+function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }: {
     provenance: ThermoRecord["provenance"] | null
+    productLevels: ProductLevels
     thermoRef: string
     idSuffix?: string
 }) {
@@ -871,19 +927,30 @@ function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
             </section>
         )
     }
+    // `productLevels` replaces the single "Level of theory" fact this block
+    // used to render straight off `provenance.level_of_theory` -- one line
+    // when geometry/frequency/energy agree (the historical case, and still
+    // every case until the backend ships genuinely mixed levels), three
+    // labelled lines otherwise. "Level of theory ref" stays alongside it
+    // ONLY in the collapsed case: with three distinct levels there are up
+    // to three distinct refs, and no single one of them is "the" ref this
+    // row could report without picking a winner among the others.
+    const levelsAgree = productLevelsAgree(productLevels)
     return (
         <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
             <dl className="kv-list">
-                <div>
-                    <dt>Level of theory</dt>
-                    <dd>{provenance.level_of_theory ? lotLabel(provenance.level_of_theory) : "not recorded"}</dd>
-                </div>
+                <ProductLevelsFact levels={productLevels} />
                 {/* SHOULD-FIX-9 (species-entry/browse/chrome residuals re-review):
                     these two rendered as plain 15px sans text next to `.data`
                     calc refs two rows below -- a ref is a ref regardless of
                     whether this page happens to link it. */}
-                <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ? <span className="data">{provenance.level_of_theory.level_of_theory_ref}</span> : "not recorded"}</dd></div>
+                {levelsAgree && (
+                    <div>
+                        <dt>Level of theory ref</dt>
+                        <dd>{productLevels.geometry?.level_of_theory_ref ? <span className="data">{productLevels.geometry.level_of_theory_ref}</span> : "not recorded"}</dd>
+                    </div>
+                )}
                 <div>
                     <dt>Software</dt>
                     <dd>{softwareLabel(provenance.software_release) ?? "not recorded"}</dd>

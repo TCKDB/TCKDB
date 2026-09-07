@@ -203,15 +203,27 @@ describe("EntryStatmechSection", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_one")
-        expect(screen.getByText("sm_one")).toBeVisible()
-        expect(screen.getByText("sm_two")).toBeVisible()
+        // Scoped to `code` (the primary card's own ref, in its heading):
+        // once the eager `source_calculations` include resolves, the
+        // "Source calculations" disclosure -- native `<details>`, present
+        // in the DOM whether expanded or not -- ALSO renders each record's
+        // own ref (`StatmechLazySection`'s row heading, a `<span
+        // class="data">`, not `<code>`). An unscoped `getByText("sm_one")`
+        // is timing-dependent on whether that fetch has resolved yet; this
+        // selector is not.
+        expect(screen.getByText("sm_one", { selector: "code" })).toBeVisible()
+        expect(screen.getByText("sm_two", { selector: "code" })).toBeVisible()
     })
 
     it("never hides a superseded record, and never swaps the direction of the correction pointer", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_two")
-        const twoCard = screen.getByText("sm_two").closest("article") as HTMLElement
+        // See the `{ selector: "code" }` note above -- the eager
+        // `source_calculations` fetch can add a second "sm_two"/"sm_one"
+        // match (inside the hidden-but-present "Source calculations"
+        // disclosure) before this runs.
+        const twoCard = screen.getByText("sm_two", { selector: "code" }).closest("article") as HTMLElement
         expect(within(twoCard).getByText("Superseded")).toBeVisible()
         // Position-bound: superseded_by must be the ref in the "replaced
         // by" sentence, current must be the ref in the "current record in
@@ -221,7 +233,7 @@ describe("EntryStatmechSection", () => {
         expect(codeAfter(twoCard, "replaced by")).toBe("sm_two_v2")
         expect(codeAfter(twoCard, "current record in this chain is")).toBe("sm_two_v3")
 
-        const oneCard = screen.getByText("sm_one").closest("article") as HTMLElement
+        const oneCard = screen.getByText("sm_one", { selector: "code" }).closest("article") as HTMLElement
         expect(within(oneCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
@@ -874,16 +886,22 @@ describe("EntryStatmechSection: identical-value records group under one card", (
     // BLOCKING-2 (species-entry/browse/chrome residuals re-review): MEASURED
     // at 1920 before this fix, the 8th column ("Workflow tool") clipped at
     // the `.table-scroll` edge with no scroll affordance. The structural
-    // guarantee this table now keeps is "at most 6 columns" -- "Record
-    // software"/"Workflow tool" render as a provenance row beneath each
-    // record's own row instead of two more columns.
-    it("keeps the group table to at most 6 columns, with software/workflow tool on a provenance row instead", async () => {
+    // guarantee this table now keeps is "at most 6 columns, plus a single
+    // 'Level of theory' column when every row's own levels agree with
+    // itself" -- "Record software"/"Workflow tool" render as a provenance
+    // row beneath each record's own row instead of two more columns.
+    it("keeps the group table to at most 7 columns, with software/workflow tool on a provenance row instead", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
         page()
         await screen.findByText("3 records with identical values")
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
         const headerCells = within(refsTable).getAllByRole("columnheader")
-        expect(headerCells.length).toBeLessThanOrEqual(6)
+        // 6 original columns + one "Level of theory" column (this fixture's
+        // clones carry no source_calculations, so every row collapses to
+        // the single-column case, never the three-column Geometry/
+        // Frequencies/Energy split).
+        expect(headerCells.length).toBeLessThanOrEqual(7)
+        expect(headerCells.map((cell) => cell.textContent)).toContain("Level of theory")
         expect(headerCells.map((cell) => cell.textContent)).not.toContain("Record software")
         expect(headerCells.map((cell) => cell.textContent)).not.toContain("Workflow tool")
 
@@ -954,8 +972,16 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         page()
         await screen.findByText("sm_one")
         expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
-        expect(screen.getByText("sm_one")).toBeVisible()
-        expect(screen.getByText("sm_two")).toBeVisible()
+        // Scoped to `code.data` (the primary card's own ref, in its
+        // heading): once the eager `source_calculations` include resolves,
+        // the "Source calculations" disclosure -- native `<details>`,
+        // present in the DOM whether expanded or not -- also renders each
+        // record's own ref (`StatmechLazySection`'s row heading, a `<span
+        // class="data">`, not `<code>`). An unscoped `getByText("sm_one")`
+        // is timing-dependent on whether that fetch has resolved yet; this
+        // selector is not.
+        expect(screen.getByText("sm_one", { selector: "code" })).toBeVisible()
+        expect(screen.getByText("sm_two", { selector: "code" })).toBeVisible()
     })
 
     /**
@@ -1198,5 +1224,185 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         expect(cellAt(rows[0], "Conformer")).toContain("conformer_2")
         expect(cellAt(rows[0], "Review")).toContain("not reviewed")
         expect(cellAt(rows[0], "Review")).toContain("approved")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Owner decision: a statmech record can use different levels of theory for
+// its optimised geometry, its frequencies, and its electronic energy. These
+// prove `domain/productLevels.ts`'s rendering rule end to end: collapse to
+// one "Level of theory" fact when all three agree, expand to three labelled
+// facts otherwise, and read identically whether the server sends the
+// additive `levels` field directly or this client derives it from
+// `source_calculations[]` roles.
+// ---------------------------------------------------------------------------
+const geomLot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_geom" }
+const energyLot = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_energy" }
+
+function sourceCalcWithLot(role: string, calculationRef: string, levelOfTheory: unknown) {
+    return { ...sourceCalc(role, calculationRef), level_of_theory: levelOfTheory }
+}
+
+describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", () => {
+    it("collapses to one 'Level of theory' fact when the opt/freq/sp roles all resolve to the same level", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("source_calculations") ? {
+                    source_calculations: [
+                        sourceCalcWithLot("opt", "calc_opt", geomLot),
+                        sourceCalcWithLot("freq", "calc_freq", geomLot),
+                        sourceCalcWithLot("sp", "calc_sp", geomLot),
+                    ],
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("b3lyp/def2tzvp")
+        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
+        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).queryByText("Frequencies", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).queryByText("Energy", { selector: "dt" })).not.toBeInTheDocument()
+    })
+
+    it("expands to Geometry/Frequencies/Energy facts, with a note under Energy, when the sp role is at a different level than opt/freq", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("source_calculations") ? {
+                    source_calculations: [
+                        sourceCalcWithLot("opt", "calc_opt", geomLot),
+                        sourceCalcWithLot("freq", "calc_freq", geomLot),
+                        sourceCalcWithLot("sp", "calc_sp", energyLot),
+                    ],
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toContain("ccsd(t)/cc-pvtz")
+        expect(ddFor(card, "Energy")).toContain("single point on the optimised geometry")
+        expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
+    })
+
+    it("renders the collapsed case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "opt" } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("b3lyp/def2tzvp")
+        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
+        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
+    })
+
+    it("renders the differing case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toContain("ccsd(t)/cc-pvtz")
+        expect(ddFor(card, "Energy")).toContain("single point on the optimised geometry")
+    })
+
+    it("shows a composite/imported energy_source as a muted pill, not a note", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: null, energy_source: "composite" } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        const energyDt = Array.from(card.querySelectorAll("dt")).find((el) => el.textContent === "Energy")!
+        const energyDd = energyDt.nextElementSibling as HTMLElement
+        expect(within(energyDd).getByText("composite")).toHaveClass("value-pill", "value-pill--muted")
+        expect(energyDd).not.toHaveTextContent("single point on the optimised geometry")
+    })
+
+    describe("in the 'Records in this group' table", () => {
+        function threeIdenticalRecords() {
+            return [
+                baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" } }),
+                baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_g2" } }),
+                baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_g3" } }),
+            ]
+        }
+
+        it("keeps one 'Level of theory' column when every member's own levels agree with itself", async () => {
+            server.use(http.get(ENDPOINT, ({ request }) => {
+                const includes = new URL(request.url).searchParams.getAll("include")
+                const records = threeIdenticalRecords().map((record) => ({
+                    ...record,
+                    ...(includes.includes("source_calculations") ? {
+                        source_calculations: [sourceCalcWithLot("opt", `calc_opt_${record.statmech.statmech_ref}`, geomLot)],
+                    } : {}),
+                }))
+                return HttpResponse.json(mockResponse(records))
+            }))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            // Wait for the real level of theory to land (not the transient
+            // "loading…" placeholder), same reasoning as the disagreeing
+            // case's own wait below -- otherwise this assertion could pass
+            // vacuously while `sourceCalcsState` is still loading.
+            // `findAllByText` (plural): all three rows report the same
+            // level, and `findByText` would treat that as a "multiple
+            // elements" failure on every retry until it times out.
+            await within(refsTable).findAllByText("b3lyp/def2tzvp")
+            const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
+            expect(headers).toContain("Level of theory")
+            expect(headers).not.toContain("Geometry")
+        })
+
+        it("switches to Geometry/Frequencies/Energy columns the moment any one member's own levels disagree, and the shared body above the table shows nothing instead of guessing", async () => {
+            server.use(http.get(ENDPOINT, ({ request }) => {
+                const includes = new URL(request.url).searchParams.getAll("include")
+                const records = threeIdenticalRecords().map((record) => ({
+                    ...record,
+                    ...(includes.includes("source_calculations") ? {
+                        source_calculations: record.statmech.statmech_ref === "sm_g3"
+                            ? [sourceCalcWithLot("opt", "calc_opt_g3", geomLot), sourceCalcWithLot("sp", "calc_sp_g3", energyLot)]
+                            : [sourceCalcWithLot("opt", `calc_opt_${record.statmech.statmech_ref}`, geomLot)],
+                    } : {}),
+                }))
+                return HttpResponse.json(mockResponse(records))
+            }))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            // Both the entry-scoped `source_calculations` include and this
+            // main listing resolve concurrently -- wait for the former's own
+            // eager fetch to land (an opt-calc ref this table's "Opt calc"
+            // column only shows once `sourceCalcsState` is ready) before
+            // reading which level-of-theory column layout it settled on.
+            await within(refsTable).findByText("calc_opt_g3")
+
+            const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
+            expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
+            expect(headers).not.toContain("Level of theory")
+            const g3Row = within(refsTable).getByText("sm_g3").closest("tr") as HTMLElement
+            expect(cellAt(g3Row, "Energy")).toContain("ccsd(t)/cc-pvtz")
+            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
+            expect(cellAt(g1Row, "Energy")).toContain("b3lyp/def2tzvp")
+
+            // The group's own shared body (everything above "Records in this
+            // group", excluding the "Show all" disclosure's own nested
+            // per-record cards) shows no levels fact at all -- disagreement
+            // among the group's own members means nothing is safe to lift.
+            const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+            const sharedDts = Array.from(groupCard.querySelectorAll("dt")).filter((dt) => !dt.closest("details"))
+            expect(sharedDts.map((dt) => dt.textContent)).not.toContain("Geometry")
+            expect(sharedDts.map((dt) => dt.textContent)).not.toContain("Level of theory")
+        })
     })
 })
