@@ -323,6 +323,18 @@ provenance and machine detail live on dedicated linked pages.
     upload validation will emit when linked single points disagree.
     On the live archive today every record agrees, so the differing
     rendering was verified through an injecting proxy, not real data.
+26. Arrows that read in their own direction. "Run on this geometry"
+    on an arrow leaving the optimisation read as if the optimisation
+    had come from the frequency job. Every edge label now reads from
+    source to target and names the target, "geometry for frequencies",
+    "geometry for the scan", and the sentences underneath follow the
+    same direction (#390). The review checked each of the seven
+    relationship kinds against what the upload path enforces rather
+    than against the rubric's docstrings, and found the scan
+    relationship documented backwards, with 73 live edges; the trust
+    rubric's code reads that edge from the wrong side too, silently so
+    far because no transition state on the archive has such an edge.
+    That fix is its own pull request.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
