@@ -33,7 +33,11 @@ from app.schemas.entities.thermo import (
 )
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+from app.schemas.fragments.refs import (
+    LevelOfTheoryRef,
+    SoftwareReleaseRef,
+    WorkflowToolReleaseRef,
+)
 from app.schemas.utils import normalize_optional_text
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
@@ -158,6 +162,19 @@ class ThermoUploadRequest(SchemaBase):
     # bundle uploads that resolve statmech server-side by local key are a
     # future enrichment; there is no raw contributor FK for statmech here.
     existing_statmech_id: int | None = Field(default=None, gt=0)
+
+    # Depositor-declared level of theory the record's energy is claimed to
+    # stand at. A depositor may run the optimisation and the single point
+    # at two different levels; when declared, this must agree with what
+    # is actually linked via ``source_calculations`` (the 'sp' role's
+    # level, or the 'opt' role's own level when no 'sp' is linked) --
+    # see ``app.services.calculation_levels`` (R4/R5). Only checked
+    # against this request's OWN ``source_calculations``: when the
+    # record instead derives from a statmech basis (``existing_statmech_id``
+    # set), it inherits that record's levels and this field is not
+    # re-validated against it (see ``validate_energy_level_requires_no_
+    # statmech_link`` below). Never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
@@ -337,6 +354,28 @@ class ThermoUploadRequest(SchemaBase):
                     key=key,
                     declared=defined,
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_energy_level_requires_no_statmech_link(self) -> Self:
+        """``energy_level_of_theory`` is meaningless once a statmech basis
+        is linked: the record's levels then come entirely from that
+        statmech record (R6), and there is no local 'opt'/'sp' link left
+        for this field to be checked against. Refuse the combination
+        outright rather than silently ignoring one of the two — the
+        depositor almost certainly meant one or the other.
+        """
+        if (
+            self.energy_level_of_theory is not None
+            and self.existing_statmech_id is not None
+        ):
+            raise ValueError(
+                "energy_level_of_theory cannot be combined with "
+                "existing_statmech_id: a thermo record derived from a "
+                "statmech basis inherits that record's levels. Declare "
+                "energy_level_of_theory on the statmech upload instead, "
+                "or omit existing_statmech_id."
+            )
         return self
 
     @model_validator(mode="after")

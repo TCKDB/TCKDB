@@ -39,6 +39,7 @@ from app.schemas.fragments.calculation import CalculationWithResultsPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.fragments.refs import (
     FreqScaleFactorRef,
+    LevelOfTheoryRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
@@ -216,6 +217,16 @@ class StatmechUploadRequest(SchemaBase):
     :param calculations: Inline supporting calculations declared by key.
     :param source_calculations: Statmech → calculation links by key/role.
     :param torsions: Torsion definitions (source scans addressed by key).
+    :param energy_level_of_theory: Optional depositor-declared level of
+        theory the record's energy is claimed to stand at. A depositor
+        may run the optimisation and the single point at two different
+        levels; when declared, this must agree with what is actually
+        linked (the linked 'sp' calculation's level, or the linked 'opt's
+        own level when no separate 'sp' is linked) — see
+        ``app.services.calculation_levels`` for the exact rule (R4/R5).
+        Never persisted: it is checked once, at upload time, against the
+        source calculations this same request links; the read-time
+        ``levels`` block is always re-derived from those links directly.
     """
 
     species_entry: SpeciesEntryIdentityPayload
@@ -249,6 +260,8 @@ class StatmechUploadRequest(SchemaBase):
 
     torsions: list[StatmechTorsionIn] = Field(default_factory=list)
     electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
+
+    energy_level_of_theory: LevelOfTheoryRef | None = None
 
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:

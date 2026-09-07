@@ -41,6 +41,7 @@ from app.schemas.reads.scientific_common import (
     ProfiledRequestEcho,
     RecordReviewBadge,
     ReviewStatusSummary,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     SupersessionNotice,
     WorkflowToolReleaseSummary,
@@ -402,6 +403,10 @@ class ScientificStatmechRecord(BaseModel):
     literature: LiteratureSummary | None = None
     evidence_summary: StatmechEvidenceSummary
     available_sections: AvailableStatmechSections
+    #: Geometry / frequency / energy levels of theory, derived from
+    #: ``source_calculations`` at read time. Always computed, never
+    #: behind an ``include=`` token — see :class:`ScientificLevelsSummary`.
+    levels: ScientificLevelsSummary = Field(default_factory=ScientificLevelsSummary)
 
     # Optional include blocks
     source_calculations: list[StatmechSourceCalculationSummary] | None = None

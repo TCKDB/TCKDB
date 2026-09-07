@@ -20,6 +20,16 @@ from app.schemas.workflows.thermo_upload import (
     ThermoSourceCalculationIn,
     ThermoUploadRequest,
 )
+from app.services.calculation_levels import (
+    W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+    W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+    W_THERMO_ROLE_DUPLICATE,
+    W_THERMO_SP_GEOMETRY_MISMATCH,
+    RoleLink,
+    assert_energy_level_consistent,
+    assert_no_duplicate_roles,
+    assert_sp_geometry_matches_opt,
+)
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -29,6 +39,7 @@ from app.services.calculation_ownership import (
 )
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
+    resolve_level_of_theory_ref,
 )
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
@@ -327,6 +338,7 @@ def persist_thermo_upload(
     # conformer step). Both paths run owner-consistency and role/type
     # compatibility checks before becoming a thermo_source_calculation row.
     resolved_source_calcs: list[ThermoSourceCalculationCreate] = []
+    role_links: list[RoleLink] = []
     for index, sc in enumerate(request.source_calculations):
         calc_row = _resolve_source_calculation(
             session,
@@ -341,6 +353,7 @@ def persist_thermo_upload(
                 role=sc.role,
             )
         )
+        role_links.append(RoleLink(sc.role.value, calc_row))
 
     # Resolve the optional statmech basis for this (computed) thermo. The
     # upload carries it as an existing-row reference (programmatic path,
@@ -351,6 +364,35 @@ def persist_thermo_upload(
         request.existing_statmech_id,
         species_entry_id=species_entry.id,
     )
+
+    # R2/R3/R4 (app.services.calculation_levels): a depositor linking
+    # opt/freq/sp calculations directly declares a single chain of
+    # evidence, so at most one of each is allowed, a linked sp must share
+    # the linked opt's geometry, and a declared energy_level_of_theory
+    # must agree with what is linked. Skipped entirely when the record
+    # instead derives from a statmech basis (R6): the schema already
+    # refuses combining energy_level_of_theory with existing_statmech_id,
+    # and the record's levels are then the statmech's, inherited wholesale
+    # at read time rather than re-checked here.
+    if resolved_statmech_id is None:
+        declared_energy_lot = (
+            resolve_level_of_theory_ref(session, request.energy_level_of_theory)
+            if request.energy_level_of_theory is not None
+            else None
+        )
+        assert_no_duplicate_roles(
+            role_links, code=W_THERMO_ROLE_DUPLICATE, subject="thermo"
+        )
+        assert_sp_geometry_matches_opt(
+            role_links, code=W_THERMO_SP_GEOMETRY_MISMATCH, subject="thermo"
+        )
+        assert_energy_level_consistent(
+            role_links,
+            declared_energy_lot,
+            requires_sp_code=W_THERMO_ENERGY_LEVEL_REQUIRES_SP,
+            contradiction_code=W_THERMO_ENERGY_LEVEL_CONTRADICTION,
+            subject="thermo",
+        )
 
     thermo_create = resolve_thermo_upload(
         session,

@@ -33633,6 +33633,60 @@
         "title": "ScientificKineticsSearchResponse",
         "type": "object"
       },
+      "ScientificLevelsSummary": {
+        "description": "Geometry / frequency / energy levels of theory, derived at read time.\n\nNever stored, and never behind an ``include=`` token: recomputed on\nevery read from whichever ``opt``/``freq``/``sp``/``composite``/\n``imported`` source calculations the record links right now, per\n``app.services.calculation_levels.derive_levels`` (R1):\n\n* ``geometry`` — the ``opt`` role's level of theory.\n* ``frequency`` — the ``freq`` role's level, or the ``opt``'s own\n  level when no separate ``freq`` is linked but the optimisation\n  calculation itself carries frequency results.\n* ``energy`` — the ``sp`` role's level when an ``sp`` is linked;\n  otherwise the ``opt``'s own level (an optimisation's final energy\n  *is* the single-point value at its own level of theory); otherwise\n  a linked ``composite``/``imported`` calculation's level.\n* ``energy_source`` names which role answered ``energy`` -- ``'sp'``,\n  ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``null`` when\n  nothing linked can answer it.\n\nAny field may be ``null`` independently of the others: a record with\nonly a ``freq`` link, for instance, reports a ``frequency`` level and\n``geometry``/``energy`` both ``null``.",
+        "properties": {
+          "energy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "energy_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sp",
+                  "opt",
+                  "composite",
+                  "imported"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Source"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ScientificLevelsSummary",
+        "type": "object"
+      },
       "ScientificLiteratureDetailResponse": {
         "description": "Response envelope for ``GET /scientific/literature/{handle}``.",
         "properties": {
@@ -35363,6 +35417,9 @@
                 "type": "null"
               }
             ]
+          },
+          "levels": {
+            "$ref": "#/components/schemas/ScientificLevelsSummary"
           },
           "literature": {
             "anyOf": [
@@ -39975,7 +40032,7 @@
       },
       "StatmechUploadRequest": {
         "additionalProperties": false,
-        "description": "Workflow-facing standalone statmech upload payload.\n\nThe backend resolves the target species entry, persists any inline\nsupporting calculations, resolves provenance references, and routes\nthe resulting scientific payload through the canonical statmech\nresolution service. Statmech is append-only — repeated uploads\nagainst the same species entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param scientific_origin: Scientific origin category for this record.\n:param literature: Optional literature submission payload.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param software_release: Optional software provenance.\n:param external_symmetry: Optional external symmetry number.\n:param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).\n:param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).\n:param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).\n:param point_group: Optional point-group label.\n:param is_linear: Optional linearity flag.\n:param rigid_rotor_kind: Optional rigid-rotor classification.\n:param statmech_treatment: Optional treatment classification.\n:param freq_scale_factor: Optional frequency scale factor ref.\n:param uses_projected_frequencies: Optional projected-frequency flag.\n:param note: Optional free-text note.\n:param calculations: Inline supporting calculations declared by key.\n:param source_calculations: Statmech → calculation links by key/role.\n:param torsions: Torsion definitions (source scans addressed by key).",
+        "description": "Workflow-facing standalone statmech upload payload.\n\nThe backend resolves the target species entry, persists any inline\nsupporting calculations, resolves provenance references, and routes\nthe resulting scientific payload through the canonical statmech\nresolution service. Statmech is append-only — repeated uploads\nagainst the same species entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param scientific_origin: Scientific origin category for this record.\n:param literature: Optional literature submission payload.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param software_release: Optional software provenance.\n:param external_symmetry: Optional external symmetry number.\n:param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).\n:param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).\n:param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).\n:param point_group: Optional point-group label.\n:param is_linear: Optional linearity flag.\n:param rigid_rotor_kind: Optional rigid-rotor classification.\n:param statmech_treatment: Optional treatment classification.\n:param freq_scale_factor: Optional frequency scale factor ref.\n:param uses_projected_frequencies: Optional projected-frequency flag.\n:param note: Optional free-text note.\n:param calculations: Inline supporting calculations declared by key.\n:param source_calculations: Statmech → calculation links by key/role.\n:param torsions: Torsion definitions (source scans addressed by key).\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. A depositor\n    may run the optimisation and the single point at two different\n    levels; when declared, this must agree with what is actually\n    linked (the linked 'sp' calculation's level, or the linked 'opt's\n    own level when no separate 'sp' is linked) — see\n    ``app.services.calculation_levels`` for the exact rule (R4/R5).\n    Never persisted: it is checked once, at upload time, against the\n    source calculations this same request links; the read-time\n    ``levels`` block is always re-derived from those links directly.",
         "properties": {
           "calculations": {
             "items": {
@@ -39990,6 +40047,16 @@
             },
             "title": "Electronic Levels",
             "type": "array"
+          },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "external_symmetry": {
             "anyOf": [
@@ -43111,6 +43178,9 @@
             ],
             "title": "H298 Uncertainty Kj Mol"
           },
+          "levels": {
+            "$ref": "#/components/schemas/ScientificLevelsSummary"
+          },
           "model_kind": {
             "$ref": "#/components/schemas/ThermoModelKindQuery"
           },
@@ -43686,6 +43756,16 @@
             },
             "title": "Calculations",
             "type": "array"
+          },
+          "energy_level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheoryRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "enthalpy_formation_0k_kj_mol": {
             "anyOf": [

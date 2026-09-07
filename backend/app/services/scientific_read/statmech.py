@@ -47,6 +47,7 @@ from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
     RecordReviewBadge,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     SupersessionNotice,
     WorkflowToolReleaseSummary,
@@ -69,6 +70,7 @@ from app.schemas.reads.scientific_statmech import (
     StatmechTorsionSummary,
     StatmechTransitionStateContext,
 )
+from app.services.calculation_levels import RoleCalcInfo, derive_levels
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -324,6 +326,7 @@ def build_statmech_record(
         has_conformer_context=has_conformer_context,
         sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
     )
+    levels = _build_levels(session, source_rows)
     available = AvailableStatmechSections(
         has_source_calculations=bool(source_rows),
         has_torsions=bool(torsion_rows),
@@ -405,6 +408,7 @@ def build_statmech_record(
         literature=lit_summary,
         evidence_summary=evidence,
         available_sections=available,
+        levels=levels,
         source_calculations=source_block,
         torsions=torsions_block,
         electronic_levels=electronic_levels_block,
@@ -460,6 +464,61 @@ def _load_electronic_level_rows(
         .where(StatmechElectronicLevel.statmech_id == statmech_id)
         .order_by(StatmechElectronicLevel.level_index.asc())
     ).all()
+
+
+_LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
+
+
+def _build_levels(
+    session: Session, source_rows: list[StatmechSourceCalculation]
+) -> ScientificLevelsSummary:
+    """R1: derive geometry/frequency/energy levels from this record's links.
+
+    ``source_rows`` is already ordered ``role.asc(), calculation_id.asc()``
+    by :func:`_load_source_rows`, so the first row seen per role is
+    already the lowest-id one -- the same deterministic tie-break
+    :func:`derive_levels` documents for a role linked more than once (a
+    legitimate shape on the multi-conformer bundle paths, which do not run
+    the upload-time R2 uniqueness check).
+    """
+    role_calc_ids: dict[str, int] = {}
+    for row in source_rows:
+        role = row.role.value
+        if role in _LEVELS_ROLES:
+            role_calc_ids.setdefault(role, row.calculation_id)
+    if not role_calc_ids:
+        return ScientificLevelsSummary()
+
+    calcs = {
+        calc.id: calc
+        for calc in session.scalars(
+            select(Calculation)
+            .where(Calculation.id.in_(role_calc_ids.values()))
+            .options(selectinload(Calculation.freq_result))
+        ).all()
+    }
+
+    def info(role: str) -> RoleCalcInfo | None:
+        calc = calcs.get(role_calc_ids.get(role, -1))
+        if calc is None:
+            return None
+        return RoleCalcInfo(
+            lot_id=calc.lot_id, carries_frequencies=calc.freq_result is not None
+        )
+
+    derived = derive_levels(
+        opt=info("opt"),
+        freq=info("freq"),
+        sp=info("sp"),
+        composite=info("composite"),
+        imported=info("imported"),
+    )
+    return ScientificLevelsSummary(
+        geometry=_build_lot_summary(session, derived.geometry_lot_id),
+        frequency=_build_lot_summary(session, derived.frequency_lot_id),
+        energy=_build_lot_summary(session, derived.energy_lot_id),
+        energy_source=derived.energy_source,
+    )
 
 
 def _exists_review_for(
