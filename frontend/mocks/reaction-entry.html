@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="../src/index.css">
 <link rel="stylesheet" href="../src/page-shell.css">
 <link rel="stylesheet" href="../src/conformer-group.css">
+<link rel="stylesheet" href="../src/calculation-detail.css">
 <link rel="stylesheet" href="../src/record-identity-header.css">
 <link rel="stylesheet" href="../src/evidence-checklist.css">
 <link rel="stylesheet" href="../src/refs-disclosure.css">
@@ -24,18 +25,23 @@
  * axis-title shape) so the eventual real component is a rename, not a
  * redesign. Deleted whole in PR 2.
  */
-/* Grid shape copied verbatim from `thermo-cp-chart.css`'s own
-   `.cp-chart-panel`/`.cp-chart-axis-title--y` (own column for the rotated
-   y-axis title, never a share of the SVG's own column — see that file's
-   comment on the bug this avoids: an SVG spanning into the title's column
-   painted over it at every measured width). */
 .arr-chart-panel {
     display: grid;
     grid-template-columns: 1.3rem 1fr;
     column-gap: .3rem;
     margin: 1.25rem 0 1.5rem;
 }
-.arr-chart-svg { grid-column: 2; grid-row: 1; display: block; width: 100%; height: auto; max-width: 720px; }
+/* Review fix (SHOULD-FIX-12): the SVG below is pinned to a FIXED CSS-px
+   width (720, its own natural size) rather than `width: 100%` -- on a
+   680px viewport the grid's second column is narrower than 720px, and an
+   un-pinned `width:100%` scaled the whole SVG (and its smallest text,
+   `--type-data-font` tick labels) down with it, measured at 11.09px,
+   under the 11.52px floor. This wrapper scrolls horizontally instead --
+   the SAME fix `.dep-graph`/`calculation-dependency-graph.css` already
+   uses for its own fixed-width SVG -- so the chart's own text never
+   shrinks below its floor at any viewport width. */
+.arr-chart-scroll { grid-column: 2; grid-row: 1; overflow-x: auto; }
+.arr-chart-svg { display: block; width: 720px; min-width: 720px; max-width: 720px; height: auto; }
 .arr-chart-axis-title {
     margin: .3rem 0 0;
     color: var(--muted);
@@ -99,7 +105,7 @@
                 <span class="value-pill value-pill--muted">not reviewed</span>
             </div>
             <h1 class="t-display-2 record-identity-title">
-                H<sub>2</sub>O + CH<sub>3</sub><wbr> ⇌<wbr> CH<sub>4</sub> + OH<wbr>
+                H<sub>2</sub>O&nbsp;+<wbr> CH<sub>3</sub>&nbsp;⇌<wbr> CH<sub>4</sub>&nbsp;+<wbr> HO
             </h1>
             <div class="record-identity-known">
                 <dl class="kv-list record-identity-facts">
@@ -113,7 +119,7 @@
                         <dt>Reaction identity</dt>
                         <dd><a href="reaction-overview.html?ref=rxn_zicx5swji2nqkg2v263rnwxn4m">rxn_zicx5swji2nqkg2v263rnwxn4m</a></dd>
                     </div>
-                    <div><dt>Family</dt><dd>H abstraction</dd></div>
+                    <div><dt>Family</dt><dd>H Abstraction</dd></div>
                     <div><dt>Reversible</dt><dd>yes</dd></div>
                     <div><dt>Atom map</dt><dd><span class="record-identity-absent-inline">no atom map deposited</span></dd></div>
                     <div class="record-identity-fact-wide">
@@ -124,15 +130,47 @@
             </div>
         </div>
         <p class="note">
-            Formulas above (H2O, CH3, CH4, OH) are computed for this mock from the deposited participant SMILES —
-            <code>ReactionFullSpeciesParticipant.formula</code> is a §3A addition not yet deployed on this endpoint
-            (verified live: <code>species.reactants[].formula</code> is absent from <code>/full</code> as of this
-            fetch). The equation string above is the literal served value.
+            Formulas above (H2O, CH3, CH4, HO) are the RDKit Hill-order strings §3A will serve — computed for this
+            mock from the deposited participant SMILES since <code>ReactionFullSpeciesParticipant.formula</code> is
+            not yet deployed on this endpoint (verified live: <code>species.reactants[].formula</code> is absent
+            from <code>/full</code> as of this fetch). HO, not OH: no carbon present, so Hill order falls back to
+            plain alphabetical (H before O). The equation string above is the literal served value.
         </p>
         <div class="refs-disclosure">
         <details class="disclosure refs-disclosure">
-            <summary>References <span class="disclosure-count">(0)</span></summary>
-            <div class="disclosure-body"></div>
+            <summary>References <span class="disclosure-count">(6)</span></summary>
+            <div class="disclosure-body">
+                <div class="ref-item">
+                    <span class="ref-item-label">Reaction identity</span>
+                    <a href="reaction-overview.html?ref=rxn_zicx5swji2nqkg2v263rnwxn4m">rxn_zicx5swji2nqkg2v263rnwxn4m</a>
+                    <button type="button" class="copy-button" aria-label="Copy Reaction identity reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Transition state</span>
+                    <a href="#ts-heading">ts_quylbcnqsbrrbem7dgg7p53ln4</a>
+                    <button type="button" class="copy-button" aria-label="Copy Transition state reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Level of theory</span>
+                    <span class="ref-item-value">lot_rrmbqrod3suvzkez2ta76hj76u</span>
+                    <button type="button" class="copy-button" aria-label="Copy Level of theory reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Software (opt / freq / sp / irc)</span>
+                    <span class="ref-item-value">srel_otzxeotd5jlip3dzx6in7d27oy</span>
+                    <button type="button" class="copy-button" aria-label="Copy Software (opt / freq / sp / irc) reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Software (kinetics fit)</span>
+                    <span class="ref-item-value">srel_xsw7wsek3vwqhuntlcevbvx4ly</span>
+                    <button type="button" class="copy-button" aria-label="Copy Software (kinetics fit) reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Workflow tool</span>
+                    <span class="ref-item-value">wfr_jfc2knqqmffnfs6fj4dtpmaxcm</span>
+                    <button type="button" class="copy-button" aria-label="Copy Workflow tool reference">Copy</button>
+                </div>
+            </div>
         </details>
         </div>
     </header>
@@ -151,12 +189,20 @@
             <thead><tr><th scope="col">Formula</th><th scope="col">SMILES</th><th scope="col">Review</th></tr></thead>
             <tbody>
                 <tr>
-                    <td data-label="Formula"><a href="#">H<sub>2</sub>O</a> <code class="data">spe_evwhah63tpbcfopksky6ji2diu</code></td>
+                    <td data-label="Formula">
+                        <a href="#">H<sub>2</sub>O</a>
+                        <code class="data">spe_evwhah63tpbcfopksky6ji2diu</code>
+                        <button type="button" class="copy-button" aria-label="Copy Formula reference">Copy</button>
+                    </td>
                     <td data-label="SMILES"><code class="data">O</code></td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                 </tr>
                 <tr>
-                    <td data-label="Formula"><a href="#">CH<sub>3</sub></a> <code class="data">spe_bcbdjwkip75yoziblpntwzblzu</code></td>
+                    <td data-label="Formula">
+                        <a href="#">CH<sub>3</sub></a>
+                        <code class="data">spe_bcbdjwkip75yoziblpntwzblzu</code>
+                        <button type="button" class="copy-button" aria-label="Copy Formula reference">Copy</button>
+                    </td>
                     <td data-label="SMILES"><code class="data">[CH3]</code></td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                 </tr>
@@ -169,12 +215,20 @@
             <thead><tr><th scope="col">Formula</th><th scope="col">SMILES</th><th scope="col">Review</th></tr></thead>
             <tbody>
                 <tr>
-                    <td data-label="Formula"><a href="#">CH<sub>4</sub></a> <code class="data">spe_bg76km6tw34gcbraa75vkwkyli</code></td>
+                    <td data-label="Formula">
+                        <a href="#">CH<sub>4</sub></a>
+                        <code class="data">spe_bg76km6tw34gcbraa75vkwkyli</code>
+                        <button type="button" class="copy-button" aria-label="Copy Formula reference">Copy</button>
+                    </td>
                     <td data-label="SMILES"><code class="data">C</code></td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                 </tr>
                 <tr>
-                    <td data-label="Formula"><a href="#">OH</a> <code class="data">spe_2lq3jupc22nwanghcqtshffoxu</code></td>
+                    <td data-label="Formula">
+                        <a href="#">HO</a>
+                        <code class="data">spe_2lq3jupc22nwanghcqtshffoxu</code>
+                        <button type="button" class="copy-button" aria-label="Copy Formula reference">Copy</button>
+                    </td>
                     <td data-label="SMILES"><code class="data">[OH]</code></td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                 </tr>
@@ -184,7 +238,6 @@
     </section>
 
     <section class="ledger-section" aria-labelledby="evidence-heading">
-        <p class="t-kicker section-kicker">Coverage on this entry</p>
         <h2 class="t-heading-1" id="evidence-heading">Evidence on this entry</h2>
         <div class="card card--derived coverage-card" data-component="evidence-checklist">
             <span class="t-label">Evidence on this reaction entry</span>
@@ -212,16 +265,22 @@
                 <div><dt>A</dt><dd><code class="data">3025.44 cm³ mol⁻¹ s⁻¹</code></dd></div>
                 <div><dt>n</dt><dd><code class="data">3.11242</code></dd></div>
                 <div><dt>Ea</dt><dd><code class="data">39.9711 kJ/mol</code></dd></div>
-                <div><dt>Fitted T range</dt><dd><code class="data">300–3000 K</code> (covers requested range; 0 K extrapolation)</dd></div>
+                <div><dt>Fitted T range</dt><dd><code class="data">300–3000 K</code></dd></div>
                 <div><dt>Uncertainty</dt><dd>A ×/÷ 1.24736 (multiplicative) · n ± 0.0287896 · Ea ± 0.16464 kJ/mol</dd></div>
                 <div><dt>Tunnelling model</dt><dd>eckart</dd></div>
                 <div><dt>Third body</dt><dd>no</dd></div>
-                <div><dt>Level of theory</dt><dd>b3lyp/def2tzvp</dd></div>
+                <!-- Owner decision (main 2bf5b19f, #396): ALWAYS Geometry/Frequencies/Energy, never collapsed to one
+                     "Level of theory" fact, even when they agree -- see ProductLevelsFact's own docstring. -->
+                <div><dt>Geometry</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                <div><dt>Frequencies</dt><dd>b3lyp/def2tzvp</dd></div>
+                <div>
+                    <dt>Energy</dt>
+                    <dd>b3lyp/def2tzvp<div class="note">single point on the optimised geometry</div></dd>
+                </div>
                 <div><dt>Software</dt><dd>Gaussian 16</dd></div>
                 <div><dt>Workflow tool</dt><dd>ARC 1.1.0</dd></div>
                 <div><dt>Fit software</dt><dd>Arkane (version not recorded)</dd></div>
                 <div><dt>Literature</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
-                <div><dt>Pressure-dependent network kinetics</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
             </dl>
             <div class="card card--derived coverage-card" data-component="evidence-checklist">
                 <span class="t-label">Evidence completeness — 7 of 9</span>
@@ -246,7 +305,7 @@
             </p>
             <dl class="kv-list">
                 <div><dt>TS opt calculation (kinetics' own link)</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
-                <div><dt>TS freq calculation (kinetics' own link)</dt><dd><a href="#calc-ledger"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></dd></div>
+                <div><dt>TS freq calculation (kinetics' own link)</dt><dd><a href="#calc-row-freq"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></dd></div>
                 <div><dt>TS sp calculation (kinetics' own link)</dt><dd><code class="data">calc_ubuf7iksctoturzi7uemc5253q</code> <span class="note">(not among the four calculations this TS entry itself lists)</span></dd></div>
                 <div><dt>Transition-state entry used</dt><dd><a href="#ts-heading">tse_yeccffkfo6p6d5exzv5iujxvuu</a></dd></div>
             </dl>
@@ -258,7 +317,9 @@
             <p>
                 k(T) = A·T<sup>n</sup>·exp(−Ea/(R·T)), hand-computed for this mock from the deposited A/n/Ea
                 (R = 8.314462618×10⁻³ kJ mol⁻¹ K⁻¹), over this record's own fitted range (300–3000 K), at 12 evenly
-                spaced temperatures. The real chart (PR 3) computes this from <code>domain/arrhenius.ts</code>.
+                spaced temperatures. Axis ticks are the round-number values <code>niceTicks</code> would produce for
+                each axis's own domain (x: 300–3000 K; y: 4.0–13.6071, the record's own plotted range). The real
+                chart (PR 3) computes this from <code>domain/arrhenius.ts</code>.
             </p>
         </div>
         <ul class="cp-chart-legend" aria-label="Kinetics record series">
@@ -268,45 +329,52 @@
             </li>
         </ul>
         <div class="arr-chart-panel">
+            <div class="arr-chart-scroll">
             <svg class="arr-chart-svg" viewBox="0 0 720 340" role="img" aria-label="Rate coefficient log10 k versus temperature, 300 to 3000 kelvin, for kin_spkzatwjlvmmnja3i5im4fl7hq">
-                <!-- gridlines / axes: plot area left=58 right=700 top=16 bottom=300 -->
+                <!-- plot box: x in [58,588] for T in [300,3000] K; y in [54,300] for log10 k in [4.0,13.6071] -->
                 <g>
-                    <line x1="58" x2="700" y1="300" y2="300" class="arr-chart-gridline"></line>
-                    <line x1="58" x2="700" y1="238.5" y2="238.5" class="arr-chart-gridline"></line>
-                    <line x1="58" x2="700" y1="177" y2="177" class="arr-chart-gridline"></line>
-                    <line x1="58" x2="700" y1="115.5" y2="115.5" class="arr-chart-gridline"></line>
-                    <line x1="58" x2="700" y1="54" y2="54" class="arr-chart-gridline"></line>
-                    <text x="50" y="304" class="arr-chart-tick-label arr-chart-tick-label--y">4.0</text>
-                    <text x="50" y="242.5" class="arr-chart-tick-label arr-chart-tick-label--y">6.4</text>
-                    <text x="50" y="181" class="arr-chart-tick-label arr-chart-tick-label--y">8.8</text>
-                    <text x="50" y="119.5" class="arr-chart-tick-label arr-chart-tick-label--y">11.2</text>
-                    <text x="50" y="58" class="arr-chart-tick-label arr-chart-tick-label--y">13.6</text>
-                    <line x1="58" x2="58" y1="16" y2="300" class="arr-chart-gridline"></line>
-                    <line x1="234.7" x2="234.7" y1="16" y2="300" class="arr-chart-gridline"></line>
-                    <line x1="411.3" x2="411.3" y1="16" y2="300" class="arr-chart-gridline"></line>
-                    <line x1="588" x2="588" y1="16" y2="300" class="arr-chart-gridline"></line>
-                    <text x="58" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">300</text>
-                    <text x="234.7" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">1200</text>
-                    <text x="411.3" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">2100</text>
-                    <text x="588" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">3000</text>
-                    <line x1="58" x2="700" y1="300" y2="300" class="arr-chart-axis-line"></line>
-                    <line x1="58" x2="58" y1="16" y2="300" class="arr-chart-axis-line"></line>
+                    <line x1="58" x2="588" y1="300.00" y2="300.00" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="588" y1="248.79" y2="248.79" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="588" y1="197.58" y2="197.58" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="588" y1="146.36" y2="146.36" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="588" y1="95.15" y2="95.15" class="arr-chart-gridline"></line>
+                    <text x="50" y="300.00" class="arr-chart-tick-label arr-chart-tick-label--y">4</text>
+                    <text x="50" y="248.79" class="arr-chart-tick-label arr-chart-tick-label--y">6</text>
+                    <text x="50" y="197.58" class="arr-chart-tick-label arr-chart-tick-label--y">8</text>
+                    <text x="50" y="146.36" class="arr-chart-tick-label arr-chart-tick-label--y">10</text>
+                    <text x="50" y="95.15" class="arr-chart-tick-label arr-chart-tick-label--y">12</text>
+                    <line x1="97.26" x2="97.26" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="195.41" x2="195.41" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="293.56" x2="293.56" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="391.70" x2="391.70" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="489.85" x2="489.85" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="588.00" x2="588.00" y1="54" y2="300" class="arr-chart-gridline"></line>
+                    <text x="97.26" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">500</text>
+                    <text x="195.41" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">1000</text>
+                    <text x="293.56" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">1500</text>
+                    <text x="391.70" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">2000</text>
+                    <text x="489.85" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">2500</text>
+                    <text x="588.00" y="304" class="arr-chart-tick-label arr-chart-tick-label--x">3000</text>
+                    <!-- axis lines end at the last TICK (588/54), not at an unrelated further pixel -->
+                    <line x1="58" x2="588" y1="300" y2="300" class="arr-chart-axis-line"></line>
+                    <line x1="58" x2="58" y1="54" y2="300" class="arr-chart-axis-line"></line>
                 </g>
-                <!-- curve: 12 points, T 300..3000K, log10 k 4.2312..13.6071, scaled onto the plot box above -->
-                <polyline class="arr-chart-curve" points="58,214.9 96.4,151.8 134.7,105.5 173.1,84.0 211.5,72.7 249.9,65.9 288.2,61.0 326.6,57.2 365.0,54.1 403.4,51.6 441.7,49.4 480.1,47.5"></polyline>
-                <circle class="arr-chart-point" cx="58" cy="214.9" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="96.4" cy="151.8" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="134.7" cy="105.5" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="173.1" cy="84.0" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="211.5" cy="72.7" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="249.9" cy="65.9" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="288.2" cy="61.0" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="326.6" cy="57.2" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="365.0" cy="54.1" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="403.4" cy="51.6" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="441.7" cy="49.4" r="3.5"></circle>
-                <circle class="arr-chart-point" cx="480.1" cy="47.5" r="3.5"></circle>
+                <!-- curve: 12 points, T 300..3000K, log10 k 4.2312..13.6071, on the SAME scale as the ticks above -->
+                <polyline class="arr-chart-curve" points="58.00,294.08 106.18,193.20 154.36,149.92 202.55,124.55 250.73,107.32 298.91,94.55 347.09,84.55 395.27,76.39 443.45,69.54 491.64,63.67 539.82,58.54 588.00,54.00"></polyline>
+                <circle class="arr-chart-point" cx="58.00" cy="294.08" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="106.18" cy="193.20" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="154.36" cy="149.92" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="202.55" cy="124.55" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="250.73" cy="107.32" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="298.91" cy="94.55" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="347.09" cy="84.55" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="395.27" cy="76.39" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="443.45" cy="69.54" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="491.64" cy="63.67" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="539.82" cy="58.54" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="588.00" cy="54.00" r="3.5"></circle>
             </svg>
+            </div>
             <p class="arr-chart-axis-title arr-chart-axis-title--y">log₁₀ k (cm³ mol⁻¹ s⁻¹)</p>
             <p class="arr-chart-axis-title arr-chart-axis-title--x">Temperature (K)</p>
         </div>
@@ -340,28 +408,86 @@
     <section class="ledger-section" aria-labelledby="ts-heading">
         <p class="t-kicker section-kicker">Saddle points on this reaction</p>
         <h2 class="t-heading-1" id="ts-heading">Transition states</h2>
+
+        <dl class="kv-list">
+            <div><dt>Entry</dt><dd><a href="#">tse_yeccffkfo6p6d5exzv5iujxvuu</a></dd></div>
+            <div><dt>Review</dt><dd><span class="value-pill value-pill--muted">not reviewed</span></dd></div>
+        </dl>
+        <p class="t-label" style="margin-top:1rem">Status</p>
+        <div class="opt-stage-flow" data-testid="ts-status-strip">
+            <div class="card opt-stage-box"><span class="opt-stage-box-label">Guess</span></div>
+            <span class="opt-stage-connector" aria-hidden="true">→</span>
+            <div class="card opt-stage-box card--selected"><span class="opt-stage-box-label">Optimized</span></div>
+            <span class="opt-stage-connector" aria-hidden="true">→</span>
+            <div class="card opt-stage-box"><span class="opt-stage-box-label">Validated</span></div>
+        </div>
+        <!-- A "rejected" status would replace this strip with a single value-pill--muted pill instead of the
+             flow -- not this entry's status, so not shown here. -->
+
+        <p class="t-label" style="margin-top:1.5rem">Calculations by stage</p>
         <div class="table-scroll">
-        <table class="data-table" aria-label="Transition-state entries on this reaction entry">
+        <table class="data-table" aria-label="Calculations for tse_yeccffkfo6p6d5exzv5iujxvuu">
             <thead>
-                <tr><th scope="col">Entry</th><th scope="col">Status</th><th scope="col">Review</th><th scope="col">opt</th><th scope="col">freq</th><th scope="col">sp</th><th scope="col">irc</th></tr>
+                <tr>
+                    <th scope="col">Stage</th>
+                    <th scope="col">Level of theory</th>
+                    <th scope="col">Software / workflow</th>
+                    <th scope="col">Energy</th>
+                    <th scope="col">Review</th>
+                    <th scope="col">Record</th>
+                </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td data-label="Entry"><a href="#">tse_yeccffkfo6p6d5exzv5iujxvuu</a></td>
-                    <td data-label="Status">optimized</td>
-                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
-                    <td data-label="opt"><a href="#calc-ledger"><code class="data">calc_asiuefa76hbbwoigp4cyzqepeu</code></a></td>
-                    <td data-label="freq"><a href="#calc-ledger"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></td>
-                    <td data-label="sp"><a href="#calc-ledger"><code class="data">calc_sy73meqxsieuscaynnvxjzsqoi</code></a></td>
-                    <td data-label="irc"><a href="#calc-ledger"><code class="data">calc_6ebj6taluvremds7vyy75buh7q</code></a></td>
+                <tr id="calc-row-opt">
+                    <td data-label="Stage">opt</td>
+                    <td data-label="Level of theory">b3lyp/def2tzvp</td>
+                    <td data-label="Software / workflow">Gaussian 16</td>
+                    <td data-label="Energy"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Review"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Record"><a href="#"><code class="data">calc_asiuefa76hbbwoigp4cyzqepeu</code></a></td>
+                </tr>
+                <tr id="calc-row-freq">
+                    <td data-label="Stage">freq</td>
+                    <td data-label="Level of theory">b3lyp/def2tzvp</td>
+                    <td data-label="Software / workflow">Gaussian 16</td>
+                    <td data-label="Energy"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Review"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Record"><a href="#"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></td>
+                </tr>
+                <tr id="calc-row-sp">
+                    <td data-label="Stage">sp</td>
+                    <td data-label="Level of theory">b3lyp/def2tzvp</td>
+                    <td data-label="Software / workflow">Gaussian 16</td>
+                    <td data-label="Energy"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Review"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Record"><a href="#"><code class="data">calc_sy73meqxsieuscaynnvxjzsqoi</code></a></td>
+                </tr>
+                <tr id="calc-row-irc">
+                    <td data-label="Stage">irc</td>
+                    <td data-label="Level of theory">b3lyp/def2tzvp</td>
+                    <td data-label="Software / workflow">Gaussian 16</td>
+                    <td data-label="Energy"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Review"><span class="note">not served by <code>/full</code></span></td>
+                    <td data-label="Record"><a href="#"><code class="data">calc_6ebj6taluvremds7vyy75buh7q</code></a></td>
                 </tr>
             </tbody>
         </table>
         </div>
-        <dl class="kv-list" style="margin-top:1rem">
-            <div><dt>Level of theory</dt><dd>b3lyp/def2tzvp</dd></div>
+        <p class="note">
+            Energy and Review are not carried by <code>/full</code>'s embedded <code>calculations[]</code> summary
+            (only the fuller <code>/transition-state-entries/{ref}</code> detail endpoint serves them per row) —
+            structurally absent from this view, not fabricated as "not recorded".
+        </p>
+
+        <dl class="kv-list" style="margin-top:1.5rem">
+            <div><dt>Geometry</dt><dd>b3lyp/def2tzvp</dd></div>
+            <div><dt>Frequencies</dt><dd>b3lyp/def2tzvp</dd></div>
+            <div>
+                <dt>Energy</dt>
+                <dd>b3lyp/def2tzvp<div class="note">single point on the optimised geometry</div></dd>
+            </div>
+            <div class="kv-list--wide"><div class="note">all at the same level</div></div>
         </dl>
-        <p class="note">opt, freq, sp and irc all agree at one level of theory for this TS entry — collapsed to a single fact per <code>ProductLevelsFact</code>'s rule.</p>
 
         <h3 class="t-heading-2" id="calc-ledger" style="margin-top:2rem">Calculation dependency graph</h3>
         <p class="t-body">
@@ -370,41 +496,56 @@
             so none is drawn.
         </p>
         <div class="dep-graph">
-            <svg class="dep-graph-svg" viewBox="0 0 640 300" role="img" aria-label="Dependency graph for calc_asiuefa76hbbwoigp4cyzqepeu: 0 parents, 3 children" style="max-width:640px;min-width:640px">
+            <svg class="dep-graph-svg" viewBox="0 0 900 250" role="img" aria-label="Dependency graph for calc_asiuefa76hbbwoigp4cyzqepeu: 3 children" style="max-width:900px;min-width:900px">
                 <defs>
                     <marker id="mock-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
                         <path d="M0,0 L10,5 L0,10 z" class="dep-graph-arrowhead"></path>
                     </marker>
                 </defs>
-                <path d="M 320 110 L 320 145 L 130 145 L 130 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
-                <path d="M 320 110 L 320 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
-                <path d="M 320 110 L 320 145 L 510 145 L 510 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
-                <g><rect x="88" y="130" width="84" height="20" class="dep-graph-edge-label-bg"></rect><text x="130" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">runs freq on</text></g>
-                <g><rect x="270" y="130" width="100" height="20" class="dep-graph-edge-label-bg"></rect><text x="320" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">runs single point on</text></g>
-                <g><rect x="466" y="130" width="88" height="20" class="dep-graph-edge-label-bg"></rect><text x="510" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">starts IRC from</text></g>
-                <g class="dep-graph-node dep-graph-node--centre">
-                    <rect x="260" y="50" width="120" height="60" rx="8" class="dep-graph-node-rect"></rect>
-                    <rect x="290" y="62" width="60" height="18" rx="999" class="dep-graph-node-pill-bg"></rect>
-                    <text x="320" y="71" class="dep-graph-node-pill-text" text-anchor="middle" dominant-baseline="middle">opt</text>
-                    <text x="320" y="98" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_asiu…zqepeu</text>
+                <path d="M 450 112 L 450 170 L 154 170 L 154 190" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <path d="M 450 112 L 450 190" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <path d="M 450 112 L 450 170 L 746 170 L 746 190" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <g>
+                    <rect x="57" y="161" width="194" height="18" class="dep-graph-edge-label-bg"></rect>
+                    <text x="154" y="170" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">geometry for frequencies</text>
                 </g>
-                <g class="dep-graph-node dep-graph-node--child">
-                    <rect x="70" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
-                    <text x="130" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_rkr2…hta7a</text>
+                <g>
+                    <rect x="349" y="161" width="202" height="18" class="dep-graph-edge-label-bg"></rect>
+                    <text x="450" y="170" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">geometry for single point</text>
                 </g>
-                <g class="dep-graph-node dep-graph-node--child">
-                    <rect x="260" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
-                    <text x="320" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_sy73…zsqoi</text>
+                <g>
+                    <rect x="641" y="161" width="210" height="18" class="dep-graph-edge-label-bg"></rect>
+                    <text x="746" y="170" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">starting point for the IRC</text>
                 </g>
-                <g class="dep-graph-node dep-graph-node--child">
-                    <rect x="450" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
-                    <text x="510" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_6ebj…buh7q</text>
+                <g class="dep-graph-node dep-graph-node--centre" data-testid="dep-node-centre-calc_asiuefa76hbbwoigp4cyzqepeu">
+                    <rect x="322" y="40" width="256" height="72" rx="8" class="dep-graph-node-rect"></rect>
+                    <rect x="398.5" y="50" width="103" height="18" rx="999" class="dep-graph-node-pill-bg"></rect>
+                    <text x="450" y="59" class="dep-graph-node-pill-text" text-anchor="middle" dominant-baseline="middle">Optimisation</text>
+                    <text x="450" y="88" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_asiuefa76hbbwoigp4cyzqepeu</text>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child" data-testid="dep-node-child-calc_rkr2yga5s5nycthaiqme4hta7a">
+                    <a href="#calc-row-freq" class="dep-graph-node-link" aria-label="Child calculation calc_rkr2yga5s5nycthaiqme4hta7a">
+                        <rect x="26" y="190" width="256" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                        <text x="154" y="210" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_rkr2yga5s5nycthaiqme4hta7a</text>
+                    </a>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child" data-testid="dep-node-child-calc_sy73meqxsieuscaynnvxjzsqoi">
+                    <a href="#calc-row-sp" class="dep-graph-node-link" aria-label="Child calculation calc_sy73meqxsieuscaynnvxjzsqoi">
+                        <rect x="322" y="190" width="256" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                        <text x="450" y="210" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_sy73meqxsieuscaynnvxjzsqoi</text>
+                    </a>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child" data-testid="dep-node-child-calc_6ebj6taluvremds7vyy75buh7q">
+                    <a href="#calc-row-irc" class="dep-graph-node-link" aria-label="Child calculation calc_6ebj6taluvremds7vyy75buh7q">
+                        <rect x="618" y="190" width="256" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                        <text x="746" y="210" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_6ebj6taluvremds7vyy75buh7q</text>
+                    </a>
                 </g>
             </svg>
             <ul class="dep-graph-sentences" aria-label="Dependency edges, as text">
-                <li>Runs freq on <a href="#">calc_rkr2yga5s5nycthaiqme4hta7a</a></li>
-                <li>Runs single point on <a href="#">calc_sy73meqxsieuscaynnvxjzsqoi</a></li>
-                <li>Starts IRC from <a href="#">calc_6ebj6taluvremds7vyy75buh7q</a></li>
+                <li>Frequencies were computed on this geometry by <a href="#calc-row-freq">calc_rkr2yga5s5nycthaiqme4hta7a</a></li>
+                <li>The single point was computed on this geometry by <a href="#calc-row-sp">calc_sy73meqxsieuscaynnvxjzsqoi</a></li>
+                <li><a href="#calc-row-irc">calc_6ebj6taluvremds7vyy75buh7q</a> IRC started from this geometry</li>
             </ul>
         </div>
     </section>
@@ -416,16 +557,15 @@
         <p class="note">
             Verified live: <code>networks/search?reaction_entry_ref=rxe_ed66mj3ohtyien5rm2x3sb3rdu</code> returns
             zero records (<code>include=networks</code> on <code>/full</code> is not yet a deployed token — §3C).
+            Contrast with <a href="reaction-entry-network-only.html">the network-only mock state</a>, where a
+            reaction entry has no kinetics of its own but IS admitted to a network.
         </p>
     </section>
 
     <section class="ledger-section" aria-labelledby="review-heading">
         <p class="t-kicker section-kicker">Curation status</p>
         <h2 class="t-heading-1" id="review-heading">Review</h2>
-        <dl class="kv-list">
-            <div><dt>This entry's own review</dt><dd><span class="value-pill value-pill--muted">not reviewed</span></dd></div>
-        </dl>
-        <div class="card card--derived coverage-card" data-component="evidence-checklist" style="margin-top:1rem">
+        <div class="card card--derived coverage-card" data-component="evidence-checklist">
             <span class="t-label">Joined-record review counts</span>
             <dl class="kv-list coverage-checklist">
                 <div><dt>Approved</dt><dd>0</dd></div>
@@ -435,7 +575,7 @@
                 <div><dt>Rejected</dt><dd>0</dd></div>
                 <div><dt>Total joined records</dt><dd>7</dd></div>
             </dl>
-            <p class="note">Counts cover every record joined into this page — the entry, its species participants, kinetics, and transition-state entry.</p>
+            <p class="note">Counts cover every record joined into this page — the entry, its species participants, kinetics, and transition-state entry. The entry's own review pill is in the header above.</p>
         </div>
     </section>
 

@@ -10,6 +10,8 @@
 <link rel="stylesheet" href="../src/page-shell.css">
 <link rel="stylesheet" href="../src/conformer-group.css">
 <link rel="stylesheet" href="../src/record-identity-header.css">
+<link rel="stylesheet" href="../src/refs-disclosure.css">
+<link rel="stylesheet" href="../src/evidence-checklist.css">
 </head>
 <body>
 <div class="archive-shell">
@@ -45,7 +47,7 @@
                 <span class="t-kicker record-identity-kicker">Reaction · chooses between deposited entries</span>
             </div>
             <h1 class="t-display-2 record-identity-title">
-                N<sub>2</sub>H<sub>4</sub><wbr> ⇌<wbr> H<sub>2</sub> + N<sub>2</sub>H<sub>2</sub><wbr>
+                H<sub>4</sub>N<sub>2</sub>&nbsp;⇌<wbr> H<sub>2</sub>&nbsp;+<wbr> H<sub>2</sub>N<sub>2</sub>
             </h1>
             <p class="t-body section-intro">
                 Four separate deposits share this reaction identity. This site never merges or silently chooses
@@ -69,9 +71,10 @@
             </div>
         </div>
         <p class="note">
-            Formulas above are computed for this mock from the deposited participant SMILES — the same §3A gap
-            noted on the reaction-entry mock. This endpoint (<code>reactions/search</code>) serves SMILES only,
-            no <code>formula</code> field, as of this fetch (2026-09-07).
+            Formulas above (H4N2, H2, H2N2) are the RDKit Hill-order strings §3A will serve — computed for this mock
+            from the deposited participant SMILES, the same §3A gap noted on the reaction-entry mock. This endpoint
+            (<code>reactions/search</code>) serves SMILES only, no <code>formula</code> field, as of this fetch
+            (2026-09-07).
         </p>
     </header>
     </div>
@@ -100,8 +103,20 @@
             <tbody>
                 <tr>
                     <td data-label="Entry"><a href="reaction-entry.html">rxe_tku6xu2lt3girf2rsiwl5uds4e</a></td>
-                    <td data-label="Reactants"><code class="data">NN</code></td>
-                    <td data-label="Products"><code class="data">[H][H]</code> · <code class="data">N=N</code> (Z)</td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                     <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
                     <td data-label="Has TS"><span class="value-pill">yes</span></td>
@@ -109,8 +124,20 @@
                 </tr>
                 <tr>
                     <td data-label="Entry"><a href="reaction-entry.html">rxe_kftcgjn7zalusaouojwi23z3gy</a></td>
-                    <td data-label="Reactants"><code class="data">NN</code></td>
-                    <td data-label="Products"><code class="data">[H][H]</code> · <code class="data">N=N</code> (Z)</td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                     <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
                     <td data-label="Has TS"><span class="value-pill">yes</span></td>
@@ -118,8 +145,20 @@
                 </tr>
                 <tr>
                     <td data-label="Entry"><a href="reaction-entry.html">rxe_xotk57v376vjphflfnoljl4wle</a></td>
-                    <td data-label="Reactants"><code class="data">NN</code></td>
-                    <td data-label="Products"><code class="data">[H][H]</code> · <code class="data">N=N</code> (Z)</td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                     <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
                     <td data-label="Has TS"><span class="value-pill">yes</span></td>
@@ -127,8 +166,20 @@
                 </tr>
                 <tr>
                     <td data-label="Entry"><a href="reaction-entry.html">rxe_higjwgwvjijez63odl7qga64gm</a></td>
-                    <td data-label="Reactants"><code class="data">NN</code></td>
-                    <td data-label="Products"><code class="data">[H][H]</code> · <code class="data">N=N</code> (Z)</td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
                     <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
                     <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
                     <td data-label="Has TS"><span class="value-pill">yes</span></td>
