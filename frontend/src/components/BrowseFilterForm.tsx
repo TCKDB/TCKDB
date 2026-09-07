@@ -30,6 +30,14 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
     filters: BrowseFilters
     onChange: (patch: Partial<BrowseFilters>) => void
 }) {
+    // "reaction" (PR 4b) shows none of charge/multiplicity/the six
+    // provenance selects -- `/reactions/browse` accepts none of them (see
+    // `buildReactionBrowseQuery`'s own comment). Showing a field that the
+    // request silently drops would look active while doing nothing, the
+    // same failure `clearInapplicableFilters` exists to prevent for a kind
+    // switch; gating the FIELDS here is the matching guarantee for what
+    // gets rendered in the first place.
+    const isReaction = kind === "reaction"
     return (
         <form aria-label="Narrow this listing" className="browse-filters" onSubmit={(event) => event.preventDefault()}>
             <div className="browse-filter-grid">
@@ -43,11 +51,12 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                  * moving the whole group first is enough -- no need to
                  * flatten it.
                  */}
-                {kind !== "transition_state" && <CompositionFields filters={filters} onChange={onChange} />}
+                {kind !== "transition_state" && !isReaction && <CompositionFields filters={filters} onChange={onChange} />}
                 {kind === "transition_state" && <TransitionStateFindabilityFields filters={filters} onChange={onChange} />}
+                {isReaction && <ReactionFindabilityFields filters={filters} onChange={onChange} />}
 
-                <TextField label="Charge" onChange={(value) => onChange({ charge: value })} value={filters.charge} />
-                <TextField label="Multiplicity" onChange={(value) => onChange({ multiplicity: value })} value={filters.multiplicity} />
+                {!isReaction && <TextField label="Charge" onChange={(value) => onChange({ charge: value })} value={filters.charge} />}
+                {!isReaction && <TextField label="Multiplicity" onChange={(value) => onChange({ multiplicity: value })} value={filters.multiplicity} />}
                 <SelectField
                     label="Minimum review status"
                     onChange={(value) => onChange({ minReviewStatus: value })}
@@ -57,8 +66,9 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                 <CheckField label="Include rejected" checked={filters.includeRejected} onChange={(checked) => onChange({ includeRejected: checked })} />
                 <CheckField label="Include deprecated" checked={filters.includeDeprecated} onChange={(checked) => onChange({ includeDeprecated: checked })} />
 
-                <ProvenanceFields filters={filters} kind={kind} onChange={onChange} />
+                {!isReaction && <ProvenanceFields filters={filters} kind={kind} onChange={onChange} />}
                 {kind === "transition_state" && <EvidenceFields filters={filters} onChange={onChange} />}
+                {isReaction && <ReactionEvidenceFields filters={filters} onChange={onChange} />}
             </div>
         </form>
     )
@@ -157,6 +167,94 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
             {familyVocab.status === "unavailable" && <p className="browse-filter-hint">Could not load family list.</p>}
         </div>
     </>
+}
+
+/**
+ * The "reaction" kind's own findability fields (PR 4b): reactant SMILES,
+ * product SMILES, and the family dropdown. `family` reuses the SAME
+ * `loadReactionFamilies` vocabulary call (and the same
+ * count-filtering/`display_name` handling) as
+ * `TransitionStateFindabilityFields` above -- both kinds narrow through the
+ * identical bounded vocabulary, so this is deliberately a near-duplicate
+ * of that component's family `<select>` rather than a shared extraction:
+ * the two differ in every OTHER field (participant SMILES is one merged
+ * exact-match field there vs. two side-specific fields here), so factoring
+ * out just the family piece would leave two components each importing a
+ * fragment of the other for no real reuse win.
+ *
+ * `reactantSmiles`/`productSmiles` map onto the backend's own
+ * `reactant_smiles`/`product_smiles` params (`buildReactionBrowseQuery`) --
+ * unlike the TS kind's single `participant_smiles`, the reaction browse
+ * endpoint filters each side independently.
+ */
+function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    const familyVocab = useVocabulary(loadReactionFamilies)
+    const entries = familyVocab.status === "ready"
+        ? familyVocab.entries.filter((entry) => entry.count > 0)
+        : []
+    return <>
+        <TextField
+            label="Reactant SMILES"
+            onChange={(value) => onChange({ reactantSmiles: value })}
+            placeholder="CCO"
+            value={filters.reactantSmiles}
+        />
+        <TextField
+            label="Product SMILES"
+            onChange={(value) => onChange({ productSmiles: value })}
+            placeholder="CC=O"
+            value={filters.productSmiles}
+        />
+        <div className="browse-filter-field">
+            <label htmlFor={fieldId("Family")}>Family</label>
+            <select
+                disabled={familyVocab.status === "loading"}
+                id={fieldId("Family")}
+                onChange={(event) => onChange({ family: event.target.value })}
+                value={filters.family}
+            >
+                <option value="">Any</option>
+                {entries.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                        {entry.display_name ?? token(entry.value)}
+                    </option>
+                ))}
+            </select>
+            {familyVocab.status === "loading" && <p className="browse-filter-hint">Loading family list…</p>}
+            {familyVocab.status === "unavailable" && <p className="browse-filter-hint">Could not load family list.</p>}
+        </div>
+    </>
+}
+
+/**
+ * The "reaction" kind's evidence row: `has_kinetics`/`has_transition_state`
+ * (`ReactionBrowseAvailability` on the wire) -- two checkboxes, same
+ * "Show only entries with..." collapsed shape as `EvidenceChecks` above,
+ * not that component itself, because the underlying field set is entirely
+ * different (two flags here vs. the TS kind's seven).
+ */
+function ReactionEvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    const checks: { key: "hasKinetics" | "hasTransitionState"; label: string }[] = [
+        { key: "hasKinetics", label: "kinetics" },
+        { key: "hasTransitionState", label: "a transition state" },
+    ]
+    return (
+        <fieldset className="browse-filter-evidence-group">
+            <legend>Show only entries with…</legend>
+            <div className="browse-filter-evidence-checks">
+                {checks.map(({ key, label }) => (
+                    <label className="browse-filter-evidence-check" key={key}>
+                        <input
+                            checked={filters[key] === "true"}
+                            onChange={(event) => onChange({ [key]: event.target.checked ? "true" : "" } as Partial<BrowseFilters>)}
+                            type="checkbox"
+                        />
+                        {label}
+                    </label>
+                ))}
+            </div>
+        </fieldset>
+    )
 }
 
 const STRUCTURE_MODES: [string, string][] = [

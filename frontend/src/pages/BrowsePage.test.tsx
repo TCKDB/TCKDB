@@ -870,3 +870,220 @@ describe("browse page: the six provenance selects work on species, not just tran
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
 })
+
+// ---------------------------------------------------------------------------
+// PR 4b: the "reaction" browse kind, end to end through the real page --
+// kind selection, query building, row rendering (two DISTINCT rows, same
+// "records[0] hardcode" guard the species/TS fixtures above use), the
+// family vocabulary dropdown, and this kind's own empty-state wording.
+// ---------------------------------------------------------------------------
+
+function reactionRecord(overrides: {
+    reactionEntryRef: string
+    reactionRef: string
+    equation: string
+    reversible: boolean
+    family: string | null
+    reviewStatus?: string
+    hasKinetics: boolean
+    hasTransitionState: boolean
+    reactants: { ref: string; smiles: string; formula: string | null }[]
+    products: { ref: string; smiles: string; formula: string | null }[]
+}) {
+    return {
+        reaction_ref: overrides.reactionRef,
+        reaction_entry_ref: overrides.reactionEntryRef,
+        equation: overrides.equation,
+        reversible: overrides.reversible,
+        family: overrides.family,
+        review: { status: overrides.reviewStatus ?? "not_reviewed", reviewed_at: null, reviewer_kind: null },
+        reactants: overrides.reactants.map((p, index) => (
+            { species_entry_ref: p.ref, species_entry_label: null, smiles: p.smiles, formula: p.formula, stoichiometry: 1, participant_index: index + 1 }
+        )),
+        products: overrides.products.map((p, index) => (
+            { species_entry_ref: p.ref, species_entry_label: null, smiles: p.smiles, formula: p.formula, stoichiometry: 1, participant_index: index + 1 }
+        )),
+        availability: {
+            has_kinetics: overrides.hasKinetics, has_transition_state: overrides.hasTransitionState,
+            has_path_search: false, has_atom_map: false, kinetics_count: overrides.hasKinetics ? 1 : 0,
+        },
+    }
+}
+
+function reactionEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof reactionRecord>[]) {
+    const page = allRecords.slice(offset, offset + limit)
+    return {
+        request: { profile: "exploratory", profile_recommendation: "none", profile_release_ref: null, filter: {}, sort: "review_rank,has_kinetics,has_transition_state,created_at,id", collapse: "all", include: [] },
+        review_summary: { approved: 0, under_review: 0, not_reviewed: allRecords.length, deprecated: 0, rejected: 0, total: allRecords.length },
+        records: page,
+        pagination: { offset, limit, returned: page.length, total: allRecords.length, post_collapse_total: allRecords.length },
+    }
+}
+
+const twoReactions = [
+    reactionRecord({
+        reactionEntryRef: "rxe_one", reactionRef: "rxn_one", equation: "O + [CH3] <=> C + [OH]", reversible: true,
+        family: "R_Addition_MultipleBond", hasKinetics: true, hasTransitionState: true,
+        reactants: [{ ref: "spe_o", smiles: "[O]", formula: "O" }, { ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }],
+        products: [{ ref: "spe_ch4", smiles: "C", formula: "CH4" }, { ref: "spe_oh", smiles: "[OH]", formula: "OH" }],
+    }),
+    reactionRecord({
+        reactionEntryRef: "rxe_two", reactionRef: "rxn_two", equation: "N=N <=> [NH2] + [NH2]", reversible: false,
+        family: null, hasKinetics: false, hasTransitionState: false, reviewStatus: "approved",
+        reactants: [{ ref: "spe_nn", smiles: "N=N", formula: "H2N2" }],
+        products: [{ ref: "spe_nh2a", smiles: "[NH2]", formula: "H2N" }, { ref: "spe_nh2b", smiles: "[NH2]", formula: "H2N" }],
+    }),
+]
+
+function reactionHandler(options: { records?: ReturnType<typeof reactionRecord>[]; captureUrl?: (url: URL) => void } = {}) {
+    const allRecords = options.records ?? twoReactions
+    return http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+        const url = new URL(request.url)
+        options.captureUrl?.(url)
+        const offset = Number(url.searchParams.get("offset") ?? "0")
+        const limit = Number(url.searchParams.get("limit") ?? "20")
+        return HttpResponse.json(reactionEnvelope(offset, limit, allRecords))
+    })
+}
+
+function reactionFamilyVocabHandler() {
+    return http.get("/api/v1/scientific/meta/reaction-families", () => HttpResponse.json({
+        results: [
+            { value: "R_Addition_MultipleBond", display_name: "Radical Addition Multiple Bond", count: 5 },
+            { value: "H_Abstraction", display_name: "Hydrogen Abstraction", count: 3 },
+        ],
+    }))
+}
+
+describe("browse page: the 'reaction' kind, end to end", () => {
+    it("selecting 'Reaction' queries /reactions/browse, never /species/browse or /transition-states/browse again, and writes ?kind=reaction", async () => {
+        const user = userEvent.setup()
+        let speciesCalls = 0
+        let tsCalls = 0
+        let reactionCalls = 0
+        server.use(
+            ...handlers({ captureSpeciesUrl: () => { speciesCalls += 1 }, captureTsUrl: () => { tsCalls += 1 } }),
+            reactionHandler({ captureUrl: () => { reactionCalls += 1 } }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        const speciesCallsBeforeSwitch = speciesCalls
+
+        await user.click(screen.getByRole("radio", { name: "Reaction" }))
+        await waitFor(() => expect(reactionCalls).toBeGreaterThan(0))
+        expect(speciesCalls).toBe(speciesCallsBeforeSwitch) // no further species calls after the switch
+        expect(tsCalls).toBe(0)
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("kind")).toBe("reaction"))
+    })
+
+    it("renders two DISTINCT reaction rows with their own equation, family, review, and availability pills -- not the first row's data repeated", async () => {
+        server.use(...handlers(), reactionHandler(), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+
+        const rows = document.querySelectorAll(".reaction-browse-row")
+        expect(rows).toHaveLength(2)
+
+        const [first, second] = [...rows] as HTMLElement[]
+        expect(within(first).getByText("rxe_one")).toBeVisible()
+        // The row renders its OWN served `family` string, token-formatted
+        // (the same naive underscore-to-space convention
+        // `TransitionStateBrowseRow` already uses) -- not the vocab
+        // dropdown's `display_name`, which only labels the FILTER select.
+        expect(within(first).getByText("R Addition MultipleBond")).toBeVisible()
+        expect(within(first).getByText("not reviewed")).toBeVisible()
+        expect(within(first).getByText("has kinetics")).toBeVisible()
+        expect(within(first).getByText("has transition state")).toBeVisible()
+
+        expect(within(second).getByText("rxe_two")).toBeVisible()
+        expect(within(second).getByText("family not recorded")).toBeVisible()
+        expect(within(second).getByText("approved")).toBeVisible()
+        expect(within(second).getByText("no kinetics deposited")).toBeVisible()
+        expect(within(second).getByText("no transition state deposited")).toBeVisible()
+
+        // The second row must NOT show the first row's values.
+        expect(within(second).queryByText("R Addition MultipleBond")).not.toBeInTheDocument()
+        expect(within(second).queryByText("has kinetics")).not.toBeInTheDocument()
+    })
+
+    it("each row links to its OWN /reaction-entries/:ref -- not the first row's ref repeated on the second", async () => {
+        server.use(...handlers(), reactionHandler(), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+        const links = screen.getAllByRole("link").map((el) => el.getAttribute("href"))
+        expect(links).toContain("/reaction-entries/rxe_one")
+        expect(links).toContain("/reaction-entries/rxe_two")
+    })
+
+    it("the family filter reaches the outgoing /reactions/browse request", async () => {
+        const user = userEvent.setup()
+        let capturedUrl: URL | undefined
+        server.use(...handlers(), reactionHandler({ captureUrl: (url) => { capturedUrl = url } }), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        await user.selectOptions(screen.getByLabelText("Family"), "Hydrogen Abstraction")
+        await waitFor(() => expect(capturedUrl?.searchParams.get("family")).toBe("H_Abstraction"))
+    })
+
+    it("the reactant/product SMILES filters reach the outgoing request as SEPARATE params", async () => {
+        const user = userEvent.setup()
+        let capturedUrl: URL | undefined
+        server.use(...handlers(), reactionHandler({ captureUrl: (url) => { capturedUrl = url } }), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+
+        await user.type(screen.getByLabelText("Reactant SMILES"), "CCO")
+        await waitFor(() => expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO"))
+        expect(capturedUrl?.searchParams.has("product_smiles")).toBe(false)
+
+        await user.type(screen.getByLabelText("Product SMILES"), "CC=O")
+        await waitFor(() => expect(capturedUrl?.searchParams.get("product_smiles")).toBe("CC=O"))
+        expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO") // unchanged by the product field
+    })
+
+    it("an UNSET filter is never sent -- the initial request carries no family/reactant_smiles/product_smiles/has_kinetics/has_transition_state at all", async () => {
+        let capturedUrl: URL | undefined
+        server.use(...handlers(), reactionHandler({ captureUrl: (url) => { capturedUrl = url } }), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+        for (const param of ["family", "reactant_smiles", "product_smiles", "has_kinetics", "has_transition_state"]) {
+            expect(capturedUrl?.searchParams.has(param)).toBe(false)
+        }
+    })
+
+    it("archive-empty wording for 'reaction' when the archive holds none, distinct from the filtered-empty wording", async () => {
+        const user = userEvent.setup()
+        server.use(...handlers(), reactionHandler({ records: [] }), reactionFamilyVocabHandler())
+        renderAt("/species?kind=reaction")
+        expect(await screen.findByText(/No reaction entries have been deposited in this archive yet/)).toBeVisible()
+        expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
+
+        // A widening toggle must not flip this into the filtered-empty message.
+        await user.click(screen.getByLabelText("Include rejected"))
+        expect(await screen.findByText(/No reaction entries have been deposited in this archive yet/)).toBeVisible()
+        expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
+    })
+
+    it("filtered-empty wording for 'reaction' when a filter genuinely narrows a nonzero corpus to zero", async () => {
+        const user = userEvent.setup()
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const rows = url.searchParams.get("reactant_smiles") ? [] : twoReactions
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+        await user.type(screen.getByLabelText("Reactant SMILES"), "Xx999")
+        expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
+        expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
+    })
+})
