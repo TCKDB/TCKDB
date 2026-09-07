@@ -9,7 +9,6 @@ import { groupByFingerprint, thermoRecordFingerprint } from "../domain/identical
 import {
     allProductLevelsAgree,
     productLevelsAgree,
-    productLevelsTableNeedsThreeColumns,
     resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
@@ -524,14 +523,13 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
  * frequency/energy are not part of `thermoRecordFingerprint`, so this
  * table is where a group member's genuinely different levels stay visible
  * even when `IdenticalThermoRecordsCard` couldn't safely lift one shared
- * fact above. One "Level of theory" column when every row's own three
- * agree with itself; three (Geometry/Frequencies/Energy) the moment any
- * row's own three disagree.
+ * fact above. ALWAYS three columns (Geometry/Frequencies/Energy), agreeing
+ * or not -- see `components/ProductLevels.tsx`'s own header comment for
+ * why the old one-column collapse was retired.
  */
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     const headingId = `identical-refs-${records[0].thermo_ref}`
     const levelsByRecord = records.map(thermoRecordProductLevels)
-    const showThreeLevelColumns = productLevelsTableNeedsThreeColumns(levelsByRecord)
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -541,7 +539,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
-                            <ProductLevelsTableHead showThree={showThreeLevelColumns} />
+                            <ProductLevelsTableHead />
                             <th scope="col">Primary calculation</th>
                             <th scope="col">Freq calculation</th>
                             <th scope="col">SP calculation</th>
@@ -558,7 +556,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                                 <tr key={record.thermo_ref}>
                                     <td data-label="Ref"><code className="data">{record.thermo_ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
-                                    <ProductLevelsTableCells levels={levelsByRecord[index]} showThree={showThreeLevelColumns} />
+                                    <ProductLevelsTableCells levels={levelsByRecord[index]} />
                                     <td data-label="Primary calculation">
                                         <CalculationRefCell calculationRef={primaryRef} />
                                     </td>
@@ -928,13 +926,14 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
         )
     }
     // `productLevels` replaces the single "Level of theory" fact this block
-    // used to render straight off `provenance.level_of_theory` -- one line
-    // when geometry/frequency/energy agree (the historical case, and still
-    // every case until the backend ships genuinely mixed levels), three
-    // labelled lines otherwise. "Level of theory ref" stays alongside it
-    // ONLY in the collapsed case: with three distinct levels there are up
-    // to three distinct refs, and no single one of them is "the" ref this
-    // row could report without picking a winner among the others.
+    // used to render straight off `provenance.level_of_theory` -- ALWAYS
+    // three labelled lines now (Geometry/Frequencies/Energy), agreeing or
+    // not; see `components/ProductLevels.tsx`'s own header comment for why
+    // the old collapse-to-one-line-when-they-agree rule was retired.
+    // "Level of theory ref" stays a SEPARATE row alongside it, shown ONLY
+    // when the three genuinely agree: with three distinct levels there are
+    // up to three distinct refs, and no single one of them is "the" ref
+    // this row could report without picking a winner among the others.
     const levelsAgree = productLevelsAgree(productLevels)
     return (
         <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>

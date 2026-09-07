@@ -16,7 +16,6 @@ import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } 
 import { groupByFingerprint, statmechRecordFingerprint } from "../domain/identicalRecordGroups"
 import {
     allProductLevelsAgree,
-    productLevelsTableNeedsThreeColumns,
     resolveProductLevels,
     type ProductLevels,
 } from "../domain/productLevels"
@@ -700,22 +699,19 @@ function freqCalcRefs(
     return frequenciesState.dataByRef.get(statmechRef)?.source_freq_calculation_refs ?? []
 }
 
-/** One row's level-of-theory cell(s) in `IdenticalStatmechGroupRefs` --
- *  `"loading…"`/`"—"` placeholders matching `showThree`'s column count
- *  while `statmechRecordProductLevels` hasn't resolved yet, matching
- *  `RecordCalcRefsCell`'s own loading convention. */
-function StatmechLevelsRowCells({ levels, showThree }: { levels: ProductLevels | "loading" | "error"; showThree: boolean }) {
+/** One row's level-of-theory cells (ALWAYS three -- Geometry/Frequencies/
+ *  Energy, never collapsed) in `IdenticalStatmechGroupRefs` --
+ *  `"loading…"`/`"—"` placeholders while `statmechRecordProductLevels`
+ *  hasn't resolved yet, matching `RecordCalcRefsCell`'s own loading
+ *  convention. */
+function StatmechLevelsRowCells({ levels }: { levels: ProductLevels | "loading" | "error" }) {
     if (levels === "loading") {
-        return showThree
-            ? <><td data-label="Geometry">loading…</td><td data-label="Frequencies">loading…</td><td data-label="Energy">loading…</td></>
-            : <td data-label="Level of theory">loading…</td>
+        return <><td data-label="Geometry">loading…</td><td data-label="Frequencies">loading…</td><td data-label="Energy">loading…</td></>
     }
     if (levels === "error") {
-        return showThree
-            ? <><td data-label="Geometry">—</td><td data-label="Frequencies">—</td><td data-label="Energy">—</td></>
-            : <td data-label="Level of theory">—</td>
+        return <><td data-label="Geometry">—</td><td data-label="Frequencies">—</td><td data-label="Energy">—</td></>
     }
-    return <ProductLevelsTableCells levels={levels} showThree={showThree} />
+    return <ProductLevelsTableCells levels={levels} />
 }
 
 /**
@@ -730,17 +726,16 @@ function StatmechLevelsRowCells({ levels, showThree }: { levels: ProductLevels |
  * already (see `StatmechList`), so no extra request is made rendering this
  * table.
  *
- * Level of theory gets its own column(s) too, per record -- deliberately
- * NOT lifted to the group's shared body the way `IdenticalStatmechRecordsCard`
+ * Level of theory gets its own columns too, per record -- deliberately NOT
+ * lifted to the group's shared body the way `IdenticalStatmechRecordsCard`
  * lifts point group/symmetry/scale-factor facts, because geometry/
  * frequency/energy levels are NOT part of `statmechRecordFingerprint`
  * (unlike the scale factor's own level of theory, which is): two records in
  * this same identical-values group can still cite different source
  * calculations at different levels of theory while reporting byte-identical
- * scientific values. One "Level of theory" column when every row's own
- * three agree with itself; three (Geometry/Frequencies/Energy) the moment
- * any row's own three disagree -- `productLevelsTableNeedsThreeColumns`,
- * shared with `EntryThermoSection.tsx`'s identical table.
+ * scientific values. ALWAYS three columns (Geometry/Frequencies/Energy),
+ * agreeing or not -- see `components/ProductLevels.tsx`'s own header
+ * comment for why the old one-column collapse was retired.
  */
 function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesState }: {
     records: StatmechRecord[]
@@ -749,9 +744,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
 }) {
     const headingId = `identical-refs-${records[0].statmech.statmech_ref}`
     const levelsByRecord = records.map((record) => statmechRecordProductLevels(record, sourceCalcsState))
-    const readyLevels = levelsByRecord.filter((levels): levels is ProductLevels => levels !== "loading" && levels !== "error")
-    const showThreeLevelColumns = productLevelsTableNeedsThreeColumns(readyLevels)
-    const levelColumnCount = showThreeLevelColumns ? 3 : 1
+    const LEVEL_COLUMN_COUNT = 3
     return (
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
@@ -770,11 +763,21 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
-                            <ProductLevelsTableHead showThree={showThreeLevelColumns} />
+                            <ProductLevelsTableHead />
                             <th scope="col">Opt calc</th>
                             <th scope="col">Freq calc</th>
                             <th scope="col">SP calc</th>
-                            <th scope="col">Frequencies</th>
+                            {/* Was "Frequencies" until this table gained a SECOND,
+                                always-shown "Frequencies" column of its own
+                                (`ProductLevelsTableHead`'s frequency level of
+                                theory, above) -- two `<th>Frequencies</th>`
+                                headers in the same table row is a genuine
+                                ambiguity, not just a naming coincidence, so this
+                                one (the dedicated frequency CALCULATION refs from
+                                the `frequencies` include -- same dt label as the
+                                record card's own "Source frequency calculations"
+                                row) gets a name that doesn't collide. */}
+                            <th scope="col">Source freq calcs</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -784,14 +787,14 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                                 <tr key={ref}>
                                     <td data-label="Ref"><code className="data">{ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
-                                    <StatmechLevelsRowCells levels={levelsByRecord[index]} showThree={showThreeLevelColumns} />
+                                    <StatmechLevelsRowCells levels={levelsByRecord[index]} />
                                     <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
                                     <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
                                     <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
-                                    <td data-label="Frequencies"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
+                                    <td data-label="Source freq calcs"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
                                 </tr>,
                                 <tr key={`${ref}-provenance`} className="data-table-provenance-row">
-                                    <td colSpan={6 + levelColumnCount}>
+                                    <td colSpan={6 + LEVEL_COLUMN_COUNT}>
                                         Software: {softwareLabel(record.software_release) ?? "not recorded"}
                                         {" · "}Workflow tool: {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
                                     </td>
