@@ -301,6 +301,34 @@ def test_rxn_ref_calls_search_reactions(monkeypatch: pytest.MonkeyPatch) -> None
     assert seen["ref"] == "rxn_naeqmg4l5wyqex5cl5tir2vt2y"
 
 
+def test_chooser_handles_null_entry_ref_without_crashing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """A search record whose ``reaction_entry_ref`` is null must render a
+    message, not raise ``TypeError`` out of ``", ".join(...)``."""
+    envelope = {
+        "records": [
+            {
+                "reaction_ref": "rxn_x",
+                "reaction_entry_ref": None,
+                "equation": "A <=> B",
+                "availability": {"has_transition_state": True, "kinetics_count": 0},
+            }
+        ]
+    }
+
+    def on_search(reaction_ref):
+        return envelope
+
+    stub_cls = _make_stub(on_search=on_search)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    rc = cli.main_tckdb(["get", "reaction", "rxn_x"])
+    assert rc == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "not recorded" in out
+    assert "?" in out  # the hint line's placeholder for the missing ref
+
+
 def test_int_ref_calls_get_reaction_full(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = {}
 
@@ -389,6 +417,63 @@ def test_table_renders_every_served_field(
     assert "300-2000 K" in out
     assert "0.01-100 bar" in out
     assert "21" in out
+    # Kinetics columns name a level of theory, not a value.
+    assert "geometry_level" in out
+    assert "frequency_level" in out
+    assert "energy_level" in out
+
+
+def test_null_fields_print_not_recorded_not_the_string_none(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """A present-but-``null`` ref must never render as the literal ``None``."""
+    envelope = {
+        "reaction_entry": {
+            "reaction_entry_ref": None,
+            "reaction_ref": None,
+            "equation": "A <=> B",
+            "reversible": True,
+            "family": None,
+            "review": {"status": "not_reviewed"},
+            "atom_maps": [],
+        },
+        "species": {
+            "reactants": [{"species_entry_ref": "spe_a", "smiles": "A", "participant_index": 1}],
+            "products": [{"species_entry_ref": "spe_b", "smiles": "B", "participant_index": 1}],
+        },
+        "kinetics": [
+            {
+                "kinetics_ref": None,
+                "model_kind": None,
+                "parameters": {},
+                "temperature_coverage": {},
+            }
+        ],
+        "transition_states": [
+            {
+                "transition_state_entry_ref": None,
+                "status": None,
+                "evidence_summary": {"levels_of_theory": {}},
+                "calculations": {"ts_opt": {"calculation_ref": None}},
+                "dependencies": [],
+            }
+        ],
+        "networks": [
+            {
+                "network_ref": None,
+                "name": None,
+                "channel_count": None,
+            }
+        ],
+    }
+    stub_cls = _make_stub(full=envelope)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    rc = cli.main_tckdb(["get", "reaction", "rxe_x"])
+    assert rc == cli.EXIT_OK
+    out = capsys.readouterr().out
+    assert "None" not in out
+    assert "entry not recorded  reaction not recorded" in out
+    assert "not recorded" in out  # present throughout the null rows
 
 
 def test_network_only_sentence_when_kinetics_empty(
@@ -514,6 +599,45 @@ def test_include_override_replaces_default(monkeypatch: pytest.MonkeyPatch) -> N
     assert seen["include"] == ["species", "kinetics"]
 
 
+def test_comma_joined_include_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The form advertised by --help (and the plan) must actually work.
+
+    ``--help`` shows the default as the comma-joined string
+    ``species,kinetics,transition_states,networks``; a user pasting that
+    exact form as one ``--include`` value must not be silently treated as
+    a single bogus token.
+    """
+    seen = {}
+
+    def on_full(ref, include):
+        seen["include"] = include
+        return EMPTY_SECTIONS_ENVELOPE
+
+    stub_cls = _make_stub(on_full=on_full)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    cli.main_tckdb(
+        ["get", "reaction", "rxe_x", "--include", "species,kinetics,transition_states,networks"]
+    )
+    assert seen["include"] == ["species", "kinetics", "transition_states", "networks"]
+
+
+def test_comma_joined_include_mixes_with_repeated_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = {}
+
+    def on_full(ref, include):
+        seen["include"] = include
+        return EMPTY_SECTIONS_ENVELOPE
+
+    stub_cls = _make_stub(on_full=on_full)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    cli.main_tckdb(
+        ["get", "reaction", "rxe_x", "--include", "species,kinetics", "--include", "networks"]
+    )
+    assert seen["include"] == ["species", "kinetics", "networks"]
+
+
 # ---------------------------------------------------------------------------
 # unknown_include_token fallback (pre-deploy API without `networks`)
 # ---------------------------------------------------------------------------
@@ -578,3 +702,73 @@ def test_unknown_include_token_does_not_retry_forever(
     rc = cli.main_tckdb(["get", "reaction", "rxe_x"])
     assert rc == cli.EXIT_FAILURES
     assert call_count["n"] == 2  # first attempt + exactly one retry, then give up
+
+
+def test_unknown_token_outside_forward_compat_set_is_a_clear_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """A typo like ``speceis`` must surface as an error, not vanish.
+
+    Only tokens in ``_FORWARD_COMPAT_INCLUDE_TOKENS`` (today: ``networks``)
+    are ever silently dropped and retried. A rejected token outside that
+    set is a real usage mistake: retrying without it would silently fall
+    back toward the server's default include set and exit 0 with data the
+    caller never asked for, which is worse than failing loudly.
+    """
+    call_count = {"n": 0}
+
+    def on_full(ref, include):
+        call_count["n"] += 1
+        detail = (
+            "unknown_include_token: token(s) ['speceis'] not legal for "
+            "/scientific/reaction-entries/{id}/full. Legal tokens: "
+            "['species', 'kinetics', 'transition_states', 'networks']"
+        )
+        raise TCKDBHTTPError(
+            detail,
+            status_code=422,
+            code="unknown_include_token",
+            detail=detail,
+            response_json={},
+            response_text=None,
+            headers={},
+        )
+
+    stub_cls = _make_stub(on_full=on_full)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    rc = cli.main_tckdb(["get", "reaction", "rxe_x", "--include", "speceis"])
+    assert rc == cli.EXIT_FAILURES
+    assert call_count["n"] == 1  # no retry -- not a known forward-compat token
+    err = capsys.readouterr().err
+    assert "speceis" in err
+
+
+def test_unknown_token_mixed_with_networks_is_not_silently_dropped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected typo riding alongside the known ``networks`` token must
+    also block the retry -- dropping only ``networks`` would silently
+    resend a request that still contains the typo, hiding it behind a
+    second failure the caller has no reason to expect."""
+    call_count = {"n": 0}
+
+    def on_full(ref, include):
+        call_count["n"] += 1
+        raise TCKDBHTTPError(
+            "unknown_include_token",
+            status_code=422,
+            code="unknown_include_token",
+            detail=(
+                "unknown_include_token: token(s) ['networks', 'speceis'] not "
+                "legal for /scientific/reaction-entries/{id}/full."
+            ),
+            response_json={},
+            response_text=None,
+            headers={},
+        )
+
+    stub_cls = _make_stub(on_full=on_full)
+    monkeypatch.setattr(cli, "TCKDBClient", stub_cls)
+    rc = cli.main_tckdb(["get", "reaction", "rxe_x", "--include", "networks,speceis"])
+    assert rc == cli.EXIT_FAILURES
+    assert call_count["n"] == 1

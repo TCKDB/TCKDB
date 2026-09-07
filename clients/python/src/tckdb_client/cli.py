@@ -248,6 +248,14 @@ _NONE_DEPOSITED = "none deposited"
 
 _REF_RE = re.compile(r"^(rxe_|rxn_)[A-Za-z0-9]+$")
 
+#: Tokens the client itself knows might legitimately be missing from an
+#: older-but-otherwise-fine API build. Only a token in this set is ever
+#: silently dropped and retried on an ``unknown_include_token`` 422 — a
+#: typo like ``speceis`` is a real usage error and must surface as one,
+#: never vanish into a retry that quietly falls back to the server's
+#: default include set with exit 0.
+_FORWARD_COMPAT_INCLUDE_TOKENS = frozenset({"networks"})
+
 
 def _validate_reaction_ref(value: str) -> str:
     """argparse ``type=`` validator for the ``ref`` positional.
@@ -262,6 +270,32 @@ def _validate_reaction_ref(value: str) -> str:
         f"invalid reaction reference {value!r}: expected 'rxe_...', "
         "'rxn_...', or an integer reaction_entry id"
     )
+
+
+def _split_include_tokens(value: str) -> list[str]:
+    """argparse ``type=`` for ``--include``: splits a comma-joined value.
+
+    ``--help`` (and the plan) advertise the default as the comma-joined
+    string ``species,kinetics,transition_states,networks``. Without this,
+    a user pasting that form as one ``--include`` value sent the single
+    bogus token ``"species,kinetics,transition_states,networks"``, which
+    the server 422s and the retry-once fallback then silently swallows
+    (see ``_FORWARD_COMPAT_INCLUDE_TOKENS``), landing on the server's
+    default include set with exit 0 — no error, wrong data. Splitting
+    here makes both forms work: ``--include species,kinetics`` and
+    ``--include species --include kinetics``. Each parsed occurrence
+    contributes a list of tokens; :func:`_flatten_include_groups` merges
+    them into one flat list.
+    """
+    tokens = [t.strip() for t in value.split(",")]
+    return [t for t in tokens if t]
+
+
+def _flatten_include_groups(groups: list[list[str]]) -> list[str]:
+    flat: list[str] = []
+    for group in groups:
+        flat.extend(group)
+    return flat
 
 
 def _build_tckdb_parser() -> argparse.ArgumentParser:
@@ -293,9 +327,12 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
     reaction_parser.add_argument(
         "--include",
         action="append",
+        type=_split_include_tokens,
         default=None,
         help=(
-            "Section to include; repeatable. Overrides the default set "
+            "Section to include; repeatable, and/or comma-joined in one "
+            "value (both '--include species,kinetics' and '--include "
+            "species --include kinetics' work). Overrides the default set "
             f"entirely when given. Default: {','.join(DEFAULT_INCLUDE)}."
         ),
     )
@@ -337,7 +374,13 @@ def _fetch_reaction_full(
     Until the API build carrying the ``networks`` include token is deployed,
     requesting it 422s with ``code=unknown_include_token``. Rather than fail
     the whole command over one section the caller merely defaulted to, retry
-    exactly once with the offending token(s) removed. Returns the response
+    exactly once with the offending token(s) removed — but only when every
+    rejected token is one this client already knows might be missing on an
+    older deployment (:data:`_FORWARD_COMPAT_INCLUDE_TOKENS`). A rejected
+    token outside that set (a typo, e.g. ``speceis``) is a real usage
+    error: silently dropping it would retry against the server's *default*
+    include set and return exit 0 with the wrong data instead of telling
+    the caller their ``--include`` value was wrong. Returns the response
     alongside the list of tokens that had to be dropped, so the caller can
     both render the sections that *did* come back and tell the operator why
     one didn't.
@@ -356,12 +399,15 @@ def _fetch_reaction_full(
                 or exc.code != "unknown_include_token"
             ):
                 raise
-            bad = [t for t in _parse_unknown_include_tokens(exc.detail) if t in current]
-            if not bad:
+            rejected = set(_parse_unknown_include_tokens(exc.detail)) & set(current)
+            # Every rejected token must be one this client recognizes as
+            # forward-compat, or a typo riding alongside a known token
+            # (or a lone typo) would be silently dropped too.
+            if not rejected or not rejected <= _FORWARD_COMPAT_INCLUDE_TOKENS:
                 raise
             retried = True
-            dropped.extend(bad)
-            current = [t for t in current if t not in bad]
+            dropped.extend(sorted(rejected))
+            current = [t for t in current if t not in rejected]
 
 
 def _fmt_scalar(value: Any, *, unit: str = "") -> str:
@@ -427,9 +473,9 @@ _KINETICS_HEADERS = [
     "n",
     "Ea",
     "T_range",
-    "geometry",
-    "frequency",
-    "energy",
+    "geometry_level",
+    "frequency_level",
+    "energy_level",
     "energy_source",
 ]
 
@@ -448,8 +494,8 @@ def _kinetics_row(k: dict) -> list[str]:
     else:
         geometry = frequency = energy = energy_source = _NOT_RECORDED
     return [
-        k.get("kinetics_ref", _NOT_RECORDED),
-        k.get("model_kind", _NOT_RECORDED),
+        k.get("kinetics_ref") or _NOT_RECORDED,
+        k.get("model_kind") or _NOT_RECORDED,
         _fmt_scalar(params.get("A"), unit=params.get("A_units") or ""),
         _fmt_scalar(params.get("n")),
         _fmt_scalar(params.get("Ea_kj_mol"), unit="kJ/mol"),
@@ -477,7 +523,7 @@ def _ts_row(ts: dict) -> list[str]:
 
     def _slot(name: str) -> str:
         slot = calcs.get(name)
-        return slot.get("calculation_ref", _NOT_RECORDED) if slot else _NOT_RECORDED
+        return (slot.get("calculation_ref") or _NOT_RECORDED) if slot else _NOT_RECORDED
 
     lot = (ts.get("evidence_summary") or {}).get("levels_of_theory") or {}
 
@@ -489,7 +535,7 @@ def _ts_row(ts: dict) -> list[str]:
 
     levels = f"opt={_lvl('opt')} freq={_lvl('freq')} sp={_lvl('sp')} irc={_lvl('irc')}"
     return [
-        ts.get("transition_state_entry_ref", _NOT_RECORDED),
+        ts.get("transition_state_entry_ref") or _NOT_RECORDED,
         ts.get("status") or _NOT_RECORDED,
         _slot("ts_opt"),
         _slot("ts_freq"),
@@ -508,7 +554,7 @@ def _network_row(n: dict) -> list[str]:
     pmin, pmax = n.get("solve_pressure_min_bar"), n.get("solve_pressure_max_bar")
     p_range = _NOT_RECORDED if pmin is None or pmax is None else f"{pmin:g}-{pmax:g} bar"
     return [
-        n.get("network_ref", _NOT_RECORDED),
+        n.get("network_ref") or _NOT_RECORDED,
         n.get("name") or _NOT_RECORDED,
         t_range,
         p_range,
@@ -534,8 +580,8 @@ def render_reaction_full_table(data: dict) -> str:
     else:
         lines.append(entry.get("equation") or _NOT_RECORDED)
     lines.append(
-        f"entry {entry.get('reaction_entry_ref', _NOT_RECORDED)}  "
-        f"reaction {entry.get('reaction_ref', _NOT_RECORDED)}  "
+        f"entry {entry.get('reaction_entry_ref') or _NOT_RECORDED}  "
+        f"reaction {entry.get('reaction_ref') or _NOT_RECORDED}  "
         f"family {entry.get('family') or _NOT_RECORDED}"
     )
 
@@ -546,7 +592,7 @@ def render_reaction_full_table(data: dict) -> str:
         lines.append("Kinetics:")
         if not kinetics:
             if networks:
-                net_ref = networks[0].get("network_ref", _NOT_RECORDED)
+                net_ref = networks[0].get("network_ref") or _NOT_RECORDED
                 lines.append(
                     "  No rate coefficient deposited on this entry; "
                     "phenomenological k(T,P) for this system is served by "
@@ -591,17 +637,19 @@ def render_reaction_chooser(data: dict) -> str:
     for r in records:
         avail = r.get("availability") or {}
         lines.append(
-            f"  {r.get('reaction_entry_ref', _NOT_RECORDED)}  "
+            f"  {r.get('reaction_entry_ref') or _NOT_RECORDED}  "
             f"kinetics={_fmt_scalar(avail.get('kinetics_count'))}  "
-            f"has_transition_state={avail.get('has_transition_state', _NOT_RECORDED)}"
+            f"has_transition_state={_fmt_scalar(avail.get('has_transition_state'))}"
         )
-    refs = ", ".join(r.get("reaction_entry_ref", "?") for r in records)
+    # ``or "?"``, not the default-arg form: a record whose ref key is present
+    # but null (server data gap) must not crash the join with a TypeError.
+    refs = ", ".join(r.get("reaction_entry_ref") or "?" for r in records)
     lines.append(f"hint: tckdb get reaction <rxe_ref>, one of: {refs}")
     return "\n".join(lines)
 
 
 def _cmd_get_reaction(args: argparse.Namespace) -> int:
-    include = list(args.include) if args.include else list(DEFAULT_INCLUDE)
+    include = _flatten_include_groups(args.include) if args.include else list(DEFAULT_INCLUDE)
     client = TCKDBClient(base_url=args.base_url, timeout=args.timeout)
     try:
         if args.ref.startswith("rxn_"):
