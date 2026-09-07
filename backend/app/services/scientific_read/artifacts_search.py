@@ -306,7 +306,7 @@ def _build_record(
     """
     artifact_summary = CalculationArtifactSummary(
         artifact_id=artifact.id,
-        artifact_ref=None,  # no public_ref column on calculation_artifact yet
+        artifact_ref=artifact.public_ref,
         kind=artifact.kind,
         uri=artifact.uri,
         filename=artifact.filename,

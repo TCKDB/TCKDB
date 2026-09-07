@@ -220,6 +220,7 @@ class CalculationArtifactUpdate(SchemaBase):
 
 class CalculationArtifactRead(CalculationArtifactBase, TimestampedReadSchema):
     created_by: int | None = None
+    public_ref: str | None = None
 
 
 class CalculationSPResultBase(BaseModel):

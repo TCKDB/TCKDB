@@ -1366,10 +1366,12 @@ Table calculation_artifact {
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
 
   indexes {
     calculation_id [name: 'ix_calculation_artifact_calculation_id']
     kind [name: 'ix_calculation_artifact_kind']
+    public_ref [unique, name: 'ix_calculation_artifact_public_ref']
     sha256 [name: 'ix_calculation_artifact_sha256']
   }
 

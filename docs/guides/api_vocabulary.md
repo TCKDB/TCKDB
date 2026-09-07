@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 34 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
 | Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 158 | `backend/app/api/code_catalogue.py` |
-| **total** | **442** | |
+| **total** | **443** | |
 
 ## How a record is named
 
@@ -94,11 +94,12 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (22)
+### Opaque prefixes (23)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
 | `aie_` | artifact integrity event | no — one row, one database |
+| `art_` | calculation artifact | no — one row, one database |
 | `calc_` | calculation | no — one row, one database |
 | `cg_` | conformer group | no — one row, one database |
 | `co_` | conformer observation | no — one row, one database |

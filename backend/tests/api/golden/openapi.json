@@ -3737,6 +3737,17 @@
             ],
             "title": "Note"
           },
+          "public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Ref"
+          },
           "sha256": {
             "maxLength": 64,
             "minLength": 64,
@@ -3764,7 +3775,7 @@
         "type": "object"
       },
       "CalculationArtifactSummary": {
-        "description": "One artifact-metadata row for the ``include=artifacts`` heavy\ninclude of the calculation detail endpoint.\n\n**Metadata only — no body bytes or pre-signed URL is inlined.**\nThe ``uri`` field carries the storage URI exactly as persisted\n(typically ``s3://bucket/key``); resolving it to a downloadable URL\nis an upload-side / artifact-service responsibility, not a public\nread concern. Approved bytes are retrieved separately through the\ncontent-addressed scientific artifact download route.\n\n``artifact_ref`` is always ``None`` until ``calculation_artifact``\ngrows a ``public_ref`` column (see open question 1 in\n``backend/docs/specs/scientific_calculation_reads.md``); the field\nexists in the schema now so adding refs later is non-breaking.\n\n``artifact_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
+        "description": "One artifact-metadata row for the ``include=artifacts`` heavy\ninclude of the calculation detail endpoint.\n\n**Metadata only — no body bytes or pre-signed URL is inlined.**\nThe ``uri`` field carries the storage URI exactly as persisted\n(typically ``s3://bucket/key``); resolving it to a downloadable URL\nis an upload-side / artifact-service responsibility, not a public\nread concern. Approved bytes are retrieved separately through the\ncontent-addressed scientific artifact download route.\n\n``artifact_ref`` is the row's own ``public_ref`` (``art_`` prefix),\nadded by the public-ref backfill described in\n``backend/docs/deployment/migrations.md``.\n\n``artifact_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids.",
         "properties": {
           "artifact_id": {
             "anyOf": [
@@ -7516,7 +7527,7 @@
         "type": "object"
       },
       "CalculationSCFStabilitySummary": {
-        "description": "SCF wavefunction stability evidence for the\n``include=scf_stability`` heavy include.\n\nA row exists only when an SCF stability analysis was actually\nperformed; absence is interpreted as ``not_checked`` by the\ncheap provenance summary on the default record (``available_sections.has_scf_stability``).\n\nThe schema constrains at most one row per calculation\n(PK = ``calculation_id``); the wrapping field is still a list\nfor API symmetry — it will contain zero or one entry.\n\n``source_artifact_ref`` is always ``None`` because\n``calculation_artifact`` has no ``public_ref`` column today (see\n``include=artifacts``); ``source_calculation_ref`` resolves via\nthe calculation's own ``public_ref`` when the link is present.\nInternal IDs follow the Phase D visibility policy.",
+        "description": "SCF wavefunction stability evidence for the\n``include=scf_stability`` heavy include.\n\nA row exists only when an SCF stability analysis was actually\nperformed; absence is interpreted as ``not_checked`` by the\ncheap provenance summary on the default record (``available_sections.has_scf_stability``).\n\nThe schema constrains at most one row per calculation\n(PK = ``calculation_id``); the wrapping field is still a list\nfor API symmetry — it will contain zero or one entry.\n\n``source_artifact_ref`` resolves ``source_artifact_id`` to the\nreferenced ``calculation_artifact``'s ``public_ref`` when the FK is\nset, the same way ``source_calculation_ref`` resolves\n``source_calculation_id`` via the calculation's own ``public_ref``.\nBoth stay ``None`` when the corresponding FK is unset — that is a\nproperty of the (nullable) link, not of the ref column. Internal\nIDs follow the Phase D visibility policy.",
         "properties": {
           "created_at": {
             "anyOf": [

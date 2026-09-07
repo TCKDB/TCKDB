@@ -969,15 +969,41 @@ def test_natural_key_field_names_are_deterministic():
     )
 
 
-def test_user_and_artifact_foreign_keys_are_still_dropped():
-    """Natural-key substitution must not become a leak of user primary keys."""
+def test_user_foreign_keys_are_still_dropped():
+    """Natural-key substitution must not become a leak of user primary keys.
+
+    ``created_by`` targets ``app_user``, which has neither a ``public_ref``
+    nor a declared natural key, so it stays dropped -- the one case this
+    resolver must never bridge.
+    """
     from app.db.base import Base
     from app.services.release.records import RefResolver
 
     thermo = Base.metadata.tables["thermo"]
     assert "created_by" not in RefResolver.fk_targets(thermo)
 
+
+def test_artifact_foreign_keys_now_resolve_via_public_ref():
+    """``calculation_artifact`` gained a ``public_ref`` column, so its FKs
+    are carried into releases automatically -- the general mechanism the
+    module docstring promises ("a new FK to a ref-bearing table is carried
+    into releases automatically instead of being silently dropped"). A
+    released ``kinetics_tunneling_application`` row can now name the
+    artifact behind its result and SCT path-integral corrections instead of
+    dropping those FKs with no substitute.
+    """
+    from app.db.base import Base
+    from app.services.release.records import RefResolver
+
     tunneling = Base.metadata.tables["kinetics_tunneling_application"]
     targets = RefResolver.fk_targets(tunneling)
-    assert "result_artifact_id" not in targets
-    assert "sct_path_integral_artifact_id" not in targets
+    assert targets["result_artifact_id"] == ("calculation_artifact", "public_ref")
+    assert targets["sct_path_integral_artifact_id"] == ("calculation_artifact", "public_ref")
+    assert (
+        RefResolver.emitted_field("result_artifact_id", "public_ref")
+        == "result_artifact_ref"
+    )
+    assert (
+        RefResolver.emitted_field("sct_path_integral_artifact_id", "public_ref")
+        == "sct_path_integral_artifact_ref"
+    )

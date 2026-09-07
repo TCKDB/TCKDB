@@ -82,6 +82,10 @@ PREFIXES: dict[str, str] = {
     "NetworkKinetics": "nkin",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
+    # Append-only upload log (see CalculationArtifact docstring). Opaque:
+    # two rows with identical bytes are two distinct upload events and
+    # must stay separately citable, same reasoning as ArtifactIntegrityEvent.
+    "CalculationArtifact": "art",
     # Custody of stored evidence (ADR 0014). Opaque: an observation about
     # an object at a moment is an event, and the log is deliberately
     # append-only, so two observations of one digest must be separately

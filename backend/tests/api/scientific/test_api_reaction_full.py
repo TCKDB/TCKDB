@@ -935,7 +935,8 @@ def test_full_artifacts_section_hides_internal_ids_by_default(
     assert "calculation_ref" in group
     art = group["artifacts"][0]
     assert "artifact_id" not in art
-    assert "artifact_ref" in art  # the field exists; None today
+    assert art["artifact_ref"] is not None
+    assert art["artifact_ref"].startswith("art_")
 
 
 def test_full_artifacts_section_restores_ids_under_policy(
