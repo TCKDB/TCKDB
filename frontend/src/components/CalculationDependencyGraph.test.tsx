@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { CalculationDependency } from "../api/calculationApi"
-import { buildDependencyGraphModel, computeNarrowLayout, computeWideLayout } from "../domain/dependencyGraphLayout"
+import { buildDependencyGraphModel, CENTRE_H, CENTRE_PAD_TOP, computeNarrowLayout, computeWideLayout } from "../domain/dependencyGraphLayout"
 import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "../domain/dependencyWording"
 import { CalculationDependencyGraph } from "./CalculationDependencyGraph"
 
@@ -339,5 +339,56 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
                 expect(svg.style.maxWidth).toBe(`${expected.width}px`)
             })
         }
+    })
+
+    // Review finding: `pillY = top + 10` pinned the pill+ref content
+    // block to the TOP of a grown centre box regardless of how much the
+    // box had grown to fit staggered lane entries -- MEASURED, a 3-child
+    // graph at 680px left 64.6px of empty space below the ref line and
+    // only 10px above it. `contentTop = top + (node.height - CENTRE_H) /
+    // 2` re-centres the block; this reads the ACTUAL rendered `<rect>`/
+    // `<text>` y-attributes (not a re-derivation of that same formula) to
+    // confirm the component really applies it, for every lane count this
+    // module is tested against (1-4).
+    it.each([1, 2, 3, 4])("centres the pill+ref content block in a grown centre node -- top and bottom margins equal within 1px (lane count %i)", async (laneCount) => {
+        const deps: CalculationDependency[] = Array.from({ length: laneCount }, (_, i) => ({
+            role: "freq_on", direction: "parent",
+            parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: `calc_child${i}abcdefghijklmnopqrstuvwx`,
+        }))
+        renderGraph(deps, "calc_own_ref_abcdefghijklmnopqrstuv")
+        await waitFor(() => expect(FakeResizeObserver.instances).toHaveLength(1))
+        const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", deps)
+        const narrow = computeNarrowLayout(model)
+        const wide = computeWideLayout(model)
+
+        // Force the narrow layout, which is the one that grows the centre
+        // node past `CENTRE_H` for 2+ lanes (`centreHeightFor`).
+        FakeResizeObserver.instances[0].trigger(wide.width - 50)
+        await waitFor(() => {
+            expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${narrow.width} ${narrow.height}`)
+        })
+
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref_abcdefghijklmnopqrstuv")
+        const nodeRect = centreNode.querySelector(".dep-graph-node-rect")!
+        const pillRect = centreNode.querySelector(".dep-graph-node-pill-bg")!
+
+        const nodeTop = Number(nodeRect.getAttribute("y"))
+        const nodeHeight = Number(nodeRect.getAttribute("height"))
+        const nodeBottom = nodeTop + nodeHeight
+        const pillTop = Number(pillRect.getAttribute("y"))
+        // The content block's own height is fixed at `CENTRE_H`
+        // regardless of the node's height; `CENTRE_PAD_TOP` is the
+        // (fixed) gap from the content block's own top to the pill --
+        // both independently exported by `dependencyGraphLayout.ts`, not
+        // re-derived from `pillTop` here.
+        const contentTop = pillTop - CENTRE_PAD_TOP
+        const contentBottom = contentTop + CENTRE_H
+
+        const topMargin = contentTop - nodeTop
+        const bottomMargin = nodeBottom - contentBottom
+        expect(
+            Math.abs(topMargin - bottomMargin),
+            `lane count ${laneCount}: topMargin=${topMargin}px, bottomMargin=${bottomMargin}px, node height=${nodeHeight}px`,
+        ).toBeLessThanOrEqual(1)
     })
 })

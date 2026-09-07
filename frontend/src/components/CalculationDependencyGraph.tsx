@@ -4,9 +4,11 @@ import "../calculation-dependency-graph.css"
 import type { CalculationDependency } from "../api/calculationApi"
 import {
     buildDependencyGraphModel,
+    CENTRE_H,
     computeNarrowLayout,
     computeWideLayout,
     dependencyGraphAriaLabel,
+    NODE_RX,
     type GraphLayout,
     type LayoutNode,
 } from "../domain/dependencyGraphLayout"
@@ -29,7 +31,9 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * -- no type for the OTHER calculation in the edge. Only the centre node's
  * own type is known (`calculation.type`, already on the record), so only
  * the centre node gets a type pill (a real `<rect rx>` behind the text,
- * `.value-pill`'s own treatment -- `domain/dependencyGraphLayout.ts`
+ * matching `.value-pill`'s own COLOUR and RADIUS -- the stroke and font
+ * both deliberately differ, see `calculation-dependency-graph.css`'s own
+ * `.dep-graph-node-pill-bg` comment -- `domain/dependencyGraphLayout.ts`
  * sizes it); every other node shows its ref alone rather than guess.
  *
  * Two full layouts (`computeWideLayout`/`computeNarrowLayout`,
@@ -184,17 +188,27 @@ const TIER_ARIA_PREFIX: Record<LayoutNode["tier"], string> = {
 function DependencyGraphNode({ node }: { node: LayoutNode }) {
     const left = node.x - node.width / 2
     const top = node.y - node.height / 2
-    const rect = <rect x={left} y={top} width={node.width} height={node.height} rx={8} className="dep-graph-node-rect" />
+    const rect = <rect x={left} y={top} width={node.width} height={node.height} rx={NODE_RX} className="dep-graph-node-rect" />
 
     if (node.tier === "centre" && node.pill) {
         const { pill } = node
+        // The pill+ref content block is `CENTRE_H` tall regardless of the
+        // node's OWN height -- the narrow layout grows a centre node past
+        // `CENTRE_H` to fit staggered lane entries (`centreHeightFor`),
+        // but the content itself never grows to match. MEASURED
+        // (post-review): pinning the block to the box's TOP (`top + 10`)
+        // left a 64.6px gap below the ref line and only 10px above it on
+        // a 3-child, 680px narrow graph. `contentTop` re-centres the
+        // whole `CENTRE_H`-tall block in the node's actual height, so the
+        // gap splits evenly top and bottom instead.
+        const contentTop = top + (node.height - CENTRE_H) / 2
         // Matches `domain/dependencyGraphLayout.ts`'s own `CENTRE_PAD_TOP`
         // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) --
         // duplicated here as plain numbers rather than exported constants
         // since this is the only place outside that module that needs the
         // internal split of `CENTRE_H`, not a value worth widening that
         // module's public surface for.
-        const pillY = top + 10
+        const pillY = contentTop + 10
         const refY = pillY + pill.height + 8 + 12
         return (
             <g className="dep-graph-node dep-graph-node--centre" data-testid={`dep-node-centre-${node.ref}`}>

@@ -5,6 +5,7 @@ import {
     computeNarrowLayout,
     computeWideLayout,
     dependencyGraphAriaLabel,
+    NODE_RX,
     type GraphLayout,
 } from "./dependencyGraphLayout"
 
@@ -130,7 +131,13 @@ function nodeRectByRef(layout: GraphLayout): Map<string, Rect> {
 /** Shortest distance from a point to a rectangle's BORDER (not just
  * "is it inside") -- 0 for a point exactly on an edge or corner, the
  * distance to the nearest edge for a point inside, and the distance to
- * the nearest edge/corner for a point outside. */
+ * the nearest edge/corner for a point outside. This treats every node as
+ * a PLAIN axis-aligned rectangle -- correct for every endpoint except a
+ * centre-node one that lands within `rx` of a corner, where the rect
+ * actually drawn (`rx={NODE_RX}`) curves inward and this flat check would
+ * report "on the border" for a point that is really inside the rounded
+ * cut. `assertPathEndpointsOnNodeBorders` below adds a SEPARATE check for
+ * exactly that case. */
 function distanceToRectBorder(p: { x: number; y: number }, rect: Rect): number {
     const insideX = p.x >= rect.x && p.x <= rect.x + rect.w
     const insideY = p.y >= rect.y && p.y <= rect.y + rect.h
@@ -143,35 +150,71 @@ function distanceToRectBorder(p: { x: number; y: number }, rect: Rect): number {
 }
 
 /**
+ * True if `p` sits on the STRAIGHT run of a rounded rect's border (the
+ * flat rect check already confirmed it is on the AABB's edge) -- i.e.
+ * clear of the `rx` corner cut on whichever edge it's on. A point on the
+ * top/bottom edge must clear the LEFT/RIGHT corners (`x` within
+ * `[rect.x + rx, rect.x + rect.w - rx]`); a point on the left/right edge
+ * must clear the TOP/BOTTOM corners (`y` within the equivalent `y`
+ * range). This is why `centreX` (dead centre, horizontally) landing
+ * exactly on the wide layout's flat top/bottom edge is fine regardless
+ * of `rx` -- it is nowhere near a LEFT/RIGHT corner -- while the narrow
+ * layout's right-edge entry/exit points, which vary in `y` rather than
+ * `x`, are the ones actually at risk of landing inside a TOP/BOTTOM
+ * corner's cut.
+ */
+function clearsRoundedCorner(p: { x: number; y: number }, rect: Rect, rx: number): boolean {
+    const EPS = 0.5
+    const onTopOrBottom = Math.abs(p.y - rect.y) <= EPS || Math.abs(p.y - (rect.y + rect.h)) <= EPS
+    const onLeftOrRight = Math.abs(p.x - rect.x) <= EPS || Math.abs(p.x - (rect.x + rect.w)) <= EPS
+    if (onTopOrBottom) return p.x >= rect.x + rx - EPS && p.x <= rect.x + rect.w - rx + EPS
+    if (onLeftOrRight) return p.y >= rect.y + rx - EPS && p.y <= rect.y + rect.h - rx + EPS
+    return true // not flush with any edge at all -- the flat check above already failed this point
+}
+
+/**
  * Every edge's `path` is drawn FROM `fromRef`'s own node TO `toRef`'s
  * own node (`LayoutEdge`'s own docstring) -- so the path string's FIRST
  * point must sit on `fromRef`'s node border and its LAST point on
- * `toRef`'s, regardless of tier or layout. Review finding: the narrow
- * layout's centre-side entry/exit points could float outside the centre
- * node's own box (a fixed stagger step exceeding a fixed box height),
- * and a satellite node narrower than the shared column had its own
- * border to the side of where the path actually touched down.
+ * `toRef`'s, regardless of tier or layout. Review finding (round 2): the
+ * narrow layout's centre-side entry/exit points could float outside the
+ * centre node's own box (a fixed stagger step exceeding a fixed box
+ * height), and a satellite node narrower than the shared column had its
+ * own border to the side of where the path actually touched down.
+ *
+ * Review finding (round 3): the flat rect-border check alone is not
+ * enough -- `centreHeightFor`'s round-2 fix put the deepest lane's point
+ * exactly AT the flat half-height line, which is INSIDE the
+ * `rx={NODE_RX}` rounded corner's cut on the RIGHT edge, not on the rect
+ * actually drawn (measured 3.31px off the real rounded border). Every
+ * endpoint therefore ALSO has to clear whichever corner it's nearest --
+ * see `clearsRoundedCorner`'s own docstring for why this is edge-
+ * dependent (the wide layout's top/bottom-edge endpoints, always at
+ * `centreX`, are never at risk; the narrow layout's right-edge ones are).
  */
 function assertPathEndpointsOnNodeBorders(layout: GraphLayout, label: string) {
     const rectsByRef = nodeRectByRef(layout)
+
+    function assertEndpoint(point: { x: number; y: number }, ref: string, edgeKeyStr: string, which: "start" | "end") {
+        const rect = rectsByRef.get(ref)
+        expect(rect, `${label}: no node rect for ${ref}`).toBeDefined()
+        const distance = distanceToRectBorder(point, rect!)
+        expect(
+            distance,
+            `${label}: edge ${edgeKeyStr} ${which} point ${JSON.stringify(point)} is ${distance}px from ${ref}'s border ${JSON.stringify(rect)}`,
+        ).toBeLessThanOrEqual(0.5)
+        expect(
+            clearsRoundedCorner(point, rect!, NODE_RX),
+            `${label}: edge ${edgeKeyStr} ${which} point ${JSON.stringify(point)} is inside ${ref}'s rounded corner cut (rx=${NODE_RX}) ${JSON.stringify(rect)}`,
+        ).toBe(true)
+    }
+
     for (const edge of layout.edges) {
         const points = parsePathPoints(edge.path)
         const first = points[0]
         const last = points[points.length - 1]
-        const fromRect = rectsByRef.get(edge.fromRef)
-        const toRect = rectsByRef.get(edge.toRef)
-        expect(fromRect, `${label}: no node rect for fromRef ${edge.fromRef}`).toBeDefined()
-        expect(toRect, `${label}: no node rect for toRef ${edge.toRef}`).toBeDefined()
-        const fromDistance = distanceToRectBorder(first, fromRect!)
-        const toDistance = distanceToRectBorder(last, toRect!)
-        expect(
-            fromDistance,
-            `${label}: edge ${edgeKey(edge)} start point ${JSON.stringify(first)} is ${fromDistance}px from ${edge.fromRef}'s border ${JSON.stringify(fromRect)}`,
-        ).toBeLessThanOrEqual(0.5)
-        expect(
-            toDistance,
-            `${label}: edge ${edgeKey(edge)} end point ${JSON.stringify(last)} is ${toDistance}px from ${edge.toRef}'s border ${JSON.stringify(toRect)}`,
-        ).toBeLessThanOrEqual(0.5)
+        assertEndpoint(first, edge.fromRef, edgeKey(edge), "start")
+        assertEndpoint(last, edge.toRef, edgeKey(edge), "end")
     }
 }
 
@@ -202,7 +245,7 @@ function makeDependencies(parentCount: number, childCount: number): CalculationD
     return deps
 }
 
-describe.each([1, 2, 3, 4])("wide layout, %i parent(s) and %i child(ren) each", (n) => {
+describe.each([1, 2, 3, 4])("wide layout, N=%i siblings per tier", (n) => {
     for (const [parentCount, childCount] of [[n, 0], [0, n], [n, n]] as const) {
         it(`no path segment intersects any label rect (parents=${parentCount}, children=${childCount})`, () => {
             const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
@@ -233,7 +276,7 @@ describe.each([1, 2, 3, 4])("wide layout, %i parent(s) and %i child(ren) each", 
     }
 })
 
-describe.each([1, 2, 3, 4])("narrow layout, %i parent(s) and %i child(ren) each", (n) => {
+describe.each([1, 2, 3, 4])("narrow layout, N=%i siblings per tier", (n) => {
     for (const [parentCount, childCount] of [[n, 0], [0, n], [n, n]] as const) {
         it(`no path segment intersects any label rect (parents=${parentCount}, children=${childCount})`, () => {
             const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))

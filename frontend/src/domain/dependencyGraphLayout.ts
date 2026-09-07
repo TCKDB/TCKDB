@@ -147,6 +147,13 @@ const CHAR_W = 7.5
 const NODE_MIN_W = 140
 const NODE_PAD_X = 24
 const NODE_H = 40
+// `rx` on every node's own `<rect>` (`CalculationDependencyGraph.tsx`'s
+// `DependencyGraphNode`, which imports this constant rather than
+// hard-coding its own copy). Exported so `centreHeightFor` below can
+// reserve room for it: a point sitting exactly ON the flat half-height
+// line lands INSIDE the rounded corner's cut, not on the actual drawn
+// border, once it's within `rx` of a corner.
+export const NODE_RX = 8
 
 // Edge labels AND the centre node's type pill: `--type-label-font` /
 // `--type-label-strong-font` (both .72rem/11.52px IBM Plex Mono,
@@ -164,11 +171,22 @@ const LABEL_H = 18
 const PILL_H = 18
 
 // Centre node: padding, the pill, a gap, then the ref line.
-const CENTRE_PAD_TOP = 10
+// Exported alongside `CENTRE_H` so a test can independently compute the
+// pill+ref content block's own top/bottom edges (`CalculationDependency
+// Graph.tsx`'s `contentTop = top + (node.height - CENTRE_H) / 2`, then
+// `pillY = contentTop + CENTRE_PAD_TOP`) without re-deriving the same
+// formula it is meant to be checking.
+export const CENTRE_PAD_TOP = 10
 const CENTRE_PILL_GAP = 8
 const CENTRE_REF_LINE_H = 24
 const CENTRE_PAD_BOTTOM = 12
-const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
+// Exported so `CalculationDependencyGraph.tsx` can vertically CENTRE the
+// pill+ref content block inside a centre node taller than this base
+// height (the narrow layout grows the centre node past `CENTRE_H` to fit
+// staggered lane entries -- see `centreHeightFor` -- but the content
+// itself never grows, so it has to be re-centred in the extra room
+// rather than staying pinned to the top).
+export const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
 
 function nodeWidth(ref: string): number {
     return Math.max(NODE_MIN_W, Math.round(ref.length * CHAR_W) + NODE_PAD_X)
@@ -436,12 +454,18 @@ const NARROW_ENTRY_STAGGER = LABEL_H + 2
 /** The centre node's own height in the narrow layout -- at least the
  * base `CENTRE_H` (room for the pill + ref line), but grown so the
  * farthest staggered entry/exit point (`NARROW_ENTRY_STAGGER *
- * maxLaneCount` from `centreCenterY`) still lands AT OR WITHIN the box's
- * own half-height, never outside it. `maxLaneCount` is the more loaded
- * side (parents or children) -- the OTHER side's points, staggered by
- * the same step, are then automatically within bounds too. */
+ * maxLaneCount` from `centreCenterY`) lands ON THE DRAWN BORDER, not
+ * just within the box's flat half-height. `+ 2 * NODE_RX` reserves a
+ * margin on each side for the rounded corner (`rx={NODE_RX}` on the
+ * rendered `<rect>`) -- MEASURED (post-review): the previous formula put
+ * the deepest lane's point exactly AT the half-height line, which is
+ * INSIDE the corner's rounded cut, not on the rect's actual path; the
+ * point sat 3.31px off the rounded border's centreline, visibly short of
+ * the arc at 4x zoom. `maxLaneCount` is the more loaded side (parents or
+ * children) -- the OTHER side's points, staggered by the same step, are
+ * then automatically within bounds too. */
 function centreHeightFor(maxLaneCount: number): number {
-    return Math.max(CENTRE_H, NARROW_ENTRY_STAGGER * maxLaneCount * 2)
+    return Math.max(CENTRE_H, NARROW_ENTRY_STAGGER * maxLaneCount * 2 + 2 * NODE_RX)
 }
 
 export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
@@ -547,8 +571,9 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
             // see the section docstring above: this is what keeps a
             // parent's lane-1 stub and a child's lane-1 stub, which
             // otherwise share both `laneX` and `centreCenterY`, from
-            // coinciding. Always within the centre box's own half-height
-            // (`centreHeightFor` sized the box for exactly this).
+            // coinciding. Always ON the centre box's own rounded border,
+            // clear of the corner's cut (`centreHeightFor` sized the box,
+            // margin for `NODE_RX` included, for exactly this).
             const entryY = centreCenterY - NARROW_ENTRY_STAGGER * parentLane
             const path = `M ${rightEdgeX} ${nodeY} L ${laneX} ${nodeY} L ${laneX} ${entryY} L ${rightEdgeX} ${entryY}`
             const width = smallTextBoxWidth(edge.label)
