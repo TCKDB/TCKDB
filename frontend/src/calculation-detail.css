@@ -76,32 +76,6 @@
    `evidenceChecklist.css.test.ts` guards this file staying empty of a
    second declaration. */
 
-/* One sentence per row, replacing the old Relationship/Role/Related-
-   calculation table -- see `dependencySentence`'s own docstring in
-   CalculationDetailPage.tsx for the "reads backwards" finding this
-   replaces. Prose (`--type-body`), not raw data -- only the calculation
-   ref link inside each sentence is a `.data` run. */
-.dependency-sentences {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-3);
-    margin: var(--s-4) 0 0;
-    padding: 0;
-    list-style: none;
-    font: var(--type-body-font);
-    color: var(--ink-2);
-}
-
-/* MEASURED (SHOULD-FIX-4, "record-page residuals" re-review): 87
-   characters per line, no cap -- each row is a genuine sentence
-   ("Coarse pass; refined by <ref>."), the same "readable prose measure"
-   case `--measure-note` exists for. */
-.dependency-sentences li {
-    max-width: var(--measure-note);
-}
-
-.dependency-sentences a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
-
 /* `.section-note` stays defined here -- it is NOT retired from this file,
    even though `CalculationDetailPage.tsx`'s OWN markup now uses `.note`
    (`design-system.css`) everywhere it used to use this class (see item 9
