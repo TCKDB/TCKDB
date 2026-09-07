@@ -74,3 +74,32 @@ export function scientificText(value: number): string {
     const mantissa = value / Math.pow(10, exponent)
     return `${mantissa.toFixed(4)}×10${superscript(exponent)}`
 }
+
+/** Same magnitude threshold `domain/quantityFormat.ts`'s own `scientific()` uses ([1e-2, 1e4)). */
+const PLAIN_MAGNITUDE_MIN = 1e-2
+const PLAIN_MAGNITUDE_MAX = 1e4
+
+/**
+ * A/n/Ea render as the RAW served number, string-for-string, EXCEPT when
+ * the magnitude falls outside `[1e-2, 1e4)` -- a live `A` on the
+ * `per_s`-order unimolecular route rendered as a bare 10-digit integer
+ * ("9444750000"), unreadable next to k(T) values the SAME record's own
+ * table already renders in scientific notation (`scientificText` above).
+ *
+ * Deliberately NOT `domain/quantityFormat.ts`'s `scientific()`/`fixed()`:
+ * those round every value to N significant figures even inside the plain
+ * range (`toPrecision(digits)` unconditionally), which would break this
+ * page's own "every served number renders string-equal to the payload"
+ * contract for the ordinary case (`ReactionEntryPage.test.tsx`'s DOM-vs-
+ * payload identity tests) -- a moderate A like 3025.44 must keep
+ * rendering as exactly "3025.44", never rounded to "3030". Only the
+ * OUTSIDE-the-plain-range case reaches `scientificText`, matching how the
+ * k(T) column already formats an extreme value.
+ */
+export function formatArrheniusValue(value: number): string {
+    const magnitude = Math.abs(value)
+    if (magnitude !== 0 && (magnitude >= PLAIN_MAGNITUDE_MAX || magnitude < PLAIN_MAGNITUDE_MIN)) {
+        return scientificText(value)
+    }
+    return String(value)
+}

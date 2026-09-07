@@ -133,7 +133,28 @@ describe("ReactionOverviewPage", () => {
         expect(refCode.tagName).toBe("CODE")
         const cell = refCode.closest("td")!
         expect(cell.querySelector(".copy-button")).not.toBeNull()
-        expect(cell.textContent).toContain("Z isomer")
+        expect(cell.textContent).toContain("(Z isomer)")
+    })
+
+    // Round-2 review finding: the between-participant separator ("·") and
+    // the stereo-chip's own separator were the SAME glyph, so a two-
+    // product cell read "H2 ... · H2N2 ... · Z isomer" -- "Z isomer"
+    // looked like a THIRD product rather than a label on H2N2. Asserting
+    // the exact cell text (not just `.toContain`) proves the chip is
+    // parenthesised and therefore distinguishable from the participant
+    // separator, which uses the same "·" character either way.
+    it("the products cell text is unambiguous: the stereo chip never reads as a third product", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+        const rows = screen.getAllByRole("row").slice(1)
+        const productsCell = rows[0].querySelector('td[data-label="Products"]')!
+        // Exactly TWO "·" characters would appear if the chip used the same
+        // separator as a genuine third participant; there must be only ONE
+        // (the real reactant/product separator), with the label parenthesised.
+        const dotCount = (productsCell.textContent!.match(/·/g) ?? []).length
+        expect(dotCount).toBe(1)
+        expect(productsCell.textContent).toContain("(Z isomer)")
     })
 
     it("the identity header carries the record's own Equation (as deposited) fact", async () => {

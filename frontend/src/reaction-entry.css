@@ -89,3 +89,16 @@
 .kinetics-k-table {
     min-width: 28rem;
 }
+
+/* `.data-table th` (design-system.css) uppercases every header via
+   `--type-label-strong-transform` -- correct for an ordinary column
+   name, but MEASURED (post-review round 2) to render this table's own
+   "k (cm³ mol⁻¹ s⁻¹)" header as "K (CM³ MOL⁻¹ S⁻¹)", indistinguishable
+   from the adjacent "T (K)" column and silently reintroducing the exact
+   ambiguity round 1's fix (naming the unit) was meant to remove -- a
+   textContent-only test cannot see this, since the rendered TEXT node is
+   still lowercase; only the computed style differs. Scoped to this one
+   table only, never a page-wide override of the shared primitive. */
+.kinetics-k-table th {
+    text-transform: none;
+}

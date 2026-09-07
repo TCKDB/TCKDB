@@ -138,7 +138,7 @@ export function deriveKineticsLevelsFallback(
         } else if (provenance.primary_level_of_theory) {
             energy = provenance.primary_level_of_theory
             energySource = "sp"
-            energyFallbackNote = `This record's own cited single-point calculation (${provenance.ts_sp_calculation_ref}) is not among this page's known calculations -- Energy above is this record's primary level of theory, a best-effort substitute, not a directly resolved single-point level.`
+            energyFallbackNote = `This record's own cited single-point calculation (${provenance.ts_sp_calculation_ref}) is not among this page's known calculations — Energy above is this record's primary level of theory, a best-effort substitute, not a directly resolved single-point level.`
         } else if (geometry) {
             energy = geometry
             energySource = "opt"

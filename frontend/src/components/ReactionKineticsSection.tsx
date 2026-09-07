@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom"
 import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
-import { computeKineticsTable, log10Text, scientificText } from "../domain/kineticsTable"
+import { computeKineticsTable, formatArrheniusValue, log10Text, scientificText } from "../domain/kineticsTable"
 import { EvidenceChecklist } from "./EvidenceChecklist"
 import { ProductLevelsFact } from "./ProductLevels"
 import { resolveProductLevels } from "../domain/productLevels"
@@ -177,13 +177,13 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 <div><dt>Origin</dt><dd>{token(record.scientific_origin)}</dd></div>
                 <div><dt>Review</dt><dd><span className={reviewPillClass(record.review.status)}>{token(record.review.status)}</span></dd></div>
                 {record.parameters.A != null && (
-                    <div><dt>A</dt><dd><code className="data">{record.parameters.A} {unitLabel}</code></dd></div>
+                    <div><dt>A</dt><dd><code className="data">{formatArrheniusValue(record.parameters.A)} {unitLabel}</code></dd></div>
                 )}
                 {record.parameters.n != null && (
-                    <div><dt>n</dt><dd><code className="data">{record.parameters.n}</code></dd></div>
+                    <div><dt>n</dt><dd><code className="data">{formatArrheniusValue(record.parameters.n)}</code></dd></div>
                 )}
                 {record.parameters.Ea_kj_mol != null && (
-                    <div><dt>Ea</dt><dd><code className="data">{record.parameters.Ea_kj_mol} kJ/mol</code></dd></div>
+                    <div><dt>Ea</dt><dd><code className="data">{formatArrheniusValue(record.parameters.Ea_kj_mol)} kJ/mol</code></dd></div>
                 )}
                 {tRange && <div><dt>Fitted T range</dt><dd><code className="data">{tRange}</code></dd></div>}
                 {uncertaintyText && <div><dt>Uncertainty</dt><dd>{uncertaintyText}</dd></div>}

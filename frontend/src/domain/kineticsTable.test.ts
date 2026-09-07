@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { arrheniusTermK, computeKineticsTable, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
+import { arrheniusTermK, computeKineticsTable, formatArrheniusValue, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
 
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300–3000 K --
 // `kin_spkzatwjlvmmnja3i5im4fl7hq`'s own live values, independently
@@ -91,5 +91,42 @@ describe("log10Text / scientificText", () => {
     it("scientificText renders a mantissa × 10^exponent with unicode superscripts", () => {
         expect(scientificText(17028.619287800688)).toBe("1.7029×10⁴")
         expect(scientificText(40467390077148.48)).toBe("4.0467×10¹³")
+    })
+})
+
+// Round-2 review finding: a live `A` (per_s-order, `rxe_snamm...`) rendered
+// as a bare 10-digit integer ("9444750000") -- unreadable next to the same
+// record's own k(T) column, which already uses scientific notation.
+describe("formatArrheniusValue", () => {
+    it("renders a LARGE value (>= 1e4) in scientific notation, matching the k(T) column's own format", () => {
+        expect(formatArrheniusValue(9444750000)).toBe(scientificText(9444750000))
+        expect(formatArrheniusValue(9444750000)).toBe("9.4448×10⁹")
+        expect(formatArrheniusValue(9444750000)).not.toContain("9444750000")
+    })
+
+    it("renders a SMALL value (< 1e-2, nonzero) in scientific notation", () => {
+        expect(formatArrheniusValue(0.00234)).toBe(scientificText(0.00234))
+        expect(formatArrheniusValue(0.00234)).toBe("2.3400×10⁻³")
+    })
+
+    it("leaves an ordinary-magnitude value EXACTLY as served -- never rounded, never notated", () => {
+        // The exact case `ReactionEntryPage.test.tsx`'s DOM-vs-payload
+        // identity test pins: A = 3025.44 must still render as the
+        // literal string "3025.44", not "3.0254×10³" or a rounded "3030".
+        expect(formatArrheniusValue(3025.44)).toBe("3025.44")
+        expect(formatArrheniusValue(3.11242)).toBe("3.11242")
+        expect(formatArrheniusValue(39.9711)).toBe("39.9711")
+    })
+
+    it("handles zero and negative values without throwing", () => {
+        expect(formatArrheniusValue(0)).toBe("0")
+        expect(formatArrheniusValue(-3025.44)).toBe("-3025.44")
+    })
+
+    it("boundary: exactly 1e4 and exactly 1e-2 (inclusive/exclusive per domain/quantityFormat.ts's own convention)", () => {
+        expect(formatArrheniusValue(9999)).toBe("9999") // just under 1e4 -- plain
+        expect(formatArrheniusValue(10000)).toBe(scientificText(10000)) // >= 1e4 -- scientific
+        expect(formatArrheniusValue(0.01)).toBe("0.01") // exactly 1e-2 -- plain (not < 1e-2)
+        expect(formatArrheniusValue(0.0099)).toBe(scientificText(0.0099)) // < 1e-2 -- scientific
     })
 })

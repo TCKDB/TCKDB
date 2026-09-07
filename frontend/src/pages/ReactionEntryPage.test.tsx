@@ -467,6 +467,29 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
 })
 
 describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table formatting", () => {
+    // Round-2 review finding: A=9444750000 (the live `rxe_snamm...` route)
+    // rendered as a bare 10-digit integer -- fixed via `formatArrheniusValue`.
+    it("a large A renders in scientific notation, never as a bare 10-digit integer", async () => {
+        const record = kineticsRecordFixture(undefined)
+        record.parameters = { A: 9444750000, A_units: "per_s", n: 0, Ea_kj_mol: 0 }
+        handleFull(mockFull({ kinetics: [record] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const aRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "A")
+        expect(aRow?.nextElementSibling?.textContent).toContain("9.4448×10⁹")
+        expect(aRow?.nextElementSibling?.textContent).not.toContain("9444750000")
+    })
+
+    it("a small A renders in scientific notation too", async () => {
+        const record = kineticsRecordFixture(undefined)
+        record.parameters = { A: 0.00234, A_units: "cm3_mol_s", n: 0, Ea_kj_mol: 0 }
+        handleFull(mockFull({ kinetics: [record] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const aRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "A")
+        expect(aRow?.nextElementSibling?.textContent).toContain("2.3400×10⁻³")
+    })
+
     it("evidence completeness rows render prose labels, not raw API keys", async () => {
         handleFull(mockFull())
         const { container } = page()
@@ -494,6 +517,26 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         await screen.findByText("kin_test1")
         const headers = Array.from(container.querySelectorAll(".kinetics-k-table thead th")).map((th) => th.textContent)
         expect(headers).toEqual(["T (K)", "k (cm³ mol⁻¹ s⁻¹)", "log₁₀ k"])
+    })
+
+    // Round-2 review finding: `.data-table th` (design-system.css)
+    // uppercases every header via `text-transform`, which rendered this
+    // table's "k (cm³ mol⁻¹ s⁻¹)" header as "K (CM³ MOL⁻¹ S⁻¹)" -- visually
+    // indistinguishable from "T (K)" -- even though the underlying
+    // `textContent` (asserted above) was already correctly lowercase.
+    // `vite.config.ts`'s `test.css: true` makes `getComputedStyle` honor
+    // real stylesheet rules in this test environment, so this checks the
+    // COMPUTED style, not just the DOM text a CSS-blind assertion cannot
+    // distinguish from a visually-broken render.
+    it("the k(T) table header is NOT uppercased -- 'k' must render lowercase, not as 'K'", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const headers = Array.from(container.querySelectorAll(".kinetics-k-table thead th"))
+        expect(headers).toHaveLength(3)
+        for (const th of headers) {
+            expect(getComputedStyle(th).textTransform).toBe("none")
+        }
     })
 
     it("Fit software with no recorded version says so explicitly, matching the mock's own wording", async () => {
