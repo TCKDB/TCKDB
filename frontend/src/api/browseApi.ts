@@ -20,15 +20,19 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 // ---------------------------------------------------------------------------
 
 /**
- * The three record kinds a reader can browse. "species" and "vdw" both hit
+ * The four record kinds a reader can browse. "species" and "vdw" both hit
  * `/species/browse` -- they differ only in the `species_entry_kind` value
  * baked into the query (`minimum` vs `vdw_complex`, see
  * `StationaryPointKind` in `app/db/models/common.py`); "transition_state"
  * hits the sibling `/transition-states/browse` endpoint, whose row shape is
  * genuinely different (no formula -- a transition state is identified by
- * the reaction it connects, not a molecular graph).
+ * the reaction it connects, not a molecular graph). "reaction" hits
+ * `/reactions/browse` (PR 4b) -- rows carry reactant/product participants
+ * (with formula and stoichiometry) and availability flags
+ * (`has_kinetics`/`has_transition_state`) rather than a single molecular
+ * graph or a linked TS.
  */
-export const BROWSE_KINDS = ["species", "vdw", "transition_state"] as const
+export const BROWSE_KINDS = ["species", "vdw", "transition_state", "reaction"] as const
 export type BrowseKind = (typeof BROWSE_KINDS)[number]
 export const DEFAULT_BROWSE_KIND: BrowseKind = "species"
 
@@ -40,6 +44,7 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
     species: "Species",
     vdw: "Van der Waals complex",
     transition_state: "Transition state",
+    reaction: "Reaction",
 }
 
 // ---------------------------------------------------------------------------
@@ -120,8 +125,26 @@ export type BrowseFilters = {
     // these narrow through that reaction instead. `participantSmiles` is
     // ONE field matching either side (reactant or product); `family` is an
     // exact match against `/meta/reaction-families`' bounded vocabulary.
+    // `family` is SHARED with the "reaction" kind below (both narrow
+    // through the same reaction-family vocabulary) -- it is the one field
+    // that survives a switch between "transition_state" and "reaction",
+    // see `clearInapplicableFilters`.
     participantSmiles: string
     family: string
+
+    // Reaction-only filters (PR 4b): `/reactions/browse` has no charge,
+    // multiplicity, or provenance axis of its own (a reaction is not a
+    // single calculation owner the way a species or transition state is --
+    // measured against the live endpoint, which accepts exactly `family,
+    // reactant_smiles, product_smiles, has_kinetics, has_transition_state,
+    // min_review_status, include_rejected, include_deprecated, offset,
+    // limit`). `reactantSmiles`/`productSmiles` are two separate exact-match
+    // fields (unlike the TS kind's one merged `participantSmiles`) because
+    // the backend filter itself is side-specific.
+    reactantSmiles: string
+    productSmiles: string
+    hasKinetics: EvidenceFlagState
+    hasTransitionState: EvidenceFlagState
 }
 
 export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
@@ -131,6 +154,7 @@ export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
     status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
     hasOpt: "", hasFreq: "", hasSp: "", hasIrc: "", hasPathSearch: "", hasGeometryValidation: "", hasScfStability: "",
     participantSmiles: "", family: "",
+    reactantSmiles: "", productSmiles: "", hasKinetics: "", hasTransitionState: "",
 }
 
 const COMPOSITION_DEFAULTS = {
@@ -146,31 +170,65 @@ const COMPOSITION_DEFAULTS = {
  * both accept all six (see `buildSpeciesBrowseQuery` /
  * `buildTransitionStateBrowseQuery`) -- so they are only ever cleared
  * explicitly by a reader picking "Any", never by `clearInapplicableFilters`
- * on a kind switch.
+ * on a kind switch. `participantSmiles` (item 4's TS-only findability
+ * field) is here too, but `family` is NOT -- `family` is shared with the
+ * "reaction" kind below (see `FAMILY_DEFAULT`'s own comment).
  */
 const EVIDENCE_DEFAULTS = {
     status: "",
     hasOpt: "" as EvidenceFlagState, hasFreq: "" as EvidenceFlagState, hasSp: "" as EvidenceFlagState, hasIrc: "" as EvidenceFlagState,
     hasPathSearch: "" as EvidenceFlagState, hasGeometryValidation: "" as EvidenceFlagState, hasScfStability: "" as EvidenceFlagState,
-    // TS-only findability filters (item 4) -- cleared the same way `status`
-    // and the seven `has_*` flags above are, on a switch AWAY from
-    // "transition_state".
-    participantSmiles: "", family: "",
+    participantSmiles: "",
 }
+
+/** Reaction-only filters (PR 4b) -- cleared on a switch away from "reaction". See `BrowseFilters.reactantSmiles`'s own comment for why these have no provenance/composition counterpart. */
+const REACTION_ONLY_DEFAULTS = {
+    reactantSmiles: "", productSmiles: "",
+    hasKinetics: "" as EvidenceFlagState, hasTransitionState: "" as EvidenceFlagState,
+}
+
+/**
+ * `family` alone, cleared only on a switch to "species"/"vdw" (neither
+ * narrows by reaction family at all). Kept OUT of both `EVIDENCE_DEFAULTS`
+ * and `REACTION_ONLY_DEFAULTS` because `family` is the one field shared
+ * between "transition_state" and "reaction" -- both narrow through
+ * `/meta/reaction-families`' same bounded vocabulary (see
+ * `TransitionStateFindabilityFields`'s and the reaction kind's own family
+ * dropdown) -- so a value typed while on one of those two kinds must
+ * survive a switch to the OTHER, not just to itself.
+ */
+const FAMILY_DEFAULT = { family: "" }
 
 /**
  * Drops whichever half of the flat `BrowseFilters` shape does not apply to
  * `kind`, leaving the shared fields (and the six provenance fields, which
- * apply to every kind) untouched. Called on every kind switch so the FORM
- * (not just the outgoing request) stops showing a filter that can no
- * longer take effect -- a composition filter surviving a switch to
- * "Transition state" would look active while doing nothing, and a stale
- * `has_*`/`status` value surviving a switch back to "Species" would
- * silently do nothing there either.
+ * apply to species/vdw/transition_state but NOT reaction) untouched.
+ * Called on every kind switch so the FORM (not just the outgoing request)
+ * stops showing a filter that can no longer take effect -- a composition
+ * filter surviving a switch to "Transition state" would look active while
+ * doing nothing, and a stale `has_*`/`status` value surviving a switch back
+ * to "Species" would silently do nothing there either.
  */
+// Review follow-up (round 2), decision recorded here rather than left
+// implicit: the six provenance fields are NOT added to any defaults group
+// above, so a value set while on species/vdw/transition_state survives a
+// switch through "reaction" (where the fields are hidden and inert, see
+// `BrowseFilterForm`'s own `!isReaction` guards) and re-applies the moment
+// the reader switches to a kind that reads them again. Chose to PRESERVE
+// this round-trip rather than carve out a reaction-specific clear: the
+// module's own established rule for these six fields (see
+// `EVIDENCE_DEFAULTS`'s doc comment, "only ever cleared explicitly by a
+// reader picking 'Any', never by a kind switch") already applies uniformly
+// across every kind pair today, and a reaction-only exception would make
+// this function's contract depend on WHICH kind a value is hidden by,
+// not just whether it is currently visible -- a real ("Method" narrows the
+// SAME calculations regardless of which browse kind is currently
+// selected) but genuinely debatable trade-off; see the PR body for the
+// alternative considered and why it was not taken.
 export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilters): BrowseFilters {
-    if (kind === "transition_state") return { ...filters, ...COMPOSITION_DEFAULTS }
-    return { ...filters, ...EVIDENCE_DEFAULTS }
+    if (kind === "transition_state") return { ...filters, ...COMPOSITION_DEFAULTS, ...REACTION_ONLY_DEFAULTS }
+    if (kind === "reaction") return { ...filters, ...COMPOSITION_DEFAULTS, ...EVIDENCE_DEFAULTS }
+    return { ...filters, ...EVIDENCE_DEFAULTS, ...REACTION_ONLY_DEFAULTS, ...FAMILY_DEFAULT }
 }
 
 /**
@@ -182,14 +240,23 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
  * back empty -- counting them as "active" made the empty-state copy claim a
  * widening toggle had narrowed the archive to zero, which is backwards.
  *
- * The six provenance fields count as active on EVERY kind, not just
- * "transition_state" -- `/species/browse` answers all six (see
- * `buildSpeciesBrowseQuery`), so a species query with only `method` set is
- * a real narrowing filter, and reporting it as "nothing active" would make
- * the empty state claim "nothing of this kind has been deposited" when the
- * true reason is that the filters excluded everything.
+ * The six provenance fields count as active on species/vdw/transition_state
+ * -- `/species/browse` answers all six (see `buildSpeciesBrowseQuery`), so
+ * a species query with only `method` set is a real narrowing filter, and
+ * reporting it as "nothing active" would make the empty state claim
+ * "nothing of this kind has been deposited" when the true reason is that
+ * the filters excluded everything. "reaction" is handled in its own
+ * branch, FIRST, because none of charge/multiplicity/the six provenance
+ * fields apply to `/reactions/browse` at all (see `BrowseFilters.
+ * reactantSmiles`'s comment) -- falling through to the shared/provenance
+ * checks below for that kind would report a stale species-scoped `method`
+ * value as an active reaction filter when it does nothing on the wire.
  */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
+    if (kind === "reaction") {
+        return filters.minReviewStatus !== "" || filters.family !== "" || filters.reactantSmiles !== ""
+            || filters.productSmiles !== "" || filters.hasKinetics !== "" || filters.hasTransitionState !== ""
+    }
     const sharedActive = filters.charge !== "" || filters.multiplicity !== "" || filters.minReviewStatus !== ""
     if (sharedActive) return true
     const provenanceActive = filters.method !== "" || filters.basis !== "" || filters.software !== ""
@@ -317,6 +384,34 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
     return query
 }
 
+/**
+ * `/scientific/reactions/browse` (PR 4b, §3D of the plan) -- deliberately
+ * NOT built on `sharedQueryParams`: that helper sends charge, multiplicity,
+ * and the six provenance params, none of which this endpoint accepts
+ * (verified live -- `GET /reactions/browse` answers exactly `family,
+ * reactant_smiles, product_smiles, has_kinetics, has_transition_state,
+ * min_review_status, include_rejected, include_deprecated, offset, limit`).
+ * Sending an inapplicable param would not 422 (the route ignores unknown
+ * query keys) but would silently do nothing, which is the same "looks
+ * active while doing nothing" failure `clearInapplicableFilters` exists to
+ * prevent for the FORM -- this function is the matching guarantee for the
+ * REQUEST.
+ */
+export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
+    const query = new URLSearchParams()
+    if (filters.family !== "") query.set("family", filters.family)
+    if (filters.reactantSmiles !== "") query.set("reactant_smiles", filters.reactantSmiles)
+    if (filters.productSmiles !== "") query.set("product_smiles", filters.productSmiles)
+    if (filters.hasKinetics !== "") query.set("has_kinetics", filters.hasKinetics)
+    if (filters.hasTransitionState !== "") query.set("has_transition_state", filters.hasTransitionState)
+    if (filters.minReviewStatus !== "") query.set("min_review_status", filters.minReviewStatus)
+    if (filters.includeRejected) query.set("include_rejected", "true")
+    if (filters.includeDeprecated) query.set("include_deprecated", "true")
+    query.set("offset", String(offset))
+    query.set("limit", String(limit))
+    return query
+}
+
 // ---------------------------------------------------------------------------
 // Response schemas
 // ---------------------------------------------------------------------------
@@ -405,6 +500,68 @@ const transitionStateBrowseResponseSchema = z.object({
     pagination: paginationSchema,
 }).passthrough()
 
+/**
+ * `/reactions/browse` row shape (PR 4b), measured live 2026-09-07 against
+ * `GET /scientific/reactions/browse?limit=2`. FLAT, unlike the
+ * `transition_state`/`reaction` split `TransitionStateBrowseRecord` nests
+ * (`transitionStateEntryCoreSchema`/`transitionStateCoreSchema`/
+ * `reactionContextSchema`) -- there is no separate "reaction" vs "reaction
+ * entry" sub-object on this row; `reaction_ref` and `reaction_entry_ref`
+ * sit alongside every other field at the top level. `reactants`/`products`
+ * reuse the same participant shape `reactionEquation.ts`'s
+ * `EquationParticipantInput` already expects (`species_entry_ref`,
+ * `species_entry_label`, `smiles`, `formula`, `stoichiometry`,
+ * `participant_index`), so `ReactionBrowseRow` can feed them into
+ * `ReactionEquation` with no reshaping.
+ */
+const reactionParticipantSchema = z.object({
+    species_entry_ref: z.string(),
+    species_entry_label: z.string().nullable().optional(),
+    smiles: z.string(),
+    formula: z.string().nullable().optional(),
+    stoichiometry: z.number(),
+    participant_index: z.number(),
+}).passthrough()
+
+const reactionAvailabilitySchema = z.object({
+    has_kinetics: z.boolean(),
+    has_transition_state: z.boolean(),
+    has_path_search: z.boolean().optional(),
+    has_atom_map: z.boolean().optional(),
+    kinetics_count: z.number().optional(),
+}).passthrough()
+
+export const reactionBrowseRecordSchema = z.object({
+    reaction_ref: z.string(),
+    reaction_entry_ref: z.string(),
+    equation: z.string().nullable().optional(),
+    // Review follow-up (round 2): served on every row (measured live,
+    // present even with no smiles filter applied, where it is always
+    // "forward") but previously dropped on the floor. "reverse" means the
+    // participant a reactant/product SMILES search matched sits on the
+    // OPPOSITE side from where the query named it -- e.g. `product_smiles=O`
+    // matching `rxe_ed66mj3ohtyien5rm2x3sb3rdu` ("O + [CH3] <=> C + [OH]",
+    // water on the REACTANT side) because the reaction is reversible and
+    // the search considered both directions. Optional/nullable so an
+    // older or pre-deployment response that never served this field parses
+    // without claiming a direction the archive never asserted -- see
+    // `ReactionBrowseRow.tsx`'s own rendering rule for the absent-vs-null
+    // distinction this preserves.
+    matched_direction: z.string().nullable().optional(),
+    reversible: z.boolean(),
+    family: z.string().nullable().optional(),
+    review: recordReviewSchema,
+    reactants: z.array(reactionParticipantSchema),
+    products: z.array(reactionParticipantSchema),
+    availability: reactionAvailabilitySchema,
+}).passthrough()
+export type ReactionBrowseRecord = z.infer<typeof reactionBrowseRecordSchema>
+
+const reactionBrowseResponseSchema = z.object({
+    records: z.array(reactionBrowseRecordSchema),
+    pagination: paginationSchema,
+}).passthrough()
+
 // ---------------------------------------------------------------------------
 // Loaders
 // ---------------------------------------------------------------------------
@@ -412,6 +569,7 @@ const transitionStateBrowseResponseSchema = z.object({
 export type BrowseResult =
     | { kind: "species" | "vdw"; records: SpeciesBrowseRecord[]; pagination: BrowsePagination }
     | { kind: "transition_state"; records: TransitionStateBrowseRecord[]; pagination: BrowsePagination }
+    | { kind: "reaction"; records: ReactionBrowseRecord[]; pagination: BrowsePagination }
 
 export async function loadBrowse(
     kind: BrowseKind, filters: BrowseFilters, offset: number, limit: number, signal?: AbortSignal,
@@ -420,6 +578,12 @@ export async function loadBrowse(
         const query = buildTransitionStateBrowseQuery(filters, offset, limit)
         const payload = await requestScientificJson(`/api/v1/scientific/transition-states/browse?${query}`, signal)
         const parsed = parseScientificResponse(transitionStateBrowseResponseSchema, payload, "transition state browse")
+        return { kind, records: parsed.records, pagination: parsed.pagination }
+    }
+    if (kind === "reaction") {
+        const query = buildReactionBrowseQuery(filters, offset, limit)
+        const payload = await requestScientificJson(`/api/v1/scientific/reactions/browse?${query}`, signal)
+        const parsed = parseScientificResponse(reactionBrowseResponseSchema, payload, "reaction browse")
         return { kind, records: parsed.records, pagination: parsed.pagination }
     }
     const query = buildSpeciesBrowseQuery(kind, filters, offset, limit)

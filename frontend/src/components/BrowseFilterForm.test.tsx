@@ -418,8 +418,17 @@ const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
 // (as `describe`s above all render with kind="transition_state") cannot
 // see: rendering correctly for TS while staying broken for the other two
 // would pass a suite that only ever mounts with TS.
-describe("the six provenance selects render on EVERY browse kind, not just transition state", () => {
-    for (const kind of BROWSE_KINDS) {
+//
+// "reaction" (PR 4b) is EXCLUDED from this loop, not silently swept in by
+// iterating `BROWSE_KINDS` -- `/reactions/browse` accepts none of charge,
+// multiplicity, or the six provenance params (measured live; see
+// `buildReactionBrowseQuery`'s own comment), so showing these selects for
+// that kind would be the exact "looks active while doing nothing" failure
+// this whole describe block exists to rule OUT for the other three kinds.
+// See the "reaction" describe block below for that kind's own inverse
+// assertion.
+describe("the six provenance selects render on EVERY browse kind that accepts them (species/vdw/transition_state)", () => {
+    for (const kind of BROWSE_KINDS.filter((value) => value !== "reaction")) {
         it(`kind="${kind}": all six provenance selects are present`, async () => {
             server.use(...metaHandlers())
             renderForm(kind)
@@ -777,5 +786,141 @@ describe("structure search mode gates its dependent controls", () => {
         // stale checked value.
         await user.selectOptions(screen.getByLabelText("Structure search mode"), "substructure")
         expect(screen.getByLabelText("Treat structure as SMARTS")).not.toBeChecked()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// PR 4b: the "reaction" browse kind's own findability/evidence fields.
+// `/reactions/browse` (measured live) has NO charge/multiplicity/
+// composition/provenance axis, so this kind's field set looks nothing like
+// the other three -- Reactant SMILES, Product SMILES, Family (shared
+// vocabulary with the TS kind), and a two-flag "Show only entries with..."
+// row (kinetics / a transition state).
+// ---------------------------------------------------------------------------
+
+const REACTION_ONLY_LABELS = ["Reactant SMILES", "Product SMILES"]
+const REACTION_EVIDENCE_LABELS = ["kinetics", "a transition state"]
+
+describe("reaction kind: its own findability and evidence fields render, the other kinds' do not", () => {
+    it('kind="reaction": Reactant SMILES, Product SMILES, Family, and the two evidence checkboxes are present', async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        for (const label of REACTION_ONLY_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+        expect(screen.getByLabelText("Family")).toBeInTheDocument()
+        for (const label of REACTION_EVIDENCE_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+    })
+
+    it('kind="reaction": Charge, Multiplicity, and all six provenance selects are ABSENT -- the endpoint accepts none of them', async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        expect(screen.queryByLabelText("Charge")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Multiplicity")).not.toBeInTheDocument()
+        for (const label of PROVENANCE_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+    })
+
+    it('kind="reaction": the species composition fields and the TS-only SMILES/evidence fields are ABSENT', async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        expect(screen.queryByLabelText("Formula")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Elements")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Structure (SMILES)")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("SMILES")).not.toBeInTheDocument() // TS's merged participant-SMILES field, distinct label from "Reactant/Product SMILES"
+        expect(screen.queryByLabelText("Status")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("optimization")).not.toBeInTheDocument() // TS's seven has_* checks
+    })
+
+    it('kind="reaction": Minimum review status, Include rejected, Include deprecated -- the three SHARED fields it does accept -- are present', async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        expect(screen.getByLabelText("Minimum review status")).toBeInTheDocument()
+        expect(screen.getByLabelText("Include rejected")).toBeInTheDocument()
+        expect(screen.getByLabelText("Include deprecated")).toBeInTheDocument()
+    })
+
+    it('kind="species"/"vdw"/"transition_state": none of Reactant SMILES, Product SMILES, or the reaction evidence checks render', async () => {
+        for (const kind of ["species", "vdw", "transition_state"] as const) {
+            server.use(...metaHandlers())
+            renderForm(kind)
+            await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+            for (const label of REACTION_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+            for (const label of REACTION_EVIDENCE_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+            cleanup()
+        }
+    })
+})
+
+describe("reaction kind: the Family select reuses the SAME vocabulary as the transition-state kind", () => {
+    it("lists only used families with readable display_name labels, exactly like the TS kind's own Family select", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        const family = await screen.findByLabelText("Family") as HTMLSelectElement
+        await waitFor(() => expect(family.querySelectorAll("option")).toHaveLength(3))
+        const optionTexts = [...family.querySelectorAll("option")].map((o) => o.textContent)
+        expect(optionTexts).toEqual(["Any", "Radical Addition Multiple Bond", "Hydrogen Abstraction"])
+        expect(screen.queryByText("Never Used Family")).not.toBeInTheDocument()
+    })
+
+    it("selecting a family by its display_name patches the underlying value", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="reaction" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-family={filters.family} data-testid="debug-family" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        await user.selectOptions(screen.getByLabelText("Family"), "Hydrogen Abstraction")
+        expect(screen.getByTestId("debug-family")).toHaveAttribute("data-family", "H_Abstraction")
+    })
+})
+
+describe("reaction kind: Reactant SMILES / Product SMILES are two independent fields, and the evidence checks patch their own field", () => {
+    it("typing into Reactant SMILES does not touch Product SMILES, and vice versa", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="reaction" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-product={filters.productSmiles} data-reactant={filters.reactantSmiles} data-testid="debug-smiles" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        await user.type(screen.getByLabelText("Reactant SMILES"), "CCO")
+        expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO")
+        expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "")
+        await user.type(screen.getByLabelText("Product SMILES"), "CC=O")
+        expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "CC=O")
+        expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO") // unchanged by the product field
+    })
+
+    it("ticking 'kinetics' patches hasKinetics to \"true\" without touching hasTransitionState; unticking clears it back to \"\"", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="reaction" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-has-kinetics={filters.hasKinetics} data-has-ts={filters.hasTransitionState} data-testid="debug-evidence" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        const checkbox = screen.getByLabelText("kinetics")
+        await user.click(checkbox)
+        expect(screen.getByTestId("debug-evidence")).toHaveAttribute("data-has-kinetics", "true")
+        expect(screen.getByTestId("debug-evidence")).toHaveAttribute("data-has-ts", "")
+
+        await user.click(checkbox)
+        expect(screen.getByTestId("debug-evidence")).toHaveAttribute("data-has-kinetics", "")
     })
 })

@@ -13,6 +13,7 @@ import type { BrowseFilters, BrowseKind } from "../api/browseApi"
 import { BrowseFilterForm } from "../components/BrowseFilterForm"
 import { BrowseKindSelector } from "../components/BrowseKindSelector"
 import { PageShell } from "../components/PageShell"
+import { ReactionBrowseRow } from "../components/ReactionBrowseRow"
 import { SpeciesBrowseRow } from "../components/SpeciesBrowseRow"
 import { TransitionStateBrowseRow } from "../components/TransitionStateBrowseRow"
 import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "../domain/browseEmptyState"
@@ -179,11 +180,15 @@ function BrowseResults({ kind, filters, offset, setOffset, state }: {
             {pagination.total} {pagination.total === 1 ? "record" : "records"} · showing {rangeStart}–{rangeEnd}
         </p>
         <ul className="browse-rows">
-            {result.kind === "transition_state"
-                ? result.records.map((record) => (
-                    <TransitionStateBrowseRow key={record.transition_state_entry.transition_state_entry_ref} record={record} />
-                ))
-                : result.records.map((record) => <SpeciesBrowseRow key={record.species_ref} record={record} />)}
+            {result.kind === "transition_state" && result.records.map((record) => (
+                <TransitionStateBrowseRow key={record.transition_state_entry.transition_state_entry_ref} record={record} />
+            ))}
+            {result.kind === "reaction" && result.records.map((record) => (
+                <ReactionBrowseRow key={record.reaction_entry_ref} record={record} />
+            ))}
+            {(result.kind === "species" || result.kind === "vdw") && result.records.map((record) => (
+                <SpeciesBrowseRow key={record.species_ref} record={record} />
+            ))}
         </ul>
         <div className="browse-pagination">
             <button disabled={offset === 0} onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))} type="button">

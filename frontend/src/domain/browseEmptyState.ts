@@ -4,6 +4,7 @@ const KIND_PLURAL: Record<BrowseKind, string> = {
     species: "species records",
     vdw: "van der Waals complexes",
     transition_state: "transition-state records",
+    reaction: "reaction entries",
 }
 
 /**
