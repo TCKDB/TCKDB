@@ -363,6 +363,34 @@ provenance and machine detail live on dedicated linked pages.
     change and an invariant that derives the rubric's role sets from
     the upload path's enforcement table, so the documentation cannot
     drift from the code again.
+29. Reactions get their pages. The reaction routes had been
+    placeholders since the first slice. They were planned in writing
+    first (`docs/plans/reaction-entry-page.md`), then built in five
+    pull requests: a static mock reviewed for design before any
+    product code (#397), additive read fields (#398), the entry page
+    and the identity chooser (#399), the Arrhenius chart (#401) and
+    the browse kind (#402), with a read-only `tckdb get reaction`
+    command alongside (#400). A reaction entry now reads as an
+    equation of formula links, its own reference inline, participants
+    by side, the evidence checklist, kinetics with the three levels of
+    theory and a k(T) curve over the fitted range, transition states
+    with their stage, network membership, and review. The identity
+    route chooses between deposits rather than merging them. The
+    backend work was additive only: formulas and stoichiometry on
+    participants, network membership on the composite, a browse route
+    that needs no filter, and the geometry level resolved through the
+    dependency edge from the cited frequency job -- without which that
+    level would have been empty on every record in the archive. Three
+    lessons came out of the reviews. A scoped fix does not travel: the
+    oversized stereochemistry chip fixed on the entry page came back
+    in the browse rows, because the rule was scoped to one page's
+    title and the browse page does not load that stylesheet. An
+    uppercase label style corrupts science: it rendered the rate
+    coefficient as a capital K and the unit per second as inverse
+    siemens, and a test asserting the text rather than the rendered
+    style saw neither. And demanding a mutation table per finding
+    turned nine survivors out of nineteen into zero out of twenty-six
+    on the same pull request.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
