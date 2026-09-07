@@ -1602,7 +1602,7 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                     {/* The sha256 is the artifact's identity — the storage URI (row.uri)
                                         is not a downloadable link, so this is the one stable handle for
                                         the bytes this row describes. */}
-                                    <td data-label="SHA-256"><code>{row.sha256}</code></td>
+                                    <td data-label="SHA-256"><code className="data">{row.sha256}</code></td>
                                 </tr>
                             ))}
                         </tbody>

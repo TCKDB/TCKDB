@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -257,6 +258,9 @@ class TestHappyPath:
         assert a["filename"] == "opt.log"
         assert a["created_by"] is not None
         assert a["note"] is None
+        # A depositor must be able to learn the citable ref from the upload
+        # response itself -- it used to be missing from this schema entirely.
+        assert re.fullmatch(r"art_[a-z2-7]{26}", a["public_ref"])
         assert _artifact_count_for(db_session, calc_id) == 1
 
         # DB row stores the same metadata.
@@ -277,6 +281,7 @@ class TestHappyPath:
         assert listed_body[0]["filename"] == "opt.log"
         assert listed_body[0]["created_by"] == a["created_by"]
         assert listed_body[0]["note"] is None
+        assert listed_body[0]["public_ref"] == a["public_ref"]
 
     def test_batch_of_multiple_artifacts(
         self, client, db_session, stub_store_artifact

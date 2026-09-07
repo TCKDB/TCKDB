@@ -3737,6 +3737,17 @@
             ],
             "title": "Note"
           },
+          "public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Public Ref"
+          },
           "sha256": {
             "maxLength": 64,
             "minLength": 64,

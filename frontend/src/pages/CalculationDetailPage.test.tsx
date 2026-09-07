@@ -1065,6 +1065,7 @@ describe("CalculationDetailPage", () => {
             expect(within(row).getByText("art_9f3k2q7m1x8h4v6c0b5n3z2y7t").tagName).toBe("CODE")
             expect(within(row).getByRole("button", { name: "Copy artifact ref" })).toBeVisible()
             expect(within(row).queryByText("no ref")).not.toBeInTheDocument()
+            expect(within(row).getByText("a".repeat(64))).toHaveClass("data")
         })
 
         it("reads a null artifact_ref as 'no ref', with no copy button", async () => {
