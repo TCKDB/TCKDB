@@ -138,12 +138,19 @@ export function levelsOfTheoryEqual(a: LevelOfTheory | null, b: LevelOfTheory | 
 
 /**
  * Whether `levels`' geometry, frequency and energy are all the SAME level
- * of theory — the collapse condition for the rendering rule: render one
- * "Level of theory: X" fact when true, three labelled facts
- * (Geometry/Frequencies/Energy) when false. All-three-`null` counts as
- * agreeing (there is one shared fact to state: "not recorded"), matching
- * the single-fact display this page already used before any of the three
- * was ever split out.
+ * of theory. Owner decision (2026-09): "I don't see the separation in LoT"
+ * retired the old rule that used this to COLLAPSE the display to one
+ * "Level of theory: X" fact — `ProductLevelsFact`/`ProductLevelsTableHead`/
+ * `ProductLevelsTableCells` now always render three labelled
+ * facts/columns (Geometry/Frequencies/Energy), agreeing or not. This is
+ * kept for the two narrower places that still turn on the SAME-level
+ * question rather than the collapse question: `ProductLevelsFact`'s own
+ * optional "all at the same level" note under an agreeing block, and
+ * `EntryThermoSection.tsx`'s `ProvenanceBlock`, which only has a single
+ * "Level of theory ref" to report when there's a single level behind it —
+ * three distinct levels can carry up to three distinct refs, and no one of
+ * them is "the" ref that row could name. All-three-`null` counts as
+ * agreeing (there is one shared fact: "not recorded").
  */
 export function productLevelsAgree(levels: ProductLevels): boolean {
     return levelsOfTheoryEqual(levels.geometry, levels.frequency) && levelsOfTheoryEqual(levels.geometry, levels.energy)
@@ -170,18 +177,4 @@ export function allProductLevelsAgree(levelsList: ProductLevels[]): boolean {
         && levelsOfTheoryEqual(levels.frequency, first.frequency)
         && levelsOfTheoryEqual(levels.energy, first.energy)
     ))
-}
-
-/**
- * Whether a table showing one row per record needs the three-column
- * (Geometry/Frequencies/Energy) layout — true the moment ANY entry's own
- * levels disagree internally (`!productLevelsAgree`), so every row in one
- * table uses the same column count (a table cannot vary its own column
- * count row to row). Lives here, not in `components/ProductLevels.tsx`,
- * because that file exports components only —
- * `react-refresh/only-export-components` (see `rateLimitFormat.ts`'s own
- * note on the same split).
- */
-export function productLevelsTableNeedsThreeColumns(levelsList: ProductLevels[]): boolean {
-    return levelsList.some((levels) => !productLevelsAgree(levels))
 }

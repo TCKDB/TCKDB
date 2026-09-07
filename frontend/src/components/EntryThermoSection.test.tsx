@@ -1046,19 +1046,22 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(within(plainFreqCell).queryByRole("link")).toBeNull()
     })
 
-    it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
+    it("shows the shared Geometry/Frequencies/Energy levels once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
         page()
         await screen.findByText("3 records with identical values")
         const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
-        // Positive: the LoT row is ON the group card, outside the collapsed
-        // per-record detail -- not merely "no Provenance heading".
-        // Query the row by its own label: the collapsed per-record detail also
-        // contains a <dt>Level of theory</dt> inside each ProvenanceBlock, so a
-        // text query would match twice.
-        const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement | null
+        // Positive: the levels facts are ON the group card, outside the
+        // collapsed per-record detail -- not merely "no Provenance heading".
+        // Query the dl by its own aria-label: the collapsed per-record detail
+        // also contains a <dt>Geometry</dt> inside each ProvenanceBlock, so a
+        // text query alone would match twice.
+        const shared = groupCard.querySelector('dl[aria-label="Shared levels of theory"]') as HTMLElement | null
         expect(shared).not.toBeNull()
-        expect(within(shared as HTMLElement).getByText("Level of theory", { selector: "dt" })).toBeInTheDocument()
+        expect(within(shared as HTMLElement).getByText("Geometry", { selector: "dt" })).toBeInTheDocument()
+        expect(within(shared as HTMLElement).getByText("Frequencies", { selector: "dt" })).toBeInTheDocument()
+        expect(within(shared as HTMLElement).getByText("Energy", { selector: "dt" })).toBeInTheDocument()
+        expect(within(shared as HTMLElement).getByText("all at the same level")).toBeInTheDocument()
         expect((shared as HTMLElement).closest(".identical-record-group-detail")).toBeNull()
     })
 
@@ -1149,15 +1152,17 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
 })
 
 // ---------------------------------------------------------------------------
-// Owner decision: a thermo record can use different levels of theory for
-// its optimised geometry, its frequencies, and its electronic energy. These
-// prove `domain/productLevels.ts`'s rendering rule end to end on the thermo
-// surface, mirroring `EntryStatmechSection.test.tsx`'s own coverage:
-// collapse to one "Level of theory" fact when all three agree, expand to
-// three labelled facts otherwise, and read identically whether the server
-// sends the additive `levels` field directly or this client derives it from
-// `source_calculations[]` roles (thermo's own eager field -- no separate
-// include token, unlike statmech's).
+// Owner decision (2026-09): a thermo record can use different levels of
+// theory for its optimised geometry, its frequencies, and its electronic
+// energy. These prove `domain/productLevels.ts`'s rendering rule end to end
+// on the thermo surface, mirroring `EntryStatmechSection.test.tsx`'s own
+// coverage: ALWAYS three labelled facts -- Geometry/Frequencies/Energy --
+// never collapsed to one "Level of theory" fact even when all three agree
+// ("I don't see the separation in LoT" retired the old collapse rule), and
+// read identically whether the server sends the additive `levels` field
+// directly or this client derives it from `source_calculations[]` roles
+// (thermo's own eager field -- no separate include token, unlike
+// statmech's).
 // ---------------------------------------------------------------------------
 const geomLot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_geom" }
 const energyLot = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_energy" }
@@ -1198,12 +1203,49 @@ function levelsRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () => {
-    it("collapses to one 'Level of theory' fact when the record carries no source_calculations (oldest fallback: provenance.level_of_theory reused for all three)", async () => {
+    it("still renders all three Geometry/Frequencies/Energy facts, plus an 'all at the same level' note, when the record carries no source_calculations (oldest fallback: provenance.level_of_theory reused for all three)", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [levelsRecord()] }))))
         page()
         const card = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
-        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
-        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toBe("b3lyp/def2tzvp")
+        expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).getByText("all at the same level")).toBeInTheDocument()
+    })
+
+    // Review finding: `productLevelsAgree` alone treats all-three-`null` as
+    // agreeing (a shared "not recorded" fact, correct for its OTHER
+    // callers) -- reachable here via a literature-origin thermo record
+    // with no `levels`, no `source_calculations`, and no
+    // `provenance.level_of_theory` at all (`thermoRecordProductLevels`'s
+    // own fallback chain bottoms out at `EMPTY_PRODUCT_LEVELS` in that
+    // case). Without the extra non-null guard, this would print "not
+    // recorded" three times followed by "all at the same level" -- a
+    // claim ("compared and found equal") this case never actually
+    // established.
+    it("shows three 'not recorded' facts but NO 'all at the same level' note when the record carries no levels at all", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: [levelsRecord({
+                provenance: {
+                    primary_calculation: null,
+                    level_of_theory: null,
+                    software_release: null,
+                    workflow_tool_release: null,
+                    statmech_ref: null,
+                    freq_calculation_ref: null,
+                    sp_calculation_ref: null,
+                },
+            })],
+        }))))
+        page()
+        const card = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("not recorded")
+        expect(ddFor(card, "Frequencies")).toBe("not recorded")
+        expect(ddFor(card, "Energy")).toBe("not recorded")
+        expect(within(card).queryByText("all at the same level")).not.toBeInTheDocument()
     })
 
     it("expands to Geometry/Frequencies/Energy facts, with a note under Energy, when source_calculations puts sp at a different level than opt/freq", async () => {
@@ -1230,14 +1272,18 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
         expect(within(card).queryByText("Level of theory ref", { selector: "dt" })).not.toBeInTheDocument()
     })
 
-    it("renders the collapsed case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
+    it("renders the agreeing case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
             records: [levelsRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "opt" } })],
         }))))
         page()
         const card = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
-        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
-        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toBe("b3lyp/def2tzvp")
+        expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).getByText("all at the same level")).toBeInTheDocument()
     })
 
     it("renders the differing case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
@@ -1287,22 +1333,25 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             }))
         }
 
-        it("lifts one shared 'Level of theory' fact above the table, and keeps one column in the table, when every member's own levels agree with every other member's", async () => {
+        it("lifts one shared Geometry/Frequencies/Energy fact above the table, and still shows three columns in the table, when every member's own levels agree with every other member's", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
                 records: threeIdenticalRecords([{}, {}, {}]),
             }))))
             page()
             await screen.findByText("3 records with identical values")
             const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
-            const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement
+            const shared = groupCard.querySelector('dl[aria-label="Shared levels of theory"]') as HTMLElement
             expect(shared).not.toBeNull()
-            expect(within(shared).getByText("Level of theory", { selector: "dt" })).toBeInTheDocument()
-            expect(ddFor(shared, "Level of theory")).toBe("b3lyp/def2tzvp")
+            expect(within(shared).getByText("Geometry", { selector: "dt" })).toBeInTheDocument()
+            expect(ddFor(shared, "Geometry")).toBe("b3lyp/def2tzvp")
+            expect(ddFor(shared, "Frequencies")).toBe("b3lyp/def2tzvp")
+            expect(ddFor(shared, "Energy")).toBe("b3lyp/def2tzvp")
+            expect(within(shared).getByText("all at the same level")).toBeInTheDocument()
 
             const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
-            expect(headers).toContain("Level of theory")
-            expect(headers).not.toContain("Geometry")
+            expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
+            expect(headers).not.toContain("Level of theory")
         })
 
         it("shows nothing above the table, but still shows each member's own levels IN the table (three columns), the moment any one member's own energy level disagrees", async () => {
@@ -1323,7 +1372,7 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
 
             // No lifted shared fact -- the group's members don't all agree.
-            expect(groupCard.querySelector('dl[aria-label="Shared level of theory"]')).toBeNull()
+            expect(groupCard.querySelector('dl[aria-label="Shared levels of theory"]')).toBeNull()
 
             const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
@@ -1335,10 +1384,12 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             expect(cellAt(g1Row, "Energy")).toContain("b3lyp/def2tzvp")
         })
 
-        it("shows the sp note only on the row whose own three levels actually disagree, not on every row citing an sp role", async () => {
-            // All three cite an sp role (energy_source: "sp"), but only
+        it("shows the sp note on EVERY sp-sourced row, not only the one whose own three levels happen to disagree", async () => {
+            // All three cite an sp role (energy_source: "sp"); only
             // thm_g2's own energy is at a DIFFERENT level than its
-            // geometry/frequency.
+            // geometry/frequency. Now that every table always shows three
+            // columns, the note simply follows `energy_source === "sp"` --
+            // all three rows get it.
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
                 records: threeIdenticalRecords([
                     { levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "sp" } },
@@ -1354,9 +1405,9 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
             const g2Row = within(refsTable).getByText("thm_g2").closest("tr") as HTMLElement
             const g3Row = within(refsTable).getByText("thm_g3").closest("tr") as HTMLElement
-            expect(cellAt(g1Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g1Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
-            expect(cellAt(g3Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g3Row, "Energy")).toContain("single point on the optimised geometry")
         })
 
         it("shows an unrecognised energy_source as a muted pill in the table too, never 'not recorded'", async () => {

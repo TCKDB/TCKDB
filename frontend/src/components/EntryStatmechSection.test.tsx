@@ -886,22 +886,24 @@ describe("EntryStatmechSection: identical-value records group under one card", (
     // BLOCKING-2 (species-entry/browse/chrome residuals re-review): MEASURED
     // at 1920 before this fix, the 8th column ("Workflow tool") clipped at
     // the `.table-scroll` edge with no scroll affordance. The structural
-    // guarantee this table now keeps is "at most 6 columns, plus a single
-    // 'Level of theory' column when every row's own levels agree with
-    // itself" -- "Record software"/"Workflow tool" render as a provenance
-    // row beneath each record's own row instead of two more columns.
-    it("keeps the group table to at most 7 columns, with software/workflow tool on a provenance row instead", async () => {
+    // guarantee this table now keeps is "at most 9 columns (6 original,
+    // ALWAYS plus the three Geometry/Frequencies/Energy level-of-theory
+    // columns -- owner decision 2026-09 retired the old single-column
+    // collapse)" -- "Record software"/"Workflow tool" render as a
+    // provenance row beneath each record's own row instead of two more
+    // columns.
+    it("keeps the group table to at most 9 columns, with software/workflow tool on a provenance row instead", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
         page()
         await screen.findByText("3 records with identical values")
         const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
         const headerCells = within(refsTable).getAllByRole("columnheader")
-        // 6 original columns + one "Level of theory" column (this fixture's
-        // clones carry no source_calculations, so every row collapses to
-        // the single-column case, never the three-column Geometry/
-        // Frequencies/Energy split).
-        expect(headerCells.length).toBeLessThanOrEqual(7)
-        expect(headerCells.map((cell) => cell.textContent)).toContain("Level of theory")
+        // 6 original columns + the three Geometry/Frequencies/Energy level
+        // columns, ALWAYS shown now regardless of whether this fixture's
+        // clones' own levels agree.
+        expect(headerCells.length).toBeLessThanOrEqual(9)
+        expect(headerCells.map((cell) => cell.textContent)).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
+        expect(headerCells.map((cell) => cell.textContent)).not.toContain("Level of theory")
         expect(headerCells.map((cell) => cell.textContent)).not.toContain("Record software")
         expect(headerCells.map((cell) => cell.textContent)).not.toContain("Workflow tool")
 
@@ -1033,7 +1035,7 @@ describe("EntryStatmechSection: identical-value records group under one card", (
             expect(cellAt(row, "Opt calc")).toBe(`calc_${ref}_opt`)
             expect(cellAt(row, "Freq calc")).toBe(`calc_${ref}_freq`)
             expect(cellAt(row, "SP calc")).toBe(`calc_${ref}_sp`)
-            expect(cellAt(row, "Frequencies")).toBe(`calc_${ref}_freqcalc`)
+            expect(cellAt(row, "Source freq calcs")).toBe(`calc_${ref}_freqcalc`)
         }
 
         // The shared body (outside the table, outside "Show all") never
@@ -1228,13 +1230,14 @@ describe("EntryStatmechSection: conformer context & review history fold into one
 })
 
 // ---------------------------------------------------------------------------
-// Owner decision: a statmech record can use different levels of theory for
-// its optimised geometry, its frequencies, and its electronic energy. These
-// prove `domain/productLevels.ts`'s rendering rule end to end: collapse to
-// one "Level of theory" fact when all three agree, expand to three labelled
-// facts otherwise, and read identically whether the server sends the
-// additive `levels` field directly or this client derives it from
-// `source_calculations[]` roles.
+// Owner decision (2026-09): a statmech record can use different levels of
+// theory for its optimised geometry, its frequencies, and its electronic
+// energy. These prove `domain/productLevels.ts`'s rendering rule end to
+// end: ALWAYS three labelled facts -- Geometry/Frequencies/Energy -- never
+// collapsed to one "Level of theory" fact even when all three agree ("I
+// don't see the separation in LoT" retired the old collapse rule), and
+// read identically whether the server sends the additive `levels` field
+// directly or this client derives it from `source_calculations[]` roles.
 // ---------------------------------------------------------------------------
 const geomLot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_geom" }
 const energyLot = { method: "ccsd(t)", basis: "cc-pvtz", display: "ccsd(t)/cc-pvtz", level_of_theory_ref: "lot_energy" }
@@ -1244,7 +1247,7 @@ function sourceCalcWithLot(role: string, calculationRef: string, levelOfTheory: 
 }
 
 describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", () => {
-    it("collapses to one 'Level of theory' fact when the opt/freq/sp roles all resolve to the same level", async () => {
+    it("still renders all three Geometry/Frequencies/Energy facts, plus an 'all at the same level' note, when the opt/freq/sp roles all resolve to the same level", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             const includes = new URL(request.url).searchParams.getAll("include")
             const record = baseRecord({
@@ -1260,11 +1263,17 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
         }))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        await within(card).findByText("b3lyp/def2tzvp")
-        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
-        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
-        expect(within(card).queryByText("Frequencies", { selector: "dt" })).not.toBeInTheDocument()
-        expect(within(card).queryByText("Energy", { selector: "dt" })).not.toBeInTheDocument()
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        // The sp role landing at the SAME level as opt/freq is still a real
+        // sp-sourced energy -- the note follows `energy_source === "sp"`
+        // unconditionally now, agreeing or not (see `ProductLevelsTableCells`'s
+        // own doc on why "this row's own agreement" stopped being the gate).
+        expect(ddFor(card, "Energy")).toContain("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toContain("single point on the optimised geometry")
+        expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).getByText("all at the same level")).toBeInTheDocument()
     })
 
     it("expands to Geometry/Frequencies/Energy facts, with a note under Energy, when the sp role is at a different level than opt/freq", async () => {
@@ -1291,15 +1300,18 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
         expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
     })
 
-    it("renders the collapsed case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
+    it("renders the agreeing case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             baseRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "opt" } }),
         ]))))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        await within(card).findByText("b3lyp/def2tzvp")
-        expect(ddFor(card, "Level of theory")).toBe("b3lyp/def2tzvp")
-        expect(within(card).queryByText("Geometry", { selector: "dt" })).not.toBeInTheDocument()
+        await within(card).findByText("Geometry", { selector: "dt" })
+        expect(ddFor(card, "Geometry")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Frequencies")).toBe("b3lyp/def2tzvp")
+        expect(ddFor(card, "Energy")).toBe("b3lyp/def2tzvp")
+        expect(within(card).queryByText("Level of theory", { selector: "dt" })).not.toBeInTheDocument()
+        expect(within(card).getByText("all at the same level")).toBeInTheDocument()
     })
 
     it("renders the differing case identically whether the server sends `levels` directly or this client derives it from source_calculations", async () => {
@@ -1353,7 +1365,7 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             ]
         }
 
-        it("keeps one 'Level of theory' column when every member's own levels agree with itself", async () => {
+        it("always shows Geometry/Frequencies/Energy columns, even when every member's own levels agree with itself", async () => {
             server.use(http.get(ENDPOINT, ({ request }) => {
                 const includes = new URL(request.url).searchParams.getAll("include")
                 const records = threeIdenticalRecords().map((record) => ({
@@ -1376,11 +1388,11 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             // elements" failure on every retry until it times out.
             await within(refsTable).findAllByText("b3lyp/def2tzvp")
             const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
-            expect(headers).toContain("Level of theory")
-            expect(headers).not.toContain("Geometry")
+            expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
+            expect(headers).not.toContain("Level of theory")
         })
 
-        it("switches to Geometry/Frequencies/Energy columns the moment any one member's own levels disagree, and the shared body above the table shows nothing instead of guessing", async () => {
+        it("shows Geometry/Frequencies/Energy columns (always) when one member's own levels disagree, and the shared body above the table shows nothing instead of guessing", async () => {
             server.use(http.get(ENDPOINT, ({ request }) => {
                 const includes = new URL(request.url).searchParams.getAll("include")
                 const records = threeIdenticalRecords().map((record) => ({
@@ -1421,14 +1433,16 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             expect(sharedDts.map((dt) => dt.textContent)).not.toContain("Level of theory")
         })
 
-        it("shows the sp note only on the row whose own three levels actually disagree, not on every row citing an sp role", async () => {
-            // All three cite an sp role (energy_source: "sp"), but only
-            // sm_g2's own energy is at a DIFFERENT level than its geometry/
+        it("shows the sp note on EVERY sp-sourced row, not only the one whose own three levels happen to disagree", async () => {
+            // All three cite an sp role (energy_source: "sp"); only sm_g2's
+            // own energy is at a DIFFERENT level than its geometry/
             // frequency -- sm_g1 and sm_g3 are sp-derived at the SAME level
             // as their own geometry/frequency (a real, if unremarkable,
             // case: a dedicated sp job that happens to land on the same
-            // level). Before this fix, all three rows got the note once the
-            // table switched to three columns; only sm_g2 should.
+            // level). Now that every table always shows three columns,
+            // "this row's own agreement" is no longer a meaningful gate for
+            // the note -- it simply follows `energy_source === "sp"`, so
+            // all three rows get it.
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
                 baseRecord({
                     statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" },
@@ -1454,9 +1468,9 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
             const g2Row = within(refsTable).getByText("sm_g2").closest("tr") as HTMLElement
             const g3Row = within(refsTable).getByText("sm_g3").closest("tr") as HTMLElement
-            expect(cellAt(g1Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g1Row, "Energy")).toContain("single point on the optimised geometry")
             expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
-            expect(cellAt(g3Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g3Row, "Energy")).toContain("single point on the optimised geometry")
         })
 
         it("shows an unrecognised energy_source as a muted pill in the table too, never 'not recorded'", async () => {
