@@ -60,6 +60,7 @@ _LOT_B = {"method": "wB97X-D", "basis": "def2-TZVP"}
 _ROLE_DUPLICATE_STATMECH = "statmech_role_duplicate"
 _ROLE_DUPLICATE_THERMO = "thermo_role_duplicate"
 _GEOMETRY_MISMATCH_STATMECH = "statmech_sp_geometry_mismatch"
+_GEOMETRY_MISMATCH_THERMO = "thermo_sp_geometry_mismatch"
 _REQUIRES_SP_STATMECH = "statmech_energy_level_requires_sp"
 _REQUIRES_SP_THERMO = "thermo_energy_level_requires_sp"
 _CONTRADICTION_STATMECH = "statmech_energy_level_contradiction"
@@ -683,10 +684,17 @@ def test_thermo_energy_level_declared_with_statmech_link_is_refused_at_schema(
 def test_thermo_existing_statmech_link_still_enforces_r2_prime(client, db_session):
     """R6 skips only R4' (the declared-level check) when a statmech basis
     is linked -- R2'/R3'/Coverage still apply to whatever the thermo
-    links itself, on its *own* role_links, independent of the basis."""
-    species_smiles = "CCCCCCCCCCCCCCCCCC"
+    links itself, on its *own* role_links, independent of the basis.
+
+    Both opts declare their own geometry inline (``output_geometries``),
+    and ``sp_a``'s explicit ``input_geometries`` matches only ``opt_a``'s
+    -- so exactly ``opt_b`` is genuinely uncovered, proving Coverage
+    reads real geometry evidence here rather than treating "no data on
+    either side" as a mismatch for both.
+    """
+    species = dict(_METHYL_SPECIES)
     sm_payload = _standalone_statmech_payload(
-        species_entry={"smiles": species_smiles, "charge": 0, "multiplicity": 1},
+        species_entry=species,
         calculations=[{"key": "opt0", "calculation": _opt_calc_at(_LOT_A)}],
         source_calculations=[{"calculation_key": "opt0", "role": "opt"}],
     )
@@ -695,29 +703,365 @@ def test_thermo_existing_statmech_link_still_enforces_r2_prime(client, db_sessio
     sm_id = sm_resp.json()["id"]
 
     before = _count(db_session, Thermo)
-    thermo_payload = _thermo_payload(
-        species_smiles,
-        existing_statmech_id=sm_id,
-        calculations=[
-            {"key": "opt_a", "calculation": _opt_calc_at(_LOT_A)},
-            {"key": "opt_b", "calculation": _opt_calc_at(_LOT_B)},
-            {"key": "sp_a", "calculation": _sp_calc_at(_LOT_A)},
-        ],
-        source_calculations=[
-            {"calculation_key": "opt_a", "role": "opt"},
-            {"calculation_key": "opt_b", "role": "opt"},
-            {"calculation_key": "sp_a", "role": "sp"},
-        ],
-    )
+    thermo_payload = _thermo_payload(species["smiles"])
+    thermo_payload["species_entry"] = species
+    thermo_payload["existing_statmech_id"] = sm_id
+    thermo_payload["calculations"] = [
+        {
+            "key": "opt_a",
+            "calculation": _opt_calc_at(
+                _LOT_A,
+                output_geometries=[
+                    {"role": "final", "geometry": {"xyz_text": _methyl_xyz(0.0)}}
+                ],
+            ),
+        },
+        {
+            "key": "opt_b",
+            "calculation": _opt_calc_at(
+                _LOT_B,
+                output_geometries=[
+                    {"role": "final", "geometry": {"xyz_text": _methyl_xyz(0.55)}}
+                ],
+            ),
+        },
+        {
+            "key": "sp_a",
+            "calculation": _sp_calc_at(
+                _LOT_A,
+                input_geometries=[{"xyz_text": _methyl_xyz(0.0)}],
+            ),
+        },
+    ]
+    thermo_payload["source_calculations"] = [
+        {"calculation_key": "opt_a", "role": "opt"},
+        {"calculation_key": "opt_b", "role": "opt"},
+        {"calculation_key": "sp_a", "role": "sp"},
+    ]
     resp = client.post("/api/v1/uploads/thermo", json=thermo_payload)
-    # Neither opt declares geometry (inline calcs), so with two opts
-    # linked, sp_a is "not comparable" to either -- Coverage sees both
-    # opts uncovered and refuses, exactly as it would with no statmech
-    # basis linked at all.
     body = _assert_code(resp, _REQUIRES_SP_THERMO)
     assert "uncovered_opt_calculation_refs" in body["context"]
-    assert len(body["context"]["uncovered_opt_calculation_refs"]) == 2
+    assert len(body["context"]["uncovered_opt_calculation_refs"]) == 1
     assert _count(client._db_session, Thermo) == before
+
+
+# ---------------------------------------------------------------------------
+# The inline-calculation geometry-attachment fix: /uploads/statmech,
+# /uploads/thermo, and /bundles/submit (which reuses persist_thermo_upload)
+# all persist inline ``calculations[].calculation`` through
+# ``resolve_and_persist_calculation_with_results``, which -- unlike every
+# other calculation-persistence path -- never attached a declared
+# ``input_geometries``/``output_geometries`` to the row. R3'/Coverage
+# therefore saw no geometry evidence at all for an inline calc: a
+# genuinely mismatched sp went undetected (false 201), and a genuinely
+# correct multi-"conformer" ensemble was refused as if every opt were
+# uncovered (false 422, since >=2 opts with no geometry data anywhere
+# makes every sp "not comparable"). Fixed by calling the same
+# ``attach_calculation_output_geometries``/``attach_calculation_input_
+# geometries`` helpers the conformer/bundle paths use, with no fallback
+# geometry (there is no conformer-level geometry on these routes --
+# only what the calc itself declares).
+# ---------------------------------------------------------------------------
+
+
+def _inline_opt_sp_pair(
+    index: int,
+    *,
+    opt_lot: dict,
+    xyz_z: float,
+    sp_lot: dict,
+    sp_xyz_z: float | None = None,
+) -> tuple[dict, dict]:
+    """One inline opt+sp calculation pair for a standalone statmech/thermo
+    (or contribution-bundle) upload, each carrying an explicit declared
+    geometry -- the shape that actually exercises R3'/Coverage now that
+    the inline path attaches geometry. ``sp_xyz_z`` defaults to matching
+    the opt's own geometry; pass a different value to build a genuine R3'
+    mismatch.
+
+    :returns: ``(opt_calculation_in, sp_calculation_in)``, each shaped for
+        a ``calculations`` list entry (``{"key": ..., "calculation": ...}``).
+    """
+    opt_calc_in = {
+        "key": f"opt{index}",
+        "calculation": _opt_calc_at(
+            opt_lot,
+            output_geometries=[
+                {"role": "final", "geometry": {"xyz_text": _methyl_xyz(xyz_z)}}
+            ],
+        ),
+    }
+    sp_calc_in = {
+        "key": f"sp{index}",
+        "calculation": _sp_calc_at(
+            sp_lot,
+            input_geometries=[
+                {
+                    "xyz_text": _methyl_xyz(
+                        sp_xyz_z if sp_xyz_z is not None else xyz_z
+                    )
+                }
+            ],
+        ),
+    }
+    return opt_calc_in, sp_calc_in
+
+
+def test_statmech_inline_sp_on_wrong_geometry_is_refused(client, db_session):
+    """(b): an sp declared inline with an explicit geometry that does not
+    match the linked opt's own -- a genuine R3' mismatch, now that the
+    inline path actually attaches declared geometry instead of silently
+    dropping it."""
+    before = _count(db_session, Statmech)
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(
+        0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_A, sp_xyz_z=0.91
+    )
+    payload = _standalone_statmech_payload(
+        species_entry=species,
+        calculations=[opt0, sp0],
+        source_calculations=[
+            {"calculation_key": "opt0", "role": "opt"},
+            {"calculation_key": "sp0", "role": "sp"},
+        ],
+    )
+    resp = client.post("/api/v1/uploads/statmech", json=payload)
+    body = _assert_code(resp, _GEOMETRY_MISMATCH_STATMECH)
+    assert "sp_calculation_ref" in body["context"]
+    assert _count(client._db_session, Statmech) == before
+
+
+def test_statmech_inline_ensemble_with_declared_geometries_is_accepted(client):
+    """(d): a correct two-conformer opt+sp ensemble expressed entirely
+    inline with declared geometries -- each sp matches its own opt, both
+    sps at the same level -- accepted rather than falsely refused as
+    "every opt uncovered" (the bug the geometry-attachment fix corrects)."""
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_B)
+    opt1, sp1 = _inline_opt_sp_pair(1, opt_lot=_LOT_A, xyz_z=0.55, sp_lot=_LOT_B)
+    payload = _standalone_statmech_payload(
+        species_entry=species,
+        calculations=[opt0, sp0, opt1, sp1],
+        source_calculations=[
+            {"calculation_key": "opt0", "role": "opt"},
+            {"calculation_key": "sp0", "role": "sp"},
+            {"calculation_key": "opt1", "role": "opt"},
+            {"calculation_key": "sp1", "role": "sp"},
+        ],
+    )
+    resp = client.post("/api/v1/uploads/statmech", json=payload)
+    assert resp.status_code == 201, resp.text
+    detail = client.get(f"/api/v1/scientific/statmech/{resp.json()['id']}")
+    levels = detail.json()["record"]["levels"]
+    assert levels["energy_source"] == "sp"
+    assert levels["energy"]["method"] == "wB97X-D"
+    assert levels["geometry"]["method"] == "B3LYP"
+
+
+def test_thermo_inline_sp_on_wrong_geometry_is_refused(client, db_session):
+    """(b) for thermo's own-roles path."""
+    before = _count(db_session, Thermo)
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(
+        0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_A, sp_xyz_z=0.91
+    )
+    payload = _thermo_payload(species["smiles"])
+    payload["species_entry"] = species
+    payload["calculations"] = [opt0, sp0]
+    payload["source_calculations"] = [
+        {"calculation_key": "opt0", "role": "opt"},
+        {"calculation_key": "sp0", "role": "sp"},
+    ]
+    resp = client.post("/api/v1/uploads/thermo", json=payload)
+    body = _assert_code(resp, _GEOMETRY_MISMATCH_THERMO)
+    assert "sp_calculation_ref" in body["context"]
+    assert _count(client._db_session, Thermo) == before
+
+
+def test_thermo_inline_ensemble_with_declared_geometries_is_accepted(client):
+    """(d) for thermo's own-roles path."""
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_B)
+    opt1, sp1 = _inline_opt_sp_pair(1, opt_lot=_LOT_A, xyz_z=0.55, sp_lot=_LOT_B)
+    payload = _thermo_payload(species["smiles"])
+    payload["species_entry"] = species
+    payload["calculations"] = [opt0, sp0, opt1, sp1]
+    payload["source_calculations"] = [
+        {"calculation_key": "opt0", "role": "opt"},
+        {"calculation_key": "sp0", "role": "sp"},
+        {"calculation_key": "opt1", "role": "opt"},
+        {"calculation_key": "sp1", "role": "sp"},
+    ]
+    resp = client.post("/api/v1/uploads/thermo", json=payload)
+    assert resp.status_code == 201, resp.text
+    species_entry_id = resp.json()["species_entry_id"]
+    read = client.get(f"/api/v1/scientific/species-entries/{species_entry_id}/thermo")
+    levels = read.json()["records"][0]["levels"]
+    assert levels["energy_source"] == "sp"
+    assert levels["energy"]["method"] == "wB97X-D"
+
+
+def _bundle_submit_envelope(thermo_upload: dict) -> dict:
+    """Minimal ``ContributionBundleV0`` envelope carrying one thermo
+    upload, mirroring ``examples/bundles/thermo-bundle-v0.json``.
+    ``/bundles/submit`` imports each ``records.thermo_uploads`` entry
+    through :func:`app.workflows.thermo.persist_thermo_upload` -- the
+    same function the standalone ``/uploads/thermo`` route calls -- so
+    this is a genuinely independent probe of a different wire endpoint,
+    not a re-test of the same code through a different door in name only.
+    """
+    return {
+        "bundle_format": "tckdb-contribution-bundle",
+        "bundle_version": "0.1",
+        "bundle_kind": "thermo",
+        "created_at": "2026-04-25T00:00:00Z",
+        "source_instance": {
+            "instance_kind": "local",
+            "instance_name": "test-local",
+            "schema_version": "d861dfd60891",
+            "software_version": "0.0.0-test",
+        },
+        "exporter": {"local_user_label": "test-user"},
+        "submission": {
+            "title": "Levels test contribution",
+            "summary": "Probes inline geometry attachment via /bundles/submit.",
+            "source_kind": "local_bundle",
+        },
+        "records": {"thermo_uploads": [thermo_upload], "kinetics_uploads": []},
+        "local_refs": {},
+        "manifest": {"sha256": None, "files": [], "created_by_tool": "test@0.0.0"},
+    }
+
+
+def test_bundle_submit_thermo_inline_sp_on_wrong_geometry_is_refused(client):
+    """(b) via ``POST /bundles/submit``."""
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(
+        0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_A, sp_xyz_z=0.91
+    )
+    thermo_upload = _thermo_payload(species["smiles"])
+    thermo_upload["species_entry"] = species
+    thermo_upload["calculations"] = [opt0, sp0]
+    thermo_upload["source_calculations"] = [
+        {"calculation_key": "opt0", "role": "opt"},
+        {"calculation_key": "sp0", "role": "sp"},
+    ]
+    resp = client.post(
+        "/api/v1/bundles/submit", json=_bundle_submit_envelope(thermo_upload)
+    )
+    # Raised inside persist_thermo_upload (the per-family import step),
+    # not the dry-run gate -- the dry-run is a read-only structural
+    # preview and cannot see geometry rows that only the actual import
+    # creates, so this reaches the client as the same coded 422
+    # persist_thermo_upload always raises, not the dry-run gate's 400.
+    body = _assert_code(resp, _GEOMETRY_MISMATCH_THERMO)
+    assert "sp_calculation_ref" in body["context"]
+
+
+def test_bundle_submit_thermo_inline_ensemble_with_declared_geometries_is_accepted(
+    client,
+):
+    """(d) via ``POST /bundles/submit``."""
+    species = dict(_METHYL_SPECIES)
+    opt0, sp0 = _inline_opt_sp_pair(0, opt_lot=_LOT_A, xyz_z=0.0, sp_lot=_LOT_B)
+    opt1, sp1 = _inline_opt_sp_pair(1, opt_lot=_LOT_A, xyz_z=0.55, sp_lot=_LOT_B)
+    thermo_upload = _thermo_payload(species["smiles"])
+    thermo_upload["species_entry"] = species
+    thermo_upload["calculations"] = [opt0, sp0, opt1, sp1]
+    thermo_upload["source_calculations"] = [
+        {"calculation_key": "opt0", "role": "opt"},
+        {"calculation_key": "sp0", "role": "sp"},
+        {"calculation_key": "opt1", "role": "opt"},
+        {"calculation_key": "sp1", "role": "sp"},
+    ]
+    resp = client.post("/api/v1/bundles/submit", json=_bundle_submit_envelope(thermo_upload))
+    assert resp.status_code == 201, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Read-side "ambiguous" state, exercised directly against the DB (the
+# upload path refuses two sps at different levels of theory, so the only
+# way to see this state is a record that predates R2'/the ambiguous
+# check, or -- as here -- a direct link insert bypassing upload
+# validation entirely, the same as any other pre-existing/legacy-row
+# scenario this archive has to keep reading honestly).
+# ---------------------------------------------------------------------------
+
+
+def test_statmech_read_reports_ambiguous_when_linked_sps_disagree(client, db_session):
+    from app.db.models.common import CalculationType, StatmechCalculationRole
+    from tests.services.scientific_read._factories import (
+        attach_statmech_source_calculation,
+        make_calculation,
+        make_lot,
+        make_species,
+        make_species_entry,
+        make_statmech,
+    )
+
+    species = make_species(db_session, smiles="[CH3]", charge=0, multiplicity=2)
+    entry = make_species_entry(db_session, species)
+    sm = make_statmech(db_session, species_entry=entry)
+    lot_a = make_lot(db_session, method="B3LYP", basis="6-31G(d)")
+    lot_b = make_lot(db_session, method="wB97X-D", basis="def2-TZVP")
+    sp_a = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot_a.id
+    )
+    sp_b = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot_b.id
+    )
+    attach_statmech_source_calculation(
+        db_session, statmech=sm, calculation=sp_a, role=StatmechCalculationRole.sp
+    )
+    attach_statmech_source_calculation(
+        db_session, statmech=sm, calculation=sp_b, role=StatmechCalculationRole.sp
+    )
+
+    detail = client.get(f"/api/v1/scientific/statmech/{sm.public_ref}")
+    assert detail.status_code == 200, detail.text
+    levels = detail.json()["record"]["levels"]
+    assert levels["energy"] is None
+    assert levels["energy_source"] == "ambiguous"
+
+
+def test_thermo_read_reports_ambiguous_when_linked_sps_disagree(client, db_session):
+    from app.db.models.common import CalculationType, ThermoCalculationRole
+    from tests.services.scientific_read._factories import (
+        attach_thermo_source_calculation,
+        make_calculation,
+        make_lot,
+        make_species,
+        make_species_entry,
+        make_thermo_scalar,
+    )
+
+    species = make_species(db_session, smiles="[CH3]", charge=0, multiplicity=2)
+    entry = make_species_entry(db_session, species)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    lot_a = make_lot(db_session, method="B3LYP", basis="6-31G(d)")
+    lot_b = make_lot(db_session, method="wB97X-D", basis="def2-TZVP")
+    sp_a = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot_a.id
+    )
+    sp_b = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot_b.id
+    )
+    attach_thermo_source_calculation(
+        db_session, thermo=thermo, calculation=sp_a, role=ThermoCalculationRole.sp
+    )
+    attach_thermo_source_calculation(
+        db_session, thermo=thermo, calculation=sp_b, role=ThermoCalculationRole.sp
+    )
+
+    read = client.get(
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo"
+    )
+    assert read.status_code == 200, read.text
+    records = read.json()["records"]
+    assert len(records) == 1
+    levels = records[0]["levels"]
+    assert levels["energy"] is None
+    assert levels["energy_source"] == "ambiguous"
 
 
 # ---------------------------------------------------------------------------

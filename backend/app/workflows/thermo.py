@@ -37,6 +37,8 @@ from app.services.calculation_ownership import (
     assert_statmech_owned_by,
 )
 from app.services.calculation_resolution import (
+    attach_calculation_input_geometries,
+    attach_calculation_output_geometries,
     resolve_and_persist_calculation_with_results,
     resolve_level_of_theory_ref,
 )
@@ -328,6 +330,29 @@ def persist_thermo_upload(
             target="thermo",
             context=f"thermo calculation '{calc_in.key}'",
             species_entry_id=species_entry.id,
+        )
+        # ``resolve_and_persist_calculation_with_results`` never attaches
+        # geometry (no conformer geometry to fall back to on this
+        # standalone path) -- only a producer-declared
+        # input_geometries/output_geometries on the calc itself. Without
+        # this, R3'/Coverage (app.services.calculation_levels) never see
+        # any geometry data for an inline calc. ``fallback_geometry_id=
+        # None`` because there is no such fallback here; a calc that
+        # declares neither field keeps carrying no geometry, as before.
+        context = f"thermo calculation '{calc_in.key}'"
+        attach_calculation_output_geometries(
+            session,
+            calc=calc_row,
+            explicit_output_geometries=calc_in.calculation.output_geometries,
+            fallback_geometry_id=None,
+            context=context,
+        )
+        attach_calculation_input_geometries(
+            session,
+            calc=calc_row,
+            explicit_input_geometries=calc_in.calculation.input_geometries,
+            fallback_geometry_id=None,
+            context=context,
         )
         calculations_by_key[calc_in.key] = calc_row
 

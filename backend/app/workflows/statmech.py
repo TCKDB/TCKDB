@@ -23,6 +23,8 @@ from app.services.calculation_ownership import (
     assert_calculation_owned_by,
 )
 from app.services.calculation_resolution import (
+    attach_calculation_input_geometries,
+    attach_calculation_output_geometries,
     resolve_and_persist_calculation_with_results,
 )
 from app.services.record_review import (
@@ -93,6 +95,32 @@ def persist_statmech_upload(
             target="statmech",
             context=f"statmech calculation '{calc_in.key}'",
             species_entry_id=species_entry.id,
+        )
+        # ``resolve_and_persist_calculation_with_results`` never attaches
+        # geometry (it has no conformer geometry to fall back to on this
+        # standalone path) -- only a producer-declared
+        # input_geometries/output_geometries on the calc itself. Without
+        # this, R3'/Coverage (app.services.calculation_levels) never see
+        # any geometry data for an inline calc and can neither catch a
+        # genuine sp/opt geometry mismatch nor confirm a genuine
+        # multi-conformer ensemble's coverage -- both silently wrong in
+        # the direction of least resistance. ``fallback_geometry_id=None``
+        # because there is no such fallback here; a calc that declares
+        # neither field keeps carrying no geometry, exactly as before.
+        context = f"statmech calculation '{calc_in.key}'"
+        attach_calculation_output_geometries(
+            session,
+            calc=calc_row,
+            explicit_output_geometries=calc_in.calculation.output_geometries,
+            fallback_geometry_id=None,
+            context=context,
+        )
+        attach_calculation_input_geometries(
+            session,
+            calc=calc_row,
+            explicit_input_geometries=calc_in.calculation.input_geometries,
+            fallback_geometry_id=None,
+            context=context,
         )
         calculations_by_key[calc_in.key] = calc_row
 

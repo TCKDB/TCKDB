@@ -318,6 +318,19 @@ def assert_role_consistency(
     times or forced a caller to thread the intermediate state through
     itself.
 
+    **Precedence, when a deposit is wrong in more than one way at once**:
+    R3' (a genuine geometry mismatch) first, then R2' distinctness (two
+    sps on one opt's geometry), then R2' level uniformity (ambiguous),
+    then Coverage, then R4'. A deposit that BOTH puts two sps on the same
+    opt's geometry AND has those two sps disagree on level of theory
+    (both are true of the same pair) is reported as the duplicate --
+    ``*_role_duplicate``, not ``*_energy_level_ambiguous`` -- because
+    distinctness is checked, and raised, first. This is not accidental:
+    "two sps claim one optimisation" is the more specific fact and the
+    one whose fix (remove the extra link) also fixes the level
+    disagreement as a side effect, so it is the more useful first thing
+    to tell a depositor.
+
     :param links: Every role link resolved for this upload (or bundle
         block) -- every linked ``opt``/``freq``/``sp``/``composite``/
         ``imported`` calculation, from every path that produced one.
@@ -407,6 +420,29 @@ def assert_role_consistency(
         if uncovered:
             refs = [opt.public_ref for opt in uncovered]
             noun = "optimisation" if len(refs) == 1 else "optimisations"
+            sp_refs = [sp.public_ref for sp in sps]
+            if len(uncovered) == len(opts):
+                # No sp could be matched to *any* linked optimisation's
+                # output geometry at all -- not "one conformer forgot its
+                # sp", but "none of the linked sps carry geometry evidence
+                # that reaches any linked opt". A different fact, so a
+                # different sentence: naming "at least one other
+                # optimisation... does" would be false here.
+                raise CodedValueError(
+                    requires_sp_code,
+                    f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
+                    f"have no 'sp' calculation linked at their geometry, "
+                    "and none of the linked 'sp' calculations "
+                    f"({', '.join(sp_refs)}) could be matched to any "
+                    "linked optimisation's output geometry. Link an 'sp' "
+                    "whose input geometry is one of these optimisations' "
+                    "output geometries, or declare no 'sp' at all.",
+                    context={
+                        "uncovered_opt_calculation_refs": refs,
+                        "sp_calculation_refs": sp_refs,
+                    },
+                    message_prefix=False,
+                )
             raise CodedValueError(
                 requires_sp_code,
                 f"{subject}: {len(refs)} {noun} ({', '.join(refs)}) "
