@@ -77,6 +77,24 @@ describe("the SVG scales fluidly and never forces page-level horizontal overflow
     })
 })
 
+/**
+ * The floor's other half -- `CalculationDependencyGraph.tsx`'s own
+ * `minWidth`/`maxWidth` inline style pins the SVG to a fixed CSS-px
+ * width (the active layout's own computed width); `overflow-x: auto`
+ * here is what a container NARROWER than that fixed width does instead
+ * of shrinking the SVG's text. MEASURED (post-review): with no floor at
+ * all, a 600px viewport scaled the narrow layout to 0.89x (labels
+ * 10.26px) and 400px to 0.57x (6.6px), both under this app's 11.52px
+ * accessible floor.
+ */
+describe(".dep-graph holds the text-size floor by scrolling, not shrinking", () => {
+    it(".dep-graph is overflow-x: auto", () => {
+        const match = /\.dep-graph\s*\{([^}]*)\}/.exec(css)
+        expect(match, ".dep-graph rule not found").not.toBeNull()
+        expect(match![1]).toMatch(/overflow-x:\s*auto/)
+    })
+})
+
 describe("the demoted sentence list uses the .note step, not body prose", () => {
     it(".dep-graph-sentences uses --type-note-font and --muted", () => {
         const match = /\.dep-graph-sentences\s*\{([^}]*)\}/.exec(css)

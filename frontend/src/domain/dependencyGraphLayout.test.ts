@@ -121,6 +121,60 @@ function assertNoLabelNodeIntersections(layout: GraphLayout, label: string) {
     }
 }
 
+function nodeRectByRef(layout: GraphLayout): Map<string, Rect> {
+    const map = new Map<string, Rect>()
+    for (const n of layout.nodes) map.set(n.ref, { x: n.x - n.width / 2, y: n.y - n.height / 2, w: n.width, h: n.height })
+    return map
+}
+
+/** Shortest distance from a point to a rectangle's BORDER (not just
+ * "is it inside") -- 0 for a point exactly on an edge or corner, the
+ * distance to the nearest edge for a point inside, and the distance to
+ * the nearest edge/corner for a point outside. */
+function distanceToRectBorder(p: { x: number; y: number }, rect: Rect): number {
+    const insideX = p.x >= rect.x && p.x <= rect.x + rect.w
+    const insideY = p.y >= rect.y && p.y <= rect.y + rect.h
+    if (insideX && insideY) {
+        return Math.min(p.x - rect.x, rect.x + rect.w - p.x, p.y - rect.y, rect.y + rect.h - p.y)
+    }
+    const cx = Math.max(rect.x, Math.min(p.x, rect.x + rect.w))
+    const cy = Math.max(rect.y, Math.min(p.y, rect.y + rect.h))
+    return Math.hypot(p.x - cx, p.y - cy)
+}
+
+/**
+ * Every edge's `path` is drawn FROM `fromRef`'s own node TO `toRef`'s
+ * own node (`LayoutEdge`'s own docstring) -- so the path string's FIRST
+ * point must sit on `fromRef`'s node border and its LAST point on
+ * `toRef`'s, regardless of tier or layout. Review finding: the narrow
+ * layout's centre-side entry/exit points could float outside the centre
+ * node's own box (a fixed stagger step exceeding a fixed box height),
+ * and a satellite node narrower than the shared column had its own
+ * border to the side of where the path actually touched down.
+ */
+function assertPathEndpointsOnNodeBorders(layout: GraphLayout, label: string) {
+    const rectsByRef = nodeRectByRef(layout)
+    for (const edge of layout.edges) {
+        const points = parsePathPoints(edge.path)
+        const first = points[0]
+        const last = points[points.length - 1]
+        const fromRect = rectsByRef.get(edge.fromRef)
+        const toRect = rectsByRef.get(edge.toRef)
+        expect(fromRect, `${label}: no node rect for fromRef ${edge.fromRef}`).toBeDefined()
+        expect(toRect, `${label}: no node rect for toRef ${edge.toRef}`).toBeDefined()
+        const fromDistance = distanceToRectBorder(first, fromRect!)
+        const toDistance = distanceToRectBorder(last, toRect!)
+        expect(
+            fromDistance,
+            `${label}: edge ${edgeKey(edge)} start point ${JSON.stringify(first)} is ${fromDistance}px from ${edge.fromRef}'s border ${JSON.stringify(fromRect)}`,
+        ).toBeLessThanOrEqual(0.5)
+        expect(
+            toDistance,
+            `${label}: edge ${edgeKey(edge)} end point ${JSON.stringify(last)} is ${toDistance}px from ${edge.toRef}'s border ${JSON.stringify(toRect)}`,
+        ).toBeLessThanOrEqual(0.5)
+    }
+}
+
 // Realistic ref shape (`calc_<24 lowercase-alnum>`, ~29 chars) and every
 // role this app has bespoke wording for -- `irc_start`'s "IRC started
 // from this geometry" is the longest label this table produces (see
@@ -170,6 +224,12 @@ describe.each([1, 2, 3, 4])("wide layout, %i parent(s) and %i child(ren) each", 
                 expect(edge.labelX + edge.labelWidth / 2).toBeLessThanOrEqual(layout.width)
             }
         })
+
+        it(`every path's node-side endpoint lies on a node rect border (parents=${parentCount}, children=${childCount})`, () => {
+            const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
+            const layout = computeWideLayout(model)
+            assertPathEndpointsOnNodeBorders(layout, `wide p=${parentCount} c=${childCount}`)
+        })
     }
 })
 
@@ -209,6 +269,12 @@ describe.each([1, 2, 3, 4])("narrow layout, %i parent(s) and %i child(ren) each"
             for (const edge of layout.edges) {
                 expect(edge.labelX + edge.labelWidth / 2).toBeLessThanOrEqual(layout.width)
             }
+        })
+
+        it(`every path's node-side endpoint lies on a node rect border (parents=${parentCount}, children=${childCount})`, () => {
+            const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(parentCount, childCount))
+            const layout = computeNarrowLayout(model)
+            assertPathEndpointsOnNodeBorders(layout, `narrow p=${parentCount} c=${childCount}`)
         })
     }
 })

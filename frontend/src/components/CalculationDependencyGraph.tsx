@@ -110,18 +110,25 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
                 role="img"
                 aria-label={`Dependency graph for ${ownRef}: ${ariaLabel}`}
                 // `width: 100%` (calculation-dependency-graph.css) lets the
-                // graph SHRINK to fit a narrow container; without a cap it
-                // would also GROW to fill a wide one, inflating every box
-                // and font past the size the layout math actually chose.
-                // One viewBox unit is intended to be one CSS px (the
-                // box-sizing estimate in `domain/dependencyGraphLayout.ts`
-                // is written in px), so the inline cap is the layout's own
-                // computed width -- this graph never scales past 1:1, only
-                // down (and even that only when narrower than its own
-                // computed width AND still wider than the narrow layout's
-                // own width, since the `isNarrow` switch above already
-                // fires before the wide layout would otherwise need to).
-                style={{ maxWidth: `${layout.width}px` }}
+                // graph fill its container UP TO this cap -- but `minWidth`
+                // pins the SAME value as a FLOOR too, so the SVG renders at
+                // EXACTLY `layout.width` CSS px regardless of the container
+                // (never scaled up OR down). One viewBox unit is intended
+                // to be one CSS px (the box-sizing estimate in
+                // `domain/dependencyGraphLayout.ts` is written in px), so
+                // this is always the layout math's own computed width.
+                // MEASURED (post-review): with only a `maxWidth` cap, the
+                // ACTIVE layout (even after the `isNarrow` switch already
+                // picked the narrower one) still shrank below its own
+                // natural size on a container narrower than THAT layout's
+                // own width -- a 600px viewport rendered the narrow layout
+                // at 0.89x (labels 10.26px), 400px at 0.57x (6.6px), both
+                // under the accessible floor. `.dep-graph`'s own
+                // `overflow-x: auto` (calculation-dependency-graph.css) is
+                // what a container narrower than this fixed width does
+                // instead: the SECTION scrolls horizontally, the graph's
+                // own text never shrinks.
+                style={{ maxWidth: `${layout.width}px`, minWidth: `${layout.width}px` }}
             >
                 <defs>
                     <marker

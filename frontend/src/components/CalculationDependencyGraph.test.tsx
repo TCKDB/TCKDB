@@ -137,6 +137,11 @@ describe("CalculationDependencyGraph — paint order (every path before every la
     })
 })
 
+// These assert against `dependencyEdgeLabel`/`DEPENDENCY_ROLE_WORDING`
+// themselves (structural: the rendered label IS whatever the table says) --
+// the LITERAL words are pinned separately, in `domain/dependencyWording
+// .test.ts`, so a wording change shows up there as a real diff instead of
+// silently staying green here.
 describe("CalculationDependencyGraph — edge labels reuse the sentence-list wording", () => {
     it.each(Object.keys(DEPENDENCY_ROLE_WORDING))("labels a %s edge with dependencyEdgeLabel's own word, not a re-derived one", (role) => {
         renderGraph([
@@ -308,5 +313,31 @@ describe("CalculationDependencyGraph — responsive layout via ResizeObserver", 
         await waitFor(() => {
             expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${wide.width} ${wide.height}`)
         })
+    })
+
+    // Review finding: with only a `maxWidth` cap (no floor), the ACTIVE
+    // layout -- even the narrow one, already chosen for being the
+    // narrower of the two -- still scaled itself down further via CSS
+    // `width: 100%` on a container narrower than ITS OWN width (600px
+    // measured at 0.89x/10.26px text, 400px at 0.57x/6.6px). `minWidth`
+    // pinned to the same value as `maxWidth` is what holds the floor: at
+    // ANY container width, the rendered SVG's own inline style -- not
+    // just its `viewBox` -- must stay fixed at the active layout's own
+    // computed width.
+    it("holds the text-size floor at narrow viewport widths (400px, 600px) -- the SVG's own min/max width never shrinks below the active layout's width", async () => {
+        renderGraph(DEPENDENCIES, "calc_own_ref_abcdefghijklmnopqrstuv")
+        await waitFor(() => expect(FakeResizeObserver.instances).toHaveLength(1))
+        const { wide, narrow } = expectedLayouts()
+
+        for (const containerWidth of [400, 600]) {
+            FakeResizeObserver.instances[0].trigger(containerWidth)
+            const expected = containerWidth < wide.width ? narrow : wide
+            await waitFor(() => {
+                const svg = screen.getByRole("img")
+                expect(svg).toHaveAttribute("viewBox", `0 0 ${expected.width} ${expected.height}`)
+                expect(svg.style.minWidth).toBe(`${expected.width}px`)
+                expect(svg.style.maxWidth).toBe(`${expected.width}px`)
+            })
+        }
     })
 })

@@ -189,8 +189,12 @@ export interface LayoutNode {
     width: number
     height: number
     /** Centre node only: the type-pill box drawn INSIDE the node (a real
-     * `<rect rx>`, not bare text -- see `.value-pill`'s own treatment,
-     * which this matches: `--accent-50` fill, `--accent-300` stroke).
+     * `<rect rx>`, not bare text -- see `.value-pill`'s own COLOUR and
+     * RADIUS treatment, which this matches (`--accent-50` fill, rounded
+     * corners); the STROKE (`--accent-300`, not `.value-pill`'s own
+     * `--line`) and the FONT (the SVG label step, not `.value-pill`'s
+     * own) both differ -- see `calculation-dependency-graph.css`'s own
+     * `.dep-graph-node-pill-bg` comment for why the stroke differs.
      * `label` is `typeLabel(type)` -- computed once here so the component
      * never re-derives what text the pill sizing was based on. */
     pill?: { width: number; height: number; label: string }
@@ -418,20 +422,40 @@ const NARROW_LANE_GUTTER = 20
 // How far each successive lane's entry/exit point sits from
 // `centreCenterY` -- parents at `centreCenterY - STEP * laneIndex`
 // (above), children at `centreCenterY + STEP * laneIndex` (below). MUST
-// exceed `LABEL_H` (18): each label is centred ON its own entry/exit
-// point (see the edge-building loop below), so two lanes staggered by
-// LESS than a label's own height leave their label bands overlapping
-// each other even though the two POINTS themselves are distinct --
-// MEASURED (post-review): a 6px stagger put lane 2's entry point inside
-// lane 1's own 18px-tall label band. `NARROW_TIER_GAP` (the space
-// reserved between the nearest sibling row and the centre node) scales
-// with this and the lane count so the staggered entries never drift far
-// enough to reach an actual sibling node's row.
-const NARROW_ENTRY_STAGGER = LABEL_H + 4
+// exceed `LABEL_H` (18) so two lanes' 18px-tall label bands (each
+// centred ON its own entry/exit point) never overlap each other.
+// `computeNarrowLayout` grows the CENTRE NODE'S OWN HEIGHT (see
+// `centreHeightFor` below) so that even the farthest lane's point --
+// `NARROW_ENTRY_STAGGER * laneCount` from `centreCenterY` -- still lands
+// ON the centre box's own border, never floating outside it. MEASURED
+// (post-review): with a FIXED centre height, lane 2's point sat 8px
+// below the box and lane 3's 30px below it -- the box was never resized
+// for lane count at all.
+const NARROW_ENTRY_STAGGER = LABEL_H + 2
+
+/** The centre node's own height in the narrow layout -- at least the
+ * base `CENTRE_H` (room for the pill + ref line), but grown so the
+ * farthest staggered entry/exit point (`NARROW_ENTRY_STAGGER *
+ * maxLaneCount` from `centreCenterY`) still lands AT OR WITHIN the box's
+ * own half-height, never outside it. `maxLaneCount` is the more loaded
+ * side (parents or children) -- the OTHER side's points, staggered by
+ * the same step, are then automatically within bounds too. */
+function centreHeightFor(maxLaneCount: number): number {
+    return Math.max(CENTRE_H, NARROW_ENTRY_STAGGER * maxLaneCount * 2)
+}
 
 export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     const { ownRef, ownType, parentRefs, childRefs, edges } = model
     const pill = centrePillFor(ownType)
+    // Every node in the narrow column is drawn at the SAME width
+    // (`colWidth`, the widest ref/pill among them), not each node's own
+    // narrower `nodeWidth(ref)` -- MEASURED (post-review): a path's
+    // node-side endpoint is always drawn at `x = rightEdgeX =
+    // centerX + colWidth / 2`, the shared COLUMN edge; a node narrower
+    // than `colWidth` has its OWN right border to the left of that,
+    // so the endpoint landed in the gap beside the box, not ON it.
+    // Uniform width makes every node's own border coincide with
+    // `rightEdgeX` exactly.
     const allWidths = [nodeWidth(ownRef), ...parentRefs.map(nodeWidth), ...childRefs.map(nodeWidth)]
     const colWidth = Math.max(...allWidths)
     const centerX = NARROW_MARGIN + colWidth / 2
@@ -455,6 +479,8 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     // width) -- `maxLabelWidth`, not just the lane positions themselves.
     const svgWidth = gutterX + laneStep * laneCount + maxLabelWidth + NARROW_MARGIN
 
+    const centreH = centreHeightFor(Math.max(parentEdges.length, childEdges.length))
+
     // Reserves enough room between the nearest sibling row and the centre
     // node for every staggered entry/exit point (see `NARROW_ENTRY_
     // STAGGER`'s own comment) to land inside the gap, never inside a
@@ -466,28 +492,26 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     let y = NARROW_MARGIN
     const parentCenters = new Map<string, number>()
     for (const ref of parentRefs) {
-        const width = nodeWidth(ref)
         const centerY = y + NODE_H / 2
-        nodes.push({ ref, tier: "parent", type: null, x: centerX, y: centerY, width, height: NODE_H })
+        nodes.push({ ref, tier: "parent", type: null, x: centerX, y: centerY, width: colWidth, height: NODE_H })
         parentCenters.set(ref, centerY)
         y += NODE_H + NARROW_GAP_Y
     }
     if (parentRefs.length > 0) y += parentTierGap - NARROW_GAP_Y
 
-    const centreCenterY = y + CENTRE_H / 2
+    const centreCenterY = y + centreH / 2
     nodes.push({
         ref: ownRef, tier: "centre", type: ownType, x: centerX, y: centreCenterY,
-        width: nodeWidth(ownRef), height: CENTRE_H, pill,
+        width: colWidth, height: centreH, pill,
     })
-    y += CENTRE_H
+    y += centreH
 
     if (childRefs.length > 0) y += childTierGap
 
     const childCenters = new Map<string, number>()
     for (const ref of childRefs) {
-        const width = nodeWidth(ref)
         const centerY = y + NODE_H / 2
-        nodes.push({ ref, tier: "child", type: null, x: centerX, y: centerY, width, height: NODE_H })
+        nodes.push({ ref, tier: "child", type: null, x: centerX, y: centerY, width: colWidth, height: NODE_H })
         childCenters.set(ref, centerY)
         y += NODE_H + NARROW_GAP_Y
     }
@@ -507,9 +531,10 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     // trunk" geometry the wide layout's band ordering exists to avoid)
     // then has a real chance of running straight through it. `entryY`/
     // `exitY` are tightly clustered within `NARROW_ENTRY_STAGGER` of
-    // `centreCenterY` (a small, fixed band near the centre node itself),
-    // well clear of every stub, which only ever runs at a sibling's own
-    // `nodeY` -- far out in the column, never inside that band.
+    // `centreCenterY` (a band sized to the centre node's OWN height, see
+    // `centreHeightFor`), well clear of every stub, which only ever runs
+    // at a sibling's own `nodeY` -- far out in the column, never inside
+    // that band.
     const edgesOut: LayoutEdge[] = []
     let parentLane = 0
     let childLane = 0
@@ -522,7 +547,8 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
             // see the section docstring above: this is what keeps a
             // parent's lane-1 stub and a child's lane-1 stub, which
             // otherwise share both `laneX` and `centreCenterY`, from
-            // coinciding.
+            // coinciding. Always within the centre box's own half-height
+            // (`centreHeightFor` sized the box for exactly this).
             const entryY = centreCenterY - NARROW_ENTRY_STAGGER * parentLane
             const path = `M ${rightEdgeX} ${nodeY} L ${laneX} ${nodeY} L ${laneX} ${entryY} L ${rightEdgeX} ${entryY}`
             const width = smallTextBoxWidth(edge.label)

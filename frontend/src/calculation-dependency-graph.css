@@ -3,15 +3,21 @@
    hard-coded hex -- `calculation-dependency-graph.css.test.ts` guards
    that directly against this file's raw source. */
 
+/* `overflow-x: auto` is the floor's other half (see
+   `CalculationDependencyGraph.tsx`'s own `minWidth`/`maxWidth` comment):
+   the SVG inside is pinned to a FIXED CSS-px width (the active layout's
+   own computed width, never scaled below it), so on a container narrower
+   than that, THIS element -- not the SVG's own text -- is what gives,
+   scrolling horizontally rather than shrinking a single letter. */
 .dep-graph {
     margin: var(--s-4) 0 0;
+    overflow-x: auto;
 }
 
 .dep-graph-svg {
     display: block;
     width: 100%;
     height: auto;
-    max-width: 100%;
 }
 
 /* Base node box -- every parent/child satellite, and the base layer the
@@ -41,10 +47,12 @@
 /* The centre node's type pill -- the only node in the graph with a known
    `type` (see the component's own docstring for why parent/child nodes
    never get one). A real `<rect rx>` behind the text, `.value-pill`'s own
-   treatment (design-system.css) -- review finding: bare uppercase SVG
-   text read as a label, not a pill. `--accent-300` (not `.value-pill`'s
-   own `--line` border) is what actually shows: the pill's `--accent-50`
-   fill sits ON TOP OF the centre node's OWN `--accent-50` fill
+   COLOUR AND RADIUS treatment (design-system.css) -- review finding: bare
+   uppercase SVG text read as a label, not a pill. Colour/radius only,
+   not the whole rule: the font is the SVG label step, not `.value-pill`'s
+   own, and the stroke deliberately differs too. `--accent-300` (not
+   `.value-pill`'s own `--line` border) is what actually shows: the pill's
+   `--accent-50` fill sits ON TOP OF the centre node's OWN `--accent-50` fill
    (`.dep-graph-node--centre .dep-graph-node-rect` above), so a `--line`
    stroke -- built for a plain `--surface` background -- would all but
    disappear against it; `--accent-300` (design-system.css's own
