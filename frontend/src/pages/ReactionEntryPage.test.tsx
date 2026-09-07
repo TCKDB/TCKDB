@@ -128,19 +128,26 @@ function handleFull(payload: object) {
 }
 
 /**
- * Refs that have no structural reason to repeat -- `kin_`/`spe_`/`net_` --
- * must appear EXACTLY once outside the References disclosure. `tse_`/
- * `calc_` refs are excluded from the strict count: the approved design
+ * Refs that have no structural reason to repeat -- `spe_`/`net_` -- must
+ * appear EXACTLY once outside the References disclosure. `tse_`/`calc_`/
+ * `kin_` refs are excluded from the strict count: the approved design
  * (plan §2's mock, and the brief's own "dependency-graph child nodes link
  * to /calculations/{ref}" + "SpeciesEntryLink per participant" rules)
  * deliberately re-surfaces a calculation ref in BOTH the "Calculations by
  * stage" table AND the dependency graph that draws the same calculations
  * as nodes -- a real, intentional second mention, not a duplication bug.
- * This fixture keeps kin_/spe_/net_ refs collision-free by construction
- * (e.g. the kinetics record's own `ts_*_calculation_ref` links point at
- * DIFFERENT calc refs than the TS entry's own `calculations` map, per the
- * plan §7 "resolver disagreement" case) so the strict count is meaningful
- * for those three prefixes.
+ * `kin_` joined this carve-out in PR 3 (`ArrheniusChart.tsx`): the same
+ * kinetics ref legitimately re-surfaces in the chart's own legend chip and
+ * its k(T)-table `Disclosure` heading, alongside the record card's own
+ * "Kinetics ref" fact -- the SAME "intentional second mention naming what
+ * it draws" shape as the calc-ref carve-out, not a duplication bug either.
+ * (Both `ArrheniusChart.tsx` nodes fold the ref into a single combined text
+ * run -- "series N — kin_…", "k(T) table — kin_…" -- rather than a bare
+ * `<code>{ref}</code>` leaf, precisely so `findByText(ref)`'s EXACT-match
+ * uniqueness assumption below still resolves to the one card fact; the
+ * substring-based count here still (correctly) sees all three mentions.)
+ * This fixture keeps spe_/net_ refs collision-free by construction so the
+ * strict count is meaningful for those two prefixes.
  */
 function occurrencesOutsideRefs(container: HTMLElement, value: string): number {
     const full = container.textContent ?? ""
@@ -150,22 +157,22 @@ function occurrencesOutsideRefs(container: HTMLElement, value: string): number {
 }
 
 describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
-    it("every kin_/spe_/net_ ref in the fixture appears exactly once outside References", async () => {
+    it("every spe_/net_ ref in the fixture appears exactly once outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
 
-        for (const ref of ["kin_test1", "spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
+        for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
             expect(occurrencesOutsideRefs(container, ref), `${ref} should appear exactly once outside References`).toBe(1)
         }
     })
 
-    it("every tse_/calc_ ref in the fixture appears at least once outside References", async () => {
+    it("every tse_/calc_/kin_ ref in the fixture appears at least once outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
 
-        for (const ref of ["tse_test1", "calc_opt1", "calc_freq1", "calc_sp1", "calc_irc1", "calc_freqlink", "calc_splink"]) {
+        for (const ref of ["kin_test1", "tse_test1", "calc_opt1", "calc_freq1", "calc_sp1", "calc_irc1", "calc_freqlink", "calc_splink"]) {
             expect(occurrencesOutsideRefs(container, ref)).toBeGreaterThanOrEqual(1)
         }
     })

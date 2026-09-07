@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom"
 import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
-import { computeKineticsTable, formatArrheniusValue, log10Text, scientificText } from "../domain/kineticsTable"
+import { formatArrheniusValue } from "../domain/kineticsTable"
+import { ArrheniusChart } from "./ArrheniusChart"
 import { EvidenceChecklist } from "./EvidenceChecklist"
 import { ProductLevelsFact } from "./ProductLevels"
 import { resolveProductLevels } from "../domain/productLevels"
@@ -110,16 +111,26 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
     const dependencyEdgesByChildRef = buildDependencyEdgesByChildRef(transitionStates)
 
     return (
-        <div className="kinetics-record-list">
-            {kinetics.map((record) => (
-                <KineticsRecordCard
-                    key={record.kinetics_ref}
-                    record={record}
-                    calculationsByRef={calculationsByRef}
-                    dependencyEdgesByChildRef={dependencyEdgesByChildRef}
-                />
-            ))}
-        </div>
+        <>
+            <div className="kinetics-record-list">
+                {kinetics.map((record) => (
+                    <KineticsRecordCard
+                        key={record.kinetics_ref}
+                        record={record}
+                        calculationsByRef={calculationsByRef}
+                        dependencyEdgesByChildRef={dependencyEdgesByChildRef}
+                    />
+                ))}
+            </div>
+            {/* One combined Arrhenius plot (one panel per distinct `A_units`)
+                spanning every deposited kinetics record, ABOVE its own k(T)
+                table equivalent -- both after the per-record cards, per
+                plan §2's "one card per KineticsRecord ... Then the
+                Arrhenius chart with its table equivalent." A PLOG/
+                Chebyshev/falloff/third-body record is listed there by ref
+                and reason, never plotted. */}
+            <ArrheniusChart kinetics={kinetics} />
+        </>
     )
 }
 
@@ -143,7 +154,6 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
         : deriveKineticsLevelsFallback(record.provenance, calculationsByRef, dependencyEdgesByChildRef)
 
     const uncertaintyText = formatUncertainty(record.uncertainty)
-    const table = computeKineticsTable(record)
     const evidenceRows = Object.entries(record.evidence_completeness.checklist).map(([key, passed]) => ({
         label: evidenceLabel(key),
         value: passed ? "present" : "absent",
@@ -259,47 +269,6 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                     </div>
                 )}
             </dl>
-
-            {table && (
-                <>
-                    <p className="note">
-                        The Arrhenius chart itself ships in a follow-up PR; the table below is its accessible/table
-                        equivalent, computed client-side from the deposited parameters.
-                    </p>
-                    <details className="disclosure">
-                        <summary>k(T) table <span className="disclosure-count">({table.length})</span></summary>
-                        <div className="disclosure-body">
-                            <div className="table-scroll">
-                                <table className="data-table kinetics-k-table" aria-label={`k(T) for ${record.kinetics_ref}`}>
-                                    <caption>k(T) = A·T^n·exp(−Ea/(R·T)){unitLabel ? `, in ${unitLabel}` : ""}</caption>
-                                    <thead>
-                                        <tr>
-                                            <th scope="col">T (K)</th>
-                                            <th scope="col">{unitLabel ? `k (${unitLabel})` : "k"}</th>
-                                            <th scope="col">log₁₀ k</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {table.map((row) => (
-                                            <tr key={row.temperatureK}>
-                                                <td className="num" data-label="T (K)">{row.temperatureK.toFixed(2)}</td>
-                                                <td className="num" data-label="k">{scientificText(row.k)}</td>
-                                                <td className="num" data-label="log10 k">{log10Text(row.k)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </details>
-                </>
-            )}
-            {!table && Boolean(record.plog_entries || record.chebyshev || record.falloff) && (
-                <p className="note">
-                    This record's rate form ({token(record.model_kind)}) is pressure-dependent and is not plotted
-                    as k(T) here — see its own parameter fields above.
-                </p>
-            )}
         </div>
     )
 }
