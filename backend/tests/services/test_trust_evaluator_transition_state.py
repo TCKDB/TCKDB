@@ -26,6 +26,7 @@ from app.db.models.calculation import (
     CalculationOptResult,
     CalculationOutputGeometry,
     CalculationPathSearchResult,
+    CalculationScanResult,
     CalculationSPResult,
 )
 from app.db.models.common import (
@@ -430,6 +431,109 @@ def _attach_path_search_parent(
     return calc
 
 
+def _attach_scan_child_of_opt(
+    db_session: Session,
+    opt_calc: Calculation,
+) -> Calculation:
+    """A scan calc run *from* the TS opt; linked via scan_parent.
+
+    Per ``_DEPENDENCY_ROLE_TO_PARENT_TYPE``, ``scan_parent`` fixes the
+    parent's type to ``opt`` and the child is the ``scan`` -- so the TS
+    opt is the *parent*, not the child, of this edge. Owned by a throwaway
+    species_entry (``calculation`` requires exactly one owner -- the
+    ``one_owner`` CheckConstraint) rather than ``transition_state_entry_id``,
+    so this only reaches the TS's source set through dependency traversal,
+    never through direct attachment.
+    """
+    lot = _make_lot(db_session)
+    release = _make_software_release(db_session)
+    owner = _make_species_entry(db_session, _make_species(db_session))
+    calc = Calculation(
+        type=CalculationType.scan,
+        quality=CalculationQuality.raw,
+        species_entry_id=owner.id,
+        lot_id=lot.id,
+        software_release_id=release.id,
+    )
+    db_session.add(calc)
+    db_session.flush()
+    db_session.add(
+        CalculationInputGeometry(
+            calculation_id=calc.id,
+            geometry_id=_make_geometry(db_session).id,
+            input_order=1,
+        )
+    )
+    db_session.add(CalculationScanResult(calculation_id=calc.id, dimension=1))
+    db_session.add(
+        CalculationDependency(
+            parent_calculation_id=opt_calc.id,
+            child_calculation_id=calc.id,
+            dependency_role=CalculationDependencyRole.scan_parent,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(calc)
+    return calc
+
+
+def _attach_irc_followup(
+    db_session: Session,
+    irc_calc: Calculation,
+    *,
+    software_release_id: int | None = None,
+) -> Calculation:
+    """A second-leg IRC continuing from ``irc_calc``; linked via irc_followup.
+
+    Per ``_DEPENDENCY_ROLE_TO_PARENT_TYPE``, ``irc_followup`` fixes the
+    parent's type to ``irc`` -- so the TS-owned ``irc_calc`` (itself
+    reached via ``irc_start``) is the parent here, not the TS opt
+    directly. Owned by a throwaway species_entry (``calculation`` requires
+    exactly one owner -- the ``one_owner`` CheckConstraint) rather than
+    ``transition_state_entry_id``, so this only reaches the TS's source
+    set through dependency traversal, never through direct attachment.
+    ``software_release_id`` defaults to ``None`` so tests can use "does
+    the all-source software check still pass" as a probe for whether this
+    calc actually landed in the source set.
+    """
+    lot = _make_lot(db_session)
+    owner = _make_species_entry(db_session, _make_species(db_session))
+    calc = Calculation(
+        type=CalculationType.irc,
+        quality=CalculationQuality.raw,
+        species_entry_id=owner.id,
+        lot_id=lot.id,
+        software_release_id=software_release_id,
+    )
+    db_session.add(calc)
+    db_session.flush()
+    db_session.add(
+        CalculationInputGeometry(
+            calculation_id=calc.id,
+            geometry_id=_make_geometry(db_session).id,
+            input_order=1,
+        )
+    )
+    db_session.add(
+        CalculationIRCResult(
+            calculation_id=calc.id,
+            direction=IRCDirection.forward,
+            has_forward=True,
+            has_reverse=False,
+        )
+    )
+    db_session.add(
+        CalculationDependency(
+            parent_calculation_id=irc_calc.id,
+            child_calculation_id=calc.id,
+            dependency_role=CalculationDependencyRole.irc_followup,
+        )
+    )
+    db_session.flush()
+    db_session.refresh(calc)
+    return calc
+
+
 # ---------- Tests ----------
 
 
@@ -746,6 +850,84 @@ def test_no_irc_no_path_search_not_hard_fail(db_session: Session):
     }
 
 
+def test_scan_child_of_ts_opt_counts_as_path_search_evidence(db_session: Session):
+    """A scan run *from* the TS opt (role=scan_parent, TS opt is the
+    parent) must satisfy ``path_search_evidence_present``.
+
+    Regression test: the check used to walk the wrong side of the
+    ``scan_parent`` edge (treating the TS opt as the child), so a scan
+    run from an already-optimized TS could never make this check pass.
+    """
+    ts_entry_base = _make_ts_entry(db_session)
+    opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
+    _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
+    db_session.refresh(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    assert baseline.checks["path_search_evidence_present"] is EvidenceOutcome.missing
+
+    ts_entry_scan = _make_ts_entry(db_session)
+    opt_scan = _attach_ts_opt_calc(db_session, ts_entry_scan)
+    _attach_ts_freq_calc(db_session, ts_entry_scan, opt_scan)
+    _attach_scan_child_of_opt(db_session, opt_scan)
+    db_session.refresh(ts_entry_scan)
+    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan)
+
+    assert with_scan.checks["path_search_evidence_present"] is EvidenceOutcome.passed
+    assert with_scan.evidence_completeness > baseline.evidence_completeness
+
+
+def test_path_search_parent_still_counts_as_path_search_evidence(db_session: Session):
+    """A path_search parent reached via optimized_from still passes.
+
+    Companion to the scan_parent regression test above: confirms the fix
+    did not disturb the pre-existing (correct) optimized_from direction.
+    """
+    ts_entry = _make_ts_entry(db_session)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(db_session, ts_entry, opt)
+    _attach_path_search_parent(db_session, ts_entry, opt)
+    db_session.refresh(ts_entry)
+
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    assert result.checks["path_search_evidence_present"] is EvidenceOutcome.passed
+
+
+def test_irc_followup_lands_in_source_set(db_session: Session):
+    """A second-leg IRC (role=irc_followup, parent is the TS-owned irc,
+    not the TS opt) must still be pulled into the source set.
+
+    Probed indirectly: the followup calc is given no software_release,
+    so if (and only if) it is counted in the source set, the all-source
+    ``source_calculation_software_present`` check flips to missing.
+    Uses two independent TS entries (rather than adding the followup to
+    an already-evaluated entry) so neither evaluation observes a
+    relationship collection cached stale by the other's earlier read.
+    """
+    ts_entry_base = _make_ts_entry(db_session)
+    opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
+    _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
+    _attach_ts_irc_calc(db_session, ts_entry_base, opt_base)
+    db_session.refresh(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    assert (
+        baseline.checks["source_calculation_software_present"]
+        is EvidenceOutcome.passed
+    )
+
+    ts_entry_fu = _make_ts_entry(db_session)
+    opt_fu = _attach_ts_opt_calc(db_session, ts_entry_fu)
+    _attach_ts_freq_calc(db_session, ts_entry_fu, opt_fu)
+    irc_fu = _attach_ts_irc_calc(db_session, ts_entry_fu, opt_fu)
+    _attach_irc_followup(db_session, irc_fu, software_release_id=None)
+    db_session.refresh(ts_entry_fu)
+    with_followup = evaluate_loaded_transition_state_entry(ts_entry_fu)
+
+    assert (
+        with_followup.checks["source_calculation_software_present"]
+        is EvidenceOutcome.missing
+    )
+
+
 def test_source_calc_artifacts_lot_software(db_session: Session):
     ts_entry = _make_ts_entry(db_session)
     opt = _attach_ts_opt_calc(db_session, ts_entry, artifacts=True)
@@ -886,3 +1068,56 @@ def test_freq_representative_picks_latest_by_id(db_session: Session):
     )
     # Sanity: the later one has the larger id.
     assert later_freq.id > opt.id
+
+
+def test_ts_dependency_role_buckets_agree_with_enforcement_table():
+    """The TS rubric's parent/child role buckets must agree with
+    ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` (the ground-truth direction table
+    in ``app/services/calculation_resolution.py``), so the two cannot
+    silently drift apart the way ``scan_parent`` once did.
+
+    Every role whose enforcement-table parent type is ``opt`` denotes an
+    edge where the TS-owned opt anchors as the edge's *parent* -- that
+    role must live in ``_TS_CALC_IS_PARENT_ROLES``, never in
+    ``_TS_CALC_IS_CHILD_ROLES``. This is exactly the check that would
+    have caught the scan_parent inversion bug (its enforcement-table
+    parent type is ``opt``, but it used to sit in the CHILD bucket).
+    """
+    from app.services.calculation_resolution import _DEPENDENCY_ROLE_TO_PARENT_TYPE
+    from app.services.trust.rubrics import (
+        _TS_CALC_IS_CHILD_ROLES,
+        _TS_CALC_IS_PARENT_ROLES,
+    )
+
+    assert _TS_CALC_IS_CHILD_ROLES.isdisjoint(_TS_CALC_IS_PARENT_ROLES)
+
+    opt_parent_roles = {
+        role
+        for role, parent_type in _DEPENDENCY_ROLE_TO_PARENT_TYPE.items()
+        if parent_type is CalculationType.opt
+    }
+    # freq_on, single_point_on, irc_start, scan_parent today.
+    assert opt_parent_roles, "expected at least one opt-parented role"
+    assert opt_parent_roles <= _TS_CALC_IS_PARENT_ROLES
+    assert opt_parent_roles.isdisjoint(_TS_CALC_IS_CHILD_ROLES)
+
+    # irc_followup's enforcement-table parent type is `irc`, not `opt` --
+    # it is still bucketed as IS_PARENT because the TS-owned *irc* calc
+    # (reached via irc_start) is the parent of that edge, not the TS opt
+    # directly. Pin that explicitly since the generic opt-parent check
+    # above cannot see it.
+    assert CalculationDependencyRole.irc_followup in _TS_CALC_IS_PARENT_ROLES
+    assert (
+        _DEPENDENCY_ROLE_TO_PARENT_TYPE[CalculationDependencyRole.irc_followup]
+        is CalculationType.irc
+    )
+
+    # optimized_from is deliberately excluded from the enforcement table
+    # (ambiguous parent type: opt or path_search) but must still land in
+    # IS_CHILD -- the TS opt is the child pulling in its
+    # path_search/opt parent.
+    assert (
+        CalculationDependencyRole.optimized_from
+        not in _DEPENDENCY_ROLE_TO_PARENT_TYPE
+    )
+    assert CalculationDependencyRole.optimized_from in _TS_CALC_IS_CHILD_ROLES

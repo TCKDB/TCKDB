@@ -336,6 +336,36 @@ class CalculationGeometryRole(str, Enum):
 
 
 class CalculationDependencyRole(str, Enum):
+    """Role on a ``calculation_dependency`` edge, naming the edge from the
+    *child* calculation's point of view (e.g. ``freq_on`` reads as "this
+    freq is on [its parent opt]"; ``scan_parent`` reads as "this scan's
+    parent" -- not "the parent is a scan"). Every value here has a fixed
+    parent -> child direction; the enforcement table is
+    ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` in
+    ``app/services/calculation_resolution.py``, which is the ground truth
+    a consumer should check against rather than re-deriving direction from
+    the name:
+
+    - ``optimized_from``: parent is ``opt`` or ``path_search`` -> child is
+      ``opt`` (not pinned to one parent type; see the note beside that
+      table).
+    - ``freq_on``: parent ``opt`` -> child ``freq``.
+    - ``single_point_on``: parent ``opt`` -> child ``sp``.
+    - ``irc_start``: parent ``opt`` -> child ``irc``.
+    - ``irc_followup``: parent ``irc`` -> child ``irc`` (a second-leg IRC
+      continuing from the first).
+    - ``scan_parent``: parent ``opt`` -> child ``scan``.
+    - ``arkane_source``: scientific metadata, not pinned to a specific
+      parent ``CalculationType``.
+
+    Any consumer that buckets these roles by "which side of the edge is
+    the calc of interest on" (e.g. the transition-state trust rubric's
+    source-set traversal in ``app/services/trust/rubrics.py``) must agree
+    with this table -- a prior version of that rubric put ``scan_parent``
+    on the wrong side and silently reported missing path-search evidence
+    for any TS whose opt had a scan child.
+    """
+
     optimized_from = "optimized_from"
     freq_on = "freq_on"
     single_point_on = "single_point_on"

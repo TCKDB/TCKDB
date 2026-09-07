@@ -267,8 +267,9 @@ edges **in both directions** for the following roles:
 | `optimized_from` (upstream) | `path_search`, `scan` | TS opt was produced from a path-search or scan. |
 | `freq_on` (downstream child where parent is the TS opt) | `freq` | TS freq computed on the TS-optimized geometry. |
 | `single_point_on` (downstream child where parent is the TS opt) | `sp` | TS SP computed on the TS-optimized geometry. |
-| `irc_start`, `irc_followup` (downstream child where parent is the TS opt) | `irc` | IRC initiated from the TS optimized geometry. |
-| `scan_parent` (upstream where the TS opt is the downstream child) | `scan` | TS guess came from a scan. |
+| `irc_start` (downstream child where parent is the TS opt) | `irc` | IRC initiated from the TS optimized geometry. |
+| `irc_followup` (downstream child where parent is the TS-owned `irc`, i.e. one further hop past `irc_start`) | `irc` | A second-leg IRC continuing from the first. |
+| `scan_parent` (downstream child where parent is the TS opt) | `scan` | A scan run from the TS-optimized geometry (e.g. a reaction-coordinate scan), evidencing path exploration anchored at the TS. Despite the role name, the TS opt is the *parent* of this edge and the scan is the child — `scan_parent` names the edge from the scan's point of view ("this scan's parent"), not "the parent is a scan". |
 
 A **single** dependency hop is sufficient — the rubric is not a graph
 walker. If a project records additional intermediate calcs that the
@@ -352,9 +353,11 @@ completeness when present — but does **not** require either of them.
 
 - `irc_evidence_present` (O): passes when an `irc` calc is reachable
   from the TS opt via `irc_start` or `irc_followup`.
-- `path_search_evidence_present` (O): passes when a `path_search` or
-  scan-parent calc is reachable from the TS opt via `optimized_from` /
-  `scan_parent`.
+- `path_search_evidence_present` (O): passes when a `path_search` calc
+  is reachable *upstream* of the TS opt via `optimized_from` (TS opt is
+  the child), OR a `scan` calc is reachable *downstream* of the TS opt
+  via `scan_parent` (TS opt is the parent — see §5.2's note on the role
+  name).
 
 Both checks are independent. A TS entry with only IRC, only
 path-search, or both, all raise the completeness ratio. Neither is
