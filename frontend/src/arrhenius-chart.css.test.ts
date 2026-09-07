@@ -33,8 +33,12 @@ describe("arrhenius-chart.css uses var(--token) only (also covered globally by t
         expect(css.match(/#[0-9a-fA-F]{3,8}\b/g)).toBeNull()
     })
 
-    it("contains no rgb()/rgba() literal", () => {
-        expect(css.match(/rgba?\(\s*\d/g)).toBeNull()
+    // Three-way rgb()/rgba()/hsl()/hsla() check -- the same pattern
+    // `calculation-dependency-graph.css.test.ts` uses. The previous version
+    // of this test only matched `rgba?\(\s*\d`, which would have said
+    // nothing about an `hsl(...)`/`hsla(...)` literal landing in this file.
+    it("contains no rgb()/rgba()/hsl()/hsla() literal", () => {
+        expect(css).not.toMatch(/\b(rgb|rgba|hsl|hsla)\s*\(/i)
     })
 })
 
@@ -67,21 +71,23 @@ describe(".arrhenius-chart-scroll -- contains the fixed-width SVG without forcin
 // COLUMN (which can be wider than the plotted chart on a wide viewport),
 // rather than under the chart itself. `.arrhenius-chart-axis-title--x`
 // itself only centres text within whatever box it's given; the box's own
-// width is pinned to the SVG's own width at the call site
-// (`style={{ width: ARRHENIUS_CHART_WIDTH }}`, `ArrheniusChart.tsx`), and
-// sits inside the SAME `.arrhenius-chart-scroll` container as the SVG so
-// the two always scroll together and stay aligned.
-describe(".arrhenius-chart-axis-title--x -- pinned to the chart's own width, not a wider grid column", () => {
+// offset/width is pinned to the PLOT box (not the full SVG box, whose own
+// left/right margins are asymmetric -- a later review finding, ~19px off)
+// at the call site (`style={{ marginLeft: left, width: plotWidth }}`,
+// `ArrheniusChart.tsx`), and sits inside the SAME `.arrhenius-chart-scroll`
+// container as the SVG so the two always scroll together and stay aligned.
+describe(".arrhenius-chart-axis-title--x -- pinned to the PLOT box, not a wider grid column or the full SVG box", () => {
     it("is placed inside .arrhenius-chart-scroll in the component (co-located with the SVG), not a separate always-full-width grid cell", () => {
         // `.arrhenius-chart-axis-title--x` itself carries no grid-column
         // override in this stylesheet -- unlike `.cp-chart-axis-title--x`
         // (thermo-cp-chart.css), which explicitly re-parents itself into
         // `grid-column: 2` of the panel grid (a WIDER track than the SVG
-        // can be on a narrow viewport). Its width instead comes from the
-        // inline style at the call site, matching the SVG's own fixed
-        // width exactly.
+        // can be on a narrow viewport). Its offset/width instead comes
+        // from the inline style at the call site, matching the plotted
+        // curve's own horizontal box exactly (not the full SVG box).
         const rule = extractRule(css, ".arrhenius-chart-axis-title--x")
         expect(rule).not.toMatch(/grid-column/)
+        expect(rule).not.toMatch(/(?<!margin-)(?<!\w)width\s*:/)
         expect(rule).toMatch(/text-align\s*:\s*center/)
     })
 })

@@ -179,6 +179,46 @@ describe("panelTemperatureDomain -- the union of every plotted series' own fitte
     })
 })
 
+// Review finding: every fixture elsewhere in this file uses the SAME
+// 300-3000 K range for every record, so a bug that sampled a record across
+// the PANEL's wider union domain instead of its own range would change
+// nothing observable in any of those tests. This block uses two records
+// with GENUINELY different ranges in the SAME panel and checks the
+// narrower one never extends past its own `record_min_k..record_max_k`,
+// per plan §4: "each curve drawn only within its own
+// record_min_k..record_max_k" -- not the panel's union.
+describe("computeArrheniusSeries -- per-record range clipping when panelled beside a wider record", () => {
+    it("a narrow record (1000-2000 K) sampled beside a wide one (300-3000 K) in the same panel stays entirely within its OWN range", () => {
+        const wideRecord = record({ kinetics_ref: "kin_wide", temperature_coverage: { record_min_k: 300, record_max_k: 3000 } })
+        const narrowRecord = record({ kinetics_ref: "kin_narrow", temperature_coverage: { record_min_k: 1000, record_max_k: 2000 } })
+        const { panels } = buildArrheniusChartData([wideRecord, narrowRecord])
+
+        expect(panels).toHaveLength(1) // same A_units -> one panel, so the union domain is genuinely wider than the narrow record
+        const panel = panels[0]
+        const [unionLo, unionHi] = panelTemperatureDomain(panel)
+        expect(unionLo).toBe(300)
+        expect(unionHi).toBe(3000)
+
+        const narrowSeries = panel.series.find((s) => s.kinetics_ref === "kin_narrow")!
+        const temperatures = narrowSeries.points.map((p) => p.temperatureK)
+        // Every sampled point sits inside the record's OWN range -- never as
+        // low as the panel union's 300 K floor, never as high as its 3000 K
+        // ceiling. A bug that samples across the panel's own union domain
+        // (rather than the record's own `temperature_coverage`) would put
+        // points at 300 K and 3000 K here instead.
+        expect(Math.min(...temperatures)).toBeGreaterThanOrEqual(1000)
+        expect(Math.max(...temperatures)).toBeLessThanOrEqual(2000)
+        expect(narrowSeries.points[0].temperatureK).toBe(1000)
+        expect(narrowSeries.points[narrowSeries.points.length - 1].temperatureK).toBe(2000)
+        // Sanity: the wide record's OWN series, by contrast, does span the
+        // full union -- so this fixture genuinely exercises "one series
+        // narrower than the panel it's drawn in", not two identical ranges.
+        const wideSeries = panel.series.find((s) => s.kinetics_ref === "kin_wide")!
+        expect(wideSeries.points[0].temperatureK).toBe(300)
+        expect(wideSeries.points[wideSeries.points.length - 1].temperatureK).toBe(3000)
+    })
+})
+
 describe("panelLog10KDomain -- padded, but strictly wider than the raw log10k extremes", () => {
     it("returns a domain that contains every plotted log10k value with room either side", () => {
         const series = computeArrheniusSeries(record())!

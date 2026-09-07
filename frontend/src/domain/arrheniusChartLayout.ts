@@ -74,10 +74,9 @@ export interface ArrheniusChartData {
 // module-private and this file must not reach into a page-scoped component
 // module for a formatting table; plan §4's own PR-slicing note sanctions
 // "otherwise duplicate one function and note it" for exactly this case).
-// The k(T) TABLE'S own header text (`ReactionKineticsSection.test.tsx`'s
-// "the k(T) table header names the unit" test, unmoved by this PR) must
-// keep reading the same string, so this map is kept byte-identical to that
-// one.
+// The k(T) TABLE'S own header text (`ReactionEntryPage.test.tsx:521`'s "the
+// k(T) table header names the unit" test, unmoved by this PR) must keep
+// reading the same string, so this map is kept byte-identical to that one.
 const A_UNIT_LABELS: Record<string, string> = {
     per_s: "s⁻¹",
     cm3_mol_s: "cm³ mol⁻¹ s⁻¹",

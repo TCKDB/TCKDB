@@ -31,11 +31,18 @@
     margin-top: 2rem;
 }
 
+/* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
+   (design-system.css) is `uppercase` -- every OTHER caller of this token is
+   an English prose label, where case carries no meaning. This heading's own
+   text is a unit string (`arrheniusUnitLabel`, e.g. "s⁻¹"), and upper-casing
+   it renders "S⁻¹" -- SIEMENS per second, a different physical quantity,
+   not "seconds⁻¹" with a capital letter. `text-transform: none` is scoped
+   to this ONE class, never a page-wide override of `--type-label` itself. */
 .arrhenius-chart-panel-heading {
     margin: 0 0 .5rem;
     font: var(--type-label-font);
     letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
+    text-transform: none;
     color: var(--muted);
 }
 
@@ -126,14 +133,18 @@
     text-transform: var(--type-label-transform);
 }
 
-/* Pinned to the SVG's own width via an inline `style={{width}}` at the call
-   site, sharing the SAME `ARRHENIUS_CHART_WIDTH` constant the SVG itself
-   is sized with -- never centred in a grid track that can be wider than
-   the chart it describes (the mock's other round-2 defect: its x-axis
-   title centred in the grid COLUMN, not under the plotted chart). Sitting
-   inside `.arrhenius-chart-scroll` alongside the SVG, this paragraph
-   scrolls in lockstep with it, so the title is always directly under the
-   axis it names regardless of how far the container has been scrolled. */
+/* Pinned to the PLOT box's own width/offset via an inline `style={{
+   marginLeft, width}}` at the call site (`left`/`plotWidth`, the SAME
+   values the ticks and curve are drawn with) -- never centred in a grid
+   track that can be wider than the chart it describes (the mock's other
+   round-2 defect: its x-axis title centred in the grid COLUMN, not under
+   the plotted chart), and never centred on the full SVG box either (a
+   later review finding: the SVG's own left/right margins are NOT
+   symmetric, so centring on the full width sat the title ~19px off from
+   the plotted curve's actual centre). Sitting inside
+   `.arrhenius-chart-scroll` alongside the SVG, this paragraph scrolls in
+   lockstep with it, so the title is always directly under the axis it
+   names regardless of how far the container has been scrolled. */
 .arrhenius-chart-axis-title--x {
     text-align: center;
 }

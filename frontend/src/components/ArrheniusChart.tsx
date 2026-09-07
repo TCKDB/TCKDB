@@ -50,10 +50,13 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     const { panels, excluded } = buildArrheniusChartData(kinetics)
 
     // Every record whose OWN k(T) table is computable -- the chart's text
-    // equivalent set. A record can be excluded from the CHART (PLOG etc.)
-    // and simultaneously have no table either; `computeKineticsTable`
-    // applies the identical plog/chebyshev/falloff gate `buildArrheniusChartData`
-    // does, so the two never disagree about which records get a table.
+    // equivalent set. `computeKineticsTable` (`domain/kineticsTable.ts`)
+    // gates on the SAME four conditions `exclusionReasons` below does --
+    // plog/chebyshev/falloff/`is_third_body` -- so a record excluded from
+    // the CHART for one of those reasons is refused a table too, rather
+    // than handing out the same T-only numbers one surface lower on the
+    // page (PR 3 review finding: a third-body record used to get exactly
+    // that -- excluded from the plot, then tabulated anyway).
     const tableRecords = kinetics
         .map((record) => ({ record, table: computeKineticsTable(record) }))
         .filter((entry): entry is { record: ReactionKineticsRecord; table: NonNullable<ReturnType<typeof computeKineticsTable>> } => entry.table !== null)
@@ -221,7 +224,20 @@ function ArrheniusPanelChart({ panel }: { panel: ArrheniusPanelData }) {
                             />
                         ))}
                     </svg>
-                    <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--x" style={{ width: ARRHENIUS_CHART_WIDTH }}>
+                    {/* Centred on the PLOT box (left..left+plotWidth), not
+                        the full SVG box -- the SVG's own margins are NOT
+                        symmetric (left=58 for the y-axis tick labels,
+                        right=20), so centring on the full 720px width sits
+                        the title ~19px off from the plotted curve's own
+                        centre (a review finding). `marginLeft: left` +
+                        `width: plotWidth` gives this paragraph the SAME
+                        horizontal box the ticks/curve are drawn in, still
+                        inside `.arrhenius-chart-scroll` so it keeps
+                        scrolling in lockstep with the SVG. */}
+                    <p
+                        className="arrhenius-chart-axis-title arrhenius-chart-axis-title--x"
+                        style={{ marginLeft: left, width: plotWidth }}
+                    >
                         Temperature (K)
                     </p>
                 </div>

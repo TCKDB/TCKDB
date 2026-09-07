@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionEntryPage from "./ReactionEntryPage"
 
@@ -167,14 +167,29 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         }
     })
 
-    it("every tse_/calc_/kin_ ref in the fixture appears at least once outside References", async () => {
+    it("every tse_/calc_ ref in the fixture appears at least once outside References", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
 
-        for (const ref of ["kin_test1", "tse_test1", "calc_opt1", "calc_freq1", "calc_sp1", "calc_irc1", "calc_freqlink", "calc_splink"]) {
+        for (const ref of ["tse_test1", "calc_opt1", "calc_freq1", "calc_sp1", "calc_irc1", "calc_freqlink", "calc_splink"]) {
             expect(occurrencesOutsideRefs(container, ref)).toBeGreaterThanOrEqual(1)
         }
+    })
+
+    // Review finding: `toBeGreaterThanOrEqual(1)` here verifies nothing that
+    // `findByText("kin_test1")` two lines above didn't already establish --
+    // `kin_test1` (unlike tse_/calc_, whose multiplicities genuinely vary
+    // with how many stages/dependency edges a fixture happens to carry) has
+    // an EXACT, known count on this fixture: the kinetics card's own
+    // "Kinetics ref" fact, the Arrhenius chart's legend chip
+    // ("series 1 — kin_test1"), and the k(T) table's Disclosure heading
+    // ("k(T) table — kin_test1") -- three sites, never more, never fewer.
+    it("kin_test1 appears exactly 3 times outside References: the card fact, the chart legend chip, and the k(T) table heading", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(occurrencesOutsideRefs(container, "kin_test1")).toBe(3)
     })
 
     it("every A/n/Ea/T value from the kinetics record is present, string-equal to the payload", async () => {
@@ -185,6 +200,24 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         for (const value of ["3025.44", "3.11242", "39.9711", "300", "3000"]) {
             expect(text).toContain(value)
         }
+    })
+})
+
+// Review finding (blocking #3): the ONE call site wiring `ArrheniusChart`
+// into `ReactionKineticsSection.tsx` had no page-level guard -- reverting
+// that file to `main` (which never called the component at all) removed
+// the chart from the page entirely and this whole test file stayed
+// 25/25 green, because nothing here ever asked the page itself for the
+// Arrhenius SVG.
+describe("ReactionEntryPage -- the Arrhenius chart actually renders on the page", () => {
+    it("the kinetics section contains an Arrhenius plot SVG for a plottable record", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const kineticsSection = container.querySelector('section[aria-labelledby="kinetics-heading"]')!
+        const svg = within(kineticsSection as HTMLElement).getByRole("img", { name: /Arrhenius plot/ })
+        expect(svg).toBeInTheDocument()
+        expect(svg.querySelector("polyline")).not.toBeNull()
     })
 })
 

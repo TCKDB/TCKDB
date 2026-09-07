@@ -15,6 +15,7 @@ function record(overrides: Record<string, unknown> = {}) {
         plog_entries: null,
         chebyshev: null,
         falloff: null,
+        is_third_body: false,
         temperature_coverage: { record_min_k: 300, record_max_k: 3000 },
         multi_arrhenius: null,
         parameters: { A, n, Ea_kj_mol: Ea },
@@ -71,6 +72,15 @@ describe("computeKineticsTable", () => {
         expect(computeKineticsTable(record({ plog_entries: [{}] }))).toBeNull()
         expect(computeKineticsTable(record({ chebyshev: {} }))).toBeNull()
         expect(computeKineticsTable(record({ falloff: {} }))).toBeNull()
+    })
+
+    // PR 3 review finding: `ArrheniusChart.tsx` refuses to plot a third-body
+    // record ("rate depends on bath-gas concentration, not on temperature
+    // alone") but used to hand the SAME numbers to this table one row lower
+    // on the page -- the same T-only formula (`arrheniusTermK`) is not this
+    // record's actual k(T) either, regardless of which surface renders it.
+    it("returns null for a third-body record, the same as a pressure-dependent one", () => {
+        expect(computeKineticsTable(record({ is_third_body: true }))).toBeNull()
     })
 
     it("returns null when the record has no fitted T range", () => {
