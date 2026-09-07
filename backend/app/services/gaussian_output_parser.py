@@ -72,6 +72,22 @@ def extract_first_geometry(
     the input deck actually declared is preferred, which is "Input
     orientation".
 
+    **A malformed block does not raise, and does not fall through to the
+    other header.** If "Input orientation" is found but its table is
+    truncated (EOF, or a non-data line) after parsing at least one atom
+    row, that partial, short atom list is returned as a *success* --
+    ``_parse_first_orientation_block`` treats any non-empty result as
+    final and stops searching (see its docstring: "found header but
+    couldn't parse -- don't keep searching"). It does **not** try
+    "Standard orientation" next in that case, and it does not signal the
+    truncation in any way a caller can detect from this function alone --
+    only a header found with **zero** parsable data rows falls through.
+    Callers that need to detect a truncated block must independently
+    verify the returned atom count against other evidence (e.g.
+    :mod:`app.services.input_geometry_extraction`'s comparison against the
+    calculation's own output-geometry atom count, run *before* the parsed
+    atoms are minted into a ``Geometry`` row).
+
     :param lines: Raw lines from the Gaussian log file.
     :returns: Tuple of (element_symbol, x, y, z) for each atom.
     :raises ValueError: If no parsable geometry block is found.

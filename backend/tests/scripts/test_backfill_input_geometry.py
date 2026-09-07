@@ -331,8 +331,9 @@ def test_a_second_apply_is_idempotent(
     second = _run_main(backfill, monkeypatch, db_session, ["--apply"])
     assert second == 0
     out = capsys.readouterr().out
-    # Now already_distinct (a and b both carry a real, distinct input).
-    assert "extracted: 0" not in out or "already_distinct" in out
+    # Now already_distinct (a and b both carry a real, distinct input);
+    # no calculation is tallied as "extracted" a second time.
+    assert "extracted:" not in out
     assert "Wrote an extracted input geometry on 0 of 5" in out
 
     after_second = _input_links(db_session, calc_a.id)
@@ -373,3 +374,65 @@ def test_verbose_names_public_refs_not_ids(
     calc_a, _ = scope["a"]
     assert calc_a.public_ref in out
     assert f"  {calc_a.public_ref}: extracted" in out
+
+
+def test_one_row_raising_does_not_kill_the_batch(
+    backfill, monkeypatch, db_session, stub_load_artifact_bytes, capsys
+):
+    """A row whose extraction raises (any exception, not just the specific
+    element-canonicality AttributeError this module's own parser hardening
+    is meant to prevent) must not abort the run -- it is recorded as
+    ``not_determinable`` and the batch continues to the next calculation."""
+    calc_bad, _ = _water_calc(db_session)
+    attach_artifact(
+        db_session,
+        calculation=calc_bad,
+        kind=ArtifactKind.input,
+        filename="bad.gjf",
+        sha256=_GAUSSIAN_GJF_SHA,
+        bytes_=len(_GAUSSIAN_GJF_FIXTURE),
+    )
+    calc_good, _ = _water_calc(db_session)
+    attach_artifact(
+        db_session,
+        calculation=calc_good,
+        kind=ArtifactKind.input,
+        filename="good.gjf",
+        sha256=_GAUSSIAN_GJF_SHA,
+        bytes_=len(_GAUSSIAN_GJF_FIXTURE),
+    )
+    db_session.flush()
+    stub_load_artifact_bytes[_GAUSSIAN_GJF_SHA] = _GAUSSIAN_GJF_FIXTURE
+
+    import app.services.input_geometry_extraction as ige_module
+
+    real_extract = ige_module.extract_and_link_input_geometry_from_stored_artifacts
+
+    def _raise_for_bad_calc(session, calc):
+        if calc.id == calc_bad.id:
+            raise RuntimeError("simulated unexpected failure")
+        return real_extract(session, calc)
+
+    monkeypatch.setattr(
+        "app.services.input_geometry_extraction.extract_and_link_input_geometry_from_stored_artifacts",
+        _raise_for_bad_calc,
+    )
+    # The backfill script imported the name directly; patch its own binding too.
+    monkeypatch.setattr(
+        backfill, "extract_and_link_input_geometry_from_stored_artifacts", _raise_for_bad_calc
+    )
+
+    rc = _run_main(backfill, monkeypatch, db_session, ["--apply"])
+    assert rc == 0
+
+    # The good calc after the bad one was still processed.
+    good_links = _input_links(db_session, calc_good.id)
+    assert len(good_links) == 1
+    assert good_links[0].source is CalculationInputGeometrySource.extracted_from_artifact
+
+    # The bad calc got no link (the raise was absorbed as not_determinable).
+    assert _input_links(db_session, calc_bad.id) == []
+
+    out = capsys.readouterr().out
+    assert "not_determinable: 1" in out
+    assert "extracted: 1" in out

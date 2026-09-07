@@ -194,3 +194,159 @@ class TestDispatch:
             software="gaussian", artifact_kind=ArtifactKind.hessian, text="anything"
         )
         assert result.action is InputGeometryParseAction.not_determinable
+
+
+# ---------------------------------------------------------------------------
+# Bohr-unit rejection. A deck whose coordinates are in Bohr must never be
+# stored as Angstrom -- that silently inflates every distance by
+# 1/0.529177 = 1.8897x. Reject, don't convert (per the module's own
+# "reject, don't guess" discipline).
+# ---------------------------------------------------------------------------
+
+
+def _gaussian_gjf(route: str) -> str:
+    return (
+        f"%chk=water.chk\n"
+        f"{route}\n"
+        "\n"
+        "water\n"
+        "\n"
+        "0 1\n"
+        "O 0.000000 0.000000 0.118351\n"
+        "H 0.000000 0.761187 -0.469725\n"
+        "H 0.000000 -0.761187 -0.469725\n"
+        "\n"
+    )
+
+
+class TestGaussianBohrRejection:
+    @pytest.mark.parametrize(
+        "route",
+        [
+            "# opt units=bohr b3lyp/6-31g(d)",
+            "# opt units(bohr) b3lyp/6-31g(d)",
+            "# opt units=(bohr,nosymm) b3lyp/6-31g(d)",
+        ],
+        ids=["units=bohr", "units(bohr)", "units=(bohr,...)"],
+    )
+    def test_bohr_route_is_rejected(self, route):
+        result = parse_gaussian_input_geometry(_gaussian_gjf(route))
+        assert result.action is InputGeometryParseAction.not_determinable
+        assert result.atoms is None
+        assert "bohr" in (result.reason or "").lower()
+
+    def test_angstrom_deck_is_unaffected(self):
+        # Sanity check: an ordinary deck (no Units keyword) still extracts.
+        result = parse_gaussian_input_geometry(_gaussian_gjf("# opt b3lyp/6-31g(d)"))
+        assert result.action is InputGeometryParseAction.extracted
+
+
+def _orca_xyz_deck(bang_line: str, *, coords_units_line: str = "") -> str:
+    coords_block = ""
+    if coords_units_line:
+        coords_block = (
+            "%coords\n"
+            "  CTyp xyz\n"
+            "  Charge 0\n"
+            "  Mult 1\n"
+            f"  {coords_units_line}\n"
+            "  coords\n"
+            "    O 0.000000 0.000000 0.118351\n"
+            "    H 0.000000 0.761187 -0.469725\n"
+            "    H 0.000000 -0.761187 -0.469725\n"
+            "  end\n"
+            "end\n"
+        )
+    xyz_block = ""
+    if not coords_units_line:
+        xyz_block = (
+            "* xyz 0 1\n"
+            "O 0.000000 0.000000 0.118351\n"
+            "H 0.000000 0.761187 -0.469725\n"
+            "H 0.000000 -0.761187 -0.469725\n"
+            "*\n"
+        )
+    return f"{bang_line}\n\n{coords_block}{xyz_block}"
+
+
+class TestOrcaBohrRejection:
+    def test_bang_line_bohrs_is_rejected(self):
+        result = parse_orca_input_geometry(
+            _orca_xyz_deck("! B3LYP def2-TZVP Opt Bohrs")
+        )
+        assert result.action is InputGeometryParseAction.not_determinable
+        assert "bohr" in (result.reason or "").lower()
+
+    def test_coords_block_units_bohrs_is_rejected(self):
+        result = parse_orca_input_geometry(
+            _orca_xyz_deck(
+                "! B3LYP def2-TZVP Opt", coords_units_line="Units Bohrs"
+            )
+        )
+        assert result.action is InputGeometryParseAction.not_determinable
+        assert "bohr" in (result.reason or "").lower()
+
+    def test_angstrom_deck_is_unaffected(self):
+        result = parse_orca_input_geometry(_orca_xyz_deck("! B3LYP def2-TZVP Opt"))
+        assert result.action is InputGeometryParseAction.extracted
+
+
+# ---------------------------------------------------------------------------
+# Element-token normalisation: atomic numbers and Gaussian-style trailing
+# label suffixes resolve; isotope/fragment syntax this module cannot
+# resolve is rejected -- never handed to resolve_geometry_payload, which
+# would otherwise mint a Geometry row that then fails the DB's element
+# canonicality CHECK.
+# ---------------------------------------------------------------------------
+
+
+class TestGaussianElementTokenNormalization:
+    def test_atomic_number_column_resolves(self):
+        text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace("O 0.000000", "8 0.000000")
+        result = parse_gaussian_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+        assert result.atoms[0][0] == "O"
+
+    def test_labelled_element_suffix_resolves(self):
+        text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace("O 0.000000", "O1 0.000000")
+        result = parse_gaussian_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+        assert result.atoms[0][0] == "O"
+
+    def test_deuterium_symbol_is_not_rejected(self):
+        # D/T are legitimate deposited symbols (ADR 0008), not something
+        # this module's element-token check may treat as unresolvable.
+        text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace(
+            "H 0.000000 0.761187", "D 0.000000 0.761187"
+        )
+        result = parse_gaussian_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+        assert result.atoms[1][0] == "D"
+
+    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C"])
+    def test_unresolvable_token_is_rejected(self, token):
+        text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace("O 0.000000", f"{token} 0.000000")
+        result = parse_gaussian_input_geometry(text)
+        assert result.action is InputGeometryParseAction.not_determinable
+        assert token in (result.reason or "")
+
+
+class TestOrcaElementTokenNormalization:
+    def test_atomic_number_column_resolves(self):
+        text = _orca_xyz_deck("! B3LYP def2-TZVP Opt").replace("O 0.000000", "8 0.000000")
+        result = parse_orca_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+        assert result.atoms[0][0] == "O"
+
+    def test_labelled_element_suffix_resolves(self):
+        text = _orca_xyz_deck("! B3LYP def2-TZVP Opt").replace("O 0.000000", "O1 0.000000")
+        result = parse_orca_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+        assert result.atoms[0][0] == "O"
+
+    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C"])
+    def test_unresolvable_token_is_rejected(self, token):
+        text = _orca_xyz_deck("! B3LYP def2-TZVP Opt").replace("O 0.000000", f"{token} 0.000000")
+        result = parse_orca_input_geometry(text)
+        assert result.action is InputGeometryParseAction.not_determinable
+        assert token in (result.reason or "")

@@ -60,9 +60,6 @@ ORCA_INP_XYZFILE = (
 ORCA_LOG_HEAD = (INPUT_GEOMETRY_FIXTURES / "orca_opt_output_head.out").read_bytes()
 GAUSSIAN_OPT_LOG = (FIXTURES / "gaussian" / "opt_g09.log").read_bytes()  # 12 atoms
 
-# The .gjf/.inp fixtures both declare this water-like starting geometry.
-WATER_INPUT_FIRST_ATOM = ("O", 0.0, 0.0, 0.118351)
-
 # opt_g09.log's SMILES, matching the existing test_geometry_validation.py
 # fixture use of the same file (N2C3H7 doublet radical).
 N2C3H7_SMILES = "[N]=NCCC"

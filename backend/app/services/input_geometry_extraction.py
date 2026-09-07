@@ -53,10 +53,11 @@ the hook's docstring for the documented ordering caveat).
 
 **Basin assignment and coverage are untouched by this module.** Conformer
 basin matching (DR-0005) runs once, at initial conformer/species/reaction
-upload time, from the *producer-declared* conformer geometry
-(``app.workflows.conformer``/``computed_species``/``computed_reaction`` call
-``resolve_conformer_group`` with the payload's own ``xyz_atoms`` -- never
-from a calculation's artifacts, and never re-run later). Nothing in this
+upload time, from the *producer-declared* conformer geometry -- all four
+call sites (``app.workflows.conformer``, ``computed_species``,
+``computed_reaction``, and ``network_pdep``) call ``resolve_conformer_group``
+with the payload's own ``xyz_atoms``, never from a calculation's artifacts,
+and never re-run later. Nothing in this
 module calls or influences that path. The group-evidence coverage counters
 (``app.services.scientific_read.conformers._build_group_evidence_summary``)
 are also unaffected: ``evidence_coverage`` and ``optimization_chain_count``
@@ -76,6 +77,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
+from rdkit import Chem
 from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -93,6 +95,7 @@ from app.db.models.common import (
     CalculationType,
     SubmissionRecordType,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.record_review import RecordReview
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.geometry import GeometryPayload
@@ -171,6 +174,65 @@ def _not_determinable(reason: str) -> ParsedInputGeometry:
     )
 
 
+# --- Element-token normalisation, shared by both input-deck parsers -------
+
+#: A bare element symbol: one or two letters, any case (the DB's own
+#: canonicality CHECK -- ``ck_geometry_atom_element_canonical`` -- is
+#: ``btrim(element) ~ '^[A-Z][a-z]?$'``, one-or-two letters, so this mirrors
+#: that shape rather than a stricter one). Deliberately *not* validated
+#: against the periodic table: ``D``/``T`` (deuterium/tritium) are
+#: legitimate deposited symbols every ESS program in this codebase's scope
+#: accepts (ADR 0008; see :func:`app.chemistry.geometry.resolve_element_symbol`),
+#: and neither is a real element RDKit's periodic table recognises.
+#: Rejecting them here would refuse correct, common isotope-labelled decks.
+_PLAIN_ELEMENT_TOKEN = re.compile(r"^[A-Za-z]{1,2}$")
+#: An element symbol with a trailing Gaussian/ORCA atom-instance label
+#: (``O1``, ``Cl2``) -- digits appended purely to distinguish otherwise-
+#: identical atoms (ONIOM layers, per-atom basis-set assignment), not an
+#: isotope or fragment marker.
+_LABELLED_ELEMENT_TOKEN = re.compile(r"^([A-Za-z]{1,2})\d+$")
+
+_PERIODIC_TABLE = Chem.GetPeriodicTable()
+
+
+def _normalize_element_token(token: str) -> str | None:
+    """Resolve one atom-column token to a plain element symbol, or ``None``.
+
+    Handles the two extra forms Gaussian/ORCA accept in a Cartesian atom
+    column beyond a bare symbol:
+
+    * an **atomic number** (``8`` -> ``O``), looked up through
+      :class:`rdkit.Chem.GetPeriodicTable`;
+    * a **trailing numeric label** used to distinguish atom instances
+      (``O1`` -> ``O``, ``Cl2`` -> ``Cl``) -- stripped, then checked
+      against the same shape a bare symbol must have.
+
+    Anything else -- isotope/fragment syntax such as ``C-13`` (Gaussian's
+    dash-isotope notation) or ``C-0.5``, or a token that is not a plausible
+    one-or-two-letter symbol even after stripping a label -- returns
+    ``None`` so the caller rejects the whole deck rather than handing an
+    unresolvable token to :func:`app.services.geometry_resolution.resolve_geometry_payload`,
+    which would otherwise mint a ``Geometry``/``GeometryAtom`` row that
+    fails the database's element-canonicality CHECK and returns ``None``
+    from a code path that does not expect it.
+    """
+    if token.isdigit():
+        atomic_number = int(token)
+        if not (1 <= atomic_number <= 118):
+            return None
+        try:
+            symbol = _PERIODIC_TABLE.GetElementSymbol(atomic_number)
+        except (RuntimeError, OverflowError, ValueError):
+            return None
+        return symbol or None
+
+    match = _LABELLED_ELEMENT_TOKEN.match(token)
+    candidate = match.group(1) if match else token
+    if not _PLAIN_ELEMENT_TOKEN.match(candidate):
+        return None
+    return candidate
+
+
 # --- Gaussian input deck (.gjf / .com): Cartesian block only --------------
 
 #: A Cartesian atom row: element, optional integer freeze-code, then three
@@ -180,6 +242,42 @@ def _not_determinable(reason: str) -> ParsedInputGeometry:
 #: whole block is rejected rather than guessed at.
 _GAUSSIAN_CART_ROW_FLOAT = re.compile(r"^[+-]?\d+\.\d+$")
 _GAUSSIAN_CART_ROW_INT = re.compile(r"^-?\d+$")
+
+#: Gaussian's ``Units`` route keyword, non-Angstrom option. ``Units(Bohr)``,
+#: ``units=bohr`` and ``units=(bohr,...)`` (a multi-option parenthesized
+#: form, like ``opt=(maxcycles=100,tight)``) are all Gaussian-legal
+#: spellings; ``AU`` is a documented synonym for ``Bohr``. Angstrom is
+#: the default and the only unit this module converts none of, so any of
+#: these must reject the deck rather than silently store Bohr-magnitude
+#: numbers as if they were Angstrom (a 1/0.529177 = 1.8897x inflation).
+_GAUSSIAN_NON_ANGSTROM_UNITS = re.compile(
+    r"\bunits\s*[=(]\s*\(?\s*(?:bohrs?|au)\b", re.IGNORECASE
+)
+
+
+def _gaussian_route_text(lines: list[str]) -> str | None:
+    """Return the joined route-section text (the ``#...`` line block).
+
+    Mirrors the route-finding half of :func:`_locate_gaussian_molecule_spec`
+    (first line starting with ``#``, collected through the next blank
+    line) but returns the joined text rather than an atom-start index, so
+    a units declaration that may wrap across physical lines is checked as
+    one string.
+    """
+    route_start = None
+    for i, line in enumerate(lines):
+        if line.strip().startswith("#"):
+            route_start = i
+            break
+    if route_start is None:
+        return None
+
+    parts: list[str] = []
+    i = route_start
+    while i < len(lines) and lines[i].strip() != "":
+        parts.append(lines[i].strip())
+        i += 1
+    return " ".join(parts)
 
 
 def _locate_gaussian_molecule_spec(lines: list[str]) -> int | None:
@@ -225,13 +323,23 @@ def _locate_gaussian_molecule_spec(lines: list[str]) -> int | None:
 def parse_gaussian_input_geometry(text: str) -> ParsedInputGeometry:
     """Parse a raw Gaussian input deck's Cartesian coordinate block.
 
-    Rejects (``not_determinable``, never guesses) when: no route/title/
-    charge-multiplicity landmark is found, the block is empty, or any atom
-    line is not a plain ``element [flag] x y z`` row -- the shape a Z-matrix
-    or mixed Cartesian/Z-matrix deck (which Gaussian also accepts) fails,
-    since converting internal coordinates to Cartesian is out of scope.
+    Rejects (``not_determinable``, never guesses) when: the route declares
+    non-Angstrom (``Bohr``/``AU``) units (see
+    :data:`_GAUSSIAN_NON_ANGSTROM_UNITS` -- this module never converts,
+    only Angstrom decks are accepted), no route/title/charge-multiplicity
+    landmark is found, the block is empty, any atom line is not a plain
+    ``element [flag] x y z`` row (the shape a Z-matrix or mixed
+    Cartesian/Z-matrix deck, which Gaussian also accepts, fails, since
+    converting internal coordinates to Cartesian is out of scope), or an
+    atom's element column cannot be resolved to a plain symbol
+    (:func:`_normalize_element_token`).
     """
     lines = text.splitlines()
+
+    route = _gaussian_route_text(lines)
+    if route is not None and _GAUSSIAN_NON_ANGSTROM_UNITS.search(route):
+        return _not_determinable("declares Bohr units; not converted")
+
     atom_start = _locate_gaussian_molecule_spec(lines)
     if atom_start is None:
         return _not_determinable(
@@ -264,7 +372,14 @@ def parse_gaussian_input_geometry(text: str) -> ParsedInputGeometry:
                 "coordinate -- possibly Z-matrix/internal coordinates, "
                 "which are not converted"
             )
-        atoms.append((element, float(xs), float(ys), float(zs)))
+        normalized_element = _normalize_element_token(element)
+        if normalized_element is None:
+            return _not_determinable(
+                f"Gaussian input element token '{element}' could not be "
+                "resolved to a plain symbol or atomic number -- "
+                "isotope/fragment labels are not converted"
+            )
+        atoms.append((normalized_element, float(xs), float(ys), float(zs)))
 
     if not atoms:
         return _not_determinable("Gaussian input coordinate block is empty")
@@ -297,15 +412,37 @@ _ORCA_XYZ_OPEN = re.compile(r"^\*\s*xyz\s+(-?\d+)\s+(\d+)\s*$", re.IGNORECASE)
 _ORCA_XYZFILE = re.compile(r"^\*\s*xyzfile\b", re.IGNORECASE)
 _ORCA_INTERNAL = re.compile(r"^\*\s*(int|gzmt)\b", re.IGNORECASE)
 
+#: ORCA's simple-input ``!`` keyword line declaring non-Angstrom
+#: coordinates (``! B3LYP def2-TZVP Opt Bohrs``). Angstrom is the default.
+_ORCA_BANG_LINE_BOHRS = re.compile(r"^\s*!.*\bbohrs?\b", re.IGNORECASE | re.MULTILINE)
+#: The longer-form ``%coords ... Units Bohrs ... end`` block declares the
+#: same thing for coordinates given that way. Matched anywhere in the text
+#: rather than scoped strictly to a ``%coords`` block: over-rejecting a
+#: deck that happens to contain this exact phrase elsewhere is far safer
+#: than under-rejecting one that genuinely declares Bohr coordinates.
+_ORCA_COORDS_UNITS_BOHRS = re.compile(r"\bunits\s+bohrs?\b", re.IGNORECASE)
+
+
+def _orca_declares_bohr_units(text: str) -> bool:
+    return bool(
+        _ORCA_BANG_LINE_BOHRS.search(text) or _ORCA_COORDS_UNITS_BOHRS.search(text)
+    )
+
 
 def parse_orca_input_geometry(text: str) -> ParsedInputGeometry:
     """Parse an ORCA input deck's inline ``* xyz <charge> <mult>`` block.
 
-    Rejects ``* xyzfile`` (coordinates live in a separate file this module
-    never sees) and ``* int`` / ``* gzmt`` (internal coordinates / Z-matrix
-    -- converting to Cartesian is out of scope) with a reason naming which
+    Rejects (never converts) a deck declaring Bohr coordinates -- either
+    the ``!`` simple-input line (``Bohrs``) or a ``%coords ... Units
+    Bohrs`` block -- since this module only stores Angstrom. Also rejects
+    ``* xyzfile`` (coordinates live in a separate file this module never
+    sees) and ``* int`` / ``* gzmt`` (internal coordinates / Z-matrix --
+    converting to Cartesian is out of scope) with a reason naming which
     one, rather than guessing. The first matching directive line wins.
     """
+    if _orca_declares_bohr_units(text):
+        return _not_determinable("declares Bohr units; not converted")
+
     lines = text.splitlines()
     for i, raw_line in enumerate(lines):
         stripped = raw_line.strip()
@@ -345,8 +482,17 @@ def parse_orca_input_geometry(text: str) -> ParsedInputGeometry:
                         "not 'element x y z'"
                     )
                 element, xs, ys, zs = parts
+                normalized_element = _normalize_element_token(element)
+                if normalized_element is None:
+                    return _not_determinable(
+                        f"ORCA input element token '{element}' could not be "
+                        "resolved to a plain symbol or atomic number -- "
+                        "isotope/fragment labels are not converted"
+                    )
                 try:
-                    atoms.append((element, float(xs), float(ys), float(zs)))
+                    atoms.append(
+                        (normalized_element, float(xs), float(ys), float(zs))
+                    )
                 except ValueError:
                     return _not_determinable(
                         "ORCA input '* xyz' block contains a non-numeric "
@@ -538,6 +684,10 @@ def _resolve_software_for_extraction(
 @dataclass(frozen=True)
 class _CalculationGeometryState:
     output_geometry_id: int | None
+    #: ``geometry.natoms`` of :attr:`output_geometry_id`. Compared against
+    #: a candidate's parsed atom count before minting -- see
+    #: :func:`_mint_and_link_extracted_geometry`.
+    output_natoms: int | None
     existing_input_link: CalculationInputGeometry | None
     eligible: bool
     ineligible_outcome: InputGeometryOutcomeKind | None = None
@@ -566,6 +716,13 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
     as a raw database error into a clean, informative outcome (relevant
     mainly to the backfill, which walks calculations the upload hook
     never sees in this state).
+
+    ``ambiguous_output`` covers **zero** output-geometry rows as much as
+    more than one: an ``opt`` calc that (for whatever reason) never got an
+    output geometry attached has nothing to compare a candidate's atom
+    count against either, so it is skipped the same way a genuinely
+    multi-output calc is -- both are "not a well-posed question", not two
+    different states.
     """
     is_frozen = session.scalar(
         select(RecordReview.id)
@@ -579,6 +736,7 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
     if is_frozen is not None:
         return _CalculationGeometryState(
             output_geometry_id=None,
+            output_natoms=None,
             existing_input_link=None,
             eligible=False,
             ineligible_outcome=InputGeometryOutcomeKind.frozen_after_approval,
@@ -588,24 +746,26 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
             ),
         )
 
-    output_rows = session.scalars(
-        select(CalculationOutputGeometry).where(
-            CalculationOutputGeometry.calculation_id == calculation.id
-        )
+    output_rows = session.execute(
+        select(CalculationOutputGeometry.geometry_id, Geometry.natoms)
+        .join(Geometry, Geometry.id == CalculationOutputGeometry.geometry_id)
+        .where(CalculationOutputGeometry.calculation_id == calculation.id)
     ).all()
     if len(output_rows) != 1:
         return _CalculationGeometryState(
             output_geometry_id=None,
+            output_natoms=None,
             existing_input_link=None,
             eligible=False,
             ineligible_outcome=InputGeometryOutcomeKind.ambiguous_output,
             ineligible_reason=(
                 f"calculation has {len(output_rows)} output geometries "
-                "(need exactly one to compare an extracted starting "
-                "geometry against)"
+                "(need exactly one -- zero or more than one are both "
+                "ambiguous -- to compare an extracted starting geometry "
+                "against)"
             ),
         )
-    output_geometry_id = output_rows[0].geometry_id
+    output_geometry_id, output_natoms = output_rows[0]
 
     input_rows = session.scalars(
         select(CalculationInputGeometry).where(
@@ -615,17 +775,20 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
     if not input_rows:
         return _CalculationGeometryState(
             output_geometry_id=output_geometry_id,
+            output_natoms=output_natoms,
             existing_input_link=None,
             eligible=True,
         )
     if len(input_rows) == 1 and input_rows[0].geometry_id == output_geometry_id:
         return _CalculationGeometryState(
             output_geometry_id=output_geometry_id,
+            output_natoms=output_natoms,
             existing_input_link=input_rows[0],
             eligible=True,
         )
     return _CalculationGeometryState(
         output_geometry_id=output_geometry_id,
+        output_natoms=output_natoms,
         existing_input_link=None,
         eligible=False,
         ineligible_outcome=InputGeometryOutcomeKind.already_distinct,
@@ -636,56 +799,101 @@ def _current_state(session: Session, calculation: Calculation) -> _CalculationGe
     )
 
 
-def _link_extracted_geometry(
+def _mint_and_link_extracted_geometry(
     session: Session,
     calculation: Calculation,
     *,
-    existing_link: CalculationInputGeometry | None,
-    geometry_id: int,
-) -> bool:
-    """Link *geometry_id* as the calculation's extracted input geometry.
+    state: _CalculationGeometryState,
+    atoms: tuple[tuple[str, float, float, float], ...],
+) -> InputGeometryOutcome:
+    """Mint (dedupe) *atoms* as a ``Geometry`` and link it, or reject atomically.
 
-    Fills the absent case (insert, ``input_order=1``) or replaces a
-    degenerate placeholder (a link that duplicated the output geometry --
-    known-wrong by construction, an ARC deposit artifact rather than a
-    second real observation, so updating it in place is a fill, not an
-    overwrite of a reported value; see the module docstring). Either way
-    :func:`assert_calculation_geometry_composition` is called first, on
-    the same construction site the link is written from, which is what the
-    AST guard in ``tests/services/test_calculation_geometry_composition_guard.py``
-    requires of every ``calculation_input_geometry`` write path.
+    **The atom-count guard runs first, before anything is minted.** A
+    parsed geometry whose atom count does not match the calculation's own
+    output geometry (:attr:`_CalculationGeometryState.output_natoms`) is
+    refused outright -- most often a truncated/malformed artifact (see
+    :func:`app.services.gaussian_output_parser.extract_first_geometry`'s
+    docstring: a malformed "Input orientation" block does not raise, it
+    returns whatever partial, non-empty atom list it parsed before hitting
+    the truncation). This check is independent of species/subject
+    identity, and runs whether or not
+    :func:`app.services.calculation_geometry_composition.assert_calculation_geometry_composition`
+    would itself judge the geometry -- that check silently declines for a
+    ``pseudo`` owner, an unparsable stored SMILES, or a transition state
+    whose reaction has a ``pseudo`` reactant
+    (:func:`app.services.calculation_geometry_composition._reference_for`),
+    and a truncated log must be refused regardless of which owner kind
+    linked it.
 
-    Returns ``True`` if a row was written/changed. Never raises. The whole
-    operation -- the composition assertion (which can raise
-    ``CodedValueError``) and either write branch -- runs inside one
-    ``SAVEPOINT``, mirroring :func:`app.services.hessian_extraction._insert`'s
-    concurrent-duplicate handling but widened to cover the update branch
-    and the composition check too: this function is called both from
-    inside the upload hook's own :func:`app.services.best_effort.isolated_best_effort`
-    savepoint and directly from the backfill script's per-row loop, which
-    has no such wrapper of its own. A failure here (a composition
-    mismatch, a concurrent-duplicate ``IntegrityError``, or the
+    **Everything after the guard runs inside one ``SAVEPOINT``, opened
+    before ``resolve_geometry_payload`` is ever called.** Minting a new
+    ``Geometry``/``GeometryAtom`` row and then rejecting the link (a
+    composition mismatch, a concurrent-duplicate ``IntegrityError``, the
     accepted-science-immutability trigger firing on a race with an
-    approval that lands between :func:`_current_state` and this write) is
-    logged and absorbed so a caller iterating candidate artifacts, or a
-    backfill iterating calculations, is never interrupted by one bad row.
+    approval) used to leave that row orphaned -- nothing pointed at it,
+    because the mint happened *before* any savepoint that could roll it
+    back. Wrapping the mint in the same savepoint as the composition check
+    and the link write means a rejection undoes the mint too. Savepoints
+    nest freely in Postgres: ``resolve_geometry_payload`` opens its own
+    inner savepoint only for a genuinely new row, and rolling back this
+    outer one discards that regardless of whether the inner one already
+    committed.
+
+    This function is called both from inside the upload hook's own
+    :func:`app.services.best_effort.isolated_best_effort` savepoint and
+    directly from the backfill script's per-row loop, which has no such
+    wrapper of its own -- hence the self-contained savepoint here rather
+    than relying on a caller to supply one. Never raises.
     """
+    if len(atoms) != state.output_natoms:
+        return InputGeometryOutcome(
+            kind=InputGeometryOutcomeKind.not_determinable,
+            reason=(
+                f"parsed geometry has {len(atoms)} atoms but the "
+                f"calculation's own output geometry has "
+                f"{state.output_natoms} -- refusing to bind a mismatched "
+                "starting geometry (the artifact may be truncated)"
+            ),
+        )
+
     savepoint = session.begin_nested()
     try:
+        xyz_text = _atoms_to_xyz_text(atoms)
+        geometry = resolve_geometry_payload(session, GeometryPayload(xyz_text=xyz_text))
+        if geometry is None:
+            # resolve_geometry_payload's own insert failed a DB-level check
+            # (e.g. the element-canonicality CHECK on geometry_atom) and
+            # found no existing row to fall back to under the concurrent-
+            # duplicate branch -- see its docstring. The parser-level
+            # element-token normalisation is meant to make this
+            # unreachable; this is the defensive backstop.
+            savepoint.rollback()
+            return InputGeometryOutcome(
+                kind=InputGeometryOutcomeKind.not_determinable,
+                reason="the parsed geometry could not be stored (see the server log)",
+            )
+
+        if geometry.id == state.output_geometry_id:
+            savepoint.commit()  # nothing new was minted (hash-deduped onto
+            # the output row); nothing to roll back either way.
+            return InputGeometryOutcome(kind=InputGeometryOutcomeKind.identical_to_output)
+
         assert_calculation_geometry_composition(
             session,
             calc=calculation,
-            geometry_id=geometry_id,
+            geometry_id=geometry.id,
             field="input_geometry_extraction",
         )
-        if existing_link is not None:
-            existing_link.geometry_id = geometry_id
-            existing_link.source = CalculationInputGeometrySource.extracted_from_artifact
+        if state.existing_input_link is not None:
+            state.existing_input_link.geometry_id = geometry.id
+            state.existing_input_link.source = (
+                CalculationInputGeometrySource.extracted_from_artifact
+            )
         else:
             session.add(
                 CalculationInputGeometry(
                     calculation_id=calculation.id,
-                    geometry_id=geometry_id,
+                    geometry_id=geometry.id,
                     input_order=1,
                     source=CalculationInputGeometrySource.extracted_from_artifact,
                 )
@@ -696,14 +904,17 @@ def _link_extracted_geometry(
         session.expire(calculation, ["input_geometries"])
         if not isinstance(exc, IntegrityError):
             logger.warning(
-                "input_geometry link write skipped for calculation id=%s (%s)",
+                "input_geometry mint/link skipped for calculation id=%s (%s)",
                 calculation.id,
                 type(exc).__name__,
                 exc_info=exc,
             )
-        return False
+        return InputGeometryOutcome(
+            kind=InputGeometryOutcomeKind.not_determinable,
+            reason="the geometry could not be minted/linked (see the server log)",
+        )
     savepoint.commit()
-    return True
+    return InputGeometryOutcome(kind=InputGeometryOutcomeKind.extracted)
 
 
 def extract_and_link_input_geometry(
@@ -751,21 +962,15 @@ def extract_and_link_input_geometry(
             last_reason = parsed.reason or "not determinable"
             continue
 
-        xyz_text = _atoms_to_xyz_text(parsed.atoms)  # type: ignore[arg-type]
-        geometry = resolve_geometry_payload(session, GeometryPayload(xyz_text=xyz_text))
-
-        if geometry.id == state.output_geometry_id:
-            return InputGeometryOutcome(kind=InputGeometryOutcomeKind.identical_to_output)
-
-        linked = _link_extracted_geometry(
-            session,
-            calculation,
-            existing_link=state.existing_input_link,
-            geometry_id=geometry.id,
+        outcome = _mint_and_link_extracted_geometry(
+            session, calculation, state=state, atoms=parsed.atoms  # type: ignore[arg-type]
         )
-        if linked:
-            return InputGeometryOutcome(kind=InputGeometryOutcomeKind.extracted)
-        last_reason = "the link could not be written (see the server log)"
+        if outcome.kind in (
+            InputGeometryOutcomeKind.extracted,
+            InputGeometryOutcomeKind.identical_to_output,
+        ):
+            return outcome
+        last_reason = outcome.reason or "not determinable"
 
     return InputGeometryOutcome(
         kind=InputGeometryOutcomeKind.not_determinable, reason=last_reason

@@ -30,15 +30,38 @@ basin matching or coverage counting -- see the module docstring of
 this backfill.
 
 **Idempotent by construction.** The per-calculation eligibility check
-(absent input, or one identical to the output) is re-evaluated on every
-run; a row this script has already fixed no longer satisfies it, so a
-second run (``--apply`` or not) finds nothing left to do for that
-calculation.
+(absent input, or one identical to the output; zero *or* more than one
+output geometry is ``ambiguous_output`` either way -- there is nothing
+well-posed to compare a candidate against) is re-evaluated on every run; a
+row this script has already fixed no longer satisfies it, so a second run
+(``--apply`` or not) finds nothing left to do for that calculation.
 
 **Safe against approved calculations.** A calculation whose evidence is
 frozen (``record_review.first_approved_at`` set) is skipped with the
 ``frozen_after_approval`` outcome rather than attempting a write the
 deployed accepted-science-immutability trigger would refuse.
+
+**One bad row never aborts the run.** Every per-calculation call is
+wrapped in its own ``try``/``except`` in addition to its own ``SAVEPOINT``
+(see the loop in ``main()``): an exception the extraction path did not
+itself convert to a typed outcome -- unexpected data, a bug -- is caught,
+the savepoint is rolled back, and the row is tallied as
+``not_determinable`` so the batch reaches the rest of the corpus rather
+than dying on one malformed artifact.
+
+**A dry run can still leave a permanent record of a storage integrity
+break.** Reading a candidate artifact that fails its digest/size check
+records an ``artifact_integrity_event`` row via
+``app.services.artifact_integrity.record_from_error`` -- and that function
+commits in **its own**, separate session
+(``app.services.artifact_integrity.record_integrity_observation``: "Write
+one ``artifact_integrity_event`` in its own transaction"), not this
+script's session. That commit happens regardless of ``--apply``/
+``--dry-run``, because the break is a fact about the object store this
+script observed while reading, not a decision this script is making about
+``calculation_input_geometry``. A "dry run" here means "no
+``calculation_input_geometry``/``geometry`` write survives"; it does not
+mean "nothing in the database changes at all".
 
 Usage::
 
@@ -64,10 +87,13 @@ calculation naming its public ref and outcome (never a raw integer id).
 from __future__ import annotations
 
 import argparse
+import logging
 import re
 import sys
 from collections import Counter
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
@@ -180,7 +206,36 @@ def main() -> int:
             # test fixture's own flushed-but-uncommitted setup, which a
             # session-wide rollback would also discard).
             row_savepoint = session.begin_nested()
-            outcome = extract_and_link_input_geometry_from_stored_artifacts(session, calc)
+            try:
+                outcome = extract_and_link_input_geometry_from_stored_artifacts(
+                    session, calc
+                )
+            except Exception as exc:
+                # Never let one malformed calculation/artifact abort the
+                # rest of the corpus. extract_and_link_input_geometry_from_
+                # stored_artifacts converts every expected failure to a
+                # typed InputGeometryOutcome already; anything that still
+                # raises here is unexpected, and a Postgres SAVEPOINT left
+                # in its failed state after an error would poison every
+                # later statement in this session if not rolled back --
+                # same reasoning as app.services.best_effort.isolated_best_effort.
+                row_savepoint.rollback()
+                logger.warning(
+                    "input_geometry backfill: calculation %s raised "
+                    "unexpectedly (%s); recorded as not_determinable and "
+                    "the run continues",
+                    calc.public_ref,
+                    type(exc).__name__,
+                    exc_info=exc,
+                )
+                tally[InputGeometryOutcomeKind.not_determinable.value] += 1
+                if args.verbose:
+                    print(
+                        f"  {calc.public_ref}: not_determinable "
+                        f"(unexpected {type(exc).__name__}, see the server log)"
+                    )
+                continue
+
             tally[outcome.kind.value] += 1
             if args.verbose:
                 detail = f" ({outcome.reason})" if outcome.reason else ""
