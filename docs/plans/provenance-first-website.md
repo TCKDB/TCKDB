@@ -248,6 +248,39 @@ provenance and machine detail live on dedicated linked pages.
     data face when no formula can be parsed. The reviewer noted the
     statmech and transport species contexts still lack a formula; the
     next copy of that expression is the moment to share it.
+20. Refs where a reader looks. The owner asked why a page showed no
+    archive reference: three record pages hid every ref, including the
+    record's own, behind the collapsed References toggle, while three
+    others printed them inline. One rule now (#381): the record's own
+    ref is the first identity fact on every record page, in the data
+    face with a copy button, and only related refs stay in References.
+    The reviewer caught the cost at laptop widths before merge: a copy
+    button beside a 30-character ref broke the ref mid-token at 1440,
+    1180 and 900 though 1920 and 680 were fine, so the button now wraps
+    below a whole ref. Measure the widths in between, not just the
+    ends.
+21. Artifacts became citable. Every artifact row showed "not recorded"
+    for its ref because the table had no public reference column; the
+    read services returned null on purpose. A new revision adds the
+    column, mints a ref for each existing row inside the migration and
+    ends with it required and unique (#383, 563 rows on the live
+    archive). The upload response returns the ref too, so a depositor
+    learns it at once. One side effect was a gain: the dataset-release
+    resolver now exports artifact refs where it used to drop the
+    foreign key. The impact score on the model change read CRITICAL;
+    grouped by hand it was import fan-out through shared mixins, with
+    six real readers, all tested.
+22. Related calculations as a graph. Three sentences with links became
+    an inline dependency diagram (#382): this calculation emphasised in
+    the centre, what it was built from above, what was built on it
+    below, arrows in the direction of data flow with the same
+    relationship words the sentences used, which stay underneath as
+    the text equivalent. Three review rounds by measurement: lines were
+    painted over other edges' labels; the wide layout shrank below the
+    type floor on laptops; then the fix for lane collisions floated the
+    arrows off the centre box; then the deepest arrow left from inside
+    the rounded corner. Each was found by a geometric check the tests
+    had not made, and each check is now a test.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
