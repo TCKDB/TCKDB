@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reaction entry mock — rxe_ed66mj3ohtyien5rm2x3sb3rdu</title>
+<link rel="stylesheet" href="../src/theme.css">
+<link rel="stylesheet" href="../src/design-system.css">
+<link rel="stylesheet" href="../src/index.css">
+<link rel="stylesheet" href="../src/page-shell.css">
+<link rel="stylesheet" href="../src/conformer-group.css">
+<link rel="stylesheet" href="../src/record-identity-header.css">
+<link rel="stylesheet" href="../src/evidence-checklist.css">
+<link rel="stylesheet" href="../src/refs-disclosure.css">
+<link rel="stylesheet" href="../src/calculation-dependency-graph.css">
+<link rel="stylesheet" href="../src/thermo-cp-chart.css">
+<style>
+/*
+ * PR 0 static mock — the ONLY mock-local styling on this page, per the
+ * plan's PR 0 spec: every other rule above is a real app stylesheet, and
+ * this block styles nothing but the hand-drawn Arrhenius SVG, which has
+ * no `arrhenius-chart.css` yet (that ships in PR 3). Layout mirrors
+ * `thermo-cp-chart.css`'s own `.cp-chart-*` rules 1:1 (same panel/grid/
+ * axis-title shape) so the eventual real component is a rename, not a
+ * redesign. Deleted whole in PR 2.
+ */
+/* Grid shape copied verbatim from `thermo-cp-chart.css`'s own
+   `.cp-chart-panel`/`.cp-chart-axis-title--y` (own column for the rotated
+   y-axis title, never a share of the SVG's own column — see that file's
+   comment on the bug this avoids: an SVG spanning into the title's column
+   painted over it at every measured width). */
+.arr-chart-panel {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    column-gap: .3rem;
+    margin: 1.25rem 0 1.5rem;
+}
+.arr-chart-svg { grid-column: 2; grid-row: 1; display: block; width: 100%; height: auto; max-width: 720px; }
+.arr-chart-axis-title {
+    margin: .3rem 0 0;
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+.arr-chart-axis-title--x { grid-column: 2; grid-row: 2; text-align: center; }
+.arr-chart-axis-title--y {
+    grid-column: 1; grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+    margin: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+}
+.arr-chart-gridline { stroke: var(--line-2); stroke-width: 1; }
+.arr-chart-axis-line { stroke: var(--line); stroke-width: 1.25; }
+.arr-chart-tick-label { fill: var(--muted); font: var(--type-data-font); }
+.arr-chart-tick-label--y { text-anchor: end; dominant-baseline: middle; }
+.arr-chart-tick-label--x { text-anchor: middle; dominant-baseline: hanging; }
+.arr-chart-curve { fill: none; stroke: var(--chart-series-1); stroke-width: 2.4; }
+.arr-chart-point { fill: var(--chart-series-1); stroke: var(--surface); stroke-width: 1; }
+</style>
+</head>
+<body>
+<div class="archive-shell">
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="utility-bar">
+    <a class="brand" href="../index.html" aria-label="TCKDB home"><span>T</span> TCKDB</a>
+    <div class="utility-bar-end">
+        <nav aria-label="Primary navigation">
+            <a href="#">Species</a>
+            <a href="reaction-overview.html" aria-current="page">Reactions</a>
+            <a href="#">Methods</a>
+        </nav>
+        <div class="theme-toggle" role="radiogroup" aria-label="Theme">
+            <button type="button" role="radio" aria-checked="true" class="theme-toggle-option" data-active="true">Light</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">Dark</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">System</button>
+        </div>
+    </div>
+</header>
+<main id="main-content">
+<section class="conformer-page tse-page">
+    <nav class="record-breadcrumbs" aria-label="Breadcrumb">
+        <a href="../index.html">TCKDB</a>
+        <span aria-hidden="true">/</span>
+        <a href="reaction-overview.html">Reactions</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Reaction entry</span>
+    </nav>
+    <div class="page-shell-layout">
+    <div class="page-shell-content">
+    <div class="page-shell-identity">
+    <header class="basin-header">
+        <div class="record-identity-header">
+            <div class="record-identity-kicker-row">
+                <span class="t-kicker record-identity-kicker">Reaction entry · deposited scientific record</span>
+                <span class="value-pill value-pill--muted">not reviewed</span>
+            </div>
+            <h1 class="t-display-2 record-identity-title">
+                H<sub>2</sub>O + CH<sub>3</sub><wbr> ⇌<wbr> CH<sub>4</sub> + OH<wbr>
+            </h1>
+            <div class="record-identity-known">
+                <dl class="kv-list record-identity-facts">
+                    <div>
+                        <dt>Reaction entry ref</dt>
+                        <dd class="record-identity-fact-copyable"><code class="data">rxe_ed66mj3ohtyien5rm2x3sb3rdu</code>
+                            <button type="button" class="copy-button" aria-label="Copy Reaction entry ref value">Copy</button>
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Reaction identity</dt>
+                        <dd><a href="reaction-overview.html?ref=rxn_zicx5swji2nqkg2v263rnwxn4m">rxn_zicx5swji2nqkg2v263rnwxn4m</a></dd>
+                    </div>
+                    <div><dt>Family</dt><dd>H abstraction</dd></div>
+                    <div><dt>Reversible</dt><dd>yes</dd></div>
+                    <div><dt>Atom map</dt><dd><span class="record-identity-absent-inline">no atom map deposited</span></dd></div>
+                    <div class="record-identity-fact-wide">
+                        <dt>Equation (as deposited)</dt>
+                        <dd><code class="data">O + [CH3] &lt;=&gt; C + [OH]</code></dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+        <p class="note">
+            Formulas above (H2O, CH3, CH4, OH) are computed for this mock from the deposited participant SMILES —
+            <code>ReactionFullSpeciesParticipant.formula</code> is a §3A addition not yet deployed on this endpoint
+            (verified live: <code>species.reactants[].formula</code> is absent from <code>/full</code> as of this
+            fetch). The equation string above is the literal served value.
+        </p>
+        <div class="refs-disclosure">
+        <details class="disclosure refs-disclosure">
+            <summary>References <span class="disclosure-count">(0)</span></summary>
+            <div class="disclosure-body"></div>
+        </details>
+        </div>
+    </header>
+    </div>
+
+    <section class="ledger-section" aria-labelledby="participants-heading">
+        <p class="t-kicker section-kicker">Species on this entry</p>
+        <h2 class="t-heading-1" id="participants-heading">Participants</h2>
+        <p class="t-body section-intro">
+            Formula links are computed from the deposited SMILES for this mock (see the note above); every other
+            value below is the literal served value.
+        </p>
+        <h3 class="t-heading-2">Reactants</h3>
+        <div class="table-scroll">
+        <table class="data-table" aria-label="Reactant participants">
+            <thead><tr><th scope="col">Formula</th><th scope="col">SMILES</th><th scope="col">Review</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td data-label="Formula"><a href="#">H<sub>2</sub>O</a> <code class="data">spe_evwhah63tpbcfopksky6ji2diu</code></td>
+                    <td data-label="SMILES"><code class="data">O</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                </tr>
+                <tr>
+                    <td data-label="Formula"><a href="#">CH<sub>3</sub></a> <code class="data">spe_bcbdjwkip75yoziblpntwzblzu</code></td>
+                    <td data-label="SMILES"><code class="data">[CH3]</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        <h3 class="t-heading-2">Products</h3>
+        <div class="table-scroll">
+        <table class="data-table" aria-label="Product participants">
+            <thead><tr><th scope="col">Formula</th><th scope="col">SMILES</th><th scope="col">Review</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td data-label="Formula"><a href="#">CH<sub>4</sub></a> <code class="data">spe_bg76km6tw34gcbraa75vkwkyli</code></td>
+                    <td data-label="SMILES"><code class="data">C</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                </tr>
+                <tr>
+                    <td data-label="Formula"><a href="#">OH</a> <code class="data">spe_2lq3jupc22nwanghcqtshffoxu</code></td>
+                    <td data-label="SMILES"><code class="data">[OH]</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="evidence-heading">
+        <p class="t-kicker section-kicker">Coverage on this entry</p>
+        <h2 class="t-heading-1" id="evidence-heading">Evidence on this entry</h2>
+        <div class="card card--derived coverage-card" data-component="evidence-checklist">
+            <span class="t-label">Evidence on this reaction entry</span>
+            <dl class="kv-list coverage-checklist">
+                <div><dt>Kinetics records</dt><dd><span class="value-pill">1 deposited</span></dd></div>
+                <div><dt>Transition-state entries</dt><dd><span class="value-pill">1 deposited</span></dd></div>
+                <div><dt>Atom map</dt><dd><span class="value-pill value-pill--muted">none deposited</span></dd></div>
+                <div><dt>Path search</dt><dd><span class="value-pill value-pill--muted">none deposited</span></dd></div>
+                <div><dt>IRC evidence</dt><dd><span class="value-pill">present (both directions)</span></dd></div>
+                <div><dt>Pressure-dependent network membership</dt><dd><span class="value-pill value-pill--muted">none deposited</span></dd></div>
+            </dl>
+            <p class="note">Counts are of served arrays only. "None deposited" describes the archive, not the chemistry.</p>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="kinetics-heading">
+        <p class="t-kicker section-kicker">Deposited rate expressions</p>
+        <h2 class="t-heading-1" id="kinetics-heading">Kinetics</h2>
+        <div class="card">
+            <dl class="kv-list">
+                <div><dt>Kinetics ref</dt><dd><code class="data">kin_spkzatwjlvmmnja3i5im4fl7hq</code></dd></div>
+                <div><dt>Model kind</dt><dd>modified arrhenius</dd></div>
+                <div><dt>Origin</dt><dd>computed</dd></div>
+                <div><dt>Review</dt><dd><span class="value-pill value-pill--muted">not reviewed</span></dd></div>
+                <div><dt>A</dt><dd><code class="data">3025.44 cm³ mol⁻¹ s⁻¹</code></dd></div>
+                <div><dt>n</dt><dd><code class="data">3.11242</code></dd></div>
+                <div><dt>Ea</dt><dd><code class="data">39.9711 kJ/mol</code></dd></div>
+                <div><dt>Fitted T range</dt><dd><code class="data">300–3000 K</code> (covers requested range; 0 K extrapolation)</dd></div>
+                <div><dt>Uncertainty</dt><dd>A ×/÷ 1.24736 (multiplicative) · n ± 0.0287896 · Ea ± 0.16464 kJ/mol</dd></div>
+                <div><dt>Tunnelling model</dt><dd>eckart</dd></div>
+                <div><dt>Third body</dt><dd>no</dd></div>
+                <div><dt>Level of theory</dt><dd>b3lyp/def2tzvp</dd></div>
+                <div><dt>Software</dt><dd>Gaussian 16</dd></div>
+                <div><dt>Workflow tool</dt><dd>ARC 1.1.0</dd></div>
+                <div><dt>Fit software</dt><dd>Arkane (version not recorded)</dd></div>
+                <div><dt>Literature</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                <div><dt>Pressure-dependent network kinetics</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+            </dl>
+            <div class="card card--derived coverage-card" data-component="evidence-checklist">
+                <span class="t-label">Evidence completeness — 7 of 9</span>
+                <dl class="kv-list coverage-checklist">
+                    <div><dt>Source calculations</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>Transition-state entry</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>TS opt evidence</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>TS freq evidence</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>TS sp evidence</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>Path search or IRC evidence</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>Uncertainty</dt><dd><span class="value-pill">present</span></dd></div>
+                    <div><dt>Geometry validation</dt><dd><span class="value-pill value-pill--muted">absent</span></dd></div>
+                    <div><dt>SCF stability</dt><dd><span class="value-pill value-pill--muted">absent</span></dd></div>
+                </dl>
+            </div>
+            <p class="note">
+                This record's own provenance reports <code>ts_opt_calculation_ref: null</code> even though its
+                transition-state entry (below) has an opt calculation on file — the kinetics provenance resolver
+                and the TS evidence disagree on this live record (verified 2026-09-07). This mock shows what each
+                actually serves rather than reconciling them; see plan §7 for the owner decision on whether the
+                resolver is fixed in PR 1.
+            </p>
+            <dl class="kv-list">
+                <div><dt>TS opt calculation (kinetics' own link)</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                <div><dt>TS freq calculation (kinetics' own link)</dt><dd><a href="#calc-ledger"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></dd></div>
+                <div><dt>TS sp calculation (kinetics' own link)</dt><dd><code class="data">calc_ubuf7iksctoturzi7uemc5253q</code> <span class="note">(not among the four calculations this TS entry itself lists)</span></dd></div>
+                <div><dt>Transition-state entry used</dt><dd><a href="#ts-heading">tse_yeccffkfo6p6d5exzv5iujxvuu</a></dd></div>
+            </dl>
+        </div>
+
+        <div class="ledger-heading" style="margin-top:2rem">
+            <p class="eyebrow">Derived view</p>
+            <h3 class="t-heading-2" id="arrhenius-heading">Rate coefficient vs. temperature</h3>
+            <p>
+                k(T) = A·T<sup>n</sup>·exp(−Ea/(R·T)), hand-computed for this mock from the deposited A/n/Ea
+                (R = 8.314462618×10⁻³ kJ mol⁻¹ K⁻¹), over this record's own fitted range (300–3000 K), at 12 evenly
+                spaced temperatures. The real chart (PR 3) computes this from <code>domain/arrhenius.ts</code>.
+            </p>
+        </div>
+        <ul class="cp-chart-legend" aria-label="Kinetics record series">
+            <li class="cp-chart-legend-item">
+                <span class="cp-chart-swatch" style="background: var(--chart-series-1)" aria-hidden="true"></span>
+                <span class="cp-chart-legend-label"><code class="data">kin_spkzatwjlvmmnja3i5im4fl7hq</code> · modified arrhenius</span>
+            </li>
+        </ul>
+        <div class="arr-chart-panel">
+            <svg class="arr-chart-svg" viewBox="0 0 720 340" role="img" aria-label="Rate coefficient log10 k versus temperature, 300 to 3000 kelvin, for kin_spkzatwjlvmmnja3i5im4fl7hq">
+                <!-- gridlines / axes: plot area left=58 right=700 top=16 bottom=300 -->
+                <g>
+                    <line x1="58" x2="700" y1="300" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="700" y1="238.5" y2="238.5" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="700" y1="177" y2="177" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="700" y1="115.5" y2="115.5" class="arr-chart-gridline"></line>
+                    <line x1="58" x2="700" y1="54" y2="54" class="arr-chart-gridline"></line>
+                    <text x="50" y="304" class="arr-chart-tick-label arr-chart-tick-label--y">4.0</text>
+                    <text x="50" y="242.5" class="arr-chart-tick-label arr-chart-tick-label--y">6.4</text>
+                    <text x="50" y="181" class="arr-chart-tick-label arr-chart-tick-label--y">8.8</text>
+                    <text x="50" y="119.5" class="arr-chart-tick-label arr-chart-tick-label--y">11.2</text>
+                    <text x="50" y="58" class="arr-chart-tick-label arr-chart-tick-label--y">13.6</text>
+                    <line x1="58" x2="58" y1="16" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="234.7" x2="234.7" y1="16" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="411.3" x2="411.3" y1="16" y2="300" class="arr-chart-gridline"></line>
+                    <line x1="588" x2="588" y1="16" y2="300" class="arr-chart-gridline"></line>
+                    <text x="58" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">300</text>
+                    <text x="234.7" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">1200</text>
+                    <text x="411.3" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">2100</text>
+                    <text x="588" y="316" class="arr-chart-tick-label arr-chart-tick-label--x">3000</text>
+                    <line x1="58" x2="700" y1="300" y2="300" class="arr-chart-axis-line"></line>
+                    <line x1="58" x2="58" y1="16" y2="300" class="arr-chart-axis-line"></line>
+                </g>
+                <!-- curve: 12 points, T 300..3000K, log10 k 4.2312..13.6071, scaled onto the plot box above -->
+                <polyline class="arr-chart-curve" points="58,214.9 96.4,151.8 134.7,105.5 173.1,84.0 211.5,72.7 249.9,65.9 288.2,61.0 326.6,57.2 365.0,54.1 403.4,51.6 441.7,49.4 480.1,47.5"></polyline>
+                <circle class="arr-chart-point" cx="58" cy="214.9" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="96.4" cy="151.8" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="134.7" cy="105.5" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="173.1" cy="84.0" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="211.5" cy="72.7" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="249.9" cy="65.9" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="288.2" cy="61.0" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="326.6" cy="57.2" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="365.0" cy="54.1" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="403.4" cy="51.6" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="441.7" cy="49.4" r="3.5"></circle>
+                <circle class="arr-chart-point" cx="480.1" cy="47.5" r="3.5"></circle>
+            </svg>
+            <p class="arr-chart-axis-title arr-chart-axis-title--y">log₁₀ k (cm³ mol⁻¹ s⁻¹)</p>
+            <p class="arr-chart-axis-title arr-chart-axis-title--x">Temperature (K)</p>
+        </div>
+        <details class="disclosure">
+            <summary>Table equivalent <span class="disclosure-count">(12)</span></summary>
+            <div class="disclosure-body">
+                <div class="table-scroll">
+                <table class="data-table" aria-label="k(T) for kin_spkzatwjlvmmnja3i5im4fl7hq">
+                    <caption>k(T) = A·T^n·exp(−Ea/(R·T)) for kin_spkzatwjlvmmnja3i5im4fl7hq, in cm³ mol⁻¹ s⁻¹</caption>
+                    <thead><tr><th scope="col">T (K)</th><th scope="col">k (cm³ mol⁻¹ s⁻¹)</th><th scope="col">log₁₀ k</th></tr></thead>
+                    <tbody>
+                        <tr><td class="num" data-label="T (K)">300.00</td><td class="num" data-label="k">1.7029×10⁴</td><td class="num" data-label="log10 k">4.2312</td></tr>
+                        <tr><td class="num" data-label="T (K)">545.45</td><td class="num" data-label="k">1.4825×10⁸</td><td class="num" data-label="log10 k">8.1710</td></tr>
+                        <tr><td class="num" data-label="T (K)">790.91</td><td class="num" data-label="k">7.2642×10⁹</td><td class="num" data-label="log10 k">9.8612</td></tr>
+                        <tr><td class="num" data-label="T (K)">1036.36</td><td class="num" data-label="k">7.1079×10¹⁰</td><td class="num" data-label="log10 k">10.8517</td></tr>
+                        <tr><td class="num" data-label="T (K)">1281.82</td><td class="num" data-label="k">3.3485×10¹¹</td><td class="num" data-label="log10 k">11.5248</td></tr>
+                        <tr><td class="num" data-label="T (K)">1527.27</td><td class="num" data-label="k">1.0554×10¹²</td><td class="num" data-label="log10 k">12.0234</td></tr>
+                        <tr><td class="num" data-label="T (K)">1772.73</td><td class="num" data-label="k">2.5952×10¹²</td><td class="num" data-label="log10 k">12.4142</td></tr>
+                        <tr><td class="num" data-label="T (K)">2018.18</td><td class="num" data-label="k">5.4038×10¹²</td><td class="num" data-label="log10 k">12.7327</td></tr>
+                        <tr><td class="num" data-label="T (K)">2263.64</td><td class="num" data-label="k">1.0001×10¹³</td><td class="num" data-label="log10 k">13.0000</td></tr>
+                        <tr><td class="num" data-label="T (K)">2509.09</td><td class="num" data-label="k">1.6959×10¹³</td><td class="num" data-label="log10 k">13.2294</td></tr>
+                        <tr><td class="num" data-label="T (K)">2754.55</td><td class="num" data-label="k">2.6897×10¹³</td><td class="num" data-label="log10 k">13.4297</td></tr>
+                        <tr><td class="num" data-label="T (K)">3000.00</td><td class="num" data-label="k">4.0467×10¹³</td><td class="num" data-label="log10 k">13.6071</td></tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="ts-heading">
+        <p class="t-kicker section-kicker">Saddle points on this reaction</p>
+        <h2 class="t-heading-1" id="ts-heading">Transition states</h2>
+        <div class="table-scroll">
+        <table class="data-table" aria-label="Transition-state entries on this reaction entry">
+            <thead>
+                <tr><th scope="col">Entry</th><th scope="col">Status</th><th scope="col">Review</th><th scope="col">opt</th><th scope="col">freq</th><th scope="col">sp</th><th scope="col">irc</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td data-label="Entry"><a href="#">tse_yeccffkfo6p6d5exzv5iujxvuu</a></td>
+                    <td data-label="Status">optimized</td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="opt"><a href="#calc-ledger"><code class="data">calc_asiuefa76hbbwoigp4cyzqepeu</code></a></td>
+                    <td data-label="freq"><a href="#calc-ledger"><code class="data">calc_rkr2yga5s5nycthaiqme4hta7a</code></a></td>
+                    <td data-label="sp"><a href="#calc-ledger"><code class="data">calc_sy73meqxsieuscaynnvxjzsqoi</code></a></td>
+                    <td data-label="irc"><a href="#calc-ledger"><code class="data">calc_6ebj6taluvremds7vyy75buh7q</code></a></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        <dl class="kv-list" style="margin-top:1rem">
+            <div><dt>Level of theory</dt><dd>b3lyp/def2tzvp</dd></div>
+        </dl>
+        <p class="note">opt, freq, sp and irc all agree at one level of theory for this TS entry — collapsed to a single fact per <code>ProductLevelsFact</code>'s rule.</p>
+
+        <h3 class="t-heading-2" id="calc-ledger" style="margin-top:2rem">Calculation dependency graph</h3>
+        <p class="t-body">
+            Centre = the TS's own optimisation (<code>ts_opt</code>). Its three children are the freq, single-point
+            and IRC calculations run on that optimised geometry — no parent edge is served for this opt calculation,
+            so none is drawn.
+        </p>
+        <div class="dep-graph">
+            <svg class="dep-graph-svg" viewBox="0 0 640 300" role="img" aria-label="Dependency graph for calc_asiuefa76hbbwoigp4cyzqepeu: 0 parents, 3 children" style="max-width:640px;min-width:640px">
+                <defs>
+                    <marker id="mock-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                        <path d="M0,0 L10,5 L0,10 z" class="dep-graph-arrowhead"></path>
+                    </marker>
+                </defs>
+                <path d="M 320 110 L 320 145 L 130 145 L 130 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <path d="M 320 110 L 320 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <path d="M 320 110 L 320 145 L 510 145 L 510 180" class="dep-graph-edge-path" marker-end="url(#mock-arrow)"></path>
+                <g><rect x="88" y="130" width="84" height="20" class="dep-graph-edge-label-bg"></rect><text x="130" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">runs freq on</text></g>
+                <g><rect x="270" y="130" width="100" height="20" class="dep-graph-edge-label-bg"></rect><text x="320" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">runs single point on</text></g>
+                <g><rect x="466" y="130" width="88" height="20" class="dep-graph-edge-label-bg"></rect><text x="510" y="140" class="dep-graph-edge-label-text" text-anchor="middle" dominant-baseline="middle">starts IRC from</text></g>
+                <g class="dep-graph-node dep-graph-node--centre">
+                    <rect x="260" y="50" width="120" height="60" rx="8" class="dep-graph-node-rect"></rect>
+                    <rect x="290" y="62" width="60" height="18" rx="999" class="dep-graph-node-pill-bg"></rect>
+                    <text x="320" y="71" class="dep-graph-node-pill-text" text-anchor="middle" dominant-baseline="middle">opt</text>
+                    <text x="320" y="98" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_asiu…zqepeu</text>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child">
+                    <rect x="70" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                    <text x="130" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_rkr2…hta7a</text>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child">
+                    <rect x="260" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                    <text x="320" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_sy73…zsqoi</text>
+                </g>
+                <g class="dep-graph-node dep-graph-node--child">
+                    <rect x="450" y="180" width="120" height="40" rx="8" class="dep-graph-node-rect"></rect>
+                    <text x="510" y="200" class="dep-graph-node-ref" text-anchor="middle" dominant-baseline="middle">calc_6ebj…buh7q</text>
+                </g>
+            </svg>
+            <ul class="dep-graph-sentences" aria-label="Dependency edges, as text">
+                <li>Runs freq on <a href="#">calc_rkr2yga5s5nycthaiqme4hta7a</a></li>
+                <li>Runs single point on <a href="#">calc_sy73meqxsieuscaynnvxjzsqoi</a></li>
+                <li>Starts IRC from <a href="#">calc_6ebj6taluvremds7vyy75buh7q</a></li>
+            </ul>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="network-heading">
+        <p class="t-kicker section-kicker">Phenomenological rate context</p>
+        <h2 class="t-heading-1" id="network-heading">Pressure-dependent network</h2>
+        <p class="empty-projection">No pressure-dependent network in this archive admits this reaction entry.</p>
+        <p class="note">
+            Verified live: <code>networks/search?reaction_entry_ref=rxe_ed66mj3ohtyien5rm2x3sb3rdu</code> returns
+            zero records (<code>include=networks</code> on <code>/full</code> is not yet a deployed token — §3C).
+        </p>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="review-heading">
+        <p class="t-kicker section-kicker">Curation status</p>
+        <h2 class="t-heading-1" id="review-heading">Review</h2>
+        <dl class="kv-list">
+            <div><dt>This entry's own review</dt><dd><span class="value-pill value-pill--muted">not reviewed</span></dd></div>
+        </dl>
+        <div class="card card--derived coverage-card" data-component="evidence-checklist" style="margin-top:1rem">
+            <span class="t-label">Joined-record review counts</span>
+            <dl class="kv-list coverage-checklist">
+                <div><dt>Approved</dt><dd>0</dd></div>
+                <div><dt>Under review</dt><dd>0</dd></div>
+                <div><dt>Not reviewed</dt><dd>7</dd></div>
+                <div><dt>Deprecated</dt><dd>0</dd></div>
+                <div><dt>Rejected</dt><dd>0</dd></div>
+                <div><dt>Total joined records</dt><dd>7</dd></div>
+            </dl>
+            <p class="note">Counts cover every record joined into this page — the entry, its species participants, kinetics, and transition-state entry.</p>
+        </div>
+    </section>
+
+    </div>
+    <div class="page-toc">
+        <nav aria-label="Sections on this page">
+            <ul>
+                <li><a href="#participants-heading" class="page-toc-active" aria-current="location">Participants</a></li>
+                <li><a href="#evidence-heading">Evidence on this entry</a></li>
+                <li><a href="#kinetics-heading">Kinetics</a></li>
+                <li><a href="#ts-heading">Transition states</a></li>
+                <li><a href="#network-heading">Pressure-dependent network</a></li>
+                <li><a href="#review-heading">Review</a></li>
+            </ul>
+        </nav>
+    </div>
+    </div>
+</section>
+</main>
+<footer class="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
+</div>
+</body>
+</html>
