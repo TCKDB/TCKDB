@@ -281,6 +281,25 @@ provenance and machine detail live on dedicated linked pages.
     arrows off the centre box; then the deepest arrow left from inside
     the rounded corner. Each was found by a geometric check the tests
     had not made, and each check is now a test.
+23. Starting geometries from the artifacts. Every coarse optimisation
+    on the archive stored one geometry as both its input and its
+    output, because the adapter deposited only where the pass ended.
+    The owner pointed out that the stored input file and log contain
+    where it started. A parser in the single-point-energy and Hessian
+    pattern now extracts it on upload and a backfill script did it for
+    the archive (#384): 233 optimisations examined, 64 given a
+    starting geometry (42 new geometry rows, the rest matched existing
+    ones), 78 already distinct, 7 identical to their output and left
+    alone, 84 with no readable artifact. Three adversarial review
+    rounds shaped the parser: a deck declaring Bohr units would have
+    been stored as ångström at 1.89 times the size, including when
+    Bohr was not the first option in Gaussian's order-free list; a
+    truncated log minted an orphan geometry before the checks ran; and
+    dummy or ghost atoms passed a symbol-shaped filter. Each is now
+    rejected with a typed reason rather than converted or guessed, and
+    linking the input was proven not to touch basin assignment or
+    coverage counts. The pre-run snapshot and rollback queries are in
+    the pull request.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
