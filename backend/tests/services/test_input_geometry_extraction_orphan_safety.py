@@ -1,19 +1,29 @@
-"""DB-level tests: a malformed/truncated artifact must never orphan a
-``Geometry`` row.
+"""DB-level tests: a malformed/adversarial artifact must never mint a
+wrong ``Geometry`` row, nor orphan one.
 
-Reproduces the adversarial finding: a Gaussian log truncated mid-table
-still yields a non-empty (but short) atom list from
-``gaussian_output_parser.extract_first_geometry`` (see that function's
-docstring -- a malformed block does not raise and does not fall through to
-"Standard orientation", it just returns whatever it parsed before hitting
-the truncation). Before the fix, ``resolve_geometry_payload`` minted a new
-``Geometry``/``GeometryAtom`` row for that wrong-atom-count geometry
-*before* any check could reject it, and a later composition/atom-count
-mismatch left that row orphaned (no ``calculation_input_geometry`` link).
-These tests assert the ``geometry`` table's row count is unchanged by a
-rejected extraction, for both the ordinary case (finding 2) and a
-``pseudo``-species owner where the composition check itself is skipped
-entirely (finding 3) -- the atom-count guard must not depend on it.
+Reproduces two adversarial findings:
+
+* A Gaussian log truncated mid-table still yields a non-empty (but short)
+  atom list from ``gaussian_output_parser.extract_first_geometry`` (see
+  that function's docstring -- a malformed block does not raise and does
+  not fall through to "Standard orientation", it just returns whatever it
+  parsed before hitting the truncation). Before the fix,
+  ``resolve_geometry_payload`` minted a new ``Geometry``/``GeometryAtom``
+  row for that wrong-atom-count geometry *before* any check could reject
+  it, and a later composition/atom-count mismatch left that row orphaned
+  (no ``calculation_input_geometry`` link). ``TestTruncatedLogNeverOrphansAGeometry``
+  asserts the ``geometry`` table's row count is unchanged by a rejected
+  extraction, for both the ordinary case and a ``pseudo``-species owner
+  where the composition check itself is skipped entirely -- the atom-count
+  guard must not depend on it.
+* A Gaussian deck naming a dummy/ghost atom (``X``, ``Bq``) or nonsense
+  (``Xx``) in its element column has exactly the shape of a plain element
+  symbol; before the element-token validation fix, it was accepted as-is
+  and minted into a ``Geometry``/``GeometryAtom`` row carrying that fake
+  "element". ``TestBadElementTokenNeverMintsAWrongGeometry`` reproduces
+  the reviewer's own end-to-end case -- an "O X H" deck against a
+  ``pseudo``-owned water calculation, where the composition check would
+  not have caught it either -- and asserts nothing is minted or linked.
 """
 
 from __future__ import annotations
@@ -21,7 +31,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 
 from app.db.models.common import ArtifactKind, CalculationType, MoleculeKind
-from app.db.models.geometry import Geometry
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.services.input_geometry_extraction import (
     InputGeometryOutcomeKind,
     extract_and_link_input_geometry,
@@ -107,3 +117,48 @@ class TestTruncatedLogNeverOrphansAGeometry:
 
         assert outcome.kind is InputGeometryOutcomeKind.not_determinable
         assert _geometry_count(db_session) == before
+
+
+# A Gaussian input deck naming a dummy atom ("X") in the element column of
+# an otherwise well-formed 3-atom Cartesian block -- the reviewer's own
+# reproduction. The pseudo species owner is deliberate: the composition
+# check (assert_calculation_geometry_composition) silently declines to
+# judge a pseudo owner, so it cannot be what stops this -- only the
+# element-token validation in _normalize_element_token can.
+_BAD_ELEMENT_GAUSSIAN_GJF = """\
+%chk=water.chk
+# opt b3lyp/6-31g(d)
+
+water with a dummy atom
+
+0 1
+O 0.000000 0.000000 0.118351
+X 0.000000 0.761187 -0.469725
+H 0.000000 -0.761187 -0.469725
+
+"""
+
+
+class TestBadElementTokenNeverMintsAWrongGeometry:
+    def test_dummy_atom_token_is_not_determinable_and_mints_nothing(self, db_session):
+        calc = _water_opt_calc(db_session, species_kind=MoleculeKind.pseudo)
+        before = _geometry_count(db_session)
+
+        outcome = extract_and_link_input_geometry(
+            db_session,
+            calc,
+            candidates=[(ArtifactKind.input, _BAD_ELEMENT_GAUSSIAN_GJF)],
+        )
+
+        assert outcome.kind is InputGeometryOutcomeKind.not_determinable
+        assert _geometry_count(db_session) == before
+        # No geometry_atom row anywhere carries the fake "X" element --
+        # not just "no new geometry row": nothing was minted at all.
+        assert (
+            db_session.scalar(
+                select(func.count())
+                .select_from(GeometryAtom)
+                .where(GeometryAtom.element == "X")
+            )
+            or 0
+        ) == 0

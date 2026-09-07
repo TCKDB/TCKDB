@@ -226,8 +226,22 @@ class TestGaussianBohrRejection:
             "# opt units=bohr b3lyp/6-31g(d)",
             "# opt units(bohr) b3lyp/6-31g(d)",
             "# opt units=(bohr,nosymm) b3lyp/6-31g(d)",
+            # Order-free option lists: Bohr/AU is not always the first
+            # option in the parenthesized list.
+            "# opt units=(rad,bohr) b3lyp/6-31g(d)",
+            "# opt Units=(Radians,Bohr) b3lyp/6-31g(d)",
+            "# opt units=(radian,bohr) b3lyp/6-31g(d)",
+            "# opt units=(rad,au) b3lyp/6-31g(d)",
         ],
-        ids=["units=bohr", "units(bohr)", "units=(bohr,...)"],
+        ids=[
+            "units=bohr",
+            "units(bohr)",
+            "units=(bohr,...)",
+            "units=(rad,bohr)",
+            "Units=(Radians,Bohr)",
+            "units=(radian,bohr)",
+            "units=(rad,au)",
+        ],
     )
     def test_bohr_route_is_rejected(self, route):
         result = parse_gaussian_input_geometry(_gaussian_gjf(route))
@@ -238,6 +252,14 @@ class TestGaussianBohrRejection:
     def test_angstrom_deck_is_unaffected(self):
         # Sanity check: an ordinary deck (no Units keyword) still extracts.
         result = parse_gaussian_input_geometry(_gaussian_gjf("# opt b3lyp/6-31g(d)"))
+        assert result.action is InputGeometryParseAction.extracted
+
+    def test_non_bohr_option_list_still_extracts(self):
+        # units=(ang,rad) declares Angstrom explicitly alongside an angle
+        # unit -- no Bohr/AU present, must not be rejected.
+        result = parse_gaussian_input_geometry(
+            _gaussian_gjf("# opt units=(ang,rad) b3lyp/6-31g(d)")
+        )
         assert result.action is InputGeometryParseAction.extracted
 
 
@@ -313,18 +335,25 @@ class TestGaussianElementTokenNormalization:
         assert result.action is InputGeometryParseAction.extracted
         assert result.atoms[0][0] == "O"
 
-    def test_deuterium_symbol_is_not_rejected(self):
+    @pytest.mark.parametrize("symbol", ["D", "T"])
+    def test_deuterium_and_tritium_symbols_are_not_rejected(self, symbol):
         # D/T are legitimate deposited symbols (ADR 0008), not something
-        # this module's element-token check may treat as unresolvable.
+        # this module's element-token check may treat as unresolvable --
+        # and not real elements RDKit's periodic table recognises, so
+        # they must be allowlisted rather than validated through it.
         text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace(
-            "H 0.000000 0.761187", "D 0.000000 0.761187"
+            "H 0.000000 0.761187", f"{symbol} 0.000000 0.761187"
         )
         result = parse_gaussian_input_geometry(text)
         assert result.action is InputGeometryParseAction.extracted
-        assert result.atoms[1][0] == "D"
+        assert result.atoms[1][0] == symbol
 
-    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C"])
+    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C", "X", "Bq", "Xx"])
     def test_unresolvable_token_is_rejected(self, token):
+        # X (Gaussian dummy atom), Bq (ghost/counterpoise atom) and Xx
+        # (nonsense) all have the *shape* of a plain element symbol but
+        # name no real element -- must be validated through the periodic
+        # table, not accepted on shape alone.
         text = _gaussian_gjf("# opt b3lyp/6-31g(d)").replace("O 0.000000", f"{token} 0.000000")
         result = parse_gaussian_input_geometry(text)
         assert result.action is InputGeometryParseAction.not_determinable
@@ -344,7 +373,15 @@ class TestOrcaElementTokenNormalization:
         assert result.action is InputGeometryParseAction.extracted
         assert result.atoms[0][0] == "O"
 
-    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C"])
+    @pytest.mark.parametrize("symbol", ["D", "T"])
+    def test_deuterium_and_tritium_symbols_are_not_rejected(self, symbol):
+        text = _orca_xyz_deck("! B3LYP def2-TZVP Opt").replace(
+            "H 0.000000 0.761187", f"{symbol} 0.000000 0.761187"
+        )
+        result = parse_orca_input_geometry(text)
+        assert result.action is InputGeometryParseAction.extracted
+
+    @pytest.mark.parametrize("token", ["C-0.5", "C-13", "1C", "X", "Bq", "Xx"])
     def test_unresolvable_token_is_rejected(self, token):
         text = _orca_xyz_deck("! B3LYP def2-TZVP Opt").replace("O 0.000000", f"{token} 0.000000")
         result = parse_orca_input_geometry(text)

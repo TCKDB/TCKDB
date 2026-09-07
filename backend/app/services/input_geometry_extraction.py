@@ -82,6 +82,7 @@ from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -179,18 +180,26 @@ def _not_determinable(reason: str) -> ParsedInputGeometry:
 #: A bare element symbol: one or two letters, any case (the DB's own
 #: canonicality CHECK -- ``ck_geometry_atom_element_canonical`` -- is
 #: ``btrim(element) ~ '^[A-Z][a-z]?$'``, one-or-two letters, so this mirrors
-#: that shape rather than a stricter one). Deliberately *not* validated
-#: against the periodic table: ``D``/``T`` (deuterium/tritium) are
-#: legitimate deposited symbols every ESS program in this codebase's scope
-#: accepts (ADR 0008; see :func:`app.chemistry.geometry.resolve_element_symbol`),
-#: and neither is a real element RDKit's periodic table recognises.
-#: Rejecting them here would refuse correct, common isotope-labelled decks.
+#: that shape rather than a stricter one). Shape alone is *not* sufficient
+#: to accept a token, though -- see :func:`_normalize_element_token`.
 _PLAIN_ELEMENT_TOKEN = re.compile(r"^[A-Za-z]{1,2}$")
 #: An element symbol with a trailing Gaussian/ORCA atom-instance label
 #: (``O1``, ``Cl2``) -- digits appended purely to distinguish otherwise-
 #: identical atoms (ONIOM layers, per-atom basis-set assignment), not an
 #: isotope or fragment marker.
 _LABELLED_ELEMENT_TOKEN = re.compile(r"^([A-Za-z]{1,2})\d+$")
+
+#: The only tokens accepted *without* a periodic-table lookup: deuterium
+#: and tritium. Both are legitimate deposited symbols every ESS program in
+#: this codebase's scope accepts (ADR 0008; see
+#: :func:`app.chemistry.geometry.resolve_element_symbol`), and neither is
+#: a real element RDKit's periodic table recognises, so validating them
+#: the same way as everything else would refuse correct, common
+#: isotope-labelled decks. Every other one-or-two-letter token -- Gaussian's
+#: ``X`` (dummy atom), ``Bq`` (ghost/counterpoise atom), or nonsense like
+#: ``Xx`` -- has exactly this shape too and names no real element, so shape
+#: alone must not be the acceptance test.
+_ISOTOPE_SYMBOL_ALLOWLIST = frozenset({"D", "T"})
 
 _PERIODIC_TABLE = Chem.GetPeriodicTable()
 
@@ -204,12 +213,22 @@ def _normalize_element_token(token: str) -> str | None:
     * an **atomic number** (``8`` -> ``O``), looked up through
       :class:`rdkit.Chem.GetPeriodicTable`;
     * a **trailing numeric label** used to distinguish atom instances
-      (``O1`` -> ``O``, ``Cl2`` -> ``Cl``) -- stripped, then checked
-      against the same shape a bare symbol must have.
+      (``O1`` -> ``O``, ``Cl2`` -> ``Cl``) -- stripped, then validated
+      the same way a bare symbol is.
+
+    A bare (or label-stripped) symbol is normalised to title case
+    (:func:`app.chemistry.geometry.normalize_element_symbol` -- RDKit's
+    periodic table is case-sensitive: ``GetAtomicNumber("o")`` fails where
+    ``GetAtomicNumber("O")`` succeeds) and accepted only if it is ``D``/``T``
+    (:data:`_ISOTOPE_SYMBOL_ALLOWLIST`) or a real element the periodic
+    table recognises. This is what rejects Gaussian's ``X`` (dummy atom)
+    and ``Bq`` (ghost/counterpoise atom) -- both have the shape of a plain
+    symbol but name no element -- rather than accepting anything shaped
+    like one or two letters.
 
     Anything else -- isotope/fragment syntax such as ``C-13`` (Gaussian's
     dash-isotope notation) or ``C-0.5``, or a token that is not a plausible
-    one-or-two-letter symbol even after stripping a label -- returns
+    one-or-two-letter symbol even after stripping a label -- also returns
     ``None`` so the caller rejects the whole deck rather than handing an
     unresolvable token to :func:`app.services.geometry_resolution.resolve_geometry_payload`,
     which would otherwise mint a ``Geometry``/``GeometryAtom`` row that
@@ -230,7 +249,15 @@ def _normalize_element_token(token: str) -> str | None:
     candidate = match.group(1) if match else token
     if not _PLAIN_ELEMENT_TOKEN.match(candidate):
         return None
-    return candidate
+
+    normalized = normalize_element_symbol(candidate)
+    if normalized in _ISOTOPE_SYMBOL_ALLOWLIST:
+        return normalized
+    try:
+        _PERIODIC_TABLE.GetAtomicNumber(normalized)
+    except RuntimeError:
+        return None
+    return normalized
 
 
 # --- Gaussian input deck (.gjf / .com): Cartesian block only --------------
@@ -250,8 +277,15 @@ _GAUSSIAN_CART_ROW_INT = re.compile(r"^-?\d+$")
 #: the default and the only unit this module converts none of, so any of
 #: these must reject the deck rather than silently store Bohr-magnitude
 #: numbers as if they were Angstrom (a 1/0.529177 = 1.8897x inflation).
+#:
+#: Gaussian's parenthesized option lists are order-free --
+#: ``units=(rad,bohr)`` and ``units=(bohr,rad)`` are the same declaration
+#: -- so ``bohr``/``au`` is matched *anywhere* inside the list
+#: (``[^)\n]*?`` up to the closing paren or line end), not only as the
+#: first option. A first-token-only anchor here previously let
+#: ``units=(rad,bohr)`` and its permutations through unrejected.
 _GAUSSIAN_NON_ANGSTROM_UNITS = re.compile(
-    r"\bunits\s*[=(]\s*\(?\s*(?:bohrs?|au)\b", re.IGNORECASE
+    r"\bunits\s*[=(]\s*\(?[^)\n]*?\b(?:bohrs?|au)\b", re.IGNORECASE
 )
 
 

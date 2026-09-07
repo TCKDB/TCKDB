@@ -63,6 +63,20 @@ script observed while reading, not a decision this script is making about
 ``calculation_input_geometry``/``geometry`` write survives"; it does not
 mean "nothing in the database changes at all".
 
+**The ``no_artifact`` tally does not distinguish "nothing on file" from
+"something on file that could not be read".** A calculation with zero
+``input``/``output_log`` artifact rows and a calculation whose only such
+rows all failed to read (storage unavailable, or an integrity break)
+both land in the same ``no_artifact`` count -- the first is an absence,
+the second is itself news (especially for an integrity break, which is
+never silent: it is recorded as described above). To tell them apart:
+run with ``--verbose``, whose per-calculation line carries the outcome's
+``reason`` (present only for the "something failed to read" case, e.g.
+"artifacts exist but none could be read from storage"; absent -- just
+``no_artifact`` -- for the "nothing on file" case), or query
+``artifact_integrity_event`` directly for the authoritative record of any
+integrity break this run observed.
+
 Usage::
 
     # Plan only -- the default. Prints the tally, writes nothing.
