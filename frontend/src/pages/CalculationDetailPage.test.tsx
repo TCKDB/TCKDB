@@ -380,9 +380,16 @@ describe("CalculationDetailPage", () => {
         expect(Array.from(facts.children)[0]).toHaveTextContent("Calculation ref")
         expect(within(facts).getByRole("button", { name: /copy calculation ref/i })).toBeVisible()
 
-        // Not duplicated inside the (collapsed) References disclosure.
-        fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
-        expect(screen.getAllByText("calc_freq_one")).toHaveLength(1)
+        // Not duplicated inside the (collapsed) References disclosure --
+        // scoped to the disclosure itself (not a page-wide `getAllByText`),
+        // because the Related-calculations graph's centre node ALSO shows
+        // this same ref as plain text elsewhere on the page (by design:
+        // "showing its type and ref" -- see `CalculationDependencyGraph.tsx`),
+        // which would make a page-wide count legitimately 2, not 1.
+        const summary = screen.getByText(bySummaryText(/References \(/))
+        fireEvent.click(summary)
+        const refsDisclosure = summary.closest("details") as HTMLElement
+        expect(within(refsDisclosure).queryByText("calc_freq_one")).not.toBeInTheDocument()
     })
 
     // Item 1 (BLOCKING): a TS-owned calculation's owner now links to the

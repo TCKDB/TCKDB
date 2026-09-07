@@ -1,0 +1,132 @@
+/* `components/CalculationDependencyGraph.tsx` -- the Related-calculations
+   graph. Design-system tokens only (colour and the `--type-*` scale), no
+   hard-coded hex -- `calculation-dependency-graph.css.test.ts` guards
+   that directly against this file's raw source. */
+
+.dep-graph {
+    margin: var(--s-4) 0 0;
+}
+
+.dep-graph-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 100%;
+}
+
+/* Base node box -- every parent/child satellite, and the base layer the
+   centre node's own rule (below) overrides. */
+.dep-graph-node-rect {
+    fill: var(--surface);
+    stroke: var(--line);
+    stroke-width: 1.5;
+}
+
+/* The centre node: `.card--selected`'s own treatment (design-system.css)
+   -- pale accent fill, accent border -- so the calculation this page is
+   ABOUT reads as visually distinct from every other node at a glance,
+   same rule a selected conformer card already follows elsewhere. */
+.dep-graph-node--centre .dep-graph-node-rect {
+    fill: var(--accent-50);
+    stroke: var(--accent);
+    stroke-width: 2;
+}
+
+.dep-graph-node-ref {
+    fill: var(--ink);
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+}
+
+.dep-graph-node--centre .dep-graph-node-ref {
+    fill: var(--ink);
+    font: var(--type-data-font);
+}
+
+/* The centre node's type pill -- the only node in the graph with a known
+   `type` (see the component's own docstring for why parent/child nodes
+   never get one). Reuses `--type-label-strong` (mono, uppercase, 600
+   weight), the same step `.value-pill` draws its own text at, without
+   pulling in `.value-pill`'s HTML-only padding/border-radius box model,
+   which an SVG `<text>` has no use for. */
+.dep-graph-node-pill-text {
+    fill: var(--accent-700);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
+}
+
+.dep-graph-node-link {
+    cursor: pointer;
+}
+
+.dep-graph-node-link:hover .dep-graph-node-rect {
+    stroke: var(--accent);
+}
+
+.dep-graph-node-link:focus-visible {
+    outline: none;
+}
+
+.dep-graph-node-link:focus-visible .dep-graph-node-rect {
+    stroke: var(--accent);
+    stroke-width: 2.5;
+}
+
+.dep-graph-edge-path {
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 1.5;
+}
+
+.dep-graph-arrowhead {
+    fill: var(--muted);
+}
+
+/* Sits behind an edge's label text so the connecting line never crosses
+   through the letters -- filled with the page surface colour, the same
+   "punch a hole in the line" trick a chart axis label uses. */
+.dep-graph-edge-label-bg {
+    fill: var(--surface);
+}
+
+.dep-graph-edge-label-text {
+    fill: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+
+/* The pre-existing sentence list, demoted below the graph as its text
+   equivalent (screen readers / Ctrl+F) rather than hidden -- `.note`'s
+   own size and colour (design-system.css), not the body-prose size the
+   list used to render at when it was this section's only content. */
+.dep-graph-sentences {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    margin: var(--s-4) 0 0;
+    padding: 0;
+    list-style: none;
+    max-width: var(--measure-note);
+    color: var(--muted);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+}
+
+.dep-graph-sentences a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.dep-graph-sentences a:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.dep-graph-sentences a:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
+}

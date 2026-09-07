@@ -24,6 +24,7 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
@@ -34,6 +35,7 @@ import { QuantityValue } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { typeLabel } from "../domain/calculationTypeFormat"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
@@ -91,18 +93,6 @@ import { useCalculationSection, type CalculationSectionState } from "../hooks/us
 // anything.
 // ---------------------------------------------------------------------------
 
-const CALC_TYPE_LABELS: Record<string, string> = {
-    opt: "Optimisation",
-    freq: "Frequency",
-    sp: "Single-point",
-    irc: "IRC",
-    scan: "Scan",
-    path_search: "Path search",
-    conf: "Conformer",
-}
-
-const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_", " ")
-const roleLabel = (role: string) => role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
@@ -595,6 +585,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             <DependenciesSection
                 dependencies={dependencies}
                 ownRef={core.calculation_ref}
+                ownType={core.type}
                 availability={dependenciesAvailability}
                 contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
             />
@@ -860,26 +851,10 @@ function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; ba
  * token -- never to "optimized from", which would silently re-introduce
  * the same bug for a role this page doesn't know about yet.
  */
-function dependencySentence(dep: CalculationDependency): { linkRef: string; text: (linkNode: ReactNode) => ReactNode } {
-    if (dep.direction === "child") {
-        const ref = dep.parent_calculation_ref
-        if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>This was optimized from {link}</> }
-        if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>This frequency calculation was run on the geometry from {link}</> }
-        if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>This single point was run on the geometry from {link}</> }
-        if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>This IRC started from the geometry of {link}</> }
-        return { linkRef: ref, text: (link) => <>This — {roleLabel(dep.role)} — {link}</> }
-    }
-    const ref = dep.child_calculation_ref
-    if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>{link} (frequency) was run on this geometry</> }
-    if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>{link} was optimized from this result</> }
-    if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>{link} single point was run on this geometry</> }
-    if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>{link} IRC started from this geometry</> }
-    return { linkRef: ref, text: (link) => <>{link} — {roleLabel(dep.role)}</> }
-}
-
-function DependenciesSection({ dependencies, ownRef, availability, contradicted }: {
+function DependenciesSection({ dependencies, ownRef, ownType, availability, contradicted }: {
     dependencies: CalculationDependency[]
     ownRef: string
+    ownType: string
     availability: SectionAvailability
     contradicted: boolean
 }) {
@@ -890,16 +865,7 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
                 Related calculations
             </SectionHeading>
             {availability === "populated" ? (
-                <ul className="dependency-sentences" aria-label={`Dependency edges for ${ownRef}`}>
-                    {dependencies.map((dep, index) => {
-                        const { linkRef, text } = dependencySentence(dep)
-                        return (
-                            <li key={`${dep.role}-${dep.direction}-${linkRef}-${index}`}>
-                                {text(<Link to={`/calculations/${linkRef}`}>{linkRef}</Link>)}
-                            </li>
-                        )
-                    })}
-                </ul>
+                <CalculationDependencyGraph dependencies={dependencies} ownRef={ownRef} ownType={ownType} />
             ) : (
                 <SectionEmptyMessage
                     availability={availability}
