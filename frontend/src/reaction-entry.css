@@ -1,0 +1,104 @@
+/*
+ * `ReactionEntryPage`/`ReactionOverviewPage` -- tokens only, no restyle of
+ * shared primitives (`.card`, `.data-table`, `.kv-list`, `.value-pill`, ...
+ * all come from `design-system.css`/`index.css` unchanged; see
+ * `dead-css-class.test.ts`/`value-pill-scope.css.test.ts`). This file adds
+ * only the page-scoped layout these two pages need beyond what the shared
+ * primitives already give them.
+ */
+
+/* One kinetics record per card, in served order, with breathing room
+   between cards -- `ReactionKineticsSection.tsx`. */
+.kinetics-record-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Separates one transition-state entry's whole block (identity, status
+   strip, calculation table, dependency graph) from the next when a
+   reaction entry carries more than one TS entry -- `ReactionTransitionStatesSection.tsx`. */
+.reaction-ts-block + .reaction-ts-block {
+    margin-top: 2.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line-2);
+}
+
+/* `ReactionEquation.tsx`'s two sizing fixes for participant text composed
+   into the `.record-identity-title` h1 (`--type-display-2`, 36px serif) --
+   see that component's own docstring for the MEASURED reports both fix.
+   `code.data` sets its own fixed `font: var(--type-data-font)` (13px
+   mono), which read as illegibly tiny inside a 36px h1 (the SMILES
+   fallback for a participant with no served `formula`); `inherit` lets it
+   read at the same size as every other equation participant instead.
+   `.reaction-equation-chip` (the optional stereo-label suffix, e.g.
+   "· Z isomer") is capped DOWN to `--type-body-font` -- uncapped, it
+   inherited the same 36px as the chemistry itself and, being the longer
+   string, became the single most visually dominant text on the chooser
+   page for an English aside rather than a formula. */
+.record-identity-title code.data {
+    font-size: inherit;
+}
+
+.record-identity-title .reaction-equation-chip {
+    font: var(--type-body-font);
+    color: var(--muted);
+}
+
+/* Spacing tokens for `ReactionTransitionStatesSection.tsx` -- named
+   classes in place of page-local inline `style={{marginTop}}`, so this
+   file stays the one place page-scoped layout for these two pages lives
+   (this file's own header comment). */
+.reaction-ts-status-label {
+    margin-top: 1rem;
+}
+
+.reaction-ts-stage-label {
+    margin-top: 1.5rem;
+}
+
+.reaction-ts-dep-graph-heading {
+    margin-top: 2rem;
+}
+
+/* The Geometry/Frequencies/Energy facts (`ProductLevelsFact`) get their
+   OWN `<dl>`, never appended to a page's other facts in one shared list --
+   `ReactionKineticsSection.tsx` and `ReactionTransitionStatesSection.tsx`
+   both do this. MEASURED (post-review): in one shared grid, the auto-flow
+   column count split the three levels across a row boundary with an
+   unrelated fact ("Software") interleaved into the same row as one of
+   them -- a `<dl>` is its own independent grid, so a group can never spill
+   into an unrelated one this way again. */
+.reaction-product-levels {
+    margin-top: 1.5rem;
+}
+
+/* `ReactionKineticsSection.tsx`'s "kinetics' own link" facts (TS opt/freq/
+   sp calculation, transition-state entry used) -- a third `<dl>` for the
+   same reason as `.reaction-product-levels` above. */
+.kinetics-own-links {
+    margin-top: 1.5rem;
+}
+
+/* The k(T) table's own columns (T (K) / k (unit) / log10 k) need more
+   room than `.data-table`'s default -- MEASURED (post-review): a long
+   caption previously narrowed the rendered table to ~215px at 1920px
+   wide, before the caption text was shortened and moved to a preceding
+   `<p class="note">`; this floor keeps the three numeric columns legible
+   regardless of caption length. */
+.kinetics-k-table {
+    min-width: 28rem;
+}
+
+/* `.data-table th` (design-system.css) uppercases every header via
+   `--type-label-strong-transform` -- correct for an ordinary column
+   name, but MEASURED (post-review round 2) to render this table's own
+   "k (cm³ mol⁻¹ s⁻¹)" header as "K (CM³ MOL⁻¹ S⁻¹)", indistinguishable
+   from the adjacent "T (K)" column and silently reintroducing the exact
+   ambiguity round 1's fix (naming the unit) was meant to remove -- a
+   textContent-only test cannot see this, since the rendered TEXT node is
+   still lowercase; only the computed style differs. Scoped to this one
+   table only, never a page-wide override of the shared primitive. */
+.kinetics-k-table th {
+    text-transform: none;
+}

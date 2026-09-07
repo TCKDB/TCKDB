@@ -259,9 +259,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         && (reviewHistory[0].reviewed_at ?? null) === null
         && (reviewHistory[0].note ?? null) === null
 
-    // The reaction-record link lives ONCE, in the Reaction section below
-    // (with a "record view not yet available" note, since `/reactions/:ref`
-    // is a placeholder route) -- not duplicated here as well. This entry's
+    // The reaction-record link lives ONCE, in the Reaction section below --
+    // `/reactions/:ref` is a real chooser page now (`ReactionOverviewPage`),
+    // not a placeholder, so the link needs no "record view not yet
+    // available" caveat any more. This entry's
     // OWN ref is deliberately NOT in this list (owner decision: "yes show
     // each record's own ref inline") -- it renders first, inline, in the
     // identity header below via `ownRef`; only RELATED refs stay here, per
@@ -361,7 +362,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             <dt>Reaction record</dt>
                             <dd>
                                 <Link to={`/reactions/${reaction.reaction_ref}`}>{reaction.reaction_ref}</Link>
-                                <span className="note tse-placeholder-note"> (record view not yet available)</span>
                             </dd>
                         </div>
                     )}

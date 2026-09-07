@@ -1,6 +1,10 @@
 import { useParams } from "react-router-dom"
 
-export type RecordRefParam = "speciesRef" | "entryRef" | "groupRef" | "observationRef" | "calculationRef" | "geometryRef" | "reactionRef"
+// `"reactionRef"` was dropped (PR: reaction entry page) -- both routes that
+// used to render this placeholder with that ref param (`/reactions/:ref`
+// and, before that route existed, `/reaction-entries/:ref`) now render the
+// real `ReactionOverviewPage`/`ReactionEntryPage` instead.
+export type RecordRefParam = "speciesRef" | "entryRef" | "groupRef" | "observationRef" | "calculationRef" | "geometryRef"
 type RecordRouteParam = RecordRefParam | "section"
 
 export default function RecordPlaceholderPage({ kind, refParam }: { kind: string; refParam?: RecordRefParam }) {

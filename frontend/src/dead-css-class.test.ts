@@ -27,7 +27,7 @@ const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
     Object.entries(STYLESHEET_SOURCES).map(([path, css]) => [path.replace(/^\.\//, ""), css]),
 )
 
-const CHECKED_STYLESHEETS = ["species-entry.css", "entry-science.css", "browse.css", "index.css", "calculation-detail.css"]
+const CHECKED_STYLESHEETS = ["species-entry.css", "entry-science.css", "browse.css", "index.css", "calculation-detail.css", "reaction-entry.css"]
 
 // Every `.tsx` source in the project, EXCLUDING test files -- a class
 // referenced only by a `*.test.tsx` assertion (`document.querySelector`,

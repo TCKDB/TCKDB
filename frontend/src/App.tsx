@@ -12,6 +12,8 @@ const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
+const ReactionEntryPage = lazy(() => import("./pages/ReactionEntryPage"))
+const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
 const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
@@ -78,8 +80,9 @@ function App() {
             <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
             <Route path="/geometries/:geometryRef" element={<GeometryDetailPage />} />
             <Route path="/transition-state-entries/:entryRef" element={<TransitionStateEntryPage />} />
+            <Route path="/reaction-entries/:entryRef" element={<ReactionEntryPage />} />
             <Route path="/reactions" element={<RecordPlaceholderPage kind="Reactions" />} />
-            <Route path="/reactions/:reactionRef" element={<RecordPlaceholderPage kind="Reaction" refParam="reactionRef" />} />
+            <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
             <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
