@@ -434,6 +434,8 @@ def _attach_path_search_parent(
 def _attach_scan_child_of_opt(
     db_session: Session,
     opt_calc: Calculation,
+    *,
+    software_release_id: int | None = -1,
 ) -> Calculation:
     """A scan calc run *from* the TS opt; linked via scan_parent.
 
@@ -444,16 +446,23 @@ def _attach_scan_child_of_opt(
     ``one_owner`` CheckConstraint) rather than ``transition_state_entry_id``,
     so this only reaches the TS's source set through dependency traversal,
     never through direct attachment.
+
+    ``software_release_id`` defaults to the sentinel ``-1``, meaning "make
+    a fresh software_release" (the normal case); pass ``None`` explicitly
+    to leave the scan without one, which callers use as a probe for
+    whether the scan actually landed in the source set (see
+    ``_attach_irc_followup``'s docstring for the same pattern).
     """
     lot = _make_lot(db_session)
-    release = _make_software_release(db_session)
+    if software_release_id == -1:
+        software_release_id = _make_software_release(db_session).id
     owner = _make_species_entry(db_session, _make_species(db_session))
     calc = Calculation(
         type=CalculationType.scan,
         quality=CalculationQuality.raw,
         species_entry_id=owner.id,
         lot_id=lot.id,
-        software_release_id=release.id,
+        software_release_id=software_release_id,
     )
     db_session.add(calc)
     db_session.flush()
@@ -876,6 +885,49 @@ def test_scan_child_of_ts_opt_counts_as_path_search_evidence(db_session: Session
     assert with_scan.evidence_completeness > baseline.evidence_completeness
 
 
+def test_scan_child_of_ts_opt_lands_in_source_set(db_session: Session):
+    """A scan child of the TS opt (role=scan_parent) must be pulled into
+    the general source set, not just satisfy path_search_evidence_present.
+
+    Distinct regression test from
+    ``test_scan_child_of_ts_opt_counts_as_path_search_evidence`` above:
+    that test's assertion is driven entirely by
+    ``_check_ts_path_search_evidence_present``'s own hardcoded
+    ``direction="downstream"`` argument to ``_ts_has_dependency_role_link``,
+    which does not consult ``_TS_CALC_IS_PARENT_ROLES`` /
+    ``_TS_CALC_IS_CHILD_ROLES`` at all -- so it stays green even if
+    ``scan_parent`` is put back in the wrong bucket in
+    ``_ts_source_calculations``, as long as the check's own direction
+    argument is correct. This test instead probes
+    ``_ts_source_calculations`` directly (the same way
+    ``test_irc_followup_lands_in_source_set`` probes ``irc_followup``):
+    the scan child is given no software_release, so if (and only if) the
+    bucket move actually landed, the all-source
+    ``source_calculation_software_present`` check flips to missing.
+    """
+    ts_entry_base = _make_ts_entry(db_session)
+    opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
+    _attach_ts_freq_calc(db_session, ts_entry_base, opt_base)
+    db_session.refresh(ts_entry_base)
+    baseline = evaluate_loaded_transition_state_entry(ts_entry_base)
+    assert (
+        baseline.checks["source_calculation_software_present"]
+        is EvidenceOutcome.passed
+    )
+
+    ts_entry_scan = _make_ts_entry(db_session)
+    opt_scan = _attach_ts_opt_calc(db_session, ts_entry_scan)
+    _attach_ts_freq_calc(db_session, ts_entry_scan, opt_scan)
+    _attach_scan_child_of_opt(db_session, opt_scan, software_release_id=None)
+    db_session.refresh(ts_entry_scan)
+    with_scan = evaluate_loaded_transition_state_entry(ts_entry_scan)
+
+    assert (
+        with_scan.checks["source_calculation_software_present"]
+        is EvidenceOutcome.missing
+    )
+
+
 def test_path_search_parent_still_counts_as_path_search_evidence(db_session: Session):
     """A path_search parent reached via optimized_from still passes.
 
@@ -1076,14 +1128,19 @@ def test_ts_dependency_role_buckets_agree_with_enforcement_table():
     in ``app/services/calculation_resolution.py``), so the two cannot
     silently drift apart the way ``scan_parent`` once did.
 
-    Every role whose enforcement-table parent type is ``opt`` denotes an
-    edge where the TS-owned opt anchors as the edge's *parent* -- that
-    role must live in ``_TS_CALC_IS_PARENT_ROLES``, never in
-    ``_TS_CALC_IS_CHILD_ROLES``. This is exactly the check that would
-    have caught the scan_parent inversion bug (its enforcement-table
-    parent type is ``opt``, but it used to sit in the CHILD bucket).
+    Both buckets are *fully derived* from the enforcement tables here --
+    no role is named by hand as "belongs in bucket X" -- so a change to
+    either table's role->type mapping (not just a change to
+    ``rubrics.py``) is caught too. Pinning e.g. "irc_followup must be in
+    the parent bucket" as a standalone assertion would stay green if
+    someone later changed what the *enforcement table* says
+    ``irc_followup``'s parent type is; deriving the expected bucket from
+    the table itself cannot drift that way.
     """
-    from app.services.calculation_resolution import _DEPENDENCY_ROLE_TO_PARENT_TYPE
+    from app.services.calculation_resolution import (
+        _DEPENDENCY_ROLE_TO_PARENT_TYPE,
+        _OPTIMIZED_FROM_PARENT_TYPES,
+    )
     from app.services.trust.rubrics import (
         _TS_CALC_IS_CHILD_ROLES,
         _TS_CALC_IS_PARENT_ROLES,
@@ -1091,33 +1148,41 @@ def test_ts_dependency_role_buckets_agree_with_enforcement_table():
 
     assert _TS_CALC_IS_CHILD_ROLES.isdisjoint(_TS_CALC_IS_PARENT_ROLES)
 
-    opt_parent_roles = {
+    # Parent-side: every role whose enforcement-table parent type is a
+    # type a TS-owned calc can itself anchor as -- ``opt`` (the common
+    # case: freq_on/single_point_on/irc_start/scan_parent all hang off
+    # the TS opt) or ``irc`` (irc_followup's parent is the TS-owned irc
+    # reached via irc_start, not the opt directly, but it is still the
+    # *parent* side of that edge). Fully derived: this is exactly today's
+    # _TS_CALC_IS_PARENT_ROLES with no role named by hand.
+    expected_parent_roles = {
         role
         for role, parent_type in _DEPENDENCY_ROLE_TO_PARENT_TYPE.items()
-        if parent_type is CalculationType.opt
+        if parent_type in (CalculationType.opt, CalculationType.irc)
     }
-    # freq_on, single_point_on, irc_start, scan_parent today.
-    assert opt_parent_roles, "expected at least one opt-parented role"
-    assert opt_parent_roles <= _TS_CALC_IS_PARENT_ROLES
-    assert opt_parent_roles.isdisjoint(_TS_CALC_IS_CHILD_ROLES)
+    assert expected_parent_roles, "expected at least one opt/irc-parented role"
+    assert _TS_CALC_IS_PARENT_ROLES == expected_parent_roles
 
-    # irc_followup's enforcement-table parent type is `irc`, not `opt` --
-    # it is still bucketed as IS_PARENT because the TS-owned *irc* calc
-    # (reached via irc_start) is the parent of that edge, not the TS opt
-    # directly. Pin that explicitly since the generic opt-parent check
-    # above cannot see it.
-    assert CalculationDependencyRole.irc_followup in _TS_CALC_IS_PARENT_ROLES
-    assert (
-        _DEPENDENCY_ROLE_TO_PARENT_TYPE[CalculationDependencyRole.irc_followup]
-        is CalculationType.irc
+    # Child-side: optimized_from is the one role absent from
+    # _DEPENDENCY_ROLE_TO_PARENT_TYPE entirely, precisely because its
+    # parent type is ambiguous (opt restart-from, or path_search
+    # TS-guess) -- validated separately via _OPTIMIZED_FROM_PARENT_TYPES
+    # in assert_dependency_role_type_compatible rather than the single-
+    # type enforcement table. arkane_source is *also* absent from the
+    # table (scientific metadata, no parent-type pin at all) but is not
+    # a structural dependency role and must land in neither bucket, so
+    # it is excluded explicitly rather than swept in as "not parent-side".
+    assert _OPTIMIZED_FROM_PARENT_TYPES, "expected a non-empty parent-type allowlist"
+    assert CalculationType.path_search in _OPTIMIZED_FROM_PARENT_TYPES
+    assert CalculationType.opt in _OPTIMIZED_FROM_PARENT_TYPES
+    roles_outside_enforcement_table = (
+        set(CalculationDependencyRole) - set(_DEPENDENCY_ROLE_TO_PARENT_TYPE)
     )
-
-    # optimized_from is deliberately excluded from the enforcement table
-    # (ambiguous parent type: opt or path_search) but must still land in
-    # IS_CHILD -- the TS opt is the child pulling in its
-    # path_search/opt parent.
-    assert (
-        CalculationDependencyRole.optimized_from
-        not in _DEPENDENCY_ROLE_TO_PARENT_TYPE
+    expected_child_roles = roles_outside_enforcement_table - {
+        CalculationDependencyRole.arkane_source
+    }
+    assert expected_child_roles, "expected at least one role outside the table"
+    assert _TS_CALC_IS_CHILD_ROLES == expected_child_roles
+    assert CalculationDependencyRole.arkane_source not in (
+        _TS_CALC_IS_CHILD_ROLES | _TS_CALC_IS_PARENT_ROLES
     )
-    assert CalculationDependencyRole.optimized_from in _TS_CALC_IS_CHILD_ROLES

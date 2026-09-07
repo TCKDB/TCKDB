@@ -2406,13 +2406,14 @@ _TS_VALIDATED_STATUSES: frozenset[TransitionStateEntryStatus] = frozenset(
 )
 
 # These two sets are keyed by which side of the ``calculation_dependency``
-# edge the TS-owned calc sits on -- NOT by an "upstream means before,dow-
-# nstream means after" intuition, which is what produced the scan_parent
-# inversion bug this comment block replaced. The authority for which side
-# is which is ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` in
+# edge the TS-owned calc sits on -- NOT by an "upstream means before,
+# downstream means after" intuition, which is what produced the
+# scan_parent inversion bug this comment block replaced. The authority
+# for which side is which is ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` in
 # ``app/services/calculation_resolution.py``; a unit test in
-# ``tests/services/trust/`` asserts these sets agree with it for every role
-# so the two cannot silently drift apart again.
+# ``tests/services/test_trust_evaluator_transition_state.py`` asserts
+# these sets agree with it for every role so the two cannot silently
+# drift apart again.
 
 _TS_CALC_IS_CHILD_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {

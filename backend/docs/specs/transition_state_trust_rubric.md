@@ -175,7 +175,7 @@ of those rows. Discovery rules are spelled out in §5.
 | `ts_frequency_present` | O | At least one calc with `calculation.type == freq` is in the source set, ideally linked to an opt via `calculation_dependency.role == freq_on`. |
 | `ts_single_point_present` | O | At least one calc with `calculation.type == sp` is in the source set, ideally linked via `single_point_on`. Missing SP is **not** a hard fail (see §6). |
 | `irc_evidence_present` | O | At least one calc with `calculation.type == irc` is in the source set, linked to the TS opt via `irc_start` or `irc_followup` dependency. Missing IRC is **not** a hard fail. |
-| `path_search_evidence_present` | O | At least one calc with `calculation.type == path_search` is reachable from the TS entry's source set (typically via the TS opt's `optimized_from` chain to a `path_search` parent), OR a `calculation.type == scan` calc participating as a scan parent (`scan_parent` dependency role). Missing path-search is **not** a hard fail. See §7. |
+| `path_search_evidence_present` | O | At least one calc with `calculation.type == path_search` is reachable from the TS entry's source set (typically via the TS opt's `optimized_from` chain to a `path_search` parent), OR a `calculation.type == scan` calc reachable as the TS opt's `scan_parent` **child** (the TS opt is the parent of that edge; see §5.2). Missing path-search is **not** a hard fail. See §7. |
 | `calculation_dependencies_present` | O | At least one `calculation_dependency` row exists among the source set's calculations. Documents the DAG explicitly even when individual roles fail to pass their own optional checks. Aligns with the existing `feedback_dag_edges_opportunistic` posture — DAG edges enrich, they do not gate. |
 
 ### 4.3 Source-calculation provenance roll-up
@@ -264,7 +264,7 @@ edges **in both directions** for the following roles:
 
 | From role | Adds calcs of type | Rationale |
 |---|---|---|
-| `optimized_from` (upstream) | `path_search`, `scan` | TS opt was produced from a path-search or scan. |
+| `optimized_from` (upstream) | `opt`, `path_search` | TS opt was produced from a path-search TS-guess, or restarted from a prior opt. Parent type is validated against `_OPTIMIZED_FROM_PARENT_TYPES = {opt, path_search}` in `calculation_resolution.py` — `scan` is not a valid `optimized_from` parent. |
 | `freq_on` (downstream child where parent is the TS opt) | `freq` | TS freq computed on the TS-optimized geometry. |
 | `single_point_on` (downstream child where parent is the TS opt) | `sp` | TS SP computed on the TS-optimized geometry. |
 | `irc_start` (downstream child where parent is the TS opt) | `irc` | IRC initiated from the TS optimized geometry. |
