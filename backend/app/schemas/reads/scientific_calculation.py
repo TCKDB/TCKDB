@@ -19,6 +19,7 @@ from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
+    CalculationInputGeometrySource,
     CalculationQuality,
     CalculationType,
     ConstraintKind,
@@ -694,6 +695,16 @@ class CalculationGeometryLinkSummary(BaseModel):
     direction-specific fields are also self-describing for clients
     that flatten the lists.
 
+    ``source`` is populated for input links only (``None`` for output
+    links, which carry no such column): ``deposited`` for a
+    producer-declared or freq/sp-fallback geometry, or
+    ``extracted_from_artifact`` when
+    ``app.services.input_geometry_extraction`` re-derived a coarse
+    ``opt`` calculation's starting geometry from its own artifacts
+    because the depositor recorded none (or recorded the converged
+    output as a stand-in for it). See
+    ``app.db.models.common.CalculationInputGeometrySource``.
+
     ``geometry_id`` is subject to the Phase D internal-ID visibility
     policy and is stripped by the strip helper when the deployment
     forbids exposing internal ids; ``geometry_ref`` is always present.
@@ -704,6 +715,7 @@ class CalculationGeometryLinkSummary(BaseModel):
     input_order: int | None = None
     output_order: int | None = None
     role: CalculationGeometryRole | None = None
+    source: CalculationInputGeometrySource | None = None
     natoms: int | None = None
     geom_hash: str | None = None
 

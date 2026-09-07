@@ -23,6 +23,7 @@ from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
+    CalculationInputGeometrySource,
     CalculationQuality,
     CalculationType,
     ConstraintKind,
@@ -110,6 +111,7 @@ class CalculationInputGeometryBase(BaseModel):
     calculation_id: int
     geometry_id: int
     input_order: int = Field(default=1, ge=1)
+    source: CalculationInputGeometrySource = CalculationInputGeometrySource.deposited
 
 
 class CalculationInputGeometryCreate(CalculationInputGeometryBase, SchemaBase):
@@ -151,6 +153,7 @@ class CalculationInputGeometryDetailRead(ORMBaseSchema):
 
     geometry_id: int
     input_order: int
+    source: CalculationInputGeometrySource
     geometry: GeometryRead
 
 

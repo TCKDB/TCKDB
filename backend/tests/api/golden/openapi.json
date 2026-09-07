@@ -1510,7 +1510,8 @@
           "parameter_extraction",
           "archive",
           "reproducibility_verification",
-          "reclaim_restore"
+          "reclaim_restore",
+          "input_geometry_extraction"
         ],
         "title": "ArtifactIntegrityDetectionContext",
         "type": "string"
@@ -4758,7 +4759,7 @@
         "type": "object"
       },
       "CalculationGeometryLinkSummary": {
-        "description": "One link from a calculation to a geometry, for the\n``include=input_geometries`` / ``include=output_geometries`` heavy\nincludes of the calculation detail endpoint.\n\nThe link carries the geometry's public ref and a tiny amount of\ncheap metadata (``natoms``, ``geom_hash``) so callers can decide\nwhether to fetch the full coordinate payload from\n``/scientific/geometries/{geometry_ref}``. **No XYZ text and no\nper-atom arrays** are inlined here — that's the geometry detail\nendpoint's job.\n\n``input_order`` is populated for input links (and ``None`` for\noutput links); ``output_order`` and ``role`` are populated for\noutput links (and ``None`` for input links). The wrapping field\nname on ``ScientificCalculationRecord``\n(``input_geometries`` vs ``output_geometries``) tells the caller\nwhich side of the link they're looking at, but the per-link\ndirection-specific fields are also self-describing for clients\nthat flatten the lists.\n\n``geometry_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids; ``geometry_ref`` is always present.",
+        "description": "One link from a calculation to a geometry, for the\n``include=input_geometries`` / ``include=output_geometries`` heavy\nincludes of the calculation detail endpoint.\n\nThe link carries the geometry's public ref and a tiny amount of\ncheap metadata (``natoms``, ``geom_hash``) so callers can decide\nwhether to fetch the full coordinate payload from\n``/scientific/geometries/{geometry_ref}``. **No XYZ text and no\nper-atom arrays** are inlined here — that's the geometry detail\nendpoint's job.\n\n``input_order`` is populated for input links (and ``None`` for\noutput links); ``output_order`` and ``role`` are populated for\noutput links (and ``None`` for input links). The wrapping field\nname on ``ScientificCalculationRecord``\n(``input_geometries`` vs ``output_geometries``) tells the caller\nwhich side of the link they're looking at, but the per-link\ndirection-specific fields are also self-describing for clients\nthat flatten the lists.\n\n``source`` is populated for input links only (``None`` for output\nlinks, which carry no such column): ``deposited`` for a\nproducer-declared or freq/sp-fallback geometry, or\n``extracted_from_artifact`` when\n``app.services.input_geometry_extraction`` re-derived a coarse\n``opt`` calculation's starting geometry from its own artifacts\nbecause the depositor recorded none (or recorded the converged\noutput as a stand-in for it). See\n``app.db.models.common.CalculationInputGeometrySource``.\n\n``geometry_id`` is subject to the Phase D internal-ID visibility\npolicy and is stripped by the strip helper when the deployment\nforbids exposing internal ids; ``geometry_ref`` is always present.",
         "properties": {
           "geom_hash": {
             "anyOf": [
@@ -4824,6 +4825,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CalculationGeometryRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationInputGeometrySource"
               },
               {
                 "type": "null"
@@ -6065,15 +6076,28 @@
           "input_order": {
             "title": "Input Order",
             "type": "integer"
+          },
+          "source": {
+            "$ref": "#/components/schemas/CalculationInputGeometrySource"
           }
         },
         "required": [
           "geometry_id",
           "input_order",
+          "source",
           "geometry"
         ],
         "title": "CalculationInputGeometryDetailRead",
         "type": "object"
+      },
+      "CalculationInputGeometrySource": {
+        "description": "How a ``calculation_input_geometry`` row's geometry was obtained.\n\n``deposited`` is the default for every existing write path — the\nproducer declared the geometry explicitly, or TCKDB filled the\nfreq/sp fallback from the calculation's own conformer geometry\n(:data:`app.services.calculation_resolution._INPUT_GEOMETRY_TYPES`).\nNeither is a guess; both are exactly what the depositor's payload\nsaid the calculation ran on.\n\n``extracted_from_artifact`` marks the one exception:\n:mod:`app.services.input_geometry_extraction` re-derives a coarse\n``opt`` calculation's true starting geometry from its own ``input``/\n``output_log`` artifacts, for calculations where the depositor never\nstated one (or stated the converged output as a stand-in for it — an\nARC deposit artifact, not a second geometry). This value is what lets\na reader tell \"the depositor said so\" from \"TCKDB worked it out\nafterwards\" without re-deriving it themselves.",
+        "enum": [
+          "deposited",
+          "extracted_from_artifact"
+        ],
+        "title": "CalculationInputGeometrySource",
+        "type": "string"
       },
       "CalculationOptResultRead": {
         "properties": {

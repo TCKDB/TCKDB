@@ -86,6 +86,9 @@ from app.services.charge_multiplicity_extraction import (
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
+from app.services.input_geometry_extraction import (
+    try_extract_input_geometry_from_artifact_upload,
+)
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
@@ -696,6 +699,10 @@ def upload_calculation_artifacts(
         # Fill-when-absent: a freq log / ORCA .hess yields the Cartesian
         # force-constant matrix, bound to the calc's input geometry.
         try_extract_hessian_from_artifact_upload(session, calculation, art_in)
+        # Fill-when-absent-or-degenerate: an opt calc's own input deck / log
+        # yields its true starting geometry, when none is on file yet or the
+        # one on file only duplicates the output (see the module docstring).
+        try_extract_input_geometry_from_artifact_upload(session, calculation, art_in)
 
     result = ArtifactsUploadResult(
         calculation_id=calculation_id,
