@@ -31,6 +31,7 @@ enum ArtifactIntegrityDetectionContext {
   archive
   reproducibility_verification
   reclaim_restore
+  input_geometry_extraction
 }
 
 enum ArtifactIntegrityFinding {
@@ -78,6 +79,11 @@ enum CalculationGeometryRole {
   irc_forward
   irc_reverse
   path_search_point
+}
+
+enum CalculationInputGeometrySource {
+  deposited
+  extracted_from_artifact
 }
 
 enum CalculationQuality {
@@ -1440,6 +1446,7 @@ Table calculation_input_geometry {
   calculation_id bigint [not null, ref: > calculation.id]
   geometry_id bigint [not null, ref: > geometry.id]
   input_order int [not null, default: '1']
+  source CalculationInputGeometrySource [not null, default: 'deposited']
 
   indexes {
     (calculation_id, input_order) [pk]

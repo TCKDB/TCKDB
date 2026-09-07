@@ -1755,6 +1755,7 @@ def _build_input_geometries(
         select(
             CalculationInputGeometry.geometry_id,
             CalculationInputGeometry.input_order,
+            CalculationInputGeometry.source,
             Geometry.public_ref,
             Geometry.natoms,
             Geometry.geom_hash,
@@ -1774,6 +1775,7 @@ def _build_input_geometries(
             input_order=row.input_order,
             output_order=None,
             role=None,
+            source=row.source,
             natoms=row.natoms,
             geom_hash=row.geom_hash,
         )

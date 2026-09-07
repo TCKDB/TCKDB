@@ -33,6 +33,7 @@ from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
+    CalculationInputGeometrySource,
     CalculationQuality,
     CalculationType,
     ConstraintKind,
@@ -383,6 +384,18 @@ class CalculationInputGeometry(Base):
     )
     input_order: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1, server_default="1"
+    )
+    #: How this row's geometry was obtained. Defaults to ``deposited`` at
+    #: the ORM and DB level so every existing write path (producer-explicit
+    #: or the freq/sp fallback) needs no code change; only
+    #: :mod:`app.services.input_geometry_extraction` sets
+    #: ``extracted_from_artifact`` explicitly. See
+    #: :class:`~app.db.models.common.CalculationInputGeometrySource`.
+    source: Mapped[CalculationInputGeometrySource] = mapped_column(
+        SAEnum(CalculationInputGeometrySource, name="calculation_input_geometry_source"),
+        nullable=False,
+        default=CalculationInputGeometrySource.deposited,
+        server_default=CalculationInputGeometrySource.deposited.value,
     )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="input_geometries")

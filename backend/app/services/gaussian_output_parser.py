@@ -1,7 +1,10 @@
 """Parse results from Gaussian output (log) files.
 
-Extracts the final optimized geometry from Standard/Input orientation blocks.
-Returns atoms in the format expected by ``resolve_atom_mapping()``:
+Extracts the final optimized geometry from Standard/Input orientation blocks,
+and (for :mod:`app.services.input_geometry_extraction`) the *first* such
+block -- the geometry Gaussian ran its first SCF/step against, which for an
+``opt`` job is the starting geometry the input deck declared. Returns atoms
+in the format expected by ``resolve_atom_mapping()``:
 ``tuple[tuple[str, float, float, float], ...]``.
 
 Future: energy, frequency, ZPE, timing extraction can be added here.
@@ -50,6 +53,86 @@ def extract_final_geometry_from_file(
     with open(path) as f:
         lines = f.readlines()
     return extract_final_geometry(lines)
+
+
+def extract_first_geometry(
+    lines: list[str],
+) -> tuple[tuple[str, float, float, float], ...]:
+    """Extract the first geometry block from a Gaussian log file.
+
+    The mirror of :func:`extract_final_geometry`, scanning forward instead
+    of backward, and preferring "Input orientation" over "Standard
+    orientation" -- the opposite order. "Input orientation" is Gaussian's
+    literal, unreoriented echo of the coordinates it was given (the
+    ``nosymm``-independent one Gaussian always prints for the run's first
+    step); "Standard orientation" is the same geometry rotated into
+    Gaussian's internal symmetry frame. For the *final* geometry the
+    reoriented frame is preferred (the converged structure in a stable,
+    comparable orientation); for the *first* one, the frame closest to what
+    the input deck actually declared is preferred, which is "Input
+    orientation".
+
+    **A malformed block does not raise, and does not fall through to the
+    other header.** If "Input orientation" is found but its table is
+    truncated (EOF, or a non-data line) after parsing at least one atom
+    row, that partial, short atom list is returned as a *success* --
+    ``_parse_first_orientation_block`` treats any non-empty result as
+    final and stops searching (see its docstring: "found header but
+    couldn't parse -- don't keep searching"). It does **not** try
+    "Standard orientation" next in that case, and it does not signal the
+    truncation in any way a caller can detect from this function alone --
+    only a header found with **zero** parsable data rows falls through.
+    Callers that need to detect a truncated block must independently
+    verify the returned atom count against other evidence (e.g.
+    :mod:`app.services.input_geometry_extraction`'s comparison against the
+    calculation's own output-geometry atom count, run *before* the parsed
+    atoms are minted into a ``Geometry`` row).
+
+    :param lines: Raw lines from the Gaussian log file.
+    :returns: Tuple of (element_symbol, x, y, z) for each atom.
+    :raises ValueError: If no parsable geometry block is found.
+    """
+    result = _parse_first_orientation_block(lines, "Input orientation:")
+    if result is not None:
+        return result
+
+    result = _parse_first_orientation_block(lines, "Standard orientation:")
+    if result is not None:
+        return result
+
+    raise ValueError(
+        "No parsable 'Input orientation' or 'Standard orientation' "
+        "geometry block found in log file."
+    )
+
+
+def extract_first_geometry_from_file(
+    path: str,
+) -> tuple[tuple[str, float, float, float], ...]:
+    """Convenience wrapper that reads a log file and extracts the first geometry."""
+    with open(path) as f:
+        lines = f.readlines()
+    return extract_first_geometry(lines)
+
+
+def _parse_first_orientation_block(
+    lines: list[str],
+    header: str,
+) -> tuple[tuple[str, float, float, float], ...] | None:
+    """Parse the first occurrence of an orientation block.
+
+    Scans forward to find the first *header* line, then parses the atom
+    table that follows (5 header lines after the header, then data rows
+    until a dashed separator or empty line) -- the mirror of
+    :func:`_parse_last_orientation_block`.
+    """
+    for i, line in enumerate(lines):
+        if header in line:
+            atoms = _parse_orientation_table(lines, i + 5)
+            if atoms:
+                return tuple(atoms)
+            break  # found header but couldn't parse — don't keep searching
+    return None
 
 
 def _parse_last_orientation_block(

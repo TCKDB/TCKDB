@@ -1,0 +1,12 @@
+%chk=water_opt.chk
+%mem=4GB
+%nprocshared=8
+# opt b3lyp/def2tzvp
+
+water opt starting geometry
+
+0 1
+O   0.000000   0.000000   0.118351
+H   0.000000   0.761187  -0.469725
+H   0.000000  -0.761187  -0.469725
+

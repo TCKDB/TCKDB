@@ -85,6 +85,9 @@ from app.services.geometry_validation import run_and_persist_geometry_validation
 from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
+from app.services.input_geometry_extraction import (
+    try_extract_input_geometry_from_artifact_upload,
+)
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.provenance_warnings import (
@@ -650,6 +653,13 @@ def persist_computed_species_upload(
                     # Input geometries for this calc were attached in an
                     # earlier pass, so the Hessian can bind to them here.
                     try_extract_hessian_from_artifact_upload(
+                        session, calc_row, art_in
+                    )
+                    # Fill-when-absent-or-degenerate: an opt calc's own
+                    # input deck / log yields its true starting geometry
+                    # when none is on file yet, or the one on file only
+                    # duplicates the output.
+                    try_extract_input_geometry_from_artifact_upload(
                         session, calc_row, art_in
                     )
 

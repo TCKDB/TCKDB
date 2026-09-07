@@ -462,6 +462,13 @@ class ArtifactIntegrityDetectionContext(str, Enum):
     #: the restore, so the row still earns its finding by hashing bytes.
     reclaim_restore = "reclaim_restore"
 
+    #: The input-geometry backfill/hook (:mod:`app.services.input_geometry_extraction`)
+    #: reading a stored ``input`` or ``output_log`` artifact to re-derive a
+    #: coarse ``opt`` calculation's starting geometry. Mirrors
+    #: ``parameter_extraction``: a best-effort reader of already-stored bytes,
+    #: not a new custody event.
+    input_geometry_extraction = "input_geometry_extraction"
+
 
 class ArtifactStorageCapacityObservation(str, Enum):
     """What was learned about the object store's willingness to accept bytes.
@@ -526,6 +533,30 @@ class HessianSource(str, Enum):
     parsed_log = "parsed_log"
     uploaded = "uploaded"
     derived = "derived"
+
+
+class CalculationInputGeometrySource(str, Enum):
+    """How a ``calculation_input_geometry`` row's geometry was obtained.
+
+    ``deposited`` is the default for every existing write path — the
+    producer declared the geometry explicitly, or TCKDB filled the
+    freq/sp fallback from the calculation's own conformer geometry
+    (:data:`app.services.calculation_resolution._INPUT_GEOMETRY_TYPES`).
+    Neither is a guess; both are exactly what the depositor's payload
+    said the calculation ran on.
+
+    ``extracted_from_artifact`` marks the one exception:
+    :mod:`app.services.input_geometry_extraction` re-derives a coarse
+    ``opt`` calculation's true starting geometry from its own ``input``/
+    ``output_log`` artifacts, for calculations where the depositor never
+    stated one (or stated the converged output as a stand-in for it — an
+    ARC deposit artifact, not a second geometry). This value is what lets
+    a reader tell "the depositor said so" from "TCKDB worked it out
+    afterwards" without re-deriving it themselves.
+    """
+
+    deposited = "deposited"
+    extracted_from_artifact = "extracted_from_artifact"
 
 
 class SCFStabilityStatus(str, Enum):

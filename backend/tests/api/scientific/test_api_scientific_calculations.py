@@ -1820,6 +1820,7 @@ def test_detail_input_geometries_no_xyz_or_atom_arrays(client, db_session):
         "input_order",
         "output_order",
         "role",
+        "source",
         "natoms",
         "geom_hash",
     }
