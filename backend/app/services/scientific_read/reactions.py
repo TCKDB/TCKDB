@@ -27,7 +27,11 @@ from app.db.models.reaction import (
 from app.db.models.reaction_atom_map import ReactionAtomMap
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.transition_state import TransitionState
-from app.schemas.reads.scientific_common import REVIEW_RANK, CollapseMode
+from app.schemas.reads.scientific_common import (
+    REVIEW_RANK,
+    CollapseMode,
+    RecordReviewBadge,
+)
 from app.schemas.reads.scientific_reactions import (
     ReactionAvailability,
     ReactionDirectionQuery,
@@ -987,7 +991,7 @@ def _materialize_and_sort_reaction_records(
     formulas_by_entry_species: dict[int, str | None],
     species_id_by_entry_species: dict[int, int],
     stoichiometry_by_key: dict[tuple[int, int, ReactionRole], int],
-    badges: dict[int, object],
+    badges: dict[int, RecordReviewBadge],
     availability_by_entry: dict[int, ReactionAvailability],
     matched_direction_by_entry: dict[int, ReactionDirectionQuery],
     family_name_by_id: dict[int, str],

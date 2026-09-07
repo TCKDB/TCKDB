@@ -171,6 +171,52 @@ def test_min_review_status_filters_by_entry_review(client, db_session):
     assert unreviewed.public_ref not in refs
 
 
+def test_include_rejected_returns_rejected_entries(client, db_session):
+    visible = _entry(db_session, reactant_smiles="C", product_smiles="N")
+    rejected = _entry(db_session, reactant_smiles="O", product_smiles="F")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.reaction_entry,
+        record_id=rejected.id,
+        status=RecordReviewStatus.rejected,
+    )
+
+    default_refs = {
+        r["reaction_entry_ref"] for r in client.get(_browse_url()).json()["records"]
+    }
+    assert visible.public_ref in default_refs
+    assert rejected.public_ref not in default_refs
+
+    included_refs = {
+        r["reaction_entry_ref"]
+        for r in client.get(_browse_url(include_rejected="true")).json()["records"]
+    }
+    assert rejected.public_ref in included_refs
+
+
+def test_include_deprecated_returns_deprecated_entries(client, db_session):
+    visible = _entry(db_session, reactant_smiles="C", product_smiles="N")
+    deprecated = _entry(db_session, reactant_smiles="O", product_smiles="F")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.reaction_entry,
+        record_id=deprecated.id,
+        status=RecordReviewStatus.deprecated,
+    )
+
+    default_refs = {
+        r["reaction_entry_ref"] for r in client.get(_browse_url()).json()["records"]
+    }
+    assert visible.public_ref in default_refs
+    assert deprecated.public_ref not in default_refs
+
+    included_refs = {
+        r["reaction_entry_ref"]
+        for r in client.get(_browse_url(include_deprecated="true")).json()["records"]
+    }
+    assert deprecated.public_ref in included_refs
+
+
 def test_offset_and_limit_page_results(client, db_session):
     for i in range(2, 5):
         _entry(db_session, reactant_smiles=f"[{i}H]", product_smiles="N")
@@ -193,3 +239,31 @@ def test_default_sort_matches_search(client, db_session):
     assert body["request"]["sort"] == (
         "review_rank,has_kinetics,has_transition_state,created_at,id"
     )
+
+
+def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_session):
+    """The echoed sort string is a label; this asserts the actual row order.
+
+    Three entries, distinguished on the sort key's first two axes:
+    ``review_rank`` (approved beats not_reviewed) beats ``has_kinetics``
+    (a not_reviewed entry with kinetics still sorts after an approved
+    entry with none), and among equal review rank, ``has_kinetics``
+    breaks the tie.
+    """
+    best = _entry(db_session, reactant_smiles="[2H]", product_smiles="N")
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.reaction_entry,
+        record_id=best.id,
+        status=RecordReviewStatus.approved,
+    )
+    mid = _entry(db_session, reactant_smiles="[3H]", product_smiles="N")
+    make_kinetics(db_session, reaction_entry=mid)
+    worst = _entry(db_session, reactant_smiles="[4H]", product_smiles="N")
+
+    body = client.get(_browse_url(limit=200)).json()
+    refs = [r["reaction_entry_ref"] for r in body["records"]]
+    positions = {ref: i for i, ref in enumerate(refs)}
+
+    assert positions[best.public_ref] < positions[mid.public_ref]
+    assert positions[mid.public_ref] < positions[worst.public_ref]

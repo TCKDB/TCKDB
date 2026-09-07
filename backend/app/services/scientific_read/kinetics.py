@@ -20,10 +20,12 @@ from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationDependency,
     CalculationGeometryValidation,
     CalculationSCFStability,
 )
 from app.db.models.common import (
+    CalculationDependencyRole,
     CalculationType,
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
@@ -496,13 +498,17 @@ def get_reaction_kinetics(
         },
     )
 
-    # Build per-record output.
-    records: list[KineticsRecord] = []
-    for k in kinetics_rows:
-        sources = sources_by_kinetics.get(k.id, [])
-        provenance = _build_provenance(
+    # Pass 1: build every record's provenance eagerly. This is needed
+    # before ``levels`` can be computed for *any* record: no legal upload
+    # can cite an opt-typed calculation as a kinetics source (see
+    # ``_build_kinetics_levels``'s docstring), so resolving ``geometry``
+    # requires walking the ``freq_on``/``single_point_on`` parent-opt
+    # dependency edge from whichever freq/sp *was* cited -- and that walk
+    # is bulk-resolved once for every kinetics row below, not per record.
+    provenance_by_kinetics: dict[int, KineticsProvenance] = {
+        k.id: _build_provenance(
             kinetics=k,
-            sources=sources,
+            sources=sources_by_kinetics.get(k.id, []),
             calc_meta=calc_meta,
             calc_refs=calc_refs,
             ts_entry_refs=ts_entry_refs,
@@ -513,6 +519,35 @@ def get_reaction_kinetics(
             wt_summaries=wt_summaries,
             network_kinetics_refs=network_kinetics_refs,
         )
+        for k in kinetics_rows
+    }
+
+    cited_freq_ids = {
+        p.ts_freq_calculation_id
+        for p in provenance_by_kinetics.values()
+        if p.ts_freq_calculation_id is not None
+    }
+    cited_sp_ids = {
+        p.ts_sp_calculation_id
+        for p in provenance_by_kinetics.values()
+        if p.ts_sp_calculation_id is not None
+    }
+    opt_via_dependency = _resolve_ts_opt_via_dependency(
+        session, freq_calc_ids=cited_freq_ids, sp_calc_ids=cited_sp_ids
+    )
+    # The resolved opt ids are new to ``calc_meta`` -- they were reached
+    # via a dependency edge, never cited as a kinetics source calculation,
+    # so the earlier bulk load (scoped to ``all_source_calc_ids``) never
+    # saw them.
+    missing_opt_meta_ids = set(opt_via_dependency.values()) - calc_meta.keys()
+    if missing_opt_meta_ids:
+        calc_meta.update(_calc_metadata(session, missing_opt_meta_ids))
+
+    # Pass 2: build per-record output.
+    records: list[KineticsRecord] = []
+    for k in kinetics_rows:
+        sources = sources_by_kinetics.get(k.id, [])
+        provenance = provenance_by_kinetics[k.id]
 
         coverage = temperature_coverage(
             requested_min=request.temperature_min,
@@ -529,8 +564,19 @@ def get_reaction_kinetics(
         # 2026-07-02 (TS frequency evidence omitted from kinetics trust).
         # It IS fed into ``levels`` (see _build_kinetics_levels).
 
+        # ``ts_opt_calc_id`` (a direct citation) is structurally always
+        # ``None`` — see ``_build_kinetics_levels``'s docstring — so
+        # ``levels`` resolves the opt one hop further via whichever of
+        # the cited freq/sp calculations has a recorded parent-opt edge,
+        # preferring the freq-derived opt when both are present.
+        levels_opt_calc_id = ts_opt_calc_id
+        if levels_opt_calc_id is None and ts_freq_calc_id is not None:
+            levels_opt_calc_id = opt_via_dependency.get(ts_freq_calc_id)
+        if levels_opt_calc_id is None and ts_sp_calc_id is not None:
+            levels_opt_calc_id = opt_via_dependency.get(ts_sp_calc_id)
+
         levels = _build_kinetics_levels(
-            ts_opt_calc_id=ts_opt_calc_id,
+            ts_opt_calc_id=levels_opt_calc_id,
             ts_freq_calc_id=ts_freq_calc_id,
             ts_sp_calc_id=ts_sp_calc_id,
             calc_meta=calc_meta,
@@ -1177,6 +1223,58 @@ def _ts_calc_types_for_entries(
     return grouped
 
 
+def _resolve_ts_opt_via_dependency(
+    session: Session,
+    *,
+    freq_calc_ids: set[int],
+    sp_calc_ids: set[int],
+) -> dict[int, int]:
+    """Map a cited ``freq``/``sp`` calculation id -> its parent ``opt`` id.
+
+    ``_KINETICS_ROLE_COMPATIBILITY`` (``app/services/kinetics_resolution.py``)
+    permits only ``sp`` under ``ts_energy`` and only ``freq`` under
+    ``freq`` -- no legal upload path can ever link an ``opt``-typed
+    calculation as a kinetics source calculation at all. So
+    ``_first_calc_with_type(..., CalculationType.opt)`` (which
+    ``ts_opt_calculation_id`` is built from) is structurally ``None`` for
+    every validly-deposited TS-backed record, not merely for records that
+    happen not to cite one.
+
+    The opt is not lost, though: a cited ``freq`` or ``sp`` calculation
+    was itself computed *at* an optimized geometry, and that relationship
+    is recorded as a ``calculation_dependency`` edge -- ``freq_on``
+    (parent ``opt`` -> child ``freq``) or ``single_point_on`` (parent
+    ``opt`` -> child ``sp``) -- at upload time, independent of whether
+    the depositor also happened to cite the opt directly under a kinetics
+    role. This walks that one hop for every cited freq/sp calculation in
+    one bulk query, returning only the child ids that actually have such
+    an edge (a citation with no recorded parent stays unresolved -- the
+    caller falls back to ``None``, never guesses).
+
+    Both ``freq_on`` and ``single_point_on`` enforce at most one parent
+    per child (partial unique indexes on ``calculation_dependency``), so
+    each id maps to exactly one opt when present.
+    """
+    child_ids = freq_calc_ids | sp_calc_ids
+    if not child_ids:
+        return {}
+    rows = session.execute(
+        select(
+            CalculationDependency.child_calculation_id,
+            CalculationDependency.parent_calculation_id,
+        ).where(
+            CalculationDependency.child_calculation_id.in_(child_ids),
+            CalculationDependency.dependency_role.in_(
+                (
+                    CalculationDependencyRole.freq_on,
+                    CalculationDependencyRole.single_point_on,
+                )
+            ),
+        )
+    ).all()
+    return dict(rows)
+
+
 def _literature_summaries(
     session: Session, lit_ids: set[int]
 ) -> dict[int, LiteratureSummary]:
@@ -1495,50 +1593,49 @@ def _build_kinetics_levels(
 
     ``KineticsCalculationRole`` has no ``opt``/``freq``/``sp`` members of
     its own (``reactant_energy``/``product_energy``/``ts_energy``/
-    ``freq``/``irc``/``master_equation``/``fit_source``) -- the three
-    calculation ids read here are the ones :func:`_build_provenance`
-    already resolved by *calculation type* among this record's linked
-    source calculations (``ts_opt_calculation_id`` /
-    ``ts_freq_calculation_id`` / ``ts_sp_calculation_id``), not by a role
-    name. Each becomes exactly one of
-    :func:`app.services.calculation_levels.derive_levels`'s input roles:
-    ``ts_opt`` -> ``opts``, ``ts_freq`` -> ``freqs``, ``ts_sp`` -> ``sps``.
-    No ``composites``/``importeds`` are fed (kinetics provenance has no
-    such concept), and the opt-carries-frequencies fallback is never
-    triggered here (every ``RoleCalcInfo`` below is built with
-    ``carries_frequencies=False``): ``frequency`` answers "is there a
-    ``ts_freq``-typed calculation on this chain", not "does *some* level
-    happen to be available", so it stays ``null`` when no ``ts_freq`` is
-    linked even though the ``ts_opt`` calculation might itself carry
-    frequency results.
+    ``freq``/``irc``/``master_equation``/``fit_source``), and
+    ``_KINETICS_ROLE_COMPATIBILITY``
+    (``app/services/kinetics_resolution.py``) permits only ``sp`` under
+    ``ts_energy`` and only ``freq`` under ``freq`` -- **no legal upload
+    path can ever cite an opt-typed calculation as a kinetics source
+    calculation at all.** So ``ts_opt_calc_id`` here is never the direct
+    citation ``_build_provenance`` resolved
+    (``KineticsProvenance.ts_opt_calculation_id``, which stays
+    structurally ``None`` for every validly-deposited record); it is the
+    caller's best-effort resolution one hop further, via
+    :func:`_resolve_ts_opt_via_dependency`: the parent ``opt`` reached
+    from the cited ``freq`` (``freq_on`` edge) or ``sp``
+    (``single_point_on`` edge) through ``calculation_dependency`` --
+    ``None`` when no such edge is recorded. ``ts_freq_calc_id`` /
+    ``ts_sp_calc_id`` remain the direct citations.
+
+    Each input becomes exactly one of
+    :func:`app.services.calculation_levels.derive_levels`'s roles:
+    ``ts_opt_calc_id`` -> ``opts``, ``ts_freq_calc_id`` -> ``freqs``,
+    ``ts_sp_calc_id`` -> ``sps``. No ``composites``/``importeds`` are fed
+    (kinetics provenance has no such concept), and the
+    opt-carries-frequencies fallback is never triggered here (every
+    ``RoleCalcInfo`` below is built with ``carries_frequencies=False``):
+    ``frequency`` answers "is there a ``ts_freq``-typed calculation cited
+    on this chain", not "does *some* level happen to be available", so it
+    stays ``null`` when no ``ts_freq`` is cited even though the resolved
+    opt might itself carry frequency results.
 
     A record with no TS chain at all (e.g. an experimental or literature
-    kinetics row) has all three ids ``None`` and returns an all-``null``
-    summary with ``energy_source=None``.
+    kinetics row) has all three inputs ``None`` and returns an all-``null``
+    summary with ``energy_source=None``. A TS-backed record whose cited
+    freq/sp has no recorded ``freq_on``/``single_point_on`` parent (an
+    incomplete deposit, or a genuinely opt-less single-point-only chain)
+    reports ``geometry=null`` the same way -- the dependency graph is
+    consulted, not guessed.
 
-    **Known divergence from TS-entry evidence.** ``ts_opt_calculation_id``
-    (and therefore ``geometry`` here) can be ``null`` even when the
-    record's transition-state entry has ``evidence_summary.has_opt=True``
-    (``kin_spkzatwjlvmmnja3i5im4fl7hq`` on the hosted archive is the
-    observed case). This is not a bug: ``ts_opt_calculation_id`` answers
-    "which calculation did *this kinetics record's own source-calculation
-    links* cite", a per-record, precise evidence chain built only from
-    :class:`~app.db.models.kinetics.KineticsSourceCalculation` rows this
-    record carries. ``has_opt`` answers "does the transition-state entry
-    itself have an optimisation calculation *at all*", scanned directly
-    off ``calculation.transition_state_entry_id`` regardless of which
-    kinetics record (if any) cited it. A TS entry legitimately
-    accumulates calculations across deposits that a given rate constant's
-    own citations never re-link -- matching the established house policy
-    that calculation DAG edges are opportunistic enrichment, not required
-    (an unlinked calculation is not evidence of a missing one). Falling
-    back to a TS-entry-wide scan here would misattribute a level of
-    theory to a calculation this specific fit may never have used, so the
-    two surfaces are left to report what each actually knows; see
-    ``tests/services/scientific_read/test_get_reaction_kinetics.py::test_ts_opt_calculation_ref_can_be_null_while_ts_entry_has_opt``
-    for the reproduction, including what ``levels`` reports in that
-    shape (``geometry`` null, ``energy``/``energy_source`` still
-    resolved from the linked ``sp``).
+    See :func:`get_reaction_kinetics` for where ``ts_opt_calc_id`` is
+    resolved and ``tests/services/scientific_read/test_get_reaction_kinetics.py``
+    (the ``levels`` / dependency-resolution tests) for the reproduction:
+    a cited ``freq`` with a ``freq_on`` parent resolves ``geometry`` from
+    that parent; a cited ``sp`` with a ``single_point_on`` parent does the
+    same when no ``freq`` is cited; and a citation with no recorded parent
+    leaves ``geometry`` ``null``.
     """
 
     def _info(calc_id: int | None) -> RoleCalcInfo | None:
