@@ -133,6 +133,64 @@
     text-underline-offset: .15em;
 }
 
+/* ---------------------------------------------------------------------
+   Optimisation stage strip -- "Coarse optimisation → Fine optimisation",
+   the current calculation's own box emphasised. Owner ask: "present
+   stages better like they flow" (`StageAndConformerNote`'s docstring in
+   `CalculationDetailPage.tsx` has the full complaint). Deliberately reuses
+   `species-entry.css`'s `.linkage-flow`/`.linkage-connector` PATTERN
+   (flex row, an arrow between items, `.value-pill`-adjacent spacing) --
+   this is a second, page-local instance of that same shape (two `.card`
+   boxes rather than three numeric steps), never a third bespoke arrow
+   style. `.card`/`.card--selected` (design-system.css) supply the box
+   chrome itself; the rules below are layout only.
+   --------------------------------------------------------------------- */
+.opt-stage-flow {
+    display: flex;
+    align-items: stretch;
+    gap: .75rem;
+    margin-top: .3rem;
+}
+
+.opt-stage-box {
+    display: flex;
+    flex: 1 1 12rem;
+    flex-direction: column;
+    gap: .35rem;
+    min-width: 10rem;
+}
+
+.opt-stage-box-label {
+    color: var(--muted);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
+}
+
+.opt-stage-box code {
+    color: var(--accent-700);
+}
+
+/* Same recipe as `.linkage-connector` (`species-entry.css`): a bare arrow
+   glyph, centred on the row, muted until it stacks. */
+.opt-stage-connector {
+    display: flex;
+    flex: none;
+    align-items: center;
+    color: var(--faint);
+    font-size: 1.4rem;
+}
+
+/* Same 680px stack breakpoint every other flow-with-connector on this app
+   stacks at (`species-entry.css`'s `.linkage-flow`) -- two boxes fit side
+   by side well below that width, so this needs no earlier tablet-band
+   breakpoint the three-step linkage flow does. */
+@media (max-width: 680px) {
+    .opt-stage-flow { flex-direction: column; }
+    .opt-stage-box { flex: none; }
+    .opt-stage-connector { align-self: flex-start; transform: rotate(90deg); margin: .2rem 0 .2rem .4rem; }
+}
+
 /* No mobile breakpoint override for `.record-context`/`.record-context--
    compact` needed: the canonical `.kv-list` (`design-system.css`) already
    uses `auto-fit, minmax(12rem, 1fr)`, which collapses to one column on
