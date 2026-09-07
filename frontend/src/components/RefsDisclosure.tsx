@@ -15,11 +15,17 @@ export type RefEntry = { label: string; value: string; to?: string }
  * ever substitutes a label for the ref itself. See the design review:
  * "it's good we have them exposed... but it makes it look messy."
  *
- * Caller's responsibility: if this disclosure sits on a record among
- * several otherwise-identical siblings (e.g. three thermo deposits that
- * differ only by ref), keep that record's own primary identifier visible
- * OUTSIDE this component -- collapsing every ref would make the siblings
- * indistinguishable at rest.
+ * The rule this component's callers follow (owner decision: "yes show
+ * each record's own ref inline"): a record's OWN public ref never goes
+ * in this list -- it renders inline, outside this component, as the
+ * FIRST fact in the identity block (`RecordIdentityHeader`'s `ownRef`
+ * prop for a page that composes that header; hand-matched markup on the
+ * two pages that don't, `ConformerObservationPage.tsx`/
+ * `ConformerGroupPage.tsx`). ONLY related refs -- a parent species,
+ * entry, group, calculation, submission, or similar -- belong in the
+ * `refs` array passed here. Putting the record's own ref in both places
+ * shows it twice and inflates this disclosure's own count for nothing; a
+ * caller building `refs` is responsible for leaving it out.
  *
  * `inset`: this disclosure's box chrome, demoted to a top-only separator
  * (no border on the other three sides, no radius, no background) for a

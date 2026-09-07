@@ -81,6 +81,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             titleVariant="display-1"
             title={entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}
             identity={identity}
+            ownRef={{ label: "Species entry ref", value: entry.species_entry_ref }}
         />
         <ul className="entry-facts" aria-label="Record facts">
             <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
@@ -109,10 +110,13 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             this page needs to distinguish two species entries at rest; the
             formula/SMILES/InChIKey above already does that job, so every
             ref here can collapse without losing anything a reader needs at
-            a glance. */}
+            a glance. This entry's OWN ref is deliberately NOT in this list
+            any more (owner decision: "yes show each record's own ref
+            inline") -- it now renders first, inline, in the identity
+            header above via `ownRef`; only the RELATED parent-species ref
+            stays here, per `RefsDisclosure.tsx`'s own docstring. */}
         <RefsDisclosure refs={[
             { label: "Species", value: entry.speciesRef, to: `/species/${entry.speciesRef}` },
-            { label: "Entry", value: entry.species_entry_ref },
         ]} />
     </header>
 }

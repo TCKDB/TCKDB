@@ -293,6 +293,28 @@ describe("ConformerObservationPage", () => {
         expect(screen.getByRole("link", { name: "geo_one" })).toHaveAttribute("href", "/geometries/geo_one")
     })
 
+    // Owner decision: "yes show each record's own ref inline" -- this
+    // page already showed "Observation ref" first, but with no copy
+    // button; every other record page's own-ref fact gets one via
+    // `RecordIdentityHeader`'s `ownRef` prop, so this hand-rolled page
+    // now matches that affordance.
+    it("shows the observation's own ref first in the identity block, with the data face and a copy button", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        const identityFacts = document.querySelector(".record-identity-header dl.kv-list") as HTMLElement
+        expect(identityFacts).not.toBeNull()
+        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Observation ref")
+        const ownRefValue = within(identityFacts).getByText("co_one", { selector: "code" })
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue).toHaveClass("data")
+        expect(screen.getByRole("button", { name: /copy observation ref/i })).toBeVisible()
+    })
+
     // Unified fallback rule (per `SpeciesEntryLink`'s own reviewer-flagged
     // duplication fix, shared with `ConformerGroupPage.tsx` and
     // `RecordIdentityHeader.tsx`): when the species SMILES did not parse

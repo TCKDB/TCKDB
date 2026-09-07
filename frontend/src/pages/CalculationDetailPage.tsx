@@ -351,9 +351,12 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
     // The provenance refs are optional on the wire; a row is only a row
     // when its ref is actually present (a label with nothing to copy is
-    // not a reference).
+    // not a reference). The calculation's OWN ref is deliberately NOT in
+    // this list -- it renders first, inline, in the identity header via
+    // `RecordIdentityHeader`'s `ownRef` prop below (owner decision: "yes
+    // show each record's own ref inline"); this disclosure carries only
+    // RELATED refs, per `RefsDisclosure.tsx`'s own docstring.
     const refs: RefEntry[] = [
-        { label: "Calculation ref", value: core.calculation_ref },
         { label: "Level of theory ref", value: lot?.level_of_theory_ref },
         { label: "Software release ref", value: software?.software_release_ref },
         { label: "Workflow tool release ref", value: workflow?.workflow_tool_release_ref },
@@ -434,6 +437,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             pill={<span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
                             title={<>{typeLabel(core.type)} of {titleSubject}</>}
                             identity={identity}
+                            ownRef={{ label: "Calculation ref", value: core.calculation_ref }}
                         />
 
                         {/* The answer this page exists to give, promoted to the

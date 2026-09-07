@@ -302,6 +302,21 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText("conformer_1", { selector: "dd" })).toBeVisible()
     })
 
+    // Owner decision: "yes show each record's own ref inline" -- this
+    // page already showed "Group ref" first, but with no copy button;
+    // every other record page's own-ref fact gets one via
+    // `RecordIdentityHeader`'s `ownRef` prop, so this hand-rolled page
+    // now matches that affordance.
+    it("gives the group's own ref, first in the identity block, the same copy affordance as every other record page", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const identityFacts = document.querySelector(".record-identity-header dl.kv-list") as HTMLElement
+        expect(identityFacts).not.toBeNull()
+        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Group ref")
+        expect(screen.getByRole("button", { name: /copy group ref/i })).toBeVisible()
+    })
+
     // Item 1/6/7, design/foundations PR B: the kicker-row/h1 order, the
     // review-status pill's `.value-pill` primitive (muted for
     // "not reviewed"), and the calculation table's `.data-table` primitive

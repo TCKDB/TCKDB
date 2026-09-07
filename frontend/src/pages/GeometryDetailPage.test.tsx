@@ -185,12 +185,23 @@ describe("GeometryDetailPage", () => {
         expect(within(breadcrumb).queryByRole("link", { name: /species/i })).not.toBeInTheDocument()
     })
 
-    it("shows the geometry ref, hash, format and units — never label-only", async () => {
+    it("shows the geometry ref first in the identity block, and the hash, format and units in the context list", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const context = screen.getByText("Geometry ref").closest(".basin-context") as HTMLElement
-        expect(within(context).getByText("geom_ch4_one")).toBeVisible()
+        // Own ref: first fact in the identity block (`RecordIdentityHeader`'s
+        // `ownRef` prop), never inside `.basin-context` any more — see
+        // `RefsDisclosure.tsx`'s own-ref-inline rule.
+        const identityFacts = screen.getByText("Geometry ref").closest(".record-identity-facts") as HTMLElement
+        expect(identityFacts).not.toBeNull()
+        const ownRefValue = within(identityFacts).getByText("geom_ch4_one")
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue.tagName).toBe("CODE")
+        expect(ownRefValue).toHaveClass("data")
+        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Geometry ref")
+        expect(within(identityFacts).getByRole("button", { name: /copy geometry ref/i })).toBeVisible()
+        const context = screen.getByText("Geometry hash", { selector: "dt" }).closest(".basin-context") as HTMLElement
+        expect(within(context).queryByText("Geometry ref")).not.toBeInTheDocument()
         // Full 64-char hash, not a truncated prefix — a mutation that
         // rendered `geom_hash.slice(0, 8)` would still pass a shorter
         // fixture by coincidence, so this fixture's hash is realistically

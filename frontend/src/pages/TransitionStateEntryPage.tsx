@@ -188,6 +188,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     // split this now makes.
     const trust = record.trust ?? null
 
+    // No `transitionStateEntryRef` here -- unlike every OTHER
+    // `RecordIdentityHeader` caller that can render a `transition_state_entry`
+    // identity (which renders an OWNER's ref, e.g. `GeometryDetailPage` on a
+    // TS-owned geometry), this component IS that entry's own page. Its own
+    // ref is supplied separately via the header's `ownRef` prop below and
+    // rendered first; setting it here too would render the exact same ref
+    // twice on one page. Mirrors `SpeciesEntrySummary.tsx`'s identical
+    // `speciesEntryRef` omission for the same reason.
     const identity: TransitionStateIdentity = {
         kind: "transition_state_entry",
         // Never served on this endpoint (see `TransitionStateEntryCoreBlock`)
@@ -197,7 +205,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts.transition_state_ref,
-        transitionStateEntryRef: entry.transition_state_entry_ref,
         label: ts.label,
     }
 
@@ -254,9 +261,12 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
 
     // The reaction-record link lives ONCE, in the Reaction section below
     // (with a "record view not yet available" note, since `/reactions/:ref`
-    // is a placeholder route) -- not duplicated here as well.
+    // is a placeholder route) -- not duplicated here as well. This entry's
+    // OWN ref is deliberately NOT in this list (owner decision: "yes show
+    // each record's own ref inline") -- it renders first, inline, in the
+    // identity header below via `ownRef`; only RELATED refs stay here, per
+    // `RefsDisclosure.tsx`'s own docstring.
     const refs = [
-        { label: "Transition state entry", value: entry.transition_state_entry_ref },
         { label: "Transition state", value: ts.transition_state_ref },
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
     ]
@@ -305,6 +315,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             titleVariant="display-2"
                             identity={identity}
                             explainTransitionStateIdentity={false}
+                            ownRef={{ label: "Transition state entry ref", value: entry.transition_state_entry_ref }}
                         />
                         <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
                         {/* No "Charge / multiplicity" row here: `RecordIdentityHeader`

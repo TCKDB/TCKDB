@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach, vi } from "vitest"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import type { RecordIdentity } from "../domain/recordIdentity"
@@ -306,5 +306,81 @@ describe("RecordIdentityHeader", () => {
             expect(code).toHaveClass("data")
             expect(link.textContent).not.toContain("Species entry")
         })
+    })
+})
+
+// `ownRef` -- the record's OWN public ref, per the owner decision "yes
+// show each record's own ref inline". Deliberately exercised across every
+// `identity.kind` branch (`species_entry`, `transition_state_entry`,
+// `ambiguous`, `absent`): a mutation that only prepends `ownRef` inside
+// ONE branch's `dl` (e.g. only `species_entry`) would still pass a test
+// that only checks the species-entry case, so each branch gets its own
+// assertion here.
+describe("ownRef -- the record's own ref, shown first, always", () => {
+    it("omits the own-ref fact entirely when no ownRef is supplied -- existing callers without it are unaffected", () => {
+        const { container } = renderHeader({ identity: speciesIdentity })
+        expect(screen.queryByText("Calculation ref")).not.toBeInTheDocument()
+        // No mystery leading fact: the first child of the facts dl is still
+        // SMILES, exactly as it was before `ownRef` existed.
+        const facts = container.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
+        expect(Array.from(facts.children)[0]).toHaveTextContent("SMILES")
+    })
+
+    it("renders the own ref as the FIRST fact in a species_entry identity's facts list, with the data face and a copy button", () => {
+        const { container } = renderHeader({
+            identity: speciesIdentity,
+            ownRef: { label: "Calculation ref", value: "calc_demo" },
+        })
+        const facts = container.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Calculation ref")
+        const value = within(facts).getByText("calc_demo")
+        expect(value.tagName).toBe("CODE")
+        expect(value).toHaveClass("data")
+        expect(within(facts).getByRole("button", { name: /copy calculation ref/i })).toBeVisible()
+    })
+
+    it("renders the own ref as the FIRST fact in a transition_state_entry identity's facts list", () => {
+        const { container } = renderHeader({
+            identity: tsIdentity,
+            ownRef: { label: "Geometry ref", value: "geom_demo" },
+        })
+        const facts = container.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Geometry ref")
+        expect(within(facts).getByText("geom_demo")).toBeVisible()
+    })
+
+    it("renders the own ref even when the identity is ambiguous -- the owner list follows it, not instead of it", () => {
+        renderHeader({
+            identity: { kind: "ambiguous", owners: [{ kind: "species_entry", ref: "spe_a" }] },
+            ownRef: { label: "Geometry ref", value: "geom_demo" },
+        })
+        const facts = screen.getByText("Geometry ref").closest(".record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        expect(within(facts).getByText("geom_demo")).toBeVisible()
+        // Still renders the ambiguous-owner content alongside it.
+        expect(screen.getByTestId("record-identity-ambiguous")).toBeVisible()
+        expect(screen.getByText("spe_a")).toBeVisible()
+    })
+
+    it("renders the own ref even when the identity is absent -- a record can always name itself even with no known molecular owner", () => {
+        renderHeader({
+            identity: { kind: "absent" },
+            ownRef: { label: "Geometry ref", value: "geom_demo" },
+        })
+        const facts = screen.getByText("Geometry ref").closest(".record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        expect(within(facts).getByText("geom_demo")).toBeVisible()
+        expect(screen.getByText(/No molecular identity is recorded/)).toBeVisible()
+    })
+
+    it("clicking the own-ref copy button writes its value to the clipboard", () => {
+        const writeText = vi.fn().mockResolvedValue(undefined)
+        Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+
+        renderHeader({ identity: speciesIdentity, ownRef: { label: "Calculation ref", value: "calc_demo" } })
+        fireEvent.click(screen.getByRole("button", { name: /copy calculation ref/i }))
+        expect(writeText).toHaveBeenCalledWith("calc_demo")
     })
 })

@@ -8,6 +8,7 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { CopyButton } from "../components/RefsDisclosure"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerObservation } from "../hooks/useConformerObservation"
@@ -141,8 +142,26 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     as plain `dd` text instead (to keep a test
                                     query passing) and why that was backwards.
                                     The tests below now query the `code`
-                                    element. */}
-                                <div><dt>Observation ref</dt><dd><code className="data">{core.conformer_observation_ref}</code></dd></div>
+                                    element.
+                                    "Observation ref" is this record's OWN ref,
+                                    already first here -- and now carries the
+                                    SAME copy affordance (`CopyButton`, same
+                                    `.record-identity-fact-copyable` layout
+                                    class from `record-identity-header.css`,
+                                    already imported above) as every other
+                                    record page's own-ref fact via
+                                    `RecordIdentityHeader`'s `ownRef` prop
+                                    (owner decision: "yes show each record's
+                                    own ref inline" -- see
+                                    `RefsDisclosure.tsx`'s own docstring for
+                                    the rule this satisfies). */}
+                                <div>
+                                    <dt>Observation ref</dt>
+                                    <dd className="record-identity-fact-copyable">
+                                        <code className="data">{core.conformer_observation_ref}</code>
+                                        <CopyButton value={core.conformer_observation_ref} label="Observation ref" srLabel="value" />
+                                    </dd>
+                                </div>
                                 <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
                                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                                 <div>

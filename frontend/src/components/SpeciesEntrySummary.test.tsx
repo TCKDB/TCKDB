@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
+import { bySummaryText } from "../test/disclosureQueries"
 import { EntryIdentity } from "./SpeciesEntrySummary"
 
 afterEach(cleanup)
@@ -70,5 +71,38 @@ describe("EntryIdentity: no pill boxes, every fact exactly once", () => {
         const facts = screen.getByRole("list", { name: "Record facts" })
         expect(within(facts).getByText("Term symbol").nextElementSibling).toHaveTextContent("T1")
         expect(within(facts).getByText("Isotopologue").nextElementSibling).toHaveTextContent("13C1")
+    })
+})
+
+// Owner decision: "yes show each record's own ref inline". This entry IS
+// its own `RecordIdentityHeader` subject, so its own ref reaches the
+// header via the `ownRef` prop (not `identity.speciesEntryRef`, which this
+// component deliberately omits -- see the component's own comment) and
+// must render first, visible at rest, and never duplicated in the
+// collapsed References disclosure below it.
+describe("EntryIdentity: own ref inline, first, never duplicated in References", () => {
+    it("shows the entry's own ref first in the identity block, with the data face and a copy button", () => {
+        renderEntry(baseEntry())
+        const identityFacts = document.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
+        expect(identityFacts).not.toBeNull()
+        expect(Array.from(identityFacts.children)[0]).toHaveTextContent("Species entry ref")
+        const ownRefValue = within(identityFacts).getByText("spe_demo")
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue.tagName).toBe("CODE")
+        expect(ownRefValue).toHaveClass("data")
+        expect(within(identityFacts).getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+    })
+
+    it("keeps the entry's own ref out of the collapsed References disclosure -- only the related parent species ref stays there", async () => {
+        renderEntry(baseEntry())
+        // Collapsed by default: the ref is not visible until opened.
+        const summary = screen.getByText(bySummaryText(/References \(1\)/))
+        expect(summary).toBeVisible()
+        fireEvent.click(summary)
+        const disclosure = summary.closest("details") as HTMLElement
+        expect(within(disclosure).queryByText("spe_demo")).not.toBeInTheDocument()
+        expect(within(disclosure).getByText("spc_demo")).toBeVisible()
+        // Exactly one occurrence of the entry's own ref anywhere on the page.
+        expect(screen.getAllByText("spe_demo")).toHaveLength(1)
     })
 })

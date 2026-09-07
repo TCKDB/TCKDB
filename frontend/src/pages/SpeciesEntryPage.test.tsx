@@ -395,16 +395,36 @@ describe("species-entry page: identity and errors", () => {
 
         // Public refs are collapsed by default (References disclosure) but
         // present, visible, and copyable once opened -- never hidden by
-        // substituting a label for the ref itself. Only the two STABLE
-        // refs (species, entry) live here now -- InChIKey moved to the
-        // always-visible identifiers row above, not duplicated here.
+        // substituting a label for the ref itself. Only the RELATED parent
+        // species ref lives here now -- InChIKey moved to the always-
+        // visible identifiers row above, and this entry's OWN ref
+        // (`species_entry_ref`) is no longer in this list at all: it
+        // renders first, inline, in the identity header's own-ref fact
+        // instead (owner decision: "yes show each record's own ref
+        // inline" -- see `RefsDisclosure.tsx`'s own docstring), so
+        // References drops from 2 rows to 1.
         expect(screen.queryByText("spc_atp56uqux2ajao7hvckx7gx7ca")).not.toBeVisible()
-        await user.click(screen.getByText(bySummaryText("References (2)")))
-        expect(screen.getByRole("link", { name: "spc_atp56uqux2ajao7hvckx7gx7ca" })).toHaveAttribute(
+        // Scoped to the entry hero -- other RefsDisclosures on this page
+        // (e.g. a conformer card's own) can carry the same "References (1)"
+        // count coincidentally.
+        const hero = document.querySelector(".entry-hero") as HTMLElement
+        await user.click(within(hero).getByText(bySummaryText("References (1)")))
+        expect(within(hero).getByRole("link", { name: "spc_atp56uqux2ajao7hvckx7gx7ca" })).toHaveAttribute(
             "href", "/species/spc_atp56uqux2ajao7hvckx7gx7ca",
         )
-        const refsPanel = screen.getByText(bySummaryText("References (2)")).closest("details") as HTMLElement
+        const refsPanel = within(hero).getByText(bySummaryText("References (1)")).closest("details") as HTMLElement
         expect(within(refsPanel).queryByText("InChIKey")).not.toBeInTheDocument()
+
+        // This entry's own ref: first fact in the identity block, at rest,
+        // with the data face and a copy button -- never inside References.
+        expect(within(facts).getByText("Species entry ref")).toBeVisible()
+        const ownRefValue = within(facts).getByText(entryRef)
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue.tagName).toBe("CODE")
+        expect(ownRefValue).toHaveClass("data")
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Species entry ref")
+        expect(within(facts).getByRole("button", { name: /copy species entry ref/i })).toBeVisible()
+        expect(within(refsPanel).queryByText(entryRef)).not.toBeInTheDocument()
 
         // The availability card grid ("Available in this entry" / "View
         // record section") is gone -- plain navigation replaced it.
