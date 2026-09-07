@@ -509,7 +509,17 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     })))
     window.history.replaceState({}, "", "/reactions/rxe_abc")
     render(<App />)
-    expect(await screen.findByText("rxe_abc")).toBeVisible()
+    // MEASURED gap this closes (post-review): the OLD `RecordPlaceholderPage`
+    // route ALSO rendered the literal text "rxe_abc" (its own `{ref &&
+    // <code>{ref}</code>}` line), at the UNCHANGED url `/reactions/rxe_abc`
+    // -- so a `findByText("rxe_abc")` assertion alone passed identically
+    // whether or not the redirect actually fired, and stayed green when
+    // this route was reverted to the placeholder. Asserting the URL itself
+    // (App.tsx renders through a real `BrowserRouter`, so `window.location`
+    // reflects client-side navigation) is the one signal only the ACTUAL
+    // `<Navigate>` redirect produces.
+    await screen.findByText("rxe_abc")
+    expect(window.location.pathname).toBe("/reaction-entries/rxe_abc")
 })
 
 describe("unmatched routes (finding #12)", () => {

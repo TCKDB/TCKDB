@@ -94,10 +94,10 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
                 <div><dt>Review</dt><dd><span className={reviewPillClass(ts.review.status)}>{token(ts.review.status)}</span></dd></div>
             </dl>
 
-            <p className="t-label" style={{ marginTop: "1rem" }}>Status</p>
+            <p className="t-label reaction-ts-status-label">Status</p>
             <StatusStrip status={ts.status} />
 
-            <p className="t-label" style={{ marginTop: "1.5rem" }}>Calculations by stage</p>
+            <p className="t-label reaction-ts-stage-label">Calculations by stage</p>
             <div className="table-scroll">
                 <table className="data-table" aria-label={`Calculations for ${ts.transition_state_entry_ref}`}>
                     <thead>
@@ -136,11 +136,11 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
                 — structurally absent from this view, not fabricated as "not recorded".
             </p>
 
-            <dl className="kv-list" style={{ marginTop: "1.5rem" }}>
+            <dl className="kv-list reaction-product-levels">
                 <ProductLevelsFact levels={levels} />
             </dl>
 
-            <h3 className="t-heading-2" style={{ marginTop: "2rem" }}>Calculation dependency graph</h3>
+            <h3 className="t-heading-2 reaction-ts-dep-graph-heading">Calculation dependency graph</h3>
             {dependencies.length > 0 && centreRef
                 ? <CalculationDependencyGraph dependencies={dependencies} ownRef={centreRef} ownType="opt" />
                 : (

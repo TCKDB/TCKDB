@@ -223,7 +223,7 @@ const transitionStateInFullSchema = z.object({
 // oddity note: a kinetics record's own `ts_*_calculation_ref` provenance
 // can name a calculation this section does not carry, in which case that
 // role's level falls back to `provenance.primary_level_of_theory` -- see
-// `deriveKineticsLevelsFallback` in `pages/ReactionEntryPage.tsx`.)
+// `deriveKineticsLevelsFallback` in `domain/reactionKineticsLevels.ts`.)
 // ---------------------------------------------------------------------------
 
 const calculationEvidenceSummarySchema = z.object({
@@ -343,7 +343,20 @@ export async function loadReactionEntry(
         payload = await fetchFull(ref, include, signal, onRateLimited)
         if (include === FULL_INCLUDE) networksIncludeSupported = true
     } catch (error) {
-        if (include === FULL_INCLUDE && error instanceof ScientificApiError && error.code === "unknown_include_token") {
+        // `error.message.includes("networks")` -- not just `error.code ===
+        // "unknown_include_token"` alone -- so a FUTURE unrelated token
+        // this endpoint stops accepting (something other than `networks`)
+        // can never latch `networksIncludeSupported = false` for a token
+        // that was never the problem. The archive's own error detail names
+        // the rejected token(s) by value (`"token(s) ['networks'] not
+        // legal for ..."`), which is the one signal specific enough to
+        // trust for this latch.
+        if (
+            include === FULL_INCLUDE
+            && error instanceof ScientificApiError
+            && error.code === "unknown_include_token"
+            && error.message.includes("networks")
+        ) {
             networksIncludeSupported = false
             payload = await fetchFull(ref, FULL_INCLUDE.filter((token) => token !== "networks"), signal, onRateLimited)
         } else {

@@ -61,6 +61,7 @@ const searchResponseSchema = z.object({
 }).passthrough()
 
 export type ReactionOverviewRecord = z.infer<typeof reactionRecordSchema>
+export type ReactionOverviewParticipant = z.infer<typeof participantSchema>
 export type ReactionOverview = z.infer<typeof searchResponseSchema>
 
 export async function loadReactionOverview(

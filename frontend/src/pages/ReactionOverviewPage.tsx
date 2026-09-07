@@ -2,7 +2,7 @@ import { Link, Navigate, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import "../reaction-entry.css"
-import type { ReactionOverviewRecord } from "../api/reactionOverviewApi"
+import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api/reactionOverviewApi"
 import { loadReactionOverview } from "../api/reactionOverviewApi"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
@@ -10,6 +10,8 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { RecordStatus } from "../components/RecordStatus"
+import { CopyButton } from "../components/RefsDisclosure"
+import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -95,9 +97,19 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                             </p>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
-                                    <div><dt>Reaction ref</dt><dd><code className="data">{reactionRef}</code></dd></div>
+                                    <div>
+                                        <dt>Reaction ref</dt>
+                                        <dd className="record-identity-fact-copyable">
+                                            <code className="data">{reactionRef}</code>
+                                            <CopyButton value={reactionRef} label="Reaction ref" srLabel="value" />
+                                        </dd>
+                                    </div>
                                     <div><dt>Family</dt><dd>{first.family ? statusLabel(first.family) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
                                     <div><dt>Reversible</dt><dd>{first.reversible ? "yes" : "no"}</dd></div>
+                                    <div className="record-identity-fact-wide">
+                                        <dt>Equation (as deposited)</dt>
+                                        <dd><code className="data">{first.equation}</code></dd>
+                                    </div>
                                 </dl>
                             </div>
                         </div>
@@ -126,22 +138,12 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                                         <td data-label="Entry"><Link to={`/reaction-entries/${record.reaction_entry_ref}`}>{record.reaction_entry_ref}</Link></td>
                                         <td data-label="Reactants">
                                             {record.reactants.map((p, i) => (
-                                                <span key={p.species_entry_ref}>
-                                                    {i > 0 && " · "}
-                                                    <Link to={`/species-entries/${p.species_entry_ref}`}>
-                                                        {p.formula ? <Formula value={p.formula} /> : p.smiles}
-                                                    </Link>
-                                                </span>
+                                                <ParticipantCell key={p.species_entry_ref} participant={p} separator={i > 0} />
                                             ))}
                                         </td>
                                         <td data-label="Products">
                                             {record.products.map((p, i) => (
-                                                <span key={p.species_entry_ref}>
-                                                    {i > 0 && " · "}
-                                                    <Link to={`/species-entries/${p.species_entry_ref}`}>
-                                                        {p.formula ? <Formula value={p.formula} /> : p.smiles}
-                                                    </Link>
-                                                </span>
+                                                <ParticipantCell key={p.species_entry_ref} participant={p} separator={i > 0} />
                                             ))}
                                         </td>
                                         <td data-label="Review"><span className={reviewPillClass(record.review.status)}>{statusLabel(record.review.status)}</span></td>
@@ -180,5 +182,28 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                 </section>
             </PageShell>
         </section>
+    )
+}
+
+/**
+ * One reactant/product cell: formula (or SMILES fallback) link, the
+ * participant's own `spe_` ref with a copy button, and its
+ * `species_entry_label` chip (e.g. "Z") when served -- the same four
+ * facts the PR 0 mock's own chooser table rendered for every participant
+ * (post-review fix: this row previously showed only the formula link,
+ * dropping the ref/copy-button/label the mock had).
+ */
+function ParticipantCell({ participant, separator }: { participant: ReactionOverviewParticipant; separator: boolean }) {
+    return (
+        <span className="chooser-participant">
+            {separator && " · "}
+            <Link to={`/species-entries/${participant.species_entry_ref}`}>
+                {participant.formula ? <Formula value={participant.formula} /> : participant.smiles}
+            </Link>
+            {" "}
+            <code className="data">{participant.species_entry_ref}</code>
+            <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
+            {participant.species_entry_label && <> · {stereoChip(participant.species_entry_label)}</>}
+        </span>
     )
 }

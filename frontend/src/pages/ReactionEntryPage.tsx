@@ -233,6 +233,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <ReactionKineticsSection
                         kinetics={kinetics}
                         calculations={record.calculations}
+                        transitionStates={transitionStates}
                         networksStatus={networksState.status === "ready" ? (networksState.networks.length ? "populated" : "empty") : "loading"}
                         networkRef={networksState.status === "ready" ? networksState.networks[0]?.network_ref : undefined}
                     />
@@ -296,7 +297,7 @@ function ParticipantsTable({ label, participants }: {
                                     </Link>
                                     {" "}
                                     <code className="data">{participant.species_entry_ref}</code>
-                                    <CopyButton value={participant.species_entry_ref} label="Formula" srLabel="reference" />
+                                    <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
                                 </td>
                                 <td data-label="SMILES"><code className="data">{participant.smiles}</code></td>
                                 <td data-label="Review"><span className={reviewPillClass(participant.review.status)}>{statusLabel(participant.review.status)}</span></td>
@@ -334,7 +335,10 @@ function NetworkSection({ state }: { state: NetworksState }) {
                     {state.networks.map((network) => (
                         <tr key={network.network_ref}>
                             <td data-label="Network">{network.name ?? "not recorded"}</td>
-                            <td data-label="Ref"><Link to={`/networks/${network.network_ref}`}><code className="data">{network.network_ref}</code></Link></td>
+                            <td data-label="Ref">
+                                <code className="data">{network.network_ref}</code>
+                                <CopyButton value={network.network_ref} label="Network" srLabel="reference" />
+                            </td>
                             <td className="num" data-label="Solve T range">
                                 {network.solve_temperature_min_k != null && network.solve_temperature_max_k != null
                                     ? `${network.solve_temperature_min_k}–${network.solve_temperature_max_k} K`

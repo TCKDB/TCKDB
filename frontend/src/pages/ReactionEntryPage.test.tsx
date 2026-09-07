@@ -57,8 +57,21 @@ function mockFull(overrides: Record<string, unknown> = {}) {
             tunneling_model: "eckart",
             is_third_body: false,
             temperature_coverage: { record_min_k: 300, record_max_k: 3000 },
-            evidence_completeness: { score: 7, max: 9, checklist: { source_calculations: true, ts_opt_evidence: true } },
-            levels: { geometry: null, frequency: { method: "b3lyp", basis: "def2tzvp" }, energy: { method: "b3lyp", basis: "def2tzvp" }, energy_source: "sp" },
+            evidence_completeness: {
+                score: 7, max: 9,
+                checklist: {
+                    has_source_calculations: true,
+                    has_transition_state_entry: true,
+                    has_ts_opt_evidence: true,
+                    has_ts_freq_evidence: true,
+                    has_ts_sp_evidence: true,
+                    has_path_search_or_irc_evidence: true,
+                    has_uncertainty: true,
+                    has_geometry_validation: false,
+                    has_scf_stability: false,
+                },
+            },
+            levels: { geometry: { method: "b3lyp", basis: "def2tzvp" }, frequency: { method: "b3lyp", basis: "def2tzvp" }, energy: { method: "b3lyp", basis: "def2tzvp" }, energy_source: "sp" },
             provenance: {
                 transition_state_entry_ref: null,
                 ts_opt_calculation_ref: null,
@@ -196,6 +209,13 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         // (plan §2's non-goal: no network page yet, so a network is a plain
         // row, not a related-ref citation) -- exactly one mention.
         expect(occurrencesOutsideRefs(container, "net_test1")).toBe(1)
+
+        // `/networks/:ref` is a site 404 today (no network page yet, plan
+        // §1's own non-goal) -- the ref renders in the data face with a
+        // copy button, NOT as a link to a page that doesn't exist.
+        expect(screen.queryByRole("link", { name: "net_test1" })).not.toBeInTheDocument()
+        const refCell = screen.getByText("net_test1").closest("td")!
+        expect(refCell.querySelector(".copy-button")).not.toBeNull()
     })
 
     it("key absent (pre-deployment API) -- section renders nothing until the fallback resolves", async () => {
@@ -242,12 +262,16 @@ describe("ReactionEntryPage -- network-only kinetics sentence", () => {
     })
 })
 
-// One kinetics record, parameterised by whether `levels` is served --
-// everything else (including both `ts_freq_calculation_ref` and
-// `ts_sp_calculation_ref` pointing at calc refs that ARE among the
-// top-level `calculations[]` list, so the fallback derivation has real
-// evidence to cross-reference) is held fixed between the two variants.
-function kineticsRecordFixture(levels: { geometry: null; frequency: { method: string; basis: string }; energy: { method: string; basis: string }; energy_source: string } | undefined) {
+// One kinetics record, parameterised by the served `levels` value (or its
+// absence, forcing `deriveKineticsLevelsFallback`). `ts_freq_calculation_ref`/
+// `ts_sp_calculation_ref` point at `calc_freq1`/`calc_sp1` -- the SAME two
+// calc refs `mockFull()`'s default `transition_states[0]` cites via its own
+// `freq_on`/`single_point_on` dependency edges (parent `calc_opt1`), so the
+// fallback derivation's dependency-edge walk has real, matching evidence to
+// resolve `geometry` from -- `ts_opt_calculation_ref: null` is the REAL
+// shape every live record now has (PR 398's post-review commit: no kinetics
+// role ever accepts an opt-typed citation directly).
+function kineticsRecordFixture(levels: Record<string, unknown> | undefined) {
     return {
         kinetics_ref: "kin_test1",
         scientific_origin: "computed",
@@ -274,31 +298,75 @@ function kineticsRecordFixture(levels: { geometry: null; frequency: { method: st
     }
 }
 
+function productLevelsBlockText(container: HTMLElement): string {
+    return (container.querySelector('section[aria-labelledby="kinetics-heading"] .reaction-product-levels') as HTMLElement).textContent ?? ""
+}
+
 describe("ReactionEntryPage -- fallback levels derivation", () => {
-    it("equals the server-served levels when both a levels object and enough calculation evidence to derive independently are present", async () => {
-        // Same fixture, once WITH `levels` served and once WITHOUT (forcing
-        // this page's own `deriveKineticsLevelsFallback` derivation from
-        // `provenance.ts_*_calculation_ref` cross-referenced against the
-        // top-level `calculations[]` list) -- both must render the same
-        // Geometry/Frequencies/Energy facts.
-        const servedLevels = { geometry: null, frequency: { method: "b3lyp", basis: "def2tzvp" }, energy: { method: "b3lyp", basis: "def2tzvp" }, energy_source: "sp" }
+    it("equals the server-served levels, EXACTLY (not merely 'contains'), when both a levels object and enough calculation evidence to derive independently are present", async () => {
+        // The served `levels` here is exactly what a correct
+        // `deriveKineticsLevelsFallback` should ALSO compute from this
+        // fixture's own calc refs: geometry via the freq_on(calc_opt1 ->
+        // calc_freq1) dependency edge, frequency/energy from calc_freq1/
+        // calc_sp1's own served levels (both b3lyp/def2tzvp per `mockFull()`'s
+        // default `calculations[]`). Gutting the fallback derivation (e.g.
+        // returning all-null) changes ONLY the second render, breaking this
+        // equality -- a plain `.toContain("b3lyp/def2tzvp")` on each side
+        // independently would NOT have caught that (each side still
+        // contains that substring somewhere else on the page).
+        const servedLevels = {
+            geometry: { method: "b3lyp", basis: "def2tzvp" },
+            frequency: { method: "b3lyp", basis: "def2tzvp" },
+            energy: { method: "b3lyp", basis: "def2tzvp" },
+            energy_source: "sp",
+        }
 
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(servedLevels)] }))
         const served = page()
         await screen.findByText("kin_test1")
-        const servedEnergyRow = served.container.querySelector('section[aria-labelledby="kinetics-heading"] .card > dl.kv-list')!
-        const servedText = servedEnergyRow.textContent ?? ""
+        const servedText = productLevelsBlockText(served.container)
+        expect(servedText).toContain("b3lyp/def2tzvp")
         served.unmount()
         server.resetHandlers()
 
         handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
         const derived = page()
         await screen.findByText("kin_test1")
-        const derivedEnergyRow = derived.container.querySelector('section[aria-labelledby="kinetics-heading"] .card > dl.kv-list')!
-        const derivedText = derivedEnergyRow.textContent ?? ""
+        const derivedText = productLevelsBlockText(derived.container)
 
-        expect(derivedText).toContain("b3lyp/def2tzvp")
-        expect(servedText).toContain("b3lyp/def2tzvp")
+        expect(derivedText).toBe(servedText)
+    })
+
+    // Closes a gap the equality test above cannot, on its own: if
+    // `ReactionKineticsSection` ignored the server's own `levels` and
+    // always ran the fallback derivation, THIS fixture's served and
+    // derived paths would coincidentally still agree (they resolve the
+    // same underlying facts). Here the served `levels` is DELIBERATELY
+    // set to a level the dependency-edge derivation would NOT produce
+    // from the same provenance -- proving the served value is trusted
+    // as-is, not silently re-derived out from under it.
+    it("trusts the server's own served levels verbatim, never silently re-deriving over them", async () => {
+        const servedLevels = {
+            geometry: { method: "ccsd(t)", basis: "cc-pvtz" }, // NOT what derivation would compute (b3lyp/def2tzvp, via calc_opt1)
+            frequency: { method: "ccsd(t)", basis: "cc-pvtz" },
+            energy: { method: "ccsd(t)", basis: "cc-pvtz" },
+            energy_source: "sp",
+        }
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(servedLevels)] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const text = productLevelsBlockText(container)
+        expect(text).toContain("ccsd(t)/cc-pvtz")
+        expect(text).not.toContain("b3lyp/def2tzvp")
+    })
+
+    it("derives geometry via the freq_on dependency-edge parent-opt walk when levels is absent (mirrors the backend's own resolver)", async () => {
+        handleFull(mockFull({ kinetics: [kineticsRecordFixture(undefined)] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const geometryRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] .reaction-product-levels dt'))
+            .find((dt) => dt.textContent === "Geometry")
+        expect(geometryRow?.nextElementSibling?.textContent).toContain("b3lyp/def2tzvp")
     })
 })
 
@@ -316,5 +384,143 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         const strip = screen.getByTestId("ts-status-strip")
         const selected = strip.querySelector(".card--selected")
         expect(selected?.textContent).toContain("Optimized")
+    })
+
+    it("renders Geometry/Frequencies/Energy facts for the TS block (ProductLevelsFact is not silently dropped)", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
+        const dts = Array.from(tsSection.querySelectorAll(".reaction-product-levels dt")).map((el) => el.textContent)
+        expect(dts).toEqual(["Geometry", "Frequencies", "Energy"])
+    })
+})
+
+// Post-review: the reviewer measured that several facts on this page could
+// be silently hard-coded or swapped without any test noticing, because
+// every existing fixture happened to use the SAME value everywhere (e.g.
+// "not_reviewed" for every review status, so a mutation hard-coding the
+// pill to a fixed string would still pass). These tests use DISTINCT,
+// non-default values per fact specifically so a hard-coded or swapped
+// render is distinguishable from a correctly wired one.
+describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-review mutation coverage)", () => {
+    it("the header review pill reflects the entry's OWN served status, not a fixed 'approved'/'not reviewed'", async () => {
+        handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, review: { status: "under_review" } } }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const header = container.querySelector(".record-identity-kicker-row")!
+        expect(header.textContent).toContain("under review")
+        expect(header.textContent).not.toContain("approved")
+        expect(header.textContent).not.toContain("not reviewed")
+    })
+
+    it("the Review section's six counts are each their OWN served number, not swapped with a sibling row", async () => {
+        handleFull(mockFull({
+            review_summary: { approved: 3, under_review: 5, not_reviewed: 7, deprecated: 11, rejected: 13, total: 39 },
+        }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const reviewSection = container.querySelector('section[aria-labelledby="review-heading"]')!
+        const rows = Array.from(reviewSection.querySelectorAll(".coverage-checklist > div")).map((row) => ({
+            label: row.querySelector("dt")?.textContent,
+            value: row.querySelector("dd")?.textContent,
+        }))
+        expect(rows).toEqual([
+            { label: "Approved", value: "3" },
+            { label: "Under review", value: "5" },
+            { label: "Not reviewed", value: "7" },
+            { label: "Deprecated", value: "11" },
+            { label: "Rejected", value: "13" },
+            { label: "Total joined records", value: "39" },
+        ])
+    })
+
+    it("the Participants table's SMILES column renders each participant's own served SMILES, never blank", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const smilesCells = Array.from(container.querySelectorAll('td[data-label="SMILES"]')).map((td) => td.textContent)
+        expect(smilesCells).toEqual(["O", "[CH3]", "C", "[OH]"])
+        expect(smilesCells.every((text) => text && text.length > 0)).toBe(true)
+    })
+
+    it("the Pressure-dependent network table's T/P ranges and channel count are each their own served value", async () => {
+        handleFull(mockFull({
+            networks: [{
+                network_ref: "net_distinct1",
+                name: "hydrazine",
+                solve_temperature_min_k: 111,
+                solve_temperature_max_k: 222,
+                solve_pressure_min_bar: 0.5,
+                solve_pressure_max_bar: 333,
+                channel_count: 17,
+                review: { status: "not_reviewed" },
+            }],
+        }))
+        const { container } = page()
+        await screen.findByText("net_distinct1")
+        const row = Array.from(container.querySelectorAll("tr")).find((tr) => tr.textContent?.includes("net_distinct1"))!
+        expect(row.querySelector('td[data-label="Solve T range"]')?.textContent).toBe("111–222 K")
+        expect(row.querySelector('td[data-label="Solve P range"]')?.textContent).toBe("0.5–333 bar")
+        expect(row.querySelector('td[data-label="Channels"]')?.textContent).toBe("17")
+    })
+})
+
+describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table formatting", () => {
+    it("evidence completeness rows render prose labels, not raw API keys", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const labels = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] .coverage-checklist dt')).map((dt) => dt.textContent)
+        expect(labels).toEqual([
+            "Source calculations",
+            "Transition-state entry",
+            "TS opt evidence",
+            "TS freq evidence",
+            "TS sp evidence",
+            "Path search or IRC evidence",
+            "Uncertainty",
+            "Geometry validation",
+            "SCF stability",
+        ])
+        // None of the raw underscored keys leak through.
+        expect(container.textContent).not.toContain("has_source_calculations")
+        expect(container.textContent).not.toContain("HAS_SOURCE_CALCULATIONS")
+    })
+
+    it("the k(T) table header names the unit next to k, distinct from the T (K) column", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const headers = Array.from(container.querySelectorAll(".kinetics-k-table thead th")).map((th) => th.textContent)
+        expect(headers).toEqual(["T (K)", "k (cm³ mol⁻¹ s⁻¹)", "log₁₀ k"])
+    })
+
+    it("Fit software with no recorded version says so explicitly, matching the mock's own wording", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const fitSoftwareRow = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt'))
+            .find((dt) => dt.textContent === "Fit software")
+        expect(fitSoftwareRow?.nextElementSibling?.textContent).toBe("Arkane (version not recorded)")
+    })
+
+    // The live "resolver disagreement" case (plan §7): a kinetics record's
+    // OWN cited sp calculation is not among this reaction's TS graph at
+    // all. The row still LINKS (the calc is a real, followable archive
+    // record), but carries an inline caveat explaining the discrepancy --
+    // MEASURED gap this closes: the row used to render unlinked with no
+    // explanation at all.
+    it("the TS sp calculation row links even when the ref is not among this entry's own calculations, with an explanatory caveat", async () => {
+        const payload = mockFull()
+        payload.kinetics[0].provenance.ts_sp_calculation_ref = "calc_unlinked_sp"
+        // NOT added to `calculations[]` -- the live resolver-disagreement shape.
+        handleFull(payload)
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const link = container.querySelector('a[href="/calculations/calc_unlinked_sp"]')
+        expect(link).not.toBeNull()
+        expect(link!.textContent).toBe("calc_unlinked_sp")
+        expect(container.textContent).toContain("not among the calculations this reaction entry's transition-state graph itself lists")
     })
 })

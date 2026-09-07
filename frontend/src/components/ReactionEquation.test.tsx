@@ -74,6 +74,38 @@ describe("ReactionEquation", () => {
         expect(container.textContent).toContain(" +")
     })
 
+    // Post-review fix: `SpeciesEntryLink` (used everywhere ELSE in the app)
+    // renders its optional stereo-label suffix as bare, unwrapped text --
+    // fine in a normal-size `<dd>`, but MEASURED to inherit the full 36px
+    // `--type-display-2` h1 size here and read as the single most
+    // prominent text on the chooser page ("· Z isomer" outweighing the
+    // chemistry itself). This component builds its own markup instead so
+    // the chip is a real, CSS-targetable element.
+    it("wraps a served stereo label in .reaction-equation-chip (formula present)", () => {
+        const { container } = renderEquation(
+            [participant({ species_entry_ref: "spe_a", smiles: "N=N", formula: "H2N2", species_entry_label: "Z", participant_index: 0 })],
+            [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
+            false,
+        )
+        const link = container.querySelector('a[href="/species-entries/spe_a"]')!
+        const chip = link.querySelector(".reaction-equation-chip")
+        expect(chip).not.toBeNull()
+        expect(chip!.textContent).toBe(" · Z isomer")
+        // The chip is a SIBLING of the formula, not swallowing it.
+        expect(link.querySelector("sub")?.textContent).toBe("2")
+    })
+
+    it("wraps a served stereo label in .reaction-equation-chip (formula absent, SMILES fallback)", () => {
+        const { container } = renderEquation(
+            [participant({ species_entry_ref: "spe_a", smiles: "N=N", formula: null, species_entry_label: "Z", participant_index: 0 })],
+            [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
+            false,
+        )
+        const link = container.querySelector('a[href="/species-entries/spe_a"]')!
+        expect(link.querySelector(".reaction-equation-chip")?.textContent).toBe(" · Z isomer")
+        expect(link.querySelector("code.data")?.textContent).toBe("N=N")
+    })
+
     it("renders ⇌ with a reversible aria-label when reversible, → with a non-reversible one otherwise", () => {
         const reversible = renderEquation(
             [participant({ species_entry_ref: "spe_a", smiles: "O", formula: "H2O", participant_index: 0 })],

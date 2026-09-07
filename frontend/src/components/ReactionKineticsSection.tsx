@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom"
-import type { ReactionKineticsRecord, ReactionFullCalculationEvidence } from "../api/reactionEntryApi"
+import type { ReactionFullCalculationEvidence, ReactionKineticsRecord, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
+import { computeKineticsTable, log10Text, scientificText } from "../domain/kineticsTable"
 import { EvidenceChecklist } from "./EvidenceChecklist"
 import { ProductLevelsFact } from "./ProductLevels"
 import { resolveProductLevels } from "../domain/productLevels"
-import { buildCalculationsByRef, deriveKineticsLevelsFallback } from "../domain/reactionKineticsLevels"
+import { buildCalculationsByRef, buildDependencyEdgesByChildRef, deriveKineticsLevelsFallback } from "../domain/reactionKineticsLevels"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 
@@ -13,7 +14,7 @@ function token(value: string): string {
 
 // `ArrheniusAUnits` (`backend/app/db/models/common.py`) -> the typeset unit
 // string this record's own `A` is reported in. A token this table has not
-// been taught yet falls back to the raw token, spaces for underscores --
+// been taught yet falls back to the raw token, spaces for underscores —
 // never blocks the page on an unrecognised enum value.
 const A_UNIT_LABELS: Record<string, string> = {
     per_s: "s⁻¹",
@@ -30,6 +31,27 @@ function aUnitLabel(units: string | null | undefined): string {
     return A_UNIT_LABELS[units] ?? token(units)
 }
 
+// `evidence_completeness.checklist`'s nine keys (`backend/app/services/scientific_read/kinetics.py`'s
+// own `checklist = {...}` literal) -> the mock's prose labels. A key this
+// table has not been taught yet (a future ninth-plus addition) falls back
+// to `token(key)`, the same "never block on an unrecognised value" rule
+// `aUnitLabel` follows above.
+const EVIDENCE_LABELS: Record<string, string> = {
+    has_source_calculations: "Source calculations",
+    has_transition_state_entry: "Transition-state entry",
+    has_ts_opt_evidence: "TS opt evidence",
+    has_ts_freq_evidence: "TS freq evidence",
+    has_ts_sp_evidence: "TS sp evidence",
+    has_path_search_or_irc_evidence: "Path search or IRC evidence",
+    has_uncertainty: "Uncertainty",
+    has_geometry_validation: "Geometry validation",
+    has_scf_stability: "SCF stability",
+}
+
+function evidenceLabel(key: string): string {
+    return EVIDENCE_LABELS[key] ?? token(key)
+}
+
 function formatUncertainty(u: ReactionKineticsRecord["uncertainty"]): string | null {
     const parts: string[] = []
     if (u.A_uncertainty != null) {
@@ -42,72 +64,26 @@ function formatUncertainty(u: ReactionKineticsRecord["uncertainty"]): string | n
     return parts.length ? parts.join(" · ") : null
 }
 
-/** R in kJ mol⁻¹ K⁻¹ -- the same constant plan §4's future `domain/arrhenius.ts` names. */
-const GAS_CONSTANT_KJ_MOL_K = 8.314462618e-3
-const TABLE_POINT_COUNT = 12
-
-function arrheniusTermK(A: number, n: number | null | undefined, Ea_kj_mol: number | null | undefined, temperatureK: number): number {
-    const exponent = n ?? 0
-    const ea = Ea_kj_mol ?? 0
-    return A * Math.pow(temperatureK, exponent) * Math.exp(-ea / (GAS_CONSTANT_KJ_MOL_K * temperatureK))
-}
-
 /**
- * k(T) sampled at `TABLE_POINT_COUNT` evenly spaced temperatures over the
- * record's own fitted range -- the table equivalent for the Arrhenius
- * chart PR 3 ships (plan §4/§6: "PR 2 owns cards + the k(T) TABLE only").
- * Only computed for a plain `arrhenius`/`modified_arrhenius` record (a
- * single `A`) or `multi_arrhenius` (summed over its own terms) -- a
- * pressure-dependent form (PLOG/Chebyshev/falloff) has no single k(T)
- * curve without a pressure, and is excluded with a note rather than
- * plotted against an unstated pressure.
+ * A software release without a recorded version (this record's own
+ * "kinetics fit" software, Arkane, on the live sample entry) must say so,
+ * not silently print just the name — mirrors `TransitionStateEntryPage.tsx`'s
+ * own `softwareCellText` helper (that page's local copy, not exported;
+ * duplicated here rather than reached into a page-scoped file).
  */
-function computeKineticsTable(record: ReactionKineticsRecord): { temperatureK: number; k: number }[] | null {
-    if (record.plog_entries || record.chebyshev || record.falloff) return null
-    const min = record.temperature_coverage?.record_min_k
-    const max = record.temperature_coverage?.record_max_k
-    if (min == null || max == null || !(max > min)) return null
-
-    const terms = record.multi_arrhenius && record.multi_arrhenius.length > 0
-        ? record.multi_arrhenius
-        : record.parameters.A != null
-            ? [{ A: record.parameters.A, n: record.parameters.n, Ea_kj_mol: record.parameters.Ea_kj_mol }]
-            : null
-    if (!terms) return null
-
-    const rows: { temperatureK: number; k: number }[] = []
-    for (let i = 0; i < TABLE_POINT_COUNT; i++) {
-        const temperatureK = min + (i * (max - min)) / (TABLE_POINT_COUNT - 1)
-        const k = terms.reduce((sum, term) => sum + arrheniusTermK(term.A, term.n, term.Ea_kj_mol, temperatureK), 0)
-        rows.push({ temperatureK, k })
+function softwareCellText(release: { software: string; version?: string | null } | null | undefined): string | null {
+    if (!release) return null
+    if (release.version === null || release.version === undefined || release.version === "") {
+        return `${release.software} (version not recorded)`
     }
-    return rows
+    return softwareLabel(release)
 }
 
-function log10(value: number): string {
-    if (value <= 0) return "n/a"
-    return Math.log10(value).toFixed(4)
-}
-
-function scientificText(value: number): string {
-    if (value === 0) return "0"
-    const exponent = Math.floor(Math.log10(Math.abs(value)))
-    const mantissa = value / Math.pow(10, exponent)
-    return `${mantissa.toFixed(4)}×10${superscript(exponent)}`
-}
-
-const SUPERSCRIPT_DIGITS: Record<string, string> = {
-    "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹", "-": "⁻",
-}
-
-function superscript(value: number): string {
-    return String(value).split("").map((ch) => SUPERSCRIPT_DIGITS[ch] ?? ch).join("")
-}
-
-export function ReactionKineticsSection({ kinetics, calculations, networksStatus, networkRef }: {
+export function ReactionKineticsSection({ kinetics, calculations, transitionStates, networksStatus, networkRef }: {
     kinetics: ReactionKineticsRecord[]
     calculations: ReactionFullCalculationEvidence[] | null | undefined
-    /** Whether this entry's network membership is known yet, and whether it has any -- decides the empty-kinetics wording. */
+    transitionStates: ReactionTransitionStateInFull[]
+    /** Whether this entry's network membership is known yet, and whether it has any — decides the empty-kinetics wording. */
     networksStatus: "loading" | "empty" | "populated"
     /** The first network ref, used only when `networksStatus === "populated"`. */
     networkRef?: string
@@ -121,7 +97,7 @@ export function ReactionKineticsSection({ kinetics, calculations, networksStatus
                         served by network <a href="#network-heading">{networkRef}</a>.
                     </p>
                     <p className="note">
-                        A network-only reaction never renders channel kinetics as if they were this entry's own --
+                        A network-only reaction never renders channel kinetics as if they were this entry's own —
                         see the Pressure-dependent network section below for what the network itself serves.
                     </p>
                 </>
@@ -131,43 +107,66 @@ export function ReactionKineticsSection({ kinetics, calculations, networksStatus
     }
 
     const calculationsByRef = buildCalculationsByRef(calculations)
+    const dependencyEdgesByChildRef = buildDependencyEdgesByChildRef(transitionStates)
 
     return (
         <div className="kinetics-record-list">
             {kinetics.map((record) => (
-                <KineticsRecordCard key={record.kinetics_ref} record={record} calculationsByRef={calculationsByRef} />
+                <KineticsRecordCard
+                    key={record.kinetics_ref}
+                    record={record}
+                    calculationsByRef={calculationsByRef}
+                    dependencyEdgesByChildRef={dependencyEdgesByChildRef}
+                />
             ))}
         </div>
     )
 }
 
-function KineticsRecordCard({ record, calculationsByRef }: {
+function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildRef }: {
     record: ReactionKineticsRecord
-    calculationsByRef: Map<string, ReactionFullCalculationEvidence>
+    calculationsByRef: ReturnType<typeof buildCalculationsByRef>
+    dependencyEdgesByChildRef: ReturnType<typeof buildDependencyEdgesByChildRef>
 }) {
     // `resolveProductLevels`'s own fallback path expects `source_calculations[]`
-    // rows, a shape kinetics records do not carry -- so when the server's
+    // rows, a shape kinetics records do not carry — so when the server's
     // own `levels` is absent this record uses ITS OWN fallback
-    // (`deriveKineticsLevelsFallback`, the TS-chain cross-reference plan §7
-    // describes) rather than the generic `source_calculations` derivation.
-    // When `levels` IS present, `resolveProductLevels` is still the one
-    // normaliser used everywhere else in the app (missing sub-fields ->
-    // `null`, never `undefined`), so it stays the single source of truth
-    // for "trust the server's own answer as-is".
-    const resolvedLevels = record.levels
-        ? resolveProductLevels(record.levels, undefined)
-        : deriveKineticsLevelsFallback(record.provenance, calculationsByRef)
+    // (`deriveKineticsLevelsFallback`, the dependency-edge walk plan §7 and
+    // PR 398's own post-review commit describe) rather than the generic
+    // `source_calculations` derivation. When `levels` IS present (every
+    // live record, as of PR 398's deploy), `resolveProductLevels` is still
+    // the one normaliser used everywhere else in the app (missing
+    // sub-fields -> `null`, never `undefined`), so it stays the single
+    // source of truth for "trust the server's own answer as-is".
+    const { levels: resolvedLevels, energyFallbackNote } = record.levels
+        ? { levels: resolveProductLevels(record.levels, undefined), energyFallbackNote: null }
+        : deriveKineticsLevelsFallback(record.provenance, calculationsByRef, dependencyEdgesByChildRef)
 
     const uncertaintyText = formatUncertainty(record.uncertainty)
     const table = computeKineticsTable(record)
     const evidenceRows = Object.entries(record.evidence_completeness.checklist).map(([key, passed]) => ({
-        label: token(key),
+        label: evidenceLabel(key),
         value: passed ? "present" : "absent",
         tone: passed ? ("pill" as const) : ("pill-muted" as const),
     }))
 
     const tRange = record.temperature_coverage?.record_min_k != null && record.temperature_coverage?.record_max_k != null
         ? `${record.temperature_coverage.record_min_k}–${record.temperature_coverage.record_max_k} K`
+        : null
+
+    const unitLabel = aUnitLabel(record.parameters.A_units)
+
+    // The SP row is the one that can name a calculation not among this
+    // page's own `calculations[]` (the plan §7 "resolver disagreement"
+    // case) — still a REAL, resolvable calc ref in the archive either way,
+    // so it stays a link the same as opt/freq above it; `spNote` carries
+    // the honesty caveat about where the row's ref came from when it
+    // genuinely isn't part of this reaction's own TS graph.
+    const spKnown = record.provenance.ts_sp_calculation_ref
+        ? calculationsByRef.has(record.provenance.ts_sp_calculation_ref)
+        : true
+    const spNote = record.provenance.ts_sp_calculation_ref && !spKnown
+        ? "not among the calculations this reaction entry's transition-state graph itself lists"
         : null
 
     return (
@@ -178,7 +177,7 @@ function KineticsRecordCard({ record, calculationsByRef }: {
                 <div><dt>Origin</dt><dd>{token(record.scientific_origin)}</dd></div>
                 <div><dt>Review</dt><dd><span className={reviewPillClass(record.review.status)}>{token(record.review.status)}</span></dd></div>
                 {record.parameters.A != null && (
-                    <div><dt>A</dt><dd><code className="data">{record.parameters.A} {aUnitLabel(record.parameters.A_units)}</code></dd></div>
+                    <div><dt>A</dt><dd><code className="data">{record.parameters.A} {unitLabel}</code></dd></div>
                 )}
                 {record.parameters.n != null && (
                     <div><dt>n</dt><dd><code className="data">{record.parameters.n}</code></dd></div>
@@ -190,15 +189,28 @@ function KineticsRecordCard({ record, calculationsByRef }: {
                 {uncertaintyText && <div><dt>Uncertainty</dt><dd>{uncertaintyText}</dd></div>}
                 {record.tunneling_model && <div><dt>Tunnelling model</dt><dd>{token(record.tunneling_model)}</dd></div>}
                 <div><dt>Third body</dt><dd>{record.is_third_body ? "yes" : "no"}</dd></div>
+            </dl>
+
+            {/* A SEPARATE `<dl>`, not appended to the facts list above --
+                MEASURED (post-review): in one shared grid, the auto-flow
+                column count let Geometry/Frequencies/Energy split across a
+                row boundary with "Software" interleaved into the same row
+                as one of them. Each `<dl>` here is its own independent
+                grid, so a group can never spill into an unrelated one. */}
+            <dl className="kv-list reaction-product-levels">
                 <ProductLevelsFact levels={resolvedLevels} />
+            </dl>
+            {energyFallbackNote && <p className="note">{energyFallbackNote}</p>}
+
+            <dl className="kv-list">
                 {record.provenance.primary_software && (
-                    <div><dt>Software</dt><dd>{softwareLabel(record.provenance.primary_software)}</dd></div>
+                    <div><dt>Software</dt><dd>{softwareCellText(record.provenance.primary_software)}</dd></div>
                 )}
                 {record.provenance.workflow_tool_release && (
                     <div><dt>Workflow tool</dt><dd>{toolReleaseLabel(record.provenance.workflow_tool_release)}</dd></div>
                 )}
                 {record.provenance.software_release && (
-                    <div><dt>Fit software</dt><dd>{softwareLabel(record.provenance.software_release) ?? "not recorded"}</dd></div>
+                    <div><dt>Fit software</dt><dd>{softwareCellText(record.provenance.software_release) ?? "not recorded"}</dd></div>
                 )}
                 <div><dt>Literature</dt><dd>{record.provenance.literature ? (record.provenance.literature.title ?? record.provenance.literature.literature_ref) : <span className="record-identity-absent-inline">not recorded</span>}</dd></div>
             </dl>
@@ -214,7 +226,7 @@ function KineticsRecordCard({ record, calculationsByRef }: {
                 </p>
             )}
 
-            <dl className="kv-list" style={{ marginTop: "1.5rem" }}>
+            <dl className="kv-list kinetics-own-links">
                 <div>
                     <dt>TS opt calculation (kinetics' own link)</dt>
                     <dd>
@@ -235,8 +247,9 @@ function KineticsRecordCard({ record, calculationsByRef }: {
                     <dt>TS sp calculation (kinetics' own link)</dt>
                     <dd>
                         {record.provenance.ts_sp_calculation_ref
-                            ? <code className="data">{record.provenance.ts_sp_calculation_ref}</code>
+                            ? <Link to={`/calculations/${record.provenance.ts_sp_calculation_ref}`}><code className="data">{record.provenance.ts_sp_calculation_ref}</code></Link>
                             : <span className="record-identity-absent-inline">not recorded</span>}
+                        {spNote && <div className="note">({spNote})</div>}
                     </dd>
                 </div>
                 {record.provenance.transition_state_entry_ref && (
@@ -248,42 +261,43 @@ function KineticsRecordCard({ record, calculationsByRef }: {
             </dl>
 
             {table && (
-                <details className="disclosure">
-                    <summary>k(T) table <span className="disclosure-count">({table.length})</span></summary>
-                    <div className="disclosure-body">
-                        <div className="table-scroll">
-                            <table className="data-table" aria-label={`k(T) for ${record.kinetics_ref}`}>
-                                <caption>
-                                    k(T) = A·T^n·exp(−Ea/(R·T)){record.parameters.A_units ? `, in ${aUnitLabel(record.parameters.A_units)}` : ""}.
-                                    The Arrhenius chart itself ships in a follow-up PR; this table is its
-                                    accessible/table equivalent, computed client-side from the deposited
-                                    parameters.
-                                </caption>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">T (K)</th>
-                                        <th scope="col">k</th>
-                                        <th scope="col">log₁₀ k</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {table.map((row) => (
-                                        <tr key={row.temperatureK}>
-                                            <td className="num" data-label="T (K)">{row.temperatureK.toFixed(2)}</td>
-                                            <td className="num" data-label="k">{scientificText(row.k)}</td>
-                                            <td className="num" data-label="log10 k">{log10(row.k)}</td>
+                <>
+                    <p className="note">
+                        The Arrhenius chart itself ships in a follow-up PR; the table below is its accessible/table
+                        equivalent, computed client-side from the deposited parameters.
+                    </p>
+                    <details className="disclosure">
+                        <summary>k(T) table <span className="disclosure-count">({table.length})</span></summary>
+                        <div className="disclosure-body">
+                            <div className="table-scroll">
+                                <table className="data-table kinetics-k-table" aria-label={`k(T) for ${record.kinetics_ref}`}>
+                                    <caption>k(T) = A·T^n·exp(−Ea/(R·T)){unitLabel ? `, in ${unitLabel}` : ""}</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">T (K)</th>
+                                            <th scope="col">{unitLabel ? `k (${unitLabel})` : "k"}</th>
+                                            <th scope="col">log₁₀ k</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {table.map((row) => (
+                                            <tr key={row.temperatureK}>
+                                                <td className="num" data-label="T (K)">{row.temperatureK.toFixed(2)}</td>
+                                                <td className="num" data-label="k">{scientificText(row.k)}</td>
+                                                <td className="num" data-label="log10 k">{log10Text(row.k)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
-                </details>
+                    </details>
+                </>
             )}
             {!table && Boolean(record.plog_entries || record.chebyshev || record.falloff) && (
                 <p className="note">
                     This record's rate form ({token(record.model_kind)}) is pressure-dependent and is not plotted
-                    as k(T) here -- see its own parameter fields above.
+                    as k(T) here — see its own parameter fields above.
                 </p>
             )}
         </div>
