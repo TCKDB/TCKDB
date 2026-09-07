@@ -579,14 +579,41 @@ describe("TransitionStateEntryPage", () => {
         )))
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
-        // The reaction-record link now lives ONCE (the Reaction section),
-        // so References drops from 4 to 3 rows: entry, TS, reaction entry.
+        // The reaction-record link now lives ONCE (the Reaction section);
+        // the entry's OWN ref is no longer in this disclosure at all (it
+        // renders first, inline, in the identity header instead -- see the
+        // "own ref" test below) -- so References drops from 4 to 2 rows:
+        // TS, reaction entry.
         expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeVisible()
-        await userEvent.setup().click(screen.getByText(bySummaryText(/References \(3\)/)))
+        await userEvent.setup().click(screen.getByText(bySummaryText(/References \(2\)/)))
         expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).toBeVisible()
         // No second "rxn_..." link inside the (now open) disclosure -- only
         // the Reaction section's own link exists anywhere on the page.
         expect(screen.getAllByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" })).toHaveLength(1)
+    })
+
+    it("shows this entry's OWN ref first in the identity block, at rest, with the data face and a copy button -- and never inside the References disclosure", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        // Visible without opening the (collapsed) References disclosure.
+        const facts = screen.getByText("Transition state entry ref").closest(".record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        const ownRefValue = within(facts).getByText(ENTRY_REF)
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue.tagName).toBe("CODE")
+        expect(ownRefValue).toHaveClass("data")
+        // First fact in the identity block.
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Transition state entry ref")
+        // Copy button present, named for the field.
+        expect(within(facts).getByRole("button", { name: /copy transition state entry ref/i })).toBeVisible()
+
+        // Not duplicated inside References -- only one occurrence of the
+        // ref anywhere on the page.
+        expect(screen.getAllByText(ENTRY_REF)).toHaveLength(1)
     })
 
     it("shows not-found style message for an unknown entry ref", async () => {

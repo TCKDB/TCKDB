@@ -128,13 +128,15 @@ describe("public archive shell", () => {
         await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
-        // The entry ref lives in the collapsed References disclosure --
-        // opening it is the real end-to-end check that it's actually there,
-        // not just present-but-hidden in the DOM. Only Species + Entry live
-        // here now (2, not 3) -- InChIKey moved to the always-visible
-        // chemistry-identifiers row above, alongside SMILES.
-        await user.click(screen.getByText(bySummaryText("References (2)")))
+        // The entry's OWN ref is visible at rest, first in the identity
+        // block -- never behind the collapsed References disclosure (owner
+        // decision: "yes show each record's own ref inline"). Only the
+        // RELATED parent-species ref lives in that disclosure now (1, not
+        // 2/3) -- InChIKey moved to the always-visible chemistry-
+        // identifiers row above, alongside SMILES.
         expect(screen.getByText(entryRef)).toBeVisible()
+        await user.click(screen.getByText(bySummaryText("References (1)")))
+        expect(screen.getByText(speciesRef)).toBeVisible()
     })
 
     it("renders formula search results as species-grain Links and follows one", async () => {

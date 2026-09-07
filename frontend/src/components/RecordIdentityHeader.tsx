@@ -77,10 +77,33 @@ function withSmilesBreaks(value: string): ReactNode {
  * and its `RefsDisclosure` still render below this component, in the
  * same page markup as before; this header only owns the identity tier
  * of that shared order, not every tier.
+ *
+ * `ownRef`: the record's OWN public ref (`calc_…`/`geom_…`/`spe_…`/
+ * `cg_…`/`co_…`/`tse_…`) -- deliberately a SEPARATE prop from `identity`,
+ * not a field folded into the `RecordIdentity` union. `identity` answers
+ * "what molecular thing does this record belong to" (an OWNER, for a
+ * calculation or geometry -- see that type's own docstring), which is a
+ * different question from "what IS this record's own stable identifier",
+ * and the two happen to coincide only for a page that IS its own
+ * identity's subject (`SpeciesEntrySummary`, `TransitionStateEntryPage`).
+ * Folding `ownRef` into `identity` would have made every OTHER caller
+ * (calculation, geometry) carry a field with nothing to do with molecular
+ * identity at all.
+ *
+ * Rendered as the FIRST fact in the identity tier, unconditionally --
+ * before SMILES/InChIKey, before the "no molecular identity" note, even
+ * before the ambiguous-owner list -- because it is the one fact that must
+ * never need a click to see (the owner's decision this prop exists to
+ * satisfy: "yes show each record's own ref inline"). A caller supplying
+ * `ownRef` is responsible for NOT also repeating the same ref in its own
+ * `RefsDisclosure` list below -- see that component's own docstring for
+ * the rule this splits: the record's own ref lives here, related refs
+ * (parent species, entry, group, calculation, submission…) stay in the
+ * collapsed disclosure.
  */
 export function RecordIdentityHeader({
     kicker, pill, title, titleVariant = "display-1", intro,
-    identity, facets, submissionRef, explainTransitionStateIdentity = true,
+    identity, facets, submissionRef, explainTransitionStateIdentity = true, ownRef,
 }: {
     kicker: ReactNode
     pill?: ReactNode
@@ -99,6 +122,14 @@ export function RecordIdentityHeader({
     facets?: EntryFacetAxes
     submissionRef?: string | null
     explainTransitionStateIdentity?: boolean
+    /** The record's own public ref, shown first, always -- see this
+     *  component's own docstring just above. `label` matches the label
+     *  style already established per record kind (`"Observation ref"`,
+     *  `"Group ref"`, `"Calculation ref"`, `"Geometry ref"`, …). Omitted
+     *  entirely (not just left absent) when a caller has no own ref to
+     *  offer -- there is no record page this header serves that lacks
+     *  one, so in practice every caller supplies it. */
+    ownRef?: { label: string; value: string }
 }) {
     return (
         <div className="record-identity-header">
@@ -110,7 +141,7 @@ export function RecordIdentityHeader({
                 {title}
             </h1>
             {intro && <p className="t-body section-intro">{intro}</p>}
-            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} />
+            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} ownRef={ownRef} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
                 `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report
@@ -137,16 +168,32 @@ export function RecordIdentityHeader({
     )
 }
 
-function IdentityTier({ identity, explainTransitionStateIdentity }: {
+function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
     identity: RecordIdentity
     explainTransitionStateIdentity: boolean
+    ownRef?: { label: string; value: string }
 }) {
+    // Rendered first, in every branch, unconditionally -- see
+    // `RecordIdentityHeader`'s own docstring on `ownRef` for why this
+    // sits outside/above the per-identity-kind branching below rather
+    // than being folded into any one branch's `dl`.
+    const ownRefFact = ownRef && (
+        <IdentityFact label={ownRef.label} copy={ownRef.value}>
+            <code className="data">{ownRef.value}</code>
+        </IdentityFact>
+    )
     if (identity.kind === "absent") {
-        return <p className="note record-identity-absent">No molecular identity is recorded for this record.</p>
+        return (
+            <div className="record-identity-known">
+                {ownRefFact && <dl className="kv-list record-identity-facts">{ownRefFact}</dl>}
+                <p className="note record-identity-absent">No molecular identity is recorded for this record.</p>
+            </div>
+        )
     }
     if (identity.kind === "ambiguous") {
         return (
             <div className="record-identity-ambiguous" role="status" data-testid="record-identity-ambiguous">
+                {ownRefFact && <dl className="kv-list record-identity-facts">{ownRefFact}</dl>}
                 <p>
                     This record is reachable from more than one distinct owner. Rather than guess, the
                     identity below is left unresolved — see the owner list to disambiguate by calculation.
@@ -175,6 +222,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                     (SMILES, InChIKey, charge/multiplicity) still render
                     below unchanged. */}
                 <dl className="kv-list record-identity-facts">
+                    {ownRefFact}
                     <IdentityFact label="SMILES" copy={identity.canonicalSmiles}><code>{identity.canonicalSmiles}</code></IdentityFact>
                     <IdentityFact label="InChIKey" copy={identity.inchiKey}><code>{identity.inchiKey}</code></IdentityFact>
                     <IdentityFact label="Charge / multiplicity">
@@ -249,6 +297,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                 </p>
             )}
             <dl className="kv-list record-identity-facts">
+                {ownRefFact}
                 {/* The producer's own label (e.g. "TS0") -- BLOCKING-1 fix
                     (PR B review): this used to be its own `.tse-label-facet`
                     span in `TransitionStateEntryPage.tsx`'s kicker row, a

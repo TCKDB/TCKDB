@@ -8,6 +8,7 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { CopyButton } from "../components/RefsDisclosure"
 import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
@@ -116,7 +117,25 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                     specifically so `getByText(..., { selector:
                                     "dd" })` kept matching, which is the test
                                     shape driving the markup, backwards). */}
-                                <div><dt>Group ref</dt><dd><code className="data">{basin.conformer_group_ref}</code></dd></div>
+                                {/* This record's OWN ref, first here -- now
+                                    carries the SAME copy affordance
+                                    (`CopyButton`, same
+                                    `.record-identity-fact-copyable` layout
+                                    class from `record-identity-header.css`,
+                                    already imported above) as every other
+                                    record page's own-ref fact via
+                                    `RecordIdentityHeader`'s `ownRef` prop
+                                    (owner decision: "yes show each record's
+                                    own ref inline" -- see
+                                    `RefsDisclosure.tsx`'s own docstring for
+                                    the rule this satisfies). */}
+                                <div>
+                                    <dt>Group ref</dt>
+                                    <dd className="record-identity-fact-copyable">
+                                        <code className="data">{basin.conformer_group_ref}</code>
+                                        <CopyButton value={basin.conformer_group_ref} label="Group ref" srLabel="value" />
+                                    </dd>
+                                </div>
                                 {basin.label && (
                                     <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
                                 )}

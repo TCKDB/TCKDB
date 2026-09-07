@@ -46,18 +46,38 @@
 
 /* Copy affordance on an identity fact whose value the header renders as
    `.data` (SMILES, InChIKey, an unmapped reaction SMILES, a TS entry
-   ref) -- laid out the same way `refs-disclosure.css`'s own `.ref-item`
-   lays out a ref row: flex, `align-items: baseline`, the button (its own
-   `.copy-button` class, imported alongside `CopyButton` from
-   `RefsDisclosure.tsx`) staying `flex: none` so it never gets pushed
-   onto a line of its own at 680px -- the value itself still wraps via
-   `.kv-list dd`'s own `overflow-wrap: anywhere` (design-system.css) when
-   it runs long, same as every other fact. */
+   ref, and -- since the "own ref inline" change -- every record's own
+   30+ char ref) -- laid out the same way `refs-disclosure.css`'s own
+   `.ref-item` lays out a ref row: flex, `align-items: baseline`, gap
+   between the value and the button.
+   `flex-wrap: wrap` (post-review fix, PR 381): an EARLIER version of
+   this rule kept the row on one line and let the value wrap via
+   `.kv-list dd`'s own `overflow-wrap: anywhere` (design-system.css)
+   whenever the row didn't fit -- fine for a short fact, but MEASURED
+   broken for a 30+ char own-ref value: the `.kv-list` column
+   (`minmax(16rem, 1fr)`, 256px) minus the button (45px) and gap (8px)
+   leaves ~203px for a ~234-242px ref, so the ref itself shrank to fit
+   and `overflow-wrap: anywhere` split it MID-TOKEN
+   ("spe_3agdbqfdhkd4yf4seviawkd" / "pla") at 1440/1180/900 (and even
+   1536 for the wider "Geometry ref" label) -- reproducible at 680 only
+   by coincidence of THAT width's own column count, not because 680 was
+   special. `white-space: nowrap` on the value's own `code`/`.data` run
+   stops it breaking internally at all; `flex-wrap: wrap` on this
+   container lets the COPY BUTTON drop to its own line below the whole
+   ref instead, the same trade this component's docstring already
+   describes for `IdentityFact` (a copy button is an affordance, not
+   part of the identifier). */
 .record-identity-fact-copyable {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: .5rem;
     min-width: 0;
+}
+
+.record-identity-fact-copyable code,
+.record-identity-fact-copyable .data {
+    white-space: nowrap;
 }
 
 .record-identity-facets {

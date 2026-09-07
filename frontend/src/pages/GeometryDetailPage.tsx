@@ -190,6 +190,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             intro="One stored set of atomic coordinates: the exact positions a calculation consumed or produced. This is not a species or a calculation — the same coordinates can be reused across more than one calculation, in either direction."
                             identity={identity}
                             submissionRef={geometry.submission_ref}
+                            ownRef={{ label: "Geometry ref", value: geometry.geometry_ref }}
                         />
                         {formulaIsFallback && (
                             // Only reachable when the archive's own identity is absent
@@ -202,7 +203,13 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             </p>
                         )}
                         <dl className="kv-list basin-context">
-                            <div><dt>Geometry ref</dt><dd><code>{geometry.geometry_ref}</code></dd></div>
+                            {/* Geometry ref itself is no longer here -- it
+                                renders first, in the identity block above,
+                                via `RecordIdentityHeader`'s `ownRef` prop
+                                (owner decision: "yes show each record's own
+                                ref inline"). Repeating it in this second
+                                kv-list would show the same ref twice on one
+                                page. */}
                             <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
                             <div><dt>Geometry hash</dt><dd><code>{geometry.geom_hash}</code></dd></div>
                             <div><dt>Format</dt><dd>{geometry.format}</dd></div>

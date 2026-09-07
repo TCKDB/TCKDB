@@ -367,9 +367,22 @@ describe("CalculationDetailPage", () => {
         // passes through unchanged).
         expect(screen.getByRole("link", { name: "CH3 · ground state" })).toHaveAttribute("href", "/species-entries/spe_demo")
 
-        // The calculation's own ref is inside the (collapsed) references disclosure.
+        // The calculation's own ref is visible at rest, first in the
+        // identity block -- never behind the collapsed References
+        // disclosure any more (owner decision: "yes show each record's own
+        // ref inline").
+        const facts = screen.getByText("Calculation ref").closest(".record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        const ownRefValue = within(facts).getByText("calc_freq_one")
+        expect(ownRefValue).toBeVisible()
+        expect(ownRefValue.tagName).toBe("CODE")
+        expect(ownRefValue).toHaveClass("data")
+        expect(Array.from(facts.children)[0]).toHaveTextContent("Calculation ref")
+        expect(within(facts).getByRole("button", { name: /copy calculation ref/i })).toBeVisible()
+
+        // Not duplicated inside the (collapsed) References disclosure.
         fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
-        expect(screen.getByText("calc_freq_one")).toBeVisible()
+        expect(screen.getAllByText("calc_freq_one")).toHaveLength(1)
     })
 
     // Item 1 (BLOCKING): a TS-owned calculation's owner now links to the
@@ -458,7 +471,9 @@ describe("CalculationDetailPage", () => {
         expect(ddFor(context, "Dispersion")).toBe("D3BJ")
         expect(ddFor(context, "Solvent")).toBe("water(CPCM)")
         // Level of theory ref/software release ref/workflow tool release
-        // ref/literature ref/calculation ref all moved into RefsDisclosure.
+        // ref/literature ref all moved into RefsDisclosure -- the
+        // calculation's own ref is NOT among them any more; it renders in
+        // the identity header instead (see the "own ref" test above).
         expect(within(context).queryByText("Level of theory ref")).not.toBeInTheDocument()
 
         fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
