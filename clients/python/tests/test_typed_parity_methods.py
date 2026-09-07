@@ -288,6 +288,45 @@ class TestTransitionStates:
         assert _query_of(str(seen[1].url))["include"] == ["calculations"]
 
 
+class TestReactionsBrowse:
+    def test_get_with_no_params_reaches_the_browse_path(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_reactions()
+
+        assert seen[0].method == "GET"
+        assert _path_of(str(seen[0].url)).endswith("/scientific/reactions/browse")
+        assert _query_of(str(seen[0].url)) == {}
+
+    def test_filters_land_in_the_query_string(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_reactions(
+            family="h_abstraction",
+            reactant_smiles="[NH2]",
+            has_kinetics=True,
+            has_transition_state=False,
+            limit=10,
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["family"] == ["h_abstraction"]
+        assert query["reactant_smiles"] == ["[NH2]"]
+        assert query["has_kinetics"] == ["true"]
+        assert query["has_transition_state"] == ["false"]
+        assert query["limit"] == ["10"]
+
+    def test_returns_the_parsed_envelope(self):
+        handler, _ = _capture(_envelope([{"reaction_entry_ref": "rxe_1"}]))
+        client, _ = make_client(handler)
+
+        result = client.browse_reactions()
+
+        assert result["records"][0]["reaction_entry_ref"] == "rxe_1"
+
+
 # ---------------------------------------------------------------------------
 # Reference libraries
 # ---------------------------------------------------------------------------

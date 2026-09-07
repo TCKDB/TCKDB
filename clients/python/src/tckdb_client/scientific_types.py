@@ -112,6 +112,26 @@ class SpeciesRecord(TypedDict, total=False):
     species_id: int
 
 
+class ReactionParticipantRecord(TypedDict, total=False):
+    """One reactant/product participant, from ``reactions/search`` or ``/browse``.
+
+    ``formula`` is the RDKit Hill-notation formula derived from ``smiles``
+    (``null`` when the SMILES fails to parse); ``stoichiometry`` is the
+    graph-identity coefficient ("this equation consumes two of this
+    species"), not a property of any one deposit. Same shape as
+    ``ReactionFullSpeciesParticipant`` on ``get_reaction_full``'s
+    ``species.reactants`` / ``species.products``.
+    """
+
+    species_entry_ref: Required[str]
+    smiles: Required[str]
+    participant_index: Required[int]
+    stoichiometry: Required[int]
+    species_entry_id: int
+    species_entry_label: str | None
+    formula: str | None
+
+
 class ReactionRecord(TypedDict, total=False):
     reaction_ref: Required[str]
     reaction_entry_ref: Required[str]
@@ -119,8 +139,8 @@ class ReactionRecord(TypedDict, total=False):
     matched_direction: Required[str]
     reversible: Required[bool]
     review: Required[JSONDict]
-    reactants: Required[list[JSONDict]]
-    products: Required[list[JSONDict]]
+    reactants: Required[list[ReactionParticipantRecord]]
+    products: Required[list[ReactionParticipantRecord]]
     availability: Required[JSONDict]
     family: str | None
     reaction_id: int
@@ -218,6 +238,11 @@ class KineticsDetailRecord(TypedDict, total=False):
     parameters: Required[JSONDict]
     uncertainty: Required[JSONDict]
     evidence_completeness: Required[JSONDict]
+    # Geometry/frequency/energy levels of theory derived at read time from
+    # this record's resolved TS chain. Always present (never behind an
+    # ``include=`` token); all-null with ``energy_source: None`` for a
+    # record with no TS chain (experimental/literature kinetics).
+    levels: Required[JSONDict]
     provenance: Required[JSONDict]
     supersession: SupersessionNotice | None
     kinetics_id: int
@@ -1044,6 +1069,7 @@ __all__ = [
     "Pagination",
     "PublicAssessmentSummary",
     "ReactionKineticsResponse",
+    "ReactionParticipantRecord",
     "ReactionRecord",
     "ReactionSearchResponse",
     "ReproducibilityAssessmentSummary",

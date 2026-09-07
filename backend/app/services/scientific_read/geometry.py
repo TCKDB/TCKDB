@@ -8,7 +8,7 @@ endpoints expose ``geometry_ref`` handles.
 
 from __future__ import annotations
 
-from sqlalchemy import Text, func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
@@ -37,6 +37,7 @@ from app.schemas.reads.scientific_geometry import (
     ScientificGeometryResponse,
 )
 from app.services.scientific_read.common import (
+    molecular_formula_expr,
     validate_includes,
 )
 from app.services.scientific_read.handles import resolve_geometry_handle
@@ -250,14 +251,15 @@ def _build_provenance(session: Session, geometry_id: int) -> GeometryProvenance:
 def _formula_expr(smiles_column):
     """Hill-notation formula for *smiles_column*, derived by the RDKit cartridge.
 
-    Same expression as ``app.services.scientific_read.species._formula_expr``
-    (see that docstring for the full rationale) applied over whichever
+    Thin wrapper over
+    :func:`app.services.scientific_read.common.molecular_formula_expr` (see
+    its docstring for the full rationale) applied over whichever
     SMILES-shaped column the caller has on hand. ``mol_from_smiles()``
     returns SQL NULL for an unparseable string, so an unparseable
     ``unmapped_smiles`` yields a NULL formula rather than raising — the
     same graceful-degradation behaviour as the species surface.
     """
-    return func.mol_formula(func.mol_from_smiles(smiles_column)).cast(Text)
+    return molecular_formula_expr(smiles_column)
 
 
 def _build_identity(

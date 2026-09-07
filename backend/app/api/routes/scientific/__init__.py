@@ -8,6 +8,7 @@ Sub-routers:
     species.router          → /scientific/species/search
     species_browse.router   → /scientific/species/browse
     reactions.router        → /scientific/reactions/search (GET, POST)
+    reactions_browse.router → /scientific/reactions/browse
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
     thermo.router           → /scientific/species-entries/{id}/thermo
     species_subresources.router
@@ -56,6 +57,7 @@ from app.api.routes.scientific import (
     networks,
     provenance,
     reactions,
+    reactions_browse,
     releases,
     species,
     species_browse,
@@ -87,6 +89,13 @@ scientific_router.include_router(species.router)
 # (``/species/browse`` vs ``/species/search``); no route-ordering
 # constraint between the two.
 scientific_router.include_router(species_browse.router)
+# Identifier-free catalogue read, registered right before the search
+# router it deliberately does not modify. Distinct static path
+# (``/reactions/browse`` vs ``/reactions/search``); ``reactions.router``
+# has no catch-all handle route today, so there is no ordering hazard,
+# but the browse-before-search convention is kept for consistency with
+# species/transition-state browse.
+scientific_router.include_router(reactions_browse.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)
 scientific_router.include_router(thermo.router)

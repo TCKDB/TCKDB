@@ -696,7 +696,7 @@ def test_the_parametrisation_asserts_its_own_size():
     numbers, so adding a section to a table without adding a case fails
     here instead of passing silently.
     """
-    assert len(CASES) == 43
+    assert len(CASES) == 43  # unchanged: "networks" joined an existing table
 
     sections_under_test = {
         (case.table.surface, token, field_name)
@@ -719,7 +719,8 @@ def test_the_parametrisation_asserts_its_own_size():
     # which contributes a real four more -- not a repeat of
     # SPECIES_SEARCH_SECTIONS's four -- because the tuples key on
     # ``surface`` and the two tables declare different surfaces.
-    assert len(sections_under_test) == 87
+    # 88 after ``networks`` joined REACTION_FULL_SECTIONS.
+    assert len(sections_under_test) == 88
 
 
 # ---------------------------------------------------------------------------
@@ -794,6 +795,11 @@ REQUESTED_BUT_EMPTY = (
     ("GET /frequency-scale-factors/{ref}", "used_by", "used_by"),
     ("GET /energy-correction-schemes/{ref}", "corrections", "corrections"),
     ("GET /reaction-entries/{ref}/full", "scans", "scans"),
+    # The corpus's reaction entry is not admitted to the network it builds
+    # (that would be a different fixture shape) -- so ``networks`` is
+    # requested-and-empty here, the same three-state contract ``scans``
+    # already pins on this operation.
+    ("GET /reaction-entries/{ref}/full", "networks", "networks"),
 )
 
 _BY_LABEL = {case.label: case for case in CASES}

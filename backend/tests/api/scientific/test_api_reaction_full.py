@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from app.db.models.common import (
+    NetworkSpeciesRole,
     RecordReviewStatus,
     ScientificOriginKind,
     SubmissionRecordType,
 )
 from tests.services.scientific_read._factories import (
+    attach_network_reaction,
+    attach_network_species,
     make_chem_reaction,
     make_kinetics,
+    make_network,
+    make_network_solve,
     make_reaction_entry,
     make_species,
     make_species_entry,
@@ -66,6 +71,7 @@ def test_include_all_populates_every_top_level_section(client, db_session):
         "conformers",
         "artifacts",
         "atom_map",
+        "networks",
     ):
         assert key in body
         assert body[key] is not None  # included sections are present
@@ -75,7 +81,7 @@ def test_default_omits_non_default_sections(client, db_session):
     entry = _entry(db_session)
     resp = client.get(f"/api/v1/scientific/reaction-entries/{entry.id}/full")
     body = resp.json()
-    # Default include set: species, kinetics, transition_states only.
+    # Default include set: species, kinetics, transition_states, networks.
     # The other seven are include-gated on this operation, so an absent key
     # is the whole answer: the caller did not ask.
     assert "calculations" not in body
@@ -83,9 +89,13 @@ def test_default_omits_non_default_sections(client, db_session):
     assert "artifacts" not in body
     assert body["request"]["include"] == [
         "kinetics",
+        "networks",
         "species",
         "transition_states",
     ]
+    # networks is now in the default set, so it is present-and-empty for a
+    # TS-only entry (requested, nothing there), not absent.
+    assert body["networks"] == []
 
 
 def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
@@ -105,6 +115,99 @@ def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
     # Phase D: ref siblings are null for non-TS-backed records.
     assert p["transition_state_entry_ref"] is None
     assert body["transition_states"] == []  # not fabricated
+
+
+def test_species_participants_carry_formula_and_stoichiometry(client, db_session):
+    """Reactant/product participants carry a Hill formula + graph stoichiometry.
+
+    Two of the reactant species (methane, ``C``) react to give one water and
+    two hydrogen radicals -- a fixture with stoichiometry 2 on the reactant
+    side and 1 on the product sides, exercising both branches.
+    """
+    methane = make_species(db_session, smiles="C", inchi_key=next_inchi_key("FFORM"))
+    water = make_species(db_session, smiles="O", inchi_key=next_inchi_key("FFORM2"))
+    h_radical = make_species(
+        db_session, smiles="[H]", inchi_key=next_inchi_key("FFORM3"), multiplicity=2
+    )
+    chem = make_chem_reaction(
+        db_session,
+        reactants=[methane, methane],
+        products=[water, h_radical],
+    )
+    entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[make_species_entry(db_session, methane)],
+        product_entries=[
+            make_species_entry(db_session, water),
+            make_species_entry(db_session, h_radical),
+        ],
+    )
+
+    resp = client.get(f"/api/v1/scientific/reaction-entries/{entry.id}/full")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    reactant = body["species"]["reactants"][0]
+    assert reactant["smiles"] == "C"
+    assert reactant["formula"] == "CH4"
+    assert reactant["stoichiometry"] == 2
+
+    products_by_smiles = {p["smiles"]: p for p in body["species"]["products"]}
+    assert products_by_smiles["O"]["formula"] == "H2O"
+    assert products_by_smiles["O"]["stoichiometry"] == 1
+    assert products_by_smiles["[H]"]["formula"] == "H"
+    assert products_by_smiles["[H]"]["stoichiometry"] == 1
+
+
+def test_networks_key_absent_when_not_requested(client, db_session):
+    entry = _entry(db_session)
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full?include=species"
+    )
+    assert resp.status_code == 200
+    assert "networks" not in resp.json()
+
+
+def test_networks_empty_for_ts_only_entry(client, db_session):
+    entry = _entry(db_session)
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full?include=networks"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["networks"] == []
+    assert body["request"]["include"] == ["networks"]
+
+
+def test_networks_populated_for_network_member(client, db_session):
+    entry = _entry(db_session)
+    reactant_entry = entry.structure_participants[0].species_entry
+    network = make_network(db_session, name="hydrazine-pdep")
+    attach_network_species(
+        db_session,
+        network=network,
+        species_entry=reactant_entry,
+        role=NetworkSpeciesRole.well,
+    )
+    attach_network_reaction(db_session, network=network, reaction_entry=entry)
+    make_network_solve(db_session, network=network)
+
+    resp = client.get(
+        f"/api/v1/scientific/reaction-entries/{entry.id}/full?include=networks"
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["networks"]) == 1
+    row = body["networks"][0]
+    assert row["network_ref"] == network.public_ref
+    assert row["name"] == "hydrazine-pdep"
+    assert row["solve_temperature_min_k"] == 300.0
+    assert row["solve_temperature_max_k"] == 2000.0
+    assert row["solve_pressure_min_bar"] == 0.01
+    assert row["solve_pressure_max_bar"] == 100.0
+    assert row["channel_count"] == 0
+    assert row["review"]["status"] == "not_reviewed"
 
 
 def test_include_review_full_adds_audit_array(client, db_session):

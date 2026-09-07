@@ -40,6 +40,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SCFStabilitySummary,
+    ScientificLevelsSummary,
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
@@ -308,6 +309,21 @@ class KineticsProvenance(BaseModel):
     TS-chain fields populated only for TS-backed computational kinetics. The
     service must never fabricate TS links for non-TS-backed records.
 
+    **``ts_opt_calculation_id``/``ts_opt_calculation_ref`` are always
+    ``null``, even on a TS-backed record.** ``_KINETICS_ROLE_COMPATIBILITY``
+    (``app/services/kinetics_resolution.py``) permits only ``sp`` under the
+    ``ts_energy`` role and only ``freq`` under the ``freq`` role -- no
+    kinetics source-calculation role accepts an optimisation, so no legal
+    upload can ever cite one here. This is a deliberate, narrow claim
+    ("which calculation did this record's own citations name"), not a data
+    gap: the optimisation's level of theory is not lost, just not reachable
+    through a direct citation. It is resolved one hop further -- via the
+    cited ``freq``'s ``freq_on`` or the cited ``sp``'s ``single_point_on``
+    ``calculation_dependency`` parent edge -- into
+    ``KineticsRecord.levels.geometry`` instead; see that field and
+    :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
+    for the mechanism.
+
     Phase B: ``*_ref`` siblings carry the public stable handles for each
     integer ``*_id`` field. The nested summary objects (path_search,
     primary_level_of_theory, primary_software, etc.) carry their own
@@ -316,6 +332,9 @@ class KineticsProvenance(BaseModel):
 
     transition_state_entry_id: int | None = None
     transition_state_entry_ref: str | None = None
+    #: Always ``null`` -- see the class docstring. Kept as a direct-citation
+    #: field rather than removed or backfilled: it answers "what did this
+    #: record's own source links cite," which is honestly ``null`` here.
     ts_opt_calculation_id: int | None = None
     ts_opt_calculation_ref: str | None = None
     ts_freq_calculation_id: int | None = None
@@ -376,6 +395,43 @@ class KineticsRecord(BaseModel):
     uncertainty: KineticsUncertainty
     temperature_coverage: TemperatureCoverage | None = None
     evidence_completeness: EvidenceCompletenessBreakdown
+    #: Geometry / frequency / energy levels of theory, derived at read time
+    #: from this record's resolved TS chain via
+    #: ``app.services.calculation_levels.derive_levels``. Always present,
+    #: never behind an ``include=`` token.
+    #:
+    #: ``KineticsCalculationRole`` (``reactant_energy`` / ``product_energy``
+    #: / ``ts_energy`` / ``freq`` / ``irc`` / ``master_equation`` /
+    #: ``fit_source``) has no ``opt``/``freq``/``sp`` members, so this is a
+    #: mapping onto ``derive_levels``' role vocabulary, not a direct role
+    #: pass-through -- and ``geometry`` specifically is **not** a direct
+    #: citation. ``_KINETICS_ROLE_COMPATIBILITY``
+    #: (``app/services/kinetics_resolution.py``) permits only ``sp`` under
+    #: ``ts_energy`` and only ``freq`` under ``freq``, so no legal upload
+    #: can ever cite an opt-typed calculation as a kinetics source at all;
+    #: ``provenance.ts_opt_calculation_id`` is therefore structurally
+    #: ``null`` on every TS-backed record. ``geometry`` instead walks one
+    #: hop through ``calculation_dependency``: the parent opt of whichever
+    #: of ``ts_freq_calculation_id`` (``freq_on`` edge) or
+    #: ``ts_sp_calculation_id`` (``single_point_on`` edge) was actually
+    #: cited, preferring the freq-derived opt when both resolve. ``null``
+    #: only when the cited freq/sp has no recorded parent-opt edge at all
+    #: (an incomplete deposit).
+    #:
+    #: ``frequency`` is the ``ts_freq_calculation_id`` calculation's own
+    #: level (``null`` when none is cited -- the opt-carries-frequencies
+    #: fallback ``derive_levels`` offers elsewhere is deliberately not used
+    #: here). ``energy`` is the ``ts_sp_calculation_id`` calculation's
+    #: level with ``energy_source="sp"`` when an ``sp`` is cited, otherwise
+    #: the resolved geometry opt's own level with ``energy_source="opt"``.
+    #: All four fields are ``null`` (``energy_source=None``) for a record
+    #: with no TS chain at all (experimental, estimated, imported, fitted,
+    #: network-derived, or literature-derived kinetics).
+    #:
+    #: See :func:`app.services.scientific_read.kinetics._build_kinetics_levels`
+    #: and :func:`app.services.scientific_read.kinetics._resolve_ts_opt_via_dependency`
+    #: for the full mechanism and the pinned tests.
+    levels: ScientificLevelsSummary
     provenance: KineticsProvenance
     trust: TrustFragment | None = None
     assessments: PublicAssessmentSummary | None = None

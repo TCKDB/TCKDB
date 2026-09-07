@@ -17,7 +17,7 @@ import logging
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Protocol
 
-from sqlalchemy import select
+from sqlalchemy import Text, func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
@@ -47,6 +47,33 @@ class PaginatedResponse(Protocol):
 
     records: list[Any]
     pagination: Pagination
+
+
+def molecular_formula_expr(smiles_column):
+    """Hill-notation formula for *smiles_column*, derived by the RDKit cartridge.
+
+    ``mol_formula()`` over ``mol_from_smiles(smiles_column)`` yields Hill
+    notation (e.g. ``H2O``, ``C3H6``), with a trailing charge suffix for
+    ions (``HO-``, ``H4N+``, ``Fe+2``). Radicals carry no marker: ``[CH3]``
+    is ``CH3``. Isotopes are not distinguished — the cartridge's default
+    ``mol_formula()`` ignores isotope labels, so heavy water reports as
+    ``H2O``, the same as light water. ``mol_from_smiles()`` returns SQL
+    NULL for any row whose SMILES fails to parse, so such a row yields a
+    NULL formula rather than raising.
+
+    **One expression, every caller.** ``species.py``, ``geometry.py``,
+    ``conformers.py`` and ``calculations.py`` each redefined this exact
+    string locally rather than importing across a private module boundary.
+    That precedent held while there was one shape of caller; the reaction
+    read surface (``provenance.py::_build_species_section``) is now a
+    fifth, so the expression is lifted here once and the other four
+    modules delegate to it instead of keeping their own copy in sync by
+    hand. Depending on the cartridge here costs nothing new: the base
+    Alembic revision ``60b67e360daf`` runs ``CREATE EXTENSION IF NOT
+    EXISTS rdkit`` before any table exists, so a database this code can
+    talk to has it.
+    """
+    return func.mol_formula(func.mol_from_smiles(smiles_column)).cast(Text)
 
 
 # ---------------------------------------------------------------------------
