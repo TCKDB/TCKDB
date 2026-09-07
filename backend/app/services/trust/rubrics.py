@@ -2405,26 +2405,46 @@ _TS_VALIDATED_STATUSES: frozenset[TransitionStateEntryStatus] = frozenset(
     {TransitionStateEntryStatus.optimized, TransitionStateEntryStatus.validated}
 )
 
-_TS_UPSTREAM_DEPENDENCY_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+# These two sets are keyed by which side of the ``calculation_dependency``
+# edge the TS-owned calc sits on -- NOT by an "upstream means before,
+# downstream means after" intuition, which is what produced the
+# scan_parent inversion bug this comment block replaced. The authority
+# for which side is which is ``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` in
+# ``app/services/calculation_resolution.py``; a unit test in
+# ``tests/services/test_trust_evaluator_transition_state.py`` asserts
+# these sets agree with it for every role so the two cannot silently
+# drift apart again.
+
+_TS_CALC_IS_CHILD_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {
         CalculationDependencyRole.optimized_from,
-        CalculationDependencyRole.scan_parent,
     }
 )
-"""Dependency roles where the TS-owned calc is the child and the upstream
-parent (e.g. a path_search or scan that produced the TS guess) should be
-pulled into the source set."""
+"""Roles where the TS-owned calc is the CHILD of the dependency edge, so
+the PARENT (reached via ``calc.child_dependencies[*].parent_calculation``)
+should be pulled into the source set. Today this is only
+``optimized_from``: a ``path_search`` (NEB/GSM/...) that produced the TS
+guess which the TS opt was then optimized from."""
 
-_TS_DOWNSTREAM_DEPENDENCY_ROLES: frozenset[CalculationDependencyRole] = frozenset(
+_TS_CALC_IS_PARENT_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {
         CalculationDependencyRole.freq_on,
         CalculationDependencyRole.single_point_on,
         CalculationDependencyRole.irc_start,
         CalculationDependencyRole.irc_followup,
+        CalculationDependencyRole.scan_parent,
     }
 )
-"""Dependency roles where the TS-owned opt calc is the parent and a
-downstream child (freq/sp/irc) should be pulled into the source set."""
+"""Roles where the TS-owned calc is the PARENT of the dependency edge, so
+the CHILD (reached via ``calc.parent_dependencies[*].child_calculation``)
+should be pulled into the source set: freq/sp/irc computed on the TS
+geometry, and a scan run from the TS-optimized geometry (``scan_parent``
+names the edge from the scan's point of view -- "this scan's parent" --
+not "the parent is a scan"; per
+``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` its parent type is always ``opt``).
+Note ``irc_followup``'s parent-side calc is the TS-owned **irc** reached
+via ``irc_start``, not the TS opt directly -- but it is still the parent
+side of that edge, so the same bucket applies."""
 
 
 def _ts_source_calculations(ts_entry: TransitionStateEntry) -> list[Calculation]:
@@ -2434,8 +2454,8 @@ def _ts_source_calculations(ts_entry: TransitionStateEntry) -> list[Calculation]
       1. Every ``calculation`` directly attached via
          ``calculation.transition_state_entry_id``.
       2. One dependency hop in both directions, restricted to the roles
-         listed in :data:`_TS_UPSTREAM_DEPENDENCY_ROLES` and
-         :data:`_TS_DOWNSTREAM_DEPENDENCY_ROLES` (spec §5.2).
+         listed in :data:`_TS_CALC_IS_CHILD_ROLES` and
+         :data:`_TS_CALC_IS_PARENT_ROLES` (spec §5.2).
     Order is stable: directly-attached calcs first (insertion order, which
     SQLAlchemy preserves from the loaded relationship), then any
     dependency-discovered calcs in the order they are first encountered.
@@ -2446,18 +2466,19 @@ def _ts_source_calculations(ts_entry: TransitionStateEntry) -> list[Calculation]
         source.setdefault(calc.id, calc)
     for calc in direct:
         # child_dependencies = rows where this calc is the *child*; the
-        # parent_calculation is the upstream we want when role is e.g.
-        # optimized_from or scan_parent.
+        # parent_calculation is the one we want when the TS-owned calc is
+        # the child for this role, e.g. optimized_from (path_search parent).
         for dep in calc.child_dependencies:
-            if dep.dependency_role in _TS_UPSTREAM_DEPENDENCY_ROLES:
+            if dep.dependency_role in _TS_CALC_IS_CHILD_ROLES:
                 parent = dep.parent_calculation
                 if parent is not None:
                     source.setdefault(parent.id, parent)
         # parent_dependencies = rows where this calc is the *parent*; the
-        # child_calculation is the downstream we want when role is e.g.
-        # freq_on, single_point_on, irc_start, irc_followup.
+        # child_calculation is the one we want when the TS-owned calc is
+        # the parent for this role, e.g. freq_on, single_point_on,
+        # irc_start, irc_followup, scan_parent (scan child of the TS opt).
         for dep in calc.parent_dependencies:
-            if dep.dependency_role in _TS_DOWNSTREAM_DEPENDENCY_ROLES:
+            if dep.dependency_role in _TS_CALC_IS_PARENT_ROLES:
                 child = dep.child_calculation
                 if child is not None:
                     source.setdefault(child.id, child)
@@ -2659,17 +2680,20 @@ def _check_ts_irc_evidence_present(
 def _check_ts_path_search_evidence_present(
     ts_entry: TransitionStateEntry,
 ) -> EvidenceOutcome:
-    """Return passed when a path_search or scan-parent calc is in the source set.
+    """Return passed when a path_search calc or a scan child of the TS opt
+    is in the source set.
 
     Per spec §7, missing path-search is **not** a hard fail.
     """
     if _ts_has_calc_type(ts_entry, CalculationType.path_search):
         return EvidenceOutcome.passed
-    # A scan parent (TS opt's child_dependencies role=scan_parent) also counts.
+    # A scan run from the TS opt also counts: the TS-owned opt is the
+    # *parent* of that edge (calc.parent_dependencies, role=scan_parent) --
+    # not the child. See _TS_CALC_IS_PARENT_ROLES.
     if _ts_has_dependency_role_link(
         ts_entry,
         frozenset({CalculationDependencyRole.scan_parent}),
-        direction="upstream",
+        direction="downstream",
     ):
         return EvidenceOutcome.passed
     return EvidenceOutcome.missing
