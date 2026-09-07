@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { CalculationDependency } from "../api/calculationApi"
+import { buildDependencyGraphModel, computeNarrowLayout, computeWideLayout } from "../domain/dependencyGraphLayout"
 import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "../domain/dependencyWording"
 import { CalculationDependencyGraph } from "./CalculationDependencyGraph"
 
@@ -100,8 +101,7 @@ describe("CalculationDependencyGraph — edges point parent -> child", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ])
-        const edge = screen.getByTestId("dep-edge-calc_opt_parent-calc_own_ref-optimized_from")
-        const path = edge.querySelector("path")!
+        const path = screen.getByTestId("dep-edge-path-calc_opt_parent-calc_own_ref-optimized_from")
         expect(path).toHaveAttribute("data-from", "calc_opt_parent")
         expect(path).toHaveAttribute("data-to", "calc_own_ref")
         // The arrowhead sits at the path's destination end (marker-end),
@@ -114,10 +114,26 @@ describe("CalculationDependencyGraph — edges point parent -> child", () => {
         renderGraph([
             { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_own_ref", child_calculation_ref: "calc_child_one" },
         ])
-        const edge = screen.getByTestId("dep-edge-calc_own_ref-calc_child_one-freq_on")
-        const path = edge.querySelector("path")!
+        const path = screen.getByTestId("dep-edge-path-calc_own_ref-calc_child_one-freq_on")
         expect(path).toHaveAttribute("data-from", "calc_own_ref")
         expect(path).toHaveAttribute("data-to", "calc_child_one")
+    })
+})
+
+describe("CalculationDependencyGraph — paint order (every path before every label)", () => {
+    it("renders every <path> before any edge-label <g>, so a later edge's line can never paint over an earlier edge's label", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_p1", child_calculation_ref: "calc_own_ref" },
+            { role: "freq_on", direction: "child", parent_calculation_ref: "calc_p2", child_calculation_ref: "calc_own_ref" },
+            { role: "single_point_on", direction: "parent", parent_calculation_ref: "calc_own_ref", child_calculation_ref: "calc_c1" },
+        ])
+        const svg = screen.getByRole("img")
+        const children = Array.from(svg.children)
+        const lastPathIndex = children.map((el) => el.tagName.toLowerCase()).lastIndexOf("path")
+        const firstLabelIndex = children.findIndex((el) => el.getAttribute("data-testid")?.startsWith("dep-edge-label-"))
+        expect(lastPathIndex).toBeGreaterThan(-1)
+        expect(firstLabelIndex).toBeGreaterThan(-1)
+        expect(lastPathIndex).toBeLessThan(firstLabelIndex)
     })
 })
 
@@ -126,16 +142,28 @@ describe("CalculationDependencyGraph — edge labels reuse the sentence-list wor
         renderGraph([
             { role, direction: "parent", parent_calculation_ref: "calc_own_ref", child_calculation_ref: "calc_child_one" },
         ])
-        const edge = screen.getByTestId(`dep-edge-calc_own_ref-calc_child_one-${role}`)
-        expect(within(edge).getByText(dependencyEdgeLabel(role))).toBeInTheDocument()
+        const label = screen.getByTestId(`dep-edge-label-calc_own_ref-calc_child_one-${role}`)
+        expect(within(label).getByText(dependencyEdgeLabel(role))).toBeInTheDocument()
     })
 
     it("falls back to the raw (spaced) role token for a role with no bespoke wording, same as the sentence list", () => {
         renderGraph([
             { role: "scan_parent", direction: "child", parent_calculation_ref: "calc_scan_owner", child_calculation_ref: "calc_own_ref" },
         ])
-        const edge = screen.getByTestId("dep-edge-calc_scan_owner-calc_own_ref-scan_parent")
-        expect(within(edge).getByText("scan parent")).toBeInTheDocument()
+        const label = screen.getByTestId("dep-edge-label-calc_scan_owner-calc_own_ref-scan_parent")
+        expect(within(label).getByText("scan parent")).toBeInTheDocument()
+    })
+})
+
+describe("CalculationDependencyGraph — centre node type pill", () => {
+    it("draws a real pill (a background rect) behind the centre node's type text, not bare text", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "freq")
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const pillBg = centreNode.querySelector(".dep-graph-node-pill-bg")
+        expect(pillBg).not.toBeNull()
+        expect(pillBg?.tagName.toLowerCase()).toBe("rect")
     })
 })
 
@@ -180,5 +208,105 @@ describe("CalculationDependencyGraph — accessibility", () => {
         // The graph node's own link carries a DIFFERENT accessible name.
         const nodeLink = within(screen.getByTestId("dep-node-parent-calc_htgb7s5nakuw52eqhcxpvilpoq")).getByRole("link")
         expect(nodeLink).not.toHaveAccessibleName("calc_htgb7s5nakuw52eqhcxpvilpoq")
+    })
+})
+
+/**
+ * jsdom has no `ResizeObserver` at all, so proving the responsive switch
+ * itself works -- not just that the component degrades honestly without
+ * one -- needs a fake one installed for just this block, mirroring
+ * `GeometryViewer.test.tsx`'s own `installFakeMatchMedia`/
+ * `FakeResizeObserver` convention (see that file's "zero-size container"
+ * describe block). Nothing else in this file exercises this branch: a
+ * stubbed always-wide default (no `ResizeObserver`, matching every other
+ * test above) and a `computeNarrowLayout` that silently returned the wide
+ * layout would BOTH stay green against every other test in this file --
+ * this block is what actually exercises the ResizeObserver/measured-
+ * width branch `CalculationDependencyGraph.tsx` itself gates on, per the
+ * post-review fix list.
+ */
+describe("CalculationDependencyGraph — responsive layout via ResizeObserver", () => {
+    class FakeResizeObserver {
+        static instances: FakeResizeObserver[] = []
+        callback: ResizeObserverCallback
+        constructor(callback: ResizeObserverCallback) {
+            this.callback = callback
+            FakeResizeObserver.instances.push(this)
+        }
+        observe() { /* no-op: the test triggers resizes manually */ }
+        unobserve() { /* no-op */ }
+        disconnect() { /* no-op */ }
+        trigger(width: number) {
+            this.callback([{ contentRect: { width } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+        }
+    }
+
+    let originalResizeObserver: typeof ResizeObserver | undefined
+
+    beforeEach(() => {
+        FakeResizeObserver.instances = []
+        originalResizeObserver = (globalThis as { ResizeObserver?: typeof ResizeObserver }).ResizeObserver
+        ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver = FakeResizeObserver
+    })
+
+    afterEach(() => {
+        (globalThis as { ResizeObserver?: unknown }).ResizeObserver = originalResizeObserver
+    })
+
+    const DEPENDENCIES: CalculationDependency[] = [
+        { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_parent0abcdefghijklmnopqrstuvwx", child_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv" },
+        { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child0abcdefghijklmnopqrstuvwx" },
+        { role: "single_point_on", direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child1abcdefghijklmnopqrstuvwx" },
+    ]
+
+    function expectedLayouts() {
+        const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", DEPENDENCIES)
+        return { wide: computeWideLayout(model), narrow: computeNarrowLayout(model) }
+    }
+
+    it("renders the wide layout before any measurement arrives (the documented fallback)", () => {
+        renderGraph(DEPENDENCIES, "calc_own_ref_abcdefghijklmnopqrstuv")
+        const { wide } = expectedLayouts()
+        expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${wide.width} ${wide.height}`)
+    })
+
+    it("switches to the narrow layout once the measured container is narrower than the wide layout's own width", async () => {
+        renderGraph(DEPENDENCIES, "calc_own_ref_abcdefghijklmnopqrstuv")
+        await waitFor(() => expect(FakeResizeObserver.instances).toHaveLength(1))
+        const { wide, narrow } = expectedLayouts()
+
+        FakeResizeObserver.instances[0].trigger(wide.width - 50)
+
+        await waitFor(() => {
+            expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${narrow.width} ${narrow.height}`)
+        })
+    })
+
+    it("stays on the wide layout when the measured container is at least as wide as the wide layout's own width", async () => {
+        renderGraph(DEPENDENCIES, "calc_own_ref_abcdefghijklmnopqrstuv")
+        await waitFor(() => expect(FakeResizeObserver.instances).toHaveLength(1))
+        const { wide } = expectedLayouts()
+
+        FakeResizeObserver.instances[0].trigger(wide.width + 50)
+
+        await waitFor(() => {
+            expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${wide.width} ${wide.height}`)
+        })
+    })
+
+    it("switches back to wide if a later measurement widens past the wide layout's own width again", async () => {
+        renderGraph(DEPENDENCIES, "calc_own_ref_abcdefghijklmnopqrstuv")
+        await waitFor(() => expect(FakeResizeObserver.instances).toHaveLength(1))
+        const { wide, narrow } = expectedLayouts()
+
+        FakeResizeObserver.instances[0].trigger(wide.width - 50)
+        await waitFor(() => {
+            expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${narrow.width} ${narrow.height}`)
+        })
+
+        FakeResizeObserver.instances[0].trigger(wide.width + 50)
+        await waitFor(() => {
+            expect(screen.getByRole("img")).toHaveAttribute("viewBox", `0 0 ${wide.width} ${wide.height}`)
+        })
     })
 })

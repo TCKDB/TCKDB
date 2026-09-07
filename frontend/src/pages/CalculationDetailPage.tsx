@@ -831,25 +831,18 @@ function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; ba
  * or ref ordering — see the module docstring above; this is the one rule
  * the whole slice is graded on.
  *
- * One sentence per edge, with a FIXED subject (this calculation, or the
- * related one), replacing the old Relationship/Role/Related-calculation
- * columns -- review finding: "feeds into | optimized from | calc_j4my…"
- * read as "this was optimized from calc_j4my", the inverse of the truth
- * (a `role` names the CHILD's relation to the parent, so on a parent-side
- * row it describes what the *other* calculation is, not this one). A
- * parent-side row states what the related calculation IS relative to this
- * geometry/result.
- *
- * Child-side dispatches on `role` too -- review finding: the live archive
- * carries child-side `freq_on`, `single_point_on` and `irc_start` edges
- * (a freq/sp/IRC calc's edge back to the opt it ran on), not only
- * `optimized_from`, and every one of them used to read "This was
- * optimized from <link>" regardless of what the edge actually was. Only
- * `optimized_from` gets that sentence now; the other three each get a
- * subject-fixed sentence naming what THIS calculation actually did on the
- * parent's geometry, and an unrecognised role falls back to the raw role
- * token -- never to "optimized from", which would silently re-introduce
- * the same bug for a role this page doesn't know about yet.
+ * This section itself is a thin shell: the populated case hands the raw
+ * `dependencies` array straight to `CalculationDependencyGraph.tsx`,
+ * which owns both the graph AND the demoted sentence list beneath it
+ * (its own docstring covers the layout/paint-order/accessibility design).
+ * The per-role WORDING both of those read — one sentence per edge, with a
+ * FIXED subject (this calculation, or the related one), and a dispatch on
+ * `role` that never collapses `freq_on`/`single_point_on`/`irc_start`
+ * into "This was optimized from <link>" the way this page's Relationship/
+ * Role/Related-calculation columns used to (a `role` names the CHILD's
+ * relation to the parent, so on a parent-side row it describes what the
+ * *other* calculation is, not this one) — lives in ONE shared table,
+ * `domain/dependencyWording.ts`, not in this function.
  */
 function DependenciesSection({ dependencies, ownRef, ownType, availability, contradicted }: {
     dependencies: CalculationDependency[]

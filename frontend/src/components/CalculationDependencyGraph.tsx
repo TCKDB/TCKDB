@@ -1,8 +1,7 @@
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 import "../calculation-dependency-graph.css"
 import type { CalculationDependency } from "../api/calculationApi"
-import { typeLabel } from "../domain/calculationTypeFormat"
 import {
     buildDependencyGraphModel,
     computeNarrowLayout,
@@ -29,22 +28,27 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * child_calculation_ref }` (`api/calculationApi.ts`'s `dependencySchema`)
  * -- no type for the OTHER calculation in the edge. Only the centre node's
  * own type is known (`calculation.type`, already on the record), so only
- * the centre node gets a type pill; every other node shows its ref alone
- * rather than guess.
+ * the centre node gets a type pill (a real `<rect rx>` behind the text,
+ * `.value-pill`'s own treatment -- `domain/dependencyGraphLayout.ts`
+ * sizes it); every other node shows its ref alone rather than guess.
  *
  * Two full layouts (`computeWideLayout`/`computeNarrowLayout`,
- * `domain/dependencyGraphLayout.ts`) rather than one CSS-scaled SVG: a
- * horizontal row of several siblings shrunk to fit a 680px viewport would
- * cross the accessible text-size floor, so the narrow layout genuinely
- * re-lays the graph out as one vertical column instead of just shrinking
- * the wide one. Which layout is ACTIVE is real `matchMedia` state (the
- * same `resolveIsDarkTheme`/`isDarkTheme` pattern `GeometryViewer.tsx`
- * already uses for `prefers-color-scheme`), not two SVGs toggled by a CSS
- * media query -- keeping only one `role="img"` element in the DOM at a
- * time avoids ever having two elements answer `getByRole("img")`, and
- * matches this app's existing "no `window.matchMedia`" test-environment
- * default (jsdom does not implement it) by falling back to the wide
- * layout, same as `resolveIsDarkTheme` falls back to light.
+ * `domain/dependencyGraphLayout.ts` -- see that module's own docstring
+ * for the geometry). Which one is ACTIVE is decided from a REAL measured
+ * container width (`ResizeObserver` on this component's own wrapper),
+ * compared against `computeWideLayout(...).width` -- narrow renders as
+ * soon as the container is narrower than the wide layout's own natural
+ * width, never a fixed breakpoint. MEASURED (post-review): a fixed
+ * `680px` media query let the wide layout scale ITSELF down (`width:
+ * 100%`, no floor) on any container between 680px and its own natural
+ * width -- at a 1100px container with 3 children the SVG scaled to
+ * 0.913x, taking its smallest text (`--type-label-font`, 11.52px) below
+ * this app's own accessible floor. Comparing against the real container
+ * width switches to the narrow layout before any such shrink can happen.
+ * `containerWidth` starts `null` (not yet measured, or `ResizeObserver`
+ * unavailable -- jsdom, this app's own test-environment default) and the
+ * component renders the WIDE layout in that case, same as this app's
+ * `resolveIsDarkTheme` falls back to light when `matchMedia` is missing.
  *
  * The demoted `<ul>` below the SVG is the pre-existing sentence list, not
  * a duplicate: it is the text equivalent a screen reader (or Ctrl+F) uses
@@ -53,6 +57,21 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * link for a sighted mouse/keyboard user (`aria-label` deliberately
  * differs from the bare ref text the list link uses, so the two never
  * collide as the same accessible name within this section).
+ *
+ * Paint order inside the `<svg>` is ALL edge paths, then ALL edge labels,
+ * then ALL nodes -- never one edge's path/label/rect interleaved with
+ * the next's. MEASURED (post-review): with each edge rendered as its own
+ * self-contained group (path, then its label, in DOM/array order), a
+ * LATER edge's path painted on top of an visually EARLIER edge's label
+ * wherever the two geometrically crossed (the `<path>` has no fill, but
+ * is still opaque along its stroked line) -- e.g. a 3-child graph's
+ * middle child's own connecting line crossing dead through another
+ * child's label text. `domain/dependencyGraphLayout.ts`'s band/lane
+ * placement keeps every DIFFERENT edge's path geometrically clear of
+ * every OTHER edge's label rect (see that module's own tests); this
+ * paint order is what ALSO keeps an edge's path from ever visually
+ * covering its OWN label where the two deliberately meet (the label's
+ * opaque background "punches a hole" in its own line at the bend).
  */
 export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
     dependencies: CalculationDependency[]
@@ -60,28 +79,31 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
     ownType: string
 }) {
     const markerId = useId()
-    const [isNarrow, setIsNarrow] = useState(() => resolveIsNarrow())
+    const containerRef = useRef<HTMLDivElement>(null)
+    const [containerWidth, setContainerWidth] = useState<number | null>(null)
 
     useEffect(() => {
-        const mediaQuery = typeof window !== "undefined" && typeof window.matchMedia === "function"
-            ? window.matchMedia(NARROW_MEDIA_QUERY)
-            : null
-        if (!mediaQuery) return
-        const sync = () => setIsNarrow(mediaQuery.matches)
-        sync()
-        mediaQuery.addEventListener?.("change", sync)
-        return () => mediaQuery.removeEventListener?.("change", sync)
+        const el = containerRef.current
+        if (!el || typeof ResizeObserver === "undefined") return
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0]
+            if (entry) setContainerWidth(entry.contentRect.width)
+        })
+        observer.observe(el)
+        return () => observer.disconnect()
     }, [])
 
     if (dependencies.length === 0) return null
 
     const model = buildDependencyGraphModel(ownRef, ownType, dependencies)
-    const layout: GraphLayout = isNarrow ? computeNarrowLayout(model) : computeWideLayout(model)
+    const wideLayout = computeWideLayout(model)
+    const isNarrow = containerWidth !== null && containerWidth < wideLayout.width
+    const layout: GraphLayout = isNarrow ? computeNarrowLayout(model) : wideLayout
     const ariaLabel = dependencyGraphAriaLabel(model.parentRefs.length, model.childRefs.length)
     const arrowMarkerId = `dep-graph-arrow-${markerId}`
 
     return (
-        <div className="dep-graph">
+        <div className="dep-graph" ref={containerRef}>
             <svg
                 className="dep-graph-svg"
                 viewBox={`0 0 ${layout.width} ${layout.height}`}
@@ -90,14 +112,15 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
                 // `width: 100%` (calculation-dependency-graph.css) lets the
                 // graph SHRINK to fit a narrow container; without a cap it
                 // would also GROW to fill a wide one, inflating every box
-                // and font past the size the layout math actually chose --
-                // MEASURED (screenshot review): a one-parent graph on this
-                // page's ~1085px-wide content column rendered at 3x its
-                // intended size, letters taller than the node boxes. One
-                // viewBox unit is intended to be one CSS px (the box-sizing
-                // estimate in `domain/dependencyGraphLayout.ts` is written
-                // in px), so the inline cap is the layout's own computed
-                // width -- this graph never scales past 1:1, only down.
+                // and font past the size the layout math actually chose.
+                // One viewBox unit is intended to be one CSS px (the
+                // box-sizing estimate in `domain/dependencyGraphLayout.ts`
+                // is written in px), so the inline cap is the layout's own
+                // computed width -- this graph never scales past 1:1, only
+                // down (and even that only when narrower than its own
+                // computed width AND still wider than the narrow layout's
+                // own width, since the `isNarrow` switch above already
+                // fires before the wide layout would otherwise need to).
                 style={{ maxWidth: `${layout.width}px` }}
             >
                 <defs>
@@ -114,8 +137,18 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
                     </marker>
                 </defs>
                 {layout.edges.map((edge) => (
-                    <g key={`${edge.role}-${edge.fromRef}-${edge.toRef}`} data-testid={`dep-edge-${edge.fromRef}-${edge.toRef}-${edge.role}`}>
-                        <path d={edge.path} className="dep-graph-edge-path" markerEnd={`url(#${arrowMarkerId})`} data-from={edge.fromRef} data-to={edge.toRef} />
+                    <path
+                        key={`path-${edge.role}-${edge.fromRef}-${edge.toRef}`}
+                        data-testid={`dep-edge-path-${edge.fromRef}-${edge.toRef}-${edge.role}`}
+                        d={edge.path}
+                        className="dep-graph-edge-path"
+                        markerEnd={`url(#${arrowMarkerId})`}
+                        data-from={edge.fromRef}
+                        data-to={edge.toRef}
+                    />
+                ))}
+                {layout.edges.map((edge) => (
+                    <g key={`label-${edge.role}-${edge.fromRef}-${edge.toRef}`} data-testid={`dep-edge-label-${edge.fromRef}-${edge.toRef}-${edge.role}`}>
                         <rect
                             x={edge.labelX - edge.labelWidth / 2}
                             y={edge.labelY - edge.labelHeight / 2}
@@ -135,15 +168,6 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
     )
 }
 
-const NARROW_MEDIA_QUERY = "(max-width: 680px)"
-
-function resolveIsNarrow(): boolean {
-    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
-        return window.matchMedia(NARROW_MEDIA_QUERY).matches
-    }
-    return false
-}
-
 const TIER_ARIA_PREFIX: Record<LayoutNode["tier"], string> = {
     parent: "Parent calculation",
     centre: "This calculation",
@@ -155,15 +179,31 @@ function DependencyGraphNode({ node }: { node: LayoutNode }) {
     const top = node.y - node.height / 2
     const rect = <rect x={left} y={top} width={node.width} height={node.height} rx={8} className="dep-graph-node-rect" />
 
-    if (node.tier === "centre") {
-        const pillLabel = typeLabel(node.type ?? "")
+    if (node.tier === "centre" && node.pill) {
+        const { pill } = node
+        // Matches `domain/dependencyGraphLayout.ts`'s own `CENTRE_PAD_TOP`
+        // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) --
+        // duplicated here as plain numbers rather than exported constants
+        // since this is the only place outside that module that needs the
+        // internal split of `CENTRE_H`, not a value worth widening that
+        // module's public surface for.
+        const pillY = top + 10
+        const refY = pillY + pill.height + 8 + 12
         return (
             <g className="dep-graph-node dep-graph-node--centre" data-testid={`dep-node-centre-${node.ref}`}>
                 {rect}
-                <text x={node.x} y={top + 20} className="dep-graph-node-pill-text" textAnchor="middle" dominantBaseline="middle">
-                    {pillLabel}
+                <rect
+                    x={node.x - pill.width / 2}
+                    y={pillY}
+                    width={pill.width}
+                    height={pill.height}
+                    rx={999}
+                    className="dep-graph-node-pill-bg"
+                />
+                <text x={node.x} y={pillY + pill.height / 2} className="dep-graph-node-pill-text" textAnchor="middle" dominantBaseline="middle">
+                    {pill.label}
                 </text>
-                <text x={node.x} y={top + 40} className="dep-graph-node-ref" textAnchor="middle" dominantBaseline="middle">
+                <text x={node.x} y={refY} className="dep-graph-node-ref" textAnchor="middle" dominantBaseline="middle">
                     {node.ref}
                 </text>
             </g>

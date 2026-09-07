@@ -38,17 +38,24 @@
     letter-spacing: var(--type-data-tracking);
 }
 
-.dep-graph-node--centre .dep-graph-node-ref {
-    fill: var(--ink);
-    font: var(--type-data-font);
-}
-
 /* The centre node's type pill -- the only node in the graph with a known
    `type` (see the component's own docstring for why parent/child nodes
-   never get one). Reuses `--type-label-strong` (mono, uppercase, 600
-   weight), the same step `.value-pill` draws its own text at, without
-   pulling in `.value-pill`'s HTML-only padding/border-radius box model,
-   which an SVG `<text>` has no use for. */
+   never get one). A real `<rect rx>` behind the text, `.value-pill`'s own
+   treatment (design-system.css) -- review finding: bare uppercase SVG
+   text read as a label, not a pill. `--accent-300` (not `.value-pill`'s
+   own `--line` border) is what actually shows: the pill's `--accent-50`
+   fill sits ON TOP OF the centre node's OWN `--accent-50` fill
+   (`.dep-graph-node--centre .dep-graph-node-rect` above), so a `--line`
+   stroke -- built for a plain `--surface` background -- would all but
+   disappear against it; `--accent-300` (design-system.css's own
+   "mid-strength accent" step) is the one border colour that still reads
+   against an already-accent-tinted background. */
+.dep-graph-node-pill-bg {
+    fill: var(--accent-50);
+    stroke: var(--accent-300);
+    stroke-width: 1;
+}
+
 .dep-graph-node-pill-text {
     fill: var(--accent-700);
     font: var(--type-label-strong-font);

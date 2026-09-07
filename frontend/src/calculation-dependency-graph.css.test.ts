@@ -18,6 +18,10 @@ describe("calculation-dependency-graph.css declares no hex colour literal", () =
     it("contains no # hex literal anywhere in the file", () => {
         expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     })
+
+    it("contains no rgb()/rgba()/hsl()/hsla() literal anywhere in the file", () => {
+        expect(css).not.toMatch(/\b(rgb|rgba|hsl|hsla)\s*\(/i)
+    })
 })
 
 /** Every `fill`/`stroke`/`color`/`background` declaration in this file
@@ -54,6 +58,15 @@ describe("the centre node reuses .card--selected's own accent treatment", () => 
     })
 })
 
+describe("the centre node's type pill is a real pill, not bare text", () => {
+    it(".dep-graph-node-pill-bg fills --accent-50 and strokes --accent-300 (visible against the centre node's own --accent-50 fill)", () => {
+        const match = /\.dep-graph-node-pill-bg\s*\{([^}]*)\}/.exec(css)
+        expect(match, ".dep-graph-node-pill-bg rule not found").not.toBeNull()
+        expect(match![1]).toMatch(/fill:\s*var\(--accent-50\)/)
+        expect(match![1]).toMatch(/stroke:\s*var\(--accent-300\)/)
+    })
+})
+
 describe("the SVG scales fluidly and never forces page-level horizontal overflow", () => {
     it(".dep-graph-svg is display:block with width:100% and height:auto", () => {
         const match = /\.dep-graph-svg\s*\{([^}]*)\}/.exec(css)
@@ -70,5 +83,16 @@ describe("the demoted sentence list uses the .note step, not body prose", () => 
         expect(match, ".dep-graph-sentences rule not found").not.toBeNull()
         expect(match![1]).toMatch(/font:\s*var\(--type-note-font\)/)
         expect(match![1]).toMatch(/color:\s*var\(--muted\)/)
+    })
+
+    // The rule this replaces (`.dependency-sentences li`, retired from
+    // `calculation-detail.css` -- see that file's own test) capped a
+    // sentence row to `--measure-note`, the "readable prose measure"
+    // step, since each row is a genuine sentence, not raw data. Pinned
+    // here in its new home so the cap itself survives the move.
+    it(".dep-graph-sentences caps to --measure-note, carrying forward calculation-detail.css's retired SHOULD-FIX-4 rule", () => {
+        const match = /\.dep-graph-sentences\s*\{([^}]*)\}/.exec(css)
+        expect(match, ".dep-graph-sentences rule not found").not.toBeNull()
+        expect(match![1]).toMatch(/max-width:\s*var\(--measure-note\)/)
     })
 })

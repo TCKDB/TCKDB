@@ -32,13 +32,20 @@ describe(".coverage-checklist / .ledger-summary--single are no longer declared h
 })
 
 /**
- * SHOULD-FIX-4 (re-review): 87 characters per line, no cap -- each row is
- * a genuine sentence ("Coarse pass; refined by <ref>.").
+ * The dependency-graph PR retired `.dependency-sentences` from this file
+ * entirely -- the sentence list it styled moved into
+ * `CalculationDependencyGraph.tsx`, alongside the graph it now sits
+ * beneath, styled by that component's OWN sheet
+ * (`calculation-dependency-graph.css`'s `.dep-graph-sentences`, which
+ * carries the SAME `max-width: var(--measure-note)` cap the retired
+ * SHOULD-FIX-4 rule pinned here -- see
+ * `calculation-dependency-graph.css.test.ts`'s own "demoted sentence
+ * list" tests for the rule's new home). This file, the former sole
+ * owner, must not declare `.dependency-sentences` again.
  */
-describe(".dependency-sentences li is capped to --measure-note (SHOULD-FIX-4)", () => {
-    it("declares max-width: var(--measure-note)", () => {
-        const rule = extractRule(css, ".dependency-sentences li")
-        expect(rule).toMatch(/max-width:\s*var\(--measure-note\)/)
+describe(".dependency-sentences is no longer declared here (moved to calculation-dependency-graph.css)", () => {
+    it("declares no .dependency-sentences rule", () => {
+        expect(css).not.toMatch(/\.dependency-sentences\s*\{/)
     })
 })
 
