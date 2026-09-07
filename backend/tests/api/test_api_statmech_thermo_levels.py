@@ -948,6 +948,71 @@ def test_computed_reaction_statmech_forgot_sp_is_refused(client):
     assert "uncovered_opt_calculation_refs" in body["context"]
 
 
+def test_computed_reaction_statmech_declared_energy_level_is_honored(client):
+    """``BundleStatmechIn.energy_level_of_theory`` (added post-review to
+    keep the two bundle roots' statmech models symmetric, per
+    ``tests/schemas/test_bundle_root_model_symmetry.py``) is actually
+    threaded through and checked, the same as the species-root bundle's:
+    a single opt, a declared level that disagrees with it, no sp linked
+    -- refused (R4')."""
+    payload = {
+        "species": [
+            {
+                "key": "ch3",
+                "species_entry": _METHYL_SPECIES,
+                "conformers": [
+                    {
+                        "key": "c0",
+                        "geometry": {"key": "g0", "xyz_text": _methyl_xyz(0.0)},
+                        "calculation": {
+                            "key": "opt0",
+                            "type": "opt",
+                            "software_release": _SOFTWARE,
+                            "level_of_theory": _LOT_A,
+                            "opt_converged": True,
+                        },
+                    },
+                ],
+                "calculations": [],
+                "statmech": {
+                    "statmech_treatment": "rrho",
+                    "external_symmetry": 1,
+                    "source_calculations": [
+                        {"calculation_key": "opt0", "role": "opt"},
+                    ],
+                    "energy_level_of_theory": _LOT_B,
+                },
+            },
+            {
+                "key": "h",
+                "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+                "conformers": [
+                    {
+                        "key": "hc",
+                        "geometry": {"key": "hg", "xyz_text": "1\nH\nH 0.0 0.0 0.0"},
+                        "calculation": {
+                            "key": "hopt",
+                            "type": "opt",
+                            "software_release": _SOFTWARE,
+                            "level_of_theory": _LOT_A,
+                            "opt_converged": True,
+                        },
+                    }
+                ],
+                "calculations": [],
+            },
+        ],
+        "reversible": True,
+        "reactant_keys": ["ch3", "h"],
+        "product_keys": ["ch3", "h"],
+    }
+    resp = client.post("/api/v1/uploads/computed-reaction", json=payload)
+    body = _assert_code(resp, _REQUIRES_SP_STATMECH)
+    assert "declared_level_of_theory_ref" in body["context"]
+    assert "wB97X-D/def2-TZVP" in body["detail"]
+    assert "B3LYP/6-31G(d)" in body["detail"]
+
+
 def test_nested_conformer_statmech_forgot_sp_is_refused(client):
     """The statmech block nested under ``/uploads/conformers``, R4': the
     depositor declares an intended energy level but links no 'sp' at all

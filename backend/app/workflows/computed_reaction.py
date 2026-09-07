@@ -1199,11 +1199,14 @@ def persist_computed_reaction_upload(
             # THIS species entry — a TS-owned or sibling-species-owned
             # calc is rejected with 422 (mirrors the AEC ownership
             # check above). Resolved here, entirely before the
-            # ``Statmech`` row exists below, so R2'/R3'/Coverage
-            # (app.services.calculation_levels; no declared-energy-level
-            # field on this bundle's ``BundleStatmechIn`` -- ``declared``
-            # is always ``None`` here) can raise without leaving a
-            # flushed-but-unreferenced row behind.
+            # ``Statmech`` row exists below, so R2'/R3'/Coverage/R4'
+            # (app.services.calculation_levels) can raise without
+            # leaving a flushed-but-unreferenced row behind.
+            statmech_declared_energy_lot = (
+                resolve_level_of_theory_ref(session, s.energy_level_of_theory)
+                if s.energy_level_of_theory is not None
+                else None
+            )
             statmech_resolved_sources: list[tuple[object, int]] = []
             statmech_role_links: list[RoleLink] = []
             for i, sc in enumerate(s.source_calculations):
@@ -1243,7 +1246,7 @@ def persist_computed_reaction_upload(
 
             assert_role_consistency(
                 statmech_role_links,
-                None,
+                statmech_declared_energy_lot,
                 duplicate_code=W_STATMECH_ROLE_DUPLICATE,
                 geometry_mismatch_code=W_STATMECH_SP_GEOMETRY_MISMATCH,
                 requires_sp_code=W_STATMECH_ENERGY_LEVEL_REQUIRES_SP,

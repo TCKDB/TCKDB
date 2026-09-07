@@ -507,6 +507,10 @@ class BundleStatmechIn(SchemaBase):
         bundle's global calc-key namespace and must be owned by this
         species entry (workflow-layer ownership check).
     :param torsions: Torsional modes.
+    :param energy_level_of_theory: Optional depositor-declared level of
+        theory the record's energy is claimed to stand at. See
+        ``app.services.calculation_levels`` on the backend for the exact
+        rule; never persisted.
     :param note: Optional note.
     """
 
@@ -531,6 +535,10 @@ class BundleStatmechIn(SchemaBase):
     uses_projected_frequencies: bool | None = None
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[BundleStatmechTorsionIn] = Field(default_factory=list)
+    # Depositor-declared level of theory the record's energy is claimed
+    # to stand at. See ``app.services.calculation_levels`` on the backend
+    # for the exact rule; never persisted.
+    energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 
     @model_validator(mode="after")
