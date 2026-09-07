@@ -335,6 +335,34 @@ provenance and machine detail live on dedicated linked pages.
     rubric's code reads that edge from the wrong side too, silently so
     far because no transition state on the archive has such an edge.
     That fix is its own pull request.
+27. Block and tell them. A statmech or thermo record may take its
+    energy from a single point at a different level from its geometry,
+    and a depositor who claims that level but forgets the single point
+    used to be accepted in silence. Upload validation now derives the
+    three levels from the linked calculation roles and refuses, with
+    the offending references named: a declared energy level with no
+    single point at it, a single point run on a different conformer's
+    geometry, single points at two levels, and a forgotten single
+    point for one conformer of an ensemble (#386). An optimisation
+    with no single point stays valid when nothing else is claimed,
+    because its own final energy is its single-point energy. Three
+    review rounds by probe matrix, one case per route: the first
+    found the rules absent on the whole-species routes an automated
+    client uses; the second found them present but starved, because
+    three routes threw away the geometry a depositor attached to each
+    inline calculation, so a wrong single point passed and a correct
+    two-conformer deposit was refused; the third found all seven
+    routes holding. The read side reports "ambiguous" rather than
+    picking one when linked single points disagree.
+28. The scan edge in the trust rubric. The transition-state rubric
+    looked for scan evidence on the wrong side of the dependency edge,
+    so a scan run from a transition state's own optimisation could
+    never count as path-search evidence (#393). Silent so far, since
+    no transition state on the archive has such an edge, and untested
+    in either direction. The fix carries a witness per half of the
+    change and an invariant that derives the rubric's role sets from
+    the upload path's enforcement table, so the documentation cannot
+    drift from the code again.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
