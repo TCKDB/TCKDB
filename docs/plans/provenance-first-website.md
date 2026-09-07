@@ -300,6 +300,29 @@ provenance and machine detail live on dedicated linked pages.
     linking the input was proven not to touch basin assignment or
     coverage counts. The pre-run snapshot and rollback queries are in
     the pull request.
+24. Stages that flow. "Coarse pass; refined by …" read as if one
+    molecule had refined another. The optimisation page now names its
+    stage in the title and kicker, "Coarse optimisation of C9H9" with
+    "coarse pass", or "Fine optimisation", and shows the two stages as
+    a strip of boxes with an arrow, this one emphasised, the other a
+    link (#387). A calculation with no refinement edge says the stage
+    is not recorded, never "single pass". The geometry section says
+    "Output geometry" when only one was deposited, and marks a
+    starting geometry recovered from the deposited input file with a
+    muted pill, including the seven cases where it turned out to be
+    identical to the output.
+25. Three levels of theory. A statmech or thermo record may take its
+    geometry, its frequencies and its energy from calculations at
+    different levels, and the page showed one. It now shows all three,
+    collapsing to one fact only when they agree (#388), reading a new
+    additive "levels" object from the API and deriving the same three
+    from the linked calculation roles when an older payload lacks it,
+    with a test that both paths render identically. The energy row
+    carries a muted pill for any source that is not a plain
+    optimisation or single point, including the "ambiguous" state the
+    upload validation will emit when linked single points disagree.
+    On the live archive today every record agrees, so the differing
+    rendering was verified through an injecting proxy, not real data.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
