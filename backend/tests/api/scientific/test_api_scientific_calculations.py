@@ -8,6 +8,7 @@ badge, internal-id policy, available_sections, and include validation
 from __future__ import annotations
 
 import pathlib
+import re
 
 from app.db.models.calculation import (
     CalculationConstraint,
@@ -1510,8 +1511,8 @@ def test_detail_include_artifacts_returns_metadata_rows(client, db_session):
     assert row["sha256"] == "a" * 64
     assert row["bytes"] == 12345
     assert row["created_at"] is not None
-    # No public ref column on calculation_artifact yet.
-    assert row["artifact_ref"] is None
+    assert row["artifact_ref"] == art.public_ref
+    assert re.fullmatch(r"art_[a-z2-7]{26}", row["artifact_ref"])
     # Phase D default: integer artifact_id stripped.
     assert "artifact_id" not in row
     # No body-content fields leak through.
@@ -1565,7 +1566,7 @@ def test_detail_include_artifacts_internal_ids_when_allowed(
     ).json()
     row = body["record"]["artifacts"][0]
     assert row["artifact_id"] == art.id
-    assert row["artifact_ref"] is None  # still no ref column
+    assert row["artifact_ref"] == art.public_ref
 
 
 def test_detail_include_artifacts_ordering_is_deterministic(
@@ -2624,8 +2625,27 @@ def test_detail_scf_stability_resolves_source_calculation_ref(
     ).json()
     summary = body["record"]["scf_stability"][0]
     assert summary["source_calculation_ref"] == source_calc.public_ref
-    # source_artifact_ref stays null; calculation_artifact has no public_ref column.
+    # source_artifact_id was never set on this row, so the ref stays null
+    # regardless of whether calculation_artifact carries a public_ref.
     assert summary["source_artifact_ref"] is None
+
+
+def test_detail_scf_stability_resolves_source_artifact_ref(
+    client, db_session
+):
+    _, _, calc = _make_species_owned_calc(db_session)
+    source_artifact = attach_artifact(db_session, calculation=calc)
+    row = attach_scf_stability(db_session, calculation=calc)
+    row.source_artifact_id = source_artifact.id
+    db_session.flush()
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=scf_stability"
+    ).json()
+    summary = body["record"]["scf_stability"][0]
+    assert summary["source_artifact_ref"] == source_artifact.public_ref
+    assert re.fullmatch(r"art_[a-z2-7]{26}", summary["source_artifact_ref"])
 
 
 def test_detail_scf_stability_internal_ids_when_allowed(

@@ -312,8 +312,10 @@ def encode_scalar(value: Any) -> Any:
 #:
 #: Targets absent from here *and* lacking a public ref keep the old behaviour
 #: of dropping the key, which is correct for ``created_by`` (a user primary key
-#: must never reach a public artifact) and for ``calculation_artifact`` ids,
-#: whose omission the manifest's ``omits`` block already declares.
+#: must never reach a public artifact). ``calculation_artifact`` no longer
+#: needs an entry here: it carries its own ``public_ref`` since the public-ref
+#: backfill (``backend/docs/deployment/migrations.md``), so FKs to it resolve
+#: through the ``public_ref`` branch of :meth:`RefResolver.fk_targets` instead.
 NATURAL_KEYS: dict[str, str] = {
     "network_channel": "channel_key",
     "network_state": "composition_hash",
@@ -357,8 +359,12 @@ class RefResolver:
         The identifying column is ``public_ref`` where the target has one, and
         otherwise the target's declared natural key. A target with neither is
         omitted, and its FK is dropped as before — that is correct for
-        ``created_by`` (a user primary key must never reach a public artifact)
-        and for artifact ids, which the manifest's ``omits`` block declares.
+        ``created_by`` (a user primary key must never reach a public artifact).
+        ``calculation_artifact`` used to fall into this dropped bucket too
+        (see the public-ref backfill in ``backend/docs/deployment/migrations.md``);
+        now that it carries a ``public_ref``, FKs to it (e.g.
+        ``kinetics_tunneling_application.result_artifact_id``) resolve like
+        any other ref-bearing target instead of being dropped.
         """
         targets: dict[str, tuple[str, str]] = {}
         for column in table.c:

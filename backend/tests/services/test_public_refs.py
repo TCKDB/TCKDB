@@ -11,7 +11,7 @@ import re
 import pytest
 from sqlalchemy import inspect
 
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import (
     CalculationType,
     MoleculeKind,
@@ -142,6 +142,7 @@ class TestPrefixRegistry:
             "FrequencyScaleFactor", "EnergyCorrectionScheme",
             "Submission",
             "RecordReproducibilityAssessment",
+            "CalculationArtifact",
         }
         assert expected.issubset(PREFIXES.keys())
 
@@ -172,6 +173,17 @@ class TestPrefixRegistry:
         assert first != second
         for ref in (first, second):
             assert re.fullmatch(r"aie_[a-z2-7]{26}", ref)
+
+    def test_calculation_artifact_ref_generation_is_opaque_and_independent(self):
+        """Same rationale as ArtifactIntegrityEvent: an upload event, not a
+        content identity -- two independently-minted refs must not collide
+        even before either row is flushed."""
+        first = generate_ref_for(CalculationArtifact())
+        second = generate_ref_for(CalculationArtifact())
+        assert first != second
+        for ref in (first, second):
+            assert ref.startswith("art_")
+            assert re.fullmatch(r"art_[a-z2-7]{26}", ref)
 
     def test_every_ref_bearing_model_has_a_registered_prefix(self):
         """The registration and the column must not be able to drift apart.
@@ -242,6 +254,7 @@ class TestColumnExists:
             WorkflowTool, WorkflowToolRelease,
             Literature,
             Submission,
+            CalculationArtifact,
         ],
     )
     def test_model_has_public_ref_column(self, model_cls):
@@ -329,6 +342,56 @@ class TestAutoPopulationOnInsert:
         db_session.add(calc2)
         db_session.flush()
         assert calc.public_ref != calc2.public_ref
+
+    def test_calculation_artifact_ref_is_opaque_and_prefixed(self, db_session):
+        """Round-trips public_ref on a real insert, and confirms two rows
+        pointing at identical bytes (same sha256 -- a re-upload of the same
+        content) still mint two distinct refs, since each row is a
+        separate upload event."""
+        from app.db.models.common import ArtifactKind
+
+        sp = Species(
+            kind=MoleculeKind.molecule,
+            smiles="O",
+            inchi_key=_next_inchi("PA"),
+            charge=0,
+            multiplicity=1,
+            stereo_kind=StereoKind.achiral,
+        )
+        db_session.add(sp)
+        db_session.flush()
+        entry = SpeciesEntry(species_id=sp.id)
+        db_session.add(entry)
+        db_session.flush()
+        calc = Calculation(type=CalculationType.sp, species_entry_id=entry.id)
+        db_session.add(calc)
+        db_session.flush()
+
+        art1 = CalculationArtifact(
+            calculation_id=calc.id,
+            kind=ArtifactKind.output_log,
+            uri="s3://bucket/output.log",
+            sha256="7" * 64,
+            bytes=10,
+            filename="output.log",
+        )
+        db_session.add(art1)
+        db_session.flush()
+        assert art1.public_ref.startswith("art_")
+        assert re.fullmatch(r"art_[a-z2-7]{26}", art1.public_ref)
+
+        # A second upload of identical bytes is a distinct event.
+        art2 = CalculationArtifact(
+            calculation_id=calc.id,
+            kind=ArtifactKind.output_log,
+            uri="s3://bucket/output-again.log",
+            sha256="7" * 64,
+            bytes=10,
+            filename="output.log",
+        )
+        db_session.add(art2)
+        db_session.flush()
+        assert art1.public_ref != art2.public_ref
 
     def test_geometry_ref_is_deterministic_from_geom_hash(self, db_session):
         """Same geom_hash → same content-derived public_ref."""

@@ -346,8 +346,13 @@ declared natural key instead (`RECORD` → `NATURAL_KEYS`), emitted as
 `network_solve` shipped channel barriers and well energies naming no channel
 and no state — numbers that could not be attached to anything. Targets with
 neither a ref nor a natural key keep being dropped, which is correct for
-`created_by` (a user primary key must never reach a public artifact) and for
-artifact ids, whose omission `omits` already declares.
+`created_by` (a user primary key must never reach a public artifact).
+`calculation_artifact` used to fall into this bucket too; now that it carries
+its own `public_ref` (the artifact-citability public-ref backfill), FKs to it
+— e.g. `kinetics_tunneling_application.result_artifact_id` /
+`sct_path_integral_artifact_id` — resolve to `result_artifact_ref` /
+`sct_path_integral_artifact_ref` like any other ref-bearing target, instead
+of being dropped.
 
 `kinetics_interpretation_assignment` ships with `kinetics`. It carries
 `standard_state_convention` and `ensemble_policy` — a rate coefficient reported

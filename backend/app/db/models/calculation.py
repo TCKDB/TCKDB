@@ -1214,7 +1214,7 @@ class CalculationPathSearchPoint(Base):
     )
 
 
-class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
+class CalculationArtifact(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Append-only artifact metadata: bytes-on-S3 plus minimal upload context.
 
     Each row records ONE upload event for ONE file attached to ONE
@@ -1230,6 +1230,13 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     ARC) should default to ``output_log`` only. Checkpoint-class
     artifacts are mainly useful for curated reanalysis, restart/debug
     scenarios, or exact binary audit trails — not routine bulk upload.
+
+    ``public_ref`` (``art_`` prefix, via :class:`PublicRefMixin`) is
+    opaque, not content-derived: this table is an append-only upload
+    log, and two rows with identical bytes (same ``sha256``) are two
+    distinct upload events that must stay separately citable — the same
+    reasoning as ``ArtifactIntegrityEvent``. See ``backend/docs/deployment/migrations.md``
+    ("Public-ref backfill") for the checklist this column follows.
     """
 
     __tablename__ = "calculation_artifact"

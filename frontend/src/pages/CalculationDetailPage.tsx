@@ -33,7 +33,7 @@ import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
-import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
@@ -1585,7 +1585,20 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                     <td data-label="Kind">{statusLabel(row.kind)}</td>
                                     <td data-label="Filename">{row.filename ?? "not recorded"}</td>
                                     <td data-label="Size" className="num">{row.bytes.toLocaleString()} bytes</td>
-                                    <td data-label="Artifact ref">{row.artifact_ref ?? "not recorded"}</td>
+                                    <td data-label="Artifact ref">
+                                        {row.artifact_ref ? (
+                                            <>
+                                                <code className="data">{row.artifact_ref}</code>{" "}
+                                                <CopyButton value={row.artifact_ref} label="artifact" srLabel="ref" />
+                                            </>
+                                        ) : (
+                                            // Every calculation_artifact row now carries a public_ref
+                                            // (backend/docs/deployment/migrations.md, "Public-ref
+                                            // backfill"), so this branch should no longer be reachable
+                                            // in practice; the field stays optional in the wire schema.
+                                            "no ref"
+                                        )}
+                                    </td>
                                     {/* The sha256 is the artifact's identity — the storage URI (row.uri)
                                         is not a downloadable link, so this is the one stable handle for
                                         the bytes this row describes. */}

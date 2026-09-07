@@ -654,10 +654,9 @@ class CalculationArtifactSummary(BaseModel):
     read concern. Approved bytes are retrieved separately through the
     content-addressed scientific artifact download route.
 
-    ``artifact_ref`` is always ``None`` until ``calculation_artifact``
-    grows a ``public_ref`` column (see open question 1 in
-    ``backend/docs/specs/scientific_calculation_reads.md``); the field
-    exists in the schema now so adding refs later is non-breaking.
+    ``artifact_ref`` is the row's own ``public_ref`` (``art_`` prefix),
+    added by the public-ref backfill described in
+    ``backend/docs/deployment/migrations.md``.
 
     ``artifact_id`` is subject to the Phase D internal-ID visibility
     policy and is stripped by the strip helper when the deployment
@@ -1018,11 +1017,13 @@ class CalculationSCFStabilitySummary(BaseModel):
     (PK = ``calculation_id``); the wrapping field is still a list
     for API symmetry — it will contain zero or one entry.
 
-    ``source_artifact_ref`` is always ``None`` because
-    ``calculation_artifact`` has no ``public_ref`` column today (see
-    ``include=artifacts``); ``source_calculation_ref`` resolves via
-    the calculation's own ``public_ref`` when the link is present.
-    Internal IDs follow the Phase D visibility policy.
+    ``source_artifact_ref`` resolves ``source_artifact_id`` to the
+    referenced ``calculation_artifact``'s ``public_ref`` when the FK is
+    set, the same way ``source_calculation_ref`` resolves
+    ``source_calculation_id`` via the calculation's own ``public_ref``.
+    Both stay ``None`` when the corresponding FK is unset — that is a
+    property of the (nullable) link, not of the ref column. Internal
+    IDs follow the Phase D visibility policy.
     """
 
     status: SCFStabilityStatus

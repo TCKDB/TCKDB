@@ -647,6 +647,20 @@ def test_internal_ids_when_allowed(client, db_session, allow_internal_ids):
     assert rec["calculation"]["calculation_id"] == calc.id
 
 
+def test_artifact_ref_is_populated_and_matches_prefix(client, db_session):
+    """Regression: the search projection used to hard-code artifact_ref=None."""
+    import re
+
+    _, _, calc = _make_species_owned_calc(db_session)
+    art = attach_artifact(db_session, calculation=calc)
+    body = client.get(
+        SEARCH_URL + f"?calculation_ref={calc.public_ref}"
+    ).json()
+    rec = body["records"][0]
+    assert rec["artifact"]["artifact_ref"] == art.public_ref
+    assert re.fullmatch(r"art_[a-z2-7]{26}", rec["artifact"]["artifact_ref"])
+
+
 # ---------------------------------------------------------------------------
 # Parity with calculation include=artifacts
 # ---------------------------------------------------------------------------

@@ -1043,6 +1043,49 @@ describe("CalculationDetailPage", () => {
         expect(await within(ecSection).findByText("ecs_1")).toBeVisible()
     })
 
+    describe("Artifacts section artifact ref cell", () => {
+        // calculation_artifact now carries a public_ref (backend public-ref
+        // backfill): a populated ref renders in the same code face as every
+        // other ref on this page, with the shared copy button next to it --
+        // not bare text, and not the old "not recorded" placeholder.
+        it("renders a populated artifact_ref in the data face with a copy button", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    artifacts: [
+                        { artifact_ref: "art_9f3k2q7m1x8h4v6c0b5n3z2y7t", kind: "output_log", uri: "s3://bucket/key", filename: "input.log", sha256: "a".repeat(64), bytes: 72526, created_at: "2026-07-21T12:06:50.748258" },
+                    ],
+                }),
+            })))
+            page()
+            await findLoaded("Frequency")
+
+            fireEvent.click(screen.getByText("Artifacts"))
+            const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
+            const row = (await within(artifactSection).findByText("art_9f3k2q7m1x8h4v6c0b5n3z2y7t")).closest("tr") as HTMLElement
+            expect(within(row).getByText("art_9f3k2q7m1x8h4v6c0b5n3z2y7t").tagName).toBe("CODE")
+            expect(within(row).getByRole("button", { name: "Copy artifact ref" })).toBeVisible()
+            expect(within(row).queryByText("no ref")).not.toBeInTheDocument()
+        })
+
+        it("reads a null artifact_ref as 'no ref', with no copy button", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    artifacts: [
+                        { artifact_ref: null, kind: "output_log", uri: "s3://bucket/key", filename: "input.log", sha256: "a".repeat(64), bytes: 72526, created_at: "2026-07-21T12:06:50.748258" },
+                    ],
+                }),
+            })))
+            page()
+            await findLoaded("Frequency")
+
+            fireEvent.click(screen.getByText("Artifacts"))
+            const artifactSection = screen.getByText("Artifacts").closest("details") as HTMLElement
+            const row = (await within(artifactSection).findByText("input.log")).closest("tr") as HTMLElement
+            expect(within(row).getByText("no ref")).toBeVisible()
+            expect(within(row).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
+        })
+    })
+
     it("marks a result whose shape this view does not recognise, rather than rendering an empty result section", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({ results: { kind: "sp", sp: null, opt: null, freq: null, scan: null, irc: null, path_search: null } }),

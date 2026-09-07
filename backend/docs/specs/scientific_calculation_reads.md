@@ -50,7 +50,7 @@ Heavy include tokens land one at a time. Current state:
 | `results` | implemented | Primary result summary only (per-type SP/Opt/Freq/Scan/IRC/PathSearch sub-blocks; no point or mode arrays). |
 | `energy_corrections` | implemented | Every `applied_energy_correction` row citing this calculation as `source_calculation_id`, with the applied magnitude, its stored unit, a hartree projection, the scheme / frequency-scale-factor provenance pointer, the target entry, and the per-component breakdown. See §4.5.2. |
 | `dependencies` | implemented | Direct parent/child edges with `direction` tag relative to the requested calc. |
-| `artifacts` | implemented | Metadata only (`kind`, `uri`, `filename`, `sha256`, `bytes`, `created_at`); no body bytes; no presigned URL. `artifact_ref` is `null` until `calculation_artifact` grows a `public_ref` column. |
+| `artifacts` | implemented | Metadata only (`kind`, `uri`, `filename`, `sha256`, `bytes`, `created_at`); no body bytes; no presigned URL. `artifact_ref` is the row's `public_ref` (`art_` prefix). |
 | `input_geometries` | implemented | Links only (`geometry_ref`, `input_order`, `natoms`, `geom_hash`); no XYZ inline — fetch via `/scientific/geometries/{geometry_ref}`. |
 | `output_geometries` | implemented | Same shape as inputs plus `output_order` and `role`. |
 | `geometry_validation` | implemented | Singleton list (`calculation_id` PK on the table); `atom_mapping` JSONB intentionally omitted. |
@@ -1159,11 +1159,12 @@ existing `test_api_*.py` style. Fixtures reuse the upload helpers in
 
 ## 11. Open design questions
 
-1. **`CalculationArtifact` public ref.** The artifact table does not yet
-   carry a `public_ref` column; `CalculationArtifactSummary.artifact_ref`
-   is therefore typed `str | None`. Should artifacts gain a content-derived
-   ref (sha256-prefix style) before this endpoint ships, so `artifact_ref`
-   is always populated?
+1. **`CalculationArtifact` public ref.** RESOLVED. `calculation_artifact`
+   now carries a `public_ref` column (`art_` prefix, opaque — not
+   content-derived, since two rows can share a `sha256` as distinct
+   upload events). `CalculationArtifactSummary.artifact_ref` is always
+   populated; it stays typed `str | None` for API stability even though
+   the column itself is `NOT NULL`.
 2. **`include=results` for multi-result types.** A `scan` calculation
    has both a scan result and (often) per-point sp/opt rows. Should
    `include=results` collapse to the *primary* result type for the

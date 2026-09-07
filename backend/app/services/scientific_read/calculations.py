@@ -1698,9 +1698,9 @@ def _build_artifacts(
     ``s3://bucket/key``), not a downloadable URL; resolving it to a
     download is an artifact-service responsibility outside this read.
 
-    ``artifact_ref`` is always ``None`` because ``calculation_artifact``
-    has no ``public_ref`` column today (see open question 1 in the
-    spec). Adding the column later does not break this contract.
+    ``artifact_ref`` is the row's own ``public_ref`` (``art_`` prefix,
+    added by the public-ref backfill in
+    ``backend/docs/deployment/migrations.md``).
 
     Ordering (deterministic, doc'd in tests):
 
@@ -1721,7 +1721,7 @@ def _build_artifacts(
     return [
         CalculationArtifactSummary(
             artifact_id=row.id,
-            artifact_ref=None,  # no public_ref column on calculation_artifact yet
+            artifact_ref=row.public_ref,
             kind=row.kind,
             uri=row.uri,
             filename=row.filename,
@@ -2424,8 +2424,8 @@ def _build_scf_stability(
     provenance summary on the default record uses the same encoding).
 
     ``source_calculation_ref`` is loaded when the FK is set;
-    ``source_artifact_ref`` is always ``None`` because
-    ``calculation_artifact`` has no ``public_ref`` column today.
+    ``source_artifact_ref`` likewise resolves the row's
+    ``source_artifact_id`` FK to its ``calculation_artifact.public_ref``.
     """
     row = session.scalar(
         select(CalculationSCFStability).where(
@@ -2443,6 +2443,14 @@ def _build_scf_stability(
             )
         )
 
+    source_artifact_ref: str | None = None
+    if row.source_artifact_id is not None:
+        source_artifact_ref = session.scalar(
+            select(CalculationArtifact.public_ref).where(
+                CalculationArtifact.id == row.source_artifact_id
+            )
+        )
+
     return [
         CalculationSCFStabilitySummary(
             status=row.status,
@@ -2455,7 +2463,7 @@ def _build_scf_stability(
             source_calculation_id=row.source_calculation_id,
             source_calculation_ref=source_calc_ref,
             source_artifact_id=row.source_artifact_id,
-            source_artifact_ref=None,
+            source_artifact_ref=source_artifact_ref,
         )
     ]
 
