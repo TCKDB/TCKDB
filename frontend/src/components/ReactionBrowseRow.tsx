@@ -52,11 +52,28 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * component's own choice -- neither review nor the two availability pills
  * carry a value a reader needs to select, so leaving them inside the
  * click target does not cost anything.
+ *
+ * `matched_direction` (review follow-up, round 2): a reactant/product
+ * SMILES search matches EITHER side of a reversible reaction, so the
+ * equation as served can list the searched species on the side OPPOSITE
+ * the one the reader searched -- e.g. a `productSmiles` search for water
+ * can return an entry whose served equation reads "H2O + CH3 <=> CH4 + HO",
+ * water on the reactant side, because the archive matched the reverse
+ * direction. Rendered as a plain note (never a pill -- this is not a
+ * categorical fact about the record the way review/kinetics/TS are, it is
+ * a fact about how THIS SEARCH matched) only when the served value is
+ * `"reverse"`; `"forward"` (the default, and what every unfiltered row
+ * carries) and an absent/null field (an older API) both render nothing,
+ * per the same absent-vs-asserted contract `familyText` follows above --
+ * "forward" is not itself news, so it says nothing, matching the site's
+ * "never assert from absence" rule read the other way: an ordinary match
+ * gets no caveat.
  */
 export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) {
     const target = `/reaction-entries/${record.reaction_entry_ref}`
     const reviewStatusText = token(record.review.status)
     const familyText = record.family ? token(record.family) : null
+    const matchedReverse = record.matched_direction === "reverse"
 
     return (
         <li className="browse-row card reaction-browse-row">
@@ -96,6 +113,9 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                 </li>
             </ul>
             <p className="browse-row-footer">
+                {matchedReverse && (
+                    <span className="browse-row-evidence">Matched on the reverse direction</span>
+                )}
                 <code className="browse-ref data">{record.reaction_entry_ref}</code>
             </p>
         </li>

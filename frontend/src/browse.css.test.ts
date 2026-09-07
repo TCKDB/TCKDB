@@ -195,3 +195,41 @@ describe("status/empty lines -- --type-note, not a bare .92rem", () => {
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
     })
 })
+
+// Review follow-up (PR 4b, round 2): the reaction browse row RE-CREATED the
+// stereo-chip defect `reaction-entry.css.test.ts` already guards for the
+// entry/chooser pages (`.record-identity-title .reaction-equation-chip` /
+// `.record-identity-title code.data`) -- that fix's selector never reaches
+// this row, and `reaction-entry.css` is not even in the browse page's CSS
+// chunk. MEASURED before this fix (real Chrome): the chip and the formula
+// beside it both rendered at the row title's own 20px `--type-heading-2-
+// font` step, ratio 1.00, in accent color with a permanent underline
+// (`.card a`) -- an English aside ("· S enantiomer") reading as equally
+// prominent as the chemistry, live on 4+ of the first 20 unfiltered rows.
+//
+// This is a SOURCE-TEXT regex against the stylesheet, the same technique
+// `reaction-entry.css.test.ts` uses for the identical bug, not a
+// `getComputedStyle` pixel assertion -- confirmed empirically (see
+// `ReactionBrowseRow.test.tsx`'s own comment on the equivalent rendered
+// test) that this project's jsdom/cssstyle version does not resolve
+// `var(...)` custom properties in EITHER shorthand or plain longhand
+// declarations, so a computed-pixel assertion here would silently pass
+// against a broken rule as readily as a fixed one. The real, rendered
+// ratio (13px chip / 20px title, both themes, 1920 and 680) is verified in
+// an actual browser as part of the PR's manual verification pass.
+describe("reaction browse row -- stereo-chip capped and muted, not a 1:1 inherited size", () => {
+    it(".reaction-browse-row-title .reaction-equation-chip is capped to --type-note-font and muted, not the title's own heading step", () => {
+        const rule = extractRule(css, ".reaction-browse-row-title .reaction-equation-chip")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule).toMatch(/color:\s*var\(--muted\)/)
+        // Never the title's own step -- the exact regression this guards:
+        // someone "fixing" a lint complaint by pointing the chip back at
+        // the same token the title uses.
+        expect(rule).not.toMatch(/--type-heading-2-font/)
+    })
+
+    it(".reaction-browse-row-title code.data inherits the surrounding font-size, not its own fixed --type-data-font (companion fix, mirrors reaction-entry.css)", () => {
+        const rule = extractRule(css, ".reaction-browse-row-title code.data")
+        expect(rule).toMatch(/font-size:\s*inherit/)
+    })
+})

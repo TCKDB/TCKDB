@@ -889,11 +889,13 @@ function reactionRecord(overrides: {
     hasTransitionState: boolean
     reactants: { ref: string; smiles: string; formula: string | null }[]
     products: { ref: string; smiles: string; formula: string | null }[]
+    matchedDirection?: string
 }) {
     return {
         reaction_ref: overrides.reactionRef,
         reaction_entry_ref: overrides.reactionEntryRef,
         equation: overrides.equation,
+        matched_direction: overrides.matchedDirection ?? "forward",
         reversible: overrides.reversible,
         family: overrides.family,
         review: { status: overrides.reviewStatus ?? "not_reviewed", reviewed_at: null, reviewer_kind: null },
@@ -1085,5 +1087,47 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         await user.type(screen.getByLabelText("Reactant SMILES"), "Xx999")
         expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
+    })
+
+    // Review follow-up (round 2), reproducing the live finding exactly: a
+    // `product_smiles=O` search against the real archive returns
+    // `rxe_ed66mj3ohtyien5rm2x3sb3rdu` ("O + [CH3] <=> C + [OH]", water on
+    // the REACTANT side) with `matched_direction: "reverse"` -- without
+    // this note, a reader searching Product SMILES "O" sees water on the
+    // wrong side with no explanation. End to end through the real page
+    // (typed filter -> outgoing request -> served row -> rendered note),
+    // not just the component-level fixture in `ReactionBrowseRow.test.tsx`.
+    it("a product-SMILES search that matches the REVERSE direction renders the note on that row, through the real page", async () => {
+        const user = userEvent.setup()
+        const reverseMatch = reactionRecord({
+            reactionEntryRef: "rxe_ed66mj3ohtyien5rm2x3sb3rdu", reactionRef: "rxn_zicx5swji2nqkg2v263rnwxn4m",
+            equation: "O + [CH3] <=> C + [OH]", reversible: true, family: "H_Abstraction",
+            hasKinetics: true, hasTransitionState: true, matchedDirection: "reverse",
+            reactants: [{ ref: "spe_o", smiles: "O", formula: "H2O" }, { ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }],
+            products: [{ ref: "spe_ch4", smiles: "C", formula: "CH4" }, { ref: "spe_oh", smiles: "[OH]", formula: "OH" }],
+        })
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const rows = url.searchParams.get("product_smiles") === "O" ? [reverseMatch] : twoReactions
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/species?kind=reaction")
+        await screen.findByText(/records · showing/)
+        await user.type(screen.getByLabelText("Product SMILES"), "O")
+        await screen.findByText("Matched on the reverse direction")
+
+        const rows = document.querySelectorAll(".reaction-browse-row")
+        expect(rows).toHaveLength(1)
+        expect(within(rows[0] as HTMLElement).getByText("Matched on the reverse direction")).toBeVisible()
+
+        // The other (forward-matched) fixture never carries the note.
+        const forwardRows = twoReactions.map((r) => r.reaction_entry_ref)
+        expect(forwardRows).not.toContain("rxe_ed66mj3ohtyien5rm2x3sb3rdu")
     })
 })

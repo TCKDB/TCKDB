@@ -492,3 +492,24 @@ describe("clearInapplicableFilters: the reaction-only fields and the shared fami
         expect(clearInapplicableFilters("vdw", filters).family).toBe("")
     })
 })
+
+// Review follow-up (round 2), NIT: the six provenance fields are invisible
+// on "reaction" (see `BrowseFilterForm`'s `!isReaction` guards) but not
+// cleared by a switch through it -- a decision, not an oversight, recorded
+// in `clearInapplicableFilters`'s own comment: the module's established
+// rule for these six fields ("only ever cleared explicitly by a reader
+// picking 'Any'") already applies uniformly, and this test pins that
+// choice so a future edit that quietly starts clearing them on "reaction"
+// (or stops clearing them on species/vdw/transition_state) is a visible,
+// deliberate diff here rather than a silent behavior change.
+describe("clearInapplicableFilters: the six provenance fields round-trip THROUGH reaction (documented choice, not an oversight)", () => {
+    it("a provenance value set on transition_state survives a switch to reaction (where it is hidden) and back to species (where it re-applies)", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, method: "b3lyp", software: "Gaussian" }
+        const throughReaction = clearInapplicableFilters("reaction", filters)
+        expect(throughReaction.method).toBe("b3lyp")
+        expect(throughReaction.software).toBe("Gaussian")
+        const backToSpecies = clearInapplicableFilters("species", throughReaction)
+        expect(backToSpecies.method).toBe("b3lyp")
+        expect(backToSpecies.software).toBe("Gaussian")
+    })
+})

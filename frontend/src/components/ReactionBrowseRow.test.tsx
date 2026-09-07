@@ -3,11 +3,16 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ReactionBrowseRecord } from "../api/browseApi"
 // Needed for the computed-style assertions below (the stretched-link/
-// selectable-ref mechanic): without the real stylesheet loaded, `getComputedStyle`
-// would fall back to each property's browser-initial value regardless of
-// what `.reaction-browse-row`'s own rules say, passing those assertions
-// without ever having exercised the rule at all (same reasoning as
-// `Disclosure.test.tsx`'s own import of `design-system.css`).
+// selectable-ref mechanic, and the stereo-chip sizing fix): without the
+// real stylesheets loaded, `getComputedStyle` would fall back to each
+// property's browser-initial value regardless of what `.reaction-browse-
+// row`'s own rules say, passing those assertions without ever having
+// exercised the rule at all (same reasoning as `Disclosure.test.tsx`'s own
+// import of `design-system.css`). `design-system.css` is imported
+// separately from `browse.css` (which does not itself `@import` it) --
+// `--type-heading-2-font`/`--type-note-font` are DEFINED there, and
+// `browse.css`'s own rules only reference them via `var(...)`.
+import "../design-system.css"
 import "../browse.css"
 import { ReactionBrowseRow } from "./ReactionBrowseRow"
 
@@ -271,6 +276,107 @@ describe("ReactionBrowseRow: stretched-link CSS mechanic (computed styles)", () 
         const footer = row.querySelector(".browse-row-footer") as HTMLElement
         expect(window.getComputedStyle(headline).position).toBe("relative")
         expect(window.getComputedStyle(footer).position).toBe("relative")
+    })
+
+    // Review follow-up (round 2): the row re-created the exact stereo-chip
+    // defect `reaction-entry.css`'s `.record-identity-title
+    // .reaction-equation-chip` rule already fixed on the entry/chooser
+    // pages -- that fix is scoped to `.record-identity-title` and does not
+    // reach this row (`reaction-entry.css` is not even in this page's CSS
+    // chunk). MEASURED before the fix (real Chrome, not jsdom): chip and
+    // formula both rendered at the row title's own 20px step, a 1.00
+    // ratio; after the fix, 13px chip / 20px formula (see the PR body's
+    // measurement table for the exact numbers, both themes, 1920 and 680).
+    //
+    // This suite does NOT assert that ratio via `getComputedStyle` here --
+    // confirmed empirically (see the investigation this comment survives
+    // from) that this project's jsdom/cssstyle version does not resolve
+    // `var(...)` custom properties AT ALL, in either shorthand (`font:
+    // var(--type-note-font)`) or plain longhand (`font-size: var(--x)`)
+    // declarations: `getComputedStyle(...).fontSize` returns the literal
+    // string `"var(--type-note-font)"`, not a pixel value, for both the
+    // BROKEN and the FIXED rule alike. No test anywhere in this codebase
+    // asserts a computed pixel font-size for a token-driven rule for the
+    // same reason -- the established pattern for exactly this class of
+    // regression (`reaction-entry.css.test.ts`'s own two tests for the
+    // IDENTICAL entry-page defect) is a source-text regex against the
+    // stylesheet, in `browse.css.test.ts`. That is the load-bearing
+    // regression guard for the actual font-size/color values; the real,
+    // rendered ratio is verified in a genuine browser as part of the PR's
+    // manual verification pass (screenshot + measurement in the PR body),
+    // not reproducible as a computed-style assertion in this test runner.
+    //
+    // What CAN be asserted here, and is: the two elements resolve to
+    // DIFFERENT (unresolved) `var()` references, proving the chip rule
+    // does not simply inherit the title's own token -- a regression where
+    // someone pointed `.reaction-equation-chip` back at
+    // `--type-heading-2-font` would flip this from failing to passing on
+    // the identical string, so it still catches the "same token" class of
+    // mistake even without resolving either to a pixel value.
+    it("the stereo-chip's font-size declaration references a DIFFERENT (unresolved) custom property than the title's own", () => {
+        renderRow(record({
+            reactants: [
+                { species_entry_ref: "spe_nn", species_entry_label: "S", smiles: "N=N", formula: "H2N2", stoichiometry: 1, participant_index: 1 },
+            ],
+        }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const chip = row.querySelector(".reaction-equation-chip") as HTMLElement
+        const title = row.querySelector(".reaction-browse-row-title") as HTMLElement
+        expect(chip).toBeTruthy()
+        const chipFont = window.getComputedStyle(chip).font
+        const titleFont = window.getComputedStyle(title).font
+        expect(chipFont).not.toBe("")
+        expect(chipFont).not.toBe(titleFont)
+    })
+})
+
+// Review follow-up (round 2): `matched_direction` is served on every row
+// (measured live -- present even on an unfiltered query, where it is
+// "forward") but was previously dropped on the floor entirely. Live
+// example: `product_smiles=O` returns `rxe_ed66mj3ohtyien5rm2x3sb3rdu`
+// ("O + [CH3] <=> C + [OH]", water on the REACTANT side of the served
+// equation) with `matched_direction: "reverse"` -- without rendering that
+// fact, a reader searching for water-as-product sees water on the wrong
+// side with nothing explaining why the filter "misfired". Tested in BOTH
+// directions, per the finding: "forward" (and its absence/null) must stay
+// SILENT, not just "reverse" must speak -- a component that rendered the
+// note unconditionally, or read the wrong field, would still pass a
+// reverse-only test suite.
+describe("ReactionBrowseRow: matched_direction (reverse-match note)", () => {
+    it('matched_direction="reverse": renders the note, exact text, in the footer', () => {
+        renderRow(record({ matched_direction: "reverse" }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const note = within(row).getByText("Matched on the reverse direction")
+        expect(note).toBeVisible()
+        expect(note).toHaveClass("browse-row-evidence")
+        expect(note.closest(".browse-row-footer")).toBeTruthy()
+    })
+
+    it('matched_direction="forward": renders NO note -- an ordinary match is not itself news', () => {
+        renderRow(record({ matched_direction: "forward" }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        expect(within(row).queryByText(/[Mm]atched on the reverse direction/)).not.toBeInTheDocument()
+    })
+
+    it("matched_direction absent (older API, key never served): renders NO note -- an absent field is not a claim of \"forward\"", () => {
+        const withoutField: ReactionBrowseRecord = record()
+        delete withoutField.matched_direction
+        renderRow(withoutField)
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        expect(within(row).queryByText(/[Mm]atched on the reverse direction/)).not.toBeInTheDocument()
+    })
+
+    it("matched_direction=null: renders NO note", () => {
+        renderRow(record({ matched_direction: null }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        expect(within(row).queryByText(/[Mm]atched on the reverse direction/)).not.toBeInTheDocument()
+    })
+
+    it("the reverse note is a plain note, not a .value-pill -- distinct from the review/availability facts", () => {
+        renderRow(record({ matched_direction: "reverse" }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const note = within(row).getByText("Matched on the reverse direction")
+        expect(note).not.toHaveClass("value-pill")
     })
 })
 

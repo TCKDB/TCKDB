@@ -355,6 +355,44 @@
     letter-spacing: var(--type-heading-2-tracking);
 }
 
+/* Review follow-up (PR 4b, round 2): this row RE-CREATED the exact defect
+   `reaction-entry.css`'s `.record-identity-title .reaction-equation-chip`
+   rule already fixed on the entry/chooser pages -- that fix is scoped to
+   `.record-identity-title` (and `reaction-entry.css` is not even loaded by
+   this page's CSS chunk), so it never reached this row. Uncapped, the chip
+   (e.g. "· S enantiomer") inherited the SAME `--type-heading-2-font` step
+   as the formula beside it -- MEASURED 20px vs 20px, ratio 1.00, in accent
+   color with a permanent underline (from `.card a`, see the rule above) --
+   so an English aside read as equally prominent as the chemistry, live on
+   4+ of the first 20 unfiltered rows.
+   `--type-note-font` (13px, `text-transform: none`), not the entry page's
+   own `--type-body-font` (16px): this row's OWN sibling metadata line
+   (`.browse-row-meta`, the family text two lines below) already uses
+   `--type-note-font` as "how a muted aside reads on this row" --
+   `--type-body-font` was calibrated against a 36px display-2 h1, not this
+   row's 20px heading-2, and importing it unchanged would still leave the
+   chip closer to the formula's size than this row's own convention for a
+   secondary fact already sets. */
+.reaction-browse-row-title .reaction-equation-chip {
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+    color: var(--muted);
+}
+
+/* Companion to the chip fix above, same missing rule as
+   `reaction-entry.css`'s `.record-identity-title code.data`: `code.data`
+   carries its own FIXED `font: var(--type-data-font)` (13px mono,
+   `design-system.css`), which would read as illegibly small set inside a
+   20px heading if a participant's SMILES fallback (`formula` absent, see
+   `ReactionEquation.tsx`'s `EquationParticipantLink`) ever lands in this
+   title. Unreached by any fixture in the live archive today (every
+   reaction-browse participant measured so far carries a `formula`), same
+   as the entry-page rule this mirrors -- added now so the row does not
+   silently regress the instant one does. */
+.reaction-browse-row-title code.data {
+    font-size: inherit;
+}
+
 .browse-row-headline {
     display: flex;
     flex-wrap: wrap;

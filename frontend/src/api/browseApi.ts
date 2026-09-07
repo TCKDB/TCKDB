@@ -209,6 +209,22 @@ const FAMILY_DEFAULT = { family: "" }
  * doing nothing, and a stale `has_*`/`status` value surviving a switch back
  * to "Species" would silently do nothing there either.
  */
+// Review follow-up (round 2), decision recorded here rather than left
+// implicit: the six provenance fields are NOT added to any defaults group
+// above, so a value set while on species/vdw/transition_state survives a
+// switch through "reaction" (where the fields are hidden and inert, see
+// `BrowseFilterForm`'s own `!isReaction` guards) and re-applies the moment
+// the reader switches to a kind that reads them again. Chose to PRESERVE
+// this round-trip rather than carve out a reaction-specific clear: the
+// module's own established rule for these six fields (see
+// `EVIDENCE_DEFAULTS`'s doc comment, "only ever cleared explicitly by a
+// reader picking 'Any', never by a kind switch") already applies uniformly
+// across every kind pair today, and a reaction-only exception would make
+// this function's contract depend on WHICH kind a value is hidden by,
+// not just whether it is currently visible -- a real ("Method" narrows the
+// SAME calculations regardless of which browse kind is currently
+// selected) but genuinely debatable trade-off; see the PR body for the
+// alternative considered and why it was not taken.
 export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilters): BrowseFilters {
     if (kind === "transition_state") return { ...filters, ...COMPOSITION_DEFAULTS, ...REACTION_ONLY_DEFAULTS }
     if (kind === "reaction") return { ...filters, ...COMPOSITION_DEFAULTS, ...EVIDENCE_DEFAULTS }
@@ -519,6 +535,19 @@ export const reactionBrowseRecordSchema = z.object({
     reaction_ref: z.string(),
     reaction_entry_ref: z.string(),
     equation: z.string().nullable().optional(),
+    // Review follow-up (round 2): served on every row (measured live,
+    // present even with no smiles filter applied, where it is always
+    // "forward") but previously dropped on the floor. "reverse" means the
+    // participant a reactant/product SMILES search matched sits on the
+    // OPPOSITE side from where the query named it -- e.g. `product_smiles=O`
+    // matching `rxe_ed66mj3ohtyien5rm2x3sb3rdu` ("O + [CH3] <=> C + [OH]",
+    // water on the REACTANT side) because the reaction is reversible and
+    // the search considered both directions. Optional/nullable so an
+    // older or pre-deployment response that never served this field parses
+    // without claiming a direction the archive never asserted -- see
+    // `ReactionBrowseRow.tsx`'s own rendering rule for the absent-vs-null
+    // distinction this preserves.
+    matched_direction: z.string().nullable().optional(),
     reversible: z.boolean(),
     family: z.string().nullable().optional(),
     review: recordReviewSchema,
