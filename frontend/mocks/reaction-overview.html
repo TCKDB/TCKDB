@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reaction chooser mock — rxn_naeqmg4l5wyqex5cl5tir2vt2y</title>
+<link rel="stylesheet" href="../src/theme.css">
+<link rel="stylesheet" href="../src/design-system.css">
+<link rel="stylesheet" href="../src/index.css">
+<link rel="stylesheet" href="../src/page-shell.css">
+<link rel="stylesheet" href="../src/conformer-group.css">
+<link rel="stylesheet" href="../src/record-identity-header.css">
+<link rel="stylesheet" href="../src/refs-disclosure.css">
+<link rel="stylesheet" href="../src/evidence-checklist.css">
+</head>
+<body>
+<div class="archive-shell">
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="utility-bar">
+    <a class="brand" href="../index.html" aria-label="TCKDB home"><span>T</span> TCKDB</a>
+    <div class="utility-bar-end">
+        <nav aria-label="Primary navigation">
+            <a href="#">Species</a>
+            <a href="reaction-overview.html" aria-current="page">Reactions</a>
+            <a href="#">Methods</a>
+        </nav>
+        <div class="theme-toggle" role="radiogroup" aria-label="Theme">
+            <button type="button" role="radio" aria-checked="true" class="theme-toggle-option" data-active="true">Light</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">Dark</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">System</button>
+        </div>
+    </div>
+</header>
+<main id="main-content">
+<section class="conformer-page">
+    <nav class="record-breadcrumbs" aria-label="Breadcrumb">
+        <a href="../index.html">TCKDB</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Reaction</span>
+    </nav>
+    <div class="page-shell-layout">
+    <div class="page-shell-content">
+    <div class="page-shell-identity">
+    <header class="basin-header">
+        <div class="record-identity-header">
+            <div class="record-identity-kicker-row">
+                <span class="t-kicker record-identity-kicker">Reaction · chooses between deposited entries</span>
+            </div>
+            <h1 class="t-display-2 record-identity-title">
+                H<sub>4</sub>N<sub>2</sub>&nbsp;⇌<wbr> H<sub>2</sub>&nbsp;+<wbr> H<sub>2</sub>N<sub>2</sub>
+            </h1>
+            <p class="t-body section-intro">
+                Four separate deposits share this reaction identity. This site never merges or silently chooses
+                between matching entries — pick the record you mean below.
+            </p>
+            <div class="record-identity-known">
+                <dl class="kv-list record-identity-facts">
+                    <div>
+                        <dt>Reaction ref</dt>
+                        <dd class="record-identity-fact-copyable"><code class="data">rxn_naeqmg4l5wyqex5cl5tir2vt2y</code>
+                            <button type="button" class="copy-button" aria-label="Copy Reaction ref value">Copy</button>
+                        </dd>
+                    </div>
+                    <div><dt>Family</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                    <div><dt>Reversible</dt><dd>yes</dd></div>
+                    <div class="record-identity-fact-wide">
+                        <dt>Equation (as deposited)</dt>
+                        <dd><code class="data">NN &lt;=&gt; [H][H] + N=N</code></dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+        <p class="note">
+            Formulas above (H4N2, H2, H2N2) are the RDKit Hill-order strings §3A will serve — computed for this mock
+            from the deposited participant SMILES, the same §3A gap noted on the reaction-entry mock. This endpoint
+            (<code>reactions/search</code>) serves SMILES only, no <code>formula</code> field, as of this fetch
+            (2026-09-07).
+        </p>
+    </header>
+    </div>
+
+    <section class="ledger-section" aria-labelledby="entries-heading">
+        <p class="t-kicker section-kicker">Deposited records</p>
+        <h2 class="t-heading-1" id="entries-heading">Reaction entries</h2>
+        <p class="t-body section-intro">
+            Each row is a separate deposit under this reaction identity. <code>created_at</code> is not served by
+            <code>reactions/search</code> as of this fetch, so a "deposited" column is omitted rather than shown
+            with a fabricated value.
+        </p>
+        <div class="table-scroll">
+        <table class="data-table" aria-label="Reaction entries for rxn_naeqmg4l5wyqex5cl5tir2vt2y">
+            <thead>
+                <tr>
+                    <th scope="col">Entry</th>
+                    <th scope="col">Reactants</th>
+                    <th scope="col">Products</th>
+                    <th scope="col">Review</th>
+                    <th scope="col">Has kinetics</th>
+                    <th scope="col">Has TS</th>
+                    <th scope="col">Kinetics count</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td data-label="Entry"><a href="reaction-entry.html">rxe_tku6xu2lt3girf2rsiwl5uds4e</a></td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
+                    <td data-label="Has TS"><span class="value-pill">yes</span></td>
+                    <td class="num" data-label="Kinetics count">0</td>
+                </tr>
+                <tr>
+                    <td data-label="Entry"><a href="reaction-entry.html">rxe_kftcgjn7zalusaouojwi23z3gy</a></td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
+                    <td data-label="Has TS"><span class="value-pill">yes</span></td>
+                    <td class="num" data-label="Kinetics count">0</td>
+                </tr>
+                <tr>
+                    <td data-label="Entry"><a href="reaction-entry.html">rxe_xotk57v376vjphflfnoljl4wle</a></td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
+                    <td data-label="Has TS"><span class="value-pill">yes</span></td>
+                    <td class="num" data-label="Kinetics count">0</td>
+                </tr>
+                <tr>
+                    <td data-label="Entry"><a href="reaction-entry.html">rxe_higjwgwvjijez63odl7qga64gm</a></td>
+                    <td data-label="Reactants">
+                        <a href="#">H<sub>4</sub>N<sub>2</sub></a>
+                        <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code>
+                        <button type="button" class="copy-button" aria-label="Copy Reactant reference">Copy</button>
+                    </td>
+                    <td data-label="Products">
+                        <a href="#">H<sub>2</sub></a>
+                        <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · <a href="#">H<sub>2</sub>N<sub>2</sub></a>
+                        <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code>
+                        <button type="button" class="copy-button" aria-label="Copy Product reference">Copy</button>
+                        · Z isomer
+                    </td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Has kinetics"><span class="value-pill value-pill--muted">no</span></td>
+                    <td data-label="Has TS"><span class="value-pill">yes</span></td>
+                    <td class="num" data-label="Kinetics count">0</td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="review-heading">
+        <p class="t-kicker section-kicker">Curation status</p>
+        <h2 class="t-heading-1" id="review-heading">Review, across all entries</h2>
+        <div class="card card--derived coverage-card" data-component="evidence-checklist">
+            <span class="t-label">Review counts across the 4 entries under this reaction</span>
+            <dl class="kv-list coverage-checklist">
+                <div><dt>Approved</dt><dd>0</dd></div>
+                <div><dt>Under review</dt><dd>0</dd></div>
+                <div><dt>Not reviewed</dt><dd>4</dd></div>
+                <div><dt>Deprecated</dt><dd>0</dd></div>
+                <div><dt>Rejected</dt><dd>0</dd></div>
+                <div><dt>Total</dt><dd>4</dd></div>
+            </dl>
+        </div>
+    </section>
+
+    </div>
+    <div class="page-toc">
+        <nav aria-label="Sections on this page">
+            <ul>
+                <li><a href="#entries-heading" class="page-toc-active" aria-current="location">Reaction entries</a></li>
+                <li><a href="#review-heading">Review, across all entries</a></li>
+            </ul>
+        </nav>
+    </div>
+    </div>
+</section>
+</main>
+<footer class="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
+</div>
+</body>
+</html>
