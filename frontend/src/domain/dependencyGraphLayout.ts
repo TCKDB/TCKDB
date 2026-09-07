@@ -320,6 +320,23 @@ function assignBandOrder(
     return order
 }
 
+/** How far the row's OUTERMOST (first/last) sibling's own widest label
+ * extends past that sibling's own node box, beyond the box's plain half-
+ * width -- see `computeWideLayout`'s own comment for why this is the one
+ * gap the inter-sibling `parentGapX`/`childGapX` spacing does not cover.
+ * A ref can carry more than one edge (two roles pointing at the same
+ * node), so this takes the WIDEST label among any edge whose `otherRef`
+ * is that outer box, not just the first edge encountered. Zero for an
+ * empty tier or whenever every label already fits inside its own box. */
+function outerLabelOverhang(tierEdges: DependencyGraphEdgeSpec[], refs: string[], widths: number[]): number {
+    if (refs.length === 0) return 0
+    const labelWidthFor = (ref: string) =>
+        Math.max(0, ...tierEdges.filter((e) => e.otherRef === ref).map((e) => smallTextBoxWidth(e.label)))
+    const leftOverhang = labelWidthFor(refs[0]) / 2 - widths[0] / 2
+    const rightOverhang = labelWidthFor(refs[refs.length - 1]) / 2 - widths[widths.length - 1] / 2
+    return Math.max(0, leftOverhang, rightOverhang)
+}
+
 export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     const { ownRef, ownType, parentRefs, childRefs, edges } = model
     const centreWidth = nodeWidth(ownRef)
@@ -330,9 +347,9 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // The gap between sibling boxes must be wide enough that a label
     // CENTRED ON ITS OWN BOX (see below) cannot reach a neighbour's box
     // OR a neighbour's label -- sized off the widest label in the tier,
-    // not a flat constant, since a long label ("IRC started from this
-    // geometry", 228px) is wider than this app's own minimum node box
-    // (140px).
+    // not a flat constant, since a long label ("starting geometry for the
+    // fine optimisation", 339px) is wider than this app's own minimum
+    // node box (140px).
     const maxParentLabelW = Math.max(0, ...parentEdges.map((e) => smallTextBoxWidth(e.label)))
     const maxChildLabelW = Math.max(0, ...childEdges.map((e) => smallTextBoxWidth(e.label)))
     const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW / 2 + 16)
@@ -343,7 +360,25 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     const parentRowWidth = parentWidths.reduce((s, w) => s + w, 0) + parentGapX * Math.max(0, parentRefs.length - 1)
     const childRowWidth = childWidths.reduce((s, w) => s + w, 0) + childGapX * Math.max(0, childRefs.length - 1)
     const contentWidth = Math.max(centreWidth, parentRowWidth, childRowWidth)
-    const svgWidth = contentWidth + WIDE_MARGIN * 2
+    // The inter-sibling gaps above (`parentGapX`/`childGapX`) only keep a
+    // label clear of its NEIGHBOUR -- the row's own OUTERMOST sibling
+    // (first/last in `parentRefs`/`childRefs`) has no neighbour on its
+    // outward side, only the plain `WIDE_MARGIN`. Once a label is wider
+    // than its own node box (`optimized_from`'s 339px label vs. a
+    // ~290px box), that flat margin alone is not enough and the label's
+    // own background rect sticks out past `[0, svgWidth]` -- MEASURED
+    // (post-review, longer edge-label wording): a lone child box centred
+    // 167.5px from the left edge with a 339px-wide label landed 2px
+    // past x=0. `outerLabelOverhang` is how much EXTRA half-width the
+    // margin needs on top of `WIDE_MARGIN` to cover the worst case
+    // across both tiers; adding it to BOTH sides keeps the row (still
+    // centred on `centreX`) entirely inside the SVG regardless of which
+    // end the long label sits on.
+    const outerMargin = WIDE_MARGIN + Math.max(
+        outerLabelOverhang(parentEdges, parentRefs, parentWidths),
+        outerLabelOverhang(childEdges, childRefs, childWidths),
+    )
+    const svgWidth = contentWidth + outerMargin * 2
     const centreX = svgWidth / 2
 
     const parentEdgeCount = parentEdges.length

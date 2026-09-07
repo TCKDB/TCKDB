@@ -152,11 +152,14 @@ describe("CalculationDependencyGraph — edge labels reuse the sentence-list wor
     })
 
     it("falls back to the raw (spaced) role token for a role with no bespoke wording, same as the sentence list", () => {
+        // All seven CalculationDependencyRole values are bespoke as of the
+        // 2026-09 wording rewrite (`dependencyWording.ts`) -- only a role
+        // this backend enum has not shipped yet exercises the fallback.
         renderGraph([
-            { role: "scan_parent", direction: "child", parent_calculation_ref: "calc_scan_owner", child_calculation_ref: "calc_own_ref" },
+            { role: "some_future_role", direction: "child", parent_calculation_ref: "calc_scan_owner", child_calculation_ref: "calc_own_ref" },
         ])
-        const label = screen.getByTestId("dep-edge-label-calc_scan_owner-calc_own_ref-scan_parent")
-        expect(within(label).getByText("scan parent")).toBeInTheDocument()
+        const label = screen.getByTestId("dep-edge-label-calc_scan_owner-calc_own_ref-some_future_role")
+        expect(within(label).getByText("some future role")).toBeInTheDocument()
     })
 })
 
@@ -192,13 +195,15 @@ describe("CalculationDependencyGraph — accessibility", () => {
         expect(screen.getByRole("img").getAttribute("aria-label")).not.toMatch(/child/)
     })
 
-    it("keeps the sentence list in the DOM as the SVG's text equivalent, with the archive's exact prior wording", () => {
+    it("keeps the sentence list in the DOM as the SVG's text equivalent, with dependencyWording.ts's exact wording", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_htgb7s5nakuw52eqhcxpvilpoq", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref")
         const list = screen.getByRole("list", { name: "Dependency edges, as text" })
         const item = within(list).getByRole("listitem")
-        expect(item.textContent).toBe("This was optimized from calc_htgb7s5nakuw52eqhcxpvilpoq")
+        expect(item.textContent).toBe(
+            "This is the fine optimisation; its starting geometry came from calc_htgb7s5nakuw52eqhcxpvilpoq",
+        )
         expect(within(list).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" })).toHaveAttribute(
             "href", "/calculations/calc_htgb7s5nakuw52eqhcxpvilpoq",
         )

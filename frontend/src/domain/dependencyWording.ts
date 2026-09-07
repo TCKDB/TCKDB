@@ -10,14 +10,30 @@
  * can never fork — a wording change here is a single edit both surfaces
  * pick up.
  *
- * A role with no bespoke entry (only three of the seven exist in today's
- * data: `optimized_from`, `freq_on`, `single_point_on`, `irc_start`; the
- * other three -- `arkane_source`, `irc_followup`, `scan_parent` -- have
- * never been seen on the live archive) falls back to `roleLabel(role)`
- * (the raw token with underscores replaced by spaces) in every view,
- * never to another role's wording -- see the "falls back to the raw role
- * token" test in `CalculationDetailPage.test.tsx`, which this table's
- * fallback path must keep satisfying.
+ * All seven roles are bespoke here (2026-09 rewrite, below) — a role with
+ * no entry falls back to `roleLabel(role)` (the raw token with underscores
+ * replaced by spaces) in every view, never to another role's wording. That
+ * fallback exists for a role this backend enum has not shipped yet, not
+ * for any of the seven current values — see the "falls back to the raw
+ * role token" test in `CalculationDetailPage.test.tsx`, which uses a
+ * synthetic `some_future_role` and which this table's fallback path must
+ * keep satisfying.
+ *
+ * Owner complaint (2026-09): the live graph drew the arrow from an
+ * optimisation DOWN to its frequency child labelled "RUN ON THIS
+ * GEOMETRY" — phrased from the PARENT's own point of view even though the
+ * arrow itself is drawn parent -> child, so the owner read it backwards
+ * ("the optimisation came from them"). Every `edgeLabel` below now reads
+ * in the direction of the arrow, source -> target, and names what the
+ * TARGET is. `childSentence`/`parentSentence` were checked against the
+ * actual parent/child semantics in `backend/app/db/models/calculation.py`
+ * (`CalculationDependency.parent_calculation_id` is the geometry/data
+ * SOURCE, `.child_calculation_id` is what depends on it) and against
+ * `_DEPENDENCY_ROLE_TO_PARENT_TYPE` / `_TS_UPSTREAM_DEPENDENCY_ROLES` /
+ * `_TS_DOWNSTREAM_DEPENDENCY_ROLES` in
+ * `backend/app/services/{calculation_resolution,trust/rubrics}.py` — not
+ * just reworded in place — so each sentence names the calc it is
+ * template'd for correctly as parent or child of the edge.
  */
 
 /** `"foo_bar"` -> `"foo bar"`. The one shared fallback for any role (or
@@ -43,8 +59,9 @@ export interface DependencyRoleWording {
     /**
      * Short, direction-neutral phrase for a graph edge label, always
      * describing the relationship in the parent -> child (data-flow)
-     * direction -- e.g. "optimized from" reads as "parent optimized
-     * from -> child" when placed on the arrow between the two boxes.
+     * direction and naming what the TARGET (child) is -- e.g. "geometry
+     * for frequencies" sits on the freq_on arrow and names the frequency
+     * calculation the arrow points at, not the geometry it left from.
      * No placeholder.
      */
     edgeLabel: string
@@ -52,24 +69,39 @@ export interface DependencyRoleWording {
 
 export const DEPENDENCY_ROLE_WORDING: Record<string, DependencyRoleWording> = {
     optimized_from: {
-        childSentence: "This was optimized from {link}",
-        parentSentence: "{link} was optimized from this result",
-        edgeLabel: "optimized from",
+        childSentence: "This is the fine optimisation; its starting geometry came from {link}",
+        parentSentence: "This coarse optimisation's geometry was the starting point for {link}",
+        edgeLabel: "starting geometry for the fine optimisation",
     },
     freq_on: {
-        childSentence: "This frequency calculation was run on the geometry from {link}",
-        parentSentence: "{link} (frequency) was run on this geometry",
-        edgeLabel: "run on this geometry",
+        childSentence: "This frequency calculation was computed on the geometry from {link}",
+        parentSentence: "Frequencies were computed on this geometry by {link}",
+        edgeLabel: "geometry for frequencies",
     },
     single_point_on: {
-        childSentence: "This single point was run on the geometry from {link}",
-        parentSentence: "{link} single point was run on this geometry",
-        edgeLabel: "run on this geometry",
+        childSentence: "This single point was computed on the geometry from {link}",
+        parentSentence: "The single point was computed on this geometry by {link}",
+        edgeLabel: "geometry for single point",
     },
     irc_start: {
         childSentence: "This IRC started from the geometry of {link}",
         parentSentence: "{link} IRC started from this geometry",
-        edgeLabel: "IRC started from this geometry",
+        edgeLabel: "starting point for the IRC",
+    },
+    irc_followup: {
+        childSentence: "This is the IRC follow-up that continues {link}",
+        parentSentence: "{link} is the IRC follow-up that continues this run",
+        edgeLabel: "continued by the IRC follow-up",
+    },
+    scan_parent: {
+        childSentence: "This optimisation continued from the scan {link}",
+        parentSentence: "{link} continued from this scan",
+        edgeLabel: "parent of the scan",
+    },
+    arkane_source: {
+        childSentence: "This used {link} as an Arkane source",
+        parentSentence: "{link} used this as an Arkane source",
+        edgeLabel: "source for Arkane",
     },
 }
 

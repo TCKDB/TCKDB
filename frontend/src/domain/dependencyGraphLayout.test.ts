@@ -8,6 +8,7 @@ import {
     NODE_RX,
     type GraphLayout,
 } from "./dependencyGraphLayout"
+import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "./dependencyWording"
 
 /**
  * Geometric verification for both layouts, 1-4 siblings per tier -- the
@@ -219,10 +220,12 @@ function assertPathEndpointsOnNodeBorders(layout: GraphLayout, label: string) {
 }
 
 // Realistic ref shape (`calc_<24 lowercase-alnum>`, ~29 chars) and every
-// role this app has bespoke wording for -- `irc_start`'s "IRC started
-// from this geometry" is the longest label this table produces (see
-// `dependencyWording.ts`), so it is deliberately over-represented below.
-const ROLES = ["optimized_from", "freq_on", "single_point_on", "irc_start"]
+// one of the seven roles this app has bespoke wording for (`optimized_from`
+// is the longest label this table produces as of the 2026-09 wording
+// rewrite -- see `dependencyWording.ts` -- but this list is not sorted by
+// length: it is every role, in enum order, so every role's own geometry
+// gets exercised at every sibling count below, not just the longest one).
+const ROLES = Object.keys(DEPENDENCY_ROLE_WORDING)
 
 function refFor(tier: string, index: number): string {
     return `calc_${tier}${index}abcdefghijklmnopqrstuvwx`
@@ -342,15 +345,24 @@ describe("centre node type pill", () => {
 })
 
 describe("longest label fits inside its own background box", () => {
-    it("'IRC started from this geometry' text width does not exceed its background rect width", () => {
+    // Derived from `DEPENDENCY_ROLE_WORDING` itself, not a hardcoded
+    // string -- a wording change (like the 2026-09 rewrite that made
+    // `optimized_from`'s label the longest, not `irc_start`'s) must not
+    // silently stop exercising the actual longest label this table
+    // produces today.
+    const longestRole = Object.keys(DEPENDENCY_ROLE_WORDING).reduce((longest, role) =>
+        dependencyEdgeLabel(role).length > dependencyEdgeLabel(longest).length ? role : longest,
+    )
+    const label = dependencyEdgeLabel(longestRole)
+
+    it(`'${label}' (the ${longestRole} label, currently the longest) text width does not exceed its background rect width`, () => {
         // Same estimate the layout module itself uses -- this pins the
         // CONSTANT, not the layout: a text-vs-box regression (the
         // pre-fix `LABEL_CHAR_W = 6.6` under-measured a real 7.6px/char
         // font) would show up here as `textWidth > bgWidth`.
-        const label = "IRC started from this geometry"
         const model = buildDependencyGraphModel(
             "calc_own_ref_abcdefghijklmnopqrstuv", "opt",
-            [{ role: "irc_start", direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child0abcdefghijklmnopqrstuvwx" }],
+            [{ role: longestRole, direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child0abcdefghijklmnopqrstuvwx" }],
         )
         const layout = computeWideLayout(model)
         const edge = layout.edges[0]
@@ -358,6 +370,20 @@ describe("longest label fits inside its own background box", () => {
         const MEASURED_CHAR_W = 7.6 // this app's real rendered advance width at this font/size/tracking
         const textWidth = label.length * MEASURED_CHAR_W
         expect(textWidth).toBeLessThanOrEqual(edge.labelWidth)
+    })
+
+    it("every label stays within its own background rect width (all seven roles)", () => {
+        const MEASURED_CHAR_W = 7.6
+        for (const role of Object.keys(DEPENDENCY_ROLE_WORDING)) {
+            const roleLabel = dependencyEdgeLabel(role)
+            const model = buildDependencyGraphModel(
+                "calc_own_ref_abcdefghijklmnopqrstuv", "opt",
+                [{ role, direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child0abcdefghijklmnopqrstuvwx" }],
+            )
+            const layout = computeWideLayout(model)
+            const edge = layout.edges[0]
+            expect(roleLabel.length * MEASURED_CHAR_W, `role ${role}`).toBeLessThanOrEqual(edge.labelWidth)
+        }
     })
 })
 
