@@ -22,21 +22,40 @@ function levelText(level: ProductLevels["geometry"]): string {
     return level ? lotLabel(level) : "not recorded"
 }
 
+/** The Energy fact's own value text -- `levelText(level)` when there IS a
+ *  level to show, else `null` when `energy_source` names a real (if
+ *  evidence-free) classification for the absence (`isOtherEnergySource`,
+ *  e.g. `"composite"`/`"imported"`/an unrecognised future value) rather
+ *  than plain "not recorded" -- the pill this record's `energy_source`
+ *  renders already says what IS known about it; "not recorded" would
+ *  misstate that as nothing being known at all. */
+function energyValueText(level: ProductLevels["energy"], source: ProductLevels["energy_source"]): string | null {
+    if (level) return levelText(level)
+    return isOtherEnergySource(source) ? null : "not recorded"
+}
+
 /** The reader-facing explanation for `energy_source`, or `null` when the
  *  label alone already says everything (`"opt"`: the energy line already
- *  reads identically to Geometry's, nothing more to add; an unrecognised
- *  future value renders the same way — no note, not a guessed one). */
+ *  reads identically to Geometry's, nothing more to add). Only ever shown
+ *  when this record's own three levels actually disagree — see the
+ *  `agree` guard at each call site; an agreeing record never gets this
+ *  note, matching the collapsed single-fact display it renders instead. */
 function energySourceNote(source: ProductLevels["energy_source"]): string | null {
     return source === "sp" ? "single point on the optimised geometry" : null
 }
 
-/** `energy_source` values the backend can declare with no calculation
- *  evidence behind them at all — rendered as a pill (never a note, which
- *  would imply the archive derived them the normal way) so a composite or
- *  imported energy is never mistaken for one traced to a source
- *  calculation. */
-function isEvidenceFreeEnergySource(source: ProductLevels["energy_source"]): boolean {
-    return source === "composite" || source === "imported"
+/** `energy_source` values that are neither of the two calculation-derived
+ *  cases (`"opt"`/`"sp"`) nor absent (`null`) -- today `"composite"`/
+ *  `"imported"`, and any future value the backend declares that this
+ *  client doesn't have a specific note for yet (kept as a plain string on
+ *  the wire for exactly this reason — see `api/scientificSchemas.ts`'s
+ *  `productLevelsSchema`). Rendered as a pill (never folded into a note,
+ *  which would imply the archive derived it the normal way, and never
+ *  silently dropped just because this client doesn't recognise the exact
+ *  word) so an energy with no ordinary calculation evidence behind it is
+ *  never mistaken for one traced to a source calculation. */
+function isOtherEnergySource(source: ProductLevels["energy_source"]): boolean {
+    return source != null && source !== "opt" && source !== "sp"
 }
 
 /**
@@ -56,7 +75,8 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
         )
     }
     const note = energySourceNote(levels.energy_source)
-    const evidenceFree = isEvidenceFreeEnergySource(levels.energy_source)
+    const otherSource = isOtherEnergySource(levels.energy_source)
+    const energyText = energyValueText(levels.energy, levels.energy_source)
     return (
         <>
             <div><dt>Geometry</dt><dd>{levelText(levels.geometry)}</dd></div>
@@ -64,10 +84,10 @@ export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
             <div>
                 <dt>Energy</dt>
                 <dd>
-                    {levelText(levels.energy)}
-                    {evidenceFree && (
+                    {energyText}
+                    {otherSource && (
                         <>
-                            {" "}
+                            {energyText && " "}
                             <span className="value-pill value-pill--muted">{levels.energy_source}</span>
                         </>
                     )}
@@ -95,27 +115,40 @@ export function ProductLevelsTableHead({ showThree }: { showThree: boolean }) {
     return <th scope="col">Level of theory</th>
 }
 
-/** Data cells for one row's levels, matching `ProductLevelsTableHead`'s own
- *  `showThree` decision for the whole table — nowrap via `.data`, per the
- *  `.data-table` convention every other identifier-shaped cell on this
- *  table already follows (`design-system.css`'s `.data-table td .data`
- *  rule), so a level of theory never breaks mid-token inside a scrolling
- *  table. */
+/**
+ * Data cells for one row's levels, matching `ProductLevelsTableHead`'s own
+ * `showThree` decision for the whole table — nowrap via `.data`, per the
+ * `.data-table` convention every other identifier-shaped cell on this
+ * table already follows (`design-system.css`'s `.data-table td .data`
+ * rule), so a level of theory never breaks mid-token inside a scrolling
+ * table.
+ *
+ * `showThree` is a TABLE-WIDE decision (does ANY row disagree with
+ * itself), but the Energy note is a PER-ROW one: a table forced into
+ * three columns by one disagreeing row still holds rows that agree with
+ * themselves (e.g. every other record deposited at one uniform level,
+ * still citing a real `sp` role) -- those rows get no note, exactly as
+ * `ProductLevelsFact` would render them collapsed. Emitting the note for
+ * every `energy_source === "sp"` row regardless of that row's own
+ * agreement (the bug this fixes) buried the one row that actually
+ * differs under six identical explanatory notes that added nothing.
+ */
 export function ProductLevelsTableCells({ levels, showThree }: { levels: ProductLevels; showThree: boolean }) {
     if (!showThree) {
         return <td data-label="Level of theory"><LevelCell level={levels.geometry} /></td>
     }
-    const note = energySourceNote(levels.energy_source)
-    const evidenceFree = isEvidenceFreeEnergySource(levels.energy_source)
+    const note = productLevelsAgree(levels) ? null : energySourceNote(levels.energy_source)
+    const otherSource = isOtherEnergySource(levels.energy_source)
+    const energyText = energyValueText(levels.energy, levels.energy_source)
     return (
         <>
             <td data-label="Geometry"><LevelCell level={levels.geometry} /></td>
             <td data-label="Frequencies"><LevelCell level={levels.frequency} /></td>
             <td data-label="Energy">
-                <LevelCell level={levels.energy} />
-                {evidenceFree && (
+                {energyText ? <span className="data">{energyText}</span> : null}
+                {otherSource && (
                     <>
-                        {" "}
+                        {energyText && " "}
                         <span className="value-pill value-pill--muted">{levels.energy_source}</span>
                     </>
                 )}

@@ -1328,6 +1328,22 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
         expect(energyDd).not.toHaveTextContent("single point on the optimised geometry")
     })
 
+    it("shows an UNRECOGNISED energy_source ('ambiguous', not composite/imported/opt/sp) as a muted pill too -- any source word gets a pill, not just the two known ones", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: null, energy_source: "ambiguous" } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        const energyDt = Array.from(card.querySelectorAll("dt")).find((el) => el.textContent === "Energy")!
+        const energyDd = energyDt.nextElementSibling as HTMLElement
+        expect(within(energyDd).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
+        // Never "not recorded" once a source word is present to explain the
+        // absence -- "not recorded" would say nothing at all is known,
+        // which is false here.
+        expect(energyDd).not.toHaveTextContent("not recorded")
+    })
+
     describe("in the 'Records in this group' table", () => {
         function threeIdenticalRecords() {
             return [
@@ -1403,6 +1419,74 @@ describe("EntryStatmechSection -- geometry/frequency/energy levels of theory", (
             const sharedDts = Array.from(groupCard.querySelectorAll("dt")).filter((dt) => !dt.closest("details"))
             expect(sharedDts.map((dt) => dt.textContent)).not.toContain("Geometry")
             expect(sharedDts.map((dt) => dt.textContent)).not.toContain("Level of theory")
+        })
+
+        it("shows the sp note only on the row whose own three levels actually disagree, not on every row citing an sp role", async () => {
+            // All three cite an sp role (energy_source: "sp"), but only
+            // sm_g2's own energy is at a DIFFERENT level than its geometry/
+            // frequency -- sm_g1 and sm_g3 are sp-derived at the SAME level
+            // as their own geometry/frequency (a real, if unremarkable,
+            // case: a dedicated sp job that happens to land on the same
+            // level). Before this fix, all three rows got the note once the
+            // table switched to three columns; only sm_g2 should.
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "sp" },
+                }),
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g2" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" },
+                }),
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g3" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "sp" },
+                }),
+            ]))))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            await within(refsTable).findByText("ccsd(t)/cc-pvtz")
+
+            const headers = within(refsTable).getAllByRole("columnheader").map((cell) => cell.textContent)
+            expect(headers).toEqual(expect.arrayContaining(["Geometry", "Frequencies", "Energy"]))
+
+            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
+            const g2Row = within(refsTable).getByText("sm_g2").closest("tr") as HTMLElement
+            const g3Row = within(refsTable).getByText("sm_g3").closest("tr") as HTMLElement
+            expect(cellAt(g1Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
+            expect(cellAt(g3Row, "Energy")).not.toContain("single point on the optimised geometry")
+        })
+
+        it("shows an unrecognised energy_source as a muted pill in the table too, never 'not recorded'", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: null, energy_source: "ambiguous" },
+                }),
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g2" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" },
+                }),
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_g3" },
+                    levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" },
+                }),
+            ]))))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            // sm_g2 and sm_g3 both report "ccsd(t)/cc-pvtz" -- `findAllByText`
+            // (plural), since `findByText` treats two matches as failure on
+            // every retry until it times out (see the earlier column tests'
+            // own note on this).
+            await within(refsTable).findAllByText("ccsd(t)/cc-pvtz")
+
+            const g1Row = within(refsTable).getByText("sm_g1").closest("tr") as HTMLElement
+            const energyCell = g1Row.querySelector('td[data-label="Energy"]') as HTMLElement
+            expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
+            expect(energyCell).not.toHaveTextContent("not recorded")
         })
     })
 })

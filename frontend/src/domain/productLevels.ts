@@ -117,8 +117,8 @@ export function resolveProductLevels(
  *  else the full method/basis/dispersion/solvent tuple, so two rows that
  *  render the same compact label (`lotLabel`) but differ only in
  *  dispersion or solvent treatment are never treated as the same level. */
-function levelKey(level: LevelOfTheory | null): string {
-    if (!level) return "\u0000null"
+function levelKey(level: LevelOfTheory | null): string | null {
+    if (!level) return null
     if (level.level_of_theory_ref) return `ref:${level.level_of_theory_ref}`
     return JSON.stringify({
         method: level.method,

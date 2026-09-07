@@ -1266,6 +1266,19 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
         expect(energyDd).not.toHaveTextContent("single point on the optimised geometry")
     })
 
+    it("shows an UNRECOGNISED energy_source ('ambiguous', not composite/imported/opt/sp) as a muted pill too, never 'not recorded'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: [levelsRecord({ levels: { geometry: geomLot, frequency: geomLot, energy: null, energy_source: "ambiguous" } })],
+        }))))
+        page()
+        const card = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        await within(card).findByText("Geometry", { selector: "dt" })
+        const energyDt = Array.from(card.querySelectorAll("dt")).find((el) => el.textContent === "Energy")!
+        const energyDd = energyDt.nextElementSibling as HTMLElement
+        expect(within(energyDd).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
+        expect(energyDd).not.toHaveTextContent("not recorded")
+    })
+
     describe("in the identical-values group", () => {
         function threeIdenticalRecords(perRecordOverrides: Record<string, unknown>[]) {
             return perRecordOverrides.map((overrides, index) => levelsRecord({
@@ -1320,6 +1333,49 @@ describe("EntryThermoSection -- geometry/frequency/energy levels of theory", () 
             expect(cellAt(g3Row, "Energy")).toContain("ccsd(t)/cc-pvtz")
             const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
             expect(cellAt(g1Row, "Energy")).toContain("b3lyp/def2tzvp")
+        })
+
+        it("shows the sp note only on the row whose own three levels actually disagree, not on every row citing an sp role", async () => {
+            // All three cite an sp role (energy_source: "sp"), but only
+            // thm_g2's own energy is at a DIFFERENT level than its
+            // geometry/frequency.
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+                records: threeIdenticalRecords([
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "sp" } },
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" } },
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: geomLot, energy_source: "sp" } },
+                ]),
+            }))))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            await within(refsTable).findByText("ccsd(t)/cc-pvtz")
+
+            const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
+            const g2Row = within(refsTable).getByText("thm_g2").closest("tr") as HTMLElement
+            const g3Row = within(refsTable).getByText("thm_g3").closest("tr") as HTMLElement
+            expect(cellAt(g1Row, "Energy")).not.toContain("single point on the optimised geometry")
+            expect(cellAt(g2Row, "Energy")).toContain("single point on the optimised geometry")
+            expect(cellAt(g3Row, "Energy")).not.toContain("single point on the optimised geometry")
+        })
+
+        it("shows an unrecognised energy_source as a muted pill in the table too, never 'not recorded'", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+                records: threeIdenticalRecords([
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: null, energy_source: "ambiguous" } },
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" } },
+                    { levels: { geometry: geomLot, frequency: geomLot, energy: energyLot, energy_source: "sp" } },
+                ]),
+            }))))
+            page()
+            await screen.findByText("3 records with identical values")
+            const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+            await within(refsTable).findAllByText("ccsd(t)/cc-pvtz")
+
+            const g1Row = within(refsTable).getByText("thm_g1").closest("tr") as HTMLElement
+            const energyCell = g1Row.querySelector('td[data-label="Energy"]') as HTMLElement
+            expect(within(energyCell).getByText("ambiguous")).toHaveClass("value-pill", "value-pill--muted")
+            expect(energyCell).not.toHaveTextContent("not recorded")
         })
     })
 })
