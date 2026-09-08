@@ -437,7 +437,6 @@ def test_ts_calc_slot_serves_sp_electronic_energy(db_session):
     """sp slot serves calc_sp_result.electronic_energy_hartree verbatim."""
     from app.db.models.calculation import Calculation
     from app.db.models.common import CalculationType
-
     from tests.services.scientific_read._factories import attach_sp_result
 
     entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
@@ -463,7 +462,6 @@ def test_ts_calc_slot_serves_opt_final_energy(db_session):
     """opt slot serves calc_opt_result.final_energy_hartree verbatim."""
     from app.db.models.calculation import Calculation
     from app.db.models.common import CalculationType
-
     from tests.services.scientific_read._factories import attach_opt_result
 
     entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
@@ -489,7 +487,6 @@ def test_ts_calc_slot_freq_never_reports_an_energy(db_session):
     """freq has no energy column of its own -- always None, never 0."""
     from app.db.models.calculation import Calculation
     from app.db.models.common import CalculationType
-
     from tests.services.scientific_read._factories import attach_freq_result
 
     entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
@@ -544,7 +541,6 @@ def test_ts_calc_slot_review_reflects_the_calculation_own_badge(db_session):
     """
     from app.db.models.calculation import Calculation
     from app.db.models.common import CalculationType, RecordReviewStatus
-
     from tests.services.scientific_read._factories import (
         attach_sp_result,
         set_review,
@@ -630,7 +626,6 @@ def test_ts_calc_energy_and_review_do_not_scale_with_calc_count(db_session):
         TransitionState,
         TransitionStateEntry,
     )
-
     from tests.services.scientific_read._factories import (
         attach_sp_result,
         set_review,
