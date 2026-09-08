@@ -7,14 +7,14 @@ import { IdentifierSearch } from "../components/IdentifierSearch"
 // discovered after. "Browse reactions" earned its "Open index →" label the
 // same way "Browse species" already had it: `/reactions` now renders the
 // real reaction browse (per-kind browse paths change), not the
-// `RecordPlaceholderPage` it used to. "Methods" is still a genuine
-// placeholder (`/methods` -> `RecordPlaceholderPage`), so it keeps "Coming
-// soon" -- that label is a status, not a dead end, and must be removed the
-// moment (and not before) its own destination stops being one.
+// `RecordPlaceholderPage` it used to. "Methods" earns the same label now,
+// for the same reason: `/methods` renders the real methods index
+// (`MethodsIndexPage`, methods-surface plan §4.1), not the placeholder it
+// used to -- the third and last card this rule applied to.
 const destinations = [
     ["Browse species", "Find stable species and species-entry records.", "/species", "⌬", "Open index →"],
     ["Browse reactions", "Follow reaction records and their scientific context.", "/reactions", "⇄", "Open index →"],
-    ["Methods", "Read the computational methods attached to records.", "/methods", "▤", "Coming soon"],
+    ["Methods", "Read the computational methods attached to records.", "/methods", "▤", "Open index →"],
 ] as const
 
 function ArchiveHomePage() {

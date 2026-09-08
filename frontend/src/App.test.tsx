@@ -331,7 +331,13 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // equation heading, rather than forcing it through this shared table's
     // generic `heading`/`ref` string-equality checks (which assumed the
     // old placeholder's fixed "Reaction" title).
-    ["/methods", "Methods", undefined],
+    //
+    // `/methods` is no longer `RecordPlaceholderPage` either (methods-surface
+    // plan PR 3) -- it is `MethodsIndexPage`, which fires its own three
+    // requests (`level-of-theories/browse`, `meta/software`,
+    // `meta/workflow-tools`) this shared table's per-path handler setup
+    // does not provide. Same treatment as `/reactions` above: its own
+    // dedicated test below instead of a row in this table.
 ]
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
@@ -501,6 +507,45 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         expect(window.location.pathname).toBe(path)
+    })
+})
+
+// `/methods` used to render `RecordPlaceholderPage` (a bare "Methods" h1,
+// no data) -- it is `MethodsIndexPage` now (methods-surface plan PR 3),
+// so it gets its own dedicated test, same treatment `/reactions` got
+// above when IT stopped being the placeholder.
+describe("/methods renders the real methods index, not RecordPlaceholderPage", () => {
+    it("shows the Methods h1 and a level-of-theory row from level-of-theories/browse", async () => {
+        server.use(
+            http.get("/api/v1/scientific/level-of-theories/browse", () => HttpResponse.json({
+                records: [{
+                    level_of_theory: {
+                        level_of_theory_ref: "lot_abc", method: "b3lyp", basis: "def2tzvp",
+                        dispersion: null, solvent: null, lot_hash: "hash1", created_at: "2026-07-21T11:59:29Z",
+                    },
+                    evidence_summary: {
+                        calculation_usage_count: 416, has_correction_schemes: true,
+                        has_frequency_scale_factors: true, distinct_software_count: 1,
+                    },
+                    available_sections: { has_correction_schemes: true, has_frequency_scale_factors: true, has_used_by: true, has_software: true },
+                }],
+                pagination: { offset: 0, limit: 200, returned: 1, total: 1 },
+            })),
+            http.get("/api/v1/scientific/meta/software", () => HttpResponse.json({ results: [{ value: "Gaussian", count: 416 }] })),
+            http.get("/api/v1/scientific/meta/workflow-tools", () => HttpResponse.json({ results: [{ value: "ARC", count: 416 }] })),
+        )
+        window.history.replaceState({}, "", "/methods")
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "Methods" })).toBeVisible()
+        expect(window.location.pathname).toBe("/methods")
+        const lotLink = await screen.findByRole("link", { name: "b3lyp" })
+        expect(lotLink).toHaveAttribute("href", "/methods/lot_abc")
+        expect(await screen.findByText("Gaussian")).toBeVisible()
+        expect(await screen.findByText("ARC")).toBeVisible()
+        // The old placeholder rendered an h1 literally reading "Methods" too,
+        // but with no `<code>` ref and none of the vocabulary content this
+        // page fetches -- confirming the three fetched rows above render is
+        // what proves this is genuinely `MethodsIndexPage`.
     })
 })
 

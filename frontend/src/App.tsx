@@ -11,11 +11,14 @@ const BrowsePage = lazy(() => import("./pages/BrowsePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
+const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
+const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
+const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
+const MethodsIndexPage = lazy(() => import("./pages/MethodsIndexPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
 const ReactionEntryPage = lazy(() => import("./pages/ReactionEntryPage"))
 const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
-const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
 const TransitionStateEntryPage = lazy(() => import("./pages/TransitionStateEntryPage"))
@@ -108,7 +111,27 @@ function App() {
                 other kind uses. */}
             <Route path={BROWSE_KIND_PATHS.reaction} element={<BrowsePage />} />
             <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
-            <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
+            {/* Was `<RecordPlaceholderPage kind="Methods" />` -- the last
+                consumer of that component (see its own file: every other
+                route that used to render it now has a real page). Three
+                more routes below it: `/methods/:lotRef` is the real
+                level-of-theory record page (methods-surface plan §4.2);
+                `/methods/schemes/:ecsRef` and
+                `/methods/frequency-scale-factors/:fsfRef` are the thin
+                anchor pages §4.3 gives the two other dead-ref kinds found
+                on this site (an energy-correction-scheme ref, a
+                frequency-scale-factor ref). No ordering hazard between
+                `/methods/:lotRef` and the two three-segment routes below
+                it -- `/methods/schemes/ecs_…` has one more path segment
+                than `/methods/:lotRef` can ever match, so React Router's
+                ranked matching (specificity, not declaration order) sends
+                it to the right route regardless of which is listed first;
+                listed in this order only because it reads best next to
+                the index above it. */}
+            <Route path="/methods" element={<MethodsIndexPage />} />
+            <Route path="/methods/schemes/:ecsRef" element={<CorrectionSchemePage />} />
+            <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
+            <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route

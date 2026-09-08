@@ -14,8 +14,11 @@ import { Link, useLocation } from "react-router-dom"
  * says plainly that the address is wrong and names it, rather than
  * pretending it resolved to something.
  *
- * Shares `.record-placeholder` with `RecordPlaceholderPage` -- both are
- * "the archive did not serve a page here" states, styled the same way.
+ * Shares `.record-placeholder` with `RecordStatus`'s own `Notice` --
+ * both are "the archive did not serve a page here" states, styled the
+ * same way. (Formerly also shared with `RecordPlaceholderPage`, deleted
+ * once `/methods` -- its last consumer -- got a real page; see
+ * `App.tsx`'s own comment on that route.)
  */
 export default function NotFoundPage() {
     const location = useLocation()

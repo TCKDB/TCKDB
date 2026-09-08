@@ -16,6 +16,7 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
 import { useRegisteredSection } from "../hooks/usePageSections"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
@@ -982,7 +983,7 @@ function ProvenanceBlock({ provenance, productLevels, thermoRef, idSuffix = "" }
                 {levelsAgree && (
                     <div>
                         <dt>Level of theory ref</dt>
-                        <dd>{productLevels.geometry?.level_of_theory_ref ? <span className="data">{productLevels.geometry.level_of_theory_ref}</span> : "not recorded"}</dd>
+                        <dd>{productLevels.geometry?.level_of_theory_ref ? <Link className="data" to={levelOfTheoryPath(productLevels.geometry.level_of_theory_ref)}>{productLevels.geometry.level_of_theory_ref}</Link> : "not recorded"}</dd>
                     </div>
                 )}
                 <div>

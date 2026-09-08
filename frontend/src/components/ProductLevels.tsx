@@ -1,4 +1,5 @@
-import { lotLabel } from "../api/scientificSchemas"
+import type { ReactNode } from "react"
+import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 
 // ---------------------------------------------------------------------------
@@ -22,19 +23,29 @@ import { productLevelsAgree, type ProductLevels } from "../domain/productLevels"
 // same level" note under the block when all three genuinely do agree.
 // ---------------------------------------------------------------------------
 
-function levelText(level: ProductLevels["geometry"]): string {
-    return level ? lotLabel(level) : "not recorded"
+/**
+ * `levelNode`'s output is what every existing caller used to render as
+ * plain `lotLabel()` text -- now the SAME text, wrapped in a
+ * `LevelOfTheoryLink` when the level carries a `level_of_theory_ref`, so
+ * `EntryStatmechSection.tsx`/`EntryThermoSection.tsx` (this module's two
+ * callers) get a working `/methods/:lotRef` link on every Geometry/
+ * Frequencies/Energy fact without either file touching `lotLabel()`
+ * directly (methods-surface plan §2.4/§6, `plan-methods-surface-v2`, not
+ * committed to this repo).
+ */
+function levelNode(level: ProductLevels["geometry"]): ReactNode {
+    return level ? <LevelOfTheoryLink levelOfTheory={level} /> : "not recorded"
 }
 
-/** The Energy fact's own value text -- `levelText(level)` when there IS a
+/** The Energy fact's own value node -- `levelNode(level)` when there IS a
  *  level to show, else `null` when `energy_source` names a real (if
  *  evidence-free) classification for the absence (`isOtherEnergySource`,
  *  e.g. `"composite"`/`"imported"`/an unrecognised future value) rather
  *  than plain "not recorded" -- the pill this record's `energy_source`
  *  renders already says what IS known about it; "not recorded" would
  *  misstate that as nothing being known at all. */
-function energyValueText(level: ProductLevels["energy"], source: ProductLevels["energy_source"]): string | null {
-    if (level) return levelText(level)
+function energyValueNode(level: ProductLevels["energy"], source: ProductLevels["energy_source"]): ReactNode | null {
+    if (level) return levelNode(level)
     return isOtherEnergySource(source) ? null : "not recorded"
 }
 
@@ -78,18 +89,18 @@ function isOtherEnergySource(source: ProductLevels["energy_source"]): boolean {
 export function ProductLevelsFact({ levels }: { levels: ProductLevels }) {
     const note = energySourceNote(levels.energy_source)
     const otherSource = isOtherEnergySource(levels.energy_source)
-    const energyText = energyValueText(levels.energy, levels.energy_source)
+    const energyNode = energyValueNode(levels.energy, levels.energy_source)
     return (
         <>
-            <div><dt>Geometry</dt><dd>{levelText(levels.geometry)}</dd></div>
-            <div><dt>Frequencies</dt><dd>{levelText(levels.frequency)}</dd></div>
+            <div><dt>Geometry</dt><dd>{levelNode(levels.geometry)}</dd></div>
+            <div><dt>Frequencies</dt><dd>{levelNode(levels.frequency)}</dd></div>
             <div>
                 <dt>Energy</dt>
                 <dd>
-                    {energyText}
+                    {energyNode}
                     {otherSource && (
                         <>
-                            {energyText && " "}
+                            {energyNode !== null && " "}
                             <span className="value-pill value-pill--muted">{levels.energy_source}</span>
                         </>
                     )}
@@ -153,16 +164,16 @@ export function ProductLevelsTableHead() {
 export function ProductLevelsTableCells({ levels }: { levels: ProductLevels }) {
     const note = energySourceNote(levels.energy_source)
     const otherSource = isOtherEnergySource(levels.energy_source)
-    const energyText = energyValueText(levels.energy, levels.energy_source)
+    const energyNode = energyValueNode(levels.energy, levels.energy_source)
     return (
         <>
             <td data-label="Geometry"><LevelCell level={levels.geometry} /></td>
             <td data-label="Frequencies"><LevelCell level={levels.frequency} /></td>
             <td data-label="Energy">
-                {energyText ? <span className="data">{energyText}</span> : null}
+                {energyNode !== null ? <span className="data">{energyNode}</span> : null}
                 {otherSource && (
                     <>
-                        {energyText && " "}
+                        {energyNode !== null && " "}
                         <span className="value-pill value-pill--muted">{levels.energy_source}</span>
                     </>
                 )}
@@ -173,5 +184,5 @@ export function ProductLevelsTableCells({ levels }: { levels: ProductLevels }) {
 }
 
 function LevelCell({ level }: { level: ProductLevels["geometry"] }) {
-    return level ? <span className="data">{lotLabel(level)}</span> : <>not recorded</>
+    return level ? <span className="data"><LevelOfTheoryLink levelOfTheory={level} /></span> : <>not recorded</>
 }
