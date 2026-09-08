@@ -27,6 +27,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -128,7 +129,11 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
         { label: "Reaction identity", value: entry.reaction_ref, to: `/reactions/${entry.reaction_ref}` },
         ...transitionStates.map((ts) => ({ label: "Transition state", value: ts.transition_state_ref })),
         ...(firstKinetics?.provenance.primary_level_of_theory?.level_of_theory_ref
-            ? [{ label: "Level of theory", value: firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref }]
+            ? [{
+                label: "Level of theory",
+                value: firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref,
+                to: levelOfTheoryPath(firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref),
+            }]
             : []),
         ...(firstKinetics?.provenance.primary_software?.software_release_ref
             ? [{ label: "Software (opt / freq / sp / irc)", value: firstKinetics.provenance.primary_software.software_release_ref }]

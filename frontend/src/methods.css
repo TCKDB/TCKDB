@@ -1,0 +1,63 @@
+/*
+ * Layout only for the methods surface (`/methods`, `/methods/:lotRef`,
+ * `/methods/schemes/:ecsRef`, `/methods/frequency-scale-factors/:fsfRef`).
+ * Everything else these pages render -- `.ledger-section`, `.basin-header`,
+ * `.basin-context`, `.kv-list`, `.data-table`, `.value-pill`, `.disclosure`,
+ * `.empty-projection`, `.note` -- is the shared design-system/record-page
+ * vocabulary (`design-system.css`, `conformer-group.css`,
+ * `record-identity-header.css`), reused rather than reinvented, per this
+ * app's own "one canonical primitive per pattern" convention. No
+ * `text-transform` rule is declared in this file -- see
+ * `text-transform-scientific-guard.test.ts`'s own docstring for why that
+ * matters on a page whose table cells carry raw atom symbols and bond
+ * keys (case-sensitive: an uppercased `S`/`Cl` reads as a different
+ * element).
+ */
+
+.correction-scheme-block {
+    display: grid;
+    gap: var(--s-3);
+    margin: var(--s-5) 0;
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--line);
+}
+
+.correction-scheme-block:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.correction-scheme-absence-list {
+    display: grid;
+    gap: var(--s-2);
+}
+
+.correction-component-group {
+    margin-top: var(--s-4);
+}
+
+.fsf-group {
+    display: grid;
+    gap: var(--s-2);
+    margin: var(--s-3) 0;
+}
+
+.fsf-group p {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-2);
+}
+
+.lot-hash-disclosure .ref-item {
+    margin-top: var(--s-2);
+}
+
+/* The index (`MethodsIndexPage`) reuses `.ledger-section`/`.data-table`
+   for its three tables; this is the one piece those don't already give
+   it -- the intro paragraph beneath the h1, before the first table. */
+.methods-index-intro {
+    max-width: var(--measure-prose);
+    color: var(--ink-2);
+}

@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../calculation-detail.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
-import { lotLabel } from "../api/scientificSchemas"
 import {
     type CalculationArtifact,
     type CalculationConformer,
@@ -30,6 +29,7 @@ import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
+import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
@@ -37,6 +37,7 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
+import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX,
     OPTIMISATION_STAGE_WORDS,
@@ -499,7 +500,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             simply don't carry. */}
                         <dl className="kv-list record-context">
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                            <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
+                            <div><dt>Level of theory</dt><dd>{lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}</dd></div>
                             <div>
                                 <dt>Software</dt>
                                 <dd>{softwareLabel(software) ?? "not recorded"}</dd>
@@ -1280,8 +1281,16 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                     <td data-label="Applied value" className="num">{row.applied_value} {row.applied_value_unit}</td>
                                     <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
                                     <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
-                                    <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "not recorded"}</td>
-                                    <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "not recorded"}</td>
+                                    <td data-label="Scheme ref">
+                                        {row.energy_correction_scheme_ref
+                                            ? <Link to={correctionSchemePath(row.energy_correction_scheme_ref)}>{row.energy_correction_scheme_ref}</Link>
+                                            : "not recorded"}
+                                    </td>
+                                    <td data-label="Frequency scale factor ref">
+                                        {row.frequency_scale_factor_ref
+                                            ? <Link to={frequencyScaleFactorPath(row.frequency_scale_factor_ref)}>{row.frequency_scale_factor_ref}</Link>
+                                            : "not recorded"}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
