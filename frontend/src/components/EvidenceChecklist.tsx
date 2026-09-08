@@ -4,17 +4,28 @@ import "../evidence-checklist.css"
 
 /**
  * The ONE evidence/coverage/validation summary card every record page
- * renders now — `/calculations`, `/conformer-observations`,
- * `/conformer-groups`, `/geometries`, `/reaction-entries`, and the
- * kinetics-record card each render the SAME structure: `.card.card--
- * derived.coverage-card` > a `Disclosure` (`components/Disclosure.tsx`)
- * whose summary is the heading plus a factual roll-up, and whose body is
- * `.kv-list.coverage-checklist` (one column, label above value, exactly
- * `CalculationDetailPage`'s original shape) > an optional `.note`. Its own
- * stylesheet is `evidence-checklist.css`, imported directly by this file
- * (not left to whichever page happens to import `conformer-group.css`) --
- * the same "a component owns its own CSS" convention `RecordIdentityHeader`
- * / `RefsDisclosure` / `EnergyDisplay` each already follow.
+ * renders now. Measured render sites (six routes, seven cards):
+ * `/calculations` (`CalculationDetailPage.tsx`), `/conformer-observations`
+ * (`ConformerObservationPage.tsx`), `/conformer-groups`
+ * (`ConformerGroupPage.tsx`), `/geometries` (`GeometryDetailPage.tsx`),
+ * `/reaction-entries` (`ReactionEntryPage.tsx`, two cards: its own
+ * evidence checklist AND the per-kinetics-record "Evidence completeness"
+ * card rendered inside `ReactionKineticsSection.tsx:228`), and
+ * `/reactions` (`ReactionOverviewPage.tsx`, the cross-entry review-counts
+ * card). `TransitionStateEntryPage.tsx` does NOT render this component
+ * (an earlier version of this docstring claimed it did -- measured zero
+ * instances; that page's own present/absent checklist is a different,
+ * hand-built shape this component's pill CLASSES happen to match, not a
+ * consumer of it). Every one of the real sites renders the SAME
+ * structure: `.card.card--derived.coverage-card` > a `Disclosure`
+ * (`components/Disclosure.tsx`) whose summary is the heading plus a
+ * factual roll-up, and whose body is `.kv-list.coverage-checklist` (one
+ * column, label above value, exactly `CalculationDetailPage`'s original
+ * shape) > an optional `.note`. Its own stylesheet is
+ * `evidence-checklist.css`, imported directly by this file (not left to
+ * whichever page happens to import `conformer-group.css`) -- the same "a
+ * component owns its own CSS" convention `RecordIdentityHeader` /
+ * `RefsDisclosure` / `EnergyDisplay` each already follow.
  *
  * Owner report this fixes ("box sizes are different and the 'Evidence
  * present on this observation' box is in line with the other boxes when I
@@ -33,17 +44,35 @@ import "../evidence-checklist.css"
  * mechanism, so it inherits the one canonical `<details>`/`<summary>`
  * chrome the rest of the app already uses. **Collapsed by default**
  * (`Disclosure`'s own `defaultOpen` contract: read once, on mount; the
- * reader's own click/keyboard toggle owns `open` after that). The
- * collapsed `<summary>` still carries the heading PLUS a factual roll-up
- * of the rows ("N present, M absent") so a reader who never opens the
- * card still learns whether evidence exists — the roll-up is COMPUTED
- * from each row's own `tone` (never a hardcoded string), counting
- * `tone: "pill"` rows as "present" and `tone: "pill-muted"` rows as
- * "absent"; a checklist whose rows carry no tone at all (a plain count
- * list, e.g. `ConformerGroupPage`'s "N of M observations" rows, or this
- * page's own "Review" card) falls back to a plain row count instead,
- * since "present/absent" has no meaning for a row that is not a
- * bounded-vocabulary status in the first place.
+ * reader's own click/keyboard toggle owns `open` after that) -- WHEN a
+ * true roll-up is available. The collapsed `<summary>` carries the
+ * heading PLUS a factual roll-up of the rows so a reader who never opens
+ * the card still learns whether evidence exists, computed one of two
+ * ways:
+ *
+ * - Rows that carry a `tone` (a bounded-vocabulary status checklist):
+ *   the roll-up is COMPUTED from each row's own `tone` (never a
+ *   hardcoded string) as "N present, M absent" -- `tone: "pill"` rows
+ *   count as "present", `tone: "pill-muted"` rows as "absent".
+ * - Rows with no tone at all (a plain count list, e.g.
+ *   `ConformerGroupPage`'s "N of M observations" rows, or a review-counts
+ *   card): "present/absent" has no meaning for these, so the CALLER must
+ *   supply its own true roll-up via the `summary` prop (e.g. "4 joined
+ *   records", "3 of 3 stages covered") -- computed by the caller from the
+ *   same data the rows themselves come from, never restated from the row
+ *   count. **There is no numeric fallback here.** An earlier version of
+ *   this component collapsed behind a bare `"N rows"` count when no
+ *   `summary` was supplied -- MEASURED (independent review) that number
+ *   is actively misleading: it is the number of CATEGORY rows (fixed per
+ *   card shape) restated as if it answered the heading's own question
+ *   ("Joined-record review counts" collapsing to "6 rows" while the real
+ *   total was 4; a conformer group's coverage collapsing to the SAME "3
+ *   rows" whether every stage is fully covered or none is at all -- two
+ *   opposite evidence states rendered identically). When no `summary` is
+ *   supplied and no tone-derived roll-up can be computed, this component
+ *   renders the card OPEN (`defaultOpen={true}`) instead of collapsing it
+ *   behind nothing meaningful -- a reader sees the real rows rather than
+ *   a number that answers a different question than the one asked.
  *
  * `heading` is the box's own `.t-label` — always specific to what the
  * page is summarizing ("Evidence on this calculation" / "Evidence on this
@@ -68,16 +97,23 @@ import "../evidence-checklist.css"
  * "this card came from the shared component" without depending on any
  * one page's own class names or copy.
  *
- * A row's optional `to` links a `tone: "pill"` (presence-asserting) row's
- * value to wherever that thing actually lives on the SAME page (e.g.
- * `"#kinetics-heading"`, matching the plain `<a href="#...">` convention
- * `ReactionKineticsSection.tsx`'s own network-only sentence already uses
- * — no react-router `Link`, no route change, just an in-page anchor).
- * **Never honoured on a `pill-muted` row, or a row with no tone at all,
- * even if a caller passes it anyway** — a link promises a destination; an
- * absence has none, and a link that scrolls nowhere is worse than plain
- * text. A caller whose presence-asserting row has nowhere on the page to
- * point to simply omits `to` — this component never invents a target.
+ * A row's optional `to` links its value to wherever that thing actually
+ * lives on the SAME page (e.g. `"#kinetics-heading"`, matching the plain
+ * `<a href="#...">` convention `ReactionKineticsSection.tsx`'s own
+ * network-only sentence already uses — no react-router `Link`, no route
+ * change, just an in-page anchor). **The invariant this component itself
+ * enforces is narrower than "presence links, absence doesn't": `to` is
+ * only ever honoured when `tone === "pill"`; it is silently ignored on a
+ * `pill-muted` row or a toneless row, even if a caller passes it.** `tone`
+ * is the CALLER's own claim about the row, not something this component
+ * derives from `value` -- so what is actually guaranteed is "a row the
+ * caller marked `pill-muted` never links", not "a row that is factually
+ * an absence never links" (nothing in this codebase mismarks one today;
+ * this is a description of the mechanism, not a claim about every
+ * caller's data). A caller is responsible for setting `tone: "pill"`
+ * ONLY on a row that truly asserts presence, and for omitting `to`
+ * entirely when a presence-asserting row has nowhere on the page to
+ * point to — this component never invents a target.
  */
 export type EvidenceChecklistTone = "pill" | "pill-muted"
 
@@ -89,49 +125,68 @@ export type EvidenceChecklistRow = {
 }
 
 /**
- * The collapsed-summary roll-up text, e.g. "3 present, 2 absent" —
- * computed from each row's own `tone`, never a fixed string. Rows with no
- * tone at all (a plain count, not a bounded-vocabulary status) don't
- * count toward "present"/"absent" either way; when NONE of the rows carry
- * a tone, the roll-up falls back to a bare row count instead of a
- * meaningless "0 present, 0 absent".
+ * The tone-derived collapsed-summary roll-up, e.g. "3 present, 2 absent"
+ * — computed from each row's own `tone`, never a fixed string. Returns
+ * `null` when no roll-up can be computed this way (no row carries a
+ * tone), so the caller of THIS function can tell "nothing to show" apart
+ * from a real "0 present, 0 absent" — collapsing `null` into that string
+ * is exactly the `"N rows"` defect this replaced (see this component's
+ * own docstring): a fixed fallback number that answers a different
+ * question than the heading asks. A caller whose rows carry no tone must
+ * supply the `EvidenceChecklist` `summary` prop with its own true
+ * roll-up instead; this function has no fallback of its own.
  */
-function summarizeRows(rows: EvidenceChecklistRow[]): string {
+function summarizeRows(rows: EvidenceChecklistRow[]): string | null {
     const present = rows.filter((row) => row.tone === "pill").length
     const absent = rows.filter((row) => row.tone === "pill-muted").length
-    if (present + absent === 0) {
-        return rows.length === 1 ? "1 row" : `${rows.length} rows`
-    }
+    if (present + absent === 0) return null
     return `${present} present, ${absent} absent`
 }
 
 function RowValue({ row }: { row: EvidenceChecklistRow }) {
     if (!row.tone) return <>{row.value}</>
     const className = row.tone === "pill-muted" ? "value-pill value-pill--muted" : "value-pill"
-    // Only a `tone: "pill"` (presence-asserting) row may ever link -- see
-    // this component's own docstring for why `to` on a muted/toneless row
-    // is silently ignored rather than honoured.
+    // Only a row the CALLER marked `tone: "pill"` may ever link -- see
+    // this component's own docstring for the exact invariant (`tone` is
+    // the caller's claim, not something this component verifies).
     if (row.tone === "pill" && row.to) {
         return <a className={className} href={row.to}>{row.value}</a>
     }
     return <span className={className}>{row.value}</span>
 }
 
-export function EvidenceChecklist({ heading, rows, note }: {
+export function EvidenceChecklist({ heading, rows, note, summary }: {
     heading: ReactNode
     rows: EvidenceChecklistRow[]
     note?: ReactNode
+    /**
+     * A true roll-up for a checklist whose rows carry no `tone` at all
+     * (so `summarizeRows` cannot compute one) — e.g. "4 joined records"
+     * for a review-counts card, or "3 of 3 stages covered" for a
+     * per-stage coverage card. Computed by the CALLER from the same
+     * underlying data the rows themselves come from (never the row
+     * count) — see this component's own docstring for the defect this
+     * fixes. Ignored when `summarizeRows` already found a tone-derived
+     * roll-up (a toned checklist's roll-up is always the computed one).
+     */
+    summary?: ReactNode
 }) {
+    const rollup = summarizeRows(rows) ?? summary ?? null
+    // No roll-up at all (no tone-derived one, and the caller supplied no
+    // `summary`) -- open by default rather than collapsing behind
+    // nothing meaningful. See this component's own docstring: this is
+    // what replaced the misleading `"N rows"` fallback.
+    const defaultOpen = rollup === null
     return (
         <div className="card card--derived coverage-card" data-component="evidence-checklist">
             <Disclosure
                 summary={(
                     <>
                         <span className="t-label">{heading}</span>
-                        <span className="coverage-checklist-summary">{summarizeRows(rows)}</span>
+                        {rollup !== null && <span className="coverage-checklist-summary">{rollup}</span>}
                     </>
                 )}
-                defaultOpen={false}
+                defaultOpen={defaultOpen}
             >
                 <dl className="kv-list coverage-checklist">
                     {rows.map((row, index) => (

@@ -188,6 +188,37 @@ describe("ConformerGroupPage", () => {
         }
     })
 
+    // Independent review: `toHaveTextContent` above is true whether or not
+    // the card is open -- `EvidenceChecklist` collapses this card by
+    // default (item 2), so confirm with a real visibility check that
+    // opening it (the only way a reader reaches these rows) surfaces the
+    // same content. Also pins the TRUE roll-up (`stageCoverageSummary`,
+    // `ConformerGroupPage.tsx`) this fixture computes: opt=2/2 (covered),
+    // freq=1/2, sp=1/2 (both NOT covered) -> "1 of 3 stages covered", not
+    // a bare row count ("3 rows" reads identically for 1-of-3 and 3-of-3).
+    it("the checklist card is collapsed behind a TRUE stage-coverage roll-up, and opening it makes the rows actually visible", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+
+        const card = screen.getByLabelText("Basin evidence checklist").querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
+        expect(rollup).toHaveTextContent("1 of 3 stages covered")
+
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+
+        fireEvent.click(details.querySelector("summary")!)
+        expect(details.open).toBe(true)
+        expect(checklist).toBeVisible()
+        const optDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Optimisation")
+        const optDd = optDt?.nextElementSibling as HTMLElement
+        expect(optDd).toBeVisible()
+        expect(optDd.textContent).toBe("2 of 2 observations")
+    })
+
     // Post-review (review of 2bd17511): number-first tile markup -- and
     // specifically, THIS page's "Calculation rows" tile is the one caller
     // with a `<small>` detail line ("N optimisation chains"). The detail

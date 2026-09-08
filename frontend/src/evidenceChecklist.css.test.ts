@@ -57,21 +57,32 @@ function declaredIn(className: string): string[] {
 }
 
 /**
- * `.coverage-card`/`.coverage-checklist` are `EvidenceChecklist.tsx`'s own
- * classes -- declared in exactly one place, its own stylesheet,
- * `evidence-checklist.css` (the repo's "a component owns its own CSS"
- * convention: `RecordIdentityHeader` -> `record-identity-header.css`,
- * `RefsDisclosure` -> `refs-disclosure.css`, `EnergyDisplay` -> `energy-
- * display.css`). `.ledger-summary--single` is a `.ledger-summary` variant
- * used directly in page markup (not a class the component itself
- * renders), so it stays in `conformer-group.css` next to `.ledger-
- * summary`. `.validation-card` (the geometry page's former bespoke,
- * non-`--derived` evidence-box class) is retired outright -- declared
- * nowhere.
+ * `.coverage-checklist` is `EvidenceChecklist.tsx`'s own class -- declared
+ * in exactly one place, its own stylesheet, `evidence-checklist.css` (the
+ * repo's "a component owns its own CSS" convention: `RecordIdentityHeader`
+ * -> `record-identity-header.css`, `RefsDisclosure` -> `refs-disclosure.
+ * css`, `EnergyDisplay` -> `energy-display.css`). `.ledger-summary--single`
+ * is a `.ledger-summary` variant used directly in page markup (not a
+ * class the component itself renders), so it stays in `conformer-
+ * group.css` next to `.ledger-summary`. `.validation-card` (the geometry
+ * page's former bespoke, non-`--derived` evidence-box class) is retired
+ * outright -- declared nowhere.
+ *
+ * `.coverage-card` (RETIRED as a styled selector, independent review, this
+ * branch): it used to carry exactly one rule, `.coverage-card > .t-label
+ * { display: block }` -- see the comment below this describe block for
+ * why that rule is gone. `.coverage-card` itself gets its box chrome
+ * entirely from the shared `.card`/`.card--derived` classes
+ * (design-system.css); it has never had a bare `.coverage-card { ... }`
+ * rule of its own, so with the direct-child rule gone it is declared
+ * NOWHERE now, the same as `.validation-card` below -- it survives only
+ * as a marker class (`EvidenceChecklist.tsx`'s own JSX + `evidence
+ * checklist.css.test.ts`'s `data-component` marker, and every page-level
+ * test's `.card.card--derived.coverage-card` query hook).
  */
 describe("evidence checklist card: each selector has exactly one CSS home (or none, for the retired one)", () => {
-    it(".coverage-card is declared only in evidence-checklist.css", () => {
-        expect(declaredIn(".coverage-card")).toEqual(["evidence-checklist.css"])
+    it(".coverage-card is declared nowhere -- retired as a styled selector, survives only as a marker class", () => {
+        expect(declaredIn(".coverage-card")).toEqual([])
     })
 
     it(".coverage-checklist is declared only in evidence-checklist.css", () => {
@@ -87,26 +98,22 @@ describe("evidence checklist card: each selector has exactly one CSS home (or no
     })
 })
 
-/**
- * Item 1 fix (review of 2bd17511): retiring the old `.coverage-card span
- * { display: block }` (which used to style BOTH the heading span and,
- * via a sibling `.coverage-card strong` rule, the pre-`EvidenceChecklist`
- * inline value) also un-blocked the `<span class="t-label">` HEADING --
- * un-scoped, a bare `<span>` computes `display: inline` by default.
- * MEASURED: the heading's own box lost ~4px, and the `<dl>` below it (a
- * block sibling, unaffected in itself) sat 4px higher for it -- the whole
- * card shrunk by that much on all four pages. `.coverage-card > .t-label`
- * (direct-child, scoped to exactly the heading this component renders)
- * is the fix.
- */
-describe(".coverage-card > .t-label heading is display: block (item 1, post-review of 2bd17511)", () => {
-    it("evidence-checklist.css declares .coverage-card > .t-label { display: block }", () => {
-        const css = stripComments(ALL_STYLESHEETS["evidence-checklist.css"] ?? "")
-        const match = /\.coverage-card\s*>\s*\.t-label\s*\{([^}]*)\}/.exec(css)
-        expect(match, "no .coverage-card > .t-label rule found in evidence-checklist.css").not.toBeNull()
-        expect(match![1]).toMatch(/display:\s*block/)
-    })
-})
+// The `.coverage-card > .t-label { display: block }` rule this file used
+// to pin here is RETIRED (independent review, this branch): the heading
+// moved inside `Disclosure`'s own `<summary>` when the card became
+// collapsible, so that selector is no longer a direct-child path and
+// matches nothing rendered -- a test pinning its SOURCE TEXT would go red
+// the moment someone deletes the (now dead) rule, without the rendered
+// page ever changing, which is a substring guard, not a behaviour guard.
+// The rule is genuinely unnecessary now, not replaced by anything: the
+// heading and the `<dl>` it used to protect the spacing of are no longer
+// adjacent siblings at all (heading in `<summary>`, `<dl>` in a separate
+// `.disclosure-body`), so the heading's own `display` (still plain
+// `inline`, MEASURED -- nothing blockifies it) can no longer affect the
+// `<dl>`'s position. Pinned as a DOM/structure assertion in
+// `EvidenceChecklist.test.tsx` instead (heading and checklist proven to
+// sit in different disclosure regions), where a regression actually
+// means something rendered differently.
 
 // Mutation check: the FIRST version of this guard (`^\s*SELECTOR\s*\{`)
 // would have let every one of these through undetected -- each is a real

@@ -1,7 +1,9 @@
 /*
  * EvidenceChecklist -- the evidence/coverage/validation summary card every
  * record page renders now (`/calculations`, `/conformer-observations`,
- * `/conformer-groups`, `/geometries`). Own stylesheet per this project's
+ * `/conformer-groups`, `/geometries`, `/reaction-entries`, `/reactions` --
+ * see `EvidenceChecklist.tsx`'s own docstring for the full, measured list
+ * of render sites). Own stylesheet per this project's
  * convention (`RecordIdentityHeader` -> `record-identity-header.css`,
  * `RefsDisclosure` -> `refs-disclosure.css`, `EnergyDisplay` -> `energy-
  * display.css`): a component's styling should not depend on some OTHER
@@ -28,21 +30,32 @@
  * `<span class="t-label">` HEADING -- that rule was styling two different
  * things at once (the heading span AND, via `.coverage-card strong`
  * alongside it, the old inline value), and only the heading survived
- * into `EvidenceChecklist`. Un-scoped, the heading now computes `display:
- * inline` (a bare `<span>`'s UA default), MEASURED: the heading's own box
- * drops ~4px, and the `<dl>` that follows it drops with it -- the whole
- * card shrinks by that much on every one of the four pages (237px ->
- * 242px follows the OTHER direction, restoring the block box back to its
- * correct height; the regression was the shrink, not the growth).
- * `.coverage-card > .t-label` (direct-child, scoped to exactly the
- * heading span this component renders, never any OTHER `.t-label`
- * elsewhere on a page that happens to also sit inside a `.coverage-card`
- * ancestor for unrelated layout reasons) is the fix -- pinned by
- * `evidence-checklist.css.test.ts`.
+ * into `EvidenceChecklist`. Un-scoped, the heading used to compute
+ * `display: inline` (a bare `<span>`'s UA default), MEASURED: the
+ * heading's own box lost ~4px, and the `<dl>` that followed it dropped
+ * with it -- the whole card shrunk by that much. That fix used to live
+ * HERE, as a `.coverage-card > .t-label { display: block }` rule.
+ *
+ * RETIRED (independent review, this branch): the heading moved inside
+ * `Disclosure`'s own `<summary>` when this card became collapsible, so
+ * `.coverage-card > .t-label` is no longer a direct-child path at all --
+ * it now matches nothing (`document.querySelectorAll('.coverage-card >
+ * .t-label').length === 0` on every page). Deleting it changes nothing
+ * rendered, but NOT because anything blockifies the heading now --
+ * MEASURED, its computed `display` is still plain `inline`, the same UA
+ * default a bare `<span>` always had. The rule is genuinely unnecessary
+ * because the LAYOUT RELATIONSHIP it protected no longer exists: the
+ * heading and the `<dl>` are no longer adjacent siblings whose box
+ * heights interact at all -- the heading lives inside `<summary>`, the
+ * `<dl>` lives inside a separate `.disclosure-body` sibling of that
+ * `<summary>` (`Disclosure.tsx`). An inline heading cannot shrink a box
+ * it is not stacked against. Pinned as a DOM/structure assertion in
+ * `EvidenceChecklist.test.tsx` (heading and checklist proven to sit in
+ * different disclosure regions), not as CSS-source text here -- a test
+ * asserting this file's own text can go red for "someone deleted a line"
+ * without the rendered page ever changing, which is not a meaningful
+ * regression signal.
  */
-.coverage-card > .t-label {
-    display: block;
-}
 
 /* `.coverage-checklist` -- the `<dl>` `EvidenceChecklist` renders its rows
    into. `kv-list` (`design-system.css`) supplies the label-above-value
@@ -62,10 +75,19 @@
 }
 
 /* The collapsed-summary roll-up (`EvidenceChecklist.tsx`'s own `summary`
-   content, alongside the `.t-label` heading) -- muted, matching the
-   `Disclosure` primitive's own `.disclosure-count` treatment (design-
-   system.css), so a reader's eye lands on the heading first and the
-   present/absent counts read as supporting detail, not a second heading. */
+   content, alongside the `.t-label` heading) -- meant to read as quieter
+   than the heading, so a reader's eye lands on the heading first and the
+   roll-up reads as supporting detail, not a second heading.
+   MEASURED (independent review): muting only the COLOUR was not enough --
+   with no `font` of its own, this span inherited `.disclosure > summary`'s
+   own `font: var(--type-ui-font)` (13px/600, design-system.css), which is
+   LARGER and BOLDER than the `.t-label` heading beside it (.72rem/400,
+   `--type-label-font`) -- the roll-up was the loudest text on the
+   collapsed card, the opposite of this comment's own stated intent. Given
+   its own explicit `font` here (smaller AND lighter than the heading, not
+   just a different colour) so the visual weight actually matches what the
+   card is meant to look like. */
 .coverage-checklist-summary {
     color: var(--muted);
+    font: 400 .72rem/1.3 var(--sans);
 }

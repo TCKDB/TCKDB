@@ -17,6 +17,27 @@ const statusLabel = (status: string) => status.replaceAll("_", " ")
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
 type GeometryLink = NonNullable<ConformerGroup["geometries"]>[number]
 
+/**
+ * The TRUE collapsed-summary roll-up for the "Evidence on this conformer
+ * group" checklist below -- its three rows are plain counts ("N of M
+ * observations"), no `tone`, so `EvidenceChecklist` cannot compute a
+ * present/absent roll-up on its own and needs this via its `summary`
+ * prop (see that component's own docstring for why a bare row count is
+ * not an acceptable stand-in: "3 rows" reads identically whether every
+ * stage is fully covered or none is, on a card whose whole job is to
+ * report evidence). A stage counts as COVERED only when every deposited
+ * observation carries it (`count === total`); with zero observations
+ * nothing is covered, never vacuously "all 3" from `0 === 0`.
+ */
+function stageCoverageSummary(
+    coverage: { opt: number; freq: number; sp: number },
+    total: number,
+): string {
+    const stages = [coverage.opt, coverage.freq, coverage.sp]
+    const covered = total > 0 ? stages.filter((count) => count === total).length : 0
+    return `${covered} of ${stages.length} stages covered`
+}
+
 export default function ConformerGroupPage() {
     const { groupRef = "" } = useParams<{ groupRef: string }>()
     const state = useConformerGroup(groupRef)
@@ -228,6 +249,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
             <section className="ledger-summary ledger-summary--single" aria-label="Basin evidence checklist">
                 <EvidenceChecklist
                     heading="Evidence on this conformer group"
+                    summary={stageCoverageSummary(evidence.evidence_coverage, summary.total)}
                     rows={[
                         { label: "Optimisation", value: `${evidence.evidence_coverage.opt} of ${summary.total} observations` },
                         { label: "Frequency", value: `${evidence.evidence_coverage.freq} of ${summary.total} observations` },

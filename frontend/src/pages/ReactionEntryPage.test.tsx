@@ -535,6 +535,35 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
         ])
     })
 
+    // Independent review: `EvidenceChecklist`'s "N rows" fallback used to
+    // collapse this card behind a NUMBER THAT NEVER CHANGES (the card
+    // always has 6 category rows), regardless of the real total -- MEASURED
+    // live, `rxe_h3z3f7tjfsj3gbvvh7lmmpikx4` collapsed to "6 rows" while the
+    // true total was 4. This fixture's `total: 39` (distinct from the fixed
+    // 6-row count) proves the collapsed summary is wired to the real
+    // `review_summary.total`, not the row list's own length.
+    it("the Review card's collapsed summary is the TRUE total joined records, never the fixed 6-row count", async () => {
+        handleFull(mockFull({
+            review_summary: { approved: 3, under_review: 5, not_reviewed: 7, deprecated: 11, rejected: 13, total: 39 },
+        }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const reviewSection = container.querySelector('section[aria-labelledby="review-heading"]')!
+        const card = reviewSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
+        expect(rollup).toHaveTextContent("39 joined records")
+        expect(rollup.textContent).not.toContain("6 rows")
+
+        // Still collapsed by default (a real summary was supplied) --
+        // opening it reaches the same rows the test above already pinned.
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+        fireEvent.click(details.querySelector("summary")!)
+        expect(checklist).toBeVisible()
+    })
+
     it("the Participants table's SMILES column renders each participant's own served SMILES, never blank", async () => {
         handleFull(mockFull())
         const { container } = page()
@@ -783,8 +812,18 @@ describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-onl
         expect(tsLink).toHaveAttribute("href", "#ts-heading")
     })
 
-    // MUTATION GUARD (mandatory mutation table item b): making an absence
-    // ("none deposited") render as a link must turn this red.
+    // MUTATION GUARD (mandatory mutation table item b): guards THIS PAGE's
+    // own conditional -- it only ever passes `to` alongside `tone: "pill"`
+    // on the Kinetics/TS-entries/network rows (see the `...(x.length ? {
+    // to: "..." } : {})` spreads above). It does NOT independently prove
+    // the shared component's own enforcement: under a mutation of
+    // `EvidenceChecklist`'s `RowValue` alone (honouring `to` regardless of
+    // `tone`), this page never supplies `to` on a muted row in the first
+    // place, so this test stays green -- `EvidenceChecklist.test.tsx`'s
+    // own "MUTATION GUARD: 'to' on a pill-muted row is silently ignored"
+    // test is the one that catches THAT mutation. Still worth keeping:
+    // it's the guard against a regression in THIS page's own wiring (e.g.
+    // someone adding `to` to the Atom map row "for consistency").
     it("MUTATION GUARD: 'none deposited' rows (Atom map with no atom maps) are never links", async () => {
         handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, atom_maps: [] } }))
         const { container } = page()

@@ -23,6 +23,35 @@ describe("EvidenceChecklist", () => {
         expect(heading).toHaveClass("t-label")
     })
 
+    // Independent review: `evidence-checklist.css` used to carry a
+    // `.coverage-card > .t-label { display: block }` rule guarding a ~4px
+    // "heading renders inline, card shrinks" regression from BEFORE this
+    // card was collapsible, when the heading span and the `<dl>` sat as
+    // direct, adjacent siblings inside `.coverage-card` (the heading's own
+    // box height affected where the `<dl>` sat directly below it). Now
+    // RETIRED: the heading lives inside `Disclosure`'s own `<summary>`,
+    // and the `<dl>` lives inside a SEPARATE `.disclosure-body` sibling of
+    // that `<summary>` -- they are no longer adjacent siblings at all, so
+    // the heading's own `display` value cannot affect the `<dl>`'s
+    // position any more, regardless of what it computes to (MEASURED:
+    // still `inline`, same UA default a bare `<span>` always had -- no
+    // blockification rescues it, and none is needed). This is pinned
+    // structurally below (heading and checklist are proven to sit in
+    // different disclosure regions) rather than as a `display` assertion
+    // that would just restate an unchanged UA default.
+    it("the heading (inside <summary>) and the checklist <dl> (inside .disclosure-body) are separate siblings, not adjacent boxes whose heights interact", () => {
+        const { container } = render(
+            <EvidenceChecklist heading="Evidence on this thing" rows={[{ label: "Optimisation", value: "present" }]} />,
+        )
+        const summary = container.querySelector(".coverage-card summary") as HTMLElement
+        const body = container.querySelector(".coverage-card .disclosure-body") as HTMLElement
+        expect(within(summary).getByText("Evidence on this thing")).toBeInTheDocument()
+        expect(body.querySelector(".coverage-checklist")).not.toBeNull()
+        // The heading is NOT inside the body the checklist lives in.
+        expect(summary.contains(body)).toBe(false)
+        expect(body.contains(summary)).toBe(false)
+    })
+
     // The marker a page-level test uses to confirm "this card came from the
     // shared component" without depending on any one page's own class names
     // or copy (see e.g. `CalculationDetailPage.test.tsx`'s own use of it).
@@ -149,7 +178,7 @@ describe("EvidenceChecklist", () => {
 
         // Mutation table (b): dropping `defaultOpen={false}` (or bypassing
         // `Disclosure` to render the body unconditionally) would make this
-        // fail -- the whole point of item 2 is that the card starts closed.
+        // fail.
         it("MUTATION GUARD: a card would fail the closed-by-default assertion if it rendered open", () => {
             const { container } = render(
                 <EvidenceChecklist heading="Evidence" rows={[{ label: "A", value: "present", tone: "pill" }]} />,
@@ -196,19 +225,6 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist-summary")).toHaveTextContent("0 present, 2 absent")
         })
 
-        it("falls back to a plain row count when no row carries a tone at all (a count list, not a status checklist)", () => {
-            const { container } = render(
-                <EvidenceChecklist
-                    heading="Evidence"
-                    rows={[
-                        { label: "Optimisation", value: "2 of 2 observations" },
-                        { label: "Frequency", value: "1 of 2 observations" },
-                    ]}
-                />,
-            )
-            expect(container.querySelector(".coverage-checklist-summary")).toHaveTextContent("2 rows")
-        })
-
         // Mutation table (c): a summary that stops rendering the computed
         // roll-up (e.g. reverting to just the bare heading) fails this.
         it("MUTATION GUARD: the summary carries digits from the roll-up, not just the heading text", () => {
@@ -224,12 +240,117 @@ describe("EvidenceChecklist", () => {
             const summary = container.querySelector(".coverage-card summary") as HTMLElement
             expect(summary.textContent).toMatch(/\d+ present, \d+ absent/)
         })
+
+        // Independent review, this branch: an EARLIER version of this
+        // component fell back to a bare `"N rows"` count when no row
+        // carried a tone -- MEASURED on live data as actively misleading,
+        // since that number is the CARD'S OWN fixed row count (constant
+        // per card shape, e.g. always 6 for the reaction-entry review
+        // card), not a fact about the archive. It restated a different
+        // question's answer as if it answered the heading's own: a
+        // reaction entry with 4 real joined records collapsed to "6
+        // rows"; two conformer groups with opposite coverage (every stage
+        // fully covered vs. none at all) BOTH collapsed to "3 rows",
+        // indistinguishable from each other. There is no numeric fallback
+        // any more -- see the two describe blocks below for what replaced
+        // it.
+        describe("no numeric row-count fallback -- untoned rows need a caller-supplied `summary`, or the card opens instead", () => {
+            it("a caller-supplied `summary` is used when no tone-derived roll-up exists", () => {
+                const { container } = render(
+                    <EvidenceChecklist
+                        heading="Joined-record review counts"
+                        summary="4 joined records"
+                        rows={[
+                            { label: "Approved", value: 1 },
+                            { label: "Under review", value: 1 },
+                            { label: "Not reviewed", value: 1 },
+                            { label: "Deprecated", value: 0 },
+                            { label: "Rejected", value: 0 },
+                            { label: "Total joined records", value: 4 },
+                        ]}
+                    />,
+                )
+                const rollup = container.querySelector(".coverage-checklist-summary") as HTMLElement
+                expect(rollup).toHaveTextContent("4 joined records")
+                // Still collapsed by default -- a real summary was supplied.
+                const details = container.querySelector("details") as HTMLDetailsElement
+                expect(details.open).toBe(false)
+            })
+
+            // MANDATORY guard (independent review): fails if a future
+            // regression ever makes the ROW COUNT the only number in a
+            // collapsed summary again, toned or not.
+            it("MUTATION GUARD: the collapsed summary's only number is never the row count -- it must come from the data, not the row list's own length", () => {
+                const distinctFromRowCount = "4 joined records" // rows.length below is 6
+                const { container } = render(
+                    <EvidenceChecklist
+                        heading="Joined-record review counts"
+                        summary={distinctFromRowCount}
+                        rows={[
+                            { label: "Approved", value: 1 },
+                            { label: "Under review", value: 1 },
+                            { label: "Not reviewed", value: 1 },
+                            { label: "Deprecated", value: 0 },
+                            { label: "Rejected", value: 0 },
+                            { label: "Total joined records", value: 4 },
+                        ]}
+                    />,
+                )
+                const rollup = container.querySelector(".coverage-checklist-summary") as HTMLElement
+                const digits = rollup.textContent?.match(/\d+/g) ?? []
+                // The row list has 6 entries -- the roll-up's own leading
+                // number must NOT be that count.
+                expect(digits[0]).not.toBe("6")
+                expect(rollup).toHaveTextContent("4 joined records")
+            })
+
+            it("renders the card OPEN by default when rows carry no tone and the caller supplies no `summary` -- never collapses behind nothing", () => {
+                const { container } = render(
+                    <EvidenceChecklist
+                        heading="Evidence on this conformer group"
+                        rows={[
+                            { label: "Optimisation", value: "2 of 2 observations" },
+                            { label: "Frequency", value: "1 of 2 observations" },
+                        ]}
+                    />,
+                )
+                const details = container.querySelector("details") as HTMLDetailsElement
+                expect(details.open).toBe(true)
+                expect(container.querySelector(".coverage-checklist")).toBeVisible()
+                // No roll-up span at all -- nothing to show, so nothing shown.
+                expect(container.querySelector(".coverage-checklist-summary")).toBeNull()
+            })
+
+            // Mutation table (d): restoring the old `"N rows"` fallback (or
+            // otherwise rendering a numeric summary with no real `summary`
+            // and no toned rows) must turn this red.
+            it("MUTATION GUARD: no `summary` and no toned rows means no numeric roll-up and an OPEN card", () => {
+                const { container } = render(
+                    <EvidenceChecklist
+                        heading="Evidence"
+                        rows={[
+                            { label: "Optimisation", value: "2 of 2 observations" },
+                            { label: "Frequency", value: "1 of 2 observations" },
+                            { label: "Single point", value: "0 of 2 observations" },
+                        ]}
+                    />,
+                )
+                const details = container.querySelector("details") as HTMLDetailsElement
+                expect(details.hasAttribute("open")).toBe(true)
+                const rollup = container.querySelector(".coverage-checklist-summary")
+                expect(rollup).toBeNull()
+            })
+        })
     })
 
-    // Item 3 (reaction-entry page): a pill asserting PRESENCE can opt into
-    // a same-page link; an absence never can, even if a caller passes `to`
-    // on a muted row by mistake.
-    describe("row links -- only a presence-asserting (tone: 'pill') row may ever link", () => {
+    // Item 3 (reaction-entry page): a row the caller marked `tone: "pill"`
+    // can opt into a same-page link. What this component itself enforces
+    // is narrower than "presence links, absence doesn't" -- `tone` is the
+    // CALLER's own claim, not something derived from `value` -- so the
+    // real, testable invariant is "a `pill-muted`/toneless row never
+    // links, even if a caller passes `to` on one" (see this component's
+    // own docstring for the exact wording).
+    describe("row links -- only a row the caller marked tone: 'pill' may ever link", () => {
         it("renders a pill row's value as a real <a> when tone is 'pill' and 'to' is given", () => {
             const { container } = render(
                 <EvidenceChecklist
@@ -253,12 +374,10 @@ describe("EvidenceChecklist", () => {
             expect(container.querySelector(".coverage-checklist .value-pill")?.tagName).toBe("SPAN")
         })
 
-        // MANDATORY per the mutation table (a is the participants-table
-        // case; this is the checklist-component analogue): "none
-        // deposited"/absence never becomes a link even when a caller
-        // supplies 'to' on a muted row -- a link promises a destination,
-        // an absence has none.
-        it("MUTATION GUARD: 'to' on a pill-muted row is silently ignored -- an absence never links", () => {
+        // MANDATORY per the mutation table: `to` on a `pill-muted` row is
+        // silently ignored by THIS component, regardless of what a caller
+        // passes -- the enforcement lives here, not in caller discipline.
+        it("MUTATION GUARD: 'to' on a pill-muted row is silently ignored, even though the caller supplied it", () => {
             const { container } = render(
                 <EvidenceChecklist
                     heading="Evidence"

@@ -283,6 +283,16 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <SectionHeading id="review-heading">Review</SectionHeading>
                     <EvidenceChecklist
                         heading="Joined-record review counts"
+                        // These rows carry no `tone` (they're counts, not a
+                        // present/absent checklist), so `EvidenceChecklist`
+                        // cannot compute a collapsed-summary roll-up on its
+                        // own -- `summary` supplies the TRUE total from the
+                        // same `review_summary.total` the "Total joined
+                        // records" row itself reads, never the row COUNT
+                        // (fixed at 6 category rows regardless of the real
+                        // total; see `EvidenceChecklist`'s own docstring for
+                        // the defect a bare row count used to cause here).
+                        summary={`${record.review_summary.total} joined records`}
                         rows={[
                             { label: "Approved", value: record.review_summary.approved },
                             { label: "Under review", value: record.review_summary.under_review },
