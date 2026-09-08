@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import type { SpeciesIdentity } from "../domain/recordIdentity"
 import { words } from "../domain/provenanceFormat"
@@ -102,7 +103,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             spacing that ties it to the identity block above, with no
             trailing gap. */}
         <p className="note entry-ts-browse-note">
-            <Link to={`/species?kind=transition_state&participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
+            <Link to={`${BROWSE_KIND_PATHS.transition_state}?participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
                 Transition states for reactions of this species
             </Link>
         </p>

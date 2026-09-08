@@ -5,9 +5,10 @@ import type { BrowseKind } from "../api/browseApi"
  * A native radiogroup, not a button row -- `role="radio"`/ARIA on plain
  * `<button>`s would just re-implement what `<input type="radio">` already
  * gives for free (arrow-key movement, a single tab stop, `aria-checked`
- * wired by the browser). Selecting a different kind drives `?kind=` on
- * `BrowsePage`, the same URL-addressable pattern `?conformer=` uses on
- * `SpeciesEntryPage`.
+ * wired by the browser). Selecting a different kind NAVIGATES `BrowsePage`
+ * to that kind's own path (`BROWSE_KIND_PATHS`, `api/browseApi.ts`) --
+ * each browse kind is its own URL now, not a `?kind=` query parameter on
+ * one shared URL.
  */
 export function BrowseKindSelector({ kind, onSelect }: { kind: BrowseKind; onSelect: (kind: BrowseKind) => void }) {
     return (

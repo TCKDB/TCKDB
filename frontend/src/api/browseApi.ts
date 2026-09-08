@@ -47,6 +47,36 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
     reaction: "Reaction",
 }
 
+/**
+ * Each browse kind's own path (owner decision: one URL per kind, replacing
+ * the earlier single `/species?kind=` surface -- see `App.tsx`). The ONE
+ * place either direction of the kind<->path relationship is spelled out;
+ * `App.tsx` builds its four `BrowsePage` routes from this object (kind ->
+ * path) and `browseKindForPath` below inverts it (path -> kind) rather than
+ * hand-maintaining a second table, so the route table and the reverse
+ * lookup cannot drift apart. `species` keeps its existing path (the
+ * pre-existing default, and the one path that still accepts a legacy
+ * `?kind=` for backward compatibility); `vdw`/`transition_state`/`reaction`
+ * get new plural, hyphenated paths matching the app's existing
+ * `/species-entries`, `/reaction-entries`, `/transition-state-entries`
+ * convention.
+ */
+export const BROWSE_KIND_PATHS: Record<BrowseKind, string> = {
+    species: "/species",
+    vdw: "/vdw-complexes",
+    transition_state: "/transition-states",
+    reaction: "/reactions",
+}
+
+const PATH_TO_BROWSE_KIND: Record<string, BrowseKind> = Object.fromEntries(
+    BROWSE_KINDS.map((kind) => [BROWSE_KIND_PATHS[kind], kind]),
+) as Record<string, BrowseKind>
+
+/** Inverse of `BROWSE_KIND_PATHS` -- an exact-match lookup (not a prefix match), since `location.pathname` for a `BrowsePage` route is always exactly one of the four. */
+export function browseKindForPath(pathname: string): BrowseKind | undefined {
+    return PATH_TO_BROWSE_KIND[pathname]
+}
+
 // ---------------------------------------------------------------------------
 // Filters
 // ---------------------------------------------------------------------------
