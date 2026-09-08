@@ -423,6 +423,11 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByText(/does not yet have a dedicated page/)).not.toBeInTheDocument()
 
         const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        // The "Browse" crumb ahead of the entry link points at the
+        // transition-state browse kind's own canonical path now
+        // (per-kind browse paths change) -- not the legacy
+        // `/species?kind=transition_state`.
+        expect(within(breadcrumb).getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/transition-states")
         expect(within(breadcrumb).getByRole("link", { name: "Transition state entry" }))
             .toHaveAttribute("href", "/transition-state-entries/tse_demo")
         // Reaction entry stays plain text -- no route exists for it yet.

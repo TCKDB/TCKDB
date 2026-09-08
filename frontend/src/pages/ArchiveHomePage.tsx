@@ -1,18 +1,19 @@
 import { Link } from "react-router-dom"
 import { IdentifierSearch } from "../components/IdentifierSearch"
 
-// Two of these three cards used to end in the same "Open index →" action
-// text as "Browse species", then land on a page reading "This public
-// record view is being prepared..." -- the owner's report: two of three
-// top-level destinations were presented as equals of a working index when
-// neither one is. The action text is now the honest label for what
-// clicking through actually finds, so the difference is visible before a
-// reader ever leaves this page, not discovered after. Still real links
-// (never removed, per the fix instruction) -- "coming soon" is a status,
-// not a dead end.
+// Each card's action text is the honest label for what clicking through
+// actually finds, so the difference between a working index and a
+// placeholder is visible before a reader ever leaves this page, not
+// discovered after. "Browse reactions" earned its "Open index →" label the
+// same way "Browse species" already had it: `/reactions` now renders the
+// real reaction browse (per-kind browse paths change), not the
+// `RecordPlaceholderPage` it used to. "Methods" is still a genuine
+// placeholder (`/methods` -> `RecordPlaceholderPage`), so it keeps "Coming
+// soon" -- that label is a status, not a dead end, and must be removed the
+// moment (and not before) its own destination stops being one.
 const destinations = [
     ["Browse species", "Find stable species and species-entry records.", "/species", "⌬", "Open index →"],
-    ["Browse reactions", "Follow reaction records and their scientific context.", "/reactions", "⇄", "Coming soon"],
+    ["Browse reactions", "Follow reaction records and their scientific context.", "/reactions", "⇄", "Open index →"],
     ["Methods", "Read the computational methods attached to records.", "/methods", "▤", "Coming soon"],
 ] as const
 
