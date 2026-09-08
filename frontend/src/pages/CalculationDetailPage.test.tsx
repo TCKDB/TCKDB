@@ -765,6 +765,42 @@ describe("CalculationDetailPage", () => {
         expect(within(checklist).queryByText("Convergence")).not.toBeInTheDocument()
     })
 
+    // Independent review: every other assertion against `.coverage-checklist`
+    // in this file reads `textContent` (via `ddFor`), which is true
+    // regardless of whether the card is open -- none of them prove a
+    // READER can actually see these rows. `EvidenceChecklist` collapses
+    // this card by default (item 2), so confirm here, with a real
+    // visibility check, that opening it (the only way a reader reaches
+    // these rows) surfaces the same content the textContent-only
+    // assertions above already pin.
+    it("the checklist card is collapsed by default, and opening it makes the rows actually visible to a reader", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true, converged: true,
+                    geometry_validation_status: "passed",
+                    scf_stability_status: "unstable",
+                },
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+
+        const card = document.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+
+        fireEvent.click(details.querySelector("summary")!)
+        expect(details.open).toBe(true)
+        expect(checklist).toBeVisible()
+        const gvDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Geometry validation")
+        const gvDd = gvDt?.nextElementSibling as HTMLElement
+        expect(gvDd).toBeVisible()
+        expect(gvDd.textContent).toBe("passed")
+    })
+
     // record-summary-row PR, post-review (owner decision: every status word
     // is a pill on every page, no exception for this one): this page's
     // evidence card renders through the SHARED `components/

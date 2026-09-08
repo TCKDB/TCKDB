@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionOverviewPage from "./ReactionOverviewPage"
 
@@ -164,5 +164,32 @@ describe("ReactionOverviewPage", () => {
         const dt = Array.from(document.querySelectorAll(".record-identity-header dt")).find((el) => el.textContent === "Equation (as deposited)")
         expect(dt).not.toBeUndefined()
         expect(dt!.nextElementSibling?.textContent).toBe("NN <=> [H][H] + N=N")
+    })
+
+    // Independent review: `EvidenceChecklist`'s old `"N rows"` fallback
+    // collapsed this card behind its own fixed 6-row count regardless of
+    // the real total. This fixture's `review_summary.total: 4` (distinct
+    // from the fixed 6-row count) proves the collapsed summary is wired to
+    // the real total, not the row list's own length -- and that opening
+    // the card reaches the same rows a reader could always see.
+    it("the review card's collapsed summary is the TRUE total, never the fixed 6-row count", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json(searchResponse())))
+        page(REACTION_REF)
+        await screen.findByRole("link", { name: "rxe_tku6xu2lt3girf2rsiwl5uds4e" })
+
+        const reviewSection = document.querySelector('section[aria-labelledby="review-heading"]')!
+        const card = reviewSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
+        expect(rollup).toHaveTextContent("4 joined records")
+        expect(rollup.textContent).not.toContain("6 rows")
+
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+        fireEvent.click(details.querySelector("summary")!)
+        expect(checklist).toBeVisible()
+        const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Total")
+        expect(dt?.nextElementSibling?.textContent).toBe("4")
     })
 })

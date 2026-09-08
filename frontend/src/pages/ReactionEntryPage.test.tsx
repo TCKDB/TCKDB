@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ReactionEntryPage from "./ReactionEntryPage"
 
@@ -535,6 +535,35 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
         ])
     })
 
+    // Independent review: `EvidenceChecklist`'s "N rows" fallback used to
+    // collapse this card behind a NUMBER THAT NEVER CHANGES (the card
+    // always has 6 category rows), regardless of the real total -- MEASURED
+    // live, `rxe_h3z3f7tjfsj3gbvvh7lmmpikx4` collapsed to "6 rows" while the
+    // true total was 4. This fixture's `total: 39` (distinct from the fixed
+    // 6-row count) proves the collapsed summary is wired to the real
+    // `review_summary.total`, not the row list's own length.
+    it("the Review card's collapsed summary is the TRUE total joined records, never the fixed 6-row count", async () => {
+        handleFull(mockFull({
+            review_summary: { approved: 3, under_review: 5, not_reviewed: 7, deprecated: 11, rejected: 13, total: 39 },
+        }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const reviewSection = container.querySelector('section[aria-labelledby="review-heading"]')!
+        const card = reviewSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const rollup = card.querySelector(".coverage-checklist-summary") as HTMLElement
+        expect(rollup).toHaveTextContent("39 joined records")
+        expect(rollup.textContent).not.toContain("6 rows")
+
+        // Still collapsed by default (a real summary was supplied) --
+        // opening it reaches the same rows the test above already pinned.
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+        fireEvent.click(details.querySelector("summary")!)
+        expect(checklist).toBeVisible()
+    })
+
     it("the Participants table's SMILES column renders each participant's own served SMILES, never blank", async () => {
         handleFull(mockFull())
         const { container } = page()
@@ -665,5 +694,193 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         expect(link).not.toBeNull()
         expect(link!.textContent).toBe("calc_unlinked_sp")
         expect(container.textContent).toContain("not among the calculations this reaction entry's transition-state graph itself lists")
+    })
+})
+
+// Owner report this fixes: "we should add a 4th column ... that is the
+// reference rather than it being in the same column as Formula" -- the
+// Formula cell used to carry the linked formula PLUS the spe_... ref PLUS
+// its own copy button, rendering as "C₉H₉ spe_... Copy" in one cell.
+describe("ReactionEntryPage -- Participants table: the reference has its own column, not the Formula cell", () => {
+    it("the Formula cell carries only the linked formula (or its SMILES fallback) -- no ref, no copy button", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const formulaCells = Array.from(container.querySelectorAll('td[data-label="Formula"]'))
+        expect(formulaCells.length).toBeGreaterThan(0)
+        for (const cell of formulaCells) {
+            expect(cell.querySelector("code.data")).toBeNull()
+            expect(cell.querySelector(".copy-button")).toBeNull()
+        }
+        // The formula cell still links to the participant's species-entry page.
+        const waterCell = formulaCells.find((cell) => cell.textContent?.includes("H2O") || cell.textContent === "H₂O")
+        expect(waterCell?.querySelector("a")).not.toBeNull()
+    })
+
+    // MUTATION GUARD (mandatory mutation table item a): putting the ref
+    // back into the Formula cell must turn this red.
+    it("MUTATION GUARD: the participant's own species_entry_ref never appears inside a Formula cell", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const formulaCells = Array.from(container.querySelectorAll('td[data-label="Formula"]'))
+        for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
+            for (const cell of formulaCells) {
+                expect(cell.textContent).not.toContain(ref)
+            }
+        }
+    })
+
+    it("adds a Ref column header, between SMILES and Review, carrying the ref and its copy button", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const table = container.querySelector('table[aria-label="Reactant participants"]') as HTMLElement
+        const headers = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent)
+        expect(headers).toEqual(["Formula", "SMILES", "Ref", "Review"])
+
+        const refCell = table.querySelector('td[data-label="Ref"]') as HTMLElement
+        expect(refCell).not.toBeNull()
+        expect(refCell.querySelector("code.data")?.textContent).toBe("spe_water")
+        expect(refCell.querySelector(".copy-button")).not.toBeNull()
+    })
+
+    it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
+            expect(occurrencesOutsideRefs(container, ref)).toBe(1)
+        }
+    })
+})
+
+// Owner: "these pill boxes like deposited etc. - can they be clickable
+// links to wherever they are meant to go?" -- a row asserting PRESENCE
+// links to its own section; "none deposited" (and every other absence)
+// never does.
+describe("ReactionEntryPage -- evidence checklist: collapsible, and presence-only pill links", () => {
+    function evidenceCard(container: HTMLElement): HTMLElement {
+        return Array.from(container.querySelectorAll('[data-component="evidence-checklist"]'))
+            .find((card) => card.textContent?.includes("Evidence on this reaction entry")) as HTMLElement
+    }
+
+    it("the evidence card is collapsed by default (owner: 'Evidence blocks should be expandable rather')", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        const details = card.querySelector("details") as HTMLDetailsElement
+        expect(details).not.toBeNull()
+        expect(details.open).toBe(false)
+        expect(card.querySelector(".coverage-checklist")).not.toBeVisible()
+        // The collapsed summary still names how many rows are present vs
+        // absent -- a reader who never opens it still learns whether
+        // evidence exists (this fixture: Kinetics/TS entries/IRC present,
+        // Atom map/Path search/network absent).
+        expect(card.querySelector(".coverage-checklist-summary")).toHaveTextContent("3 present, 3 absent")
+    })
+
+    it("opening it shows the same rows an always-open card used to", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        fireEvent.click(card.querySelector("summary")!)
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(checklist).toBeVisible()
+        const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Kinetics records")
+        expect(dt?.nextElementSibling?.textContent).toBe("1 deposited")
+    })
+
+    it("a present row with a real section on this page (Kinetics/TS entries) links to it", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        fireEvent.click(card.querySelector("summary")!)
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+
+        const kineticsDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Kinetics records")
+        const kineticsLink = kineticsDt?.nextElementSibling?.querySelector("a")
+        expect(kineticsLink).not.toBeNull()
+        expect(kineticsLink).toHaveAttribute("href", "#kinetics-heading")
+
+        const tsDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Transition-state entries")
+        const tsLink = tsDt?.nextElementSibling?.querySelector("a")
+        expect(tsLink).not.toBeNull()
+        expect(tsLink).toHaveAttribute("href", "#ts-heading")
+    })
+
+    // MUTATION GUARD (mandatory mutation table item b): guards THIS PAGE's
+    // own conditional -- it only ever passes `to` alongside `tone: "pill"`
+    // on the Kinetics/TS-entries/network rows (see the `...(x.length ? {
+    // to: "..." } : {})` spreads above). It does NOT independently prove
+    // the shared component's own enforcement: under a mutation of
+    // `EvidenceChecklist`'s `RowValue` alone (honouring `to` regardless of
+    // `tone`), this page never supplies `to` on a muted row in the first
+    // place, so this test stays green -- `EvidenceChecklist.test.tsx`'s
+    // own "MUTATION GUARD: 'to' on a pill-muted row is silently ignored"
+    // test is the one that catches THAT mutation. Still worth keeping:
+    // it's the guard against a regression in THIS page's own wiring (e.g.
+    // someone adding `to` to the Atom map row "for consistency").
+    it("MUTATION GUARD: 'none deposited' rows (Atom map with no atom maps) are never links", async () => {
+        handleFull(mockFull({ reaction_entry: { ...mockFull().reaction_entry, atom_maps: [] } }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        fireEvent.click(card.querySelector("summary")!)
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+
+        const atomMapDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Atom map")
+        const atomMapDd = atomMapDt?.nextElementSibling as HTMLElement
+        expect(atomMapDd.textContent).toBe("none deposited")
+        expect(atomMapDd.querySelector("a")).toBeNull()
+
+        const networkDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Pressure-dependent network membership")
+        const networkDd = networkDt?.nextElementSibling as HTMLElement
+        expect(networkDd.textContent).toBe("none deposited")
+        expect(networkDd.querySelector("a")).toBeNull()
+    })
+
+    it("a present row with no section on this page (Atom map, Path search, IRC evidence) stays plain -- never invents a target", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        fireEvent.click(card.querySelector("summary")!)
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+
+        // This fixture's IRC evidence is present (has_irc: true) but has no
+        // section of its own -- confirm it renders as a plain pill, not a link.
+        const ircDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "IRC evidence")
+        const ircDd = ircDt?.nextElementSibling as HTMLElement
+        expect(ircDd.textContent).toBe("present")
+        expect(ircDd.querySelector("a")).toBeNull()
+        expect(ircDd.querySelector(".value-pill")).not.toBeNull()
+    })
+
+    it("the network-membership row links to the network section once the fallback resolves and the archive has a network", async () => {
+        handleFull(mockFull({
+            networks: [{
+                network_ref: "net_test1",
+                name: "hydrazine",
+                solve_temperature_min_k: 300,
+                solve_temperature_max_k: 2000,
+                solve_pressure_min_bar: 0.01,
+                solve_pressure_max_bar: 100,
+                channel_count: 21,
+                review: { status: "not_reviewed" },
+            }],
+        }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const card = evidenceCard(container)
+        fireEvent.click(card.querySelector("summary")!)
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        const networkDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Pressure-dependent network membership")
+        const networkLink = networkDt?.nextElementSibling?.querySelector("a")
+        expect(networkLink).not.toBeNull()
+        expect(networkLink).toHaveAttribute("href", "#network-heading")
     })
 })

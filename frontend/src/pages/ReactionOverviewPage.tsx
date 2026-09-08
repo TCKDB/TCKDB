@@ -170,6 +170,11 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
                     <SectionHeading id="review-heading">Review, across all entries</SectionHeading>
                     <EvidenceChecklist
                         heading={`Review counts across the ${records.length} ${records.length === 1 ? "entry" : "entries"} under this reaction`}
+                        // No `tone` on these rows -- a true collapsed-summary
+                        // roll-up (the real total, not the fixed 6-row
+                        // count) must come from the caller. See
+                        // `EvidenceChecklist`'s own docstring.
+                        summary={`${reviewSummary.total} joined records`}
                         rows={[
                             { label: "Approved", value: reviewSummary.approved },
                             { label: "Under review", value: reviewSummary.under_review },

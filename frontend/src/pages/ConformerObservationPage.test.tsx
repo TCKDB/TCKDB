@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerObservationPage from "./ConformerObservationPage"
 
@@ -420,6 +420,33 @@ describe("ConformerObservationPage", () => {
         expect(checklist).not.toBeNull()
         expect(ddFor(checklist, "Geometry validation")).toBe("recorded")
         expect(ddFor(checklist, "SCF stability")).toBe("not recorded")
+    })
+
+    // Independent review: `ddFor` above reads `textContent`, which is true
+    // whether or not the card is open -- `EvidenceChecklist` collapses this
+    // card by default (item 2), so confirm with a real visibility check
+    // that opening it (the only way a reader reaches these rows) surfaces
+    // the same content.
+    it("the checklist card is collapsed by default, and opening it makes the rows actually visible to a reader", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        const card = document.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        const details = card.querySelector("details") as HTMLDetailsElement
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        expect(details.open).toBe(false)
+        expect(checklist).not.toBeVisible()
+
+        fireEvent.click(details.querySelector("summary")!)
+        expect(details.open).toBe(true)
+        expect(checklist).toBeVisible()
+        const gvDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Geometry validation")
+        const gvDd = gvDt?.nextElementSibling as HTMLElement
+        expect(gvDd).toBeVisible()
+        expect(gvDd.textContent).toBe("recorded")
     })
 
     // record-summary-row PR, item 1: the evidence box sits BELOW the tile

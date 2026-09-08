@@ -243,6 +243,11 @@ describe("GeometryDetailPage", () => {
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const checklist = screen.getByLabelText("Geometry validation checklist")
+        // `EvidenceChecklist` is collapsed by default (owner: "Evidence
+        // blocks should be expandable rather") -- open it via its own
+        // `<summary>` toggle, same as a reader clicking it, before
+        // asserting the row content is actually visible once expanded.
+        fireEvent.click(checklist.querySelector("summary")!)
         expect(within(checklist).getByText("not recorded for this geometry")).toBeVisible()
         expect(within(checklist).queryByText(/passed/i)).not.toBeInTheDocument()
         expect(within(checklist).queryByText(/failed/i)).not.toBeInTheDocument()
@@ -305,6 +310,7 @@ describe("GeometryDetailPage", () => {
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const checklist = screen.getByLabelText("Geometry validation checklist")
+        fireEvent.click(checklist.querySelector("summary")!)
 
         expect(within(checklist).getByText(/Produced by.*Used as input by/s)).toBeVisible()
         // No calculation refs repeated inline in this card -- confirmed by

@@ -210,8 +210,28 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <EvidenceChecklist
                         heading="Evidence on this reaction entry"
                         rows={[
-                            { label: "Kinetics records", value: kinetics.length ? `${kinetics.length} deposited` : "none deposited", tone: kinetics.length ? "pill" : "pill-muted" },
-                            { label: "Transition-state entries", value: transitionStates.length ? `${transitionStates.length} deposited` : "none deposited", tone: transitionStates.length ? "pill" : "pill-muted" },
+                            {
+                                label: "Kinetics records",
+                                value: kinetics.length ? `${kinetics.length} deposited` : "none deposited",
+                                tone: kinetics.length ? "pill" : "pill-muted",
+                                // Only a row asserting PRESENCE ever links --
+                                // "none deposited" stays plain text (see
+                                // `EvidenceChecklist`'s own docstring: `to`
+                                // on a muted row is ignored anyway, but this
+                                // page doesn't even offer one).
+                                ...(kinetics.length ? { to: "#kinetics-heading" } : {}),
+                            },
+                            {
+                                label: "Transition-state entries",
+                                value: transitionStates.length ? `${transitionStates.length} deposited` : "none deposited",
+                                tone: transitionStates.length ? "pill" : "pill-muted",
+                                ...(transitionStates.length ? { to: "#ts-heading" } : {}),
+                            },
+                            // Atom map / Path search / IRC evidence have no
+                            // section of their own on this page -- per the
+                            // rule, a presence-asserting row with nowhere to
+                            // point stays plain rather than inventing a
+                            // target.
                             { label: "Atom map", value: entry.atom_maps.length ? `${entry.atom_maps.length} deposited` : "none deposited", tone: entry.atom_maps.length ? "pill" : "pill-muted" },
                             { label: "Path search", value: hasPathSearch ? "present" : "none deposited", tone: hasPathSearch ? "pill" : "pill-muted" },
                             { label: "IRC evidence", value: hasIrc ? "present" : "none deposited", tone: hasIrc ? "pill" : "pill-muted" },
@@ -221,6 +241,7 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                                     ? (networksState.networks.length ? `${networksState.networks.length} network${networksState.networks.length === 1 ? "" : "s"}` : "none deposited")
                                     : "checking…",
                                 tone: networksState.status === "ready" && networksState.networks.length ? "pill" : "pill-muted",
+                                ...(networksState.status === "ready" && networksState.networks.length ? { to: "#network-heading" } : {}),
                             },
                         ]}
                         note='Counts are of served arrays only. "None deposited" describes the archive, not the chemistry.'
@@ -262,6 +283,16 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <SectionHeading id="review-heading">Review</SectionHeading>
                     <EvidenceChecklist
                         heading="Joined-record review counts"
+                        // These rows carry no `tone` (they're counts, not a
+                        // present/absent checklist), so `EvidenceChecklist`
+                        // cannot compute a collapsed-summary roll-up on its
+                        // own -- `summary` supplies the TRUE total from the
+                        // same `review_summary.total` the "Total joined
+                        // records" row itself reads, never the row COUNT
+                        // (fixed at 6 category rows regardless of the real
+                        // total; see `EvidenceChecklist`'s own docstring for
+                        // the defect a bare row count used to cause here).
+                        summary={`${record.review_summary.total} joined records`}
                         rows={[
                             { label: "Approved", value: record.review_summary.approved },
                             { label: "Under review", value: record.review_summary.under_review },
@@ -291,6 +322,7 @@ function ParticipantsTable({ label, participants }: {
                         <tr>
                             <th scope="col">Formula</th>
                             <th scope="col">SMILES</th>
+                            <th scope="col">Ref</th>
                             <th scope="col">Review</th>
                         </tr>
                     </thead>
@@ -301,11 +333,12 @@ function ParticipantsTable({ label, participants }: {
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
                                         {participant.formula ? <Formula value={participant.formula} /> : participant.smiles}
                                     </Link>
-                                    {" "}
+                                </td>
+                                <td data-label="SMILES"><code className="data">{participant.smiles}</code></td>
+                                <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>
                                     <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
                                 </td>
-                                <td data-label="SMILES"><code className="data">{participant.smiles}</code></td>
                                 <td data-label="Review"><span className={reviewPillClass(participant.review.status)}>{statusLabel(participant.review.status)}</span></td>
                             </tr>
                         ))}
