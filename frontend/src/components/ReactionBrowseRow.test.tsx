@@ -55,12 +55,19 @@ function record(overrides: Partial<ReactionBrowseRecord> = {}): ReactionBrowseRe
 // mutating the corresponding field in `record()` (or swapping which prop
 // the row passes to `ReactionEquation`) makes the assertion fail -- not a
 // loose substring check that would still pass on a differently-wrong row.
-describe("ReactionBrowseRow: equation rendering (via the shared ReactionEquation component)", () => {
-    it("renders each participant's formula WITH subscripts, not the bare formula string", () => {
+//
+// Owner-reported-defect fix: participants no longer render as individual
+// `/species-entries/:ref` links on this row (that was the bug -- almost
+// every pixel of the equation was a species link, crowding out the
+// reaction link). `ReactionBrowseRow` now passes `linkParticipants=false`,
+// so the formula/subscript/chip content still renders, just as plain text.
+describe("ReactionBrowseRow: equation rendering (via the shared ReactionEquation component, participants UNLINKED)", () => {
+    it("renders each participant's formula WITH subscripts, not the bare formula string -- but as plain text, no per-participant <a>", () => {
         const { container } = renderRow(record())
-        const link = container.querySelector('a[href="/species-entries/spe_ch3"]')!
-        expect(link.querySelector("sub")?.textContent).toBe("3")
-        expect(link.textContent).toBe("CH3")
+        expect(container.querySelector('a[href="/species-entries/spe_ch3"]')).toBeNull()
+        const title = container.querySelector(".reaction-browse-row-title") as HTMLElement
+        expect(title.querySelector("sub")?.textContent).toBe("3")
+        expect(title.textContent).toContain("CH3")
     })
 
     it("renders the reversible arrow (⇌) with its aria-label when reversible=true", () => {
@@ -79,12 +86,17 @@ describe("ReactionBrowseRow: equation rendering (via the shared ReactionEquation
         expect(row.querySelector('[aria-label="reacts reversibly with"]')).toBeNull()
     })
 
-    it("each participant links to its OWN species entry (/species-entries/:ref), not the reaction entry", () => {
+    // MUTATION CHECK: if the row re-enabled participant links (dropped
+    // `linkParticipants={false}` or flipped it to `true`), every one of
+    // these four hrefs would reappear, and the row would carry FIVE links
+    // instead of one (see the "EXACTLY ONE link" describe block below,
+    // which is the sharper version of this same check).
+    it("no participant renders as a link to its OWN species entry -- none of the four species hrefs exist on this row", () => {
         const { container } = renderRow(record())
-        expect(container.querySelector('a[href="/species-entries/spe_o"]')).not.toBeNull()
-        expect(container.querySelector('a[href="/species-entries/spe_ch3"]')).not.toBeNull()
-        expect(container.querySelector('a[href="/species-entries/spe_ch4"]')).not.toBeNull()
-        expect(container.querySelector('a[href="/species-entries/spe_oh"]')).not.toBeNull()
+        expect(container.querySelector('a[href="/species-entries/spe_o"]')).toBeNull()
+        expect(container.querySelector('a[href="/species-entries/spe_ch3"]')).toBeNull()
+        expect(container.querySelector('a[href="/species-entries/spe_ch4"]')).toBeNull()
+        expect(container.querySelector('a[href="/species-entries/spe_oh"]')).toBeNull()
     })
 })
 
@@ -208,8 +220,8 @@ describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable
     it("links to /reaction-entries/:ref, not /reactions/:ref", () => {
         renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_other" }))
         const links = screen.getAllByRole("link")
-        const stretchedLink = links.find((el) => el.getAttribute("href") === "/reaction-entries/rxe_specific")
-        expect(stretchedLink).toBeTruthy()
+        const rowLink = links.find((el) => el.getAttribute("href") === "/reaction-entries/rxe_specific")
+        expect(rowLink).toBeTruthy()
         expect(links.some((el) => el.getAttribute("href")?.startsWith("/reactions/"))).toBe(false)
     })
 
@@ -220,31 +232,44 @@ describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable
         expect(ref.closest("a")).toBeNull()
     })
 
-    it("the row-level stretched link carries an accessible name naming the ref, distinct from any species-entry participant link", () => {
-        renderRow(record({ reaction_entry_ref: "rxe_specific" }))
-        const stretched = screen.getByRole("link", { name: "View reaction entry rxe_specific" })
-        expect(stretched).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+    it("the row's single link carries an accessible name built from the served equation text", () => {
+        renderRow(record({ reaction_entry_ref: "rxe_specific", equation: "O + [CH3] <=> C + [OH]" }))
+        const link = screen.getByRole("link", { name: "O + [CH3] <=> C + [OH]" })
+        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
     })
 
-    // MUTATION CHECK: if the stretched link were built by wrapping the
-    // WHOLE equation (the TS row's own `.browse-row-title::after` pattern,
-    // which does not work here -- see the component's doc comment), the
-    // per-participant species-entry links would break (nested <a>). This
-    // asserts both link families coexist: the row-level stretched link AND
-    // every per-participant equation link.
-    it("both the row-level stretched link and the equation's own per-participant links are present (no nested-anchor breakage)", () => {
+    it("falls back to the browser's own content-derived accessible name when `equation` is absent (older API)", () => {
+        const withoutEquation: ReactionBrowseRecord = record({ reaction_entry_ref: "rxe_specific" })
+        delete withoutEquation.equation
+        renderRow(withoutEquation)
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const link = within(row).getByRole("link")
+        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+        // No explicit aria-label was set, so the accessible name falls
+        // back to the link's own visible text content (the rendered
+        // equation) -- it is non-empty and mentions the formula.
+        expect(link).not.toHaveAttribute("aria-label")
+        expect(link.textContent).toContain("CH3")
+    })
+
+    // MUTATION CHECK (invariant: "a reaction browse row contains EXACTLY
+    // ONE link"): catches (b) participant links re-enabled -- which would
+    // add four more `<a>`s -- and (d) the row link deleted entirely --
+    // which would drop this to zero. Neither survives this assertion.
+    it("the row contains EXACTLY ONE link, and it is the reaction-entries link", () => {
         renderRow(record())
-        const links = screen.getAllByRole("link")
-        const hrefs = links.map((el) => el.getAttribute("href"))
-        expect(hrefs).toContain("/reaction-entries/rxe_one")
-        expect(hrefs).toContain("/species-entries/spe_o")
-        expect(hrefs).toContain("/species-entries/spe_ch3")
-        expect(hrefs).toContain("/species-entries/spe_ch4")
-        expect(hrefs).toContain("/species-entries/spe_oh")
-        // Every link is a REAL, distinct <a> -- nesting would have merged
-        // or truncated some of these, not merely produced invalid markup
-        // jsdom silently accepts.
-        expect(new Set(hrefs).size).toBe(hrefs.length)
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const links = within(row).getAllByRole("link")
+        expect(links).toHaveLength(1)
+        expect(links[0]).toHaveAttribute("href", "/reaction-entries/rxe_one")
+    })
+
+    it("the row's link wraps the equation content -- no nested <a> inside it", () => {
+        renderRow(record())
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const link = within(row).getByRole("link")
+        expect(link.textContent).toContain("CH3")
+        expect(link.querySelector("a")).toBeNull()
     })
 })
 
@@ -263,18 +288,24 @@ describe("ReactionBrowseRow: stretched-link CSS mechanic (computed styles)", () 
         expect(window.getComputedStyle(row).position).toBe("relative")
     })
 
-    it("the stretched-link overlay is absolutely positioned", () => {
-        renderRow(record())
-        const stretched = screen.getByRole("link", { name: /^View reaction entry/ })
-        expect(window.getComputedStyle(stretched).position).toBe("absolute")
-    })
-
-    it("the headline (equation + family) and the footer (ref) are positioned, so they paint ABOVE the overlay and stay individually clickable/selectable", () => {
+    it("the stretched-link overlay (the title link's own ::after) is absolutely positioned -- same mechanic as the TS row's .browse-row-title::after", () => {
         renderRow(record())
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const headline = row.querySelector(".browse-row-headline") as HTMLElement
+        const link = within(row).getByRole("link")
+        expect(link).toHaveClass("browse-row-title")
+        // jsdom does not compute pseudo-element styles, so the overlay
+        // rule itself is covered by source-text assertions in
+        // `browse.css.test.ts` (`.reaction-browse-row .browse-row-title
+        // ::after`); this asserts the anchor it is scoped from carries the
+        // right class, and that the row (the positioning ancestor the
+        // overlay's `inset: 0` resolves against) is itself positioned.
+        expect(window.getComputedStyle(row).position).toBe("relative")
+    })
+
+    it("the footer (ref) is positioned, so it paints ABOVE the overlay and stays selectable", () => {
+        renderRow(record())
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
         const footer = row.querySelector(".browse-row-footer") as HTMLElement
-        expect(window.getComputedStyle(headline).position).toBe("relative")
         expect(window.getComputedStyle(footer).position).toBe("relative")
     })
 

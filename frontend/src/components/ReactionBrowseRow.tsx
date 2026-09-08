@@ -30,28 +30,38 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * linking `transition_state_entry_ref` rather than
  * `transition_state_ref`.
  *
- * Stretched-link mechanics differ from `TransitionStateBrowseRow`'s own
- * `.browse-row-title::after` pattern on purpose: that pattern puts the
- * `<Link>` around the row's OWN visible title text and stretches an empty
- * pseudo-element off of it. Here the "title" is `ReactionEquation`, which
- * already renders real `<Link>`s of its own (one per participant, to
- * `/species-entries/:ref`) -- nesting the whole equation inside a SECOND
- * anchor pointed at `/reaction-entries/:ref` would nest `<a>` inside
- * `<a>`, which browsers silently break (the outer link stops being
- * clickable past the first nested one). So the row-level link here is its
- * OWN separate, empty element (`.browse-row-stretched-link`, no visible
- * text, `aria-label` only) placed FIRST in the DOM and stretched via
- * `position: absolute; inset: 0` in `browse.css` -- the headline (so each
- * participant link stays individually clickable, matching
- * `EquationParticipantLink`'s own href) and the footer (so the ref stays
- * selectable, the same non-goal `TransitionStateBrowseRow`'s own doc
- * comment names) are given their own `position: relative` there so they
- * paint above the overlay per DOM order, the identical mechanic that
- * component's own comment documents in more depth. The pills row
- * (`.browse-row-entries`) is deliberately NOT elevated, matching that
- * component's own choice -- neither review nor the two availability pills
- * carry a value a reader needs to select, so leaving them inside the
- * click target does not cost anything.
+ * Owner-reported defect fixed here: this row used to render
+ * `ReactionEquation` with its participant links left ON (one per
+ * participant, to `/species-entries/:ref`) and stack an invisible
+ * row-wide `.browse-row-stretched-link` UNDER it for the reaction itself
+ * -- almost every pixel of the equation was a species link, and the
+ * reaction link only caught the gaps between glyphs. The premise that
+ * pattern rested on ("the equation must keep its per-participant links
+ * here, so the row link has to be a separate element to avoid nesting
+ * `<a>` in `<a>`") was the bug, not the nesting concern itself: a browse
+ * row does not need per-species links at all -- a reader who wants a
+ * specific participant can already reach it from the reaction entry page
+ * this row links to, where `ReactionEquation` still renders them (see
+ * `ReactionEntryPage.tsx`/`ReactionOverviewPage.tsx`, both unchanged).
+ * So this row now passes `linkParticipants={false}` (the opt-out
+ * `ReactionEquation.tsx` added for exactly this caller), turning the
+ * equation into plain text, and wraps that plain text in ONE real
+ * `<Link>` to the reaction entry -- now safe, since there is no nested
+ * anchor left to collide with. This is `TransitionStateBrowseRow`'s own
+ * `.browse-row-title::after` mechanic (shared class, shared selector
+ * shape, scoped by `.reaction-browse-row` in `browse.css` instead of
+ * `.ts-browse-row`): the `<Link>` wraps the visible title content, and an
+ * absolutely-positioned empty `::after` pseudo-element stretches it
+ * (`inset: 0`) to the row's full box against `.reaction-browse-row`'s own
+ * `position: relative` -- a click anywhere in the card lands on that one
+ * anchor. The footer (so the ref stays selectable, the same non-goal
+ * `TransitionStateBrowseRow`'s own doc comment names) is given its own
+ * `position: relative` there so it paints above the overlay per DOM
+ * order, the identical mechanic that component's own comment documents
+ * in more depth. The pills row (`.browse-row-entries`) is deliberately
+ * NOT elevated, matching that component's own choice -- neither review
+ * nor the two availability pills carry a value a reader needs to select,
+ * so leaving them inside the click target does not cost anything.
  *
  * `matched_direction` (review follow-up, round 2): a reactant/product
  * SMILES search matches EITHER side of a reversible reaction, so the
@@ -77,18 +87,23 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
 
     return (
         <li className="browse-row card reaction-browse-row">
-            <Link
-                aria-label={`View reaction entry ${record.reaction_entry_ref}`}
-                className="browse-row-stretched-link"
-                to={target}
-            />
             <div className="browse-row-headline">
                 <p className="reaction-browse-row-title">
-                    <ReactionEquation
-                        products={toEquationParticipants(record.products)}
-                        reactants={toEquationParticipants(record.reactants)}
-                        reversible={record.reversible}
-                    />
+                    {/* `aria-label` falls back to the browser's own accname
+                        computation (concatenating the equation's visible
+                        text) when `record.equation` is absent/null -- an
+                        older or pre-deployment response that never served
+                        this convenience string still gets a usable,
+                        content-derived accessible name, just not the exact
+                        served string. */}
+                    <Link aria-label={record.equation ?? undefined} className="browse-row-title" to={target}>
+                        <ReactionEquation
+                            linkParticipants={false}
+                            products={toEquationParticipants(record.products)}
+                            reactants={toEquationParticipants(record.reactants)}
+                            reversible={record.reversible}
+                        />
+                    </Link>
                 </p>
                 <span className="browse-row-meta">
                     {familyText ?? <span className="absent">family not recorded</span>}

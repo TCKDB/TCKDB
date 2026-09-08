@@ -125,3 +125,59 @@ describe("ReactionEquation", () => {
         expect(oneWay.container.querySelector('[aria-label="reacts to form"]')).not.toBeNull()
     })
 })
+
+// `linkParticipants` opt-out (added for `ReactionBrowseRow`, which wraps
+// the WHOLE equation in its own single `<Link>` to the reaction entry --
+// leaving participant links on there would nest `<a>` inside `<a>`). The
+// prop must default to `true` so every caller that does not pass it
+// (`ReactionEntryPage`, `ReactionOverviewPage`) is unaffected -- covered
+// by every other test in this file, which never passes the prop and
+// still asserts `a[href="/species-entries/..."]` exists.
+describe("ReactionEquation: linkParticipants opt-out", () => {
+    it("linkParticipants=false: renders no <a> element at all, formula/subscripts still present", () => {
+        const { container } = render(
+            <MemoryRouter>
+                <p>
+                    <ReactionEquation
+                        linkParticipants={false}
+                        reactants={[participant({ species_entry_ref: "spe_a", smiles: "O", formula: "H2O", participant_index: 0 })]}
+                        products={[participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })]}
+                        reversible={false}
+                    />
+                </p>
+            </MemoryRouter>,
+        )
+        expect(container.querySelector("a")).toBeNull()
+        expect(container.querySelector("sub")?.textContent).toBe("2")
+        expect(container.textContent).toContain("H2O")
+        expect(container.textContent).toContain("CH4")
+    })
+
+    it("linkParticipants=false: the SMILES fallback and stereo chip still render as plain text, not swallowed", () => {
+        const { container } = render(
+            <MemoryRouter>
+                <p>
+                    <ReactionEquation
+                        linkParticipants={false}
+                        reactants={[participant({ species_entry_ref: "spe_a", smiles: "N=N", formula: null, species_entry_label: "Z", participant_index: 0 })]}
+                        products={[participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })]}
+                        reversible={false}
+                    />
+                </p>
+            </MemoryRouter>,
+        )
+        expect(container.querySelector("a")).toBeNull()
+        expect(container.querySelector("code.data")?.textContent).toBe("N=N")
+        expect(container.querySelector(".reaction-equation-chip")?.textContent).toBe(" · Z isomer")
+    })
+
+    it("linkParticipants omitted (default): participant links are still rendered -- the default stays 'linked'", () => {
+        const { container } = renderEquation(
+            [participant({ species_entry_ref: "spe_a", smiles: "O", formula: "H2O", participant_index: 0 })],
+            [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
+            false,
+        )
+        expect(container.querySelector('a[href="/species-entries/spe_a"]')).not.toBeNull()
+        expect(container.querySelector('a[href="/species-entries/spe_b"]')).not.toBeNull()
+    })
+})

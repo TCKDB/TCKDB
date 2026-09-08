@@ -46,28 +46,40 @@ const NBSP = " "
  * The arrow itself carries an `aria-label` (⇌ "reacts reversibly with" /
  * → "reacts to form") -- a screen reader has no other way to distinguish
  * the two Unicode arrow glyphs from each other by ear.
+ *
+ * `linkParticipants` (default `true`, so every current caller --
+ * `ReactionEntryPage`/`ReactionOverviewPage` -- is unaffected) opts a
+ * caller OUT of the per-participant `/species-entries/:ref` links,
+ * rendering the same formula/chip content as plain text instead. The one
+ * caller that passes `false`: `ReactionBrowseRow`, which wraps the whole
+ * equation in its OWN single `<Link>` to the reaction entry -- with
+ * participant links left on, that outer link would nest `<a>` inside
+ * `<a>` (browsers silently break the outer one past the first nested
+ * link), which is the exact defect this prop exists to let a browse row
+ * opt out of.
  */
-export function ReactionEquation({ reactants, products, reversible }: {
+export function ReactionEquation({ reactants, products, reversible, linkParticipants = true }: {
     reactants: EquationParticipantInput[]
     products: EquationParticipantInput[]
     reversible: boolean
+    linkParticipants?: boolean
 }) {
     const { reactants: reactantSide, products: productSide } = buildEquationSides(reactants, products)
     return (
         <>
-            {renderSide(reactantSide, "reactant")}
+            {renderSide(reactantSide, "reactant", linkParticipants)}
             {NBSP}
             <span aria-label={reversible ? "reacts reversibly with" : "reacts to form"}>
                 {reversible ? "⇌" : "→"}
             </span>
             <wbr />
             {" "}
-            {renderSide(productSide, "product")}
+            {renderSide(productSide, "product", linkParticipants)}
         </>
     )
 }
 
-function renderSide(participants: EquationParticipant[], keyPrefix: string): ReactNode[] {
+function renderSide(participants: EquationParticipant[], keyPrefix: string, linkParticipants: boolean): ReactNode[] {
     const nodes: ReactNode[] = []
     participants.forEach((participant, index) => {
         if (index > 0) {
@@ -77,24 +89,40 @@ function renderSide(participants: EquationParticipant[], keyPrefix: string): Rea
                 </span>,
             )
         }
-        nodes.push(<EquationParticipantLink key={participant.speciesEntryRef} participant={participant} />)
+        nodes.push(
+            <EquationParticipantFace
+                key={participant.speciesEntryRef}
+                participant={participant}
+                linked={linkParticipants}
+            />,
+        )
     })
     return nodes
 }
 
-function EquationParticipantLink({ participant }: { participant: EquationParticipant }) {
+function EquationParticipantFace({ participant, linked }: { participant: EquationParticipant; linked: boolean }) {
     const face = participant.formula
         ? <Formula value={participant.formula} />
         : <code className="data">{participant.smiles}</code>
+    const chip = participant.speciesEntryLabel && (
+        <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
+    )
     return (
         <>
             {participant.coefficient > 1 && `${participant.coefficient} `}
-            <Link to={`/species-entries/${participant.speciesEntryRef}`}>
-                {face}
-                {participant.speciesEntryLabel && (
-                    <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
+            {linked
+                ? (
+                    <Link to={`/species-entries/${participant.speciesEntryRef}`}>
+                        {face}
+                        {chip}
+                    </Link>
+                )
+                : (
+                    <>
+                        {face}
+                        {chip}
+                    </>
                 )}
-            </Link>
         </>
     )
 }

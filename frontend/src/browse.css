@@ -304,20 +304,25 @@
     position: relative;
 }
 
-/* Stretched-link pattern for the reaction browse row (PR 4b) --
-   deliberately NOT the TS row's own `.browse-row-title::after` mechanic
-   (see `ReactionBrowseRow.tsx`'s doc comment for why: `ReactionEquation`
-   already renders real per-participant `<Link>`s, so nesting the whole
-   equation inside a second row-level anchor would nest `<a>` inside `<a>`).
-   Instead `.browse-row-stretched-link` is its OWN element -- no visible
-   text, `aria-label` only -- placed FIRST in the DOM and stretched to the
-   row's full box directly (not via a pseudo-element, since this anchor has
-   no meaningful inline content of its own to attach one to). */
+/* Stretched-link pattern for the reaction browse row -- now the SAME
+   mechanic as `.ts-browse-row .browse-row-title::after` above, not a
+   separate one. Was a distinct `.browse-row-stretched-link` overlay
+   element in the DOM (see git history) because `ReactionEquation` used to
+   render a real per-participant `<Link>` for every species, and nesting
+   the whole equation inside a second row-level anchor would have nested
+   `<a>` inside `<a>`. `ReactionBrowseRow.tsx` now renders the equation
+   with `linkParticipants={false}` (plain text, no per-participant links),
+   so the equation can sit directly inside a single `<Link
+   className="browse-row-title">` to the reaction entry with no nesting
+   hazard -- the shared `.browse-row-title::after` rule above already
+   covers the overlay/stretch mechanics for both rows; only the two rules
+   below, scoped to `.reaction-browse-row`, are needed on top of it. */
 .reaction-browse-row {
     position: relative;
 }
 
-.reaction-browse-row .browse-row-stretched-link {
+.reaction-browse-row .browse-row-title::after {
+    content: "";
     position: absolute;
     inset: 0;
 }
@@ -326,28 +331,33 @@
    `.ts-browse-row .browse-row-footer` comment documents: a positioned
    element paints above later non-positioned in-flow siblings regardless of
    DOM order, so without this the overlay above would sit on top of the
-   equation's own participant links AND the footer's ref text. Giving both
-   their own `position: relative` re-enters them into the same
-   "positioned, DOM order" bucket as the overlay -- and since both are
-   declared AFTER `.browse-row-stretched-link` in `ReactionBrowseRow.tsx`,
-   DOM order puts them on top. `.browse-row-entries` (the review/kinetics/
-   TS pills) is deliberately excluded, matching the TS row's own choice:
-   neither pill carries a value a reader needs to select or click through
-   on its own, so lifting it would only shrink the row's actual click
-   target for no benefit. */
-.reaction-browse-row .browse-row-headline,
+   footer's ref text. Giving the footer its own `position: relative`
+   re-enters it into the same "positioned, DOM order" bucket as the
+   overlay -- and since it is declared AFTER `.browse-row-headline` (which
+   contains the overlay) in `ReactionBrowseRow.tsx`, DOM order puts it on
+   top. `.browse-row-entries` (the review/kinetics/TS pills) is
+   deliberately excluded, matching the TS row's own choice: neither pill
+   carries a value a reader needs to select or click through on its own,
+   so lifting it would only shrink the row's actual click target for no
+   benefit. `.browse-row-headline` itself needs no lift here (unlike the
+   old full-row-overlay version of this rule) -- the overlay now lives
+   INSIDE the headline, on the title's own `<Link>`, so there is nothing
+   later-in-tree-order within the headline that still needs elevating. */
 .reaction-browse-row .browse-row-footer {
     position: relative;
 }
 
-/* The equation itself: `.browse-row-title`'s own rule (below) assumes an
-   `<a>` element (accent color, permanent underline) -- wrong here, since
-   this `<p>` is not itself a link, only a container for `ReactionEquation`'s
-   own per-participant links (which pick up their accent/underline styling
-   for free from `.card a`, see `design-system.css`). This narrower rule
-   sets only the heading step and ink color; text-decoration stays at its
-   inherited `none` so the `+`/⇌ characters between participants do not
-   render as if they too were part of a link. */
+/* The `<p>` wrapping the equation's `<Link>` -- just a margin reset plus a
+   heading-step/color fallback now that the equation sits inside a real
+   `.browse-row-title` anchor (see `ReactionBrowseRow.tsx`): the `<a>`
+   itself sets its own `color`/`font`/`text-decoration` directly (from the
+   shared `.browse-row-title` rule below), which wins over anything
+   inherited from this ancestor `<p>` for any of its own text, so this
+   rule's `color`/`font` are effectively redundant with that one today and
+   only matter if the `<p>` is ever read without the `<Link>` inside it.
+   Kept as its own class (rather than folded away) because two descendant
+   rules below (`.reaction-browse-row-title .reaction-equation-chip`/
+   `code.data`) still key off it. */
 .reaction-browse-row-title {
     margin: 0;
     color: var(--ink);
@@ -384,7 +394,7 @@
    carries its own FIXED `font: var(--type-data-font)` (13px mono,
    `design-system.css`), which would read as illegibly small set inside a
    20px heading if a participant's SMILES fallback (`formula` absent, see
-   `ReactionEquation.tsx`'s `EquationParticipantLink`) ever lands in this
+   `ReactionEquation.tsx`'s `EquationParticipantFace`) ever lands in this
    title. Unreached by any fixture in the live archive today (every
    reaction-browse participant measured so far carries a `formula`), same
    as the entry-page rule this mirrors -- added now so the row does not
