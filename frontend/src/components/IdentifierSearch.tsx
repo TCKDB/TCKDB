@@ -239,7 +239,21 @@ function ReactionParticipationResults({ state }: { state: ReactionParticipationS
         </p>
     }
     const hasMore = state.total > state.matches.length
+    // `direction=either` MUST travel with `reactant_smiles` here (PR #418
+    // follow-up): `state.total`/`state.matches` above come from
+    // `searchReactionParticipation`, which now asks the browse endpoint for
+    // `direction=either` explicitly (see that function's own doc comment in
+    // `scientificApi.ts`) rather than getting it for free from the
+    // endpoint's old unconditional-either default. `BrowsePage` seeds its
+    // OWN request straight from this URL's query params
+    // (`seedFiltersFromUrl`, `browseApi.ts`), including `direction` -- if
+    // this link omitted it, the browse page would silently fall back to the
+    // endpoint's new `forward` default and land on a DIFFERENT, narrower
+    // result set than the "See all N" count above just promised, the same
+    // class of link/landing-count disagreement `seedFiltersFromUrl`'s own
+    // repeated-param handling was already written to prevent.
     const browseQuery = state.querySmiles.map((smiles) => `reactant_smiles=${encodeURIComponent(smiles)}`).join("&")
+        + "&direction=either"
     return <section className="search-results reaction-search-results" aria-label="Reactions found">
         <h2>Reactions involving {state.headline}</h2>
         <ul>{state.matches.map((match) => (

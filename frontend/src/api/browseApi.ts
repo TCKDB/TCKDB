@@ -213,13 +213,31 @@ export type BrowseFilters = {
     // multiplicity, or provenance axis of its own (a reaction is not a
     // single calculation owner the way a species or transition state is --
     // measured against the live endpoint, which accepts exactly `family,
-    // reactant_smiles, product_smiles, has_kinetics, has_transition_state,
-    // min_review_status, include_rejected, include_deprecated, offset,
-    // limit`). `reactantSmiles`/`productSmiles` are two separate exact-match
-    // fields (unlike the TS kind's one merged `participantSmiles`) because
-    // the backend filter itself is side-specific.
+    // reactant_smiles, product_smiles, direction, has_kinetics,
+    // has_transition_state, min_review_status, include_rejected,
+    // include_deprecated, offset, limit`). `reactantSmiles`/`productSmiles`
+    // are two separate exact-match fields (unlike the TS kind's one merged
+    // `participantSmiles`) because the backend filter itself is side-specific.
     reactantSmiles: string
     productSmiles: string
+    // `direction` (`ReactionDirectionQuery` on the wire -- see
+    // `reactions_browse.py`): `""` means "let the backend apply its own
+    // default", never a locally-invented default duplicated here. The
+    // backend's default is `forward` (2026-09, PR #418) -- `reactantSmiles`/
+    // `productSmiles` match only the stored side they are named for. `""`
+    // is the ONLY value this form ever produces for "named sides" rather
+    // than the literal string `"forward"`, specifically so an untouched
+    // form's request is byte-identical to a bare API call with no
+    // `direction` param at all -- the two can never disagree about what
+    // "default" means, including if the backend's own default ever changes
+    // again. `"either"` is the one other value the control offers (see
+    // `ReactionFindabilityFields`'s `CheckField` in `BrowseFilterForm.tsx`)
+    // -- ticking it restores the OLD either-direction matching behaviour
+    // this endpoint used to run unconditionally, now opt-in. `"reverse"` is
+    // a legal wire value too (mirrors `/reactions/search`) but this form has
+    // no control that produces it; `seedFiltersFromUrl` still passes any
+    // raw value through unvalidated, the same as every other seeded field.
+    direction: string
     hasKinetics: EvidenceFlagState
     hasTransitionState: EvidenceFlagState
 }
@@ -231,7 +249,7 @@ export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
     status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
     hasOpt: "", hasFreq: "", hasSp: "", hasIrc: "", hasPathSearch: "", hasGeometryValidation: "", hasScfStability: "",
     participantSmiles: "", family: "",
-    reactantSmiles: "", productSmiles: "", hasKinetics: "", hasTransitionState: "",
+    reactantSmiles: "", productSmiles: "", direction: "", hasKinetics: "", hasTransitionState: "",
 }
 
 const COMPOSITION_DEFAULTS = {
@@ -260,7 +278,7 @@ const EVIDENCE_DEFAULTS = {
 
 /** Reaction-only filters (PR 4b) -- cleared on a switch away from "reaction". See `BrowseFilters.reactantSmiles`'s own comment for why these have no provenance/composition counterpart. */
 const REACTION_ONLY_DEFAULTS = {
-    reactantSmiles: "", productSmiles: "",
+    reactantSmiles: "", productSmiles: "", direction: "",
     hasKinetics: "" as EvidenceFlagState, hasTransitionState: "" as EvidenceFlagState,
 }
 
@@ -328,6 +346,14 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
  * reactantSmiles`'s comment) -- falling through to the shared/provenance
  * checks below for that kind would report a stale species-scoped `method`
  * value as an active reaction filter when it does nothing on the wire.
+ *
+ * `direction` is deliberately excluded from the reaction check for the same
+ * reason `includeRejected`/`includeDeprecated` are excluded above: switching
+ * it to "either" WIDENS the result set (it can only add rows a forward-only
+ * search would have missed, never remove one), so it can never be the reason
+ * a listing came back empty -- the same "a widening toggle is not a
+ * narrowing filter" rule, applied to the third widening control this kind
+ * now has.
  */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
     if (kind === "reaction") {
@@ -483,8 +509,9 @@ function splitSmilesList(value: string): string[] {
  * NOT built on `sharedQueryParams`: that helper sends charge, multiplicity,
  * and the six provenance params, none of which this endpoint accepts
  * (verified live -- `GET /reactions/browse` answers exactly `family,
- * reactant_smiles, product_smiles, has_kinetics, has_transition_state,
- * min_review_status, include_rejected, include_deprecated, offset, limit`).
+ * reactant_smiles, product_smiles, direction, has_kinetics,
+ * has_transition_state, min_review_status, include_rejected,
+ * include_deprecated, offset, limit`, PR #418 having added `direction`).
  * Sending an inapplicable param would not 422 (the route ignores unknown
  * query keys) but would silently do nothing, which is the same "looks
  * active while doing nothing" failure `clearInapplicableFilters` exists to
@@ -499,12 +526,17 @@ function splitSmilesList(value: string): string[] {
  * is unfiltered, same as omitting it entirely. A single-token value (no
  * comma typed) still produces exactly one `query.append`, so the one-value
  * shape callers relied on before this change is unaffected.
+ *
+ * `direction` is sent only when `filters.direction !== ""` -- see
+ * `BrowseFilters.direction`'s own comment for why an unset value is
+ * omitted rather than sent as a locally-hardcoded `"forward"`.
  */
 export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = new URLSearchParams()
     if (filters.family !== "") query.set("family", filters.family)
     for (const smiles of splitSmilesList(filters.reactantSmiles)) query.append("reactant_smiles", smiles)
     for (const smiles of splitSmilesList(filters.productSmiles)) query.append("product_smiles", smiles)
+    if (filters.direction !== "") query.set("direction", filters.direction)
     if (filters.hasKinetics !== "") query.set("has_kinetics", filters.hasKinetics)
     if (filters.hasTransitionState !== "") query.set("has_transition_state", filters.hasTransitionState)
     if (filters.minReviewStatus !== "") query.set("min_review_status", filters.minReviewStatus)
@@ -538,6 +570,19 @@ export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number,
  *   this reads with `getAll` and rejoins with a comma (`splitSmilesList`'s
  *   own on-the-wire shape, above) rather than `.get`.
  *
+ * `direction` (PR #418 / #419 follow-up) belongs here alongside the two
+ * SMILES fields for the same reason they do: a shared or bookmarked link
+ * that carries `reactant_smiles`/`product_smiles` but silently drops
+ * `direction` would re-run as a DIFFERENT query than the one the sender
+ * saw -- the sender's `direction=either` link would come back to this page
+ * defaulting to `forward` and quietly lose the reverse-direction matches
+ * the link promised, no different in kind from losing a structure value
+ * itself. Read raw and unvalidated (`searchParams.get("direction") ?? ""`),
+ * the same as every other seeded field here (`participant_smiles` above is
+ * not checked against a vocabulary either) -- an unrecognized value simply
+ * reaches the backend on the next request and gets whatever response a
+ * bad `direction` value gets there, same as a bad `family` value would.
+ *
  * Still one function with an explicit per-kind branch, not a fully generic
  * "read every filter from a same-named param" walk -- that would seed
  * fields NO external caller ever links to today (family, review status,
@@ -553,7 +598,11 @@ export function seedFiltersFromUrl(kind: BrowseKind, searchParams: URLSearchPara
     if (kind === "reaction") {
         const reactantSmiles = searchParams.getAll("reactant_smiles").filter((value) => value !== "")
         const productSmiles = searchParams.getAll("product_smiles").filter((value) => value !== "")
-        return { reactantSmiles: reactantSmiles.join(","), productSmiles: productSmiles.join(",") }
+        return {
+            reactantSmiles: reactantSmiles.join(","),
+            productSmiles: productSmiles.join(","),
+            direction: searchParams.get("direction") ?? "",
+        }
     }
     return {}
 }

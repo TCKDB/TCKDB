@@ -219,9 +219,15 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
     // involving X" link): a REPEATED param must seed ALL values, comma-
     // joined into this filter's own on-the-wire shape -- `.get` alone would
     // silently keep only the first and understate what the link promised.
-    it("reaction: a single reactant_smiles/product_smiles seeds one token each", () => {
+    //
+    // Every reaction-kind case below also carries `direction: ""` in its
+    // expected shape (PR #418's own follow-up): a link that carries
+    // structures but no `direction` must seed the backend's own default
+    // ("" -- omitted on the next request, per `buildReactionBrowseQuery`),
+    // not silently drop the field from the seeded object.
+    it("reaction: a single reactant_smiles/product_smiles seeds one token each, and no direction", () => {
         expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles=NN&product_smiles=C"))).toEqual({
-            reactantSmiles: "NN", productSmiles: "C",
+            reactantSmiles: "NN", productSmiles: "C", direction: "",
         })
     })
 
@@ -229,24 +235,45 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
         const params = new URLSearchParams()
         params.append("reactant_smiles", "NN")
         params.append("reactant_smiles", "[H]")
-        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "NN,[H]", productSmiles: "" })
+        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "NN,[H]", productSmiles: "", direction: "" })
     })
 
     it("reaction: a repeated product_smiles seeds both values too, independently of reactant_smiles", () => {
         const params = new URLSearchParams()
         params.append("product_smiles", "C")
         params.append("product_smiles", "[OH]")
-        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "", productSmiles: "C,[OH]" })
+        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "", productSmiles: "C,[OH]", direction: "" })
     })
 
     it("reaction: an empty-value param (?reactant_smiles=) seeds nothing -- 'present but blank' means unfiltered, same as the backend's own contract", () => {
         expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles="))).toEqual({
-            reactantSmiles: "", productSmiles: "",
+            reactantSmiles: "", productSmiles: "", direction: "",
         })
     })
 
-    it("reaction: no reactant_smiles/product_smiles at all seeds empty strings for both", () => {
-        expect(seedFiltersFromUrl("reaction", new URLSearchParams())).toEqual({ reactantSmiles: "", productSmiles: "" })
+    it("reaction: no reactant_smiles/product_smiles at all seeds empty strings for both, and no direction", () => {
+        expect(seedFiltersFromUrl("reaction", new URLSearchParams())).toEqual({
+            reactantSmiles: "", productSmiles: "", direction: "",
+        })
+    })
+
+    // PR #418 follow-up: a link built with an explicit `direction` (e.g.
+    // `?reactant_smiles=NN&direction=either`, the shape a future "reactions
+    // involving X, either side" linker would use) must seed that value into
+    // the form -- a shared link that carries structures but silently loses
+    // `direction` would return a DIFFERENT result set from the one the
+    // sender saw, which is exactly the gap this branch closes.
+    it("reaction: an explicit direction param is seeded verbatim", () => {
+        expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles=NN&direction=either"))).toEqual({
+            reactantSmiles: "NN", productSmiles: "", direction: "either",
+        })
+    })
+
+    it("reaction: species/vdw/transition_state never see a direction param leak in", () => {
+        const params = new URLSearchParams("participant_smiles=CCO&direction=either")
+        expect(seedFiltersFromUrl("species", params)).toEqual({})
+        expect(seedFiltersFromUrl("vdw", params)).toEqual({})
+        expect(seedFiltersFromUrl("transition_state", params)).not.toHaveProperty("direction")
     })
 
     // A reaction-kind linker's params must not leak into an unrelated kind,
