@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react"
-import { Link, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import "../browse.css"
 import {
     BROWSE_KIND_LABELS,
+    BROWSE_KIND_PATHS,
     DEFAULT_BROWSE_KIND,
     EMPTY_BROWSE_FILTERS,
+    browseKindForPath,
     clearInapplicableFilters,
     hasActiveFilters,
     isBrowseKind,
@@ -30,21 +32,48 @@ const PAGE_SIZE = 20
  * design brief for the full gap measurement.
  */
 export default function BrowsePage() {
-    const [searchParams, setSearchParams] = useSearchParams()
-    const requestedKind = searchParams.get("kind")
-    const kind: BrowseKind = isBrowseKind(requestedKind) ? requestedKind : DEFAULT_BROWSE_KIND
+    const location = useLocation()
+    const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
 
-    // Self-heal: an absent or unrecognised `?kind=` becomes the canonical
-    // value once resolved, the same pattern `?conformer=` uses on
-    // `SpeciesEntryPage` -- the address bar always names what is actually
-    // selected, so a reload or a shared link lands on the same view.
+    // The kind is fixed by the ROUTE now, not read from `?kind=` -- see
+    // `BROWSE_KIND_PATHS`/`browseKindForPath` (`api/browseApi.ts`) and
+    // `App.tsx`, which mounts this exact component at all four kind paths.
+    // `routeKind` falls back to the default only defensively; every real
+    // route this page is mounted at resolves.
+    const routeKind = browseKindForPath(location.pathname) ?? DEFAULT_BROWSE_KIND
+
+    // Backward compatibility: every browse link before this change pointed
+    // at `/species?kind=...` -- `/species` is the one path that still
+    // interprets that query param, so an old link keeps working. A
+    // recognised, non-default kind is resolved HERE (synchronously, on the
+    // very same render) rather than only in the redirect effect below, so
+    // the first paint already shows the right kind's content/request --
+    // without this, the page would flash species content (and fire a
+    // species/browse request) for one render before redirecting. `kind=
+    // species` or no `kind` at all needs no special casing (`/species` IS
+    // species already); an unrecognised value falls through to `routeKind`,
+    // preserving today's fallback -- `/species` already renders species,
+    // so there is nothing to redirect to.
+    const requestedKind = searchParams.get("kind")
+    const legacyKind: BrowseKind | null =
+        routeKind === DEFAULT_BROWSE_KIND && isBrowseKind(requestedKind) ? requestedKind : null
+    const kind: BrowseKind = legacyKind ?? routeKind
+
+    // The actual redirect: replace (never push -- the Back button must not
+    // bounce through the old `?kind=` URL) to the resolved kind's own path,
+    // carrying every OTHER query parameter forward untouched (filters,
+    // pagination, whatever a bookmarked/shared link carried -- only `kind`
+    // itself is stripped, since the path now says that).
     useEffect(() => {
-        if (requestedKind === kind) return
+        if (legacyKind === null || legacyKind === DEFAULT_BROWSE_KIND) return
         const next = new URLSearchParams(searchParams)
-        next.set("kind", kind)
-        setSearchParams(next, { replace: true })
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the resolved kind or the raw param changes, not on every searchParams object identity change
-    }, [kind, requestedKind])
+        next.delete("kind")
+        const query = next.toString()
+        const target = BROWSE_KIND_PATHS[legacyKind]
+        navigate(query ? `${target}?${query}` : target, { replace: true })
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the resolved legacy kind or the location itself changes, not on every searchParams object identity change
+    }, [legacyKind, location.pathname, location.search])
 
     // Seeded ONCE from the URL on mount (a lazy initializer, not an effect
     // that keeps re-syncing) -- the one deep-link case this page needs to
@@ -61,13 +90,20 @@ export default function BrowsePage() {
     }))
     const [offset, setOffset] = useState(0)
 
+    // NAVIGATES between the four kind paths now, rather than rewriting
+    // `?kind=` on the same route -- `BrowsePage` is the exact same
+    // component reference at all four (see `App.tsx`'s doc comment), so
+    // React Router keeps this component instance across the navigation
+    // instead of remounting it: `filters`/`offset` state below survives the
+    // path change untouched, and `clearInapplicableFilters` (called first,
+    // synchronously, before the navigation) still drops whatever no longer
+    // applies to `nextKind` -- exactly the same filter-carrying contract as
+    // before, just driven by a real navigation instead of a query rewrite.
     function selectKind(nextKind: BrowseKind) {
         if (nextKind === kind) return
         setFilters((current) => clearInapplicableFilters(nextKind, current))
         setOffset(0)
-        const next = new URLSearchParams(searchParams)
-        next.set("kind", nextKind)
-        setSearchParams(next, { replace: true })
+        navigate(BROWSE_KIND_PATHS[nextKind])
     }
 
     function updateFilters(patch: Partial<BrowseFilters>) {

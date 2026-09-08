@@ -41,6 +41,21 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
 
+// `BrowsePage` mounts `BrowseFilterForm`, which fires several unscoped
+// `/meta/*` vocabulary requests unconditionally regardless of which kind is
+// selected (see `BrowsePage.test.tsx`'s own `emptyVocabHandlers`, the same
+// need here) -- without handlers for these, this file's `onUnhandledRequest:
+// "error"` server fails every browse-route test for a reason unrelated to
+// what it actually asserts. Empty results are enough.
+function emptyVocabHandlers() {
+    return ["methods", "basis-sets", "software", "workflow-tools", "software-versions", "workflow-tool-versions", "reaction-families"].map((path) =>
+        http.get(`/api/v1/scientific/meta/${path}`, () => HttpResponse.json({ results: [] })))
+}
+
+function emptyBrowseEnvelope() {
+    return { records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 } }
+}
+
 describe("public archive shell", () => {
     it("renders visible keyboard navigation and excludes the admin diagnostic route", async () => {
         const user = userEvent.setup(); render(<App />)
@@ -286,7 +301,15 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
     ["/calculations/calc_abc", "Single-point of H2O", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
-    ["/reactions", "Reactions", undefined],
+    // `/reactions` is no longer `RecordPlaceholderPage` -- it is `BrowsePage`
+    // with the "reaction" kind fixed by the route (same component as
+    // `/species`, `/vdw-complexes`, `/transition-states`), so it does not
+    // fit this table's generic `heading`/`ref` string-equality check any
+    // more than `/species` does (see `/species`'s own entry above, whose
+    // heading is `BrowsePage`'s own "Browse the archive", not a per-kind
+    // title). It gets its own dedicated test below instead, the same
+    // treatment `/reactions/:reactionRef` already got when THAT stopped
+    // being `RecordPlaceholderPage`.
     // `/reactions/:reactionRef` is a real chooser page now (`ReactionOverviewPage`,
     // not `RecordPlaceholderPage`) -- its own dedicated test below builds a
     // realistic `reactions/search` fixture and asserts the rendered
@@ -407,6 +430,11 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
+        // Route ordering (item 1 of the per-kind browse paths): a heading
+        // match alone does not prove the URL actually resolved to THIS
+        // route rather than some other one that happens to render the same
+        // text -- assert the address bar too.
+        expect(window.location.pathname).toBe(path)
         // The calculation page's own ref lives inside the collapsed
         // References disclosure (item 3 of the calculation-page rework) --
         // present in the DOM, but not VISIBLE until opened.
@@ -418,6 +446,109 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         if (path.includes("/species-entries/") && path.split("/").length === 4) {
             expect(screen.getByText(path.split("/").at(-1) ?? "", { selector: "code" })).toBeVisible()
         }
+    })
+})
+
+// The site nav's "Reactions" link used to be a dead end -- `/reactions`
+// rendered `RecordPlaceholderPage`, not the working reaction browse (only
+// reachable via `/species?kind=reaction`). It is `BrowsePage` now, same
+// component as `/species`/`/vdw-complexes`/`/transition-states`, with the
+// "reaction" kind fixed by the route -- so it gets its own test (per the
+// comment on its removal from `publicRoutes` above), not the generic
+// `heading`/`ref` table.
+describe("browse kind paths: each of the four renders BrowsePage with its own kind selected", () => {
+    it("/reactions renders BrowsePage with 'Reaction' selected and hits /reactions/browse, not /species/browse", async () => {
+        let speciesCalls = 0
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => { speciesCalls += 1; return HttpResponse.json(emptyBrowseEnvelope()) }),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        window.history.replaceState({}, "", "/reactions")
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "Browse the archive" })).toBeVisible()
+        expect(screen.getByRole("radio", { name: "Reaction" })).toBeChecked()
+        expect(window.location.pathname).toBe("/reactions")
+        expect(speciesCalls).toBe(0)
+    })
+
+    it.each([
+        ["/vdw-complexes", "Van der Waals complex"],
+        ["/transition-states", "Transition state"],
+    ])("%s renders BrowsePage with '%s' selected", async (path, radioName) => {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        window.history.replaceState({}, "", path)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "Browse the archive" })).toBeVisible()
+        expect(screen.getByRole("radio", { name: radioName })).toBeChecked()
+        expect(window.location.pathname).toBe(path)
+    })
+})
+
+describe("site nav: the Reactions link is a real page, not a dead end", () => {
+    it("Reactions points at /reactions and is not RecordPlaceholderPage", async () => {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        const user = userEvent.setup()
+        window.history.replaceState({}, "", "/species")
+        render(<App />)
+        await screen.findByText(/have been deposited in this archive yet/)
+        const link = screen.getByRole("link", { name: "Reactions" })
+        expect(link).toHaveAttribute("href", "/reactions")
+        await user.click(link)
+        expect(await screen.findByRole("radio", { name: "Reaction" })).toBeChecked()
+        expect(window.location.pathname).toBe("/reactions")
+        // The old placeholder rendered an h1 literally reading "Reactions" --
+        // confirms this is genuinely `BrowsePage`, not that page surviving
+        // under a new route.
+        expect(screen.queryByRole("heading", { name: "Reactions" })).not.toBeInTheDocument()
+    })
+
+    // `NavLink` marks the active link via `aria-current="page"` (see
+    // `index.css`'s `nav a[aria-current="page"]` rule) -- it must land on
+    // exactly the ONE nav item matching the current path, on every one of
+    // the four browse-kind paths (only two of which -- Species and
+    // Reactions -- have their own top nav entry; `/vdw-complexes` and
+    // `/transition-states` have none, and must not make an unrelated link
+    // fire).
+    it.each([
+        ["/species", "Species"],
+        ["/reactions", "Reactions"],
+    ])("on %s, the %s nav link (and only that one) is marked aria-current", async (path, activeLabel) => {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        window.history.replaceState({}, "", path)
+        render(<App />)
+        await screen.findByText(/have been deposited in this archive yet/)
+        expect(screen.getByRole("link", { name: activeLabel })).toHaveAttribute("aria-current", "page")
+        for (const [label, href] of [["Species", "/species"], ["Reactions", "/reactions"], ["Methods", "/methods"]] as const) {
+            if (label === activeLabel) continue
+            expect(screen.getByRole("link", { name: label })).not.toHaveAttribute("aria-current")
+            expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href)
+        }
+    })
+
+    it.each(["/vdw-complexes", "/transition-states"])("on %s (no dedicated nav link), Species is NOT spuriously marked active", async (path) => {
+        server.use(
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
+        )
+        window.history.replaceState({}, "", path)
+        render(<App />)
+        await screen.findByText(/have been deposited in this archive yet/)
+        expect(screen.getByRole("link", { name: "Species" })).not.toHaveAttribute("aria-current")
+        expect(screen.getByRole("link", { name: "Reactions" })).not.toHaveAttribute("aria-current")
     })
 })
 
@@ -460,6 +591,7 @@ it("routes a transition-state-entry ref to its detail page (finding #1)", async 
     window.history.replaceState({}, "", "/transition-state-entries/tse_abc")
     render(<App />)
     expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
+    expect(window.location.pathname).toBe("/transition-state-entries/tse_abc")
 })
 
 it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () => {
@@ -491,6 +623,11 @@ it("routes a reaction ref to the chooser page (ReactionOverviewPage)", async () 
     const h1 = document.querySelector("h1")
     expect(h1?.textContent).toContain("⇌")
     expect(screen.getByRole("link", { name: "rxe_abc" })).toHaveAttribute("href", "/reaction-entries/rxe_abc")
+    // `/reactions` (exact) now renders a real page (BrowsePage) too, not a
+    // placeholder -- confirms `/reactions/:reactionRef` still resolves to
+    // THIS chooser page rather than being swallowed by the exact-match
+    // browse route.
+    expect(window.location.pathname).toBe("/reactions/rxn_abc")
 })
 
 it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref with no reactions/search request", async () => {
@@ -553,6 +690,7 @@ describe("unmatched routes (finding #12)", () => {
             render(<App />)
             expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
             expect(screen.queryByRole("heading", { name: "No page at this address" })).not.toBeInTheDocument()
+            expect(window.location.pathname).toBe(`/species-entries/${entryRef}/${section}`)
             cleanup()
         }
     })

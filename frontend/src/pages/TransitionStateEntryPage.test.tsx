@@ -128,6 +128,18 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("TransitionStateEntryPage", () => {
+    // The breadcrumb's "Browse" crumb points at the transition-state
+    // browse kind's own canonical path now (per-kind browse paths change),
+    // not the legacy `/species?kind=transition_state` it used to.
+    it("the breadcrumb's Browse crumb links to /transition-states", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })
+
+        const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" })
+        expect(within(breadcrumb).getByRole("link", { name: "Browse" })).toHaveAttribute("href", "/transition-states")
+    })
+
     it("leads with the reaction equation as the h1, and never shows a SMILES row", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, ({ request }) => {
             expect(new URL(request.url).searchParams.getAll("include")).toEqual(["calculations", "geometries", "review", "trust"])

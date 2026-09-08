@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 import {
+    BROWSE_KINDS,
+    BROWSE_KIND_PATHS,
     EMPTY_BROWSE_FILTERS,
+    browseKindForPath,
     buildReactionBrowseQuery,
     buildSpeciesBrowseQuery,
     buildTransitionStateBrowseQuery,
@@ -511,5 +514,33 @@ describe("clearInapplicableFilters: the six provenance fields round-trip THROUGH
         const backToSpecies = clearInapplicableFilters("species", throughReaction)
         expect(backToSpecies.method).toBe("b3lyp")
         expect(backToSpecies.software).toBe("Gaussian")
+    })
+})
+
+// Each browse kind now lives at its own path (App.tsx) instead of behind
+// `/species?kind=`; `BROWSE_KIND_PATHS`/`browseKindForPath` is the ONE
+// place the kind<->path relationship is spelled out (`App.tsx` builds its
+// route table from the former, `BrowsePage` fixes its kind from the
+// latter). This pins the mapping TOTAL in both directions -- every
+// `BROWSE_KINDS` member has a path, every path round-trips back to the
+// SAME kind -- so a kind added to `BROWSE_KINDS` without a matching path
+// entry (or a path edited without updating the reverse lookup) fails here
+// instead of silently 404ing a browse kind or misrouting another.
+describe("BROWSE_KIND_PATHS / browseKindForPath: the kind<->path mapping is total in both directions", () => {
+    it("every BROWSE_KINDS member has its own, distinct path", () => {
+        const paths = BROWSE_KINDS.map((kind) => BROWSE_KIND_PATHS[kind])
+        for (const path of paths) expect(typeof path).toBe("string")
+        expect(new Set(paths).size).toBe(BROWSE_KINDS.length)
+    })
+
+    it("every kind's own path resolves back to that SAME kind", () => {
+        for (const kind of BROWSE_KINDS) {
+            expect(browseKindForPath(BROWSE_KIND_PATHS[kind])).toBe(kind)
+        }
+    })
+
+    it("an unmapped path resolves to no kind at all", () => {
+        expect(browseKindForPath("/species/spc_abc")).toBeUndefined()
+        expect(browseKindForPath("/not-a-browse-path")).toBeUndefined()
     })
 })

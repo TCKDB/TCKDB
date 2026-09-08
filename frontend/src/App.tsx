@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes, useParams } from "react-router-dom"
 import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
 import { AppShell } from "./components/AppShell"
 import { LoadingPage } from "./components/LoadingPage"
+import { BROWSE_KIND_PATHS } from "./api/browseApi"
 import { isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "./domain/speciesEntrySections"
 
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
@@ -26,7 +27,24 @@ function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />
-            <Route path="/species" element={<BrowsePage />} />
+            {/* Every browse kind renders the SAME `BrowsePage`, at its own
+                path (owner decision, replacing the earlier single `/species
+                ?kind=` surface) -- built from `BROWSE_KIND_PATHS` rather
+                than four literal path strings so this table and
+                `browseKindForPath`'s reverse lookup (which `BrowsePage`
+                itself uses to fix its kind from the route) cannot drift
+                apart. `BrowsePage` is the exact same component reference at
+                all four paths, which matters beyond DRY: React Router
+                reconciles the ONE matched route's `element` like any other
+                subtree (see `SpeciesEntrySectionRoute`'s doc comment below
+                for the general rule) -- same type at the same position
+                (the `AppShell` `Outlet`'s one child slot) keeps the
+                component instance, so navigating between kinds via
+                `BrowseKindSelector` carries filter state across without any
+                type-identity remount. `/species` doubles as the legacy
+                `?kind=` redirect target (`BrowsePage`'s own effect) since
+                it is the one path every pre-existing browse link used. */}
+            <Route path={BROWSE_KIND_PATHS.species} element={<BrowsePage />} />
             <Route path="/species/:speciesRef" element={<SpeciesOverviewPage />} />
             {/* Both the sectionless and `:section` routes render the SAME
                 element type, `SpeciesEntrySectionRoute` -- this is not
@@ -79,9 +97,16 @@ function App() {
             <Route path="/conformer-observations/:observationRef" element={<ConformerObservationPage />} />
             <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
             <Route path="/geometries/:geometryRef" element={<GeometryDetailPage />} />
+            <Route path={BROWSE_KIND_PATHS.vdw} element={<BrowsePage />} />
+            <Route path={BROWSE_KIND_PATHS.transition_state} element={<BrowsePage />} />
             <Route path="/transition-state-entries/:entryRef" element={<TransitionStateEntryPage />} />
             <Route path="/reaction-entries/:entryRef" element={<ReactionEntryPage />} />
-            <Route path="/reactions" element={<RecordPlaceholderPage kind="Reactions" />} />
+            {/* Was `<RecordPlaceholderPage kind="Reactions" />` -- a dead
+                end the site nav's "Reactions" link pointed straight at,
+                while the working reaction browse was reachable only via
+                `/species?kind=reaction`. Now the SAME `BrowsePage` every
+                other kind uses. */}
+            <Route path={BROWSE_KIND_PATHS.reaction} element={<BrowsePage />} />
             <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
             <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
             <Route path="*" element={<NotFoundPage />} />

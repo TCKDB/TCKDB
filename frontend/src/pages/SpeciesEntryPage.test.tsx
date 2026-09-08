@@ -449,9 +449,12 @@ describe("species-entry page: identity and errors", () => {
         const heading = await screen.findByRole("heading", { name: "CH3" })
 
         const link = screen.getByRole("link", { name: "Transition states for reactions of this species" })
+        // Points at the canonical `/transition-states` path now (its own
+        // route, per the per-kind browse paths change), not the legacy
+        // `/species?kind=transition_state`.
         expect(link).toHaveAttribute(
             "href",
-            `/species?kind=transition_state&participant_smiles=${encodeURIComponent("[CH3]")}`,
+            `/transition-states?participant_smiles=${encodeURIComponent("[CH3]")}`,
         )
 
         // DOCUMENT_POSITION_FOLLOWING (4) means `link` comes AFTER

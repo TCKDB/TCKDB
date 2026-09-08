@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../calculation-detail.css"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import { lotLabel } from "../api/scientificSchemas"
 import {
     type CalculationArtifact,
@@ -419,7 +420,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 {ownerTS && (
                     <>
                         <span aria-hidden="true">/</span>
-                        <Link to="/species?kind=transition_state">Browse</Link>
+                        <Link to={BROWSE_KIND_PATHS.transition_state}>Browse</Link>
                         <span aria-hidden="true">/</span>
                         <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
                             Transition state entry

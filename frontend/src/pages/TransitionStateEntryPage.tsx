@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../transition-state-entry.css"
+import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
 import { lotLabel } from "../api/scientificSchemas"
@@ -280,7 +281,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
                 <Link to="/">TCKDB</Link>
                 <span aria-hidden="true">/</span>
-                <Link to="/species?kind=transition_state">Browse</Link>
+                <Link to={BROWSE_KIND_PATHS.transition_state}>Browse</Link>
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Transition state entry</span>
             </nav>
