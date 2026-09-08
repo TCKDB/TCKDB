@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 98 |
+| typed | 101 |
 | raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **243** |
+| **total** | **246** |
 
 ## Typed coverage
 
@@ -69,6 +69,9 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/geometries/{geometry_handle}` | yes | `get_geometry` | — | `examples/query_cookbook.py` | `tests/test_get_geometry.py` |
 | `GET /api/v1/scientific/kinetics/search` | yes | `search_kinetics` | `iter_kinetics` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/kinetics/search` | yes | `search_kinetics` | `iter_kinetics` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
+| `GET /api/v1/scientific/level-of-theories/search` | yes | `search_levels_of_theory` | `iter_levels_of_theory` | — | `tests/test_typed_parity_methods.py` |
+| `POST /api/v1/scientific/level-of-theories/search` | yes | `search_levels_of_theory` | `iter_levels_of_theory` | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}` | yes | `get_level_of_theory` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/literature/{literature_ref_or_id}` | yes | `get_literature` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/literature/{literature_ref_or_id}/records` | yes | `get_literature_records` | `iter_literature_records` | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/meta/basis-sets` | yes | `get_meta_basis_sets` | — | — | `tests/test_typed_parity_methods.py` |

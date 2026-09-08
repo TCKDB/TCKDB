@@ -417,6 +417,19 @@ ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS = IncludeGatedSections(
     },
 )
 
+# ``/level-of-theories/{ref}``, ``/level-of-theories/search``. ``software``
+# is deliberately not a key here: it is not yet a legal include token (see
+# ``app/services/scientific_read/level_of_theory.py``'s own docstring), so
+# there is no field for a caller to under-request -- it 422s instead.
+LEVEL_OF_THEORY_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/level-of-theories",
+    sections={
+        "correction_schemes": ("correction_schemes",),
+        "frequency_scale_factors": ("frequency_scale_factors",),
+        "used_by": ("used_by",),
+    },
+)
+
 # ``/artifacts/search``. ``review`` is legal and gates no data field (the
 # history is built and discarded); ``calculation`` gates three summaries
 # *nested inside* the always-present calculation context rather than a
@@ -529,6 +542,9 @@ INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "ScientificEnergyCorrectionSchemeRecord": MappingProxyType(
             ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificLevelOfTheoryRecord": MappingProxyType(
+            LEVEL_OF_THEORY_RECORD_SECTIONS.fields_by_token()
         ),
         "ScientificArtifactRecord": MappingProxyType(
             ARTIFACT_RECORD_SECTIONS.fields_by_token()
@@ -736,6 +752,7 @@ ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
             FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS
         ),
         "KINETICS_RECORD_SECTIONS": KINETICS_RECORD_SECTIONS,
+        "LEVEL_OF_THEORY_RECORD_SECTIONS": LEVEL_OF_THEORY_RECORD_SECTIONS,
         "LITERATURE_RECORDS_SECTIONS": LITERATURE_RECORDS_SECTIONS,
         "NETWORK_KINETICS_RECORD_SECTIONS": NETWORK_KINETICS_RECORD_SECTIONS,
         "NETWORK_RECORD_SECTIONS": NETWORK_RECORD_SECTIONS,
@@ -768,6 +785,7 @@ __all__ = [
     "FULL_SCOPE",
     "INCLUDE_GATED_COMPONENTS",
     "KINETICS_RECORD_SECTIONS",
+    "LEVEL_OF_THEORY_RECORD_SECTIONS",
     "LITERATURE_RECORDS_SECTIONS",
     "NETWORK_KINETICS_RECORD_SECTIONS",
     "NETWORK_RECORD_SECTIONS",

@@ -608,6 +608,16 @@ def resolve_energy_correction_scheme_handle(
     )
 
 
+def resolve_level_of_theory_handle(session: Session, handle: str) -> int:
+    """Resolve a level-of-theory path handle (int or ``lot_...``) → row id."""
+    return resolve_path_handle(
+        session,
+        LevelOfTheory,
+        handle,
+        kind_label="level_of_theory",
+    )
+
+
 def reconcile_species_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | object | None:
@@ -712,6 +722,7 @@ __all__ = [
     "resolve_filter_ref",
     "resolve_frequency_scale_factor_handle",
     "resolve_geometry_handle",
+    "resolve_level_of_theory_handle",
     "resolve_literature_handle",
     "resolve_network_handle",
     "resolve_network_kinetics_handle",

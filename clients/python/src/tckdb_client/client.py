@@ -57,6 +57,9 @@ from tckdb_client.scientific_types import (
     KineticsAnalyticsResponse,
     KineticsRecord,
     KineticsSearchResponse,
+    LevelOfTheoryDetailResponse,
+    LevelOfTheoryRecord,
+    LevelOfTheorySearchResponse,
     LiteratureDetailResponse,
     LiteratureLinkedRecord,
     LiteratureRecordsResponse,
@@ -2621,6 +2624,61 @@ class TCKDBClient:
             profile=profile,
         )
 
+    def search_levels_of_theory(
+        self,
+        *,
+        level_of_theory_ref: str | None = None,
+        lot_hash: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        dispersion: str | None = None,
+        solvent: str | None = None,
+        spin_treatment: str | None = None,
+        has_correction_schemes: bool | None = None,
+        has_frequency_scale_factors: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+        method_http: _ScientificSearchMethod = "POST",
+    ) -> LevelOfTheorySearchResponse:
+        """Search the reference library of levels of theory.
+
+        Only levels of theory with at least one attributing calculation
+        are returned -- a level of theory nothing has ever run does not
+        appear here, same discipline as ``search_energy_correction_schemes``
+        / ``search_frequency_scale_factors``.
+        """
+
+        body = {
+            "level_of_theory_ref": level_of_theory_ref,
+            "lot_hash": lot_hash,
+            "method": method,
+            "basis": basis,
+            "dispersion": dispersion,
+            "solvent": solvent,
+            "spin_treatment": spin_treatment,
+            "has_correction_schemes": has_correction_schemes,
+            "has_frequency_scale_factors": has_frequency_scale_factors,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+        }
+        return self._request_scientific_search(
+            "/scientific/level-of-theories/search",
+            body,
+            method_http=method_http,
+            profile=profile,
+        )
+
     # ------------------------------------------------------------------
     # Analytics reads (/api/v1/scientific/analytics/*)
     # ------------------------------------------------------------------
@@ -3043,6 +3101,13 @@ class TCKDBClient:
             self.search_frequency_scale_factors, parameters
         )
 
+    def iter_levels_of_theory(
+        self, **parameters: Any
+    ) -> Iterator[LevelOfTheoryRecord]:
+        """Lazily yield levels of theory matching the filters."""
+
+        return iter_paginated_records(self.search_levels_of_theory, parameters)
+
     def iter_literature_records(
         self, literature_ref_or_id: int | str, **parameters: Any
     ) -> Iterator[LiteratureLinkedRecord]:
@@ -3284,6 +3349,28 @@ class TCKDBClient:
         return self._get_scientific_detail(
             "/scientific/frequency-scale-factors/"
             f"{frequency_scale_factor_ref_or_id}",
+            include=include,
+            profile=profile,
+        )
+
+    def get_level_of_theory(
+        self,
+        level_of_theory_ref_or_id: int | str,
+        *,
+        include: list[str] | None = None,
+        profile: str | None = None,
+    ) -> LevelOfTheoryDetailResponse:
+        """``GET /scientific/level-of-theories/{ref_or_id}``.
+
+        The methods-surface reference page: identity (method, basis,
+        dispersion, solvent, spin treatment), the correction schemes and
+        frequency scale factor(s) actually deposited against it
+        (``include=correction_schemes,frequency_scale_factors``), and a
+        bounded usage list (``include=used_by``).
+        """
+
+        return self._get_scientific_detail(
+            f"/scientific/level-of-theories/{level_of_theory_ref_or_id}",
             include=include,
             profile=profile,
         )
