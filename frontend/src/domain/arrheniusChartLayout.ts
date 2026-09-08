@@ -146,6 +146,24 @@ export function arrheniusUnitLabel(units: string | null | undefined): string {
 }
 
 /**
+ * The y-axis title, in the only form that is dimensionally honest: the log
+ * of a RATIO (`log₁₀ [k / <unit>]`), never `log₁₀ k (<unit>)` -- you cannot
+ * take a logarithm of a dimensional quantity, so "the log has units" is not
+ * a sentence a chemist can read as meaning anything; the ratio form is what
+ * makes the argument of the log dimensionless. Reuses `arrheniusUnitLabel`
+ * (the SAME string the k(T) table's own caption/header show, and the panel
+ * legend's "deposited: ..." chip) so the axis, the table, and the legend
+ * can never disagree about which unit is meant -- one formatting function,
+ * three call sites (owner's report: switching the unit used to move the
+ * curve, the table, and the caption, and leave the axis reading the bare
+ * "log₁₀ k" it always had, the one thing on the page that never said what
+ * was actually plotted).
+ */
+export function arrheniusLog10AxisTitle(units: string | null | undefined): string {
+    return `log₁₀ [k / ${arrheniusUnitLabel(units)}]`
+}
+
+/**
  * ~60-point k(T) curve for one plain `arrhenius`/`modified_arrhenius`
  * (single `A`) or `multi_arrhenius` (summed) record, sampled evenly across
  * ITS OWN `record_min_k..record_max_k` -- never a shared/union range, per

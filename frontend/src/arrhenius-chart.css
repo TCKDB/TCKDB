@@ -60,12 +60,28 @@
     color: var(--muted);
 }
 
+/* The considered replacement for "a bare native `<select>` sitting on the
+   chart" (owner, round 3: "I do not like the grey style" / "something more
+   visually appealing"). A rounded chip -- label, then select, inside one
+   bordered pill -- deliberately matching `.arrhenius-chart-legend-item`
+   below (same border/radius/background language) so the controls read as
+   part of THIS chart, not a browser-default form control dropped on top of
+   it. Native `<select>` semantics are unchanged (see this file's own
+   header comment on why a custom dropdown widget is never an option); only
+   the select's own border/background are stripped in favour of the chip's,
+   its native arrow and keyboard/screen-reader behaviour untouched. */
 .arrhenius-chart-control {
     display: flex;
     align-items: center;
-    gap: .4rem;
-    font: var(--type-data-font);
-    color: var(--ink-2);
+    gap: .45rem;
+    padding: .3rem .55rem .3rem .75rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.arrhenius-chart-control:hover {
+    border-color: var(--accent-300);
 }
 
 .arrhenius-chart-control-label {
@@ -73,15 +89,46 @@
     letter-spacing: var(--type-label-tracking);
     text-transform: var(--type-label-transform);
     color: var(--muted);
+    white-space: nowrap;
 }
 
 .arrhenius-chart-control-select {
-    font: var(--type-data-font);
+    border: none;
+    margin: 0;
+    padding: .05rem 0;
+    background: transparent;
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.arrhenius-chart-control-select:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 2px;
+    border-radius: .2rem;
 }
 
 .arrhenius-chart-control-select:disabled {
     color: var(--muted);
     cursor: not-allowed;
+}
+
+/* The Y-axis control when its panel offers no alternative unit
+   (`yAxisUnitNote` -- e.g. every `per_s` panel, 14 of this archive's 17
+   live reaction entries). "Never silently omit the y control" stands: this
+   is the SAME chip, same position, same size an enabled control has --
+   only quieter (a sunken fill, the app's own second-tier hairline) so it
+   reads as "present, deliberately fixed" rather than as a lighter-weight
+   or half-rendered version of the control next to it, which is what a
+   dashed border or a faded-out chip would have read as. */
+.arrhenius-chart-control--disabled {
+    background: var(--surface-sunken);
+    border-color: var(--line-2);
+}
+
+.arrhenius-chart-control--disabled:hover {
+    border-color: var(--line-2);
 }
 
 /* Wraps the Y-axis label+select together with its own optional
@@ -153,20 +200,16 @@
     border: 0;
 }
 
-/* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
-   (design-system.css) is `uppercase` -- every OTHER caller of this token is
-   an English prose label, where case carries no meaning. This heading's own
-   text is a unit string (`arrheniusUnitLabel`, e.g. "s⁻¹"), and upper-casing
-   it renders "S⁻¹" -- SIEMENS per second, a different physical quantity,
-   not "seconds⁻¹" with a capital letter. `text-transform: none` is scoped
-   to this ONE class, never a page-wide override of `--type-label` itself. */
-.arrhenius-chart-panel-heading {
-    margin: 0 0 .5rem;
-    font: var(--type-label-font);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: none;
-    color: var(--muted);
-}
+/* `.arrhenius-chart-panel-heading` (a standalone unit-string caption above
+   the legend, e.g. "s⁻¹") is RETIRED as of round 3 of the axis-label fix --
+   once the y-axis title itself states the unit (`log₁₀ [k / <unit>]`,
+   `ArrheniusChart.tsx`'s `arrheniusLog10AxisTitle`), this heading said the
+   exact same fact a second time, which is what the owner's report flagged
+   ("this page stating the same thing twice"). The SCIENTIFIC ERROR fix this
+   rule used to carry (`text-transform: none`, scoped against `S⁻¹` reading
+   as siemens) now lives on `.arrhenius-chart-axis-title--y` below, which
+   carries the same unit string and needed that exact same override
+   already, unchanged by this removal. */
 
 .arrhenius-chart-legend {
     display: flex;
@@ -275,15 +318,18 @@
    `.arrhenius-chart-axis-title` rule above inherits `--type-label-transform`
    (design-system.css) = `uppercase` -- correct for the X title ("Temperature
    (K)" / "1000 / T (K⁻¹)", ordinary English prose where case carries no
-   meaning), but this Y title's own text is literally "log₁₀ k", and
-   upper-casing it renders "LOG₁₀ K" -- which reads as kelvin, not as
-   log-base-10 of a rate coefficient, on a plot whose x-axis already reads
-   "TEMPERATURE (K)". MEASURED: computed `text-transform: uppercase` with
-   `textContent === "log₁₀ k"` on the live page. The EXACT same defect this
-   file already fixed for `.arrhenius-chart-panel-heading` above ("S⁻¹" --
-   siemens per second) was never applied here. `text-transform: none` is
-   scoped to this ONE (`--y`) selector -- the X title keeps the shared
-   uppercase rule, never a page-wide override of `--type-label` itself. */
+   meaning), but this Y title's own text is `arrheniusLog10AxisTitle`'s
+   dimensionally-honest ratio form (e.g. "log₁₀ [k / cm³ mol⁻¹ s⁻¹]"), and
+   upper-casing it renders "LOG₁₀ [K / CM³ MOL⁻¹ S⁻¹]" -- "K" reads as
+   kelvin, not as log-base-10 of a rate coefficient, on a plot whose x-axis
+   already reads "TEMPERATURE (K)". MEASURED (original finding, still true
+   of the ratio form): computed `text-transform: uppercase` with
+   `textContent === "log₁₀ k"` on the live page, before the axis carried a
+   unit. The EXACT same defect this file already fixed for the retired
+   `.arrhenius-chart-panel-heading` ("S⁻¹" -- siemens per second) was never
+   applied here. `text-transform: none` is scoped to this ONE (`--y`)
+   selector -- the X title keeps the shared uppercase rule, never a
+   page-wide override of `--type-label` itself. */
 .arrhenius-chart-axis-title--y {
     grid-column: 1;
     grid-row: 1;
@@ -322,10 +368,9 @@
    having loaded first"). PROVEN by deleting that one CSSOM rule at
    runtime: the header flipped to "K (CM³ MOL⁻¹ S⁻¹)" -- the exact
    siemens-per-second-shaped defect this file already fixes for
-   `.arrhenius-chart-panel-heading` and `.arrhenius-chart-axis-title--y`
-   above, just reached through a missing import instead of a missing
-   selector. Duplicated here (not moved) rather than deleting
-   `reaction-entry.css`'s own copy, which stays as that page's own belt on
+   `.arrhenius-chart-axis-title--y` above, just reached through a missing
+   import instead of a missing selector. Duplicated here (not moved) rather
+   than deleting `reaction-entry.css`'s own copy, which stays as that page's own belt on
    top of this component's suspenders -- `reaction-entry.css.test.ts`'s own
    "declares .kinetics-k-table th { text-transform: none }" test still
    passes unchanged. `.data-table th` (design-system.css) is what needs
