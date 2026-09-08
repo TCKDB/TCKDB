@@ -5,6 +5,7 @@ const links = [
     ["Species", "/species"],
     ["Reactions", "/reactions"],
     ["Transition states", "/transition-states"],
+    ["Van der Waals", "/vdw-complexes"],
     ["Methods", "/methods"],
 ] as const
 
