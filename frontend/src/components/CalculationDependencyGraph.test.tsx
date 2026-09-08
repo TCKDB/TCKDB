@@ -21,10 +21,10 @@ afterEach(cleanup)
  * fallback. The narrow (<=680px) layout is verified visually, with a real
  * browser, in the PR's own screenshots.
  */
-function renderGraph(dependencies: CalculationDependency[], ownRef = "calc_own_ref", ownType = "opt") {
+function renderGraph(dependencies: CalculationDependency[], ownRef = "calc_own_ref", ownType = "opt", centreLinked?: boolean) {
     return render(
         <MemoryRouter>
-            <CalculationDependencyGraph dependencies={dependencies} ownRef={ownRef} ownType={ownType} />
+            <CalculationDependencyGraph dependencies={dependencies} ownRef={ownRef} ownType={ownType} centreLinked={centreLinked} />
         </MemoryRouter>,
     )
 }
@@ -91,6 +91,41 @@ describe("CalculationDependencyGraph — nodes", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ])
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        expect(within(centreNode).queryByRole("link")).toBeNull()
+    })
+})
+
+// `centreLinked` -- the opt-in `ReactionTransitionStatesSection.tsx` uses,
+// since ITS centre node (the TS's own `ts_opt`) is NOT the page the reader
+// is on, unlike `CalculationDetailPage.tsx`. The default-false case is
+// already covered by the "does not render the centre node as a link" test
+// above (mutation table item (b): flip the default to `true` and that
+// exact test goes red, catching a regression on `CalculationDetailPage`'s
+// own call site, which never passes this prop at all).
+describe("CalculationDependencyGraph — centreLinked opt-in", () => {
+    it("links the centre node to /calculations/<ref> when centreLinked is true", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", true)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const link = within(centreNode).getByRole("link")
+        expect(link).toHaveAttribute("href", "/calculations/calc_own_ref")
+    })
+
+    it("names the linked centre node with the same '<prefix> <ref>' accessible-name shape a parent/child node uses", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", true)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const link = within(centreNode).getByRole("link")
+        expect(link).toHaveAccessibleName("Optimisation calculation calc_own_ref")
+    })
+
+    it("still shows no link when centreLinked is explicitly false", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", false)
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         expect(within(centreNode).queryByRole("link")).toBeNull()
     })

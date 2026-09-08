@@ -1,9 +1,10 @@
 import { Link } from "react-router-dom"
 import type { CalculationDependency } from "../api/calculationApi"
-import type { ReactionFullCalculationEvidence, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
+import type { ReactionEntrySpeciesParticipant, ReactionFullCalculationEvidence, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
 import { lotLabel } from "../api/scientificSchemas"
 import { CalculationDependencyGraph } from "./CalculationDependencyGraph"
 import { ProductLevelsFact } from "./ProductLevels"
+import { ReactionEquation } from "./ReactionEquation"
 import { StageFlow, type StageFlowBox } from "./StageFlow"
 import { deriveProductLevelsFromSourceCalculations } from "../domain/productLevels"
 import { buildCalculationsByRef } from "../domain/reactionKineticsLevels"
@@ -42,10 +43,43 @@ const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
  * `CalculationDependencyGraph` (the same component `CalculationDetailPage`
  * renders, not a fork) whenever this entry's `dependencies[]` is
  * non-empty.
+ *
+ * Owner complaint (2026-09): "in reaction we see Optimisation but no idea
+ * what the optimisation is of? and its not clickable link to the calc?
+ * also i think the graph needs the reactants and products". Three fixes,
+ * all rendered directly above the graph as one `.dep-graph-context` block
+ * (never inside the SVG itself -- see `CalculationDependencyGraph.tsx`'s
+ * own docstring for why the node boxes stay unchanged):
+ * - `centreLinked` (new opt-in prop on `CalculationDependencyGraph`) --
+ *   the centre node here is the TS's `ts_opt`, a calculation the reader is
+ *   NOT already viewing (unlike on `CalculationDetailPage`, where it is
+ *   the page), so it gets the same link affordance a parent/child node has.
+ * - A subject caption naming what the centre node's optimisation IS the
+ *   optimisation OF (this TS entry), linking to the TS entry itself. Kept
+ *   OUT of the node's own pill/ref text (which is sized to fit today's
+ *   `calc_...` refs at every layout width, `dependencyGraphLayout.ts`'s
+ *   own box-sizing estimate) rather than risk overflow inside the SVG.
+ * - `reactants`/`products`/`reversible` (new, OPTIONAL props -- omitted
+ *   entirely renders no equation caption rather than a broken one) let
+ *   this section reuse `ReactionEquation` for the reaction's own
+ *   participants, each still linking to its species entry. Optional
+ *   because `species` is itself a nullable §3A field on `/full`
+ *   (`api/reactionEntryApi.ts`'s `reactionFullResponseSchema`) -- an
+ *   absent equation is an honest "not served," never fabricated. A short,
+ *   separate note makes explicit what the graph itself does and does NOT
+ *   show: calculations and their data flow, never which species the IRC
+ *   terminated at -- `/full` carries no such linkage (no species-level
+ *   calculation edge of any kind), so the graph never draws one.
  */
-export function ReactionTransitionStatesSection({ transitionStates, calculations }: {
+export function ReactionTransitionStatesSection({ transitionStates, calculations, reactants, products, reversible }: {
     transitionStates: ReactionTransitionStateInFull[]
     calculations: ReactionFullCalculationEvidence[] | null | undefined
+    /** The reaction's own participants (`/full`'s `species.reactants`/
+     * `.products`), for the equation caption above each TS's dependency
+     * graph. Optional -- see this component's own docstring. */
+    reactants?: ReactionEntrySpeciesParticipant[]
+    products?: ReactionEntrySpeciesParticipant[]
+    reversible?: boolean
 }) {
     if (transitionStates.length === 0) {
         return <p className="empty-projection">No transition-state entry has been deposited for this reaction entry.</p>
@@ -54,15 +88,25 @@ export function ReactionTransitionStatesSection({ transitionStates, calculations
     return (
         <>
             {transitionStates.map((ts) => (
-                <TransitionStateBlock key={ts.transition_state_entry_ref} ts={ts} calculationsByRef={calculationsByRef} />
+                <TransitionStateBlock
+                    key={ts.transition_state_entry_ref}
+                    ts={ts}
+                    calculationsByRef={calculationsByRef}
+                    reactants={reactants}
+                    products={products}
+                    reversible={reversible}
+                />
             ))}
         </>
     )
 }
 
-function TransitionStateBlock({ ts, calculationsByRef }: {
+function TransitionStateBlock({ ts, calculationsByRef, reactants, products, reversible }: {
     ts: ReactionTransitionStateInFull
     calculationsByRef: Map<string, ReactionFullCalculationEvidence>
+    reactants?: ReactionEntrySpeciesParticipant[]
+    products?: ReactionEntrySpeciesParticipant[]
+    reversible?: boolean
 }) {
     const stageEntries = STAGE_ORDER
         .filter((key) => ts.calculations[key])
@@ -142,7 +186,27 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
 
             <h3 className="t-heading-2 reaction-ts-dep-graph-heading">Calculation dependency graph</h3>
             {dependencies.length > 0 && centreRef
-                ? <CalculationDependencyGraph dependencies={dependencies} ownRef={centreRef} ownType="opt" />
+                ? (
+                    <>
+                        <div className="dep-graph-context">
+                            {reactants && products && (
+                                <p className="note" data-testid="dep-graph-equation-caption">
+                                    Reaction:{" "}
+                                    <ReactionEquation reactants={reactants} products={products} reversible={reversible ?? false} />
+                                </p>
+                            )}
+                            <p className="note" data-testid="dep-graph-subject-caption">
+                                The centre node below is this transition state's own geometry optimisation, from{" "}
+                                <Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>{ts.transition_state_entry_ref}</Link>.
+                            </p>
+                            <p className="note" data-testid="dep-graph-context-note">
+                                This graph shows calculations and how data flows between them — the archive does not
+                                record which of the reaction's species the IRC calculation terminated at.
+                            </p>
+                        </div>
+                        <CalculationDependencyGraph dependencies={dependencies} ownRef={centreRef} ownType="opt" centreLinked />
+                    </>
+                )
                 : (
                     <p className="empty-projection">
                         No dependency edges are served for this TS entry's calculations.
