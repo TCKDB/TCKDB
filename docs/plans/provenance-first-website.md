@@ -391,6 +391,22 @@ provenance and machine detail live on dedicated linked pages.
     style saw neither. And demanding a mutation table per finding
     turned nine survivors out of nineteen into zero out of twenty-six
     on the same pull request.
+30. One path per browse kind. All four kinds had shared one address,
+    `/species?kind=...`, so reactions were browsed under a URL that
+    said species -- and the nav's own Reactions link still rendered a
+    placeholder, so the discoverable route was a dead end while the
+    working one hid behind a query parameter. Each kind now has its
+    own path, `/species`, `/vdw-complexes`, `/transition-states` and
+    `/reactions`, all rendering one browse component with the kind
+    fixed by the route; the kind selector navigates between them
+    carrying the filters that still apply, and old query links
+    redirect with their filters intact and without an extra history
+    entry (#404). The review found the same complaint alive in a more
+    prominent place: the home page still advertised reactions as
+    coming soon while linking to the index the change had just made
+    work. When a placeholder route becomes real, every label and
+    comment that exists only because it was a placeholder has to be
+    swept with it.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
