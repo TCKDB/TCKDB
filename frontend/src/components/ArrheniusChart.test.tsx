@@ -368,6 +368,43 @@ describe("ArrheniusChart -- the panel heading is never visually uppercased (a un
     })
 })
 
+// SCIENTIFIC ERROR regression guard (post-merge review finding, the SAME
+// defect class as the panel-heading test above): the y-axis title's own
+// text is literally "log₁₀ k" -- the shared `.arrhenius-chart-axis-title`
+// rule inherits `--type-label-transform` (`uppercase`), which renders it
+// "LOG₁₀ K", indistinguishable from kelvin on a plot whose x-axis reads
+// "TEMPERATURE (K)". A `textContent` assertion cannot see this (the DOM
+// text is still lowercase "log₁₀ k"; only the COMPUTED style differs) --
+// this asserts `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+describe("ArrheniusChart -- the y-axis title (log10 k) is never visually uppercased into kelvin", () => {
+    it("computed text-transform is none on .arrhenius-chart-axis-title--y, textContent stays lowercase log10 k", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const yTitle = document.querySelector(".arrhenius-chart-axis-title--y") as HTMLElement
+        expect(yTitle.textContent).toBe("log₁₀ k")
+        expect(getComputedStyle(yTitle).textTransform).toBe("none")
+    })
+
+    // The X title is ordinary prose ("Temperature (K)") where uppercasing
+    // carries no scientific-error risk -- this pins that the y-axis fix is
+    // scoped to `--y` only, never a page-wide removal of the shared
+    // `.arrhenius-chart-axis-title` rule's own uppercase behaviour. jsdom
+    // does not resolve `var(--type-label-transform)` to a literal keyword
+    // (unlike a real browser -- confirmed here: the computed value comes
+    // back as the unresolved token string, not "uppercase"), so this
+    // cannot assert the literal keyword the way the `--y` test above
+    // asserts `"none"`. It instead asserts the one thing jsdom CAN
+    // distinguish: the x-axis title's computed value is still the
+    // inherited `var(...)` token, NOT the explicit `"none"` an
+    // over-broadly-scoped fix (accidentally widening `--y`'s override to
+    // the shared `.arrhenius-chart-axis-title` base rule) would produce.
+    it("the X-axis title (ordinary prose) is NOT overridden to text-transform: none -- the y-axis fix stays scoped to --y", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const xTitle = document.querySelector(".arrhenius-chart-axis-title--x") as HTMLElement
+        expect(xTitle.textContent).toBe("Temperature (K)")
+        expect(getComputedStyle(xTitle).textTransform).not.toBe("none")
+    })
+})
+
 // Should-fix #7, the CHART's own half of the third-body table-withholding
 // fix (`kineticsTable.test.ts` covers `computeKineticsTable` itself) --
 // this checks BOTH surfaces together on one third-body fixture: excluded

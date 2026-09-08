@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import {
     ARRHENIUS_SAMPLE_COUNT,
+    type ArrheniusSeries,
     arrheniusPanelKey,
     arrheniusPointX,
     arrheniusUnitLabel,
@@ -437,5 +438,34 @@ describe("convertArrheniusSeriesUnits -- the series-level half of the unit selec
         const unrecorded = computeArrheniusSeries(record({ parameters: { A, n, Ea_kj_mol: Ea, A_units: null } }))!
         const attempted = convertArrheniusSeriesUnits(unrecorded, "cm3_mol_s")
         expect(attempted).toBe(unrecorded)
+    })
+
+    // Post-merge review finding: a converted `k` that underflows to EXACTLY
+    // 0 (a double cannot represent the true tiny positive value) must be
+    // SKIPPED, mirroring `computeArrheniusSeries`'s own `if (!(k > 0))
+    // continue` guard on the RAW k -- without it, `Math.log10(0)` is
+    // `-Infinity`, which poisons `panelLog10KDomain`'s `Math.min`/`Math.max`
+    // into `[-Infinity, Infinity]` and every plotted y becomes `NaN`: the
+    // WHOLE panel renders blank with no error. `Number.MIN_VALUE` (the
+    // smallest positive subnormal double, ~5e-324) times ANY of this file's
+    // own conversion factors below 1 rounds to exactly 0 in IEEE-754 double
+    // arithmetic -- a clean, deterministic way to force the underflow
+    // without needing a physically implausible A.
+    it("a converted k that underflows to exactly 0 is SKIPPED, not left in as a -Infinity log10k", () => {
+        const raw = computeArrheniusSeries(record())!
+        const tinyPointSeries: ArrheniusSeries = {
+            ...raw,
+            points: [
+                { temperatureK: 300, k: Number.MIN_VALUE, log10k: Math.log10(Number.MIN_VALUE) },
+                ...raw.points.slice(1),
+            ],
+        }
+        const converted = convertArrheniusSeriesUnits(tinyPointSeries, "cm3_molecule_s")
+        // The underflowed point is gone entirely -- not present as a
+        // `k: 0` / `log10k: -Infinity` point that would corrupt the domain.
+        expect(converted.points.some((p) => p.temperatureK === 300)).toBe(false)
+        expect(converted.points.length).toBe(tinyPointSeries.points.length - 1)
+        expect(converted.points.every((p) => Number.isFinite(p.log10k))).toBe(true)
+        expect(converted.points.every((p) => p.k > 0)).toBe(true)
     })
 })

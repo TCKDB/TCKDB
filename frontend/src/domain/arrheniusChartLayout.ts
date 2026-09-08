@@ -328,18 +328,30 @@ export function arrheniusPanelKey(panel: ArrheniusPanel): string {
  * conversion is legal, only the one that PERFORMS an already-legal one
  * (`ArrheniusPanel.availableUnits` is what stops an illegal one from ever
  * being requested in the first place).
+ *
+ * A converted point whose `k` is not strictly positive is SKIPPED, exactly
+ * as `computeArrheniusSeries` above already skips one (`if (!(k > 0))
+ * continue`) -- a tiny-but-nonzero `k` (e.g. an order-3 unit's own
+ * `1/N_A²` factor applied to an already-small raw `k`) can underflow to
+ * exactly `0` in a double, and an un-guarded `Math.log10(0)` is
+ * `-Infinity`: left in, that single point poisons `panelLog10KDomain`'s
+ * `Math.min`/`Math.max` into `[-Infinity, Infinity]`, every plotted y
+ * becomes `NaN`, and the WHOLE panel renders blank with no error anywhere
+ * (post-merge review finding -- the underflow threshold, k < ~1.79e-308 /
+ * factor, is not realistically reachable for a real deposit, but the
+ * guard is one line and the failure mode without it is silent).
  */
 export function convertArrheniusSeriesUnits(series: ArrheniusSeries, toUnits: string): ArrheniusSeries {
     if (series.depositedUnits == null) return series
     const factor = arrheniusUnitConversionFactor(series.depositedUnits, toUnits)
     if (factor == null || factor === 1) return series
-    return {
-        ...series,
-        points: series.points.map((point) => {
-            const k = point.k * factor
-            return { ...point, k, log10k: Math.log10(k) }
-        }),
+    const points: ArrheniusPoint[] = []
+    for (const point of series.points) {
+        const k = point.k * factor
+        if (!(k > 0)) continue
+        points.push({ ...point, k, log10k: Math.log10(k) })
     }
+    return { ...series, points }
 }
 
 /** x-domain for one panel -- the UNION of every plotted series' own fitted
