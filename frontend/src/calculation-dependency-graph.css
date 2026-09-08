@@ -14,6 +14,33 @@
     overflow-x: auto;
 }
 
+/* `ReactionTransitionStatesSection.tsx`'s caption block, rendered directly
+   above the graph (never inside the SVG -- see `CalculationDependencyGraph
+   .tsx`'s own docstring for why): the reaction equation this TS connects,
+   what the centre node's optimisation is OF, and (only when this TS
+   actually has one) an honest note on what the graph does/doesn't show
+   about the IRC. Each line is `.note`-styled by the caller
+   (`.note`/`.note a`, design-system.css) -- this rule only stacks them,
+   the same flex-column pattern `.dep-graph-sentences` below uses.
+   `margin: 0` on the `<p>`s: `.note` (design-system.css) sets no margin of
+   its own, so each paragraph still carried its plain UA-stylesheet
+   default (`1em` top/bottom) on top of this flex container's own `gap` --
+   review finding: the two stacked, so this block's own lines sat visibly
+   airier than every other `.note` stack on the page. Flex items' margins
+   never collapse against each other the way block-level siblings' do, so
+   only zeroing them here (not just relying on `gap`) fixes it. */
+.dep-graph-context {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    margin: var(--s-4) 0 var(--s-2);
+    max-width: var(--measure-note);
+}
+
+.dep-graph-context p {
+    margin: 0;
+}
+
 .dep-graph-svg {
     display: block;
     width: 100%;
@@ -75,12 +102,42 @@
     cursor: pointer;
 }
 
+/* Static clickable affordance (review finding: a linked node rendered as
+   a plain box with plain `--ink` text -- indistinguishable from a
+   satellite type pill's own text at a glance, no cue at all until the
+   pointer happened to hover it). The house link treatment
+   (`.kv-list a`/`.data-table a`/`.card a`/`.note a`, design-system.css)
+   is accent-coloured and underlined WITHOUT needing hover -- this is the
+   same treatment applied to the ref text of any node this component
+   itself wraps in a `<Link>` (every parent/child node, and the centre
+   node when `centreLinked`), so a linked node always reads as a link. */
+.dep-graph-node-link .dep-graph-node-ref {
+    fill: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+}
+
 .dep-graph-node-link:hover .dep-graph-node-rect {
     stroke: var(--accent);
 }
 
+.dep-graph-node-link:hover .dep-graph-node-ref {
+    fill: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+/* Keyboard focus: BOTH a real `outline` around the whole link (the same
+   3px/accent-300/3px-offset the house link treatment uses,
+   design-system.css) AND the node's own border switching to a thicker
+   accent stroke -- belt and suspenders, since the outline alone can be
+   hard to see against the node's own already-drawn border at the box's
+   corners. MEASURED (post-review): an earlier version suppressed the
+   outline entirely (`outline: none`) and relied on the border-stroke
+   change alone, which review found too subtle to count as "focus
+   visible" on a box already drawn with a 1.5px `--line` stroke. */
 .dep-graph-node-link:focus-visible {
-    outline: none;
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
 }
 
 .dep-graph-node-link:focus-visible .dep-graph-node-rect {

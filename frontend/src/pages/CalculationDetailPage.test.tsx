@@ -576,6 +576,17 @@ describe("CalculationDetailPage", () => {
         // suite green, since nothing here named the graph specifically.
         expect(within(depSection).getByRole("img", { name: /Dependency graph for/ })).toBeVisible()
 
+        // This page IS the centre calculation's own page -- its centre
+        // node must never become a link (unlike ReactionTransitionStates
+        // Section.tsx's own graph, whose centre is a DIFFERENT calculation
+        // the reader is not already viewing). Guarded here at the call
+        // site (`CalculationDependencyGraph.tsx:884` never passes
+        // `centreLinked`), not just at that prop's own default, so an
+        // accidental opt-in on THIS page is caught even if the component's
+        // default ever changed.
+        const centreNode = within(depSection).getByTestId("dep-node-centre-calc_freq_one")
+        expect(within(centreNode).queryByRole("link")).toBeNull()
+
         // Parent-side: the OTHER calculation is the subject, and the
         // sentence has a verb ("was run on") -- review finding: it used to
         // read "single point on this geometry" with no verb at all.

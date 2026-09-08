@@ -434,6 +434,66 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         const dts = Array.from(tsSection.querySelectorAll(".reaction-product-levels dt")).map((el) => el.textContent)
         expect(dts).toEqual(["Geometry", "Frequencies", "Energy"])
     })
+
+    // The gap this test exists to close: `ReactionTransitionStatesSection`'s
+    // own `reactants`/`products`/`reversible` props were built and unit
+    // tested in isolation, but the ONE call site that matters --
+    // `EntryDetail` below, inside THIS file -- kept passing only
+    // `transitionStates`/`calculations` for a full review cycle, so the
+    // equation caption above the dependency graph was unreachable code on
+    // the live page despite every unit test passing. Only a render of the
+    // real page (this file, not the section's own test file) can catch a
+    // wiring gap at the CALL SITE -- exercised here via the page's own
+    // already-served `species.reactants`/`.products` fixture (spe_water/
+    // spe_ch3 -> spe_ch4/spe_oh), never synthetic props handed to the
+    // section directly.
+    it("wires the page's own species participants into the dependency graph's equation caption", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
+        const caption = tsSection.querySelector('[data-testid="dep-graph-equation-caption"]')
+        expect(caption, "equation caption not rendered above the TS dependency graph -- reactants/products/reversible not reaching ReactionTransitionStatesSection from EntryDetail's own record").not.toBeNull()
+        const reactantLink = within(caption as HTMLElement).getByRole("link", { name: "H2O" })
+        expect(reactantLink).toHaveAttribute("href", "/species-entries/spe_water")
+        const productLink = within(caption as HTMLElement).getByRole("link", { name: "CH4" })
+        expect(productLink).toHaveAttribute("href", "/species-entries/spe_ch4")
+        // `reversible` reaches the caption via a THIRD prop the two link
+        // assertions above cannot exercise at all -- review finding:
+        // dropping `reversible={entry.reversible}` from the call site left
+        // the full suite green while the caption printed "→" instead of
+        // "⇌" for every one of this archive's reactions (all 42 live
+        // reaction entries are reversible), a false chemistry claim in an
+        // authoritative-looking position. `mockFull`'s own fixture is
+        // `reversible: true`.
+        expect(caption!.textContent).toContain("⇌")
+        expect(caption!.textContent).not.toContain("→")
+    })
+
+    // Review finding: `species` is a nullable §3A field
+    // (`api/reactionEntryApi.ts`'s `reactionFullResponseSchema`), and
+    // `EntryDetail` normalises its absence to `{reactants: [], products:
+    // []}` -- empty arrays, which are TRUTHY. An earlier version of the
+    // section's own gate (`reactants && products`) rendered a bare
+    // "Reaction:  ⇌ " with nothing on either side for exactly this
+    // response shape; the section's OWN test file could not catch it
+    // because it exercised the gate with `undefined`, a shape no real
+    // caller produces (the page always normalises to `[]`, never passes
+    // `undefined` through). Only a render of the real page against a
+    // payload with `species` genuinely omitted proves the fix.
+    it("renders no equation caption -- and never a bare arrow -- when /full omits species entirely", async () => {
+        const payload = mockFull()
+        delete (payload as Record<string, unknown>).species
+        handleFull(payload)
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
+        expect(tsSection.querySelector('[data-testid="dep-graph-equation-caption"]')).toBeNull()
+        expect(tsSection.textContent).not.toMatch(/⇌/)
+        expect(tsSection.textContent).not.toMatch(/Reaction:/)
+        // Everything that does NOT depend on species still renders.
+        expect(tsSection.querySelector('[data-testid="dep-graph-subject-caption"]')).not.toBeNull()
+    })
 })
 
 // Post-review: the reviewer measured that several facts on this page could

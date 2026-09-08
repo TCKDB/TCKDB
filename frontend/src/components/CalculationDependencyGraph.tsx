@@ -36,6 +36,28 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * `.dep-graph-node-pill-bg` comment -- `domain/dependencyGraphLayout.ts`
  * sizes it); every other node shows its ref alone rather than guess.
  *
+ * `centreLinked` (default `false`, preserving every existing caller's
+ * behaviour) opts the CENTRE node into being a real link too --
+ * `CalculationDetailPage.tsx` never passes it (that page IS the centre
+ * calculation, so a link back to itself would be pointless) but
+ * `ReactionTransitionStatesSection.tsx` does: on the reaction entry page
+ * the centre node is the transition state's own `ts_opt`, a calculation
+ * the reader is NOT already viewing, so leaving it unlinked there was the
+ * owner's second complaint ("not clickable link to the calc"). When linked,
+ * the pill+ref content wraps in the SAME `.dep-graph-node-link` a
+ * parent/child node uses (hover/focus/visible-affordance CSS all apply
+ * unchanged) and gets an accessible name of `${pill.label} ${node.ref}`
+ * (e.g. "Optimisation calc_xxx") -- the two visible text runs (the pill's
+ * own text, then the ref line) concatenated in their own on-screen reading
+ * order, nothing inserted between them. Review finding (SC 2.5.3, Label in
+ * Name): an earlier version inserted the word "calculation" between the
+ * two -- `"Optimisation calculation calc_xxx"` -- which is a real word in
+ * the accessible name that never appears on screen, breaking the visible
+ * label into two non-contiguous pieces of the name. A parent/child node
+ * has only ONE visible text run (its ref alone, no pill), so `${prefix}
+ * ${ref}` was already safe there -- the prefix is never visible, and the
+ * ref is a contiguous, unbroken tail of the name.
+ *
  * Two full layouts (`computeWideLayout`/`computeNarrowLayout`,
  * `domain/dependencyGraphLayout.ts` -- see that module's own docstring
  * for the geometry). Which one is ACTIVE is decided from a REAL measured
@@ -77,10 +99,13 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * covering its OWN label where the two deliberately meet (the label's
  * opaque background "punches a hole" in its own line at the bend).
  */
-export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
+export function CalculationDependencyGraph({ dependencies, ownRef, ownType, centreLinked = false }: {
     dependencies: CalculationDependency[]
     ownRef: string
     ownType: string
+    /** Opt-in: see this component's own docstring. Default `false` keeps
+     * `CalculationDetailPage.tsx`'s existing centre-is-unlinked behaviour. */
+    centreLinked?: boolean
 }) {
     const markerId = useId()
     const containerRef = useRef<HTMLDivElement>(null)
@@ -172,7 +197,9 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType }: {
                         </text>
                     </g>
                 ))}
-                {layout.nodes.map((node) => <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} />)}
+                {layout.nodes.map((node) => (
+                    <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} centreLinked={centreLinked} />
+                ))}
             </svg>
             <DependencySentenceList dependencies={dependencies} />
         </div>
@@ -185,7 +212,7 @@ const TIER_ARIA_PREFIX: Record<LayoutNode["tier"], string> = {
     child: "Child calculation",
 }
 
-function DependencyGraphNode({ node }: { node: LayoutNode }) {
+function DependencyGraphNode({ node, centreLinked }: { node: LayoutNode; centreLinked: boolean }) {
     const left = node.x - node.width / 2
     const top = node.y - node.height / 2
     const rect = <rect x={left} y={top} width={node.width} height={node.height} rx={NODE_RX} className="dep-graph-node-rect" />
@@ -210,8 +237,8 @@ function DependencyGraphNode({ node }: { node: LayoutNode }) {
         // module's public surface for.
         const pillY = contentTop + 10
         const refY = pillY + pill.height + 8 + 12
-        return (
-            <g className="dep-graph-node dep-graph-node--centre" data-testid={`dep-node-centre-${node.ref}`}>
+        const content = (
+            <>
                 {rect}
                 <rect
                     x={node.x - pill.width / 2}
@@ -227,6 +254,21 @@ function DependencyGraphNode({ node }: { node: LayoutNode }) {
                 <text x={node.x} y={refY} className="dep-graph-node-ref" textAnchor="middle" dominantBaseline="middle">
                     {node.ref}
                 </text>
+            </>
+        )
+        return (
+            <g className="dep-graph-node dep-graph-node--centre" data-testid={`dep-node-centre-${node.ref}`}>
+                {centreLinked
+                    ? (
+                        <Link
+                            to={`/calculations/${node.ref}`}
+                            aria-label={`${pill.label} ${node.ref}`}
+                            className="dep-graph-node-link"
+                        >
+                            {content}
+                        </Link>
+                    )
+                    : content}
             </g>
         )
     }
