@@ -89,14 +89,31 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
         <li className="browse-row card reaction-browse-row">
             <div className="browse-row-headline">
                 <p className="reaction-browse-row-title">
-                    {/* `aria-label` falls back to the browser's own accname
-                        computation (concatenating the equation's visible
-                        text) when `record.equation` is absent/null -- an
-                        older or pre-deployment response that never served
-                        this convenience string still gets a usable,
-                        content-derived accessible name, just not the exact
-                        served string. */}
-                    <Link aria-label={record.equation ?? undefined} className="browse-row-title" to={target}>
+                    {/* Deliberately NO `aria-label` here: the equation is the
+                        Link's own visible content (`species_entry_label` chip
+                        and the arrow's "reacts reversibly with"/"reacts to
+                        form" aria-label included), so the browser's own
+                        accname computation already reads as an English
+                        sentence -- e.g. "H2N + H2N reacts reversibly with
+                        H4N2". A served `record.equation` string (raw
+                        SMILES-joined form, e.g. "[NH2] + [NH2] <=> NN") is
+                        NOT a substitute: measured live via Chrome's
+                        accessibility tree, that string shares zero words
+                        with the rendered formula text, a WCAG 2.5.3 "Label
+                        in Name" failure -- a voice-control user saying
+                        "click H2N" cannot activate the row, and a screen
+                        reader spells out a SMILES string letter by letter
+                        instead of reading the formula it corresponds to.
+                        An earlier revision of this component set
+                        `aria-label={record.equation ?? undefined}`
+                        specifically to get an "exact, testable string" the
+                        way `TransitionStateBrowseRow` does -- but that
+                        component's own aria-label is built from the SAME
+                        rendered-equation string its Link displays (plus the
+                        TS label), never a differently-formatted one; there
+                        is no equivalent here to reach for, so the honest
+                        fix is no override at all. */}
+                    <Link className="browse-row-title" to={target}>
                         <ReactionEquation
                             linkParticipants={false}
                             products={toEquationParticipants(record.products)}

@@ -232,22 +232,43 @@ describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable
         expect(ref.closest("a")).toBeNull()
     })
 
-    it("the row's single link carries an accessible name built from the served equation text", () => {
+    // Review follow-up: an earlier revision of this row set
+    // `aria-label={record.equation ?? undefined}` on the link, reaching
+    // for "an exact, testable string" the way `TransitionStateBrowseRow`
+    // does. Measured live via Chrome's accessibility tree, that was a
+    // WCAG 2.5.3 "Label in Name" failure -- `record.equation` is the raw
+    // SMILES-joined served string (e.g. "[NH2] + [NH2] <=> NN"), which
+    // shares no words with the rendered formula text a sighted user sees
+    // ("H2N + H2N ⇌ H4N2"), so a voice-control user saying "click H2N"
+    // could not activate the row, and a screen reader spelled out SMILES
+    // letter by letter instead of reading the formula. The fix is no
+    // `aria-label` at all: the browser's own accname computation already
+    // reads as a sentence, because the arrow's own nested `aria-label`
+    // ("reacts reversibly with"/"reacts to form") is picked up by that
+    // computation same as any other descendant text.
+    it("the row's link carries NO aria-label -- its accessible name is computed from its own visible content, not `record.equation`", () => {
         renderRow(record({ reaction_entry_ref: "rxe_specific", equation: "O + [CH3] <=> C + [OH]" }))
-        const link = screen.getByRole("link", { name: "O + [CH3] <=> C + [OH]" })
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const link = within(row).getByRole("link")
         expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+        expect(link).not.toHaveAttribute("aria-label")
+        // The computed accessible name includes the arrow's own nested
+        // aria-label text -- proof the name is built from rendered
+        // content, not overridden.
+        expect(within(row).getByRole("link", { name: /reacts reversibly with/ })).toBe(link)
+        // MUTATION CHECK: the raw served `equation` string must NOT be
+        // (part of) the accessible name -- reintroducing the old
+        // `aria-label={record.equation}` override would make this match.
+        expect(within(row).queryByRole("link", { name: "O + [CH3] <=> C + [OH]" })).toBeNull()
     })
 
-    it("falls back to the browser's own content-derived accessible name when `equation` is absent (older API)", () => {
+    it("behaves identically when `equation` is absent (older API) -- there was never a code path that used it for aria-label", () => {
         const withoutEquation: ReactionBrowseRecord = record({ reaction_entry_ref: "rxe_specific" })
         delete withoutEquation.equation
         renderRow(withoutEquation)
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
         const link = within(row).getByRole("link")
         expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
-        // No explicit aria-label was set, so the accessible name falls
-        // back to the link's own visible text content (the rendered
-        // equation) -- it is non-empty and mentions the formula.
         expect(link).not.toHaveAttribute("aria-label")
         expect(link.textContent).toContain("CH3")
     })

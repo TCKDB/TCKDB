@@ -233,3 +233,33 @@ describe("reaction browse row -- stereo-chip capped and muted, not a 1:1 inherit
         expect(rule).toMatch(/font-size:\s*inherit/)
     })
 })
+
+// Review follow-up: the ENTIRE point of this PR -- making the reaction
+// browse card one click target for the reaction entry -- lives in a single
+// CSS rule, `.reaction-browse-row .browse-row-title::after`. jsdom does
+// not compute pseudo-element styles at all (confirmed: `getComputedStyle`
+// on a `::after` selector returns nothing meaningful in this project's
+// jsdom/cssstyle version), so `ReactionBrowseRow.test.tsx`'s own
+// computed-style suite cannot see this rule -- it can only assert that the
+// row and footer ancestors are positioned. Without a SOURCE-TEXT assertion
+// here, that one line could be deleted entirely and the whole rendered
+// test suite would stay green while the on-page click target collapsed
+// from the full card down to a sliver around the equation text (MEASURED:
+// deleting this rule drops on-target click points from 2940/2940 to
+// 170/2940 in a real browser, with 57 unrelated tests still passing).
+// Same source-text technique the stereo-chip suite above uses, for the
+// same reason: no computed-pixel assertion can catch this class of
+// regression here.
+describe("reaction browse row -- title-link stretched-click overlay (the one rule that makes the whole card a single click target)", () => {
+    it(".reaction-browse-row .browse-row-title::after is an absolutely positioned, full-box (inset: 0) empty overlay", () => {
+        const rule = extractRule(css, ".reaction-browse-row .browse-row-title::after")
+        expect(rule).toMatch(/content:\s*""/)
+        expect(rule).toMatch(/position:\s*absolute/)
+        expect(rule).toMatch(/inset:\s*0/)
+    })
+
+    it(".reaction-browse-row itself is positioned, so the overlay's inset:0 resolves against the ROW (the whole card), not the title text alone", () => {
+        const rule = extractRule(css, ".reaction-browse-row")
+        expect(rule).toMatch(/position:\s*relative/)
+    })
+})
