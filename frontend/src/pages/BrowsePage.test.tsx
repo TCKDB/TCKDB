@@ -1,9 +1,10 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
+import { seedFiltersFromUrl } from "../api/browseApi"
 
 // ---------------------------------------------------------------------------
 // Fixtures. Two DISTINCT rows per kind, each with different chemistry/
@@ -198,6 +199,84 @@ function renderAt(path: string) {
     render(<App />)
 }
 
+// `seedFiltersFromUrl` is the ONE place initial-URL params become filter
+// state -- unit-tested directly here (not just through the end-to-end
+// tests below) so a broken kind branch or a `.get` regression (silently
+// keeping only the first of a repeated param) is caught at the smallest
+// possible unit, before it ever reaches a rendered page.
+describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind", () => {
+    it("transition_state: reads participant_smiles", () => {
+        expect(seedFiltersFromUrl("transition_state", new URLSearchParams("participant_smiles=CCO"))).toEqual({
+            participantSmiles: "CCO",
+        })
+    })
+
+    it("transition_state: no participant_smiles in the URL seeds an empty string, not undefined", () => {
+        expect(seedFiltersFromUrl("transition_state", new URLSearchParams())).toEqual({ participantSmiles: "" })
+    })
+
+    // Gap found post-hoc (front-page reaction search's "See all N reactions
+    // involving X" link): a REPEATED param must seed ALL values, comma-
+    // joined into this filter's own on-the-wire shape -- `.get` alone would
+    // silently keep only the first and understate what the link promised.
+    it("reaction: a single reactant_smiles/product_smiles seeds one token each", () => {
+        expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles=NN&product_smiles=C"))).toEqual({
+            reactantSmiles: "NN", productSmiles: "C",
+        })
+    })
+
+    it("reaction: a REPEATED reactant_smiles seeds BOTH values, comma-joined -- not just the first", () => {
+        const params = new URLSearchParams()
+        params.append("reactant_smiles", "NN")
+        params.append("reactant_smiles", "[H]")
+        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "NN,[H]", productSmiles: "" })
+    })
+
+    it("reaction: a repeated product_smiles seeds both values too, independently of reactant_smiles", () => {
+        const params = new URLSearchParams()
+        params.append("product_smiles", "C")
+        params.append("product_smiles", "[OH]")
+        expect(seedFiltersFromUrl("reaction", params)).toEqual({ reactantSmiles: "", productSmiles: "C,[OH]" })
+    })
+
+    it("reaction: an empty-value param (?reactant_smiles=) seeds nothing -- 'present but blank' means unfiltered, same as the backend's own contract", () => {
+        expect(seedFiltersFromUrl("reaction", new URLSearchParams("reactant_smiles="))).toEqual({
+            reactantSmiles: "", productSmiles: "",
+        })
+    })
+
+    it("reaction: no reactant_smiles/product_smiles at all seeds empty strings for both", () => {
+        expect(seedFiltersFromUrl("reaction", new URLSearchParams())).toEqual({ reactantSmiles: "", productSmiles: "" })
+    })
+
+    // A reaction-kind linker's params must not leak into an unrelated kind,
+    // and vice versa (mirrors the pre-existing `participant_smiles`
+    // species-kind test, end to end, below).
+    it("species/vdw: seeds nothing, even if the URL happens to carry a transition_state/reaction param", () => {
+        const params = new URLSearchParams("participant_smiles=CCO&reactant_smiles=NN")
+        expect(seedFiltersFromUrl("species", params)).toEqual({})
+        expect(seedFiltersFromUrl("vdw", params)).toEqual({})
+    })
+
+    it("reaction: does not seed participant_smiles even if present in the URL -- that param belongs to transition_state only", () => {
+        const seed = seedFiltersFromUrl("reaction", new URLSearchParams("participant_smiles=CCO"))
+        expect(seed).not.toHaveProperty("participantSmiles")
+    })
+})
+
+// The kind switcher (`BrowseKindSelector.tsx`, demoted from a radiogroup to
+// a plain link list) shares its own kind's label with the top nav's
+// "Species"/"Reactions" links -- `screen.getByRole("link", { name:
+// "Species" })` throws "found multiple elements" whenever the page also
+// shows the switcher's own "Species" link. Scoped to
+// `nav[aria-label="Browse a different kind"]` so every kind-switch click in
+// this file resolves the SWITCHER's link, not the top nav's, even on the
+// one kind (species) where the two labels collide.
+async function clickKindLink(user: ReturnType<typeof userEvent.setup>, name: string) {
+    const switcher = screen.getByRole("navigation", { name: "Browse a different kind" })
+    await user.click(within(switcher).getByRole("link", { name }))
+}
+
 describe("browse page: kind selection queries the right endpoint with the right parameters", () => {
     it("defaults to species at /species, hitting /species/browse with species_entry_kind=minimum", async () => {
         let capturedUrl: URL | undefined
@@ -206,7 +285,15 @@ describe("browse page: kind selection queries the right endpoint with the right 
         await screen.findByText(/records · showing/)
         expect(capturedUrl?.searchParams.get("species_entry_kind")).toBe("minimum")
         expect(window.location.pathname).toBe("/species")
-        expect(screen.getByRole("radio", { name: "Species" })).toBeChecked()
+        // The kind switcher no longer marks a "checked" option (it demoted
+        // from a radiogroup to a plain link list, `BrowseKindSelector.tsx`)
+        // -- the page's own heading is the honest way to assert which kind
+        // is showing now (`BROWSE_KIND_CONTENT`, `api/browseApi.ts`).
+        expect(screen.getByRole("heading", { name: "Browse species" })).toBeVisible()
+        // And the switcher itself must not link back to the kind you are
+        // already on -- scoped to `nav[aria-label="Browse a different
+        // kind"]` since the top nav also carries an unrelated "Species" link.
+        expect(within(screen.getByRole("navigation", { name: "Browse a different kind" })).queryByRole("link", { name: "Species" })).not.toBeInTheDocument()
     })
 
     it("selecting 'Van der Waals complex' NAVIGATES to /vdw-complexes and queries /species/browse with species_entry_kind=vdw_complex, not the TS endpoint", async () => {
@@ -220,7 +307,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        await clickKindLink(user, "Van der Waals complex")
         await waitFor(() => expect(lastKindParam).toBe("vdw_complex"))
         expect(speciesCalls).toBeGreaterThan(0)
         expect(tsCalls).toBe(0)
@@ -235,7 +322,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         renderAt("/species")
         await screen.findByText(/records · showing/)
         server.use(http.get("/api/v1/scientific/species/browse", () => { speciesCallsAfterSwitch += 1; return HttpResponse.json(speciesEnvelope(0, 20, twoSpecies)) }))
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         await waitFor(() => expect(tsCalls).toBeGreaterThan(0))
         expect(speciesCallsAfterSwitch).toBe(0)
@@ -251,14 +338,14 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers({ captureSpeciesUrl: (url) => { capturedUrl = url } }))
         renderAt("/vdw-complexes")
         await waitFor(() => expect(capturedUrl?.searchParams.get("species_entry_kind")).toBe("vdw_complex"))
-        expect(screen.getByRole("radio", { name: "Van der Waals complex" })).toBeChecked()
+        expect(screen.getByRole("heading", { name: "Browse van der Waals complexes" })).toBeVisible()
         expect(window.location.pathname).toBe("/vdw-complexes")
     })
 
     it("loading /transition-states directly renders the transition-state kind and hits /transition-states/browse", async () => {
         server.use(...handlers())
         renderAt("/transition-states")
-        expect(await screen.findByRole("radio", { name: "Transition state" })).toBeChecked()
+        expect(await screen.findByRole("heading", { name: "Browse transition states" })).toBeVisible()
         expect(await screen.findByText("A <=> B")).toBeVisible()
         expect(window.location.pathname).toBe("/transition-states")
     })
@@ -273,7 +360,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers())
         renderAt("/species?kind=nonsense")
         await screen.findByText(/records · showing/)
-        expect(screen.getByRole("radio", { name: "Species" })).toBeChecked()
+        expect(screen.getByRole("heading", { name: "Browse species" })).toBeVisible()
         expect(window.location.pathname).toBe("/species")
     })
 
@@ -312,7 +399,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers())
         renderAt("/species?participant_smiles=CCO")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         // Switching to transition_state AFTER mount does not retroactively
         // apply a species-kind URL's participant_smiles -- the seed is
@@ -330,7 +417,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers({ captureSpeciesUrl: (url) => kinds.push(url.searchParams.get("species_entry_kind")) }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        await clickKindLink(user, "Van der Waals complex")
         await waitFor(() => expect(kinds).toContain("vdw_complex"))
         expect(kinds).toContain("minimum")
     })
@@ -418,7 +505,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("formula")).toBe("C6H6"))
         expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
 
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         await waitFor(() => expect(lastTsUrl).toBeDefined())
         expect(lastTsUrl?.searchParams.get("charge")).toBe("0") // shared filter carried over
         expect(lastTsUrl?.searchParams.has("formula")).toBe(false) // inapplicable filter dropped from the request
@@ -440,7 +527,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await user.selectOptions(screen.getByLabelText("Status"), "optimized")
         await waitFor(() => expect(screen.getByLabelText("Status")).toHaveValue("optimized"))
 
-        await user.click(screen.getByRole("radio", { name: "Species" }))
+        await clickKindLink(user, "Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("species_entry_kind")).toBe(true))
         expect(lastSpeciesUrl?.searchParams.has("status")).toBe(false)
         expect(screen.queryByLabelText("Status")).not.toBeInTheDocument()
@@ -469,11 +556,11 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
         await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
 
-        await user.click(screen.getByRole("radio", { name: "Species" }))
+        await clickKindLink(user, "Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
 
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
     })
@@ -505,7 +592,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         expect(lastTsUrl?.searchParams.get("include_rejected")).toBe("true")
 
         // TS -> species direction: every shared value above must survive too.
-        await user.click(screen.getByRole("radio", { name: "Species" }))
+        await clickKindLink(user, "Species")
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("include_deprecated")).toBe("true"))
         expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
         expect(lastSpeciesUrl?.searchParams.get("multiplicity")).toBe("2")
@@ -520,7 +607,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        await clickKindLink(user, "Van der Waals complex")
         expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
         expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
@@ -534,7 +621,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        await clickKindLink(user, "Van der Waals complex")
         expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
 
         await user.click(screen.getByLabelText("Include rejected"))
@@ -639,7 +726,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        await clickKindLink(user, "Van der Waals complex")
         const archiveMessage = (await screen.findByText(/No van der Waals complexes have been deposited/)).textContent
         expect(filteredMessage).not.toBe(archiveMessage)
     })
@@ -762,7 +849,7 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         await screen.findByText("A <=> B")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -792,7 +879,7 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         server.use(...handlers({ tsRecords: [nullFamily, nullEquation] }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await clickKindLink(user, "Transition state")
         await screen.findByText("E <=> F")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -1049,7 +1136,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         await screen.findByText(/records · showing/)
         const speciesCallsBeforeSwitch = speciesCalls
 
-        await user.click(screen.getByRole("radio", { name: "Reaction" }))
+        await clickKindLink(user, "Reaction")
         await waitFor(() => expect(reactionCalls).toBeGreaterThan(0))
         expect(speciesCalls).toBe(speciesCallsBeforeSwitch) // no further species calls after the switch
         expect(tsCalls).toBe(0)
@@ -1059,9 +1146,110 @@ describe("browse page: the 'reaction' kind, end to end", () => {
     it("loading /reactions directly renders the reaction kind and hits /reactions/browse", async () => {
         server.use(...handlers(), reactionHandler(), reactionFamilyVocabHandler())
         renderAt("/reactions")
-        expect(await screen.findByRole("radio", { name: "Reaction" })).toBeChecked()
+        expect(await screen.findByRole("heading", { name: "Browse reactions" })).toBeVisible()
         await screen.findByText(/records · showing/)
         expect(window.location.pathname).toBe("/reactions")
+    })
+
+    // Cross-branch gap, found post-hoc: the front-page reaction search's
+    // "See all N reactions involving X" link points at
+    // `/reactions?reactant_smiles=X` and PROMISES a filtered count. Without
+    // this seeding, that link would land on an unfiltered `/reactions`
+    // showing every reaction in the archive under a heading that claimed a
+    // specific count for a specific structure -- a wrong answer presented
+    // as a right one. Asserted on the RESULT COUNT, not just the field's
+    // displayed text -- a test that only checked the input's value would
+    // stay green even if the seed never reached the outgoing request at
+    // all (see `seedFiltersFromUrl`'s own unit tests above for the
+    // narrower, request-shape-only coverage).
+    it("?reactant_smiles= on the initial URL seeds the field AND filters the listing, not just displays the value", async () => {
+        let capturedUrl: URL | undefined
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                capturedUrl = url
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const values = url.searchParams.getAll("reactant_smiles")
+                const rows = values.length === 0 ? twoReactions : [twoReactions[0]]
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/reactions?reactant_smiles=NN")
+        expect(await screen.findByLabelText("Structures on one side")).toHaveValue("NN")
+        await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN"]))
+        // The rendered count reflects the FILTERED corpus (1 of 2), not the
+        // full unfiltered archive.
+        expect(await screen.findByText("1 record · showing 1–1")).toBeVisible()
+    })
+
+    // Same gap, the REPEATED-param shape: `?reactant_smiles=A&reactant_
+    // smiles=B` must populate BOTH structures into the one field (its own
+    // comma-separated shape), not just the first.
+    it("a REPEATED ?reactant_smiles= on the initial URL seeds BOTH structures into the field, and the listing reflects the two-structure AND filter", async () => {
+        let capturedUrl: URL | undefined
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                capturedUrl = url
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const values = url.searchParams.getAll("reactant_smiles")
+                const rows = values.length >= 2 ? [] : twoReactions
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/reactions?reactant_smiles=NN&reactant_smiles=%5BH%5D")
+        expect(await screen.findByLabelText("Structures on one side")).toHaveValue("NN,[H]")
+        await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN", "[H]"]))
+        expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
+    })
+
+    it("?product_smiles= seeds the OTHER field the same way", async () => {
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const values = url.searchParams.getAll("product_smiles")
+                const rows = values.length === 0 ? twoReactions : [twoReactions[0]]
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/reactions?product_smiles=C")
+        expect(await screen.findByLabelText("Structures on the other side")).toHaveValue("C")
+        expect(await screen.findByText("1 record · showing 1–1")).toBeVisible()
+    })
+
+    // MUTATION CHECK (the coordinator's own addition): reverting
+    // `seedFiltersFromUrl`'s reaction branch back to seeding nothing (the
+    // pre-fix state) must fail on the RESULT COUNT, not merely on the
+    // field's displayed value -- landing this test file with the seed
+    // reverted is the mutation-table entry for this fix.
+    it("MUTATION-SHAPED: without the seed, the field would be empty and the count would be the FULL unfiltered total -- this is what the fix prevents", async () => {
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                const values = url.searchParams.getAll("reactant_smiles")
+                const rows = values.length === 0 ? twoReactions : [twoReactions[0]]
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/reactions?reactant_smiles=NN")
+        // With the seed working, this is 1 of 2 -- NOT "2 records · showing
+        // 1–2" (the unfiltered total a broken/reverted seed would show).
+        expect(await screen.findByText("1 record · showing 1–1")).toBeVisible()
+        expect(screen.queryByText(/^2 records/)).not.toBeInTheDocument()
     })
 
     it("renders two DISTINCT reaction rows with their own equation, family, review, and availability pills -- not the first row's data repeated", async () => {
@@ -1073,7 +1261,11 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(rows).toHaveLength(2)
 
         const [first, second] = [...rows] as HTMLElement[]
-        expect(within(first).getByText("rxe_one")).toBeVisible()
+        // The footer shows the REACTION (identity) ref now, not the entry
+        // ref -- the entry ref is still reachable, as the "View this
+        // deposit" link's href (see the dedicated link-target test below).
+        expect(within(first).getByText("rxn_one")).toBeVisible()
+        expect(within(first).getByRole("link", { name: "View this deposit" })).toHaveAttribute("href", "/reaction-entries/rxe_one")
         // The row renders its OWN served `family` string, token-formatted
         // (the same naive underscore-to-space convention
         // `TransitionStateBrowseRow` already uses) -- not the vocab
@@ -1083,7 +1275,8 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         expect(within(first).getByText("has kinetics")).toBeVisible()
         expect(within(first).getByText("has transition state")).toBeVisible()
 
-        expect(within(second).getByText("rxe_two")).toBeVisible()
+        expect(within(second).getByText("rxn_two")).toBeVisible()
+        expect(within(second).getByRole("link", { name: "View this deposit" })).toHaveAttribute("href", "/reaction-entries/rxe_two")
         expect(within(second).getByText("family not recorded")).toBeVisible()
         expect(within(second).getByText("approved")).toBeVisible()
         expect(within(second).getByText("no kinetics deposited")).toBeVisible()
@@ -1115,20 +1308,60 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         await waitFor(() => expect(capturedUrl?.searchParams.get("family")).toBe("H_Abstraction"))
     })
 
-    it("the reactant/product SMILES filters reach the outgoing request as SEPARATE params", async () => {
+    it("the two structure filters reach the outgoing request as SEPARATE params", async () => {
         const user = userEvent.setup()
         let capturedUrl: URL | undefined
         server.use(...handlers(), reactionHandler({ captureUrl: (url) => { capturedUrl = url } }), reactionFamilyVocabHandler())
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
 
-        await user.type(screen.getByLabelText("Reactant SMILES"), "CCO")
+        await user.type(screen.getByLabelText("Structures on one side"), "CCO")
         await waitFor(() => expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO"))
         expect(capturedUrl?.searchParams.has("product_smiles")).toBe(false)
 
-        await user.type(screen.getByLabelText("Product SMILES"), "CC=O")
+        await user.type(screen.getByLabelText("Structures on the other side"), "CC=O")
         await waitFor(() => expect(capturedUrl?.searchParams.get("product_smiles")).toBe("CC=O"))
         expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO") // unchanged by the product field
+    })
+
+    // Item 3's multi-structure search, end to end through the real page:
+    // typing a COMMA-separated value into "Structures on one side" must
+    // reach the wire as TWO repeated `reactant_smiles` params, verified
+    // live -- `?reactant_smiles=NN` -> 20 reactions, `?reactant_smiles=NN&
+    // reactant_smiles=[H]` -> 0. `fireEvent.change` (not `user.type`) sets
+    // the field's value directly, since `[` and `]` are userEvent's own
+    // special-character delimiters for `.type()` and NN/[H] genuinely need
+    // literal brackets.
+    it("typing two comma-separated SMILES into 'Structures on one side' sends TWO repeated reactant_smiles params, and the result count changes", async () => {
+        let capturedUrl: URL | undefined
+        server.use(
+            ...handlers(),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                const url = new URL(request.url)
+                capturedUrl = url
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                // Mirrors the live archive's own measured behaviour: a
+                // single structure narrows the corpus, a SECOND one on the
+                // same side (that never co-occurs with the first) empties
+                // it entirely.
+                const values = url.searchParams.getAll("reactant_smiles")
+                const rows = values.length >= 2 ? [] : values.length === 1 ? [twoReactions[0]] : twoReactions
+                return HttpResponse.json(reactionEnvelope(offset, limit, rows))
+            }),
+            reactionFamilyVocabHandler(),
+        )
+        renderAt("/reactions")
+        await screen.findByText(/records · showing/)
+
+        const field = screen.getByLabelText("Structures on one side")
+        fireEvent.change(field, { target: { value: "NN" } })
+        await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN"]))
+        await screen.findByText(/1 record · showing/)
+
+        fireEvent.change(field, { target: { value: "NN,[H]" } })
+        await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN", "[H]"]))
+        expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
     })
 
     it("an UNSET filter is never sent -- the initial request carries no family/reactant_smiles/product_smiles/has_kinetics/has_transition_state at all", async () => {
@@ -1169,7 +1402,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         )
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
-        await user.type(screen.getByLabelText("Reactant SMILES"), "Xx999")
+        await user.type(screen.getByLabelText("Structures on one side"), "Xx999")
         expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
@@ -1204,7 +1437,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         )
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
-        await user.type(screen.getByLabelText("Product SMILES"), "O")
+        await user.type(screen.getByLabelText("Structures on the other side"), "O")
         await screen.findByText("Matched on the reverse direction")
 
         const rows = document.querySelectorAll(".reaction-browse-row")

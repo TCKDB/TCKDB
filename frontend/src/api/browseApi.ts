@@ -48,6 +48,53 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
 }
 
 /**
+ * Each index's own identity (owner, repeatedly: "Why is the browse reactions
+ * with the species/transition/vanderwaals browsing page?" / "there should be
+ * separate for reaction and species not slammed together"). Before this, all
+ * four kind paths rendered `BrowsePage` with the SAME heading/eyebrow/intro
+ * ("Browse the archive" / "Archive index" / "Choose what to browse, then
+ * narrow it down…") -- the URL said which kind, but nothing ON the page did.
+ * `heading` names the kind directly (an h1 a reader can screenshot and know
+ * which archive they are looking at); `intro` is one line stating what the
+ * index actually holds, including the one thing it deliberately excludes
+ * (`species` naming that `vdw` is catalogued separately, and vice versa --
+ * the two hit the same `/species/browse` endpoint under the hood, which is
+ * exactly the distinction a reader cannot see from the URL alone).
+ * `breadcrumbLabel` is the honest per-path breadcrumb trail end (was the
+ * literal string "Browse" on every one of the four paths).
+ */
+export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading: string; intro: string; breadcrumbLabel: string }> = {
+    species: {
+        eyebrow: "Species index",
+        heading: "Browse species",
+        intro: "Every stable minimum deposited in the archive. Narrow by formula, structure, charge, or review "
+            + "status -- van der Waals complexes are catalogued on their own page.",
+        breadcrumbLabel: "Species",
+    },
+    vdw: {
+        eyebrow: "Van der Waals index",
+        heading: "Browse van der Waals complexes",
+        intro: "Weakly bound complexes deposited in the archive, catalogued separately from ordinary species "
+            + "minima. Narrow by formula, structure, charge, or review status.",
+        breadcrumbLabel: "Van der Waals complexes",
+    },
+    transition_state: {
+        eyebrow: "Transition-state index",
+        heading: "Browse transition states",
+        intro: "Every transition state deposited in the archive, identified by the reaction it connects rather "
+            + "than a molecular formula. Narrow by participant SMILES, family, or calculation evidence.",
+        breadcrumbLabel: "Transition states",
+    },
+    reaction: {
+        eyebrow: "Reaction index",
+        heading: "Browse reactions",
+        intro: "Every reaction entry deposited in the archive. Narrow by reactant or product structure, family, "
+            + "or available kinetics and transition-state evidence.",
+        breadcrumbLabel: "Reactions",
+    },
+}
+
+/**
  * Each browse kind's own path (owner decision: one URL per kind, replacing
  * the earlier single `/species?kind=` surface -- see `App.tsx`). The ONE
  * place either direction of the kind<->path relationship is spelled out;
@@ -284,8 +331,9 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
  */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
     if (kind === "reaction") {
-        return filters.minReviewStatus !== "" || filters.family !== "" || filters.reactantSmiles !== ""
-            || filters.productSmiles !== "" || filters.hasKinetics !== "" || filters.hasTransitionState !== ""
+        return filters.minReviewStatus !== "" || filters.family !== ""
+            || splitSmilesList(filters.reactantSmiles).length > 0 || splitSmilesList(filters.productSmiles).length > 0
+            || filters.hasKinetics !== "" || filters.hasTransitionState !== ""
     }
     const sharedActive = filters.charge !== "" || filters.multiplicity !== "" || filters.minReviewStatus !== ""
     if (sharedActive) return true
@@ -415,6 +463,22 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
 }
 
 /**
+ * `reactantSmiles`/`productSmiles` hold a COMMA-separated list, typed by the
+ * reader into one text box (`ReactionFindabilityFields`,
+ * `BrowseFilterForm.tsx`) -- not a bare single SMILES any more. Comma is the
+ * only separator that cannot appear inside a SMILES token itself the way `+`
+ * and `.` can (`[NH4+]` carries a `+`; a disconnected-component SMILES like
+ * `[Na+].[Cl-]` carries a `.`), so splitting on it never mis-parses a real
+ * structure into two. Each split token is trimmed and blank tokens are
+ * dropped, so `"NN, [H],"` (stray whitespace/trailing comma from typing) and
+ * `""` (nothing typed) both behave exactly as intended -- one clean token
+ * list, or none at all.
+ */
+function splitSmilesList(value: string): string[] {
+    return value.split(",").map((token) => token.trim()).filter((token) => token !== "")
+}
+
+/**
  * `/scientific/reactions/browse` (PR 4b, §3D of the plan) -- deliberately
  * NOT built on `sharedQueryParams`: that helper sends charge, multiplicity,
  * and the six provenance params, none of which this endpoint accepts
@@ -426,12 +490,21 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
  * active while doing nothing" failure `clearInapplicableFilters` exists to
  * prevent for the FORM -- this function is the matching guarantee for the
  * REQUEST.
+ *
+ * `reactant_smiles`/`product_smiles` are sent as REPEATED params, one per
+ * comma-separated token in the filter's own text value (`splitSmilesList`
+ * above) -- verified live: `?reactant_smiles=NN` returns 20 reactions,
+ * `?reactant_smiles=NN&reactant_smiles=[H]` returns 0 (the archive holds no
+ * reaction with both together on one side), and `?reactant_smiles=` (empty)
+ * is unfiltered, same as omitting it entirely. A single-token value (no
+ * comma typed) still produces exactly one `query.append`, so the one-value
+ * shape callers relied on before this change is unaffected.
  */
 export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = new URLSearchParams()
     if (filters.family !== "") query.set("family", filters.family)
-    if (filters.reactantSmiles !== "") query.set("reactant_smiles", filters.reactantSmiles)
-    if (filters.productSmiles !== "") query.set("product_smiles", filters.productSmiles)
+    for (const smiles of splitSmilesList(filters.reactantSmiles)) query.append("reactant_smiles", smiles)
+    for (const smiles of splitSmilesList(filters.productSmiles)) query.append("product_smiles", smiles)
     if (filters.hasKinetics !== "") query.set("has_kinetics", filters.hasKinetics)
     if (filters.hasTransitionState !== "") query.set("has_transition_state", filters.hasTransitionState)
     if (filters.minReviewStatus !== "") query.set("min_review_status", filters.minReviewStatus)
@@ -440,6 +513,49 @@ export function buildReactionBrowseQuery(filters: BrowseFilters, offset: number,
     query.set("offset", String(offset))
     query.set("limit", String(limit))
     return query
+}
+
+/**
+ * Seeds whichever filters can be read back from the INITIAL URL, kind by
+ * kind (`BrowsePage.tsx`'s lazy `useState` initializer, run once on mount).
+ * Deliberately not a general "every filter field syncs two-way with a
+ * matching query param" mechanism -- every field in `BrowseFilters` already
+ * applies immediately as the reader types (`BrowseFilterForm`'s own doc
+ * comment) and drives ONE outgoing request; adding a live URL<->filters
+ * sync on top would be a second source of truth for state the page already
+ * owns, for a need only the initial mount actually has. What this covers is
+ * external LINKERS -- another page constructing a `BrowsePage` URL and
+ * expecting the field to already show what the link promised:
+ *
+ * - `SpeciesEntrySummary.tsx`'s "Transition states for reactions of this
+ *   species" link (`?participant_smiles=...`, `transition_state` kind).
+ * - The front-page reaction search's "See all N reactions involving X"
+ *   link (`?reactant_smiles=...`/`?product_smiles=...`, `reaction` kind).
+ *   Gap found post-hoc: that link can carry the SAME param repeated
+ *   (`?reactant_smiles=NN&reactant_smiles=%5BH%5D`, the multi-structure
+ *   search this filter form now supports) -- `searchParams.get` would
+ *   silently keep only the first, understating what the link promised, so
+ *   this reads with `getAll` and rejoins with a comma (`splitSmilesList`'s
+ *   own on-the-wire shape, above) rather than `.get`.
+ *
+ * Still one function with an explicit per-kind branch, not a fully generic
+ * "read every filter from a same-named param" walk -- that would seed
+ * fields NO external caller ever links to today (family, review status,
+ * evidence flags…) from a URL a reader might have hand-edited or bookmarked
+ * with unrelated params, silently pre-filtering a listing the reader never
+ * asked to be filtered. Both cases above are a real, known linker; a third
+ * kind gains a line here only when a third linker exists to seed for.
+ */
+export function seedFiltersFromUrl(kind: BrowseKind, searchParams: URLSearchParams): Partial<BrowseFilters> {
+    if (kind === "transition_state") {
+        return { participantSmiles: searchParams.get("participant_smiles") ?? "" }
+    }
+    if (kind === "reaction") {
+        const reactantSmiles = searchParams.getAll("reactant_smiles").filter((value) => value !== "")
+        const productSmiles = searchParams.getAll("product_smiles").filter((value) => value !== "")
+        return { reactantSmiles: reactantSmiles.join(","), productSmiles: productSmiles.join(",") }
+    }
+    return {}
 }
 
 // ---------------------------------------------------------------------------

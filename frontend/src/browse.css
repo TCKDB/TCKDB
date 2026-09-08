@@ -31,34 +31,41 @@
     font: var(--type-lede-font);
 }
 
-.browse-kind-selector {
+/* Demoted from a radiogroup (`BrowseKindSelector.tsx`'s own doc comment) --
+   a plain navigation list to the OTHER three indexes, not a control for
+   picking a "mode" of the page you are already on. `.browse-kind-option`'s
+   own `[data-selected="true"]` styling is retired along with it: there is
+   no selected state to style any more, since the current kind is never
+   itself one of the links. */
+.browse-kind-links {
     margin: 2.4rem 0 0;
-    padding: 0;
-    border: 0;
 }
 
-.browse-kind-selector legend {
+.browse-kind-links-label {
     margin: 0 0 .6rem;
-    padding: 0;
     color: var(--muted);
     font: var(--type-label-font);
     letter-spacing: var(--type-label-tracking);
     text-transform: var(--type-label-transform);
 }
 
-.browse-kind-options {
+.browse-kind-link-list {
     display: flex;
     flex-wrap: wrap;
     gap: .6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
 
-/* SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): was a
-   bare `.86rem` -- `--type-value` (sans 400 .9375rem) is the named step
-   for a plain content label a reader picks between ("Species"/
-   "Reaction"/"Transition state"), matching a filter field's own typed
-   value one row down. The selected state's own `font-weight: 600`
-   override below still wins on its own, more specific selector. */
-.browse-kind-option {
+/* Same box/typography the old `.browse-kind-option` pill used (border,
+   radius, surface background, `--type-value` step) -- a reader should not
+   be able to tell from the box alone that this used to be a radio input;
+   the meaningful change is that it is a real `<a>` now (keyboard-reachable
+   without a roving tabindex, opens in a new tab on a middle-click, has a
+   real `href` a screen reader announces as a link, not an option in a
+   group), not a redesign of how it looks. */
+.browse-kind-link {
     display: flex;
     align-items: center;
     gap: .45rem;
@@ -69,14 +76,12 @@
     color: var(--ink-2);
     font: var(--type-value-font);
     letter-spacing: var(--type-value-tracking);
-    cursor: pointer;
+    text-decoration: none;
 }
 
-.browse-kind-option[data-selected="true"] {
+.browse-kind-link:hover {
     border-color: var(--accent);
-    background: var(--accent-50);
     color: var(--accent-700);
-    font-weight: 600;
 }
 
 .browse-filters {
@@ -552,6 +557,27 @@ span.browse-row-title {
 
 .browse-row-footer .browse-ref {
     margin-top: 0;
+}
+
+/* The reaction row's second, secondary link -- the one deposit the row
+   itself represents (`ReactionBrowseRow.tsx`'s `entryTarget`), reachable
+   despite the title now pointing at the reaction identity/chooser instead
+   of this entry. Lives inside `.browse-row-footer`, which is already
+   `position: relative` (below), so it needs no elevation rule of its own
+   to paint above the full-row stretched overlay. Styled at the same
+   `--type-note-font`/underline register as the ref beside it -- a small,
+   clearly-secondary affordance, not a second headline competing with the
+   title. */
+.browse-row-entry-link {
+    color: var(--accent-700);
+    font: var(--type-note-font);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+}
+
+.browse-row-entry-link:hover {
+    color: var(--accent);
+    text-decoration-color: currentColor;
 }
 
 @media (max-width: 899px) {

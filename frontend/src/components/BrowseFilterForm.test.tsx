@@ -798,11 +798,11 @@ describe("structure search mode gates its dependent controls", () => {
 // row (kinetics / a transition state).
 // ---------------------------------------------------------------------------
 
-const REACTION_ONLY_LABELS = ["Reactant SMILES", "Product SMILES"]
+const REACTION_ONLY_LABELS = ["Structures on one side", "Structures on the other side"]
 const REACTION_EVIDENCE_LABELS = ["kinetics", "a transition state"]
 
 describe("reaction kind: its own findability and evidence fields render, the other kinds' do not", () => {
-    it('kind="reaction": Reactant SMILES, Product SMILES, Family, and the two evidence checkboxes are present', async () => {
+    it('kind="reaction": Structures on one side, Structures on the other side, Family, and the two evidence checkboxes are present', async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
@@ -827,7 +827,7 @@ describe("reaction kind: its own findability and evidence fields render, the oth
         expect(screen.queryByLabelText("Formula")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("Elements")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("Structure (SMILES)")).not.toBeInTheDocument()
-        expect(screen.queryByLabelText("SMILES")).not.toBeInTheDocument() // TS's merged participant-SMILES field, distinct label from "Reactant/Product SMILES"
+        expect(screen.queryByLabelText("SMILES")).not.toBeInTheDocument() // TS's merged participant-SMILES field, distinct label from the reaction kind's two structure fields
         expect(screen.queryByLabelText("Status")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("optimization")).not.toBeInTheDocument() // TS's seven has_* checks
     })
@@ -841,7 +841,7 @@ describe("reaction kind: its own findability and evidence fields render, the oth
         expect(screen.getByLabelText("Include deprecated")).toBeInTheDocument()
     })
 
-    it('kind="species"/"vdw"/"transition_state": none of Reactant SMILES, Product SMILES, or the reaction evidence checks render', async () => {
+    it('kind="species"/"vdw"/"transition_state": none of the reaction kind\'s two structure fields, or the reaction evidence checks render', async () => {
         for (const kind of ["species", "vdw", "transition_state"] as const) {
             server.use(...metaHandlers())
             renderForm(kind)
@@ -881,8 +881,8 @@ describe("reaction kind: the Family select reuses the SAME vocabulary as the tra
     })
 })
 
-describe("reaction kind: Reactant SMILES / Product SMILES are two independent fields, and the evidence checks patch their own field", () => {
-    it("typing into Reactant SMILES does not touch Product SMILES, and vice versa", async () => {
+describe("reaction kind: the two structure fields are independent, and the evidence checks patch their own field", () => {
+    it("typing into the first structure field does not touch the second, and vice versa", async () => {
         const user = userEvent.setup()
         server.use(...metaHandlers())
         function Wrapper() {
@@ -894,10 +894,10 @@ describe("reaction kind: Reactant SMILES / Product SMILES are two independent fi
         }
         render(<Wrapper />)
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
-        await user.type(screen.getByLabelText("Reactant SMILES"), "CCO")
+        await user.type(screen.getByLabelText("Structures on one side"), "CCO")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "")
-        await user.type(screen.getByLabelText("Product SMILES"), "CC=O")
+        await user.type(screen.getByLabelText("Structures on the other side"), "CC=O")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "CC=O")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO") // unchanged by the product field
     })
