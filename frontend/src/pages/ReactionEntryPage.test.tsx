@@ -434,6 +434,31 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         const dts = Array.from(tsSection.querySelectorAll(".reaction-product-levels dt")).map((el) => el.textContent)
         expect(dts).toEqual(["Geometry", "Frequencies", "Energy"])
     })
+
+    // The gap this test exists to close: `ReactionTransitionStatesSection`'s
+    // own `reactants`/`products`/`reversible` props were built and unit
+    // tested in isolation, but the ONE call site that matters --
+    // `EntryDetail` below, inside THIS file -- kept passing only
+    // `transitionStates`/`calculations` for a full review cycle, so the
+    // equation caption above the dependency graph was unreachable code on
+    // the live page despite every unit test passing. Only a render of the
+    // real page (this file, not the section's own test file) can catch a
+    // wiring gap at the CALL SITE -- exercised here via the page's own
+    // already-served `species.reactants`/`.products` fixture (spe_water/
+    // spe_ch3 -> spe_ch4/spe_oh), never synthetic props handed to the
+    // section directly.
+    it("wires the page's own species participants into the dependency graph's equation caption", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
+        const caption = tsSection.querySelector('[data-testid="dep-graph-equation-caption"]')
+        expect(caption, "equation caption not rendered above the TS dependency graph -- reactants/products/reversible not reaching ReactionTransitionStatesSection from EntryDetail's own record").not.toBeNull()
+        const reactantLink = within(caption as HTMLElement).getByRole("link", { name: "H2O" })
+        expect(reactantLink).toHaveAttribute("href", "/species-entries/spe_water")
+        const productLink = within(caption as HTMLElement).getByRole("link", { name: "CH4" })
+        expect(productLink).toHaveAttribute("href", "/species-entries/spe_ch4")
+    })
 })
 
 // Post-review: the reviewer measured that several facts on this page could

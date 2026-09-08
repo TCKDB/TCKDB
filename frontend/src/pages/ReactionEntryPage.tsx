@@ -242,7 +242,13 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                 <section className="ledger-section" aria-labelledby="ts-heading">
                     <p className="t-kicker section-kicker">Saddle points on this reaction</p>
                     <SectionHeading id="ts-heading">Transition states</SectionHeading>
-                    <ReactionTransitionStatesSection transitionStates={transitionStates} calculations={record.calculations} />
+                    <ReactionTransitionStatesSection
+                        transitionStates={transitionStates}
+                        calculations={record.calculations}
+                        reactants={species.reactants}
+                        products={species.products}
+                        reversible={entry.reversible}
+                    />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="network-heading">
