@@ -291,6 +291,7 @@ def _build_lot_summary(
         basis=lot.basis,
         dispersion=lot.dispersion,
         solvent=lot.solvent,
+        spin_treatment=lot.spin_treatment,
         label=None,
     )
 

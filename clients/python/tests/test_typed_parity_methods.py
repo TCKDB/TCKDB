@@ -544,6 +544,65 @@ class TestFrequencyScaleFactors:
         assert len(list(client.iter_frequency_scale_factors(method="b3lyp"))) == 1
 
 
+class TestLevelsOfTheory:
+    def test_search_posts_filters(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_levels_of_theory(
+            method="b3lyp", basis="def2tzvp", spin_treatment="unrestricted"
+        )
+
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/level-of-theories/search"
+        )
+        assert json.loads(seen[0].content) == {
+            "method": "b3lyp",
+            "basis": "def2tzvp",
+            "spin_treatment": "unrestricted",
+        }
+
+    def test_get_form_and_detail(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+        client.search_levels_of_theory(
+            has_correction_schemes=True, method_http="GET"
+        )
+        assert _query_of(str(seen[0].url))["has_correction_schemes"] == ["true"]
+
+        handler2, seen2 = _capture(_detail({"level_of_theory": {}}))
+        client2, _ = make_client(handler2)
+        client2.get_level_of_theory(
+            "lot_1", include=["correction_schemes", "frequency_scale_factors"]
+        )
+        assert _path_of(str(seen2[0].url)).endswith(
+            "/scientific/level-of-theories/lot_1"
+        )
+
+    def test_iterator_yields_records(self):
+        handler, _ = _capture(_envelope([{"level_of_theory": {}}]))
+        client, _ = make_client(handler)
+        assert len(list(client.iter_levels_of_theory(method="b3lyp"))) == 1
+
+    def test_profile_forwarded_on_search_and_detail(self):
+        """Mutation target (d): omit ``profile`` from the client method.
+
+        A read profile selects which curated view answers a read; a
+        typed method that silently drops it answers from the default
+        profile no matter what the caller asked for. Both the search and
+        detail forms must forward it.
+        """
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+        client.search_levels_of_theory(method="b3lyp", profile="curated")
+        assert _query_of(str(seen[0].url))["profile"] == ["curated"]
+
+        handler2, seen2 = _capture(_detail({"level_of_theory": {}}))
+        client2, _ = make_client(handler2)
+        client2.get_level_of_theory("lot_1", profile="curated")
+        assert _query_of(str(seen2[0].url))["profile"] == ["curated"]
+
+
 # ---------------------------------------------------------------------------
 # Literature
 # ---------------------------------------------------------------------------

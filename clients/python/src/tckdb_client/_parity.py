@@ -464,6 +464,22 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "{frequency_scale_factor_ref_or_id}",
         "get_frequency_scale_factor", None, None, _NEW_METHOD_TESTS,
     ),
+    (
+        "GET", "/api/v1/scientific/level-of-theories/search",
+        "search_levels_of_theory", "iter_levels_of_theory", None,
+        _NEW_METHOD_TESTS,
+    ),
+    (
+        "POST", "/api/v1/scientific/level-of-theories/search",
+        "search_levels_of_theory", "iter_levels_of_theory", None,
+        _NEW_METHOD_TESTS,
+    ),
+    (
+        "GET",
+        "/api/v1/scientific/level-of-theories/"
+        "{level_of_theory_ref_or_id}",
+        "get_level_of_theory", None, None, _NEW_METHOD_TESTS,
+    ),
     # --- Literature ---------------------------------------------------
     (
         "GET", "/api/v1/scientific/literature/{literature_ref_or_id}",

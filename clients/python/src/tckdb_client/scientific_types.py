@@ -752,6 +752,26 @@ class EnergyCorrectionSchemeRecord(TypedDict, total=False):
     used_by: list[JSONDict] | None
 
 
+class LevelOfTheoryRecord(TypedDict, total=False):
+    """One ``level_of_theory`` row -- the methods-surface reference page.
+
+    ``correction_schemes`` reuses the same per-scheme shape as
+    ``EnergyCorrectionSchemeRecord`` (each entry carries its own
+    ``corrections`` parameter table). ``frequency_scale_factors`` is
+    deduplicated by ``(scale_kind, value)``; each group still lists every
+    underlying ``frequency_scale_factor_ref`` and its own provenance --
+    see the backend schema's docstring for why the ten near-duplicate
+    rows deposited for one live level of theory do not collapse to one.
+    """
+
+    level_of_theory: Required[JSONDict]
+    evidence_summary: Required[JSONDict]
+    available_sections: Required[JSONDict]
+    correction_schemes: list[JSONDict] | None
+    frequency_scale_factors: list[JSONDict] | None
+    used_by: list[JSONDict] | None
+
+
 class FrequencyScaleFactorRecord(TypedDict, total=False):
     frequency_scale_factor: Required[JSONDict]
     evidence_summary: Required[JSONDict]
@@ -1036,6 +1056,12 @@ FrequencyScaleFactorSearchResponse: TypeAlias = ScientificSearchResponse[
 FrequencyScaleFactorDetailResponse: TypeAlias = ScientificDetailResponse[
     FrequencyScaleFactorRecord
 ]
+LevelOfTheorySearchResponse: TypeAlias = ScientificSearchResponse[
+    LevelOfTheoryRecord
+]
+LevelOfTheoryDetailResponse: TypeAlias = ScientificDetailResponse[
+    LevelOfTheoryRecord
+]
 LiteratureDetailResponse: TypeAlias = ScientificDetailResponse[LiteratureRecord]
 LiteratureRecordsResponse: TypeAlias = ScientificSearchResponse[
     LiteratureLinkedRecord
@@ -1091,6 +1117,9 @@ __all__ = [
     "KineticsRecord",
     "KineticsSearchRecord",
     "KineticsSearchResponse",
+    "LevelOfTheoryDetailResponse",
+    "LevelOfTheoryRecord",
+    "LevelOfTheorySearchResponse",
     "LiteratureDetailResponse",
     "LiteratureLinkedRecord",
     "LiteratureRecord",

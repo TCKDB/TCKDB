@@ -1451,6 +1451,7 @@ def _bulk_lot_summaries(
             basis=lot.basis,
             dispersion=lot.dispersion,
             solvent=lot.solvent,
+            spin_treatment=lot.spin_treatment,
             label=None,
         )
         for lot in rows

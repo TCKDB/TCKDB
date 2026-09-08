@@ -2031,6 +2031,30 @@
         "title": "AvailableFrequencyScaleFactorSections",
         "type": "object"
       },
+      "AvailableLevelOfTheorySections": {
+        "description": "Boolean map describing which heavy include sections have data.",
+        "properties": {
+          "has_correction_schemes": {
+            "title": "Has Correction Schemes",
+            "type": "boolean"
+          },
+          "has_frequency_scale_factors": {
+            "title": "Has Frequency Scale Factors",
+            "type": "boolean"
+          },
+          "has_used_by": {
+            "title": "Has Used By",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_correction_schemes",
+          "has_frequency_scale_factors",
+          "has_used_by"
+        ],
+        "title": "AvailableLevelOfTheorySections",
+        "type": "object"
+      },
       "AvailableLiteratureSections": {
         "description": "Boolean map describing which heavy include sections have data.",
         "properties": {
@@ -20480,6 +20504,320 @@
         "title": "KineticsUploadResult",
         "type": "object"
       },
+      "LevelOfTheoryCalculationUsageSummary": {
+        "description": "One calculation attributing this level of theory.\n\nBounded, ordered-by-id projection -- the same shape and limit\ndiscipline as ``EnergyCorrectionSchemeUsageSummary`` /\n``FrequencyScaleFactorUsageSummary``. A caller wanting the full,\npaginated set should use\n``/scientific/calculations/search?lot_ref=...`` instead; this section\nexists so the LOT detail page does not need a second round trip for a\nfirst look.",
+        "properties": {
+          "calculation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "endpoint": {
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "record_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Endpoint"
+          },
+          "record_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Ref"
+          },
+          "record_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Type"
+          },
+          "type": {
+            "$ref": "#/components/schemas/CalculationType"
+          }
+        },
+        "required": [
+          "calculation_ref",
+          "endpoint",
+          "type"
+        ],
+        "title": "LevelOfTheoryCalculationUsageSummary",
+        "type": "object"
+      },
+      "LevelOfTheoryCoreBlock": {
+        "description": "Direct ``level_of_theory`` row metadata.\n\n``lot_hash`` is served plainly rather than gated behind\n``include=internal_ids``: it is already a public, documented filter on\n``/scientific/calculations/search`` (``lot_hash=``), so hiding it here\nwhile accepting it there would gate nothing real. Unlike\n``level_of_theory_id`` it names no database row, so it carries none of\nthe enumeration risk internal ids exist to withhold.\n\n``aux_basis``/``cabs_basis``/``keywords`` are part of ``lot_hash``'s\nidentity inputs (DR-0034) alongside the fields already served\nelsewhere; a page whose whole point is showing what distinguishes one\nlevel of theory from another should not silently drop three of the\nnine. There is no ``label`` field: the ORM row carries no such column\n(unlike ``LevelOfTheorySummary.label``, which is a cross-record\npresentation field every existing builder sets to ``None`` for lack of\na stored value) -- inventing one here would fabricate a field the API\ncannot back.",
+        "properties": {
+          "aux_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aux Basis"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "cabs_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cabs Basis"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dispersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispersion"
+          },
+          "keywords": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keywords"
+          },
+          "level_of_theory_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "level_of_theory_ref": {
+            "title": "Level Of Theory Ref",
+            "type": "string"
+          },
+          "lot_hash": {
+            "title": "Lot Hash",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "solvent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solvent"
+          },
+          "solvent_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solvent Model"
+          },
+          "spin_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinTreatment-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "level_of_theory_ref",
+          "method",
+          "lot_hash",
+          "created_at"
+        ],
+        "title": "LevelOfTheoryCoreBlock",
+        "type": "object"
+      },
+      "LevelOfTheoryEvidenceSummary": {
+        "description": "Bounded evidence projection for a level-of-theory row.\n\n``calculation_usage_count`` is usage-derived: an ``INNER JOIN`` from\n``calculation.lot_id``, the same discipline ``list_software`` /\n``list_workflow_tools`` already apply (2026-08). A level of theory\nwith zero attributing calculations does not appear in\n``/level-of-theories/search`` at all -- see that endpoint's own\ndocstring.",
+        "properties": {
+          "calculation_usage_count": {
+            "title": "Calculation Usage Count",
+            "type": "integer"
+          },
+          "distinct_software_count": {
+            "title": "Distinct Software Count",
+            "type": "integer"
+          },
+          "has_correction_schemes": {
+            "title": "Has Correction Schemes",
+            "type": "boolean"
+          },
+          "has_frequency_scale_factors": {
+            "title": "Has Frequency Scale Factors",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "calculation_usage_count",
+          "has_correction_schemes",
+          "has_frequency_scale_factors",
+          "distinct_software_count"
+        ],
+        "title": "LevelOfTheoryEvidenceSummary",
+        "type": "object"
+      },
+      "LevelOfTheoryFrequencyScaleFactorGroup": {
+        "description": "One distinct ``(scale_kind, value)`` pair observed for this LOT.",
+        "properties": {
+          "frequency_scale_factor_count": {
+            "title": "Frequency Scale Factor Count",
+            "type": "integer"
+          },
+          "frequency_scale_factors": {
+            "items": {
+              "$ref": "#/components/schemas/LevelOfTheoryFrequencyScaleFactorProvenance"
+            },
+            "title": "Frequency Scale Factors",
+            "type": "array"
+          },
+          "scale_kind": {
+            "$ref": "#/components/schemas/FrequencyScaleKind"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "scale_kind",
+          "value",
+          "frequency_scale_factor_count",
+          "frequency_scale_factors"
+        ],
+        "title": "LevelOfTheoryFrequencyScaleFactorGroup",
+        "type": "object"
+      },
+      "LevelOfTheoryFrequencyScaleFactorProvenance": {
+        "description": "One underlying ``frequency_scale_factor`` row inside a dedup group.\n\nA level of theory can carry several FSF rows that all evaluate to the\nsame ``(scale_kind, value)`` pair -- ten of them for b3lyp/def2tzvp on\nthe live archive today, one per distinct producing workflow-tool\nrelease. Each one is still a separate depositor action and keeps its\nown ref and provenance here; only the *grouping* collapses, never the\nrows themselves (methods-surface plan §4.2 item 4).",
+        "properties": {
+          "frequency_scale_factor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Scale Factor Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "frequency_scale_factor_ref": {
+            "title": "Frequency Scale Factor Ref",
+            "type": "string"
+          },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Literature Ref"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__reads__scientific_common__WorkflowToolReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "frequency_scale_factor_ref"
+        ],
+        "title": "LevelOfTheoryFrequencyScaleFactorProvenance",
+        "type": "object"
+      },
       "LevelOfTheoryRead": {
         "description": "Read schema returned by the API.",
         "properties": {
@@ -20677,7 +21015,7 @@
           "spin_treatment": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SpinTreatment"
+                "$ref": "#/components/schemas/tckdb_schemas__enums__SpinTreatment"
               },
               {
                 "type": "null"
@@ -20689,6 +21027,166 @@
           "method"
         ],
         "title": "LevelOfTheoryRef",
+        "type": "object"
+      },
+      "LevelOfTheorySearchRequest": {
+        "description": "Service-layer request for /scientific/level-of-theories/search.\n\nFilters AND-combine; at least one meaningful filter is required\n(422 ``missing_filter`` otherwise). Bool filters default to\n``None``; explicit ``False`` is meaningful -- only ``None`` skips\nthe filter gate. Same convention as the ECS/FSF search requests.\n\n``include_rejected``/``include_deprecated``/``min_review_status``\nare accepted for shape parity with every other scientific search\nendpoint; a level of theory is non-reviewable, same as ECS/FSF, so\nthey are no-ops here.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "dispersion": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dispersion"
+          },
+          "has_correction_schemes": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Correction Schemes"
+          },
+          "has_frequency_scale_factors": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Frequency Scale Factors"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "include_deprecated": {
+            "default": false,
+            "title": "Include Deprecated",
+            "type": "boolean"
+          },
+          "include_rejected": {
+            "default": false,
+            "title": "Include Rejected",
+            "type": "boolean"
+          },
+          "level_of_theory_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Theory Ref"
+          },
+          "limit": {
+            "default": 50,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "lot_hash": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Hash"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "min_review_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Review Status"
+          },
+          "offset": {
+            "default": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "solvent": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solvent"
+          },
+          "sort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort"
+          },
+          "spin_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__db__models__common__SpinTreatment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "LevelOfTheorySearchRequest",
         "type": "object"
       },
       "LevelOfTheorySummary": {
@@ -20756,6 +21254,16 @@
               }
             ],
             "title": "Solvent"
+          },
+          "spin_treatment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinTreatment-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -33879,6 +34387,122 @@
         "title": "ScientificKineticsSearchResponse",
         "type": "object"
       },
+      "ScientificLevelOfTheoryDetailResponse": {
+        "description": "Response envelope for ``GET /scientific/level-of-theories/{handle}``.",
+        "properties": {
+          "record": {
+            "$ref": "#/components/schemas/ScientificLevelOfTheoryRecord"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_level_of_theory__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "record"
+        ],
+        "title": "ScientificLevelOfTheoryDetailResponse",
+        "type": "object"
+      },
+      "ScientificLevelOfTheoryRecord": {
+        "description": "One ``level_of_theory`` row projected as a scientific record.",
+        "properties": {
+          "available_sections": {
+            "$ref": "#/components/schemas/AvailableLevelOfTheorySections"
+          },
+          "correction_schemes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScientificEnergyCorrectionSchemeRecord"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction Schemes",
+            "x-tckdb-include-gated": "correction_schemes"
+          },
+          "evidence_summary": {
+            "$ref": "#/components/schemas/LevelOfTheoryEvidenceSummary"
+          },
+          "frequency_scale_factors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LevelOfTheoryFrequencyScaleFactorGroup"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Scale Factors",
+            "x-tckdb-include-gated": "frequency_scale_factors"
+          },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheoryCoreBlock"
+          },
+          "used_by": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LevelOfTheoryCalculationUsageSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used By",
+            "x-tckdb-include-gated": "used_by"
+          }
+        },
+        "required": [
+          "level_of_theory",
+          "evidence_summary",
+          "available_sections"
+        ],
+        "title": "ScientificLevelOfTheoryRecord",
+        "type": "object"
+      },
+      "ScientificLevelOfTheorySearchResponse": {
+        "description": "Response envelope for the level-of-theory search endpoint.",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ScientificLevelOfTheoryRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_level_of_theory_search__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "ScientificLevelOfTheorySearchResponse",
+        "type": "object"
+      },
       "ScientificLevelsSummary": {
         "description": "Geometry / frequency / energy levels of theory, derived at read time.\n\nNever stored, and never behind an ``include=`` token: recomputed on\nevery read from whichever ``opt``/``freq``/``sp``/``composite``/\n``imported`` source calculations the record links right now, per\n``app.services.calculation_levels.derive_levels`` (R1):\n\n* ``geometry`` — the ``opt`` role's level of theory.\n* ``frequency`` — the ``freq`` role's level, or the ``opt``'s own\n  level when no separate ``freq`` is linked but the optimisation\n  calculation itself carries frequency results.\n* ``energy`` — the linked ``sp``s' shared level when they agree;\n  otherwise the ``opt``'s own level (an optimisation's final energy\n  *is* the single-point value at its own level of theory); otherwise\n  a linked ``composite``/``imported`` calculation's level; ``null``\n  when linked ``sp``s disagree on level of theory (see\n  ``energy_source=\"ambiguous\"`` below).\n* ``energy_source`` names which role answered ``energy`` -- ``'sp'``,\n  ``'opt'``, ``'composite'``, or ``'imported'`` -- or ``'ambiguous'``\n  when two or more linked ``sp`` calculations (a multi-conformer\n  ensemble's per-conformer single points, say) run at different\n  levels of theory, so no single energy level of theory can be\n  reported for the record as a whole; or ``null`` when nothing\n  linked can answer it.\n\nAny field may be ``null`` independently of the others: a record with\nonly a ``freq`` link, for instance, reports a ``frequency`` level and\n``geometry``/``energy`` both ``null``.",
         "properties": {
@@ -37942,8 +38566,8 @@
         "title": "SpinDiagnosticPayload",
         "type": "object"
       },
-      "SpinTreatment": {
-        "description": "Spin treatment of the electronic-structure method (DR-0034).",
+      "SpinTreatment-Output": {
+        "description": "Spin treatment of the electronic-structure method (DR-0034).\n\nRestricted (R), unrestricted (U), and restricted-open-shell (RO) treatments\nof the same method/basis are genuinely different levels of theory —\ne.g. UCCSD(T) vs ROCCSD(T), or UB3LYP vs ROB3LYP — and differ at the\nkJ/mol level for radicals. Part of the level-of-theory identity so they\ndo not collapse to one row. ``unknown`` = not specified by the producer.",
         "enum": [
           "restricted",
           "unrestricted",
@@ -48197,6 +48821,17 @@
         "title": "PressureContext",
         "type": "string"
       },
+      "app__db__models__common__SpinTreatment": {
+        "description": "Spin treatment of the electronic-structure method (DR-0034).\n\nRestricted (R), unrestricted (U), and restricted-open-shell (RO) treatments\nof the same method/basis are genuinely different levels of theory —\ne.g. UCCSD(T) vs ROCCSD(T), or UB3LYP vs ROB3LYP — and differ at the\nkJ/mol level for radicals. Part of the level-of-theory identity so they\ndo not collapse to one row. ``unknown`` = not specified by the producer.",
+        "enum": [
+          "restricted",
+          "unrestricted",
+          "restricted_open",
+          "unknown"
+        ],
+        "title": "SpinTreatment",
+        "type": "string"
+      },
       "app__db__models__common__TunnelingModel": {
         "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
         "enum": [
@@ -48860,6 +49495,85 @@
           "sort",
           "collapse",
           "include"
+        ],
+        "title": "RequestEcho",
+        "type": "object"
+      },
+      "app__schemas__reads__scientific_level_of_theory__RequestEcho": {
+        "description": "Echo of the parsed include list, post-validation and post-policy.",
+        "properties": {
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          }
+        },
+        "title": "RequestEcho",
+        "type": "object"
+      },
+      "app__schemas__reads__scientific_level_of_theory_search__RequestEcho": {
+        "description": "Echo of the parsed request -- surfaced in the response envelope.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "title": "Filter",
+            "type": "object"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "sort"
         ],
         "title": "RequestEcho",
         "type": "object"
@@ -49934,6 +50648,17 @@
           "pressure_dependent"
         ],
         "title": "PressureContext",
+        "type": "string"
+      },
+      "tckdb_schemas__enums__SpinTreatment": {
+        "description": "Spin treatment of the electronic-structure method (DR-0034).",
+        "enum": [
+          "restricted",
+          "unrestricted",
+          "restricted_open",
+          "unknown"
+        ],
+        "title": "SpinTreatment",
         "type": "string"
       },
       "tckdb_schemas__enums__TunnelingModel": {
@@ -68220,6 +68945,471 @@
           }
         },
         "summary": "Kinetics Search Post",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/level-of-theories/search": {
+      "get": {
+        "description": "Level-of-theory search.\n\nAND-combines the supplied filters; at least one meaningful filter is\nrequired. Only levels of theory with at least one attributing\ncalculation are returned -- see\n``app/services/scientific_read/level_of_theory_search.py``.",
+        "operationId": "scientific_level_of_theory_search_get_api_v1_scientific_level_of_theories_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level_of_theory_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level Of Theory Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lot_hash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lot Hash"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dispersion",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dispersion"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solvent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Solvent"
+            }
+          },
+          {
+            "in": "query",
+            "name": "spin_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/app__db__models__common__SpinTreatment"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Spin Treatment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_correction_schemes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Correction Schemes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_frequency_scale_factors",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Frequency Scale Factors"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificLevelOfTheorySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Level Of Theory Search Get",
+        "tags": [
+          "scientific"
+        ]
+      },
+      "post": {
+        "description": "JSON-body variant of /scientific/level-of-theories/search.",
+        "operationId": "scientific_level_of_theory_search_post_api_v1_scientific_level_of_theories_search_post",
+        "parameters": [
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LevelOfTheorySearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificLevelOfTheorySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Level Of Theory Search Post",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}": {
+      "get": {
+        "description": "Return one level-of-theory row as a scientific record.\n\nPath handle accepts an integer ``level_of_theory.id`` or a public ref\nof the form ``lot_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs / ids return 404.",
+        "operationId": "scientific_level_of_theory_detail_api_v1_scientific_level_of_theories__level_of_theory_ref_or_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "level_of_theory_ref_or_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Level Of Theory Ref Or Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificLevelOfTheoryDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Level Of Theory Detail",
         "tags": [
           "scientific"
         ]

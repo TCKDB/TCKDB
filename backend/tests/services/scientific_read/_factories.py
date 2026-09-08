@@ -51,6 +51,7 @@ from app.db.models.common import (
     SCFStabilityStatus,
     ScientificOriginKind,
     SpeciesEntryStateKind,
+    SpinTreatment,
     StationaryPointKind,
     StatmechCalculationRole,
     StatmechTreatmentKind,
@@ -310,26 +311,40 @@ def set_review(
 
 
 def make_lot(
-    session: Session, *, method: str = "wb97xd", basis: str | None = "def2tzvp"
+    session: Session,
+    *,
+    method: str = "wb97xd",
+    basis: str | None = "def2tzvp",
+    spin_treatment: SpinTreatment | None = None,
 ) -> LevelOfTheory:
     """Create or fetch a LevelOfTheory row.
 
     The ``lot_hash`` column is uniquely constrained; repeated calls with
-    the same (method, basis) reuse the existing row so factory callers
-    don't trip the constraint when they don't care which LOT they get.
+    the same (method, basis, spin_treatment) reuse the existing row so
+    factory callers don't trip the constraint when they don't care which
+    LOT they get. ``spin_treatment`` is folded into the hash (DR-0034):
+    this is what lets a caller build the "two LOTs share method/basis,
+    differ only in spin_treatment" fixture the join-on-FK-not-text
+    invariant is tested against.
     """
     import hashlib
 
     from sqlalchemy import select as _select
 
-    raw = f"{method}|{basis or ''}".encode()
+    spin_key = spin_treatment.value if spin_treatment is not None else ""
+    raw = f"{method}|{basis or ''}|{spin_key}".encode()
     lot_hash = hashlib.sha256(raw).hexdigest()
     existing = session.scalar(
         _select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
     )
     if existing is not None:
         return existing
-    lot = LevelOfTheory(method=method, basis=basis, lot_hash=lot_hash)
+    lot = LevelOfTheory(
+        method=method,
+        basis=basis,
+        spin_treatment=spin_treatment,
+        lot_hash=lot_hash,
+    )
     session.add(lot)
     session.flush()
     return lot

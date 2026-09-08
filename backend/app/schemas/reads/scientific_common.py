@@ -15,7 +15,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus
+from app.db.models.common import (
+    ProfileRecommendation,
+    ReadProfile,
+    RecordReviewStatus,
+    SpinTreatment,
+)
 
 # ---------------------------------------------------------------------------
 # Request-side enums and shared knobs
@@ -234,6 +239,11 @@ class LevelOfTheorySummary(BaseModel):
     basis: str | None = None
     dispersion: str | None = None
     solvent: str | None = None
+    #: Restricted / unrestricted / restricted-open (DR-0034). ``None`` means
+    #: unspecified by the producer, distinct from the enum's own explicit
+    #: ``unknown`` member -- see ``LevelOfTheory.spin_treatment``. Part of
+    #: LOT identity and folded into ``lot_hash``; not builders' to omit.
+    spin_treatment: SpinTreatment | None = None
     label: str | None = None
 
     @computed_field  # type: ignore[prop-decorator]

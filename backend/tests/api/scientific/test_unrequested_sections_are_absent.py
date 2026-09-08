@@ -52,6 +52,7 @@ from app.api.routes.scientific._response import (
     ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS,
     FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS,
     KINETICS_RECORD_SECTIONS,
+    LEVEL_OF_THEORY_RECORD_SECTIONS,
     LITERATURE_RECORDS_SECTIONS,
     NETWORK_KINETICS_RECORD_SECTIONS,
     NETWORK_RECORD_SECTIONS,
@@ -262,6 +263,7 @@ def corpus(client, db_session) -> dict[str, Any]:
         "network_kinetics_ref": network_kinetics.public_ref,
         "frequency_scale_factor_ref": fsf.public_ref,
         "energy_correction_scheme_ref": ecs.public_ref,
+        "level_of_theory_ref": lot.public_ref,
         "literature_ref": literature.public_ref,
         "calculation_ref": calculation.public_ref,
         "artifact_sha256": artifact.sha256,
@@ -610,6 +612,29 @@ CASES: tuple[Case, ...] = (
         ),
     ),
     Case(
+        "GET /level-of-theories/search",
+        LEVEL_OF_THEORY_RECORD_SECTIONS,
+        SEARCH_SCOPE,
+        lambda c: (
+            f"{_SCI}/level-of-theories/search"
+            f"?level_of_theory_ref={c['level_of_theory_ref']}"
+        ),
+    ),
+    Case(
+        "POST /level-of-theories/search",
+        LEVEL_OF_THEORY_RECORD_SECTIONS,
+        SEARCH_SCOPE,
+        lambda c: f"{_SCI}/level-of-theories/search",
+        method="POST",
+        body=lambda c: {"level_of_theory_ref": c["level_of_theory_ref"]},
+    ),
+    Case(
+        "GET /level-of-theories/{ref}",
+        LEVEL_OF_THEORY_RECORD_SECTIONS,
+        DETAIL_SCOPE,
+        lambda c: f"{_SCI}/level-of-theories/{c['level_of_theory_ref']}",
+    ),
+    Case(
         "GET /artifacts/search",
         ARTIFACT_RECORD_SECTIONS,
         SEARCH_SCOPE,
@@ -696,7 +721,10 @@ def test_the_parametrisation_asserts_its_own_size():
     numbers, so adding a section to a table without adding a case fails
     here instead of passing silently.
     """
-    assert len(CASES) == 43  # unchanged: "networks" joined an existing table
+    # 43 unchanged: "networks" joined an existing table; 46 after
+    # "level-of-theories" added its own three cases (GET/POST search,
+    # GET detail).
+    assert len(CASES) == 46
 
     sections_under_test = {
         (case.table.surface, token, field_name)
@@ -720,7 +748,9 @@ def test_the_parametrisation_asserts_its_own_size():
     # SPECIES_SEARCH_SECTIONS's four -- because the tuples key on
     # ``surface`` and the two tables declare different surfaces.
     # 88 after ``networks`` joined REACTION_FULL_SECTIONS.
-    assert len(sections_under_test) == 88
+    # 91 after ``level-of-theories`` added LEVEL_OF_THEORY_RECORD_SECTIONS
+    # (correction_schemes, frequency_scale_factors, used_by).
+    assert len(sections_under_test) == 91
 
 
 # ---------------------------------------------------------------------------

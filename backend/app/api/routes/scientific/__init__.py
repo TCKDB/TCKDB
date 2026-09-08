@@ -52,6 +52,7 @@ from app.api.routes.scientific import (
     geometries,
     kinetics,
     kinetics_search,
+    level_of_theory,
     literature,
     meta,
     networks,
@@ -135,6 +136,7 @@ scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
+scientific_router.include_router(level_of_theory.router)
 scientific_router.include_router(artifacts.router)
 scientific_router.include_router(export.router)
 # Quantitative analytics reads. Their ``/analytics`` prefix collides with

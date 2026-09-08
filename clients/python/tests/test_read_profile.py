@@ -81,6 +81,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_energy_correction_scheme": ("ecs_1",),
     "get_frequency_scale_factor": ("fsf_1",),
     "get_geometry": ("geom_1",),
+    "get_level_of_theory": ("lot_1",),
     "get_literature": ("lit_1",),
     "get_literature_records": ("lit_1",),
     "get_network_solve": ("nsolve_1",),
