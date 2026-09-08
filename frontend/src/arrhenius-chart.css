@@ -31,6 +31,57 @@
     margin-top: 2rem;
 }
 
+/* The single, page-wide x-axis-mode control (temperature vs 1000/T) --
+   sits ABOVE every panel, never duplicated per panel: which axis a reader
+   wants is a reading-convention choice, not a per-record fact the way the
+   per-panel unit selector below is. */
+.arrhenius-chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 0 0 1.25rem;
+}
+
+.arrhenius-chart-control {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font: var(--type-data-font);
+    color: var(--ink-2);
+}
+
+.arrhenius-chart-control-label {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+}
+
+.arrhenius-chart-control-select {
+    font: var(--type-data-font);
+}
+
+/* Panel heading + its own unit selector share one row -- the heading
+   states the unit CURRENTLY shown (updates live as the selector changes),
+   the selector lets a reader change it. Wraps on a narrow viewport rather
+   than forcing the fixed-width SVG below it any wider. */
+.arrhenius-chart-panel-heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+    margin: 0 0 .5rem;
+}
+
+.arrhenius-chart-panel-heading-row .arrhenius-chart-panel-heading {
+    margin: 0;
+}
+
+.arrhenius-chart-panel-unit-control {
+    margin: 0;
+}
+
 /* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
    (design-system.css) is `uppercase` -- every OTHER caller of this token is
    an English prose label, where case carries no meaning. This heading's own
@@ -149,6 +200,19 @@
     text-align: center;
 }
 
+/* SCIENTIFIC ERROR fixed here (post-merge review finding): the shared
+   `.arrhenius-chart-axis-title` rule above inherits `--type-label-transform`
+   (design-system.css) = `uppercase` -- correct for the X title ("Temperature
+   (K)" / "1000 / T (K⁻¹)", ordinary English prose where case carries no
+   meaning), but this Y title's own text is literally "log₁₀ k", and
+   upper-casing it renders "LOG₁₀ K" -- which reads as kelvin, not as
+   log-base-10 of a rate coefficient, on a plot whose x-axis already reads
+   "TEMPERATURE (K)". MEASURED: computed `text-transform: uppercase` with
+   `textContent === "log₁₀ k"` on the live page. The EXACT same defect this
+   file already fixed for `.arrhenius-chart-panel-heading` above ("S⁻¹" --
+   siemens per second) was never applied here. `text-transform: none` is
+   scoped to this ONE (`--y`) selector -- the X title keeps the shared
+   uppercase rule, never a page-wide override of `--type-label` itself. */
 .arrhenius-chart-axis-title--y {
     grid-column: 1;
     grid-row: 1;
@@ -158,6 +222,7 @@
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     white-space: nowrap;
+    text-transform: none;
 }
 
 .arrhenius-chart-excluded-notes {
@@ -174,4 +239,29 @@
     display: flex;
     flex-direction: column;
     gap: .75rem;
+}
+
+/* SELF-SUFFICIENCY fix (post-merge review finding): `.kinetics-k-table th`
+   is rendered ENTIRELY by `ArrheniusChart.tsx` (this file's own component --
+   `.kinetics-k-table` names no element anywhere else in `src/`), but its
+   lowercase header used to depend on `reaction-entry.css:102-104`'s copy of
+   this exact rule -- a PAGE-scoped stylesheet `ArrheniusChart.tsx` never
+   imports (only this file, per this file's own header comment: "a
+   component's styling should not depend on another file's stylesheet
+   having loaded first"). PROVEN by deleting that one CSSOM rule at
+   runtime: the header flipped to "K (CM³ MOL⁻¹ S⁻¹)" -- the exact
+   siemens-per-second-shaped defect this file already fixes for
+   `.arrhenius-chart-panel-heading` and `.arrhenius-chart-axis-title--y`
+   above, just reached through a missing import instead of a missing
+   selector. Duplicated here (not moved) rather than deleting
+   `reaction-entry.css`'s own copy, which stays as that page's own belt on
+   top of this component's suspenders -- `reaction-entry.css.test.ts`'s own
+   "declares .kinetics-k-table th { text-transform: none }" test still
+   passes unchanged. `.data-table th` (design-system.css) is what needs
+   overriding -- `--type-label-strong-transform` uppercases every ordinary
+   column name there, which is correct everywhere else `.data-table` is
+   used; this stays scoped to `.kinetics-k-table th`, never a page-wide
+   override of that shared primitive. */
+.kinetics-k-table th {
+    text-transform: none;
 }

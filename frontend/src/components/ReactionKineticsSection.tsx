@@ -122,7 +122,11 @@ export function ReactionKineticsSection({ kinetics, calculations, transitionStat
                     />
                 ))}
             </div>
-            {/* One combined Arrhenius plot (one panel per distinct `A_units`)
+            {/* One combined Arrhenius plot (one panel per A_units ORDER
+                FAMILY -- unimolecular/bimolecular/termolecular, so e.g. a
+                cm3_mol_s record and an m3_mol_s record share one panel and
+                one unit selector; only a genuine dimensional difference,
+                like per_s beside cm3_mol_s, still gets two panels)
                 spanning every deposited kinetics record, ABOVE its own k(T)
                 table equivalent -- both after the per-record cards, per
                 plan §2's "one card per KineticsRecord ... Then the

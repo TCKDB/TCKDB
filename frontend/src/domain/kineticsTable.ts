@@ -63,6 +63,25 @@ export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_
     return rows
 }
 
+/**
+ * `rows`, with every `k` multiplied by `factor` -- the table's own half of
+ * "the k(T) table must follow the same [unit] selection" as the chart
+ * (`ArrheniusChart.tsx`). `factor` is computed ONCE by the caller via
+ * `arrheniusUnitConversionFactor` (`domain/arrheniusUnits.ts`) -- this
+ * function only applies an already-decided, already-legal factor; it holds
+ * no unit knowledge of its own; the SAME factor is what
+ * `arrheniusChartLayout.ts`'s `convertArrheniusSeriesUnits` applies to the
+ * plotted curve, so the chart and this table can never disagree about which
+ * unit is shown. `factor === 1` (the identity -- no conversion requested,
+ * or converting a unit to itself) returns `rows` UNCHANGED rather than
+ * mapping a same-valued copy, so displaying a record in its own deposited
+ * unit is an exact, zero-float-noise identity, never a `k * 1` round trip.
+ */
+export function convertKineticsTableRows(rows: readonly KineticsTableRow[], factor: number): KineticsTableRow[] {
+    if (factor === 1) return rows as KineticsTableRow[]
+    return rows.map((row) => ({ ...row, k: row.k * factor }))
+}
+
 export function log10Text(value: number): string {
     if (value <= 0) return "n/a"
     return Math.log10(value).toFixed(4)

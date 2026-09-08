@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 import { ARRHENIUS_CHART_HEIGHT, ARRHENIUS_CHART_WIDTH } from "../domain/arrheniusChartLayout"
-import { arrheniusTermK } from "../domain/kineticsTable"
+import { arrheniusTermK, scientificText } from "../domain/kineticsTable"
 import { ArrheniusChart } from "./ArrheniusChart"
 
 afterEach(() => cleanup())
@@ -63,6 +63,35 @@ function narrowRecord(overrides: Record<string, unknown> = {}): ReactionKinetics
     return bimolecularRecord({
         kinetics_ref: "kin_narrow_range",
         temperature_coverage: { record_min_k: 1000, record_max_k: 2000 },
+        ...overrides,
+    })
+}
+
+// SAME A/n/Ea/range as `bimolecularRecord()`, but deposited in `m3_mol_s`
+// instead of `cm3_mol_s` -- BOTH order 2 (bimolecular), so this shares
+// `bimolecularRecord()`'s own panel (the defect this PR fixes: these used
+// to be two uncomparable panels). Because the underlying A/n/Ea numbers are
+// IDENTICAL, this record's raw (pre-conversion) k(T) curve is numerically
+// identical to `bimolecularRecord()`'s -- so once the panel's default
+// display unit (`cm3_mol_s`, tie-broken to whichever is served first)
+// converts THIS record's own m3_mol_s points by 1e6, the two rendered
+// curves must visibly differ. If they render IDENTICALLY, the conversion
+// was silently skipped for this series -- a real mutation-catching shape,
+// not just a pixel-position check.
+function m3Record(overrides: Record<string, unknown> = {}): ReactionKineticsRecord {
+    return bimolecularRecord({
+        kinetics_ref: "kin_m3_one",
+        parameters: { A: 3025.44, A_units: "m3_mol_s", n: 3.11242, Ea_kj_mol: 39.9711 },
+        ...overrides,
+    })
+}
+
+// A termolecular (order 3) record -- own A_units family, own panel, never
+// merged with a bimolecular (order 2) or unimolecular (order 1) one.
+function termolecularRecord(overrides: Record<string, unknown> = {}): ReactionKineticsRecord {
+    return bimolecularRecord({
+        kinetics_ref: "kin_termolecular_one",
+        parameters: { A: 3025.44, A_units: "cm6_mol2_s", n: 3.11242, Ea_kj_mol: 39.9711 },
         ...overrides,
     })
 }
@@ -339,6 +368,43 @@ describe("ArrheniusChart -- the panel heading is never visually uppercased (a un
     })
 })
 
+// SCIENTIFIC ERROR regression guard (post-merge review finding, the SAME
+// defect class as the panel-heading test above): the y-axis title's own
+// text is literally "log₁₀ k" -- the shared `.arrhenius-chart-axis-title`
+// rule inherits `--type-label-transform` (`uppercase`), which renders it
+// "LOG₁₀ K", indistinguishable from kelvin on a plot whose x-axis reads
+// "TEMPERATURE (K)". A `textContent` assertion cannot see this (the DOM
+// text is still lowercase "log₁₀ k"; only the COMPUTED style differs) --
+// this asserts `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+describe("ArrheniusChart -- the y-axis title (log10 k) is never visually uppercased into kelvin", () => {
+    it("computed text-transform is none on .arrhenius-chart-axis-title--y, textContent stays lowercase log10 k", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const yTitle = document.querySelector(".arrhenius-chart-axis-title--y") as HTMLElement
+        expect(yTitle.textContent).toBe("log₁₀ k")
+        expect(getComputedStyle(yTitle).textTransform).toBe("none")
+    })
+
+    // The X title is ordinary prose ("Temperature (K)") where uppercasing
+    // carries no scientific-error risk -- this pins that the y-axis fix is
+    // scoped to `--y` only, never a page-wide removal of the shared
+    // `.arrhenius-chart-axis-title` rule's own uppercase behaviour. jsdom
+    // does not resolve `var(--type-label-transform)` to a literal keyword
+    // (unlike a real browser -- confirmed here: the computed value comes
+    // back as the unresolved token string, not "uppercase"), so this
+    // cannot assert the literal keyword the way the `--y` test above
+    // asserts `"none"`. It instead asserts the one thing jsdom CAN
+    // distinguish: the x-axis title's computed value is still the
+    // inherited `var(...)` token, NOT the explicit `"none"` an
+    // over-broadly-scoped fix (accidentally widening `--y`'s override to
+    // the shared `.arrhenius-chart-axis-title` base rule) would produce.
+    it("the X-axis title (ordinary prose) is NOT overridden to text-transform: none -- the y-axis fix stays scoped to --y", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const xTitle = document.querySelector(".arrhenius-chart-axis-title--x") as HTMLElement
+        expect(xTitle.textContent).toBe("Temperature (K)")
+        expect(getComputedStyle(xTitle).textTransform).not.toBe("none")
+    })
+})
+
 // Should-fix #7, the CHART's own half of the third-body table-withholding
 // fix (`kineticsTable.test.ts` covers `computeKineticsTable` itself) --
 // this checks BOTH surfaces together on one third-body fixture: excluded
@@ -363,5 +429,187 @@ describe("ArrheniusChart -- the table remains the text equivalent", () => {
         expect(rows[0].querySelector('[data-label="T (K)"]')?.textContent).toBe("300.00")
         expect(rows[rows.length - 1].querySelector('[data-label="T (K)"]')?.textContent).toBe("3000.00")
         expect(table.querySelector("caption")?.textContent).toMatch(/cm³ mol⁻¹ s⁻¹/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// New in this PR: per-order-family panel merging, the per-panel unit
+// selector, the x-axis mode control, and the k(T) table following the same
+// selection as the chart.
+// ---------------------------------------------------------------------------
+
+describe("ArrheniusChart -- records sharing an order family (not just an A_units token) share ONE panel", () => {
+    it("a cm3_mol_s record and an m3_mol_s record render as ONE svg with two curves, not two panels", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord(), m3Record()]} />)
+        expect(screen.getAllByRole("img", { name: /Arrhenius plot/ })).toHaveLength(1)
+        expect(screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")).toBeInTheDocument()
+        expect(screen.getByTestId("arrhenius-line-kin_m3_one")).toBeInTheDocument()
+    })
+
+    // MUTATION-CATCHING (guards against a silently-skipped conversion, not
+    // just a pixel position): both records share the exact same A/n/Ea, so
+    // their RAW k(T) curves are numerically identical. Once the panel's
+    // shared display unit (cm3_mol_s, since it is served first and ties
+    // with m3_mol_s 1-1) converts the m3_mol_s record's points by 1e6, the
+    // two rendered curves must be visibly DIFFERENT -- identical curves
+    // here means the conversion never ran.
+    it("the two curves render at DIFFERENT y-positions once the shared panel converts them to its one display unit", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord(), m3Record()]} />)
+        const cm3Points = screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq").getAttribute("points")!
+        const m3Points = screen.getByTestId("arrhenius-line-kin_m3_one").getAttribute("points")!
+        expect(cm3Points).not.toBe(m3Points)
+        const cm3FirstY = Number(cm3Points.split(" ")[0].split(",")[1])
+        const m3FirstY = Number(m3Points.split(" ")[0].split(",")[1])
+        // A 1e6 factor is 6 decades -- nowhere near a rounding-level gap.
+        expect(Math.abs(cm3FirstY - m3FirstY)).toBeGreaterThan(10)
+    })
+
+    it("a termolecular (cm6_mol2_s) record never shares a panel with a bimolecular (cm3_mol_s) one", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord(), termolecularRecord()]} />)
+        expect(screen.getAllByRole("img", { name: /Arrhenius plot/ })).toHaveLength(2)
+    })
+})
+
+describe("ArrheniusChart -- the per-panel unit selector", () => {
+    it("a per_s panel (family with exactly one member) renders NO unit selector", () => {
+        render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
+        expect(screen.queryByRole("combobox", { name: /Display units/ })).not.toBeInTheDocument()
+    })
+
+    it("a bimolecular panel renders a selector listing all three order-2 units, base unit first, defaulted to the record's own deposited unit", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Display units \(bimolecular\)/ }) as HTMLSelectElement
+        const optionLabels = Array.from(select.options).map((option) => option.textContent)
+        expect(optionLabels).toEqual(["cm³ mol⁻¹ s⁻¹", "m³ mol⁻¹ s⁻¹", "cm³ molecule⁻¹ s⁻¹"])
+        expect(select.value).toBe("cm3_mol_s")
+    })
+
+    it("a termolecular panel's selector lists all three order-3 units", () => {
+        render(<ArrheniusChart kinetics={[termolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Display units \(termolecular\)/ }) as HTMLSelectElement
+        const optionLabels = Array.from(select.options).map((option) => option.textContent)
+        expect(optionLabels).toEqual(["cm⁶ mol⁻² s⁻¹", "m⁶ mol⁻² s⁻¹", "cm⁶ molecule⁻² s⁻¹"])
+    })
+
+    // MUTATION TARGET (a): the cm³->m³ factor (1e-6, not 1e6). Pinned
+    // against the SAME hand-computed value `arrheniusChartLayout.test.ts`
+    // and `arrheniusUnits.test.ts` pin: 17028.619287800688 * 1e-6 =
+    // 0.017028619287800688.
+    it("switching the selector to m3_mol_s re-converts the plotted curve -- pinned against the hand-computed value", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Display units/ })
+        fireEvent.change(select, { target: { value: "m3_mol_s" } })
+
+        const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
+        expect(svg.getAttribute("aria-label")).toMatch(/m³ mol⁻¹ s⁻¹/)
+        expect(screen.getByText("m³ mol⁻¹ s⁻¹", { selector: ".arrhenius-chart-panel-heading" })).toBeInTheDocument()
+
+        const yTicks = readTicks(svg, "arrhenius-chart-tick-label--y", "y")
+        const yFromTicks = deriveLinearMapping(yTicks)
+        const polyline = screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")
+        const [, firstY] = polyline.getAttribute("points")!.split(" ")[0].split(",").map(Number)
+        const expectedLog10k = Math.log10(0.017028619287800688)
+        expect(Math.abs(firstY - yFromTicks(expectedLog10k))).toBeLessThanOrEqual(1)
+    })
+
+    // MUTATION TARGET (b): dropping the N_A division for the per-molecule
+    // unit. Pinned against 17028.619287800688 / 6.02214076e23 =
+    // 2.827668758742313e-20 (same value `arrheniusChartLayout.test.ts` pins).
+    it("switching the selector to cm3_molecule_s divides by N_A, not left unconverted", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Display units/ })
+        fireEvent.change(select, { target: { value: "cm3_molecule_s" } })
+
+        const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
+        const yTicks = readTicks(svg, "arrhenius-chart-tick-label--y", "y")
+        const yFromTicks = deriveLinearMapping(yTicks)
+        const polyline = screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")
+        const [, firstY] = polyline.getAttribute("points")!.split(" ")[0].split(",").map(Number)
+        const expectedLog10k = Math.log10(2.827668758742313e-20)
+        expect(Math.abs(firstY - yFromTicks(expectedLog10k))).toBeLessThanOrEqual(1)
+    })
+
+    // A record's DEPOSITED unit must remain visible regardless of which
+    // unit the panel is currently showing (this PR's own invariant).
+    it("the legend still names the record's OWN deposited unit after switching the panel's display unit away from it", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        fireEvent.change(screen.getByRole("combobox", { name: /Display units/ }), { target: { value: "m3_mol_s" } })
+        const legendChip = screen.getByTestId("arrhenius-legend-kin_spkzatwjlvmmnja3i5im4fl7hq")
+        expect(legendChip.textContent).toContain("deposited: cm³ mol⁻¹ s⁻¹")
+    })
+
+    // MUTATION TARGET (e): the k(T) table left in the deposited unit while
+    // the chart converts. Same pinned m3_mol_s value as the chart test
+    // above -- if the table's own conversion were skipped, its k column
+    // would still read `scientificText(17028.619287800688)` ("1.7029×10⁴"),
+    // not the converted value.
+    it("switching the panel's unit also converts the k(T) table -- caption, header, AND values", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        fireEvent.change(screen.getByRole("combobox", { name: /Display units/ }), { target: { value: "m3_mol_s" } })
+
+        const table = document.querySelector(".kinetics-k-table") as HTMLTableElement
+        expect(table.querySelector("caption")?.textContent).toMatch(/, in m³ mol⁻¹ s⁻¹$/)
+        expect(table.querySelector("thead th:nth-child(2)")?.textContent).toBe("k (m³ mol⁻¹ s⁻¹)")
+        const firstRowK = table.querySelector("tbody tr td[data-label='k']")?.textContent
+        expect(firstRowK).toBe(scientificText(0.017028619287800688))
+        expect(firstRowK).not.toBe(scientificText(17028.619287800688))
+    })
+})
+
+describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", () => {
+    it("defaults to Temperature (K) -- today's view, unchanged", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /X-axis/ }) as HTMLSelectElement
+        expect(select.value).toBe("temperature")
+        const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
+        expect(svg.getAttribute("aria-label")).toMatch(/versus temperature in kelvin/)
+    })
+
+    // MUTATION TARGET (c): plotting T instead of 1000/T in the inverse
+    // mode. Pinned against 1000/300 = 3.3333... and 1000/3000 = 0.3333...
+    // -- and the axis is reversed (high T at the LEFT), so the 300 K point
+    // (index 0) must land at the tick-derived mapping's HIGH x-value, not
+    // its low one.
+    it("switching to 1000/T re-projects every plotted point, high temperature at the left, pinned against 1000/T", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        fireEvent.change(screen.getByRole("combobox", { name: /X-axis/ }), { target: { value: "inverse_temperature" } })
+
+        const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
+        expect(svg.getAttribute("aria-label")).toMatch(/1000 divided by temperature/)
+        expect(svg.getAttribute("aria-label")).toMatch(/straight line/)
+        expect(screen.getByText("1000 / T (K⁻¹)", { selector: ".arrhenius-chart-axis-title--x" })).toBeInTheDocument()
+
+        const xTicks = readTicks(svg, "arrhenius-chart-tick-label--x", "x")
+        const xFromTicks = deriveLinearMapping(xTicks)
+        const polyline = screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")
+        const points = polyline.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
+        const [firstX] = points[0] // T = 300 K -> 1000/T = 3.3333...
+        const [lastX] = points[points.length - 1] // T = 3000 K -> 1000/T = 0.3333...
+
+        expect(Math.abs(firstX - xFromTicks(1000 / 300))).toBeLessThanOrEqual(1)
+        expect(Math.abs(lastX - xFromTicks(1000 / 3000))).toBeLessThanOrEqual(1)
+        // High temperature (3000 K, the LAST point) at the left: its pixel
+        // x must be SMALLER than the low-temperature (300 K, first) point's.
+        expect(lastX).toBeLessThan(firstX)
+    })
+
+    it("switching back to Temperature (K) restores the un-reversed axis", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /X-axis/ })
+        fireEvent.change(select, { target: { value: "inverse_temperature" } })
+        fireEvent.change(select, { target: { value: "temperature" } })
+
+        const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
+        const polyline = screen.getByTestId("arrhenius-line-kin_spkzatwjlvmmnja3i5im4fl7hq")
+        const points = polyline.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
+        const [firstX] = points[0]
+        const [lastX] = points[points.length - 1]
+        expect(firstX).toBeLessThan(lastX) // 300 K back on the left
+        expect(svg.getAttribute("aria-label")).toMatch(/versus temperature in kelvin/)
+    })
+
+    it("the x-axis mode is a SINGLE control governing every panel at once", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord(), unimolecularRecord()]} />)
+        expect(screen.getAllByRole("combobox", { name: /X-axis/ })).toHaveLength(1)
     })
 })
