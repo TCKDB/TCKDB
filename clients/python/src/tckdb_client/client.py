@@ -1884,6 +1884,103 @@ class TCKDBClient:
             profile=profile,
         )
 
+    def browse_networks(
+        self,
+        *,
+        network_ref: str | None = None,
+        species_ref: str | None = None,
+        species_entry_ref: str | None = None,
+        reaction_ref: str | None = None,
+        reaction_entry_ref: str | None = None,
+        has_species: bool | None = None,
+        has_reactions: bool | None = None,
+        has_states: bool | None = None,
+        has_channels: bool | None = None,
+        has_solves: bool | None = None,
+        has_kinetics: bool | None = None,
+        has_chebyshev: bool | None = None,
+        has_plog: bool | None = None,
+        has_point_kinetics: bool | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        software: str | None = None,
+        software_version: str | None = None,
+        workflow_tool: str | None = None,
+        workflow_tool_version: str | None = None,
+        temperature_min: float | None = None,
+        temperature_max: float | None = None,
+        pressure_min: float | None = None,
+        pressure_max: float | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> NetworkSearchResponse:
+        """``GET /scientific/networks/browse`` -- list networks, no filter required.
+
+        The sibling of :meth:`search_networks` for "what does this
+        archive hold" rather than "find this network": no parameter here
+        is required, unlike ``search_networks``, which 422s
+        (``missing_filter``) on a request with no meaningful filter.
+        Unlike the reaction/transition-state/species browse methods,
+        every parameter :meth:`search_networks` accepts is accepted here
+        too, ``network_ref`` included -- a network has no owner/parent
+        ref to exclude, so narrowing an open listing down to one exact
+        ref is a legitimate call here.
+
+        Unlike levels of theory, a network is not usage-derived: an
+        empty network with no attached species or reactions still
+        appears in an unfiltered call.
+
+        Returns the parsed ``ScientificNetworkSearchResponse`` JSON
+        envelope -- field-for-field identical to
+        :meth:`search_networks`'s response.
+        """
+        params = {
+            "network_ref": network_ref,
+            "species_ref": species_ref,
+            "species_entry_ref": species_entry_ref,
+            "reaction_ref": reaction_ref,
+            "reaction_entry_ref": reaction_entry_ref,
+            "has_species": has_species,
+            "has_reactions": has_reactions,
+            "has_states": has_states,
+            "has_channels": has_channels,
+            "has_solves": has_solves,
+            "has_kinetics": has_kinetics,
+            "has_chebyshev": has_chebyshev,
+            "has_plog": has_plog,
+            "has_point_kinetics": has_point_kinetics,
+            "method": method,
+            "basis": basis,
+            "software": software,
+            "software_version": software_version,
+            "workflow_tool": workflow_tool,
+            "workflow_tool_version": workflow_tool_version,
+            "temperature_min": temperature_min,
+            "temperature_max": temperature_max,
+            "pressure_min": pressure_min,
+            "pressure_max": pressure_max,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/networks/browse",
+            params=params,
+            authenticated=False,
+        ).data
+
     def search_network_kinetics(
         self,
         *,
@@ -2678,6 +2775,73 @@ class TCKDBClient:
             method_http=method_http,
             profile=profile,
         )
+
+    def browse_levels_of_theory(
+        self,
+        *,
+        level_of_theory_ref: str | None = None,
+        lot_hash: str | None = None,
+        method: str | None = None,
+        basis: str | None = None,
+        dispersion: str | None = None,
+        solvent: str | None = None,
+        spin_treatment: str | None = None,
+        has_correction_schemes: bool | None = None,
+        has_frequency_scale_factors: bool | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        sort: str | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> LevelOfTheorySearchResponse:
+        """``GET /scientific/level-of-theories/browse`` -- list levels of theory, no filter required.
+
+        The sibling of :meth:`search_levels_of_theory` for "what does
+        this archive hold" rather than "find this level of theory": no
+        parameter here is required, unlike ``search_levels_of_theory``,
+        which 422s (``missing_filter``) on a request with no meaningful
+        filter. Unlike the reaction/transition-state/species browse
+        methods, every parameter :meth:`search_levels_of_theory` accepts
+        is accepted here too, ``level_of_theory_ref`` included -- a
+        level of theory has no owner/parent ref to exclude, so narrowing
+        an open listing down to one exact ref is a legitimate call here.
+
+        Only levels of theory with at least one attributing calculation
+        are returned, same usage-derived discipline as
+        :meth:`search_levels_of_theory`.
+
+        Returns the parsed ``ScientificLevelOfTheorySearchResponse`` JSON
+        envelope -- field-for-field identical to
+        :meth:`search_levels_of_theory`'s response.
+        """
+        params = {
+            "level_of_theory_ref": level_of_theory_ref,
+            "lot_hash": lot_hash,
+            "method": method,
+            "basis": basis,
+            "dispersion": dispersion,
+            "solvent": solvent,
+            "spin_treatment": spin_treatment,
+            "has_correction_schemes": has_correction_schemes,
+            "has_frequency_scale_factors": has_frequency_scale_factors,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "sort": sort,
+            "include": include,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/level-of-theories/browse",
+            params=params,
+            authenticated=False,
+        ).data
 
     # ------------------------------------------------------------------
     # Analytics reads (/api/v1/scientific/analytics/*)
