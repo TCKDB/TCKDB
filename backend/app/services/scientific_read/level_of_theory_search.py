@@ -1,19 +1,31 @@
-"""Service implementation for /api/v1/scientific/level-of-theories/search.
+"""Service implementation for /api/v1/scientific/level-of-theories/search
+and /api/v1/scientific/level-of-theories/browse.
 
 Records reuse :class:`ScientificLevelOfTheoryRecord` from the detail
 endpoint via :func:`build_level_of_theory_record`.
 
 **Usage-derived, not a registry dump.** A level of theory nothing
-attaches to does not appear in these results. The candidate-id query
-below filters with ``EXISTS (SELECT 1 FROM calculation WHERE
-calculation.lot_id = level_of_theory.id)`` -- an existence check against
-``calculation``, never an ``OUTER JOIN`` from ``level_of_theory`` that
-would let an unused row leak back in. This mirrors the 2026-08 fix
-already applied to ``list_software`` / ``list_workflow_tools``
-(``app/services/scientific_read/meta.py``) -- see that module's
-docstring for the "registered but unused" failure this guards against.
-``tests/api/scientific/test_api_level_of_theory.py`` pins this with a
-seeded-but-uncalculated LOT and a join-direction mutation.
+attaches to does not appear in these results -- search *or* browse. The
+candidate-id query below filters with ``EXISTS (SELECT 1 FROM
+calculation WHERE calculation.lot_id = level_of_theory.id)`` -- an
+existence check against ``calculation``, never an ``OUTER JOIN`` from
+``level_of_theory`` that would let an unused row leak back in. This
+mirrors the 2026-08 fix already applied to ``list_software`` /
+``list_workflow_tools`` (``app/services/scientific_read/meta.py``) --
+see that module's docstring for the "registered but unused" failure
+this guards against. ``tests/api/scientific/test_api_level_of_theory.py``
+pins this with a seeded-but-uncalculated LOT and a join-direction
+mutation, for both search and browse.
+
+**search vs. browse.** :func:`search_levels_of_theory` 422s
+(``missing_filter``) on a request with no meaningful filter, to keep an
+accidental unbounded scan off a route other callers rely on staying a
+lookup. :func:`browse_levels_of_theory` is the identifier-free catalogue
+sibling that closes the gap that guard creates -- see its own docstring
+and ``app/services/scientific_read/reactions.py::browse_reactions`` for
+the precedent this follows. Both share the entire candidate-query and
+materialization pipeline via :func:`_run_lot_query`; the only difference
+between them is whether :func:`_enforce_at_least_one_filter` runs first.
 """
 
 from __future__ import annotations
@@ -31,6 +43,7 @@ from app.schemas.reads.scientific_level_of_theory import (
     ScientificLevelOfTheoryRecord,
 )
 from app.schemas.reads.scientific_level_of_theory_search import (
+    LevelOfTheoryBrowseRequest,
     LevelOfTheorySearchRequest,
     RequestEcho,
     ScientificLevelOfTheorySearchResponse,
@@ -74,7 +87,7 @@ _DEFAULT_SORT_ECHO = "method,basis,id"
 def search_levels_of_theory(
     session: Session, request: LevelOfTheorySearchRequest
 ) -> ScientificLevelOfTheorySearchResponse:
-    """Multi-axis level-of-theory search."""
+    """Multi-axis level-of-theory search. At least one filter is required."""
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
@@ -87,6 +100,80 @@ def search_levels_of_theory(
 
     _enforce_at_least_one_filter(request)
 
+    return _run_lot_query(session, request, includes=includes, offset=offset, limit=limit)
+
+
+def browse_levels_of_theory(
+    session: Session, request: LevelOfTheoryBrowseRequest
+) -> ScientificLevelOfTheorySearchResponse:
+    """List levels of theory with no filter required, for a catalogue page.
+
+    See ``/scientific/level-of-theories/browse``. This is the
+    identifier-free catalogue read :func:`search_levels_of_theory`
+    deliberately cannot serve: that function's ``missing_filter`` 422
+    keeps an accidental unbounded scan off a route whose other callers
+    rely on it staying a narrowed lookup. Relaxing that guard in place
+    would make one route mean two different things depending on which
+    query parameters happened to be present, so this is a sibling
+    function and route instead -- the same relationship
+    ``browse_reactions`` has to ``search_reactions``
+    (``app/services/scientific_read/reactions.py``).
+
+    Downstream of "which candidate level-of-theory ids" this shares
+    every filter predicate and the whole materialization pipeline with
+    :func:`search_levels_of_theory` via :func:`_run_lot_query`, so a
+    browse record and a search record are byte-identical in shape
+    (:class:`ScientificLevelOfTheoryRecord`) -- same usage-derived
+    ``EXISTS`` gate against ``calculation``, same ``method ASC, basis
+    ASC, id ASC`` order, same include tokens
+    (``correction_schemes``, ``frequency_scale_factors``, ``used_by``,
+    ``software``). :class:`LevelOfTheoryBrowseRequest` keeps every
+    filter :class:`LevelOfTheorySearchRequest` has -- unlike the
+    reaction/transition-state browse siblings there is no owner/parent
+    ref to exclude, so nothing here is narrower than search except the
+    absence of the "at least one filter" gate.
+
+    With no filter supplied (the default, empty browse request) the
+    candidate set is every ``level_of_theory`` row with at least one
+    attributing calculation -- all four levels of theory on the live
+    archive.
+
+    :param session: SQLAlchemy session.
+    :param request: Parsed request model.
+    :returns: ``ScientificLevelOfTheorySearchResponse`` -- same envelope
+        shape ``search_levels_of_theory`` returns.
+    :raises ValueError: 422 for sort/include/pagination validation
+        failures.
+    """
+    reject_client_sort(request.sort)
+    offset, limit = validate_pagination(request.offset, request.limit)
+    includes = validate_includes(
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/level-of-theories/browse",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    return _run_lot_query(session, request, includes=includes, offset=offset, limit=limit)
+
+
+def _run_lot_query(
+    session: Session,
+    request: LevelOfTheorySearchRequest | LevelOfTheoryBrowseRequest,
+    *,
+    includes: set[str],
+    offset: int,
+    limit: int,
+) -> ScientificLevelOfTheorySearchResponse:
+    """Shared candidate-query + materialization pipeline.
+
+    Called by both :func:`search_levels_of_theory` and
+    :func:`browse_levels_of_theory` -- everything downstream of "which
+    filters were supplied" lives here exactly once, so a search record
+    and a browse record cannot drift apart in shape or in which rows are
+    usage-derived-eligible.
+    """
     lot_id, short_circuit = _resolve_ref(
         session, LevelOfTheory, request.level_of_theory_ref, "level_of_theory"
     )
@@ -204,7 +291,7 @@ def _materialize_records(
 
 
 def _empty_response(
-    request: LevelOfTheorySearchRequest,
+    request: LevelOfTheorySearchRequest | LevelOfTheoryBrowseRequest,
     includes: set[str],
     offset: int,
     limit: int,
@@ -221,7 +308,9 @@ def _empty_response(
     )
 
 
-def _request_filter_echo(request: LevelOfTheorySearchRequest) -> dict[str, Any]:
+def _request_filter_echo(
+    request: LevelOfTheorySearchRequest | LevelOfTheoryBrowseRequest,
+) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name in _MEANINGFUL_FILTER_FIELDS + _DEFERRED_FILTER_FIELDS + (
         "include_rejected",
@@ -235,4 +324,4 @@ def _request_filter_echo(request: LevelOfTheorySearchRequest) -> dict[str, Any]:
     return out
 
 
-__all__ = ["search_levels_of_theory"]
+__all__ = ["browse_levels_of_theory", "search_levels_of_theory"]

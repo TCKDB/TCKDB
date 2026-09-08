@@ -1,4 +1,17 @@
-"""Service implementation for /api/v1/scientific/networks/search."""
+"""Service implementation for /api/v1/scientific/networks/search and
+/api/v1/scientific/networks/browse.
+
+``search_networks`` 422s (``missing_filter``) on a request with no
+meaningful filter, to keep an accidental unbounded scan off a route
+other callers rely on staying a lookup. ``browse_networks`` is the
+identifier-free catalogue sibling that closes the gap that guard
+creates -- see its own docstring and
+``app/services/scientific_read/reactions.py::browse_reactions`` for the
+precedent this follows. Both share the entire candidate-query and
+materialization pipeline via ``_run_network_query``; the only
+difference between them is whether ``_enforce_at_least_one_filter``
+runs first.
+"""
 
 from __future__ import annotations
 
@@ -33,6 +46,7 @@ from app.schemas.reads.scientific_network import (
     ScientificNetworkRecord,
 )
 from app.schemas.reads.scientific_network_search import (
+    NetworkBrowseRequest,
     NetworkSearchRequest,
     RequestEcho,
     ScientificNetworkSearchResponse,
@@ -89,7 +103,7 @@ _DEFAULT_SORT_ECHO = "review_rank,created_at,id"
 def search_networks(
     session: Session, request: NetworkSearchRequest
 ) -> ScientificNetworkSearchResponse:
-    """Multi-axis network search (MVP)."""
+    """Multi-axis network search (MVP). At least one filter is required."""
     reject_client_sort(request.sort)
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
@@ -102,6 +116,77 @@ def search_networks(
 
     _enforce_at_least_one_filter(request)
 
+    return _run_network_query(session, request, includes=includes, offset=offset, limit=limit)
+
+
+def browse_networks(
+    session: Session, request: NetworkBrowseRequest
+) -> ScientificNetworkSearchResponse:
+    """List networks with no filter required, for a catalogue page.
+
+    See ``/scientific/networks/browse``. This is the identifier-free
+    catalogue read :func:`search_networks` deliberately cannot serve:
+    that function's ``missing_filter`` 422 keeps an accidental unbounded
+    scan off a route whose other callers rely on it staying a narrowed
+    lookup. Relaxing that guard in place would make one route mean two
+    different things depending on which query parameters happened to be
+    present, so this is a sibling function and route instead -- the same
+    relationship ``browse_reactions`` has to ``search_reactions``
+    (``app/services/scientific_read/reactions.py``).
+
+    Downstream of "which candidate network ids" this shares every
+    filter predicate (:func:`_apply_identity_filters`,
+    :func:`_apply_evidence_filters`, :func:`_apply_envelope_filters`,
+    :func:`_apply_method_basis_software_filters`) and the whole
+    review-visibility / sort / materialization pipeline with
+    :func:`search_networks` via :func:`_run_network_query`, so a browse
+    record and a search record are byte-identical in shape
+    (:class:`~app.schemas.reads.scientific_network.ScientificNetworkRecord`).
+    :class:`NetworkBrowseRequest` keeps every filter
+    :class:`NetworkSearchRequest` has -- nothing here is narrower than
+    search except the absence of the "at least one filter" gate.
+
+    Unlike ``level_of_theory``, a ``Network`` row is not usage-derived:
+    there is no ``EXISTS`` gate requiring attached species/reactions, so
+    with no filter supplied the candidate set is every visible
+    ``network`` row in the corpus -- the live archive's one network
+    included.
+
+    :param session: SQLAlchemy session.
+    :param request: Parsed request model.
+    :returns: ``ScientificNetworkSearchResponse`` -- same envelope shape
+        ``search_networks`` returns.
+    :raises ValueError: 422 for sort/include/pagination validation
+        failures.
+    """
+    reject_client_sort(request.sort)
+    offset, limit = validate_pagination(request.offset, request.limit)
+    includes = validate_includes(
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/networks/browse",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    return _run_network_query(session, request, includes=includes, offset=offset, limit=limit)
+
+
+def _run_network_query(
+    session: Session,
+    request: NetworkSearchRequest | NetworkBrowseRequest,
+    *,
+    includes: set[str],
+    offset: int,
+    limit: int,
+) -> ScientificNetworkSearchResponse:
+    """Shared ref-resolution + candidate-query + materialization pipeline.
+
+    Called by both :func:`search_networks` and :func:`browse_networks` --
+    everything downstream of "which filters were supplied" lives here
+    exactly once, so a search record and a browse record cannot drift
+    apart in shape or in review-visibility handling.
+    """
     # --- ref resolution -----------------------------------------------------
     network_id, short = _resolve_ref(
         session, Network, request.network_ref, "network"
@@ -284,7 +369,7 @@ def _apply_identity_filters(
     return stmt
 
 
-def _apply_evidence_filters(stmt, request: NetworkSearchRequest):
+def _apply_evidence_filters(stmt, request: NetworkSearchRequest | NetworkBrowseRequest):
     if request.has_species is not None:
         ex = exists().where(NetworkSpecies.network_id == Network.id)
         stmt = stmt.where(ex if request.has_species else ~ex)
@@ -334,7 +419,7 @@ def _apply_evidence_filters(stmt, request: NetworkSearchRequest):
     return stmt
 
 
-def _apply_envelope_filters(stmt, request: NetworkSearchRequest):
+def _apply_envelope_filters(stmt, request: NetworkSearchRequest | NetworkBrowseRequest):
     """Filter networks whose solve-level T/P envelope at least touches
     the requested range (overlap semantics).
 
@@ -388,7 +473,7 @@ def _apply_envelope_filters(stmt, request: NetworkSearchRequest):
 
 
 def _apply_method_basis_software_filters(
-    stmt, request: NetworkSearchRequest
+    stmt, request: NetworkSearchRequest | NetworkBrowseRequest
 ):
     """Match networks whose solve source-calc graph carries at least
     one calculation matching the supplied provenance."""
@@ -480,7 +565,7 @@ def _materialize_records(
 
 
 def _empty_response(
-    request: NetworkSearchRequest,
+    request: NetworkSearchRequest | NetworkBrowseRequest,
     includes: set[str],
     offset: int,
     limit: int,
@@ -499,7 +584,9 @@ def _empty_response(
     )
 
 
-def _request_filter_echo(request: NetworkSearchRequest) -> dict[str, Any]:
+def _request_filter_echo(
+    request: NetworkSearchRequest | NetworkBrowseRequest,
+) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
@@ -509,4 +596,4 @@ def _request_filter_echo(request: NetworkSearchRequest) -> dict[str, Any]:
     return out
 
 
-__all__ = ["search_networks"]
+__all__ = ["browse_networks", "search_networks"]

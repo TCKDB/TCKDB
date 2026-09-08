@@ -31,6 +31,9 @@ Sub-routers:
                               /scientific/transition-states/{ref_or_id}
     transition_states.tse_router
                             → /scientific/transition-state-entries/{ref_or_id}
+    networks_browse.router  → /scientific/networks/browse
+    level_of_theory_browse.router
+                            → /scientific/level-of-theories/browse
     releases.router         → /scientific/releases (+ /{handle}/manifest,
                               /selections, /artifacts/{path})
     analytics.router        → /scientific/analytics/{kinetics,thermo,
@@ -53,9 +56,11 @@ from app.api.routes.scientific import (
     kinetics,
     kinetics_search,
     level_of_theory,
+    level_of_theory_browse,
     literature,
     meta,
     networks,
+    networks_browse,
     provenance,
     reactions,
     reactions_browse,
@@ -130,12 +135,28 @@ scientific_router.include_router(conformers.cg_router)
 scientific_router.include_router(conformers.co_router)
 scientific_router.include_router(statmech.router)
 scientific_router.include_router(transport.router)
+# Identifier-free catalogue read, registered right before the search +
+# detail router it deliberately does not modify -- and it must come
+# first: networks.router's ``/{network_ref_or_id}`` catch-all is
+# registered by the time this module's own decorators could reach it, so
+# a route appended to networks.router afterwards would be shadowed. See
+# networks_browse.py's module docstring (same mechanism as
+# transition_states_browse.py).
+scientific_router.include_router(networks_browse.router)
 scientific_router.include_router(networks.router)
 scientific_router.include_router(networks.solve_router)
 scientific_router.include_router(networks.kinetics_router)
 scientific_router.include_router(literature.router)
 scientific_router.include_router(corrections.fsf_router)
 scientific_router.include_router(corrections.ecs_router)
+# Identifier-free catalogue read, registered right before the search +
+# detail router it deliberately does not modify -- and it must come
+# first: level_of_theory.router's ``/{level_of_theory_ref_or_id}``
+# catch-all is registered by the time this module's own decorators could
+# reach it, so a route appended to level_of_theory.router afterwards
+# would be shadowed. See level_of_theory_browse.py's module docstring
+# (same mechanism as transition_states_browse.py).
+scientific_router.include_router(level_of_theory_browse.router)
 scientific_router.include_router(level_of_theory.router)
 scientific_router.include_router(artifacts.router)
 scientific_router.include_router(export.router)

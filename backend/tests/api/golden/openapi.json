@@ -34576,7 +34576,7 @@
         "type": "object"
       },
       "ScientificLevelOfTheorySearchResponse": {
-        "description": "Response envelope for the level-of-theory search endpoint.",
+        "description": "Response envelope for the level-of-theory search endpoint.\n\nReused verbatim (not subclassed) for\n``/scientific/level-of-theories/browse`` -- the same relationship\n:func:`app.services.scientific_read.reactions.browse_reactions` has\nto :class:`~app.schemas.reads.scientific_reactions.ScientificReactionSearchResponse`.\nA search response and a browse response are the same envelope over\nthe same record type, so a caller's parser for one works unmodified\nagainst the other.",
         "properties": {
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
@@ -35135,6 +35135,7 @@
         "type": "object"
       },
       "ScientificNetworkSearchResponse": {
+        "description": "Response envelope for /api/v1/scientific/networks/search.\n\nReused verbatim (not subclassed) for\n``/scientific/networks/browse`` -- the same relationship\n:func:`app.services.scientific_read.reactions.browse_reactions` has\nto\n:class:`~app.schemas.reads.scientific_reactions.ScientificReactionSearchResponse`.\nA search response and a browse response are the same envelope over\nthe same record type, so a caller's parser for one works unmodified\nagainst the other.",
         "properties": {
           "pagination": {
             "$ref": "#/components/schemas/Pagination"
@@ -69051,6 +69052,307 @@
         ]
       }
     },
+    "/api/v1/scientific/level-of-theories/browse": {
+      "get": {
+        "description": "List levels of theory with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/level-of-theories/search``\n(:class:`~app.schemas.reads.scientific_level_of_theory.ScientificLevelOfTheoryRecord`)\nand the same include tokens (``correction_schemes``,\n``frequency_scale_factors``, ``used_by``, ``software``) -- unlike\nsearch, no filter is required: with none supplied, every level of\ntheory with at least one attributing calculation is a candidate\n(usage-derived, same as search -- see\n``app/services/scientific_read/level_of_theory_search.py``).\n\n``limit`` is capped at 200 (default 50, matching\n``/level-of-theories/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``method ASC, basis ASC, id ASC`` -- the same order\n``/level-of-theories/search`` uses. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
+        "operationId": "scientific_level_of_theory_browse_api_v1_scientific_level_of_theories_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "level_of_theory_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Level Of Theory Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "lot_hash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lot Hash"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dispersion",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Dispersion"
+            }
+          },
+          {
+            "in": "query",
+            "name": "solvent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Solvent"
+            }
+          },
+          {
+            "in": "query",
+            "name": "spin_treatment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/app__db__models__common__SpinTreatment"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Spin Treatment"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_correction_schemes",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Correction Schemes"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_frequency_scale_factors",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Frequency Scale Factors"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificLevelOfTheorySearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Level Of Theory Browse",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
     "/api/v1/scientific/level-of-theories/search": {
       "get": {
         "description": "Level-of-theory search.\n\nAND-combines the supplied filters; at least one meaningful filter is\nrequired. Only levels of theory with at least one attributing\ncalculation are returned -- see\n``app/services/scientific_read/level_of_theory_search.py``.",
@@ -71735,6 +72037,547 @@
           }
         },
         "summary": "Scientific Network Solve Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/browse": {
+      "get": {
+        "description": "List networks with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/networks/search``\n(:class:`~app.schemas.reads.scientific_network.ScientificNetworkRecord`)\nand the same include tokens -- unlike search, no filter is required:\nwith none supplied, every visible network in the corpus is a\ncandidate (a ``Network`` row is not usage-derived the way a\n``level_of_theory`` row is, so an empty network with no attached\nspecies/reactions still appears).\n\n``limit`` is capped at 200 (default 50, matching\n``/networks/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, created_at DESC, id DESC`` -- the\nsame order ``/networks/search`` uses. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
+        "operationId": "scientific_networks_browse_api_v1_scientific_networks_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "network_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Network Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "species_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Species Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "species_entry_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Species Entry Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reaction_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reaction Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "reaction_entry_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reaction Entry Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_species",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Species"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_reactions",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Reactions"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_states",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has States"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_channels",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Channels"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_solves",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Solves"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_kinetics",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Kinetics"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_chebyshev",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Chebyshev"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_plog",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Plog"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_point_kinetics",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Point Kinetics"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "temperature_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Temperature Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "temperature_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Temperature Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pressure_min",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pressure Min"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pressure_max",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pressure Max"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificNetworkSearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Networks Browse",
         "tags": [
           "scientific"
         ]

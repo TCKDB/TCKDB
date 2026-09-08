@@ -367,6 +367,93 @@ class TestReactionsBrowse:
         assert query["direction"] == ["either"]
 
 
+class TestLevelOfTheoryBrowse:
+    def test_get_with_no_params_reaches_the_browse_path(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_levels_of_theory()
+
+        assert seen[0].method == "GET"
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/level-of-theories/browse"
+        )
+        assert _query_of(str(seen[0].url)) == {}
+
+    def test_filters_land_in_the_query_string(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_levels_of_theory(
+            level_of_theory_ref="lot_1",
+            method="b3lyp",
+            basis="def2tzvp",
+            has_correction_schemes=True,
+            has_frequency_scale_factors=False,
+            limit=10,
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["level_of_theory_ref"] == ["lot_1"]
+        assert query["method"] == ["b3lyp"]
+        assert query["basis"] == ["def2tzvp"]
+        assert query["has_correction_schemes"] == ["true"]
+        assert query["has_frequency_scale_factors"] == ["false"]
+        assert query["limit"] == ["10"]
+
+    def test_returns_the_parsed_envelope(self):
+        handler, _ = _capture(
+            _envelope([{"level_of_theory": {"level_of_theory_ref": "lot_1"}}])
+        )
+        client, _ = make_client(handler)
+
+        result = client.browse_levels_of_theory()
+
+        assert (
+            result["records"][0]["level_of_theory"]["level_of_theory_ref"]
+            == "lot_1"
+        )
+
+
+class TestNetworksBrowse:
+    def test_get_with_no_params_reaches_the_browse_path(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_networks()
+
+        assert seen[0].method == "GET"
+        assert _path_of(str(seen[0].url)).endswith("/scientific/networks/browse")
+        assert _query_of(str(seen[0].url)) == {}
+
+    def test_filters_land_in_the_query_string(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_networks(
+            network_ref="net_1",
+            has_species=True,
+            has_channels=False,
+            method="b3lyp",
+            limit=10,
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["network_ref"] == ["net_1"]
+        assert query["has_species"] == ["true"]
+        assert query["has_channels"] == ["false"]
+        assert query["method"] == ["b3lyp"]
+        assert query["limit"] == ["10"]
+
+    def test_returns_the_parsed_envelope(self):
+        handler, _ = _capture(_envelope([{"network": {"network_ref": "net_1"}}]))
+        client, _ = make_client(handler)
+
+        result = client.browse_networks()
+
+        assert result["records"][0]["network"]["network_ref"] == "net_1"
+
+
 class TestNetworkKineticsEvaluate:
     def _evaluate_body(self) -> dict:
         return {

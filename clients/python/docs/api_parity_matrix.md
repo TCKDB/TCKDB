@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 101 |
+| typed | 103 |
 | raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **246** |
+| **total** | **248** |
 
 ## Typed coverage
 
@@ -69,6 +69,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/geometries/{geometry_handle}` | yes | `get_geometry` | — | `examples/query_cookbook.py` | `tests/test_get_geometry.py` |
 | `GET /api/v1/scientific/kinetics/search` | yes | `search_kinetics` | `iter_kinetics` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/kinetics/search` | yes | `search_kinetics` | `iter_kinetics` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
+| `GET /api/v1/scientific/level-of-theories/browse` | yes | `browse_levels_of_theory` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/level-of-theories/search` | yes | `search_levels_of_theory` | `iter_levels_of_theory` | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/scientific/level-of-theories/search` | yes | `search_levels_of_theory` | `iter_levels_of_theory` | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/level-of-theories/{level_of_theory_ref_or_id}` | yes | `get_level_of_theory` | — | — | `tests/test_typed_parity_methods.py` |
@@ -87,6 +88,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/network-solves/search` | yes | `search_network_solves` | `iter_network_solves` | — | `tests/test_network_solve_client.py` |
 | `POST /api/v1/scientific/network-solves/search` | yes | `search_network_solves` | `iter_network_solves` | — | `tests/test_network_solve_client.py` |
 | `GET /api/v1/scientific/network-solves/{network_solve_ref_or_id}` | yes | `get_network_solve` | — | — | `tests/test_network_solve_client.py` |
+| `GET /api/v1/scientific/networks/browse` | yes | `browse_networks` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` | yes | `get_reaction_full` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |

@@ -384,6 +384,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "iter_networks", None, "tests/test_typed_scientific.py",
     ),
     (
+        "GET", "/api/v1/scientific/networks/browse", "browse_networks",
+        None, None, _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/network-kinetics/search",
         "search_network_kinetics", "iter_network_kinetics", None,
         "tests/test_typed_scientific.py",
@@ -479,6 +483,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "/api/v1/scientific/level-of-theories/"
         "{level_of_theory_ref_or_id}",
         "get_level_of_theory", None, None, _NEW_METHOD_TESTS,
+    ),
+    (
+        "GET", "/api/v1/scientific/level-of-theories/browse",
+        "browse_levels_of_theory", None, None, _NEW_METHOD_TESTS,
     ),
     # --- Literature ---------------------------------------------------
     (
