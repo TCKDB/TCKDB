@@ -158,7 +158,16 @@ const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
         ".arrhenius-chart-controls-heading",
     ],
     "browse.css": [
-        ".browse-kind-selector legend", // "Browse"
+        // `.browse-kind-selector legend` retired here: the kind switcher
+        // demoted from a `<fieldset>`/`<legend>` radiogroup to a plain
+        // `<nav>` of links (owner: browse-by-kind must not read as "modes
+        // of one page" -- see `BrowseKindSelector.tsx`'s own doc comment).
+        // `.browse-kind-links-label` is its replacement -- the `<p
+        // className="browse-kind-links-label">` heading the link list,
+        // verified directly against `BrowseKindSelector.tsx`: a single
+        // static literal, `Also in this archive`, never interpolated with
+        // a kind name, unit, or any other scientific content.
+        ".browse-kind-links-label",
         ".browse-filter-field label", // "Charge" / "Formula" / "SMILES" / ...
         ".browse-filter-evidence-group legend", // "Show only entries with…"
         ".browse-count", // "N species entries" (a count sentence)
