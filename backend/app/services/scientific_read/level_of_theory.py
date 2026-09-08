@@ -41,7 +41,8 @@ from app.db.models.calculation import Calculation
 from app.db.models.energy_correction import EnergyCorrectionScheme, FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
-from app.db.models.software import SoftwareRelease
+from app.db.models.software import Software, SoftwareRelease
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import ReviewStatusSummary
 from app.schemas.reads.scientific_level_of_theory import (
     AvailableLevelOfTheorySections,
@@ -50,6 +51,9 @@ from app.schemas.reads.scientific_level_of_theory import (
     LevelOfTheoryEvidenceSummary,
     LevelOfTheoryFrequencyScaleFactorGroup,
     LevelOfTheoryFrequencyScaleFactorProvenance,
+    LevelOfTheorySoftwareBreakdown,
+    LevelOfTheorySoftwareUsage,
+    LevelOfTheoryWorkflowToolUsage,
     RequestEcho,
     ScientificLevelOfTheoryDetailResponse,
     ScientificLevelOfTheoryRecord,
@@ -69,16 +73,17 @@ from app.services.scientific_read.internal_ids import (
 
 # LOT is not reviewable (no SubmissionRecordType entry), so ``review`` is
 # intentionally not a legal token. ``software`` (the LOT-scoped
-# software/version breakdown, methods-surface plan §5.3) is deliberately
-# NOT in this table yet -- it depends on a new aggregation service that
-# ships in a follow-up change; asking for it 422s with
-# ``unknown_include_token`` rather than silently answering with nothing.
-# ``include=all`` expands to ``correction_schemes,frequency_scale_factors,
-# used_by`` minus internal_ids per the standard policy.
+# software/workflow-tool usage breakdown, methods-surface plan §5.3) asks
+# "which software (and workflow tool) ran calculations at this level of
+# theory, and how many" -- see ``_software_usage_rows`` /
+# ``_workflow_tool_usage_rows`` below. ``include=all`` expands to
+# ``correction_schemes,frequency_scale_factors,used_by,software`` minus
+# internal_ids per the standard policy.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "correction_schemes",
     "frequency_scale_factors",
     "used_by",
+    "software",
     "internal_ids",
     "all",
 }
@@ -142,7 +147,14 @@ def build_level_of_theory_record(
     calc_usage_count = _count_calculation_usage(session, lot.id)
     has_schemes = _has_correction_schemes(session, lot.id)
     has_fsf = _has_frequency_scale_factors(session, lot.id)
-    distinct_software = _count_distinct_software(session, lot.id)
+    # Always computed (same discipline as has_schemes/has_fsf above): this
+    # is the one query that also backs ``include=software``'s ``software``
+    # list, so ``distinct_software_count`` and that list can never
+    # disagree -- see ``LevelOfTheoryEvidenceSummary.distinct_software_count``'s
+    # docstring for why that used to be a real risk (two independent
+    # queries) and is not one now.
+    software_rows = _software_usage_rows(session, lot.id)
+    distinct_software = len({name for name, _version, _count in software_rows})
 
     evidence = LevelOfTheoryEvidenceSummary(
         calculation_usage_count=calc_usage_count,
@@ -154,6 +166,7 @@ def build_level_of_theory_record(
         has_correction_schemes=has_schemes,
         has_frequency_scale_factors=has_fsf,
         has_used_by=calc_usage_count > 0,
+        has_software=bool(software_rows),
     )
 
     core = LevelOfTheoryCoreBlock(
@@ -184,6 +197,10 @@ def build_level_of_theory_record(
     if "used_by" in includes:
         used_by_block = _build_used_by(session, lot.id)
 
+    software_block = None
+    if "software" in includes:
+        software_block = _build_software(session, lot.id, software_rows=software_rows)
+
     return ScientificLevelOfTheoryRecord(
         level_of_theory=core,
         evidence_summary=evidence,
@@ -191,6 +208,7 @@ def build_level_of_theory_record(
         correction_schemes=correction_schemes_block,
         frequency_scale_factors=fsf_block,
         used_by=used_by_block,
+        software=software_block,
     )
 
 
@@ -241,27 +259,125 @@ def _has_frequency_scale_factors(session: Session, lot_id: int) -> bool:
     )
 
 
-def _count_distinct_software(session: Session, lot_id: int) -> int:
-    """Distinct ``software`` packages observed running a calculation at *lot_id*.
+# ---------------------------------------------------------------------------
+# include=software -- LOT-scoped software/workflow-tool usage aggregation
+# (methods-surface plan §5.3)
+# ---------------------------------------------------------------------------
+#
+# Bulk, grouped queries -- one statement per level of theory for the
+# software side, one for the workflow-tool side, *never* one statement per
+# software package. That is the exact gap this closes: building the
+# software column of the methods index by hand (before this endpoint
+# existed) took 12 separate ``calculations/search?lot_ref=&software=``
+# calls, one per (LOT, package) pair. A per-package query loop here would
+# just move that N+1 shape server-side instead of removing it; see
+# ``tests/api/scientific/test_api_level_of_theory.py``'s query-count
+# regression test, which pins the statement count for this section at a
+# fixed few per level of theory regardless of how many distinct packages
+# it has.
+#
+# Both queries are usage-derived, ``INNER JOIN`` from ``calculation`` --
+# same discipline as ``list_software`` / ``list_workflow_tools`` in
+# ``app/services/scientific_read/meta.py`` (2026-08): a software package or
+# workflow tool with zero calculations at this LOT does not appear in its
+# list at all. It is never rendered with a ``calculation_count`` of zero.
 
-    A headline count, not the per-package breakdown (``include=software``,
-    methods-surface plan §5.3, added separately once the LOT-scoped
-    aggregation service lands). ``INNER JOIN`` from ``calculation`` through
-    ``software_release``, same usage-derived discipline as everywhere else
-    in this module -- a package with zero calculations at this LOT
-    contributes nothing to the count.
+
+def _software_usage_rows(session: Session, lot_id: int) -> list[tuple[str, str | None, int]]:
+    """``(software_name, version, calculation_count)`` rows for *lot_id*.
+
+    Grouped by ``(Software.name, SoftwareRelease.version)`` -- two
+    calculations at the same LOT citing the same software but different
+    recorded versions are two rows here, not one merged row that would
+    hide the version split. ``version`` is ``None`` (never ``""``) when
+    the underlying release rows carry no recorded version -- see
+    ``LevelOfTheorySoftwareUsage``'s docstring.
     """
-    return int(
-        session.scalar(
-            select(func.count(func.distinct(SoftwareRelease.software_id)))
-            .select_from(Calculation)
-            .join(
-                SoftwareRelease,
-                SoftwareRelease.id == Calculation.software_release_id,
-            )
-            .where(Calculation.lot_id == lot_id)
+    rows = session.execute(
+        select(
+            Software.name,
+            SoftwareRelease.version,
+            func.count(Calculation.id),
         )
-        or 0
+        .select_from(Calculation)
+        .join(
+            SoftwareRelease,
+            SoftwareRelease.id == Calculation.software_release_id,
+        )
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.lot_id == lot_id)
+        .group_by(Software.name, SoftwareRelease.version)
+        .order_by(
+            func.count(Calculation.id).desc(),
+            Software.name.asc(),
+            SoftwareRelease.version.asc(),
+        )
+    ).all()
+    return [(name, version, int(count)) for name, version, count in rows]
+
+
+def _workflow_tool_usage_rows(
+    session: Session, lot_id: int
+) -> list[tuple[str, str | None, int]]:
+    """``(workflow_tool_name, version, calculation_count)`` rows for *lot_id*.
+
+    Mirrors :func:`_software_usage_rows` exactly, one join hop over on
+    ``workflow_tool_release`` / ``workflow_tool`` instead of
+    ``software_release`` / ``software``.
+    """
+    rows = session.execute(
+        select(
+            WorkflowTool.name,
+            WorkflowToolRelease.version,
+            func.count(Calculation.id),
+        )
+        .select_from(Calculation)
+        .join(
+            WorkflowToolRelease,
+            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
+        )
+        .join(WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id)
+        .where(Calculation.lot_id == lot_id)
+        .group_by(WorkflowTool.name, WorkflowToolRelease.version)
+        .order_by(
+            func.count(Calculation.id).desc(),
+            WorkflowTool.name.asc(),
+            WorkflowToolRelease.version.asc(),
+        )
+    ).all()
+    return [(name, version, int(count)) for name, version, count in rows]
+
+
+def _build_software(
+    session: Session,
+    lot_id: int,
+    *,
+    software_rows: list[tuple[str, str | None, int]],
+) -> LevelOfTheorySoftwareBreakdown:
+    """Assemble the ``include=software`` payload.
+
+    *software_rows* is passed in rather than re-queried: the caller
+    (:func:`build_level_of_theory_record`) already ran
+    :func:`_software_usage_rows` unconditionally to compute
+    ``distinct_software_count`` -- re-running it here would be a second
+    statement doing the same work on every request that asks for
+    ``include=software``. Only the workflow-tool side is queried fresh,
+    since nothing else in this module needs it yet.
+    """
+    workflow_rows = _workflow_tool_usage_rows(session, lot_id)
+    return LevelOfTheorySoftwareBreakdown(
+        software=[
+            LevelOfTheorySoftwareUsage(
+                software=name, version=version, calculation_count=count
+            )
+            for name, version, count in software_rows
+        ],
+        workflow_tools=[
+            LevelOfTheoryWorkflowToolUsage(
+                workflow_tool=name, version=version, calculation_count=count
+            )
+            for name, version, count in workflow_rows
+        ],
     )
 
 

@@ -153,6 +153,57 @@ class LevelOfTheoryCalculationUsageSummary(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Software / workflow-tool breakdown (include=software)
+# ---------------------------------------------------------------------------
+
+
+class LevelOfTheorySoftwareUsage(BaseModel):
+    """One ``(software, version)`` pair observed running >=1 calculation
+    at this level of theory.
+
+    ``version`` is ``None`` -- never ``""`` -- when the ``software_release``
+    row(s) behind this pair carry no recorded version. Absence is stated,
+    not implied: on the live archive, 2 of 3 software packages have no
+    version recorded at all, and rendering that as a blank string would
+    read as "we asked and it was blank" rather than "no one recorded it".
+    """
+
+    software: str
+    version: str | None = None
+    calculation_count: int
+
+
+class LevelOfTheoryWorkflowToolUsage(BaseModel):
+    """One ``(workflow_tool, version)`` pair observed running >=1
+    calculation at this level of theory. Same absent-version rule as
+    :class:`LevelOfTheorySoftwareUsage` -- on the live archive only 10 of
+    ARC's 416 calculations carry a recorded workflow-tool-release version.
+    """
+
+    workflow_tool: str
+    version: str | None = None
+    calculation_count: int
+
+
+class LevelOfTheorySoftwareBreakdown(BaseModel):
+    """``include=software`` -- which software (and workflow tool) actually
+    ran calculations at this level of theory, and how many.
+
+    Usage-derived, same ``INNER JOIN`` discipline as ``list_software`` /
+    ``list_workflow_tools`` in ``app/services/scientific_read/meta.py``
+    (2026-08): a software package or workflow tool with zero calculations
+    at *this* level of theory is absent from the corresponding list, never
+    present with a zero count. This is the closed gap named in the
+    methods-surface plan §5.3 -- establishing this mapping by hand cost 12
+    ``calculations/search?lot_ref=&software=`` calls before this endpoint
+    existed.
+    """
+
+    software: list[LevelOfTheorySoftwareUsage]
+    workflow_tools: list[LevelOfTheoryWorkflowToolUsage]
+
+
+# ---------------------------------------------------------------------------
 # Evidence + available sections
 # ---------------------------------------------------------------------------
 
@@ -172,11 +223,17 @@ class LevelOfTheoryEvidenceSummary(BaseModel):
     has_correction_schemes: bool
     has_frequency_scale_factors: bool
     #: Count of distinct ``software`` packages observed running a
-    #: calculation at this level of theory. The *breakdown* (which
-    #: package, which version, how many calculations each) is
-    #: ``include=software``, added in a follow-up change once the
-    #: LOT-scoped aggregation service lands; this headline count needs no
-    #: new aggregation, only a distinct-count query over the same join.
+    #: calculation at this level of theory. Derived from the exact same
+    #: query that backs ``include=software``'s ``software`` list (see
+    #: ``_software_usage_rows`` in
+    #: ``app/services/scientific_read/level_of_theory.py``) -- counting
+    #: the distinct package names in those rows, not a separate
+    #: ``COUNT(DISTINCT ...)`` query. This is a deliberate choice: PR 1
+    #: computed this scalar with its own query, and a second, independent
+    #: query computing the ``include=software`` breakdown could in
+    #: principle disagree with it (e.g. after an unrelated edit changes
+    #: one join but not the other). Sharing one query makes that
+    #: disagreement structurally impossible instead of merely unlikely.
     distinct_software_count: int
 
 
@@ -186,6 +243,18 @@ class AvailableLevelOfTheorySections(BaseModel):
     has_correction_schemes: bool
     has_frequency_scale_factors: bool
     has_used_by: bool
+    #: True when at least one software package (by name) ran a
+    #: calculation at this level of theory -- i.e. ``distinct_software_count
+    #: > 0``. Deliberately silent on workflow-tool-only usage (a
+    #: calculation citing a ``workflow_tool_release`` but no
+    #: ``software_release``): that is a real but rare shape on today's
+    #: archive (1 workflow tool, ARC, always alongside a software release
+    #: in the measured data) and is not worth a second always-on query
+    #: per record to detect. ``include=software``'s own
+    #: ``workflow_tools`` list is unaffected by this simplification --
+    #: it is still correct when requested, this flag just does not
+    #: promise to predict it.
+    has_software: bool
 
 
 # ---------------------------------------------------------------------------
@@ -204,6 +273,7 @@ class ScientificLevelOfTheoryRecord(BaseModel):
     correction_schemes: list[ScientificEnergyCorrectionSchemeRecord] | None = None
     frequency_scale_factors: list[LevelOfTheoryFrequencyScaleFactorGroup] | None = None
     used_by: list[LevelOfTheoryCalculationUsageSummary] | None = None
+    software: LevelOfTheorySoftwareBreakdown | None = None
 
 
 class ScientificLevelOfTheoryDetailResponse(BaseModel):
@@ -221,6 +291,9 @@ __all__ = [
     "LevelOfTheoryEvidenceSummary",
     "LevelOfTheoryFrequencyScaleFactorGroup",
     "LevelOfTheoryFrequencyScaleFactorProvenance",
+    "LevelOfTheorySoftwareBreakdown",
+    "LevelOfTheorySoftwareUsage",
+    "LevelOfTheoryWorkflowToolUsage",
     "RequestEcho",
     "ScientificLevelOfTheoryDetailResponse",
     "ScientificLevelOfTheoryRecord",
