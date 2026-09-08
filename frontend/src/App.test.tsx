@@ -71,7 +71,7 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "Cl", canonical_smiles: "[Cl]", charge: 0, multiplicity: 2, entries: [] }],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "Cl")
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "Cl")
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
@@ -88,7 +88,7 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "H2O", canonical_smiles: "O", charge: 0, multiplicity: 1, entries: [] }],
         })))
         const user = userEvent.setup(); render(<StrictMode><App /></StrictMode>)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "H2O")
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
         expect(await screen.findByRole("link", { name: /^H2O O /})).toBeVisible()
@@ -101,7 +101,7 @@ describe("public archive shell", () => {
             HttpResponse.json({ records: [overviewSpecies()] })
         )))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), speciesRef)
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), speciesRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
@@ -140,7 +140,7 @@ describe("public archive shell", () => {
             http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [] })),
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         // The entry's OWN ref is visible at rest, first in the identity
@@ -170,7 +170,7 @@ describe("public archive shell", () => {
             ] })
         }))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "H2O")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // Each row reads by its own chemistry, not by an interchangeable ref:
         // the two matches share the same formula prefix but diverge past it,
@@ -188,11 +188,21 @@ describe("public archive shell", () => {
     })
 
     it("keeps structure search at entry grain and shows SMILES when formula is unavailable", async () => {
-        server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
-            records: [{ species_ref: speciesRef, species_entry_ref: entryRef, smiles: "CCO", charge: 0, multiplicity: 1 }],
-        })))
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
+                records: [{ species_ref: speciesRef, species_entry_ref: entryRef, smiles: "CCO", charge: 0, multiplicity: 1 }],
+            })),
+            // A successful SMILES/InChI/InChIKey match also fires the
+            // reaction-participation lookup (`IdentifierSearch`'s "Reactions
+            // involving …" group) -- this file's server is configured
+            // `onUnhandledRequest: "error"`, so this handler is required for
+            // the test to run at all, not just to assert on.
+            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json({
+                records: [], pagination: { offset: 0, limit: 5, returned: 0, total: 0 },
+            })),
+        )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species identifier"), "smiles:CCO")
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // The structure-search endpoint never returns a formula (#251): the
         // row leads with SMILES instead and says so honestly, rather than
@@ -214,7 +224,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: ref, ...chemistry, charge: 0, multiplicity: 1, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Exact species or reaction identifier")
         await user.type(input, "H2O"); await user.click(screen.getByRole("button", { name: "Search" }))
         await user.clear(input); await user.type(input, "H2"); await user.click(screen.getByRole("button", { name: "Search" }))
         // The stale, slower "H2O" response must never overwrite the "H2" result.
@@ -231,7 +241,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Exact species or reaction identifier")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         expect(await screen.findByRole("status")).toHaveTextContent("No exact formula record")
@@ -250,7 +260,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Exact species or reaction identifier")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         await user.clear(input); await user.type(input, "spc_BAD"); await user.click(button)
@@ -275,7 +285,7 @@ describe("public archive shell", () => {
             })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species identifier")
+        const input = await screen.findByLabelText("Exact species or reaction identifier")
         await user.type(input, "Cl"); await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("button", { name: "Formula" })).toBeVisible()
         await user.clear(input); await user.type(input, "Br")
@@ -659,6 +669,100 @@ it("an rxe_ ref handed to /reactions/:ref redirects to /reaction-entries/:ref wi
     expect(window.location.pathname).toBe("/reaction-entries/rxe_abc")
 })
 
+// The owner-reported gap this project exists to close: the home-page search
+// only recognised `spc_`/`spe_`; a `rxn_`/`rxe_`/`tse_` reference fell
+// through every branch and was sent to the archive as a SMILES structure
+// query. These three exercise the SAME public-reference vocabulary the
+// tests above already exercise via `window.history.replaceState` (a
+// direct link/bookmark), but arrived by TYPING into `IdentifierSearch` on
+// the home page instead -- the actual path the owner's report was about.
+describe("the home-page identifier search recognizes and routes public references beyond spc_/spe_", () => {
+    const REF_BODY = "aaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+    it("a typed rxn_ reference navigates straight to the reaction chooser page", async () => {
+        server.use(http.get("/api/v1/scientific/reactions/search", () => HttpResponse.json({
+            review_summary: { total: 1, not_reviewed: 1, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+            records: [{
+                reaction_ref: `rxn_${REF_BODY}`,
+                reaction_entry_ref: `rxe_${REF_BODY}`,
+                equation: "A <=> B",
+                reversible: true,
+                family: null,
+                review: { status: "not_reviewed" },
+                reactants: [{ species_entry_ref: "spe_a", smiles: "A", participant_index: 0 }],
+                products: [{ species_entry_ref: "spe_b", smiles: "B", participant_index: 0 }],
+                availability: { has_kinetics: false, has_transition_state: false, has_path_search: false, kinetics_count: 0 },
+            }],
+        })))
+        const user = userEvent.setup(); render(<App />)
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `rxn_${REF_BODY}`)
+        await user.click(screen.getByRole("button", { name: "Search" }))
+        expect(await screen.findByText(`rxn_${REF_BODY}`)).toBeVisible()
+        expect(window.location.pathname).toBe(`/reactions/rxn_${REF_BODY}`)
+    })
+
+    it("a typed rxe_ reference navigates straight to the reaction-entry page, with no /reactions/search request at all", async () => {
+        // No handler for `reactions/search` -- this file's server is
+        // `onUnhandledRequest: "error"`, so going through the chooser
+        // (`/reactions/:ref`, which calls `reactions/search` first) rather
+        // than straight to `/reaction-entries/:ref` would fail this test on
+        // that request alone.
+        server.use(http.get(`/api/v1/scientific/reaction-entries/rxe_${REF_BODY}/full`, () => HttpResponse.json({
+            reaction_entry: {
+                reaction_entry_ref: `rxe_${REF_BODY}`, reaction_ref: `rxn_${REF_BODY}`, equation: "A <=> B",
+                reversible: true, family: null, review: { status: "not_reviewed" }, atom_maps: [],
+            },
+            review_summary: { total: 0, not_reviewed: 0, approved: 0, under_review: 0, deprecated: 0, rejected: 0 },
+            species: { reactants: [], products: [] },
+            kinetics: [], transition_states: [], calculations: [], networks: [],
+        })))
+        const user = userEvent.setup(); render(<App />)
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `rxe_${REF_BODY}`)
+        await user.click(screen.getByRole("button", { name: "Search" }))
+        expect(await screen.findByText(`rxe_${REF_BODY}`)).toBeVisible()
+        expect(window.location.pathname).toBe(`/reaction-entries/rxe_${REF_BODY}`)
+    })
+
+    it("a typed tse_ reference navigates straight to the transition-state-entry detail page", async () => {
+        server.use(
+            http.get("/api/v1/scientific/transition-states/search", () => HttpResponse.json({ records: [] })),
+            http.get(`/api/v1/scientific/transition-state-entries/tse_${REF_BODY}`, () => HttpResponse.json({
+                record: {
+                    transition_state_entry: {
+                        transition_state_entry_ref: `tse_${REF_BODY}`, charge: 0, multiplicity: 2, status: "optimized",
+                        unmapped_smiles: "[C]>>C", created_at: "2026-08-05T14:04:16.914780",
+                        review: { status: "not_reviewed" },
+                    },
+                    transition_state: {
+                        transition_state_ref: "ts_abc", label: "TS0", note: null,
+                        created_at: "2026-08-05T14:04:16.914780", review: { status: "not_reviewed" },
+                    },
+                    reaction: {
+                        reaction_ref: `rxn_${REF_BODY}`, reaction_entry_ref: `rxe_${REF_BODY}`,
+                        equation: "A <=> B", reversible: true, family: "R_Addition_MultipleBond",
+                    },
+                    evidence_summary: {
+                        calculation_count: 0, has_opt: false, has_freq: false, has_sp: false, has_irc: false,
+                        has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                        levels_of_theory: {},
+                    },
+                    validation: { irc: "absent" },
+                    available_sections: {
+                        has_entries: true, has_calculations: false, has_geometries: false,
+                        has_review: false, has_validation_evidence: false,
+                    },
+                    calculations: [], geometries: [], review_history: [],
+                },
+            })),
+        )
+        const user = userEvent.setup(); render(<App />)
+        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `tse_${REF_BODY}`)
+        await user.click(screen.getByRole("button", { name: "Search" }))
+        expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
+        expect(window.location.pathname).toBe(`/transition-state-entries/tse_${REF_BODY}`)
+    })
+})
+
 describe("unmatched routes (finding #12)", () => {
     it("shows the not-found page instead of silently rendering the home page", async () => {
         window.history.replaceState({}, "", "/this-route-does-not-exist")
@@ -666,7 +770,7 @@ describe("unmatched routes (finding #12)", () => {
         expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
         expect(screen.getByText("/this-route-does-not-exist")).toBeVisible()
         // Not the home page, which this route used to silently redirect to.
-        expect(screen.queryByLabelText("Exact species identifier")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Exact species or reaction identifier")).not.toBeInTheDocument()
     })
 
     it("shows the not-found page for a plausible-looking but wrong tab segment, not the first tab", async () => {

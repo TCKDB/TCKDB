@@ -20,7 +20,7 @@ function page() {
 describe("ArchiveHomePage: no structure/SMILES search on the front page", () => {
     it("renders the exact-identifier search", () => {
         page()
-        expect(screen.getByLabelText("Exact species identifier")).toBeInTheDocument()
+        expect(screen.getByLabelText("Exact species or reaction identifier")).toBeInTheDocument()
     })
 
     it("does not render a structure-search mode fieldset, a SMARTS toggle, or a 'Search structures' control", () => {
