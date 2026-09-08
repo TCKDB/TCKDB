@@ -92,16 +92,6 @@ describe("filter form typography", () => {
         expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
     })
 
-    // `.browse-kind-selector legend` (a `<fieldset>`/`<legend>` radiogroup)
-    // was retired when `BrowseKindSelector` demoted to a plain nav of
-    // `<Link>`s (owner: browse-by-kind must not read as "modes of one
-    // page") -- `.browse-kind-links-label` (a `<p>` heading the link list)
-    // is its replacement, same named type step.
-    it(".browse-kind-links-label uses the shared --type-label step", () => {
-        const rule = extractRule(css, ".browse-kind-links-label")
-        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
-    })
-
     it(".browse-filter-evidence-group legend uses the shared --type-label step", () => {
         const rule = extractRule(css, ".browse-filter-evidence-group legend")
         expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
@@ -166,18 +156,6 @@ describe(".browse-row-smiles -- --type-data (mono), consolidated from two split 
         expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
         const occurrences = css.match(/\.browse-row-smiles\s*\{/g) ?? []
         expect(occurrences).toHaveLength(1)
-    })
-})
-
-// `.browse-kind-option` (the old radio-input pill) was renamed
-// `.browse-kind-link` when the control demoted to a plain `<Link>` list --
-// same box/typography, per `BrowseKindSelector.tsx`'s own doc comment
-// ("a reader should not be able to tell from the box alone").
-describe(".browse-kind-link -- --type-value, not a bare .86rem", () => {
-    it("uses var(--type-value-font)", () => {
-        const rule = extractRule(css, ".browse-kind-link")
-        expect(rule).toMatch(/font:\s*var\(--type-value-font\)/)
-        expect(rule).not.toMatch(/font-size:\s*\.86rem/)
     })
 })
 

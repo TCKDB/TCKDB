@@ -291,17 +291,14 @@ describe("seedFiltersFromUrl: reads the initial URL into filter state, per kind"
     })
 })
 
-// The kind switcher (`BrowseKindSelector.tsx`, demoted from a radiogroup to
-// a plain link list) shares its own kind's label with the top nav's
-// "Species"/"Reactions" links -- `screen.getByRole("link", { name:
-// "Species" })` throws "found multiple elements" whenever the page also
-// shows the switcher's own "Species" link. Scoped to
-// `nav[aria-label="Browse a different kind"]` so every kind-switch click in
-// this file resolves the SWITCHER's link, not the top nav's, even on the
-// one kind (species) where the two labels collide.
+// Kind navigation lives in the TOP NAV now, not in a per-page switcher --
+// the owner did not want kind buttons repeated on every browse page. The nav
+// carries Species, Reactions and Transition states; /vdw-complexes has no nav
+// link (it holds zero records) and is reached by URL, so tests wanting that
+// kind render at the path directly rather than clicking.
 async function clickKindLink(user: ReturnType<typeof userEvent.setup>, name: string) {
-    const switcher = screen.getByRole("navigation", { name: "Browse a different kind" })
-    await user.click(within(switcher).getByRole("link", { name }))
+    const nav = screen.getByRole("navigation", { name: "Primary navigation" })
+    await user.click(within(nav).getByRole("link", { name }))
 }
 
 describe("browse page: kind selection queries the right endpoint with the right parameters", () => {
@@ -312,19 +309,18 @@ describe("browse page: kind selection queries the right endpoint with the right 
         await screen.findByText(/records · showing/)
         expect(capturedUrl?.searchParams.get("species_entry_kind")).toBe("minimum")
         expect(window.location.pathname).toBe("/species")
-        // The kind switcher no longer marks a "checked" option (it demoted
-        // from a radiogroup to a plain link list, `BrowseKindSelector.tsx`)
-        // -- the page's own heading is the honest way to assert which kind
-        // is showing now (`BROWSE_KIND_CONTENT`, `api/browseApi.ts`).
+        // The page's own heading is the honest way to assert which kind is
+        // showing (`BROWSE_KIND_CONTENT`, `api/browseApi.ts`).
         expect(screen.getByRole("heading", { name: "Browse species" })).toBeVisible()
-        // And the switcher itself must not link back to the kind you are
-        // already on -- scoped to `nav[aria-label="Browse a different
-        // kind"]` since the top nav also carries an unrelated "Species" link.
-        expect(within(screen.getByRole("navigation", { name: "Browse a different kind" })).queryByRole("link", { name: "Species" })).not.toBeInTheDocument()
+        // MUTATION GUARD: no per-page kind switcher may come back. The owner
+        // asked three times for kind buttons not to be repeated on every
+        // browse page; navigation between kinds lives in the top nav only.
+        expect(screen.queryByRole("navigation", { name: "Browse a different kind" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("radiogroup", { name: "What to browse" })).not.toBeInTheDocument()
+        expect(screen.queryByText("Also in this archive")).not.toBeInTheDocument()
     })
 
     it("selecting 'Van der Waals complex' NAVIGATES to /vdw-complexes and queries /species/browse with species_entry_kind=vdw_complex, not the TS endpoint", async () => {
-        const user = userEvent.setup()
         let speciesCalls = 0
         let tsCalls = 0
         let lastKindParam: string | null = null
@@ -334,7 +330,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Van der Waals complex")
+        renderAt("/vdw-complexes")
         await waitFor(() => expect(lastKindParam).toBe("vdw_complex"))
         expect(speciesCalls).toBeGreaterThan(0)
         expect(tsCalls).toBe(0)
@@ -349,7 +345,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         renderAt("/species")
         await screen.findByText(/records · showing/)
         server.use(http.get("/api/v1/scientific/species/browse", () => { speciesCallsAfterSwitch += 1; return HttpResponse.json(speciesEnvelope(0, 20, twoSpecies)) }))
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         await waitFor(() => expect(tsCalls).toBeGreaterThan(0))
         expect(speciesCallsAfterSwitch).toBe(0)
@@ -426,7 +422,7 @@ describe("browse page: kind selection queries the right endpoint with the right 
         server.use(...handlers())
         renderAt("/species?participant_smiles=CCO")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         expect(await screen.findByText("A <=> B")).toBeVisible()
         // Switching to transition_state AFTER mount does not retroactively
         // apply a species-kind URL's participant_smiles -- the seed is
@@ -439,12 +435,11 @@ describe("browse page: kind selection queries the right endpoint with the right 
     // species_entry_kind assertion would fail -- this is that exact check,
     // isolated.
     it("MUTATION CHECK: species and vdW selections hit the SAME endpoint with DIFFERENT species_entry_kind values", async () => {
-        const user = userEvent.setup()
         const kinds: (string | null)[] = []
         server.use(...handlers({ captureSpeciesUrl: (url) => kinds.push(url.searchParams.get("species_entry_kind")) }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Van der Waals complex")
+        renderAt("/vdw-complexes")
         await waitFor(() => expect(kinds).toContain("vdw_complex"))
         expect(kinds).toContain("minimum")
     })
@@ -532,7 +527,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("formula")).toBe("C6H6"))
         expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
 
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         await waitFor(() => expect(lastTsUrl).toBeDefined())
         expect(lastTsUrl?.searchParams.get("charge")).toBe("0") // shared filter carried over
         expect(lastTsUrl?.searchParams.has("formula")).toBe(false) // inapplicable filter dropped from the request
@@ -587,7 +582,7 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
 
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
         expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
     })
@@ -630,11 +625,10 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
 
 describe("browse page: the four empty/failure states are distinguishable", () => {
     it("reads 'no records deposited' for van der Waals complexes with no filters applied -- an archive fact, not a broken search", async () => {
-        const user = userEvent.setup()
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Van der Waals complex")
+        renderAt("/vdw-complexes")
         expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
         expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
@@ -648,7 +642,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Van der Waals complex")
+        renderAt("/vdw-complexes")
         expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
 
         await user.click(screen.getByLabelText("Include rejected"))
@@ -753,7 +747,7 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Van der Waals complex")
+        renderAt("/vdw-complexes")
         const archiveMessage = (await screen.findByText(/No van der Waals complexes have been deposited/)).textContent
         expect(filteredMessage).not.toBe(archiveMessage)
     })
@@ -876,7 +870,7 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         await screen.findByText("A <=> B")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -906,7 +900,7 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         server.use(...handlers({ tsRecords: [nullFamily, nullEquation] }))
         renderAt("/species")
         await screen.findByText(/records · showing/)
-        await clickKindLink(user, "Transition state")
+        await clickKindLink(user, "Transition states")
         await screen.findByText("E <=> F")
         const rows = document.querySelectorAll(".ts-browse-row")
         expect(rows).toHaveLength(2)
@@ -1163,7 +1157,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         await screen.findByText(/records · showing/)
         const speciesCallsBeforeSwitch = speciesCalls
 
-        await clickKindLink(user, "Reaction")
+        await clickKindLink(user, "Reactions")
         await waitFor(() => expect(reactionCalls).toBeGreaterThan(0))
         expect(speciesCalls).toBe(speciesCallsBeforeSwitch) // no further species calls after the switch
         expect(tsCalls).toBe(0)

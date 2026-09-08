@@ -31,58 +31,7 @@
     font: var(--type-lede-font);
 }
 
-/* Demoted from a radiogroup (`BrowseKindSelector.tsx`'s own doc comment) --
-   a plain navigation list to the OTHER three indexes, not a control for
-   picking a "mode" of the page you are already on. `.browse-kind-option`'s
-   own `[data-selected="true"]` styling is retired along with it: there is
-   no selected state to style any more, since the current kind is never
-   itself one of the links. */
-.browse-kind-links {
-    margin: 2.4rem 0 0;
-}
 
-.browse-kind-links-label {
-    margin: 0 0 .6rem;
-    color: var(--muted);
-    font: var(--type-label-font);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
-}
-
-.browse-kind-link-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .6rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-/* Same box/typography the old `.browse-kind-option` pill used (border,
-   radius, surface background, `--type-value` step) -- a reader should not
-   be able to tell from the box alone that this used to be a radio input;
-   the meaningful change is that it is a real `<a>` now (keyboard-reachable
-   without a roving tabindex, opens in a new tab on a middle-click, has a
-   real `href` a screen reader announces as a link, not an option in a
-   group), not a redesign of how it looks. */
-.browse-kind-link {
-    display: flex;
-    align-items: center;
-    gap: .45rem;
-    padding: .55rem .9rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: var(--surface);
-    color: var(--ink-2);
-    font: var(--type-value-font);
-    letter-spacing: var(--type-value-tracking);
-    text-decoration: none;
-}
-
-.browse-kind-link:hover {
-    border-color: var(--accent);
-    color: var(--accent-700);
-}
 
 .browse-filters {
     margin: 1.5rem 0 0;
