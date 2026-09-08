@@ -1296,6 +1296,43 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("network_kinetics_evaluate_grid_too_large", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py",
+            shape=Shape.relationship,
+            note=(
+                "Same shape as export_all_cap_exceeded: context carries "
+                "grid_size (len(temperature_k) * len(pressure_bar)) and cap "
+                "(settings.public_max_limit) so a client can see by how much "
+                "it overshot rather than re-deriving the cap from the docs."
+            )),
+    ApiCode("network_kinetics_evaluate_invalid_point", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py",
+            note=(
+                "Wraps app.chemistry.network_kinetics_eval.KineticsEvaluationError "
+                "-- a requested (T, P) point or a stored fit's own bounds are "
+                "non-finite/non-positive, so the point cannot be evaluated at "
+                "all (distinct from in_range=False, which is a valid "
+                "evaluation outside the fit's stated range)."
+            )),
+    ApiCode("network_kinetics_evaluate_missing_pressure", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py"),
+    ApiCode("network_kinetics_evaluate_missing_temperature", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py"),
+    ApiCode("network_kinetics_evaluate_model_kind_not_supported", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py",
+            note=(
+                "network_kinetics.model_kind is chebyshev or plog on every "
+                "row the write path currently accepts (tabulated/point "
+                "upload is rejected there), so this is a forward-compatible "
+                "guard, not a code any current row can trigger."
+            )),
+    ApiCode("network_kinetics_rate_units_missing", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics.py",
+            note=(
+                "network_kinetics.rate_units is a nullable column; a row "
+                "that never recorded it is refused rather than served with "
+                "an unlabeled k, per the unit policy (docs/unit_policy.md)."
+            )),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,

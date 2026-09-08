@@ -25,8 +25,17 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
+from app.api.error_contract import CodedValueError
 from app.api.errors import DataIntegrityError, not_found
+from app.chemistry.network_kinetics_eval import (
+    EvaluatedKPoint,
+    KineticsEvaluationError,
+    PlogEntry,
+    evaluate_chebyshev,
+    evaluate_plog,
+)
 from app.db.models.common import (
+    NetworkKineticsModelKind,
     RecordReviewStatus,
     SubmissionRecordType,
 )
@@ -63,6 +72,10 @@ from app.schemas.reads.scientific_network_kinetics import (
     NetworkStateComposition,
     ScientificNetworkKineticsDetailResponse,
     ScientificNetworkKineticsRecord,
+)
+from app.schemas.reads.scientific_network_kinetics_evaluate import (
+    NetworkKineticsEvaluatedPoint,
+    NetworkKineticsEvaluateResponse,
 )
 from app.services.scientific_read.common import (
     fetch_review_badges,
@@ -155,6 +168,257 @@ def get_network_kinetics(
         review_summary=review_summary([badge]),
         record=record,
     )
+
+
+# ---------------------------------------------------------------------------
+# k(T,P) evaluation
+# ---------------------------------------------------------------------------
+
+#: Cap on ``len(temperatures_k) * len(pressures_bar)`` per request. Shares
+#: ``settings.public_max_limit`` with every other bounded list surface on
+#: the read API (search ``limit``, the coefficient/PLOG/point include
+#: caps) rather than inventing a second knob for the same "how big can one
+#: response be" question.
+EVALUATE_GRID_POINT_CAP = int(settings.public_max_limit)
+
+
+def evaluate_network_kinetics(
+    session: Session,
+    *,
+    network_kinetics_handle: str,
+    temperatures_k: list[float],
+    pressures_bar: list[float],
+) -> NetworkKineticsEvaluateResponse:
+    """Evaluate one stored k(T,P) fit at a grid of (T, P) points.
+
+    Server-side evaluation, not client-side: see
+    ``app/chemistry/network_kinetics_eval.py`` for the formulas and why
+    the archive keeps this math in one place rather than reimplementing
+    it in every consumer.
+
+    Path-handle semantics match every other detail surface here
+    (integer id / ``nkin_…`` public ref / 404 / handle-shape 422).
+
+    The response's ``points`` is the Cartesian product of
+    ``temperatures_k`` x ``pressures_bar`` — a caller asking for a chart
+    grid (several temperatures at several pressures) gets it in one
+    request. Both lists must be non-empty, and the product is capped at
+    :data:`EVALUATE_GRID_POINT_CAP`; refused as
+    ``network_kinetics_evaluate_grid_too_large`` above that, rather than
+    silently truncated, so a caller who needs more points knows to split
+    the request instead of receiving a partial, unlabeled chart.
+
+    A point outside the fit's own stated T/P validity range is still
+    evaluated (mathematically, extrapolation is well-defined for both
+    supported forms — see the chemistry module) but flagged
+    ``in_range=False``. Never silently presented as interpolated.
+
+    :raises CodedValueError: malformed request (empty axis, grid too
+        large, a non-finite/non-positive T or P value) or a fit that
+        cannot be evaluated as stored (missing rate units, an
+        unsupported ``model_kind``).
+    :raises DataIntegrityError: the row's ``model_kind`` promises data
+        (a Chebyshev coefficient matrix / PLOG entries) that is not
+        actually there — a stored-data invariant violation, not a
+        client mistake.
+    """
+    if not temperatures_k:
+        raise CodedValueError(
+            "network_kinetics_evaluate_missing_temperature",
+            "at least one temperature_k value is required to evaluate "
+            "/scientific/network-kinetics/{ref}/evaluate.",
+        )
+    if not pressures_bar:
+        raise CodedValueError(
+            "network_kinetics_evaluate_missing_pressure",
+            "at least one pressure_bar value is required to evaluate "
+            "/scientific/network-kinetics/{ref}/evaluate.",
+        )
+    bad_temperatures = [t for t in temperatures_k if not (t > 0)]
+    bad_pressures = [p for p in pressures_bar if not (p > 0)]
+    if bad_temperatures or bad_pressures:
+        raise CodedValueError(
+            "network_kinetics_evaluate_invalid_point",
+            "temperature_k and pressure_bar must be strictly positive; got "
+            f"invalid temperature_k={bad_temperatures!r}, "
+            f"invalid pressure_bar={bad_pressures!r}.",
+        )
+    grid_size = len(temperatures_k) * len(pressures_bar)
+    if grid_size > EVALUATE_GRID_POINT_CAP:
+        raise CodedValueError(
+            "network_kinetics_evaluate_grid_too_large",
+            "requested evaluation grid has "
+            f"{grid_size} points ({len(temperatures_k)} temperature(s) x "
+            f"{len(pressures_bar)} pressure(s)), exceeding the cap of "
+            f"{EVALUATE_GRID_POINT_CAP}. Request fewer temperatures or "
+            "pressures, or split the grid across multiple calls.",
+            context={"grid_size": grid_size, "cap": EVALUATE_GRID_POINT_CAP},
+        )
+
+    nk_id = resolve_network_kinetics_handle(session, network_kinetics_handle)
+    nk = session.get(NetworkKinetics, nk_id)
+    if nk is None:  # pragma: no cover — defended by resolver 404
+        raise not_found("network_kinetics", row_id=nk_id, code="handle_not_found")
+
+    if nk.rate_units is None:
+        logger.error(
+            "network_kinetics has no rate_units; refusing to evaluate "
+            "(network_kinetics.id=%s)",
+            nk.id,
+        )
+        raise CodedValueError(
+            "network_kinetics_rate_units_missing",
+            "this fit's rate-coefficient units are not recorded, so its "
+            "evaluated k cannot be labeled "
+            f"(network_kinetics_ref={nk.public_ref!r}); refusing to serve "
+            "an unlabeled rate coefficient.",
+        )
+
+    if nk.model_kind == NetworkKineticsModelKind.chebyshev:
+        points = _evaluate_chebyshev_points(session, nk, temperatures_k, pressures_bar)
+    elif nk.model_kind == NetworkKineticsModelKind.plog:
+        points = _evaluate_plog_points(session, nk, temperatures_k, pressures_bar)
+    else:
+        raise CodedValueError(
+            "network_kinetics_evaluate_model_kind_not_supported",
+            "server-side evaluation is not implemented for model_kind "
+            f"{nk.model_kind.value!r} (supported: chebyshev, plog).",
+        )
+
+    return NetworkKineticsEvaluateResponse(
+        network_kinetics_ref=nk.public_ref,
+        model_kind=nk.model_kind,
+        k_units=nk.rate_units,
+        tmin_k=nk.tmin_k,
+        tmax_k=nk.tmax_k,
+        pmin_bar=nk.pmin_bar,
+        pmax_bar=nk.pmax_bar,
+        points=points,
+    )
+
+
+def _as_evaluated_points(
+    results: list[EvaluatedKPoint],
+) -> list[NetworkKineticsEvaluatedPoint]:
+    return [
+        NetworkKineticsEvaluatedPoint(
+            temperature_k=r.temperature_k,
+            pressure_bar=r.pressure_bar,
+            k=r.k,
+            in_range=r.in_range,
+        )
+        for r in results
+    ]
+
+
+def _evaluate_chebyshev_points(
+    session: Session,
+    nk: NetworkKinetics,
+    temperatures_k: list[float],
+    pressures_bar: list[float],
+) -> list[NetworkKineticsEvaluatedPoint]:
+    cheb_row = session.execute(
+        select(
+            NetworkKineticsChebyshev.n_temperature,
+            NetworkKineticsChebyshev.n_pressure,
+            NetworkKineticsChebyshev.coefficients,
+        ).where(NetworkKineticsChebyshev.network_kinetics_id == nk.id)
+    ).one_or_none()
+    if cheb_row is None:
+        logger.error(
+            "network_kinetics.model_kind == chebyshev but no "
+            "network_kinetics_chebyshev row exists (network_kinetics.id=%s)",
+            nk.id,
+        )
+        raise DataIntegrityError(
+            "network_kinetics declares model_kind=chebyshev but stores no "
+            f"coefficients (network_kinetics_ref={nk.public_ref}); a "
+            "channel/fit with no kinetics cannot be evaluated as if it had "
+            "one."
+        )
+    matrix = _extract_chebyshev_matrix(cheb_row.coefficients)
+    if (
+        matrix is None
+        or nk.tmin_k is None
+        or nk.tmax_k is None
+        or nk.pmin_bar is None
+        or nk.pmax_bar is None
+    ):
+        logger.error(
+            "network_kinetics.model_kind == chebyshev but is missing a "
+            "usable coefficient matrix or T/P bounds "
+            "(network_kinetics.id=%s)",
+            nk.id,
+        )
+        raise DataIntegrityError(
+            "network_kinetics declares model_kind=chebyshev but is missing "
+            "the coefficient matrix or the T/P validity bounds required to "
+            f"evaluate it (network_kinetics_ref={nk.public_ref})"
+        )
+
+    try:
+        results = [
+            evaluate_chebyshev(
+                t,
+                p,
+                coefficients=matrix,
+                tmin_k=nk.tmin_k,
+                tmax_k=nk.tmax_k,
+                pmin_bar=nk.pmin_bar,
+                pmax_bar=nk.pmax_bar,
+                stores_log10_k=nk.stores_log10_k,
+            )
+            for t in temperatures_k
+            for p in pressures_bar
+        ]
+    except KineticsEvaluationError as exc:
+        raise CodedValueError(
+            "network_kinetics_evaluate_invalid_point", str(exc)
+        ) from exc
+    return _as_evaluated_points(results)
+
+
+def _evaluate_plog_points(
+    session: Session,
+    nk: NetworkKinetics,
+    temperatures_k: list[float],
+    pressures_bar: list[float],
+) -> list[NetworkKineticsEvaluatedPoint]:
+    rows = session.scalars(
+        select(NetworkKineticsPlog)
+        .where(NetworkKineticsPlog.network_kinetics_id == nk.id)
+        .order_by(
+            NetworkKineticsPlog.pressure_bar.asc(),
+            NetworkKineticsPlog.entry_index.asc(),
+        )
+    ).all()
+    if not rows:
+        logger.error(
+            "network_kinetics.model_kind == plog but no "
+            "network_kinetics_plog rows exist (network_kinetics.id=%s)",
+            nk.id,
+        )
+        raise DataIntegrityError(
+            "network_kinetics declares model_kind=plog but stores no PLOG "
+            f"entries (network_kinetics_ref={nk.public_ref}); a "
+            "channel/fit with no kinetics cannot be evaluated as if it had "
+            "one."
+        )
+    entries = [
+        PlogEntry(pressure_bar=r.pressure_bar, a=r.a, n=r.n, ea_kj_mol=r.ea_kj_mol)
+        for r in rows
+    ]
+    try:
+        results = [
+            evaluate_plog(t, p, entries=entries)
+            for t in temperatures_k
+            for p in pressures_bar
+        ]
+    except KineticsEvaluationError as exc:
+        raise CodedValueError(
+            "network_kinetics_evaluate_invalid_point", str(exc)
+        ) from exc
+    return _as_evaluated_points(results)
 
 
 # ---------------------------------------------------------------------------
@@ -610,8 +874,10 @@ def _exists_solve_review(session: Session, solve_id: int | None) -> bool:
 
 
 __all__ = [
+    "EVALUATE_GRID_POINT_CAP",
     "_INTERNAL_INCLUDE_TOKENS",
     "_LEGAL_INCLUDE_TOKENS",
     "build_network_kinetics_record",
+    "evaluate_network_kinetics",
     "get_network_kinetics",
 ]
