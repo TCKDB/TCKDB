@@ -107,7 +107,7 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                         <Disclosure summary="Level-of-theory hash" defaultOpen={false} className="lot-hash-disclosure">
                             <p className="note">
                                 A content hash over method, basis, auxiliary/CABS basis, dispersion, solvent,
-                                solvent model, keywords, and spin treatment -- two deposits with the same six
+                                solvent model, keywords, and spin treatment — two deposits with the same six
                                 displayed facts above but a different hash differ in one of the fields not shown
                                 inline (most often spin treatment). Not an identifier a reader looks up by; shown
                                 for exact-identity comparison only.
@@ -242,7 +242,7 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                             units={scheme.energy_correction_scheme.units}
                         />
                         <p className="note">
-                            The full recipe and its application list live on this scheme's own page --{" "}
+                            The full recipe and its application list live on this scheme's own page —{" "}
                             <Link to={correctionSchemePath(scheme.energy_correction_scheme.energy_correction_scheme_ref)}>
                                 open {scheme.energy_correction_scheme.energy_correction_scheme_ref}
                             </Link>.
@@ -294,7 +294,7 @@ function FrequencyScaleFactorSection({ groups, available }: { groups: LevelOfThe
                             {group.frequency_scale_factor_count > 1 && (
                                 <p className="note">
                                     {group.frequency_scale_factor_count} separate depositor actions produced this
-                                    same value -- each keeps its own ref and provenance below, not collapsed into
+                                    same value — each keeps its own ref and provenance below, not collapsed into
                                     one.
                                 </p>
                             )}
