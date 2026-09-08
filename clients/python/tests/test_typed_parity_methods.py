@@ -326,6 +326,26 @@ class TestReactionsBrowse:
 
         assert result["records"][0]["reaction_entry_ref"] == "rxe_1"
 
+    def test_multiple_smiles_per_side_repeat_as_query_params(self):
+        """A ``list[str]`` on either side serializes as a repeated param.
+
+        ``["C", "[OH]"]`` must become ``reactant_smiles=C&reactant_smiles=%5BOH%5D``
+        on the wire, not a single joined/JSON-encoded value -- this is what
+        ``browse_reactions`` (multi) at
+        ``app/schemas/reads/scientific_reactions.py`` expects to parse.
+        """
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_reactions(
+            reactant_smiles=["C", "[OH]"],
+            product_smiles=["N"],
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["reactant_smiles"] == ["C", "[OH]"]
+        assert query["product_smiles"] == ["N"]
+
 
 # ---------------------------------------------------------------------------
 # Reference libraries

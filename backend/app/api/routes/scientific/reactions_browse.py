@@ -36,6 +36,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.models.common import RecordReviewStatus
+from app.schemas.reads._field_bounds import (
+    MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
+)
 from app.schemas.reads.scientific_reactions import (
     ReactionsBrowseRequest,
     ScientificReactionSearchResponse,
@@ -59,20 +62,44 @@ def scientific_reactions_browse(
             "values). Unknown values return an empty result, not a 422."
         ),
     ),
-    reactant_smiles: str | None = Query(
+    reactant_smiles: list[str] | None = Query(
         None,
         description=(
-            "Exact-match SMILES filter over the reactant side. Narrows "
-            "an open listing to reaction entries with this species among "
-            "their reactants; the product side is unconstrained."
+            "One or more exact-match SMILES filters; repeat the "
+            "parameter for more than one "
+            "(?reactant_smiles=C&reactant_smiles=[OH]), up to "
+            f"{_MAX_PARTICIPANTS_PER_REACTION} per call. A single value "
+            "behaves exactly as a bare SMILES filter always has. Every "
+            "supplied species must appear among a reaction's "
+            "participants; the product side is unconstrained unless "
+            "``product_smiles`` is also given. Despite the name, this "
+            "does not restrict matches to the stored reactant role: "
+            "browse matches with direction=either, so a species listed "
+            "here also matches reaction entries where it is stored as a "
+            "PRODUCT and reached in reverse -- those records come back "
+            "with matched_direction=\"reverse\". If any supplied SMILES "
+            "does not resolve to a species TCKDB has, the result is "
+            "empty rather than a partial match on the ones that did."
         ),
     ),
-    product_smiles: str | None = Query(
+    product_smiles: list[str] | None = Query(
         None,
         description=(
-            "Exact-match SMILES filter over the product side. Narrows "
-            "an open listing to reaction entries with this species among "
-            "their products; the reactant side is unconstrained."
+            "One or more exact-match SMILES filters; repeat the "
+            "parameter for more than one "
+            "(?product_smiles=N&product_smiles=[NH2]), up to "
+            f"{_MAX_PARTICIPANTS_PER_REACTION} per call. A single value "
+            "behaves exactly as a bare SMILES filter always has. Every "
+            "supplied species must appear among a reaction's "
+            "participants; the reactant side is unconstrained unless "
+            "``reactant_smiles`` is also given. Despite the name, this "
+            "does not restrict matches to the stored product role: "
+            "browse matches with direction=either, so a species listed "
+            "here also matches reaction entries where it is stored as a "
+            "REACTANT and reached in reverse -- those records come back "
+            "with matched_direction=\"reverse\". If any supplied SMILES "
+            "does not resolve to a species TCKDB has, the result is "
+            "empty rather than a partial match on the ones that did."
         ),
     ),
     has_kinetics: bool | None = Query(None),
@@ -101,11 +128,16 @@ def scientific_reactions_browse(
     "review rank, then an availability flag, then recency, then id".
     There is no client-supplied ``sort=`` parameter to reject; this
     operation has none to accept.
+
+    ``reactant_smiles`` / ``product_smiles`` match **either** stored
+    side of the reaction, not just the one the parameter names -- see
+    the parameter descriptions and
+    :func:`app.services.scientific_read.reactions.browse_reactions`.
     """
     request = ReactionsBrowseRequest(
         family=family,
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
+        reactant_smiles=reactant_smiles or [],
+        product_smiles=product_smiles or [],
         has_kinetics=has_kinetics,
         has_transition_state=has_transition_state,
         min_review_status=min_review_status,

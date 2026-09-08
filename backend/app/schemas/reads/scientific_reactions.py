@@ -129,18 +129,30 @@ class ReactionSearchRequest(BaseModel):
         ``CodedValueError`` because ``app.schemas.reads`` is on the wire
         side of the schema layer; both are caught by the same handler.
         """
-        for item in value:
-            if len(item) > _MAX_SMILES_LENGTH:
-                raise CodedValidationError(
-                    "smiles_too_long",
-                    "participant SMILES exceeds "
-                    f"the maximum length of {_MAX_SMILES_LENGTH}.",
-                    context={
-                        "max_length": _MAX_SMILES_LENGTH,
-                        "length": len(item),
-                    },
-                )
-        return value
+        return _bound_smiles_list_lengths(value)
+
+
+def _bound_smiles_list_lengths(value: list[str]) -> list[str]:
+    """Shared per-item SMILES length bound for any list-of-SMILES field.
+
+    Factored out of :meth:`ReactionSearchRequest._bound_participant_lengths`
+    so :class:`ReactionsBrowseRequest`'s ``reactant_smiles`` /
+    ``product_smiles`` reject an oversized item with the identical
+    ``smiles_too_long`` coded error rather than a second, drifting copy of
+    the same check.
+    """
+    for item in value:
+        if len(item) > _MAX_SMILES_LENGTH:
+            raise CodedValidationError(
+                "smiles_too_long",
+                "participant SMILES exceeds "
+                f"the maximum length of {_MAX_SMILES_LENGTH}.",
+                context={
+                    "max_length": _MAX_SMILES_LENGTH,
+                    "length": len(item),
+                },
+            )
+    return value
 
 
 class ReactionsBrowseRequest(BaseModel):
@@ -150,17 +162,43 @@ class ReactionsBrowseRequest(BaseModel):
     field here is required, mirroring
     ``TransitionStatesBrowseRequest``'s relationship to
     ``TransitionStatesSearchRequest``. ``reactant_smiles`` / ``product_smiles``
-    are single exact-match SMILES filters (unlike search's ``reactants`` /
-    ``products`` lists) -- narrowing an open listing by one structure per
-    side, not building a multi-species equation query. There is
-    deliberately no ``reaction_ref`` / ``reaction_entry_ref`` field: a
-    caller who already has one of those wants
+    are lists of exact-match SMILES filters, one repeated query parameter per
+    side (``?reactant_smiles=C&reactant_smiles=[OH]``) -- the browse
+    analogue of search's ``reactants`` / ``products`` lists, bounded at
+    :data:`_MAX_PARTICIPANTS_PER_REACTION` items per side. A single value
+    behaves exactly as the old single-SMILES filter did: this is an
+    additive change, not a breaking one. Every supplied SMILES on a side
+    must appear among that reaction's participants (set containment, per
+    :class:`ReactionMatchMode.contains`); an empty side is unconstrained.
+
+    Matching is by *participant*, not by *role*: the browse service calls
+    the shared matcher with ``direction=either``, so ``reactant_smiles``
+    also matches a species that is stored as a PRODUCT and reached in
+    reverse (the returned record then carries
+    ``matched_direction: "reverse"``), and symmetrically for
+    ``product_smiles``. The field names describe which query bucket a
+    SMILES was put in, not which side of the stored equation it is
+    required to land on.
+
+    If any supplied SMILES (on either side) fails to resolve to a species
+    TCKDB has on file, the whole response is empty -- never a degraded
+    match against only the SMILES that did resolve, because no stored
+    reaction can contain a species the archive does not have.
+
+    There is deliberately no ``reaction_ref`` / ``reaction_entry_ref``
+    field: a caller who already has one of those wants
     ``/scientific/reactions/search``, an exact lookup.
     """
 
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
-    reactant_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
-    product_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    reactant_smiles: list[str] = Field(
+        default_factory=list,
+        max_length=_MAX_PARTICIPANTS_PER_REACTION,
+    )
+    product_smiles: list[str] = Field(
+        default_factory=list,
+        max_length=_MAX_PARTICIPANTS_PER_REACTION,
+    )
     has_kinetics: bool | None = None
     has_transition_state: bool | None = None
 
@@ -170,6 +208,15 @@ class ReactionsBrowseRequest(BaseModel):
 
     offset: int = 0
     limit: int = 50
+
+    @field_validator("reactant_smiles", "product_smiles")
+    @classmethod
+    def _bound_browse_smiles_lengths(cls, value: list[str]) -> list[str]:
+        """Reject an over-length SMILES with the same coded 422 as search.
+
+        See :func:`_bound_smiles_list_lengths`.
+        """
+        return _bound_smiles_list_lengths(value)
 
 
 # ---------------------------------------------------------------------------

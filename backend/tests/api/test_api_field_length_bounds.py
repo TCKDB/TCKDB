@@ -55,6 +55,22 @@ def test_too_many_reactants_returns_422(client):
     assert r.status_code == 422
 
 
+def test_oversized_browse_reactant_smiles_item_returns_422(client):
+    """Same per-item SMILES length bound, on the browse route's list field."""
+    huge = "C" * (MAX_SMILES_LENGTH + 1)
+    r = client.get(f"/api/v1/scientific/reactions/browse?reactant_smiles={huge}")
+    assert r.status_code == 422
+
+
+def test_too_many_browse_reactant_smiles_returns_422(client):
+    """The browse route's list has the same per-side item-count bound."""
+    qs = "&".join(
+        f"reactant_smiles=A{i}" for i in range(MAX_PARTICIPANTS_PER_REACTION + 1)
+    )
+    r = client.get(f"/api/v1/scientific/reactions/browse?{qs}")
+    assert r.status_code == 422
+
+
 def test_valid_chemistry_query_still_accepted(client):
     """Sanity: an ordinary SMILES (well under the cap) is not rejected."""
     r = client.get("/api/v1/scientific/species/search?smiles=CCO")

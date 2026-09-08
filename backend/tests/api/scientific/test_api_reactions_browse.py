@@ -9,7 +9,10 @@ with ``/reactions/search`` (see
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.schemas.reads._field_bounds import MAX_PARTICIPANTS_PER_REACTION
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -28,6 +31,19 @@ def _browse_url(**params) -> str:
         return base
     qs = "&".join(f"{k}={v}" for k, v in params.items())
     return f"{base}?{qs}"
+
+
+def _browse_url_multi(**params) -> str:
+    """Build a browse URL where a list-valued param repeats the key.
+
+    ``urlencode(..., doseq=True)`` turns ``{"reactant_smiles": ["A", "B"]}``
+    into ``reactant_smiles=A&reactant_smiles=B`` -- the wire shape a real
+    client uses to supply more than one SMILES per side.
+    """
+    base = "/api/v1/scientific/reactions/browse"
+    if not params:
+        return base
+    return f"{base}?{urlencode(params, doseq=True)}"
 
 
 def _entry(db_session, *, reactant_smiles="A", product_smiles="B", family=None):
@@ -49,6 +65,36 @@ def _entry(db_session, *, reactant_smiles="A", product_smiles="B", family=None):
         reaction=chem,
         reactant_entries=[make_species_entry(db_session, rs)],
         product_entries=[make_species_entry(db_session, ps)],
+    )
+
+
+def _entry_multi(db_session, *, reactant_smiles: list[str], product_smiles: list[str]):
+    """Like ``_entry`` but with an arbitrary number of reactants/products.
+
+    Needed for the multi-SMILES ``contains`` (set-containment/AND) tests,
+    which require a stored reaction with more than one participant on a
+    side to distinguish "any one of these" from "all of these".
+    """
+    reactant_species = [
+        make_species(db_session, smiles=s, inchi_key=next_inchi_key("RBRWM1"))
+        for s in reactant_smiles
+    ]
+    product_species = [
+        make_species(db_session, smiles=s, inchi_key=next_inchi_key("RBRWM2"))
+        for s in product_smiles
+    ]
+    chem = make_chem_reaction(
+        db_session, reactants=reactant_species, products=product_species
+    )
+    return make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[
+            make_species_entry(db_session, sp) for sp in reactant_species
+        ],
+        product_entries=[
+            make_species_entry(db_session, sp) for sp in product_species
+        ],
     )
 
 
@@ -265,3 +311,145 @@ def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_se
 
     assert positions[best.public_ref] < positions[mid.public_ref]
     assert positions[mid.public_ref] < positions[worst.public_ref]
+
+
+# ---------------------------------------------------------------------------
+# Multiple SMILES per side (repeated query parameter)
+# ---------------------------------------------------------------------------
+
+
+def test_single_reactant_smiles_still_behaves_as_before(client, db_session):
+    """A single repeated-param value is byte-identical to the old scalar filter."""
+    matching = _entry(db_session, reactant_smiles="[NH2]", product_smiles="N")
+    _entry(db_session, reactant_smiles="O", product_smiles="F")
+
+    body = client.get(_browse_url_multi(reactant_smiles="[NH2]")).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert refs == {matching.public_ref}
+
+
+def test_two_reactant_smiles_requires_both_present(client, db_session):
+    """Multiple values on one side are an AND (set containment), not an OR.
+
+    A reaction with both A and B among its reactants matches
+    ``?reactant_smiles=A&reactant_smiles=B``; a reaction with only A does
+    not, even though A alone would match a single-value query.
+    """
+    both = _entry_multi(
+        db_session, reactant_smiles=["MSA", "MSB"], product_smiles=["MSC"]
+    )
+    only_one = _entry_multi(
+        db_session, reactant_smiles=["MSA"], product_smiles=["MSD"]
+    )
+
+    body = client.get(_browse_url_multi(reactant_smiles=["MSA", "MSB"])).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert refs == {both.public_ref}
+    assert only_one.public_ref not in refs
+
+
+def test_unresolvable_reactant_smiles_among_valid_ones_returns_empty(client, db_session):
+    """The correctness trap this task exists to fix.
+
+    One SMILES resolves to a real species that IS among this reaction's
+    reactants; the other does not resolve to any species TCKDB has at
+    all. The old scalar-filter guard (``if reactant_smiles and not ids``)
+    would have passed here because *some* id resolved, silently
+    degrading to a one-species search and returning the reaction below as
+    if the caller had only asked for the resolvable SMILES. The correct
+    behaviour is an empty response: no stored reaction can contain a
+    species the archive does not have.
+    """
+    entry = _entry(db_session, reactant_smiles="UNRES_A", product_smiles="UNRES_C")
+
+    body = client.get(
+        _browse_url_multi(
+            reactant_smiles=["UNRES_A", "totally-unresolvable-smiles-xyz"]
+        )
+    ).json()
+    assert body["records"] == []
+
+    # Sanity: the resolvable SMILES alone WOULD have matched, so the empty
+    # result above is caused by the unresolved second SMILES, not by
+    # "UNRES_A" failing to be a real reactant.
+    solo = client.get(_browse_url_multi(reactant_smiles=["UNRES_A"])).json()
+    assert {r["reaction_entry_ref"] for r in solo["records"]} == {entry.public_ref}
+
+
+def test_unresolvable_product_smiles_among_valid_ones_returns_empty(client, db_session):
+    """Same correctness trap, product side."""
+    _entry(db_session, reactant_smiles="UNRESP_A", product_smiles="UNRESP_B")
+
+    body = client.get(
+        _browse_url_multi(product_smiles=["UNRESP_B", "another-nonexistent-smiles"])
+    ).json()
+    assert body["records"] == []
+
+
+def test_duplicate_smiles_in_query_does_not_falsely_empty(client, db_session):
+    """Repeating the SAME resolvable SMILES must not look like a partial miss.
+
+    ``_resolve_smiles_to_species_ids`` de-duplicates internally, so the
+    empty-on-partial-resolution guard has to compare against the count of
+    *distinct* valid inputs -- ``?reactant_smiles=A&reactant_smiles=A``
+    must behave like a single ``A``, not like two different species of
+    which only one resolved.
+    """
+    matching = _entry(db_session, reactant_smiles="DUP_A", product_smiles="DUP_B")
+
+    body = client.get(_browse_url_multi(reactant_smiles=["DUP_A", "DUP_A"])).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert refs == {matching.public_ref}
+
+
+def test_reactant_smiles_matches_either_stored_side(client, db_session):
+    """``reactant_smiles`` is not restricted to the stored reactant role.
+
+    ``browse_reactions`` always calls the matcher with
+    ``direction=either``, so a species stored as a PRODUCT still matches
+    when supplied via ``reactant_smiles`` -- the record then carries
+    ``matched_direction: "reverse"``. Pre-existing behaviour; this only
+    asserts it survives the scalar-to-list migration.
+    """
+    entry = _entry(db_session, reactant_smiles="EIR_A", product_smiles="EIR_B")
+
+    body = client.get(_browse_url_multi(reactant_smiles=["EIR_B"])).json()
+    matches = [
+        r for r in body["records"] if r["reaction_entry_ref"] == entry.public_ref
+    ]
+    assert len(matches) == 1
+    assert matches[0]["matched_direction"] == "reverse"
+
+
+def test_filters_echo_round_trips_multiple_smiles(client, db_session):
+    """The echoed filter must let a caller reconstruct the query they sent."""
+    _entry_multi(
+        db_session, reactant_smiles=["ECHO_A", "ECHO_B"], product_smiles=["ECHO_C"]
+    )
+
+    body = client.get(
+        _browse_url_multi(
+            reactant_smiles=["ECHO_A", "ECHO_B"], product_smiles=["ECHO_C"]
+        )
+    ).json()
+    assert body["request"]["filter"]["reactant_smiles"] == ["ECHO_A", "ECHO_B"]
+    assert body["request"]["filter"]["product_smiles"] == ["ECHO_C"]
+
+
+def test_too_many_reactant_smiles_returns_422(client, db_session):
+    too_many = [f"CAP{i}" for i in range(MAX_PARTICIPANTS_PER_REACTION + 1)]
+    resp = client.get(_browse_url_multi(reactant_smiles=too_many))
+    assert resp.status_code == 422
+
+
+def test_too_many_product_smiles_returns_422(client, db_session):
+    too_many = [f"CAPP{i}" for i in range(MAX_PARTICIPANTS_PER_REACTION + 1)]
+    resp = client.get(_browse_url_multi(product_smiles=too_many))
+    assert resp.status_code == 422
+
+
+def test_max_allowed_reactant_smiles_count_is_accepted(client, db_session):
+    """The bound is exclusive: exactly the max is fine, one more is not."""
+    at_cap = [f"ATCAP{i}" for i in range(MAX_PARTICIPANTS_PER_REACTION)]
+    resp = client.get(_browse_url_multi(reactant_smiles=at_cap))
+    assert resp.status_code == 200

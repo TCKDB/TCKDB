@@ -71404,7 +71404,7 @@
     },
     "/api/v1/scientific/reactions/browse": {
       "get": {
-        "description": "List reaction entries with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/reactions/search``\n(:class:`~app.schemas.reads.scientific_reactions.ReactionScientificRecord`)\n-- equation, participants (with ``formula``/``stoichiometry``),\nreview, availability -- so a browse row and a search row render\nidentically. Unlike search, no filter is required: with none\nsupplied, every reaction entry in the corpus is a candidate.\n\n``limit`` is capped at 200 (default 50, matching\n``/reactions/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, has_kinetics DESC,\nhas_transition_state DESC, created_at DESC, id DESC`` -- the same\norder ``/reactions/search`` uses, in the species-browse style of\n\"review rank, then an availability flag, then recency, then id\".\nThere is no client-supplied ``sort=`` parameter to reject; this\noperation has none to accept.",
+        "description": "List reaction entries with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/reactions/search``\n(:class:`~app.schemas.reads.scientific_reactions.ReactionScientificRecord`)\n-- equation, participants (with ``formula``/``stoichiometry``),\nreview, availability -- so a browse row and a search row render\nidentically. Unlike search, no filter is required: with none\nsupplied, every reaction entry in the corpus is a candidate.\n\n``limit`` is capped at 200 (default 50, matching\n``/reactions/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, has_kinetics DESC,\nhas_transition_state DESC, created_at DESC, id DESC`` -- the same\norder ``/reactions/search`` uses, in the species-browse style of\n\"review rank, then an availability flag, then recency, then id\".\nThere is no client-supplied ``sort=`` parameter to reject; this\noperation has none to accept.\n\n``reactant_smiles`` / ``product_smiles`` match **either** stored\nside of the reaction, not just the one the parameter names -- see\nthe parameter descriptions and\n:func:`app.services.scientific_read.reactions.browse_reactions`.",
         "operationId": "scientific_reactions_browse_api_v1_scientific_reactions_browse_get",
         "parameters": [
           {
@@ -71426,38 +71426,44 @@
             }
           },
           {
-            "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+            "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?reactant_smiles=C&reactant_smiles=[OH]), up to 32 per call. A single value behaves exactly as a bare SMILES filter always has. Every supplied species must appear among a reaction's participants; the product side is unconstrained unless ``product_smiles`` is also given. Despite the name, this does not restrict matches to the stored reactant role: browse matches with direction=either, so a species listed here also matches reaction entries where it is stored as a PRODUCT and reached in reverse -- those records come back with matched_direction=\"reverse\". If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
             "in": "query",
             "name": "reactant_smiles",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+              "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?reactant_smiles=C&reactant_smiles=[OH]), up to 32 per call. A single value behaves exactly as a bare SMILES filter always has. Every supplied species must appear among a reaction's participants; the product side is unconstrained unless ``product_smiles`` is also given. Despite the name, this does not restrict matches to the stored reactant role: browse matches with direction=either, so a species listed here also matches reaction entries where it is stored as a PRODUCT and reached in reverse -- those records come back with matched_direction=\"reverse\". If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
               "title": "Reactant Smiles"
             }
           },
           {
-            "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+            "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?product_smiles=N&product_smiles=[NH2]), up to 32 per call. A single value behaves exactly as a bare SMILES filter always has. Every supplied species must appear among a reaction's participants; the reactant side is unconstrained unless ``reactant_smiles`` is also given. Despite the name, this does not restrict matches to the stored product role: browse matches with direction=either, so a species listed here also matches reaction entries where it is stored as a REACTANT and reached in reverse -- those records come back with matched_direction=\"reverse\". If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
             "in": "query",
             "name": "product_smiles",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+              "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?product_smiles=N&product_smiles=[NH2]), up to 32 per call. A single value behaves exactly as a bare SMILES filter always has. Every supplied species must appear among a reaction's participants; the reactant side is unconstrained unless ``reactant_smiles`` is also given. Despite the name, this does not restrict matches to the stored product role: browse matches with direction=either, so a species listed here also matches reaction entries where it is stored as a REACTANT and reached in reverse -- those records come back with matched_direction=\"reverse\". If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
               "title": "Product Smiles"
             }
           },
