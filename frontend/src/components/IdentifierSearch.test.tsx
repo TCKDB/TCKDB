@@ -50,8 +50,24 @@ const hydroxideIon = {
 }
 
 async function searchFormula(user: ReturnType<typeof userEvent.setup>, value: string) {
-    await user.type(await screen.findByLabelText("Exact species identifier"), value)
+    await user.type(await screen.findByLabelText("Exact species or reaction identifier"), value)
     await user.click(screen.getByRole("button", { name: "Search" }))
+}
+
+/**
+ * A successful SMILES/InChI/InChIKey species match also fires the
+ * reaction-participation lookup (the "Reactions involving …" group) --
+ * this file's `server` is configured `onUnhandledRequest: "error"`, so
+ * every test whose structure-search handler returns at least one record
+ * needs this registered too, or the unmocked request fails the test for a
+ * reason unrelated to what it actually asserts. Empty by default (no
+ * reaction group renders); pass `records`/`total` to test the group
+ * itself.
+ */
+function reactionsBrowseHandler(records: unknown[] = [], total = records.length) {
+    return http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json({
+        records, pagination: { offset: 0, limit: 5, returned: records.length, total },
+    }))
 }
 
 describe("IdentifierSearch chemistry-first results", () => {
@@ -104,15 +120,18 @@ describe("IdentifierSearch chemistry-first results", () => {
         // The structure-search endpoint never returns `formula` at all
         // (see `scientificApi.ts`); this is the shape a SMILES/InChI/
         // InChIKey search actually returns.
-        server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
-            records: [{
-                species_ref: "spc_ethanol0000000000000000000",
-                species_entry_ref: "spe_ethanol0000000000000000000",
-                smiles: "CCO",
-                charge: 0,
-                multiplicity: 1,
-            }],
-        })))
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
+                records: [{
+                    species_ref: "spc_ethanol0000000000000000000",
+                    species_entry_ref: "spe_ethanol0000000000000000000",
+                    smiles: "CCO",
+                    charge: 0,
+                    multiplicity: 1,
+                }],
+            })),
+            reactionsBrowseHandler(),
+        )
         const user = userEvent.setup(); page()
         await searchFormula(user, "smiles:CCO")
 
@@ -156,10 +175,13 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         // `species/search?smiles=`, the exact defect this test guards
         // against) would hit that unhandled route and fail the test for
         // that reason alone, even before the assertions below run.
-        server.use(http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
-            capturedUrl = new URL(request.url)
-            return HttpResponse.json({ records: [propanoicAcid] })
-        }))
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
+                capturedUrl = new URL(request.url)
+                return HttpResponse.json({ records: [propanoicAcid] })
+            }),
+            reactionsBrowseHandler(),
+        )
         const user = userEvent.setup(); page()
         await searchFormula(user, nonCanonical)
 
@@ -172,10 +194,13 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
 
     it("routes InChI the same way -- through structure-search mode=exact, not string equality", async () => {
         let capturedUrl: URL | undefined
-        server.use(http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
-            capturedUrl = new URL(request.url)
-            return HttpResponse.json({ records: [propanoicAcid] })
-        }))
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
+                capturedUrl = new URL(request.url)
+                return HttpResponse.json({ records: [propanoicAcid] })
+            }),
+            reactionsBrowseHandler(),
+        )
         const user = userEvent.setup(); page()
         const inchi = "InChI=1S/C3H6O2/c1-2-3(4)5/h2H2,1H3,(H,4,5)"
         await searchFormula(user, inchi)
@@ -241,7 +266,7 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         // with `delay: null` (measured: hangs to the test timeout). Fake
         // timers are switched on AFTER the form submits -- before that,
         // nothing here depends on timers at all.
-        fireEvent.change(await screen.findByLabelText("Exact species identifier"), { target: { value: "CH3" } })
+        fireEvent.change(await screen.findByLabelText("Exact species or reaction identifier"), { target: { value: "CH3" } })
         fireEvent.click(screen.getByRole("button", { name: "Search" }))
 
         vi.useFakeTimers()
@@ -273,6 +298,122 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
     })
 })
 
+/**
+ * "A structure query must also find reactions" (owner brief). A SMILES/
+ * InChI/InChIKey query that resolves at least one species also fires
+ * `searchReactionParticipation` (`api/scientificApi.ts`) and renders a
+ * second, clearly-labelled group beneath the species matches. A formula
+ * query never does -- a reaction has no formula.
+ */
+describe("structure query also finds reactions", () => {
+    const nn = {
+        species_ref: "spc_hydrazine00000000000000nn",
+        species_entry_ref: "spe_hydrazine00000000000000nn",
+        smiles: "NN",
+        charge: 0,
+        multiplicity: 1,
+    }
+
+    function reactionRecord(entryRef: string) {
+        return {
+            reaction_ref: `rxn_${entryRef.slice(4)}`,
+            reaction_entry_ref: entryRef,
+            reversible: true,
+            reactants: [{ species_entry_ref: "spe_h2n_a", smiles: "[NH2]", stoichiometry: 2, participant_index: 0 }],
+            products: [{ species_entry_ref: nn.species_entry_ref, smiles: "NN", stoichiometry: 1, participant_index: 0 }],
+        }
+    }
+
+    it("shows a labelled 'Reactions involving …' group under the species matches, linked to the reaction entry", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [nn] })),
+            reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1),
+        )
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:NN")
+
+        await screen.findByText(nn.species_entry_ref)
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        expect(within(region).getByRole("heading", { name: /Reactions involving/ })).toBeVisible()
+        // Links to the REACTION ENTRY, never the reaction chooser
+        // (`/reactions/:ref`) or anywhere else -- mutation-table item (d).
+        const link = within(region).getByRole("link")
+        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_a0000000000000000000000001")
+        expect(within(region).getByText("rxe_a0000000000000000000000001")).toBeVisible()
+    })
+
+    it("truncates to a handful of rows and links through to /reactions with the filter when more exist", async () => {
+        const shown = ["a", "b", "c", "d", "e"].map((letter) => reactionRecord(`rxe_${letter}0000000000000000000000${letter}`))
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [nn] })),
+            // 20 reactions total (the real `NN` figure against the live
+            // archive) -- only the first page (5, `REACTION_PARTICIPATION_
+            // LIMIT`) is returned by the mock, matching what the real
+            // endpoint would hand back for `limit=5`.
+            reactionsBrowseHandler(shown, 20),
+        )
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:NN")
+
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        expect(within(region).getAllByRole("listitem")).toHaveLength(5)
+        const seeAll = within(region).getByRole("link", { name: /See all 20 reactions/ })
+        expect(seeAll).toHaveAttribute("href", `/reactions?reactant_smiles=${encodeURIComponent("NN")}`)
+    })
+
+    // Honesty rule: an absence is a real result and must be SAID, not left
+    // implied by rendering nothing -- the same rule the species "No exact
+    // … record was found" message already follows. Mutation-table item (c).
+    it("states a genuine zero-reaction result honestly, rather than silently showing nothing", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [nn] })),
+            reactionsBrowseHandler([], 0),
+        )
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:NN")
+
+        await screen.findByText(nn.species_entry_ref)
+        expect(await screen.findByText("No reactions in this archive list NN as a participant.")).toBeVisible()
+        expect(screen.queryByRole("region", { name: "Reactions found" })).not.toBeInTheDocument()
+    })
+
+    // A reaction has no formula -- a formula query must stay species-only,
+    // never asserting (or even attempting to check) reaction participation.
+    // Mutation-table item (b).
+    it("never renders a reaction group for a formula query, even though a reaction exists for the match", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [methylRadical] })),
+            // Registered and would return a real reaction if fetched -- this
+            // proves the absence of the group is because the formula path
+            // never calls this endpoint, not because the endpoint happened
+            // to return nothing.
+            reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1),
+        )
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "CH3")
+
+        await screen.findByText(methylRadical.species_ref)
+        expect(screen.queryByRole("region", { name: "Reactions found" })).not.toBeInTheDocument()
+        expect(screen.queryByText(/Reactions involving/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/No reactions in this archive list/)).not.toBeInTheDocument()
+    })
+})
+
+describe("recognized public references route directly, unrecognized ones never fall through to a structure search", () => {
+    it("gives a clear message for a recognized-but-unrouted reference, without attempting a structure search", async () => {
+        // No handler registered for either species endpoint -- this file's
+        // `server` is `onUnhandledRequest: "error"`, so a regression that
+        // sent this through structure-search (the exact bug this suite
+        // guards against) would fail here even before the message assertion.
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "thm_aaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+        const message = await screen.findByText(/does not have a page for that record type yet/)
+        expect(message).toBeVisible()
+        expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
+    })
+})
+
 describe("identifier option ordering", () => {
     it("offers SMILES before Formula when a value is ambiguous", async () => {
         const user = userEvent.setup(); page()
@@ -287,7 +428,7 @@ describe("identifier option ordering", () => {
 
     it("names SMILES ahead of formula in the input placeholder", async () => {
         page()
-        const placeholder = (await screen.findByLabelText("Exact species identifier"))
+        const placeholder = (await screen.findByLabelText("Exact species or reaction identifier"))
             .getAttribute("placeholder") ?? ""
         expect(placeholder).toContain("SMILES")
         expect(placeholder.indexOf("SMILES")).toBeLessThan(placeholder.indexOf("formula"))

@@ -258,6 +258,13 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     overflow-wrap: anywhere;
     user-select: all;
 }
+/* The reaction-participation group ("Reactions involving …") that follows
+   a structure query's species matches -- second `.search-results` block,
+   separated with its own top margin so it doesn't read as a continuation
+   of the species list above it. */
+.reaction-search-results { margin-top: 1rem; }
+.reaction-search-message { margin-top: 1rem; }
+.search-results-more { margin: .75rem 0 0; font-size: .82rem; }
 /* Box styling (border/radius/background) comes from the shared `.card`
    primitive now (`.destination card` in `ArchiveHomePage.tsx`); this rule
    keeps only the flex layout and hover motion a destination card needs on
