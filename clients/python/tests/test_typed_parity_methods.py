@@ -367,6 +367,86 @@ class TestReactionsBrowse:
         assert query["direction"] == ["either"]
 
 
+class TestNetworkKineticsEvaluate:
+    def _evaluate_body(self) -> dict:
+        return {
+            "network_kinetics_ref": "nkin_1",
+            "model_kind": "chebyshev",
+            "k_units": "cm3_mol_s",
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "pmin_bar": 0.01,
+            "pmax_bar": 100.0,
+            "points": [
+                {
+                    "temperature_k": 1000.0,
+                    "pressure_bar": 1.0,
+                    "k": 1.69,
+                    "in_range": True,
+                }
+            ],
+        }
+
+    def test_reaches_the_evaluate_path_for_the_given_ref(self):
+        handler, seen = _capture(self._evaluate_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics(
+            "nkin_1", temperature_k=1000.0, pressure_bar=1.0
+        )
+
+        assert seen[0].method == "GET"
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/network-kinetics/nkin_1/evaluate"
+        )
+
+    def test_single_values_land_as_single_query_params(self):
+        handler, seen = _capture(self._evaluate_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics(
+            "nkin_1", temperature_k=1000.0, pressure_bar=1.0
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["temperature_k"] == ["1000.0"]
+        assert query["pressure_bar"] == ["1.0"]
+
+    def test_multiple_temperatures_and_pressures_both_repeat_as_query_params(self):
+        """Both ``temperature_k`` and ``pressure_bar`` accept a list and
+        serialize as repeated query parameters -- the same pattern
+        :meth:`TCKDBClient.browse_reactions` uses for its SMILES lists
+        -- so a caller building a chart grid gets the full Cartesian
+        product in one request. Dropping either list (passing a single
+        value where the caller supplied several) would silently narrow
+        the requested grid; this is the test that would catch that.
+        """
+        handler, seen = _capture(self._evaluate_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics(
+            "nkin_1",
+            temperature_k=[300.0, 500.0, 1000.0],
+            pressure_bar=[1.0, 10.0],
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["temperature_k"] == ["300.0", "500.0", "1000.0"]
+        assert query["pressure_bar"] == ["1.0", "10.0"]
+
+    def test_returns_the_parsed_envelope(self):
+        handler, _ = _capture(self._evaluate_body())
+        client, _ = make_client(handler)
+
+        result = client.evaluate_network_kinetics(
+            "nkin_1", temperature_k=1000.0, pressure_bar=1.0
+        )
+
+        assert result["network_kinetics_ref"] == "nkin_1"
+        assert result["points"][0]["k"] == 1.69
+        assert result["points"][0]["in_range"] is True
+
+
 # ---------------------------------------------------------------------------
 # Reference libraries
 # ---------------------------------------------------------------------------

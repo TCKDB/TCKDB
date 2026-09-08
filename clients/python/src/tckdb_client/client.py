@@ -60,6 +60,7 @@ from tckdb_client.scientific_types import (
     LiteratureDetailResponse,
     LiteratureLinkedRecord,
     LiteratureRecordsResponse,
+    NetworkKineticsEvaluateResponse,
     NetworkKineticsRecord,
     NetworkKineticsSearchResponse,
     NetworkRecord,
@@ -1952,6 +1953,58 @@ class TCKDBClient:
             method_http=method_http,
             profile=profile,
         )
+
+    def evaluate_network_kinetics(
+        self,
+        network_kinetics_ref_or_id: int | str,
+        *,
+        temperature_k: float | list[float],
+        pressure_bar: float | list[float],
+    ) -> NetworkKineticsEvaluateResponse:
+        """``GET /scientific/network-kinetics/{ref}/evaluate`` -- server-side k(T,P).
+
+        Evaluates one stored Chebyshev or PLOG fit at the Cartesian
+        product of ``temperature_k`` x ``pressure_bar``, so a caller
+        asking for several temperatures at several pressures (a chart
+        grid) gets it in one request. Both accept either a single value
+        or a list; a list serializes as a repeated query parameter
+        (``?temperature_k=300&temperature_k=500``), the same pattern
+        :meth:`browse_reactions` uses for its ``reactant_smiles`` /
+        ``product_smiles`` lists.
+
+        This is deliberately the *only* way to get a rate coefficient
+        out of a stored PDep fit through this client -- there is no
+        Chebyshev/PLOG evaluator here to call instead. The backend owns
+        the arithmetic (see ``app/chemistry/network_kinetics_eval.py``)
+        precisely so this client, the CLI, and the web page all read
+        the same evaluated number rather than each reimplementing the
+        reduced-variable Chebyshev expansion or the log-linear PLOG
+        interpolation and risking three different answers for the same
+        stored fit.
+
+        Each returned point carries ``in_range``: ``False`` marks an
+        extrapolation (still computed, never silently presented as
+        interpolated) when the requested (T, P) falls outside the
+        fit's own stated validity range on either axis. The grid size
+        is capped server-side; a request that asks for too many points
+        is refused with a coded 422
+        (``network_kinetics_evaluate_grid_too_large``) rather than
+        silently truncated.
+
+        :param network_kinetics_ref_or_id: Integer id or ``nkin_…`` ref.
+        :param temperature_k: One or more temperatures, K.
+        :param pressure_bar: One or more pressures, bar.
+        """
+        params = {
+            "temperature_k": temperature_k,
+            "pressure_bar": pressure_bar,
+        }
+        return self.request_json(
+            "GET",
+            f"/scientific/network-kinetics/{network_kinetics_ref_or_id}/evaluate",
+            params=params,
+            authenticated=False,
+        ).data
 
     def search_network_solves(
         self,
