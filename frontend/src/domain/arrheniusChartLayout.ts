@@ -218,16 +218,16 @@ export function computeArrheniusSeries(
 function exclusionReasons(record: Pick<ReactionKineticsRecord, "plog_entries" | "chebyshev" | "falloff" | "is_third_body">): string[] {
     const reasons: string[] = []
     if (record.plog_entries && record.plog_entries.length > 0) {
-        reasons.push("PLOG-fitted -- pressure-dependent, no single k(T) curve without a stated pressure")
+        reasons.push("PLOG-fitted — pressure-dependent, no single k(T) curve without a stated pressure")
     }
     if (record.chebyshev) {
-        reasons.push("Chebyshev-fitted -- pressure-dependent, no single k(T) curve without a stated pressure")
+        reasons.push("Chebyshev-fitted — pressure-dependent, no single k(T) curve without a stated pressure")
     }
     if (record.falloff) {
-        reasons.push("falloff-fitted -- pressure-dependent, no single k(T) curve without a stated pressure")
+        reasons.push("falloff-fitted — pressure-dependent, no single k(T) curve without a stated pressure")
     }
     if (record.is_third_body) {
-        reasons.push("third-body reaction -- rate depends on bath-gas concentration, not on temperature alone")
+        reasons.push("third-body reaction — rate depends on bath-gas concentration, not on temperature alone")
     }
     return reasons
 }

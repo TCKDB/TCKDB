@@ -4,6 +4,8 @@ import { loadBasisSets, loadMethods, loadReactionFamilies, loadSoftwareNames, lo
 import type { VocabRecordKind } from "../api/vocabApi"
 import type { VersionVocabularyState, VocabularyState } from "../hooks/useVocabulary"
 import { useVersionVocabulary, useVocabulary } from "../hooks/useVocabulary"
+import { useInlineExplain } from "../hooks/useInlineExplain"
+import { InlineExplainNote } from "./InlineExplain"
 
 const REVIEW_STATUSES = ["not_reviewed", "under_review", "approved", "deprecated", "rejected"]
 const TS_STATUSES = ["guess", "optimized", "validated", "rejected"]
@@ -185,17 +187,24 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
  * The two structure fields still map onto the backend's own
  * `reactant_smiles`/`product_smiles` params (`buildReactionBrowseQuery`) --
  * unlike the TS kind's single `participant_smiles`, the reaction browse
- * endpoint filters each side independently. Labeled "...on one side" /
- * "...on the other side", not "Reactant SMILES" / "Product SMILES" (the
- * labels this replaced): the live endpoint runs `direction=either`
- * unconditionally, so a value typed into the first field also matches
+ * endpoint filters each side independently.
+ *
+ * Labeled "Reactant structures" / "Product structures" -- restored from an
+ * earlier "...on one side" / "...on the other side" pair. That EARLIER
+ * rename existed because the live endpoint runs `direction=either`
+ * unconditionally: a value typed into the reactant field also matches
  * reactions where it is deposited as a PRODUCT (rows then say "Matched on
- * the reverse direction", `ReactionBrowseRow.tsx`) -- "Reactant SMILES"
- * asserted a restriction the query never enforces, which is the labels the
- * owner flagged as lying. Each field accepts a COMMA-separated list
+ * the reverse direction", `ReactionBrowseRow.tsx`), and "Reactant SMILES"
+ * read as asserting a restriction the query never enforces. The owner
+ * (a kineticist) asked for the conventional name back regardless -- it is
+ * what a chemist scans for, and that is his call to make. The
+ * either-direction behavior has not gone away; it now lives in each
+ * field's hover/focus explanation (`TextField`'s `hint`, via
+ * `InlineExplain`) instead of in the label itself, which is exactly what
+ * that explanation is FOR. Each field accepts a COMMA-separated list
  * (`splitSmilesList`, `browseApi.ts`) -- every structure typed into ONE
  * field must sit together on the SAME side (AND, not OR); the hint spells
- * that out, since `[NH4+]`/`[Na+].[Cl-]`-shaped SMILES rule out any
+ * that out too, since `[NH4+]`/`[Na+].[Cl-]`-shaped SMILES rule out any
  * separator that isn't a plain comma.
  */
 function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
@@ -205,18 +214,20 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
         : []
     return <>
         <TextField
-            hint={"Comma-separated SMILES (e.g. NN,[H]). All of them must sit together on ONE side of the reaction "
-                + "-- matched as reactants, or, in reverse, as products (rows then note “Matched on the reverse "
+            hint={"Comma-separated SMILES (e.g. NN,[H]) — every one of them must sit together on the SAME side of "
+                + "the reaction. Matching runs in either direction, so a value here can also match a reaction "
+                + "where it was deposited as a product instead (rows then note “Matched on the reverse "
                 + "direction”). A SMILES this archive does not hold empties the result."}
-            label="Structures on one side"
+            label="Reactant structures"
             onChange={(value) => onChange({ reactantSmiles: value })}
             placeholder="NN,[H]"
             value={filters.reactantSmiles}
         />
         <TextField
-            hint={"Comma-separated SMILES. All of them must sit together on the side OPPOSITE the field above -- "
-                + "combine both fields to pin a reaction down to a specific pair of sides, in either direction."}
-            label="Structures on the other side"
+            hint={"Comma-separated SMILES — every one of them must sit together on the side OPPOSITE the field "
+                + "above. Matching runs in either direction, the same as Reactant structures; combine both fields "
+                + "to pin a reaction down to a specific pair of sides."}
+            label="Product structures"
             onChange={(value) => onChange({ productSmiles: value })}
             placeholder="C,[OH]"
             value={filters.productSmiles}
@@ -480,6 +491,18 @@ function EvidenceChecks({ filters, onChange }: { filters: BrowseFilters; onChang
     )
 }
 
+/**
+ * A hint is no longer a permanently-rendered paragraph under the field
+ * (owner: "way too much writing under the cells... maybe if they hover the
+ * mouse over [the label] it then shows a hover box"). The field's own
+ * `<label>` becomes the trigger -- hover, keyboard focus, OR a tap all
+ * reveal the SAME `InlineExplain` box, and the `<input>` itself carries
+ * `aria-describedby` unconditionally, so a screen-reader user hears the
+ * explanation the moment the field is focused regardless of whether
+ * anything is drawn on screen (`useInlineExplain`'s own doc comment has the
+ * full accessibility rationale). A field with no `hint` renders a bare
+ * `<label>`, unchanged from before this fix.
+ */
 function TextField({ label, value, onChange, placeholder, hint }: {
     label: string
     value: string
@@ -488,11 +511,40 @@ function TextField({ label, value, onChange, placeholder, hint }: {
     hint?: string
 }) {
     const id = fieldId(label)
+    const hintId = `${id}-hint`
+    const explain = useInlineExplain()
     return (
         <div className="browse-filter-field">
-            <label htmlFor={id}>{label}</label>
-            <input id={id} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
-            {hint && <p className="browse-filter-hint">{hint}</p>}
+            {hint ? (
+                <label
+                    aria-describedby={hintId}
+                    className="browse-filter-field-label--explain"
+                    htmlFor={id}
+                    onBlur={explain.close}
+                    onClick={explain.toggle}
+                    onFocus={explain.open}
+                    onKeyDown={explain.onKeyDown}
+                    onMouseEnter={explain.open}
+                    onMouseLeave={explain.close}
+                    tabIndex={0}
+                    title={hint}
+                >
+                    {label}
+                </label>
+            ) : (
+                <label htmlFor={id}>{label}</label>
+            )}
+            <input
+                aria-describedby={hint ? hintId : undefined}
+                id={id}
+                onBlur={hint ? explain.close : undefined}
+                onChange={(event) => onChange(event.target.value)}
+                onFocus={hint ? explain.open : undefined}
+                onKeyDown={hint ? explain.onKeyDown : undefined}
+                placeholder={placeholder}
+                value={value}
+            />
+            {hint && <InlineExplainNote id={hintId} note={hint} open={explain.isOpen} />}
         </div>
     )
 }

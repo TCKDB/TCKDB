@@ -1,0 +1,36 @@
+/* Shared on-demand explanation box (`InlineExplain.tsx`). Always present in
+   the DOM (never `display:none`) so `aria-describedby` keeps working in
+   BOTH states -- only `opacity`/`pointer-events` toggle, which hide it from
+   the eye without removing it from the accessibility tree. `position:
+   absolute` takes it out of normal flow in either state, so a closed note
+   never reserves layout space the way the old permanently-rendered hint
+   paragraph did (the whole point of this fix -- see `browse.css`'s own
+   `.browse-filter-field` comment). The nearest positioned ancestor is
+   whichever call site opts in (`.browse-filter-field` gets `position:
+   relative` in `browse.css`); this file intentionally does not assume one
+   itself, since a future non-filter call site may position differently. */
+.inline-explain-note {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + .35rem);
+    left: 0;
+    width: max-content;
+    max-width: 20rem;
+    margin: 0;
+    padding: .55rem .7rem;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    background: var(--surface);
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    line-height: 1.5;
+    box-shadow: 0 .3rem .9rem var(--shadow-color);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .12s ease;
+}
+
+.inline-explain-note--open {
+    opacity: 1;
+    pointer-events: auto;
+}

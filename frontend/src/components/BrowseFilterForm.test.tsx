@@ -2,7 +2,7 @@ import { useState } from "react"
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { BROWSE_KINDS, EMPTY_BROWSE_FILTERS } from "../api/browseApi"
 import type { BrowseFilters, BrowseKind } from "../api/browseApi"
@@ -687,15 +687,72 @@ describe("Family select: only used families, readable labels", () => {
     })
 })
 
-describe("SMILES field: short label, hint text instead of a wrapping long label", () => {
-    it('is labeled "SMILES" (not "SMILES (reactant or product)"), with the scope explained in a hint', async () => {
+// ---------------------------------------------------------------------------
+// Item 1 of the hover-hint fix: a field's explanation is no longer a
+// permanently-rendered paragraph under the field -- it is an `InlineExplain`
+// box, opened on demand from the field's own `<label>` (hover, keyboard
+// focus, or a tap/click) or from the field's `<input>` itself (keyboard
+// focus, the field's own natural, always-reachable tab stop). The
+// underlying facts (comma separation, same-side grouping, either-direction
+// matching, an unheld SMILES emptying the result) must all still be
+// present in the DOM -- just not drawn on screen until asked for.
+// ---------------------------------------------------------------------------
+
+describe("SMILES field: short label, hover/focus explanation instead of a permanent paragraph", () => {
+    it('is labeled "SMILES" (not "SMILES (reactant or product)"), with the scope explained on demand -- present in the DOM, but not drawn on screen until hover or focus', async () => {
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
-        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
-        expect(
-            screen.getByText("Matches either the reactant or the product side of the reaction."),
-        ).toBeVisible()
+        const field = screen.getByLabelText("SMILES")
+        expect(field).toBeInTheDocument()
+
+        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
+        // The permanently-rendered `<p className="browse-filter-hint">`
+        // this replaced would have been `toBeVisible()` here
+        // UNCONDITIONALLY -- asserting the closed state is what this test
+        // adds over the version it replaces.
+        expect(note).not.toBeVisible()
+        expect(field).toHaveAttribute("aria-describedby", note.id)
+    })
+
+    it("hovering the label opens the box; moving off it closes it again", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const label = screen.getByText("SMILES", { selector: "label" })
+        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
+
+        expect(note).not.toBeVisible()
+        fireEvent.mouseEnter(label)
+        expect(note).toBeVisible()
+        fireEvent.mouseLeave(label)
+        expect(note).not.toBeVisible()
+    })
+
+    it("keyboard focus on the FIELD ITSELF (not just the label) opens the same box -- hover is not the only path", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const field = screen.getByLabelText("SMILES")
+        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
+
+        expect(note).not.toBeVisible()
+        fireEvent.focus(field)
+        expect(note).toBeVisible()
+        fireEvent.blur(field)
+        expect(note).not.toBeVisible()
+    })
+
+    it("a tap (a click, with no preceding hover) opens the box too -- the touch path, where there is no hover", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        const label = screen.getByText("SMILES", { selector: "label" })
+        const note = screen.getByText("Matches either the reactant or the product side of the reaction.")
+
+        expect(note).not.toBeVisible()
+        fireEvent.click(label)
+        expect(note).toBeVisible()
     })
 })
 
@@ -793,16 +850,16 @@ describe("structure search mode gates its dependent controls", () => {
 // PR 4b: the "reaction" browse kind's own findability/evidence fields.
 // `/reactions/browse` (measured live) has NO charge/multiplicity/
 // composition/provenance axis, so this kind's field set looks nothing like
-// the other three -- Reactant SMILES, Product SMILES, Family (shared
-// vocabulary with the TS kind), and a two-flag "Show only entries with..."
-// row (kinetics / a transition state).
+// the other three -- Reactant structures, Product structures, Family
+// (shared vocabulary with the TS kind), and a two-flag "Show only entries
+// with..." row (kinetics / a transition state).
 // ---------------------------------------------------------------------------
 
-const REACTION_ONLY_LABELS = ["Structures on one side", "Structures on the other side"]
+const REACTION_ONLY_LABELS = ["Reactant structures", "Product structures"]
 const REACTION_EVIDENCE_LABELS = ["kinetics", "a transition state"]
 
 describe("reaction kind: its own findability and evidence fields render, the other kinds' do not", () => {
-    it('kind="reaction": Structures on one side, Structures on the other side, Family, and the two evidence checkboxes are present', async () => {
+    it('kind="reaction": Reactant structures, Product structures, Family, and the two evidence checkboxes are present', async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
@@ -894,10 +951,10 @@ describe("reaction kind: the two structure fields are independent, and the evide
         }
         render(<Wrapper />)
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
-        await user.type(screen.getByLabelText("Structures on one side"), "CCO")
+        await user.type(screen.getByLabelText("Reactant structures"), "CCO")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "")
-        await user.type(screen.getByLabelText("Structures on the other side"), "CC=O")
+        await user.type(screen.getByLabelText("Product structures"), "CC=O")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-product", "CC=O")
         expect(screen.getByTestId("debug-smiles")).toHaveAttribute("data-reactant", "CCO") // unchanged by the product field
     })
@@ -922,5 +979,90 @@ describe("reaction kind: the two structure fields are independent, and the evide
 
         await user.click(checkbox)
         expect(screen.getByTestId("debug-evidence")).toHaveAttribute("data-has-kinetics", "")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Item 1 (renamed "Reactant structures" / "Product structures", item 2):
+// the matching-rules prose that used to sit permanently under these two
+// fields must still be fully present -- comma separation, same-side
+// grouping, either-direction matching (now the field's OWN explanation for
+// why the conventional "Reactant"/"Product" naming is still accurate), and
+// an unheld SMILES emptying the result -- just reachable on demand instead
+// of always rendered. Item 3: neither hint may contain a literal `--`.
+// ---------------------------------------------------------------------------
+
+describe("Reactant/Product structures: the either-direction matching rule moved into the hover/focus explanation, not deleted", () => {
+    it("both hints are present in the DOM but not drawn on screen until opened", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
+        const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
+        expect(reactantNote).not.toBeVisible()
+        expect(productNote).not.toBeVisible()
+
+        // No permanently-rendered hint paragraph survives for either field.
+        expect(document.querySelectorAll(".browse-filter-hint")).toHaveLength(0)
+    })
+
+    it("the Reactant structures hint states comma separation, same-side grouping, either-direction matching, and that an unheld SMILES empties the result", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        const note = screen.getByText(/every one of them must sit together on the SAME side/)
+        expect(note.textContent).toMatch(/Comma-separated/)
+        expect(note.textContent).toMatch(/SAME side/)
+        expect(note.textContent).toMatch(/either direction/)
+        expect(note.textContent).toMatch(/deposited as a product/)
+        expect(note.textContent).toMatch(/reverse direction/)
+        expect(note.textContent).toMatch(/does not hold empties the result/)
+        expect(note.textContent).not.toContain("--")
+    })
+
+    it("the Product structures hint states comma separation, opposite-side grouping, and either-direction matching", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        const note = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
+        expect(note.textContent).toMatch(/Comma-separated/)
+        expect(note.textContent).toMatch(/OPPOSITE/)
+        expect(note.textContent).toMatch(/either direction/)
+        expect(note.textContent).not.toContain("--")
+    })
+
+    it("focusing the Reactant structures FIELD reveals its box; focusing Product structures does not open the reactant one", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        const reactantField = screen.getByLabelText("Reactant structures")
+        const productField = screen.getByLabelText("Product structures")
+        const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
+        const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
+
+        fireEvent.focus(reactantField)
+        expect(reactantNote).toBeVisible()
+        expect(productNote).not.toBeVisible()
+        fireEvent.blur(reactantField)
+        expect(reactantNote).not.toBeVisible()
+
+        fireEvent.focus(productField)
+        expect(productNote).toBeVisible()
+        expect(reactantNote).not.toBeVisible()
+    })
+
+    it("each field's input carries aria-describedby pointing at its own note's id", async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        const reactantField = screen.getByLabelText("Reactant structures")
+        const productField = screen.getByLabelText("Product structures")
+        const reactantNote = screen.getByText(/every one of them must sit together on the SAME side/)
+        const productNote = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
+
+        expect(reactantField).toHaveAttribute("aria-describedby", reactantNote.id)
+        expect(productField).toHaveAttribute("aria-describedby", productNote.id)
+        expect(reactantNote.id).not.toBe(productNote.id)
     })
 })

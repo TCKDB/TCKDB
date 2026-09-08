@@ -68,7 +68,7 @@ export const BROWSE_KIND_CONTENT: Record<BrowseKind, { eyebrow: string; heading:
         eyebrow: "Species index",
         heading: "Browse species",
         intro: "Every stable minimum deposited in the archive. Narrow by formula, structure, charge, or review "
-            + "status -- van der Waals complexes are catalogued on their own page.",
+            + "status — van der Waals complexes are catalogued on their own page.",
         breadcrumbLabel: "Species",
     },
     vdw: {
