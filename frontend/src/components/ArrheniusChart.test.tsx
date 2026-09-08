@@ -471,14 +471,30 @@ describe("ArrheniusChart -- records sharing an order family (not just an A_units
 })
 
 describe("ArrheniusChart -- the per-panel unit selector", () => {
-    it("a per_s panel (family with exactly one member) renders NO unit selector", () => {
+    // Owner's report: hiding the control entirely (the OLD behaviour) is
+    // exactly what left the majority of live reaction entries -- 14 of 17
+    // deposit in `per_s`, the order family with exactly one member --
+    // looking like there was no y-axis control at all. This panel's own
+    // control must still be found, DISABLED, showing the one unit it's
+    // stuck at, with a plain-language reason next to it.
+    it("a per_s panel (family with exactly one member) still renders a Y-axis control -- disabled, showing s⁻¹, with a reason why", () => {
         render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
-        expect(screen.queryByRole("combobox", { name: /Display units/ })).not.toBeInTheDocument()
+        const select = screen.getByRole("combobox", { name: /Y-axis/ }) as HTMLSelectElement
+        expect(select).toBeDisabled()
+        const optionLabels = Array.from(select.options).map((option) => option.textContent)
+        expect(optionLabels).toEqual(["s⁻¹"])
+        expect(select.value).toBe("per_s")
+
+        const note = screen.getByText(/no other unit it could be converted to/)
+        expect(note.textContent).toMatch(/unimolecular/)
+        expect(note.textContent).toMatch(/s⁻¹/)
+        expect(select.getAttribute("aria-describedby")).toBe(note.id)
     })
 
-    it("a bimolecular panel renders a selector listing all three order-2 units, base unit first, defaulted to the record's own deposited unit", () => {
+    it("a bimolecular panel renders an ENABLED selector listing all three order-2 units, base unit first, defaulted to the record's own deposited unit", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        const select = screen.getByRole("combobox", { name: /Display units \(bimolecular\)/ }) as HTMLSelectElement
+        const select = screen.getByRole("combobox", { name: /Y-axis \(bimolecular\)/ }) as HTMLSelectElement
+        expect(select).not.toBeDisabled()
         const optionLabels = Array.from(select.options).map((option) => option.textContent)
         expect(optionLabels).toEqual(["cm³ mol⁻¹ s⁻¹", "m³ mol⁻¹ s⁻¹", "cm³ molecule⁻¹ s⁻¹"])
         expect(select.value).toBe("cm3_mol_s")
@@ -486,7 +502,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
 
     it("a termolecular panel's selector lists all three order-3 units", () => {
         render(<ArrheniusChart kinetics={[termolecularRecord()]} />)
-        const select = screen.getByRole("combobox", { name: /Display units \(termolecular\)/ }) as HTMLSelectElement
+        const select = screen.getByRole("combobox", { name: /Y-axis \(termolecular\)/ }) as HTMLSelectElement
         const optionLabels = Array.from(select.options).map((option) => option.textContent)
         expect(optionLabels).toEqual(["cm⁶ mol⁻² s⁻¹", "m⁶ mol⁻² s⁻¹", "cm⁶ molecule⁻² s⁻¹"])
     })
@@ -497,7 +513,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // 0.017028619287800688.
     it("switching the selector to m3_mol_s re-converts the plotted curve -- pinned against the hand-computed value", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        const select = screen.getByRole("combobox", { name: /Display units/ })
+        const select = screen.getByRole("combobox", { name: /Y-axis/ })
         fireEvent.change(select, { target: { value: "m3_mol_s" } })
 
         const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
@@ -517,7 +533,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // 2.827668758742313e-20 (same value `arrheniusChartLayout.test.ts` pins).
     it("switching the selector to cm3_molecule_s divides by N_A, not left unconverted", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        const select = screen.getByRole("combobox", { name: /Display units/ })
+        const select = screen.getByRole("combobox", { name: /Y-axis/ })
         fireEvent.change(select, { target: { value: "cm3_molecule_s" } })
 
         const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
@@ -533,7 +549,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // unit the panel is currently showing (this PR's own invariant).
     it("the legend still names the record's OWN deposited unit after switching the panel's display unit away from it", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        fireEvent.change(screen.getByRole("combobox", { name: /Display units/ }), { target: { value: "m3_mol_s" } })
+        fireEvent.change(screen.getByRole("combobox", { name: /Y-axis/ }), { target: { value: "m3_mol_s" } })
         const legendChip = screen.getByTestId("arrhenius-legend-kin_spkzatwjlvmmnja3i5im4fl7hq")
         expect(legendChip.textContent).toContain("deposited: cm³ mol⁻¹ s⁻¹")
     })
@@ -545,7 +561,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
     // not the converted value.
     it("switching the panel's unit also converts the k(T) table -- caption, header, AND values", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        fireEvent.change(screen.getByRole("combobox", { name: /Display units/ }), { target: { value: "m3_mol_s" } })
+        fireEvent.change(screen.getByRole("combobox", { name: /Y-axis/ }), { target: { value: "m3_mol_s" } })
 
         const table = document.querySelector(".kinetics-k-table") as HTMLTableElement
         expect(table.querySelector("caption")?.textContent).toMatch(/, in m³ mol⁻¹ s⁻¹$/)
@@ -611,5 +627,40 @@ describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", ()
     it("the x-axis mode is a SINGLE control governing every panel at once", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord(), unimolecularRecord()]} />)
         expect(screen.getAllByRole("combobox", { name: /X-axis/ })).toHaveLength(1)
+    })
+})
+
+// Owner's report (second, independent finding): "X-AXIS" sat at the far
+// left of the chart block while "DISPLAY UNITS" floated to the far right
+// of the same row, reading as two unrelated controls rather than a pair.
+// These are structural/textual regression guards for the fix -- both
+// controls now live in their own labelled, boxed control-group (matching
+// CSS classes, `.arrhenius-chart-controls` / `.arrhenius-chart-panel-controls`),
+// each stating in words whether it governs the whole chart or just its own
+// panel, and both are labelled with the SAME "X-axis"/"Y-axis" word shape.
+describe("ArrheniusChart -- the x-axis and y-axis controls read as a pair, not two unrelated corners", () => {
+    it("both controls sit in their own labelled box, each naming its own scope", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+
+        const pageControls = document.querySelector(".arrhenius-chart-controls") as HTMLElement
+        expect(pageControls).not.toBeNull()
+        expect(within(pageControls).getByText("applies to every panel below")).toBeInTheDocument()
+        expect(within(pageControls).getByText("X-axis")).toBeInTheDocument()
+
+        const panelControls = document.querySelector(".arrhenius-chart-panel-controls") as HTMLElement
+        expect(panelControls).not.toBeNull()
+        expect(within(panelControls).getByText("this panel only")).toBeInTheDocument()
+        expect(within(panelControls).getByText("Y-axis")).toBeInTheDocument()
+
+        // The two boxes are distinct control groups, not one nested inside
+        // the other (which would make "this panel only" meaningless).
+        expect(pageControls.contains(panelControls)).toBe(false)
+        expect(panelControls.contains(pageControls)).toBe(false)
+    })
+
+    it("a mixed-family page renders one page-wide X-axis box and a SEPARATE Y-axis box per panel", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord(), unimolecularRecord()]} />)
+        expect(document.querySelectorAll(".arrhenius-chart-controls")).toHaveLength(1)
+        expect(document.querySelectorAll(".arrhenius-chart-panel-controls")).toHaveLength(2)
     })
 })

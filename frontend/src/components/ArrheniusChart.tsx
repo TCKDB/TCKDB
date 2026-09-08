@@ -116,7 +116,18 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     return (
         <div className="arrhenius-chart-section">
             {panels.length > 0 && (
+                // The one page-wide control, grouped in its own labelled box
+                // rather than a bare `<select>` floating above the panels --
+                // this is the OTHER half of the pairing every
+                // `.arrhenius-chart-panel-controls` box below echoes (same
+                // box styling, same "X-axis"/"Y-axis" label shape), so a
+                // reader can tell at a glance that the two kinds of control
+                // belong to one system even though this one governs every
+                // panel and each panel's own y-axis control only governs
+                // itself (owner's report: the two used to sit at opposite
+                // ends of an ~1100px row with nothing tying them together).
                 <div className="arrhenius-chart-controls">
+                    <span className="arrhenius-chart-controls-heading">Chart controls</span>
                     <label className="arrhenius-chart-control">
                         <span className="arrhenius-chart-control-label">X-axis</span>
                         <select
@@ -128,6 +139,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                             <option value="inverse_temperature">1000 / T (K⁻¹)</option>
                         </select>
                     </label>
+                    <span className="arrhenius-chart-controls-scope">applies to every panel below</span>
                 </div>
             )}
 
@@ -259,6 +271,34 @@ function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: Arrhen
     )
 }
 
+/**
+ * Why this panel's y-axis (unit) control offers no alternative to switch
+ * to -- shown NEXT TO a control that is always rendered, never in place of
+ * one (owner's report: 14 of 17 live reaction entries are `per_s`, and the
+ * old "fewer than two options -> render nothing" rule left the majority of
+ * readers looking at an x-axis control and nothing for y, with no
+ * explanation). `null` whenever the panel genuinely offers a choice
+ * (`availableUnits.length > 1`) -- the control is enabled and no note is
+ * shown. The two `null`-`availableUnits`-but-still-rendered cases below are
+ * physically different facts and get different, chemist-legible wording:
+ * order family 1 (`per_s`) has exactly one unit BY DEFINITION (a
+ * unimolecular rate coefficient is s⁻¹, full stop -- there is nothing to
+ * convert to, not an oversight), whereas `orderFamily === null` means this
+ * file could not place the record's units in any family at all (unrecorded,
+ * or a token `arrheniusUnits.ts` doesn't recognise) -- a DIFFERENT kind of
+ * "nothing to offer", and conflating the two wordings would overstate one
+ * of them as a settled physical fact when it might just be a missing value.
+ */
+function yAxisUnitNote(panel: ArrheniusPanelData): string | null {
+    if (panel.availableUnits.length > 1) return null
+    if (panel.orderFamily === 1) {
+        return "A unimolecular rate coefficient is reported in s⁻¹ only — there is no other unit it could be converted to."
+    }
+    return panel.defaultUnits != null
+        ? "This record's units aren't recognised, so no alternative unit can be offered."
+        : "This record's units weren't recorded, so no alternative unit can be offered."
+}
+
 function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }: {
     panel: ArrheniusPanelData
     xAxisMode: ArrheniusXAxisMode
@@ -266,6 +306,7 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }:
     onSelectUnits: (units: string) => void
 }) {
     const selectId = useId()
+    const noteId = `${selectId}-note`
     const displayUnits = selectedUnits ?? panel.defaultUnits
     // `panel.series` itself, UNCONVERTED, in every place only the
     // temperature range matters (unit conversion never touches
@@ -275,10 +316,14 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }:
         ? panel.series.map((series) => convertArrheniusSeriesUnits(series, displayUnits))
         : panel.series
     const unitLabel = arrheniusUnitLabel(displayUnits ?? null)
-    // A control with a single option (`per_s`'s own family, or an
-    // unrecorded/unrecognised panel's empty `availableUnits`) is never
-    // rendered at all (plan §4).
-    const showUnitSelector = panel.availableUnits.length > 1
+    // A panel with a single option (`per_s`'s own family, or an
+    // unrecorded/unrecognised panel's empty `availableUnits`) still renders
+    // this control -- disabled, showing the one unit it's stuck at, with
+    // `yAxisUnitNote` saying why right next to it (owner's report: hiding
+    // it entirely, the OLD behaviour, is what a reader going looking for a
+    // y-axis control and finding nothing actually experiences).
+    const hasUnitChoice = panel.availableUnits.length > 1
+    const unitNote = yAxisUnitNote(panel)
 
     const xDomain = panelXDomain(panel.series, xAxisMode)
     const kDomain = panelLog10KDomain(displaySeries)
@@ -306,25 +351,36 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }:
 
     return (
         <div className="arrhenius-chart-panel-wrap">
-            <div className="arrhenius-chart-panel-heading-row">
-                <p className="arrhenius-chart-panel-heading">{unitLabel}</p>
-                {showUnitSelector && (
-                    <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
-                        <span className="arrhenius-chart-control-label">Display units</span>
-                        <select
-                            id={selectId}
-                            className="arrhenius-chart-control-select"
-                            aria-label={`Display units (${FAMILY_NAME[panel.orderFamily!]})`}
-                            value={displayUnits ?? panel.availableUnits[0]}
-                            onChange={(event) => onSelectUnits(event.target.value)}
-                        >
-                            {panel.availableUnits.map((units) => (
+            {/* This panel's own control group -- deliberately styled to
+                MATCH `.arrhenius-chart-controls` above (same box, same
+                "axis name" label shape) so the pairing with the page-wide
+                X-axis control reads visually, not just in the surrounding
+                prose. The scope caption below states in words what the
+                styling implies: this one control, unlike the X-axis
+                control above it, governs only this panel. */}
+            <div className="arrhenius-chart-panel-controls">
+                <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
+                    <span className="arrhenius-chart-control-label">Y-axis</span>
+                    <select
+                        id={selectId}
+                        className="arrhenius-chart-control-select"
+                        aria-label={panel.orderFamily != null ? `Y-axis (${FAMILY_NAME[panel.orderFamily]})` : "Y-axis"}
+                        aria-describedby={unitNote ? noteId : undefined}
+                        disabled={!hasUnitChoice}
+                        value={displayUnits ?? panel.availableUnits[0] ?? ""}
+                        onChange={(event) => onSelectUnits(event.target.value)}
+                    >
+                        {hasUnitChoice
+                            ? panel.availableUnits.map((units) => (
                                 <option key={units} value={units}>{arrheniusUnitLabel(units)}</option>
-                            ))}
-                        </select>
-                    </label>
-                )}
+                            ))
+                            : <option value={displayUnits ?? ""}>{unitLabel}</option>}
+                    </select>
+                </label>
+                <span className="arrhenius-chart-panel-controls-scope">this panel only</span>
             </div>
+            {unitNote && <p id={noteId} className="note arrhenius-chart-panel-unit-note">{unitNote}</p>}
+            <p className="arrhenius-chart-panel-heading">{unitLabel}</p>
             <ArrheniusLegend
                 panel={panel}
                 displaySeriesDepositedUnits={(ref) => panel.series.find((series) => series.kinetics_ref === ref)?.depositedUnits ?? null}

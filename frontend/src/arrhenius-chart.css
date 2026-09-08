@@ -34,12 +34,40 @@
 /* The single, page-wide x-axis-mode control (temperature vs 1000/T) --
    sits ABOVE every panel, never duplicated per panel: which axis a reader
    wants is a reading-convention choice, not a per-record fact the way the
-   per-panel unit selector below is. */
+   per-panel unit selector below is. Boxed (border + sunken background)
+   rather than a bare `<select>` floating in whitespace -- the SAME box
+   styling `.arrhenius-chart-panel-controls` below carries, so the two read
+   as one system of "chart axis controls" even though this one governs
+   every panel and each panel's own box only governs itself (owner's
+   report: previously an "X-AXIS" control at the far left of the row had
+   nothing visually tying it to the "DISPLAY UNITS" control floating at the
+   far right of a DIFFERENT row below it). */
 .arrhenius-chart-controls {
     display: flex;
     flex-wrap: wrap;
-    gap: 1rem;
+    align-items: center;
+    gap: .4rem 1rem;
     margin: 0 0 1.25rem;
+    padding: .6rem .9rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface-sunken);
+}
+
+.arrhenius-chart-controls-heading {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+}
+
+/* States in words what the shared box styling implies visually: THIS
+   control (unlike each panel's own y-axis control) is not scoped to any
+   one panel. Its mirror, "this panel only", sits on
+   `.arrhenius-chart-panel-controls-scope` below. */
+.arrhenius-chart-controls-scope {
+    font: var(--type-note-font);
+    color: var(--muted);
 }
 
 .arrhenius-chart-control {
@@ -61,25 +89,51 @@
     font: var(--type-data-font);
 }
 
-/* Panel heading + its own unit selector share one row -- the heading
-   states the unit CURRENTLY shown (updates live as the selector changes),
-   the selector lets a reader change it. Wraps on a narrow viewport rather
-   than forcing the fixed-width SVG below it any wider. */
-.arrhenius-chart-panel-heading-row {
+.arrhenius-chart-control-select:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+}
+
+/* This panel's own y-axis (unit) control -- the SAME box styling as the
+   page-wide `.arrhenius-chart-controls` above (border, sunken background,
+   same gap/padding), positioned at the TOP of the panel so a reader
+   scanning top-to-bottom meets "X-axis" then, immediately after, "Y-axis"
+   as one visual pair -- never at opposite ends of a spread-out row (the
+   defect this replaces: `justify-content: space-between` used to push the
+   old "Display units" selector to the far right of its own row while the
+   page-wide X-axis control sat at the far left of the row above it).
+   Always rendered, even when the control inside is disabled -- see
+   `ArrheniusChart.tsx`'s own `hasUnitChoice`/`yAxisUnitNote`. */
+.arrhenius-chart-panel-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: .5rem 1rem;
+    gap: .4rem 1rem;
     margin: 0 0 .5rem;
-}
-
-.arrhenius-chart-panel-heading-row .arrhenius-chart-panel-heading {
-    margin: 0;
+    padding: .5rem .8rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface-sunken);
 }
 
 .arrhenius-chart-panel-unit-control {
     margin: 0;
+}
+
+/* Mirrors `.arrhenius-chart-controls-scope` above -- "this panel only" is
+   the reader-facing half of the pairing the matching box styling implies. */
+.arrhenius-chart-panel-controls-scope {
+    font: var(--type-note-font);
+    color: var(--muted);
+}
+
+/* The disabled control's own "why" -- sits directly under its box, per
+   `.note`'s own shared styling (design-system.css), never in place of the
+   control (plan: "never silently omit the y control"). Only ever rendered
+   alongside a `disabled` select (`ArrheniusChart.tsx`'s `unitNote`), so
+   this margin only needs to separate it from the panel heading below. */
+.arrhenius-chart-panel-unit-note {
+    margin: 0 0 .5rem;
 }
 
 /* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
