@@ -44492,7 +44492,7 @@
         "type": "string"
       },
       "TransitionStateCalculationSlot": {
-        "description": "One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.).\n\nPhase B: ``calculation_ref`` is the public stable handle alongside\n``calculation_id``.",
+        "description": "One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.).\n\nPhase B: ``calculation_ref`` is the public stable handle alongside\n``calculation_id``.\n\n``energy_hartree`` is the one energy quantity this calculation's own\nresult row canonically holds, in the fixed hartree unit every\n``calc_*_result`` energy column already uses (``docs/unit_policy.md``)\n-- read from the same columns\n:func:`app.services.scientific_read.calculations._build_sp_summary` /\n``_build_opt_summary`` project on ``GET /scientific/calculations/{ref}``,\nnever a second, independently-derived number:\n\n- ``sp``: ``calc_sp_result.electronic_energy_hartree``.\n- ``opt``: ``calc_opt_result.final_energy_hartree`` -- populated only\n  when the optimisation itself recorded a converged energy; many\n  opt rows do not.\n- ``freq``, ``irc``, ``path_search`` (``ts_guess``): always ``None``.\n  None of those result tables carry an energy of the calculation\n  itself -- ``calc_freq_result`` carries a zero-point *correction*,\n  not an electronic energy, and ``calc_scan_result``'s\n  ``zero_energy_reference_hartree`` is a scan reference point, not\n  this calculation's own energy.\n\n``None`` here means \"this calculation's result row has nothing to\nreport\" -- a calculation with no result row at all and a result row\nwhose energy column is itself null both serve ``None``, never ``0``.\n\n``review`` is this calculation's own review badge: the same\n``RecordReviewStatus`` vocabulary and the same\n:func:`app.services.scientific_read.common.fetch_review_badges`\nlookup (keyed by ``SubmissionRecordType.calculation`` and this\ncalculation's id) that produces ``CalculationCoreBlock.review`` on\n``GET /scientific/calculations/{ref}`` -- never a status borrowed\nfrom the owning TS entry or the reaction entry.",
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
@@ -44502,6 +44502,17 @@
           "calculation_ref": {
             "title": "Calculation Ref",
             "type": "string"
+          },
+          "energy_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Hartree"
           },
           "method": {
             "anyOf": [
@@ -44514,6 +44525,9 @@
             ],
             "title": "Method"
           },
+          "review": {
+            "$ref": "#/components/schemas/RecordReviewBadge"
+          },
           "type": {
             "title": "Type",
             "type": "string"
@@ -44521,7 +44535,8 @@
         },
         "required": [
           "calculation_ref",
-          "type"
+          "type",
+          "review"
         ],
         "title": "TransitionStateCalculationSlot",
         "type": "object"
