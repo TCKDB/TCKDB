@@ -1458,7 +1458,14 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
             {(rows) => (rows?.length ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Vibrational modes">
-                        <thead><tr><th scope="col">Mode</th><th scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
+                        {/* SCIENTIFIC ERROR fixed here (sweep finding, same class
+                            as the Cp chart's y-axis title): `.data-table th`
+                            (design-system.css) uppercases every header via
+                            `--type-label-strong-transform` -- "cm-1" (wavenumber,
+                            lower-case "cm" for centimetre) read "CM-1".
+                            `.t-preserve-case` (design-system.css) is the shared
+                            fix. */}
+                        <thead><tr><th scope="col">Mode</th><th className="t-preserve-case" scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={`mode-${row.mode_index}`}>
@@ -1495,7 +1502,10 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, app
                                     <thead>
                                         <tr>
                                             <th scope="col">Mode</th>
-                                            <th scope="col">Frequency (cm-1)</th>
+                                            {/* Same "cm-1" defect the Vibrational-modes table
+                                                above fixes -- .t-preserve-case keeps it out of
+                                                .data-table th's uppercase transform. */}
+                                            <th className="t-preserve-case" scope="col">Frequency (cm-1)</th>
                                             <th scope="col">Declared</th>
                                             <th scope="col">Determination</th>
                                             <th scope="col">Agreement</th>

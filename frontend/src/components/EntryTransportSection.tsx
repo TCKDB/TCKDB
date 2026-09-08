@@ -200,11 +200,22 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 (`unitOverride: null`) -- printing "3.800 Å" next to a
                 "Sigma (Å)" label would say the unit twice. Only the
                 precision half of the digits table applies here. */}
+            {/* SCIENTIFIC ERROR fixed here (sweep finding): `.kv-list dt`
+                (design-system.css) uppercases every fact label via
+                `--type-label-transform`. "Epsilon / k (K)" is the sharpest
+                instance -- lower-case `k` here is the Boltzmann constant
+                (the Lennard-Jones well-depth parameter epsilon/k_B), and
+                uppercasing it collided visually with the UNIT "(K)"
+                immediately after it: "EPSILON / K (K)" reads as the same
+                symbol twice. The other three labels in this group are the
+                same "quantity name (unit)" shape, so all four keep their
+                written case together -- `.t-preserve-case`
+                (design-system.css) is the shared fix. */}
             <dl className="kv-list">
-                <div><dt>Sigma (Å)</dt><dd><QuantityValue value={formatQuantity("transport_sigma_angstrom", core.sigma_angstrom, null)} /></dd></div>
-                <div><dt>Epsilon / k (K)</dt><dd><QuantityValue value={formatQuantity("transport_epsilon_over_k_k", core.epsilon_over_k_k, null)} /></dd></div>
-                <div><dt>Dipole (Debye)</dt><dd><QuantityValue value={formatQuantity("transport_dipole_debye", core.dipole_debye, null)} /></dd></div>
-                <div><dt>Polarizability (Å³)</dt><dd>{core.polarizability_angstrom3 ?? "not recorded"}</dd></div>
+                <div><dt className="t-preserve-case">Sigma (Å)</dt><dd><QuantityValue value={formatQuantity("transport_sigma_angstrom", core.sigma_angstrom, null)} /></dd></div>
+                <div><dt className="t-preserve-case">Epsilon / k (K)</dt><dd><QuantityValue value={formatQuantity("transport_epsilon_over_k_k", core.epsilon_over_k_k, null)} /></dd></div>
+                <div><dt className="t-preserve-case">Dipole (Debye)</dt><dd><QuantityValue value={formatQuantity("transport_dipole_debye", core.dipole_debye, null)} /></dd></div>
+                <div><dt className="t-preserve-case">Polarizability (Å³)</dt><dd>{core.polarizability_angstrom3 ?? "not recorded"}</dd></div>
                 <div><dt>Rotational relaxation</dt><dd>{core.rotational_relaxation ?? "not recorded"}</dd></div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>

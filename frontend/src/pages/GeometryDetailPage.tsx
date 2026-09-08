@@ -460,10 +460,22 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                                     unlike the visible header text below it (which
                                     intentionally changes to name the active unit;
                                     see geometry-detail.css's numeric-alignment rule
-                                    for why the two must not be the same attribute). */}
-                                <th scope="col" data-column="x">{`x (${unitLabel})`}</th>
-                                <th scope="col" data-column="y">{`y (${unitLabel})`}</th>
-                                <th scope="col" data-column="z">{`z (${unitLabel})`}</th>
+                                    for why the two must not be the same attribute).
+
+                                    SCIENTIFIC ERROR fixed here (sweep finding,
+                                    same class `arrhenius-chart.css`/`thermo-cp-
+                                    chart.css` already fix): `.data-table th`
+                                    (design-system.css) uppercases every header via
+                                    `--type-label-strong-transform`, correct for
+                                    "Atom"/"Element" above but not for `unitLabel`
+                                    -- "bohr" read "BOHR" (not the unit's own
+                                    written form; the toggle button and the caption
+                                    above this table both spell it lower-case).
+                                    `.t-preserve-case` (design-system.css) is the
+                                    shared fix. */}
+                                <th className="t-preserve-case" scope="col" data-column="x">{`x (${unitLabel})`}</th>
+                                <th className="t-preserve-case" scope="col" data-column="y">{`y (${unitLabel})`}</th>
+                                <th className="t-preserve-case" scope="col" data-column="z">{`z (${unitLabel})`}</th>
                             </tr>
                         </thead>
                         <tbody>

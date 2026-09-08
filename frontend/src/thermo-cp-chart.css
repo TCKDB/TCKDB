@@ -192,6 +192,18 @@
     text-align: center;
 }
 
+/* SCIENTIFIC ERROR fixed here (live-site review finding, matches the
+   defect `arrhenius-chart.css` already fixes for its own Y title): the
+   shared `.cp-chart-axis-title` rule above inherits `--type-label-transform`
+   (design-system.css) = `uppercase` -- correct for the X title
+   ("Temperature (K)", ordinary English prose), but this Y title's own text
+   is `` `Cp (${cpUnitLabel(unit)})` `` -- "Cp (J/mol·K)" or, with the
+   calorie toggle, "Cp (cal/mol·K)". Upper-cased that read "CP (J/MOL·K)":
+   "Cp" (heat capacity at constant pressure) is not "CP", and "MOL" is not
+   a unit. `text-transform: none` is scoped to this ONE (`--y`) selector --
+   the X title keeps the shared uppercase rule, never a page-wide override
+   of `--type-label` itself. See `design-system.css`'s own comment beside
+   `--type-label-transform` for the general rule this instance follows. */
 .cp-chart-axis-title--y {
     /* Spans both rows so it stays centred against the FULL panel height
        (plot + x-axis title beneath it), matching what the old
@@ -204,6 +216,7 @@
     writing-mode: vertical-rl;
     transform: rotate(180deg);
     white-space: nowrap;
+    text-transform: none;
 }
 
 /* A non-selected series dims once ANY series is selected, so the

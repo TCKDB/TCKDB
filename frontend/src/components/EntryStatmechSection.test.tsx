@@ -5,6 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryStatmechSection } from "./EntryStatmechSection"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// -- see `ReactionEntryPage.test.tsx`'s identical import for why a
+// component test rendered in isolation needs it directly to exercise
+// `.t-preserve-case`'s real computed style.
+import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -1148,6 +1153,28 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
             // wrapper (horizontal scroll), never bare in the page body.
             expect(table.closest(".table-scroll")).not.toBeNull()
         }
+    })
+
+    // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+    // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.data-table th`
+    // (design-system.css) uppercases every header via `--type-label-
+    // strong-transform` -- "cm⁻¹" (wavenumber) would read "CM⁻¹". A
+    // `textContent` assertion cannot see this -- the DOM text stays
+    // correctly-cased; only the COMPUTED style differs -- so this asserts
+    // `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+    it("computed text-transform is none on the Electronic-levels table's 'Energy (cm⁻¹)' header", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_electronic_levels: true },
+                electronic_levels: [{ level_index: 0, energy_cm1: 0, degeneracy: 1 }],
+            }),
+        ]))))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Electronic levels", { selector: "summary" }))
+        const table = await screen.findByRole("table", { name: "Electronic levels" })
+        expect(getComputedStyle(within(table).getByRole("columnheader", { name: "Level" })).textTransform).not.toBe("none")
+        expect(getComputedStyle(within(table).getByRole("columnheader", { name: "Energy (cm⁻¹)" })).textTransform).toBe("none")
     })
 })
 

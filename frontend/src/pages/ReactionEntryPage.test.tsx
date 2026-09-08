@@ -3,6 +3,18 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// at the top -- the real app loads `index.css` once, globally, in
+// `main.tsx`, before any page's own stylesheet. This test renders
+// `ReactionEntryPage` in isolation (no `index.css` in its own import
+// graph), so `.t-preserve-case`/`.kv-list dt`'s own uppercase rule would
+// otherwise be ABSENT from jsdom's stylesheet set entirely -- the
+// "computed text-transform is none" guard below needs the real rule
+// present to prove anything (an unstyled element's computed value is `""`
+// in jsdom, not a meaningful "not uppercase"). Direct import, not
+// `index.css` itself, to avoid pulling in that file's own unrelated global
+// rules for a test scoped to this one page.
+import "../design-system.css"
 import ReactionEntryPage from "./ReactionEntryPage"
 
 const ENTRY_REF = "rxe_test1"
@@ -199,6 +211,31 @@ describe("ReactionEntryPage -- DOM-vs-payload identity", () => {
         const text = container.textContent ?? ""
         for (const value of ["3025.44", "3.11242", "39.9711", "300", "3000"]) {
             expect(text).toContain(value)
+        }
+    })
+
+    // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+    // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.kv-list dt`
+    // (design-system.css) uppercases every fact label via
+    // `--type-label-transform` -- correct for prose labels elsewhere on
+    // this page but not for the Arrhenius parameter names "A"/"n"/"Ea" in
+    // `ReactionKineticsSection.tsx`. "n" (the temperature exponent)
+    // upper-cased to "N" is the sharpest instance -- a different symbol,
+    // not a capitalised version of the same one. A `textContent` assertion
+    // cannot see this (the DOM text is still correctly-cased; only the
+    // COMPUTED style differs) -- this asserts `getComputedStyle`, per
+    // `vite.config.ts`'s `test.css: true`.
+    it("computed text-transform is none on the A/n/Ea parameter-name dt's, textContent stays lower-case 'n'", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const kineticsSection = container.querySelector('section[aria-labelledby="kinetics-heading"]')!
+        const dts = Array.from(kineticsSection.querySelectorAll("dt")).filter((dt) =>
+            ["A", "n", "Ea"].includes(dt.textContent ?? ""),
+        )
+        expect(dts.map((dt) => dt.textContent)).toEqual(["A", "n", "Ea"])
+        for (const dt of dts) {
+            expect(getComputedStyle(dt as HTMLElement).textTransform).toBe("none")
         }
     })
 })
