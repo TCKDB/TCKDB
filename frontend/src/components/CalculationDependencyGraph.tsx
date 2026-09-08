@@ -4,7 +4,7 @@ import "../calculation-dependency-graph.css"
 import type { CalculationDependency } from "../api/calculationApi"
 import {
     buildDependencyGraphModel,
-    CENTRE_H,
+    centreContentHeight,
     computeNarrowLayout,
     computeWideLayout,
     dependencyGraphAriaLabel,
@@ -84,6 +84,28 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * differs from the bare ref text the list link uses, so the two never
  * collide as the same accessible name within this section).
  *
+ * `centreSubject` (default `null`) answers the OTHER question a linked
+ * centre node still didn't answer -- owner report on the reaction-entry
+ * page's graph: "what the fuck is it? a ts? a random ass molecule?...
+ * there is no real indication except before it some tiny ass text that no
+ * one is going to read". The type pill says WHAT KIND ("Optimisation");
+ * the ref line says WHICH ONE (`calc_xxx`); neither says WHOSE --
+ * `ReactionTransitionStatesSection.tsx` is the one caller that has an
+ * answer (the TS entry this `ts_opt` belongs to) and passes it as a THIRD
+ * row inside the node itself, a real `<Link>` to the TS entry (so the
+ * `tse_...` ref stays reachable from the node area, not only from prose
+ * above the graph) with the visible text kept short (e.g. "Transition
+ * state") and the ref folded into the link's own accessible name instead
+ * (`${label} ${ref}`) rather than printed twice. `CalculationDetailPage
+ * .tsx` never passes this -- it has no such "whose" to report about
+ * itself -- so its own centre node stays exactly two rows, unchanged.
+ * `domain/dependencyGraphLayout.ts`'s `centreContentHeight`/
+ * `centreNodeWidth` grow the box for the subject row at LAYOUT time (fed
+ * `centreSubject?.label` into `buildDependencyGraphModel`); this
+ * component re-derives the SAME split (`centreContentHeight`, imported
+ * rather than re-computed) to place the subject row between the pill and
+ * the ref line without a second, drifting copy of that arithmetic.
+ *
  * Paint order inside the `<svg>` is ALL edge paths, then ALL edge labels,
  * then ALL nodes -- never one edge's path/label/rect interleaved with
  * the next's. MEASURED (post-review): with each edge rendered as its own
@@ -99,13 +121,33 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * covering its OWN label where the two deliberately meet (the label's
  * opaque background "punches a hole" in its own line at the bend).
  */
-export function CalculationDependencyGraph({ dependencies, ownRef, ownType, centreLinked = false }: {
+/** See `CalculationDependencyGraph`'s own docstring for what this answers
+ * and why it lives inside the node rather than a caption above it. */
+export interface CentreSubject {
+    /** Short, visible answer to "an optimisation (or whatever `ownType`
+     * is) OF WHAT?" -- e.g. "Transition state". Deliberately NOT the raw
+     * ref (that stays reachable via the link's own accessible name and
+     * `href`, not printed a second time next to the calc ref line). */
+    label: string
+    /** The subject's own ref (e.g. a `tse_...` transition-state-entry
+     * ref) -- folded into the link's accessible name (`${label} ${ref}`)
+     * so the exact record stays identifiable even though the visible
+     * text is the short label alone. */
+    ref: string
+    href: string
+}
+
+export function CalculationDependencyGraph({ dependencies, ownRef, ownType, centreLinked = false, centreSubject = null }: {
     dependencies: CalculationDependency[]
     ownRef: string
     ownType: string
     /** Opt-in: see this component's own docstring. Default `false` keeps
      * `CalculationDetailPage.tsx`'s existing centre-is-unlinked behaviour. */
     centreLinked?: boolean
+    /** Opt-in: see this component's own docstring. Default `null` keeps
+     * `CalculationDetailPage.tsx`'s centre node at its existing two rows
+     * (pill + ref), since that page has no subject of its own to report. */
+    centreSubject?: CentreSubject | null
 }) {
     const markerId = useId()
     const containerRef = useRef<HTMLDivElement>(null)
@@ -124,7 +166,7 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
 
     if (dependencies.length === 0) return null
 
-    const model = buildDependencyGraphModel(ownRef, ownType, dependencies)
+    const model = buildDependencyGraphModel(ownRef, ownType, dependencies, centreSubject?.label)
     const wideLayout = computeWideLayout(model)
     const isNarrow = containerWidth !== null && containerWidth < wideLayout.width
     const layout: GraphLayout = isNarrow ? computeNarrowLayout(model) : wideLayout
@@ -198,7 +240,7 @@ export function CalculationDependencyGraph({ dependencies, ownRef, ownType, cent
                     </g>
                 ))}
                 {layout.nodes.map((node) => (
-                    <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} centreLinked={centreLinked} />
+                    <DependencyGraphNode key={`${node.tier}-${node.ref}`} node={node} centreLinked={centreLinked} centreSubject={centreSubject} />
                 ))}
             </svg>
             <DependencySentenceList dependencies={dependencies} />
@@ -212,31 +254,52 @@ const TIER_ARIA_PREFIX: Record<LayoutNode["tier"], string> = {
     child: "Child calculation",
 }
 
-function DependencyGraphNode({ node, centreLinked }: { node: LayoutNode; centreLinked: boolean }) {
+function DependencyGraphNode({ node, centreLinked, centreSubject }: {
+    node: LayoutNode
+    centreLinked: boolean
+    centreSubject?: CentreSubject | null
+}) {
     const left = node.x - node.width / 2
     const top = node.y - node.height / 2
     const rect = <rect x={left} y={top} width={node.width} height={node.height} rx={NODE_RX} className="dep-graph-node-rect" />
 
     if (node.tier === "centre" && node.pill) {
         const { pill } = node
-        // The pill+ref content block is `CENTRE_H` tall regardless of the
-        // node's OWN height -- the narrow layout grows a centre node past
-        // `CENTRE_H` to fit staggered lane entries (`centreHeightFor`),
-        // but the content itself never grows to match. MEASURED
-        // (post-review): pinning the block to the box's TOP (`top + 10`)
-        // left a 64.6px gap below the ref line and only 10px above it on
-        // a 3-child, 680px narrow graph. `contentTop` re-centres the
-        // whole `CENTRE_H`-tall block in the node's actual height, so the
-        // gap splits evenly top and bottom instead.
-        const contentTop = top + (node.height - CENTRE_H) / 2
+        const hasSubject = Boolean(centreSubject)
+        // The pill(+subject)+ref content block is `centreContentHeight
+        // (hasSubject)` tall regardless of the node's OWN height -- the
+        // narrow layout grows a centre node past that to fit staggered
+        // lane entries (`centreHeightFor`), but the content itself never
+        // grows to match. MEASURED (post-review, pre-subject-row): pinning
+        // the block to the box's TOP (`top + 10`) left a 64.6px gap below
+        // the ref line and only 10px above it on a 3-child, 680px narrow
+        // graph. `contentTop` re-centres the whole block in the node's
+        // actual height, so the gap splits evenly top and bottom instead.
+        const contentTop = top + (node.height - centreContentHeight(hasSubject)) / 2
         // Matches `domain/dependencyGraphLayout.ts`'s own `CENTRE_PAD_TOP`
-        // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) --
-        // duplicated here as plain numbers rather than exported constants
-        // since this is the only place outside that module that needs the
-        // internal split of `CENTRE_H`, not a value worth widening that
-        // module's public surface for.
+        // (10) / `CENTRE_PILL_GAP` (8) / `CENTRE_REF_LINE_H` (24) /
+        // `CENTRE_SUBJECT_GAP_TOP` (6) / `CENTRE_SUBJECT_LINE_H` (16) /
+        // `CENTRE_SUBJECT_GAP_BOTTOM` (6) -- duplicated here as plain
+        // numbers rather than exported constants (besides
+        // `centreContentHeight` itself, already imported) since this is
+        // the only place outside that module that needs the internal
+        // split, not a value worth widening that module's public surface
+        // for.
         const pillY = contentTop + 10
-        const refY = pillY + pill.height + 8 + 12
+        const pillBottom = pillY + pill.height
+        // Row 2 (subject, only when `hasSubject`) sits between the pill
+        // and the ref line; row 3 (ref) starts right after whichever gap
+        // applies -- the plain `CENTRE_PILL_GAP` (8) with no subject, or
+        // the subject row plus its own two gaps (6 + 16 + 6 = 28)
+        // otherwise. Both branches land on the SAME ref-row top when
+        // `hasSubject` is false as the pre-subject-row formula did
+        // (`pillBottom + 8`), so `CalculationDetailPage.tsx`'s own centre
+        // node (never passes `centreSubject`) renders byte-identical
+        // geometry to before this row existed.
+        const subjectTop = pillBottom + 6
+        const subjectTextY = subjectTop + 16 / 2
+        const refRowTop = hasSubject ? subjectTop + 16 + 6 : pillBottom + 8
+        const refY = refRowTop + 12
         const content = (
             <>
                 {rect}
@@ -269,6 +332,37 @@ function DependencyGraphNode({ node, centreLinked }: { node: LayoutNode; centreL
                         </Link>
                     )
                     : content}
+                {/* A SEPARATE link from the calc link above -- an SVG `<a>`
+                    cannot nest inside another, and this answers a
+                    different question (WHOSE, not WHICH) with a
+                    different destination. Sits strictly within its own
+                    row (`subjectTop`..`subjectTop + 16`), never
+                    overlapping the pill or ref rows above/below it, so
+                    the two links' hit areas stay disjoint even though
+                    both live inside the same node box. A transparent
+                    rect gives the link a real click target sized to the
+                    row (an SVG `<text>` alone hit-tests only its own
+                    glyph shapes, per `CalculationDependencyGraph.tsx`'s
+                    own `.dep-graph-node-subject-link` CSS comment). */}
+                {centreSubject && (
+                    <Link
+                        to={centreSubject.href}
+                        aria-label={`${centreSubject.label} ${centreSubject.ref}`}
+                        className="dep-graph-node-subject-link"
+                        data-testid={`dep-node-subject-${node.ref}`}
+                    >
+                        <rect
+                            x={left + 8}
+                            y={subjectTop}
+                            width={node.width - 16}
+                            height={16}
+                            fill="transparent"
+                        />
+                        <text x={node.x} y={subjectTextY} className="dep-graph-node-subject-text" textAnchor="middle" dominantBaseline="middle">
+                            {centreSubject.label}
+                        </text>
+                    </Link>
+                )}
             </g>
         )
     }

@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useState, type ReactNode } from "react"
 import "../arrhenius-chart.css"
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 import {
@@ -71,6 +71,42 @@ import { Disclosure } from "./Disclosure"
 // underlying numbers) -- built with the exact same `computeKineticsTable`/
 // `arrheniusTermK` maths PR 2 pinned, reused rather than forked, and shown
 // directly beneath the panels in a `Disclosure` per record.
+//
+// CONTROLS (owner's report, round 2 -- pasted the actual rendered text:
+// "Chart controls / X-axis / applies to every panel below / Y-axis / this
+// panel only / A unimolecular rate coefficient is reported in s⁻¹ only —
+// there is no other unit it could be converted to. / s⁻¹", and: "this
+// looks so shit"). An earlier version of this section rendered a titled,
+// bordered "Chart controls" box (X-axis) immediately followed by a SECOND
+// bordered box per panel (Y-axis), each with its own full-sentence scope
+// caption -- on 14 of this archive's 17 live reaction entries there is
+// only ONE panel, so "applies to every panel below" and "this panel only"
+// disambiguate nothing, and the no-alternative-unit reason printed as a
+// standalone sentence in the layout on top of that.
+//
+// `onlyPanel` (below) is that common case: when there is EXACTLY one
+// panel, the page-wide X-axis control and that one panel's own Y-axis
+// control render together as ONE compact row (`ArrheniusControlsRow`, no
+// heading, no scope caption -- nothing on the page to disambiguate FROM).
+// Two or more panels keep the X-axis control in its own single,
+// still-page-wide row (`ArrheniusChart -- the x-axis mode is a SINGLE
+// control governing every panel at once` stays true regardless of this
+// change: exactly one instance either way, never duplicated per panel),
+// with each panel's own compact Y-axis row below it -- NOW naming its
+// scope in two words ("all panels" / "this panel"), not a sentence, and
+// only rendered at all because a second panel genuinely exists to
+// disambiguate against.
+//
+// The no-alternative-unit reason (`yAxisUnitNote`) is never a sentence
+// sitting in the page layout any more: the disabled `<select>` still
+// shows the one unit (`ArrheniusYAxisSelect`'s own `hasUnitChoice` --
+// "never silently omit the y control" stands unchanged, present but
+// compact is the target), and a small, real `<button>` next to it carries
+// the full reason via `title` (mouse hover) AND `aria-describedby`
+// pointing at a visually-hidden paragraph (screen reader, and a REAL
+// interactive element -- unlike the disabled select itself, which native
+// HTML excludes from the tab order entirely -- so a sighted keyboard-only
+// user can still reach it, not just a mouse or a screen reader).
 // ---------------------------------------------------------------------------
 
 export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[] }) {
@@ -113,34 +149,28 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
         .map((record) => ({ record, table: computeKineticsTable(record) }))
         .filter((entry): entry is { record: ReactionKineticsRecord; table: NonNullable<ReturnType<typeof computeKineticsTable>> } => entry.table !== null)
 
+    // See the header comment's own "CONTROLS" section for the reasoning.
+    // `onlyPanel` is non-null exactly when there is nothing on the page a
+    // scope caption could disambiguate FROM.
+    const onlyPanel = panels.length === 1 ? panels[0] : null
+    const xAxisSelectId = useId()
+
     return (
         <div className="arrhenius-chart-section">
-            {panels.length > 0 && (
-                // The one page-wide control, grouped in its own labelled box
-                // rather than a bare `<select>` floating above the panels --
-                // this is the OTHER half of the pairing every
-                // `.arrhenius-chart-panel-controls` box below echoes (same
-                // box styling, same "X-axis"/"Y-axis" label shape), so a
-                // reader can tell at a glance that the two kinds of control
-                // belong to one system even though this one governs every
-                // panel and each panel's own y-axis control only governs
-                // itself (owner's report: the two used to sit at opposite
-                // ends of an ~1100px row with nothing tying them together).
-                <div className="arrhenius-chart-controls">
-                    <span className="arrhenius-chart-controls-heading">Chart controls</span>
-                    <label className="arrhenius-chart-control">
-                        <span className="arrhenius-chart-control-label">X-axis</span>
-                        <select
-                            className="arrhenius-chart-control-select"
-                            value={xAxisMode}
-                            onChange={(event) => setXAxisMode(event.target.value as ArrheniusXAxisMode)}
-                        >
-                            <option value="temperature">Temperature (K)</option>
-                            <option value="inverse_temperature">1000 / T (K⁻¹)</option>
-                        </select>
-                    </label>
-                    <span className="arrhenius-chart-controls-scope">applies to every panel below</span>
-                </div>
+            {onlyPanel && (
+                <ArrheniusControlsRow>
+                    <ArrheniusXAxisSelect id={xAxisSelectId} xAxisMode={xAxisMode} onSelectXAxisMode={setXAxisMode} />
+                    <ArrheniusYAxisSelect
+                        panel={onlyPanel}
+                        selectedUnits={displayUnitsByPanelKey.get(arrheniusPanelKey(onlyPanel))}
+                        onSelectUnits={(units) => setSelectedUnitsByPanel((prev) => ({ ...prev, [arrheniusPanelKey(onlyPanel)]: units }))}
+                    />
+                </ArrheniusControlsRow>
+            )}
+            {panels.length > 1 && (
+                <ArrheniusControlsRow scope="all panels">
+                    <ArrheniusXAxisSelect id={xAxisSelectId} xAxisMode={xAxisMode} onSelectXAxisMode={setXAxisMode} />
+                </ArrheniusControlsRow>
             )}
 
             {panels.length === 0 ? (
@@ -158,6 +188,10 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                             xAxisMode={xAxisMode}
                             selectedUnits={displayUnitsByPanelKey.get(key)}
                             onSelectUnits={(units) => setSelectedUnitsByPanel((prev) => ({ ...prev, [key]: units }))}
+                            // The single panel's own Y-axis control already
+                            // rendered above, combined with X-axis -- never
+                            // render it a second time here.
+                            ownControls={panel !== onlyPanel}
                         />
                     )
                 })
@@ -299,14 +333,112 @@ function yAxisUnitNote(panel: ArrheniusPanelData): string | null {
         : "This record's units weren't recorded, so no alternative unit can be offered."
 }
 
-function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }: {
-    panel: ArrheniusPanelData
+/** The compact controls row -- X-axis alone (2+ panels) or X+Y together
+ * (exactly one panel, the common case). No heading, no bordered "section"
+ * feel: `.arrhenius-chart-controls` is one thin inline-flex strip. `scope`,
+ * when given, is the two/three-word disambiguator a row genuinely needs
+ * because something ELSE on the page could be confused with it -- omitted
+ * entirely for the single-panel combined row, which has nothing else to
+ * be confused with (owner's report: "applies to every panel below" /
+ * "this panel only" "distinguish nothing" when there is only one panel). */
+function ArrheniusControlsRow({ children, scope }: { children: ReactNode; scope?: string }) {
+    return (
+        <div className="arrhenius-chart-controls">
+            {children}
+            {scope && <span className="arrhenius-chart-controls-scope">{scope}</span>}
+        </div>
+    )
+}
+
+function ArrheniusXAxisSelect({ id, xAxisMode, onSelectXAxisMode }: {
+    id: string
     xAxisMode: ArrheniusXAxisMode
+    onSelectXAxisMode: (mode: ArrheniusXAxisMode) => void
+}) {
+    return (
+        <label className="arrhenius-chart-control" htmlFor={id}>
+            <span className="arrhenius-chart-control-label">X-axis</span>
+            <select
+                id={id}
+                className="arrhenius-chart-control-select"
+                value={xAxisMode}
+                onChange={(event) => onSelectXAxisMode(event.target.value as ArrheniusXAxisMode)}
+            >
+                <option value="temperature">Temperature (K)</option>
+                <option value="inverse_temperature">1000 / T (K⁻¹)</option>
+            </select>
+        </label>
+    )
+}
+
+/**
+ * The Y-axis (unit) control, always rendered -- "never silently omit the
+ * y control" stands from the previous round of this fix; present-but-
+ * compact is the target, not hidden. A panel with a single option
+ * (`per_s`'s own family, or an unrecorded/unrecognised panel's empty
+ * `availableUnits`) shows the control DISABLED with the one unit it's
+ * stuck at, and -- unlike the previous round, which printed
+ * `yAxisUnitNote`'s full sentence directly in the layout -- the reason is
+ * now on demand: a small, real `<button>` (not just a `title` on the
+ * disabled select, which native HTML excludes from the tab order and so
+ * a sighted keyboard-only user could never reach) carries the reason via
+ * BOTH `title` (mouse hover) and `aria-describedby` pointing at a
+ * visually-hidden paragraph (screen reader, and Chrome/Firefox also show
+ * a focused element's own `title` as a tooltip, so keyboard focus reveals
+ * it too). */
+function ArrheniusYAxisSelect({ panel, selectedUnits, onSelectUnits }: {
+    panel: ArrheniusPanelData
     selectedUnits: string | undefined
     onSelectUnits: (units: string) => void
 }) {
     const selectId = useId()
     const noteId = `${selectId}-note`
+    const displayUnits = selectedUnits ?? panel.defaultUnits
+    const unitLabel = arrheniusUnitLabel(displayUnits ?? null)
+    const hasUnitChoice = panel.availableUnits.length > 1
+    const unitNote = yAxisUnitNote(panel)
+
+    return (
+        <span className="arrhenius-chart-y-control">
+            <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
+                <span className="arrhenius-chart-control-label">Y-axis</span>
+                <select
+                    id={selectId}
+                    className="arrhenius-chart-control-select"
+                    aria-label={panel.orderFamily != null ? `Y-axis (${FAMILY_NAME[panel.orderFamily]})` : "Y-axis"}
+                    aria-describedby={unitNote ? noteId : undefined}
+                    disabled={!hasUnitChoice}
+                    value={displayUnits ?? panel.availableUnits[0] ?? ""}
+                    onChange={(event) => onSelectUnits(event.target.value)}
+                >
+                    {hasUnitChoice
+                        ? panel.availableUnits.map((units) => (
+                            <option key={units} value={units}>{arrheniusUnitLabel(units)}</option>
+                        ))
+                        : <option value={displayUnits ?? ""}>{unitLabel}</option>}
+                </select>
+            </label>
+            {unitNote && (
+                <button type="button" className="arrhenius-chart-unit-reason" title={unitNote} aria-describedby={noteId}>
+                    <span aria-hidden="true">?</span>
+                    <span className="arrhenius-chart-visually-hidden">Why this unit can't be changed</span>
+                </button>
+            )}
+            {unitNote && <span id={noteId} className="arrhenius-chart-visually-hidden">{unitNote}</span>}
+        </span>
+    )
+}
+
+function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, ownControls }: {
+    panel: ArrheniusPanelData
+    xAxisMode: ArrheniusXAxisMode
+    selectedUnits: string | undefined
+    onSelectUnits: (units: string) => void
+    /** `false` for the one panel already given its own Y-axis control in
+     * the combined single-panel row above (`ArrheniusChart`'s `onlyPanel`)
+     * -- rendering it again here would duplicate the control. */
+    ownControls: boolean
+}) {
     const displayUnits = selectedUnits ?? panel.defaultUnits
     // `panel.series` itself, UNCONVERTED, in every place only the
     // temperature range matters (unit conversion never touches
@@ -316,14 +448,6 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }:
         ? panel.series.map((series) => convertArrheniusSeriesUnits(series, displayUnits))
         : panel.series
     const unitLabel = arrheniusUnitLabel(displayUnits ?? null)
-    // A panel with a single option (`per_s`'s own family, or an
-    // unrecorded/unrecognised panel's empty `availableUnits`) still renders
-    // this control -- disabled, showing the one unit it's stuck at, with
-    // `yAxisUnitNote` saying why right next to it (owner's report: hiding
-    // it entirely, the OLD behaviour, is what a reader going looking for a
-    // y-axis control and finding nothing actually experiences).
-    const hasUnitChoice = panel.availableUnits.length > 1
-    const unitNote = yAxisUnitNote(panel)
 
     const xDomain = panelXDomain(panel.series, xAxisMode)
     const kDomain = panelLog10KDomain(displaySeries)
@@ -351,35 +475,17 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }:
 
     return (
         <div className="arrhenius-chart-panel-wrap">
-            {/* This panel's own control group -- deliberately styled to
-                MATCH `.arrhenius-chart-controls` above (same box, same
-                "axis name" label shape) so the pairing with the page-wide
-                X-axis control reads visually, not just in the surrounding
-                prose. The scope caption below states in words what the
-                styling implies: this one control, unlike the X-axis
-                control above it, governs only this panel. */}
-            <div className="arrhenius-chart-panel-controls">
-                <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
-                    <span className="arrhenius-chart-control-label">Y-axis</span>
-                    <select
-                        id={selectId}
-                        className="arrhenius-chart-control-select"
-                        aria-label={panel.orderFamily != null ? `Y-axis (${FAMILY_NAME[panel.orderFamily]})` : "Y-axis"}
-                        aria-describedby={unitNote ? noteId : undefined}
-                        disabled={!hasUnitChoice}
-                        value={displayUnits ?? panel.availableUnits[0] ?? ""}
-                        onChange={(event) => onSelectUnits(event.target.value)}
-                    >
-                        {hasUnitChoice
-                            ? panel.availableUnits.map((units) => (
-                                <option key={units} value={units}>{arrheniusUnitLabel(units)}</option>
-                            ))
-                            : <option value={displayUnits ?? ""}>{unitLabel}</option>}
-                    </select>
-                </label>
-                <span className="arrhenius-chart-panel-controls-scope">this panel only</span>
-            </div>
-            {unitNote && <p id={noteId} className="note arrhenius-chart-panel-unit-note">{unitNote}</p>}
+            {/* Rendered only when this panel does NOT already have its own
+                Y-axis control from the combined single-panel row above
+                (`ArrheniusChart`'s `onlyPanel`). "this panel" only means
+                something once a second panel exists to tell it apart
+                from -- which is exactly the case `ownControls` is true
+                for. */}
+            {ownControls && (
+                <ArrheniusControlsRow scope="this panel">
+                    <ArrheniusYAxisSelect panel={panel} selectedUnits={selectedUnits} onSelectUnits={onSelectUnits} />
+                </ArrheniusControlsRow>
+            )}
             <p className="arrhenius-chart-panel-heading">{unitLabel}</p>
             <ArrheniusLegend
                 panel={panel}

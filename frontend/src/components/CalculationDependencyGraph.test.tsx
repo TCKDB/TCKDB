@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { CalculationDependency } from "../api/calculationApi"
-import { buildDependencyGraphModel, CENTRE_H, CENTRE_PAD_TOP, computeNarrowLayout, computeWideLayout } from "../domain/dependencyGraphLayout"
+import { buildDependencyGraphModel, CENTRE_H, CENTRE_PAD_TOP, centreContentHeight, computeNarrowLayout, computeWideLayout } from "../domain/dependencyGraphLayout"
 import { DEPENDENCY_ROLE_WORDING, dependencyEdgeLabel } from "../domain/dependencyWording"
-import { CalculationDependencyGraph } from "./CalculationDependencyGraph"
+import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDependencyGraph"
 
 afterEach(cleanup)
 
@@ -21,10 +21,22 @@ afterEach(cleanup)
  * fallback. The narrow (<=680px) layout is verified visually, with a real
  * browser, in the PR's own screenshots.
  */
-function renderGraph(dependencies: CalculationDependency[], ownRef = "calc_own_ref", ownType = "opt", centreLinked?: boolean) {
+function renderGraph(
+    dependencies: CalculationDependency[],
+    ownRef = "calc_own_ref",
+    ownType = "opt",
+    centreLinked?: boolean,
+    centreSubject?: CentreSubject | null,
+) {
     return render(
         <MemoryRouter>
-            <CalculationDependencyGraph dependencies={dependencies} ownRef={ownRef} ownType={ownType} centreLinked={centreLinked} />
+            <CalculationDependencyGraph
+                dependencies={dependencies}
+                ownRef={ownRef}
+                ownType={ownType}
+                centreLinked={centreLinked}
+                centreSubject={centreSubject}
+            />
         </MemoryRouter>,
     )
 }
@@ -148,6 +160,90 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
         ], "calc_own_ref", "opt", false)
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         expect(within(centreNode).queryByRole("link")).toBeNull()
+    })
+})
+
+// The owner's core defect report on the reaction-entry page's graph:
+// "what the fuck is it? a ts? a random ass molecule?... there is no real
+// indication except before it some tiny ass text that no one is going to
+// read". `centreSubject` puts the answer ON the node itself.
+const SUBJECT: CentreSubject = { label: "Transition state", ref: "tse_own1", href: "/transition-state-entries/tse_own1" }
+
+describe("CalculationDependencyGraph — centreSubject opt-in", () => {
+    it("renders no subject row at all by default -- CalculationDetailPage's own graph must never show one", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ])
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        expect(within(centreNode).queryByTestId("dep-node-subject-calc_own_ref")).toBeNull()
+    })
+
+    it("renders the subject's visible label and links it to its own href, separately from the calc link (mutation table item (a))", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", true, SUBJECT)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_own_ref")
+        expect(subjectLink).toHaveTextContent("Transition state")
+        expect(subjectLink).toHaveAttribute("href", "/transition-state-entries/tse_own1")
+        // Folds the subject's own ref into the accessible name, even
+        // though the visible text is the short label alone -- the ref
+        // stays reachable (screen reader) without being printed twice.
+        expect(subjectLink).toHaveAccessibleName("Transition state tse_own1")
+        // A SEPARATE link from the calc link -- an SVG <a> cannot nest
+        // inside another, and clicking each must go to a different place.
+        const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_own_ref/ })
+        expect(calcLink).not.toBe(subjectLink)
+        expect(calcLink).toHaveAttribute("href", "/calculations/calc_own_ref")
+        expect(within(centreNode).getAllByRole("link")).toHaveLength(2)
+    })
+
+    it("still renders the subject row even when centreLinked is false -- the two props are independent", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", false, SUBJECT)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        expect(within(centreNode).getByTestId("dep-node-subject-calc_own_ref")).toBeInTheDocument()
+        // No calc link this time -- only the subject's own.
+        expect(within(centreNode).getAllByRole("link")).toHaveLength(1)
+    })
+
+    it("grows the centre node's own content-block height to fit the subject row (mutation table item (a))", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", true, SUBJECT)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const nodeRect = centreNode.querySelector(".dep-graph-node-rect")!
+        expect(Number(nodeRect.getAttribute("height"))).toBe(centreContentHeight(true))
+        expect(centreContentHeight(true)).toBeGreaterThan(CENTRE_H)
+    })
+
+    it("keeps the pill and ref rows at their pre-subject-row geometry when there IS no subject (no regression on CalculationDetailPage's own graph)", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt")
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const nodeRect = centreNode.querySelector(".dep-graph-node-rect")!
+        expect(Number(nodeRect.getAttribute("height"))).toBe(centreContentHeight(false))
+        expect(centreContentHeight(false)).toBe(CENTRE_H)
+    })
+
+    // No text overflow / no collision with an edge label at a narrow
+    // layout width -- a real subject ("Transition state") plus a
+    // realistic ~29-char calc ref, forced narrow so the subject row's own
+    // width contribution is exercised too.
+    it("does not push the narrow layout's node rect width narrower than the subject text needs", () => {
+        const model = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", [
+            { role: "freq_on", direction: "parent", parent_calculation_ref: "calc_own_ref_abcdefghijklmnopqrstuv", child_calculation_ref: "calc_child0abcdefghijklmnopqrstuvwx" },
+        ], "Transition state")
+        const narrow = computeNarrowLayout(model)
+        const centre = narrow.nodes.find((n) => n.tier === "centre")!
+        // The subject label at this graph's own small-text estimate must
+        // fit inside the node's own width with room to spare (the
+        // dominant width driver here is the long calc ref, not the short
+        // subject label, but this guards the estimate never regresses to
+        // ignoring the subject entirely).
+        expect(centre.width).toBeGreaterThanOrEqual("Transition state".length * 7.6 + 12)
     })
 })
 

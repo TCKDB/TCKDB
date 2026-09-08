@@ -592,6 +592,14 @@ describe("CalculationDetailPage", () => {
         const centreNode = within(depSection).getByTestId("dep-node-centre-calc_freq_one")
         expect(within(centreNode).queryByRole("link")).toBeNull()
 
+        // This page has no "whose" to report about its own centre
+        // calculation (unlike `ReactionTransitionStatesSection.tsx`'s own
+        // graph, whose centre node names the TS entry it belongs to) --
+        // `CalculationDependencyGraph.tsx`'s `centreSubject` must never be
+        // passed at this call site, so the node stays exactly two rows
+        // (pill + ref), never a third subject row.
+        expect(within(centreNode).queryByTestId("dep-node-subject-calc_freq_one")).toBeNull()
+
         // Parent-side: the OTHER calculation is the subject, and the
         // sentence has a verb ("was run on") -- review finding: it used to
         // read "single point on this geometry" with no verb at all.

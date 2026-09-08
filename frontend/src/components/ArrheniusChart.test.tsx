@@ -630,37 +630,92 @@ describe("ArrheniusChart -- the x-axis mode control (temperature vs 1000/T)", ()
     })
 })
 
-// Owner's report (second, independent finding): "X-AXIS" sat at the far
-// left of the chart block while "DISPLAY UNITS" floated to the far right
-// of the same row, reading as two unrelated controls rather than a pair.
-// These are structural/textual regression guards for the fix -- both
-// controls now live in their own labelled, boxed control-group (matching
-// CSS classes, `.arrhenius-chart-controls` / `.arrhenius-chart-panel-controls`),
-// each stating in words whether it governs the whole chart or just its own
-// panel, and both are labelled with the SAME "X-axis"/"Y-axis" word shape.
-describe("ArrheniusChart -- the x-axis and y-axis controls read as a pair, not two unrelated corners", () => {
-    it("both controls sit in their own labelled box, each naming its own scope", () => {
+// Owner's report, round 1: "X-AXIS" sat at the far left of the chart block
+// while "DISPLAY UNITS" floated to the far right of the same row, reading
+// as two unrelated controls rather than a pair. Round 2, on the fix for
+// round 1: it rebuilt the pairing as a titled "Chart controls" box
+// followed by a SECOND boxed section with a full-sentence "this panel
+// only" caption underneath -- on THIS page there is exactly one panel, so
+// neither caption disambiguated anything, and the owner pasted the actual
+// rendered text back ("this looks so shit"). This describe block covers
+// the compact rebuild: a single panel collapses X+Y into ONE row with no
+// captions at all; two or more panels keep X-axis as its own single
+// (still page-wide, never duplicated) row, with each panel's own Y-axis
+// row below it, now naming its scope in two words rather than a sentence
+// -- and only because a second panel actually exists to name it against.
+describe("ArrheniusChart -- the x-axis and y-axis controls read as a compact pair, not a wall of chrome", () => {
+    it("a single panel renders X-axis and Y-axis together in ONE row, with no scope caption at all (mutation table item (d))", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
 
-        const pageControls = document.querySelector(".arrhenius-chart-controls") as HTMLElement
-        expect(pageControls).not.toBeNull()
-        expect(within(pageControls).getByText("applies to every panel below")).toBeInTheDocument()
-        expect(within(pageControls).getByText("X-axis")).toBeInTheDocument()
+        const xSelect = screen.getByRole("combobox", { name: /X-axis/ })
+        const ySelect = screen.getByRole("combobox", { name: /Y-axis/ })
+        const row = xSelect.closest(".arrhenius-chart-controls") as HTMLElement
+        expect(row).not.toBeNull()
+        expect(row.contains(ySelect)).toBe(true)
+        // Exactly one controls row on the whole page -- X and Y share it.
+        expect(document.querySelectorAll(".arrhenius-chart-controls")).toHaveLength(1)
 
-        const panelControls = document.querySelector(".arrhenius-chart-panel-controls") as HTMLElement
-        expect(panelControls).not.toBeNull()
-        expect(within(panelControls).getByText("this panel only")).toBeInTheDocument()
-        expect(within(panelControls).getByText("Y-axis")).toBeInTheDocument()
-
-        // The two boxes are distinct control groups, not one nested inside
-        // the other (which would make "this panel only" meaningless).
-        expect(pageControls.contains(panelControls)).toBe(false)
-        expect(panelControls.contains(pageControls)).toBe(false)
+        // Nothing left in the layout to disambiguate -- neither the old
+        // full sentences nor a short replacement should appear anywhere.
+        expect(screen.queryByText("applies to every panel below")).toBeNull()
+        expect(screen.queryByText("this panel only")).toBeNull()
+        expect(screen.queryByText("Chart controls")).toBeNull()
+        expect(document.querySelectorAll(".arrhenius-chart-controls-scope")).toHaveLength(0)
     })
 
-    it("a mixed-family page renders one page-wide X-axis box and a SEPARATE Y-axis box per panel", () => {
+    it("a mixed-family (2-panel) page keeps X-axis as its own single page-wide row and gives each panel a separate, scoped Y-axis row", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord(), unimolecularRecord()]} />)
-        expect(document.querySelectorAll(".arrhenius-chart-controls")).toHaveLength(1)
-        expect(document.querySelectorAll(".arrhenius-chart-panel-controls")).toHaveLength(2)
+
+        expect(screen.getAllByRole("combobox", { name: /X-axis/ })).toHaveLength(1)
+        expect(screen.getAllByRole("combobox", { name: /Y-axis/ })).toHaveLength(2)
+        // Three rows total: one X-axis row, two Y-axis rows (one per panel).
+        expect(document.querySelectorAll(".arrhenius-chart-controls")).toHaveLength(3)
+
+        // Now that a second panel exists, the compact scope words show up
+        // -- short, not the old full sentences.
+        expect(screen.getByText("all panels")).toBeInTheDocument()
+        expect(screen.getAllByText("this panel")).toHaveLength(2)
+        expect(screen.queryByText("applies to every panel below")).toBeNull()
+        expect(screen.queryByText("this panel only")).toBeNull()
+    })
+})
+
+// Owner's report on the no-alternative-unit case specifically: the
+// previous round's fix kept the control present (correct) but printed
+// `yAxisUnitNote`'s full sentence directly in the page layout. The
+// requirement standing from that round -- "never silently omit the y
+// control" -- is unchanged; what moved is only where the REASON lives.
+describe("ArrheniusChart -- the no-alternative-unit reason is compact and on-demand, never a sentence in the layout", () => {
+    it("a per_s panel's disabled Y-axis control shows no full-sentence reason in the visible layout", () => {
+        render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Y-axis/ }) as HTMLSelectElement
+        expect(select).toBeDisabled()
+        expect(select.options).toHaveLength(1)
+        expect(select.options[0].textContent).toBe("s⁻¹")
+
+        // The reason text still exists in the DOM (for aria-describedby /
+        // screen readers), but it must be visually hidden, not printed as
+        // a paragraph in the flow the way it was before this fix.
+        const reasonText = screen.getByText(/no other unit it could be converted to/)
+        expect(reasonText.className).toContain("arrhenius-chart-visually-hidden")
+    })
+
+    it("gives a real, focusable button carrying the reason -- reachable without a mouse (title + aria-describedby)", () => {
+        render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
+        const button = screen.getByRole("button", { name: /Why this unit can't be changed/ })
+        expect(button).toHaveAttribute("title", expect.stringContaining("no other unit it could be converted to"))
+        const describedById = button.getAttribute("aria-describedby")
+        expect(describedById).toBeTruthy()
+        expect(document.getElementById(describedById!)?.textContent).toMatch(/no other unit it could be converted to/)
+        // A real button is in the tab order by default (no explicit
+        // tabindex=-1 / disabled) -- unlike the select it explains, which
+        // IS disabled and therefore unreachable by keyboard at all.
+        expect(button).not.toHaveAttribute("disabled")
+        expect(button.getAttribute("tabindex")).not.toBe("-1")
+    })
+
+    it("a bimolecular panel (real unit choice) renders no reason button at all", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        expect(screen.queryByRole("button", { name: /Why this unit/ })).toBeNull()
     })
 })

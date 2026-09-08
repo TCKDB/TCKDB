@@ -266,9 +266,6 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
                     <ReactionTransitionStatesSection
                         transitionStates={transitionStates}
                         calculations={record.calculations}
-                        reactants={species.reactants}
-                        products={species.products}
-                        reversible={entry.reversible}
                     />
                 </section>
 

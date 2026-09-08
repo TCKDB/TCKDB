@@ -31,40 +31,30 @@
     margin-top: 2rem;
 }
 
-/* The single, page-wide x-axis-mode control (temperature vs 1000/T) --
-   sits ABOVE every panel, never duplicated per panel: which axis a reader
-   wants is a reading-convention choice, not a per-record fact the way the
-   per-panel unit selector below is. Boxed (border + sunken background)
-   rather than a bare `<select>` floating in whitespace -- the SAME box
-   styling `.arrhenius-chart-panel-controls` below carries, so the two read
-   as one system of "chart axis controls" even though this one governs
-   every panel and each panel's own box only governs itself (owner's
-   report: previously an "X-AXIS" control at the far left of the row had
-   nothing visually tying it to the "DISPLAY UNITS" control floating at the
-   far right of a DIFFERENT row below it). */
+/* ONE compact controls row, reused for every shape `ArrheniusChart.tsx`
+   needs (`ArrheniusControlsRow`): X-axis alone (2+ panels), X+Y together
+   (exactly one panel -- the common case, 14 of 17 live reaction entries),
+   or Y alone (a single panel among 2+, rendered inside that panel's own
+   `ArrheniusPanelChart`). Owner's report on the previous round of this
+   fix: "Chart controls" (a titled, bordered box) immediately followed by
+   a SECOND bordered box per panel with its own "this panel only" caption
+   -- "this looks so shit". No heading, no per-row border/background any
+   more: a thin inline-flex strip is what "read as one short row" means
+   here. `scope` (`.arrhenius-chart-controls-scope` below) is the only
+   thing that still varies in weight -- two or three words, shown ONLY
+   when a second row on the page genuinely needs disambiguating from,
+   never a caption at all with a single panel. */
 .arrhenius-chart-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: .4rem 1rem;
-    margin: 0 0 1.25rem;
-    padding: .6rem .9rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: var(--surface-sunken);
+    gap: .4rem .75rem;
+    margin: 0 0 1rem;
 }
 
-.arrhenius-chart-controls-heading {
-    font: var(--type-label-font);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
-    color: var(--muted);
-}
-
-/* States in words what the shared box styling implies visually: THIS
-   control (unlike each panel's own y-axis control) is not scoped to any
-   one panel. Its mirror, "this panel only", sits on
-   `.arrhenius-chart-panel-controls-scope` below. */
+/* Two/three words, not a sentence -- "all panels" / "this panel", shown
+   only when `ArrheniusControlsRow` is given one (a second panel actually
+   exists to disambiguate against). */
 .arrhenius-chart-controls-scope {
     font: var(--type-note-font);
     color: var(--muted);
@@ -73,7 +63,7 @@
 .arrhenius-chart-control {
     display: flex;
     align-items: center;
-    gap: .5rem;
+    gap: .4rem;
     font: var(--type-data-font);
     color: var(--ink-2);
 }
@@ -94,46 +84,73 @@
     cursor: not-allowed;
 }
 
-/* This panel's own y-axis (unit) control -- the SAME box styling as the
-   page-wide `.arrhenius-chart-controls` above (border, sunken background,
-   same gap/padding), positioned at the TOP of the panel so a reader
-   scanning top-to-bottom meets "X-axis" then, immediately after, "Y-axis"
-   as one visual pair -- never at opposite ends of a spread-out row (the
-   defect this replaces: `justify-content: space-between` used to push the
-   old "Display units" selector to the far right of its own row while the
-   page-wide X-axis control sat at the far left of the row above it).
-   Always rendered, even when the control inside is disabled -- see
-   `ArrheniusChart.tsx`'s own `hasUnitChoice`/`yAxisUnitNote`. */
-.arrhenius-chart-panel-controls {
+/* Wraps the Y-axis label+select together with its own optional
+   `.arrhenius-chart-unit-reason` button, so the two sit adjacent inside
+   the shared `.arrhenius-chart-controls` row (`gap` above spaces them
+   from whatever else is in that row -- the X-axis control, when the two
+   are combined into one row for a single panel). */
+.arrhenius-chart-y-control {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: .4rem 1rem;
-    margin: 0 0 .5rem;
-    padding: .5rem .8rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: var(--surface-sunken);
+    gap: .35rem;
 }
 
 .arrhenius-chart-panel-unit-control {
     margin: 0;
 }
 
-/* Mirrors `.arrhenius-chart-controls-scope` above -- "this panel only" is
-   the reader-facing half of the pairing the matching box styling implies. */
-.arrhenius-chart-panel-controls-scope {
-    font: var(--type-note-font);
+/* The compact "why only one unit" affordance -- a REAL, focusable
+   `<button>` (never bare `title` on the disabled `<select>` itself, which
+   native HTML excludes from the tab order entirely) sitting right next to
+   the control it explains. `title` gives a mouse-hover tooltip;
+   `aria-describedby` (set at the call site, `ArrheniusChart.tsx`) points
+   a screen reader at the full reason; Chrome/Firefox also show a focused
+   element's own `title` on keyboard focus, so a sighted keyboard-only
+   user reaches the same tooltip a mouse user does. Round, small, muted
+   until interacted with -- reads as "more info", not as a second control
+   competing with the select next to it. */
+.arrhenius-chart-unit-reason {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-sunken);
     color: var(--muted);
+    font: var(--type-label-font);
+    line-height: 1;
+    cursor: help;
 }
 
-/* The disabled control's own "why" -- sits directly under its box, per
-   `.note`'s own shared styling (design-system.css), never in place of the
-   control (plan: "never silently omit the y control"). Only ever rendered
-   alongside a `disabled` select (`ArrheniusChart.tsx`'s `unitNote`), so
-   this margin only needs to separate it from the panel heading below. */
-.arrhenius-chart-panel-unit-note {
-    margin: 0 0 .5rem;
+.arrhenius-chart-unit-reason:hover,
+.arrhenius-chart-unit-reason:focus-visible {
+    border-color: var(--accent-300);
+    color: var(--accent-700);
+}
+
+.arrhenius-chart-unit-reason:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 2px;
+}
+
+/* Standard clip-based visually-hidden technique (present in the
+   accessibility tree, invisible on screen) -- carries the y-axis unit
+   reason's full sentence for a screen reader / `aria-describedby`
+   without printing it in the layout (owner: "the reason available on
+   demand ... not a full sentence sitting in the layout"). */
+.arrhenius-chart-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`

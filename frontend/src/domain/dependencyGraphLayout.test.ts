@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest"
 import type { CalculationDependency } from "../api/calculationApi"
 import {
     buildDependencyGraphModel,
+    CENTRE_H,
+    centreContentHeight,
     computeNarrowLayout,
     computeWideLayout,
     dependencyGraphAriaLabel,
@@ -384,6 +386,51 @@ describe("longest label fits inside its own background box", () => {
             const edge = layout.edges[0]
             expect(roleLabel.length * MEASURED_CHAR_W, `role ${role}`).toBeLessThanOrEqual(edge.labelWidth)
         }
+    })
+})
+
+describe("centreContentHeight / centre node subject row", () => {
+    it("is unchanged (byte-identical to CENTRE_H) with no subject", () => {
+        expect(centreContentHeight(false)).toBe(CENTRE_H)
+    })
+
+    it("is taller with a subject than without one", () => {
+        expect(centreContentHeight(true)).toBeGreaterThan(centreContentHeight(false))
+    })
+
+    it("wide layout: a subject grows the centre node's own height, never the parent/child sibling rows", () => {
+        const withSubject = buildDependencyGraphModel(
+            "calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(1, 1), "Transition state",
+        )
+        const withoutSubject = buildDependencyGraphModel("calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(1, 1))
+        const layoutWith = computeWideLayout(withSubject)
+        const layoutWithout = computeWideLayout(withoutSubject)
+        const centreWith = layoutWith.nodes.find((n) => n.tier === "centre")!
+        const centreWithout = layoutWithout.nodes.find((n) => n.tier === "centre")!
+        expect(centreWith.height).toBeGreaterThan(centreWithout.height)
+        const siblingWith = layoutWith.nodes.find((n) => n.tier === "parent")!
+        const siblingWithout = layoutWithout.nodes.find((n) => n.tier === "parent")!
+        expect(siblingWith.height).toBe(siblingWithout.height)
+    })
+
+    it("wide layout with a subject: no label rect intersects any node rect, no path segment intersects any label rect", () => {
+        const model = buildDependencyGraphModel(
+            "calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(3, 3), "Transition state",
+        )
+        const layout = computeWideLayout(model)
+        assertNoLabelNodeIntersections(layout, "wide with subject")
+        assertNoPathLabelIntersections(layout, "wide with subject")
+        assertPathEndpointsOnNodeBorders(layout, "wide with subject")
+    })
+
+    it("narrow layout with a subject: no label rect intersects any node rect, every path endpoint still lands on a node border", () => {
+        const model = buildDependencyGraphModel(
+            "calc_own_ref_abcdefghijklmnopqrstuv", "opt", makeDependencies(3, 3), "Transition state",
+        )
+        const layout = computeNarrowLayout(model)
+        assertNoLabelNodeIntersections(layout, "narrow with subject")
+        assertNoPathLabelIntersections(layout, "narrow with subject")
+        assertPathEndpointsOnNodeBorders(layout, "narrow with subject")
     })
 })
 
