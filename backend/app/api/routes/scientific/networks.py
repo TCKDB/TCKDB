@@ -28,6 +28,9 @@ from app.schemas.reads.scientific_network import (
 from app.schemas.reads.scientific_network_kinetics import (
     ScientificNetworkKineticsDetailResponse,
 )
+from app.schemas.reads.scientific_network_kinetics_evaluate import (
+    NetworkKineticsEvaluateResponse,
+)
 from app.schemas.reads.scientific_network_kinetics_search import (
     NetworkKineticsSearchRequest,
     ScientificNetworkKineticsSearchResponse,
@@ -44,6 +47,7 @@ from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
 from app.services.scientific_read.network_kinetics import (
+    evaluate_network_kinetics,
     get_network_kinetics,
 )
 from app.services.scientific_read.network_kinetics_search import (
@@ -504,4 +508,55 @@ def scientific_network_kinetics_detail(
         payload,
         table=NETWORK_KINETICS_RECORD_SECTIONS,
         scope=DETAIL_SCOPE,
+    )
+
+
+@kinetics_router.get(
+    "/{network_kinetics_ref_or_id}/evaluate",
+    response_model=NetworkKineticsEvaluateResponse,
+)
+def scientific_network_kinetics_evaluate(
+    network_kinetics_ref_or_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+    temperature_k: list[float] = Query(
+        ..., description="One or more temperatures, K. Repeatable."
+    ),
+    pressure_bar: list[float] = Query(
+        ..., description="One or more pressures, bar. Repeatable."
+    ),
+):
+    """Evaluate one stored k(T,P) fit at a grid of (T, P) points.
+
+    Server-side evaluation only — see
+    ``app/chemistry/network_kinetics_eval.py`` for the Chebyshev and PLOG
+    formulas. The archive does not publish client-side Chebyshev/PLOG
+    math, since a wrong evaluation produces a rate coefficient that
+    looks entirely plausible.
+
+    Path handle accepts an integer ``network_kinetics.id`` or a public
+    ref of the form ``nkin_…``, matching every other detail surface
+    here. ``temperature_k`` / ``pressure_bar`` are each repeatable query
+    parameters (``?temperature_k=300&temperature_k=500&pressure_bar=1``);
+    the response's ``points`` is their Cartesian product, so one request
+    covers a full chart grid. The product is capped
+    (``settings.public_max_limit``) and refused with 422
+    ``network_kinetics_evaluate_grid_too_large`` above the cap, rather
+    than silently truncated.
+
+    A requested point outside the fit's own stated validity range on
+    either axis is still evaluated — extrapolation is mathematically
+    well-defined for both supported forms — but its ``in_range`` flag
+    is ``False``. Never silently presented as interpolated. For
+    Chebyshev that range is exactly ``[tmin_k, tmax_k]`` x
+    ``[pmin_bar, pmax_bar]`` as echoed on the response; for PLOG the
+    pressure axis is judged against the fit's own table of fitted
+    pressures instead (see
+    ``NetworkKineticsEvaluatedPoint`` for why), with temperature judged
+    against the same ``tmin_k``/``tmax_k``.
+    """
+    return evaluate_network_kinetics(
+        session,
+        network_kinetics_handle=network_kinetics_ref_or_id,
+        temperatures_k=temperature_k,
+        pressures_bar=pressure_bar,
     )

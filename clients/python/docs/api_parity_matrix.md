@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 97 |
+| typed | 98 |
 | raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **242** |
+| **total** | **243** |
 
 ## Typed coverage
 
@@ -80,6 +80,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/meta/workflow-tools` | yes | `get_meta_workflow_tools` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
+| `GET /api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}/evaluate` | yes | `evaluate_network_kinetics` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/network-solves/search` | yes | `search_network_solves` | `iter_network_solves` | — | `tests/test_network_solve_client.py` |
 | `POST /api/v1/scientific/network-solves/search` | yes | `search_network_solves` | `iter_network_solves` | — | `tests/test_network_solve_client.py` |
 | `GET /api/v1/scientific/network-solves/{network_solve_ref_or_id}` | yes | `get_network_solve` | — | — | `tests/test_network_solve_client.py` |

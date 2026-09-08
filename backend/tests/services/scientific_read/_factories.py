@@ -1713,6 +1713,8 @@ def make_network_kinetics(
     tmax_k: float | None = 2000.0,
     pmin_bar: float | None = 0.01,
     pmax_bar: float | None = 100.0,
+    rate_units=None,
+    stores_log10_k: bool | None = None,
 ):
     from app.db.models.network_pdep import NetworkKinetics
 
@@ -1724,6 +1726,8 @@ def make_network_kinetics(
         tmax_k=tmax_k,
         pmin_bar=pmin_bar,
         pmax_bar=pmax_bar,
+        rate_units=rate_units,
+        stores_log10_k=stores_log10_k,
     )
     session.add(row)
     session.flush()

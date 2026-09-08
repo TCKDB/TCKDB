@@ -560,6 +560,44 @@ class NetworkKineticsRecord(TypedDict, total=False):
     review_history: list[JSONDict] | None
 
 
+class NetworkKineticsEvaluatedPoint(TypedDict):
+    """One server-evaluated (T, P) -> k point.
+
+    ``in_range`` is ``False`` whenever the point falls outside the
+    fit's own stated validity range on either axis -- the value is
+    still computed (extrapolation is well-defined for both supported
+    forms) but must never be read as an interpolated value. See
+    ``app/chemistry/network_kinetics_eval.py`` in the backend for the
+    exact Chebyshev/PLOG formulas -- this client never reimplements
+    them, matching the "evaluation happens server-side" design.
+    """
+
+    temperature_k: float
+    pressure_bar: float
+    k: float
+    in_range: bool
+
+
+class NetworkKineticsEvaluateResponse(TypedDict):
+    """Response envelope for
+    ``GET /scientific/network-kinetics/{ref}/evaluate``.
+
+    Flat, not a ``ScientificSearchResponse`` -- this endpoint evaluates
+    one stored fit at a requested (T, P) grid rather than searching a
+    corpus, so it carries no ``request``/``review_summary``/
+    ``pagination`` envelope.
+    """
+
+    network_kinetics_ref: str
+    model_kind: str
+    k_units: str
+    tmin_k: float | None
+    tmax_k: float | None
+    pmin_bar: float | None
+    pmax_bar: float | None
+    points: list[NetworkKineticsEvaluatedPoint]
+
+
 class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
     species: Required[JSONDict]
@@ -1057,6 +1095,8 @@ __all__ = [
     "LiteratureLinkedRecord",
     "LiteratureRecord",
     "LiteratureRecordsResponse",
+    "NetworkKineticsEvaluateResponse",
+    "NetworkKineticsEvaluatedPoint",
     "NetworkKineticsRecord",
     "NetworkKineticsSearchResponse",
     "NetworkRecord",
