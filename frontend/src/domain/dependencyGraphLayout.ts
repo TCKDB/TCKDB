@@ -77,6 +77,15 @@ export interface DependencyGraphEdgeSpec {
 export interface DependencyGraphModel {
     ownRef: string
     ownType: string
+    /** Short label for the centre node's own SUBJECT row -- see
+     * `CalculationDependencyGraph.tsx`'s `centreSubject` prop's own
+     * docstring for what this answers ("an optimisation OF WHAT",
+     * distinct from the pill's "what KIND" and the ref line's "WHICH
+     * one"). `undefined` for every caller that doesn't have a subject to
+     * show (`CalculationDetailPage.tsx`'s own graph) -- in which case the
+     * centre node's content block stays exactly `CENTRE_H` tall, byte-
+     * identical to this row's own geometry before the subject existed. */
+    centreSubjectLabel?: string
     /** Distinct parent refs, in first-seen order. */
     parentRefs: string[]
     /** Distinct child refs, in first-seen order. */
@@ -100,6 +109,7 @@ export function buildDependencyGraphModel(
     ownRef: string,
     ownType: string,
     dependencies: CalculationDependency[],
+    centreSubjectLabel?: string,
 ): DependencyGraphModel {
     const parentRefs: string[] = []
     const childRefs: string[] = []
@@ -126,7 +136,7 @@ export function buildDependencyGraphModel(
         }
     }
 
-    return { ownRef, ownType, parentRefs, childRefs, edges }
+    return { ownRef, ownType, centreSubjectLabel, parentRefs, childRefs, edges }
 }
 
 /** "2 parents, 1 child" / "1 parent" / "3 children" -- the `aria-label`
@@ -193,6 +203,35 @@ const CENTRE_PAD_BOTTOM = 12
 // rather than staying pinned to the top).
 export const CENTRE_H = CENTRE_PAD_TOP + PILL_H + CENTRE_PILL_GAP + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
 
+// The centre node's optional SUBJECT row -- "an optimisation OF WHAT"
+// (owner: "what the fuck is it? a ts? a random ass molecule?"), inserted
+// BETWEEN the type pill and the ref line rather than replacing either --
+// the pill still answers WHAT KIND of calculation, the ref line still
+// answers WHICH one, and this row alone answers WHOSE. Same small font
+// step as the pill/edge labels (`SMALL_CHAR_W`, `PILL_H`-adjacent line
+// height), but never a duplicate concept: `CalculationDependencyGraph
+// .tsx`'s `centreSubject` prop's own docstring covers the accessibility
+// shape (a real link, its accessible name carrying the subject's own
+// ref, since the visible text here is deliberately short).
+export const CENTRE_SUBJECT_GAP_TOP = 6
+export const CENTRE_SUBJECT_LINE_H = 16
+export const CENTRE_SUBJECT_GAP_BOTTOM = 6
+
+/** The centre node's own pill(+subject)+ref content block height --
+ * `CENTRE_H` (pill, then straight to the ref line) when there is no
+ * subject, or `CENTRE_H` widened by the subject row and its own two gaps
+ * (replacing the plain `CENTRE_PILL_GAP` the no-subject case uses)
+ * otherwise. Exported so `CalculationDependencyGraph.tsx` can re-derive
+ * the SAME box height this module used to size the node, rather than
+ * re-deriving a second copy of the split -- mirrors how `CENTRE_PAD_TOP`
+ * is already shared this way for the pill's own vertical offset. */
+export function centreContentHeight(hasSubject: boolean): number {
+    const middle = hasSubject
+        ? CENTRE_SUBJECT_GAP_TOP + CENTRE_SUBJECT_LINE_H + CENTRE_SUBJECT_GAP_BOTTOM
+        : CENTRE_PILL_GAP
+    return CENTRE_PAD_TOP + PILL_H + middle + CENTRE_REF_LINE_H + CENTRE_PAD_BOTTOM
+}
+
 function nodeWidth(ref: string): number {
     return Math.max(NODE_MIN_W, Math.round(ref.length * CHAR_W) + NODE_PAD_X)
 }
@@ -201,6 +240,20 @@ function nodeWidth(ref: string): number {
  * both draw at the same small, tracked, uppercase mono step. */
 function smallTextBoxWidth(text: string): number {
     return Math.round(text.length * SMALL_CHAR_W) + SMALL_PAD * 2
+}
+
+/** The centre node's own width -- `nodeWidth(ownRef)`, widened to fit the
+ * subject row's own text when one is present and would otherwise be
+ * wider than the ref-based box (never narrower: a short subject label
+ * like "Transition state" is well under a real `calc_...` ref's own
+ * width in every case measured, but this stays a `Math.max` rather than
+ * an assumption). Sized with `smallTextBoxWidth` -- the SAME estimate the
+ * subject row's own font step uses (matching `SMALL_PAD`'s slack), not
+ * the ref line's wider `CHAR_W`/`NODE_PAD_X` estimate. */
+function centreNodeWidth(ownRef: string, subjectLabel: string | undefined): number {
+    const base = nodeWidth(ownRef)
+    if (!subjectLabel) return base
+    return Math.max(base, smallTextBoxWidth(subjectLabel))
 }
 
 export interface LayoutNode {
@@ -343,8 +396,9 @@ function outerLabelOverhang(tierEdges: DependencyGraphEdgeSpec[], refs: string[]
 }
 
 export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
-    const { ownRef, ownType, parentRefs, childRefs, edges } = model
-    const centreWidth = nodeWidth(ownRef)
+    const { ownRef, ownType, centreSubjectLabel, parentRefs, childRefs, edges } = model
+    const centreWidth = centreNodeWidth(ownRef, centreSubjectLabel)
+    const centreH = centreContentHeight(Boolean(centreSubjectLabel))
     const pill = centrePillFor(ownType)
 
     const parentEdges = edges.filter((e) => e.tier === "parent")
@@ -415,10 +469,10 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
 
     const centreTopY = cursorY
     nodes.push({
-        ref: ownRef, tier: "centre", type: ownType, x: centreX, y: centreTopY + CENTRE_H / 2,
-        width: centreWidth, height: CENTRE_H, pill,
+        ref: ownRef, tier: "centre", type: ownType, x: centreX, y: centreTopY + centreH / 2,
+        width: centreWidth, height: centreH, pill,
     })
-    const centreBottomY = centreTopY + CENTRE_H
+    const centreBottomY = centreTopY + centreH
     cursorY = centreBottomY + childTierGap
 
     let childRow: { boxes: Map<string, { x: number; width: number }> } | null = null
@@ -510,12 +564,12 @@ const NARROW_ENTRY_STAGGER = LABEL_H + 2
  * the arc at 4x zoom. `maxLaneCount` is the more loaded side (parents or
  * children) -- the OTHER side's points, staggered by the same step, are
  * then automatically within bounds too. */
-function centreHeightFor(maxLaneCount: number): number {
-    return Math.max(CENTRE_H, NARROW_ENTRY_STAGGER * maxLaneCount * 2 + 2 * NODE_RX)
+function centreHeightFor(maxLaneCount: number, hasSubject: boolean): number {
+    return Math.max(centreContentHeight(hasSubject), NARROW_ENTRY_STAGGER * maxLaneCount * 2 + 2 * NODE_RX)
 }
 
 export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
-    const { ownRef, ownType, parentRefs, childRefs, edges } = model
+    const { ownRef, ownType, centreSubjectLabel, parentRefs, childRefs, edges } = model
     const pill = centrePillFor(ownType)
     // Every node in the narrow column is drawn at the SAME width
     // (`colWidth`, the widest ref/pill among them), not each node's own
@@ -526,7 +580,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     // so the endpoint landed in the gap beside the box, not ON it.
     // Uniform width makes every node's own border coincide with
     // `rightEdgeX` exactly.
-    const allWidths = [nodeWidth(ownRef), ...parentRefs.map(nodeWidth), ...childRefs.map(nodeWidth)]
+    const allWidths = [centreNodeWidth(ownRef, centreSubjectLabel), ...parentRefs.map(nodeWidth), ...childRefs.map(nodeWidth)]
     const colWidth = Math.max(...allWidths)
     const centerX = NARROW_MARGIN + colWidth / 2
 
@@ -549,7 +603,7 @@ export function computeNarrowLayout(model: DependencyGraphModel): GraphLayout {
     // width) -- `maxLabelWidth`, not just the lane positions themselves.
     const svgWidth = gutterX + laneStep * laneCount + maxLabelWidth + NARROW_MARGIN
 
-    const centreH = centreHeightFor(Math.max(parentEdges.length, childEdges.length))
+    const centreH = centreHeightFor(Math.max(parentEdges.length, childEdges.length), Boolean(centreSubjectLabel))
 
     // Reserves enough room between the nearest sibling row and the centre
     // node for every staggered entry/exit point (see `NARROW_ENTRY_

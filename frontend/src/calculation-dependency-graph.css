@@ -14,31 +14,20 @@
     overflow-x: auto;
 }
 
-/* `ReactionTransitionStatesSection.tsx`'s caption block, rendered directly
-   above the graph (never inside the SVG -- see `CalculationDependencyGraph
-   .tsx`'s own docstring for why): the reaction equation this TS connects,
-   what the centre node's optimisation is OF, and (only when this TS
-   actually has one) an honest note on what the graph does/doesn't show
-   about the IRC. Each line is `.note`-styled by the caller
-   (`.note`/`.note a`, design-system.css) -- this rule only stacks them,
-   the same flex-column pattern `.dep-graph-sentences` below uses.
-   `margin: 0` on the `<p>`s: `.note` (design-system.css) sets no margin of
-   its own, so each paragraph still carried its plain UA-stylesheet
-   default (`1em` top/bottom) on top of this flex container's own `gap` --
-   review finding: the two stacked, so this block's own lines sat visibly
-   airier than every other `.note` stack on the page. Flex items' margins
-   never collapse against each other the way block-level siblings' do, so
-   only zeroing them here (not just relying on `gap`) fixes it. */
-.dep-graph-context {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-2);
-    margin: var(--s-4) 0 var(--s-2);
+/* `ReactionTransitionStatesSection.tsx`'s own IRC note, rendered directly
+   above the graph, only when this TS entry actually has an IRC slot --
+   the one thing the graph itself genuinely cannot say (which species the
+   IRC connects). Everything else that used to sit in a caption block here
+   (the reaction equation, and what the centre node's optimisation is OF)
+   is gone: the equation restates the page's own `<h1>`, and the subject
+   now lives ON the centre node itself (`CalculationDependencyGraph.tsx`'s
+   `centreSubject`) -- see this section's own docstring. Plain `.note`
+   styling (design-system.css), no wrapper needed for a single line.
+   `margin` here (not left to `.note`'s own, which sets none) separates it
+   from the heading above and the graph below. */
+.dep-graph-irc-note {
+    margin: var(--s-2) 0 var(--s-4);
     max-width: var(--measure-note);
-}
-
-.dep-graph-context p {
-    margin: 0;
 }
 
 .dep-graph-svg {
@@ -100,6 +89,46 @@
 
 .dep-graph-node-link {
     cursor: pointer;
+}
+
+/* The centre node's optional SUBJECT row (`CalculationDependencyGraph.tsx`'s
+   `centreSubject` prop) -- a SEPARATE link from `.dep-graph-node-link`
+   above, since an SVG `<a>` cannot nest inside another and this answers a
+   different question (WHOSE, not WHICH/WHAT KIND) with a different
+   destination. `fill: transparent` gives the link a real rectangular hit
+   target sized to its own row: an SVG `<text>` element alone hit-tests
+   only its own glyph shapes under `pointer-events: visiblePainted` (the
+   default), which would make the subject link hard to click precisely --
+   the same reason the centre node's TYPE pill already draws a real `<rect
+   rx>` behind its own text rather than relying on bare text. */
+.dep-graph-node-subject-link {
+    cursor: pointer;
+}
+
+/* Never `--type-label-strong-transform` (uppercase, `.dep-graph-node-pill-
+   text`'s own step): the subject's own text is a short descriptive phrase
+   ("Transition state"), not a tracked all-caps classification the way the
+   pill's TYPE text is -- keeping it lower-case is what visually tells the
+   two rows apart at a glance, not just their colour. Static accent link
+   treatment (no hover needed to notice it's a link), matching every other
+   linked ref in this graph. */
+.dep-graph-node-subject-text {
+    fill: var(--accent);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: none;
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+}
+
+.dep-graph-node-subject-link:hover .dep-graph-node-subject-text {
+    fill: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.dep-graph-node-subject-link:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
 }
 
 /* Static clickable affordance (review finding: a linked node rendered as

@@ -1,21 +1,22 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
-import type { ReactionEntrySpeciesParticipant, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
+import type { ReactionTransitionStateInFull } from "../api/reactionEntryApi"
 import { ReactionTransitionStatesSection } from "./ReactionTransitionStatesSection"
 
 afterEach(cleanup)
 
 /**
- * Owner complaint (2026-09): "in reaction we see Optimisation but no idea
- * what the optimisation is of? and its not clickable link to the calc?
- * also i think the graph needs the reactants and products". This file
- * exercises the three fixes in `ReactionTransitionStatesSection.tsx`'s own
- * docstring: the centre node becomes a real link (`centreLinked`), a
- * subject caption names what the centre node's optimisation is OF, and an
- * (optional, since `species` is itself a nullable §3A field) reaction
- * equation caption gives the graph its chemistry context -- plus an
- * IRC-conditional note on what the graph does/doesn't show.
+ * Owner complaint, round 1 (2026-09): "in reaction we see Optimisation but
+ * no idea what the optimisation is of? and its not clickable link to the
+ * calc?". Round 2, on an earlier version of this fix that answered "what
+ * is it" with a caption block ABOVE the graph (the equation, plus a
+ * subject sentence): "This does need repeating what reaction since the top
+ * of the page says which reaction" -- the equation caption is gone
+ * entirely, and the subject now lives ON the centre node itself
+ * (`CalculationDependencyGraph.tsx`'s `centreSubject`), not in prose above
+ * it. See `ReactionTransitionStatesSection.tsx`'s own docstring for the
+ * full history.
  *
  * `TS` has an `ts_irc` slot (17 of 34 live TS entries do not -- see
  * `TS_NO_IRC` below for that case, which the honest note must stay silent
@@ -65,13 +66,6 @@ const TS_NO_DEPENDENCIES: ReactionTransitionStateInFull = {
     dependencies: [],
 }
 
-const REACTANTS: ReactionEntrySpeciesParticipant[] = [
-    { species_entry_ref: "spe_water", smiles: "O", formula: "H2O", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" } },
-]
-const PRODUCTS: ReactionEntrySpeciesParticipant[] = [
-    { species_entry_ref: "spe_oh", smiles: "[OH]", formula: "HO", stoichiometry: 1, participant_index: 0, review: { status: "not_reviewed" } },
-]
-
 function renderSection(props: Partial<Parameters<typeof ReactionTransitionStatesSection>[0]> = {}) {
     return render(
         <MemoryRouter>
@@ -88,18 +82,29 @@ describe("ReactionTransitionStatesSection — centre node link", () => {
     it("links the dependency graph's centre node to /calculations/<ts_opt ref> (mutation table item (a))", () => {
         renderSection()
         const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
-        const link = within(centreNode).getByRole("link")
-        expect(link).toHaveAttribute("href", "/calculations/calc_opt1")
+        const calcLink = within(centreNode).getByRole("link", { name: /Optimisation calc_opt1/ })
+        expect(calcLink).toHaveAttribute("href", "/calculations/calc_opt1")
     })
 })
 
-describe("ReactionTransitionStatesSection — subject caption", () => {
-    it("names the optimisation as this TS entry's own, linking to the TS entry (mutation table item (c))", () => {
+describe("ReactionTransitionStatesSection — subject lives on the node, not in a caption", () => {
+    it("names the optimisation's own subject ON the centre node, linking to the TS entry (mutation table item (a))", () => {
         renderSection()
-        const caption = screen.getByTestId("dep-graph-subject-caption")
-        expect(caption).toHaveTextContent("geometry optimisation")
-        const link = within(caption).getByRole("link", { name: "tse_test1" })
-        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
+        const centreNode = screen.getByTestId("dep-node-centre-calc_opt1")
+        const subjectLink = within(centreNode).getByTestId("dep-node-subject-calc_opt1")
+        expect(subjectLink).toHaveTextContent("Transition state")
+        expect(subjectLink).toHaveAttribute("href", "/transition-state-entries/tse_test1")
+        expect(subjectLink).toHaveAccessibleName("Transition state tse_test1")
+    })
+
+    // Round-2 owner complaint: no caption above the graph should repeat
+    // the reaction (the page's own <h1> already states it) or restate the
+    // subject a second time in prose now that it lives on the node.
+    it("renders no equation caption and no separate subject caption above the graph", () => {
+        renderSection()
+        expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
+        expect(screen.queryByTestId("dep-graph-subject-caption")).toBeNull()
+        expect(screen.queryByText(/^Reaction:/)).toBeNull()
     })
 })
 
@@ -116,49 +121,35 @@ describe("ReactionTransitionStatesSection — IRC-conditional honest note", () =
     it("does NOT render the honest note for a TS entry with no ts_irc slot -- no IRC was run, so nothing IRC-shaped should be named", () => {
         renderSection({ transitionStates: [TS_NO_IRC] })
         expect(screen.queryByTestId("dep-graph-context-note")).toBeNull()
-        // The subject caption still renders regardless -- only the
+        // The subject still renders on the node regardless -- only the
         // IRC-specific note is conditional.
-        expect(screen.getByTestId("dep-graph-subject-caption")).toBeInTheDocument()
-    })
-})
-
-describe("ReactionTransitionStatesSection — reaction equation caption", () => {
-    it("renders the equation, with participant links, when reactants/products are provided (mutation table item (d))", () => {
-        renderSection({ reactants: REACTANTS, products: PRODUCTS, reversible: true })
-        const caption = screen.getByTestId("dep-graph-equation-caption")
-        const reactantLink = within(caption).getByRole("link", { name: "H2O" })
-        expect(reactantLink).toHaveAttribute("href", "/species-entries/spe_water")
-        const productLink = within(caption).getByRole("link", { name: "HO" })
-        expect(productLink).toHaveAttribute("href", "/species-entries/spe_oh")
-    })
-
-    it("omits the equation caption entirely (no broken/empty equation) when reactants/products are not provided", () => {
-        renderSection()
-        expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
-        // The subject caption still renders regardless.
-        expect(screen.getByTestId("dep-graph-subject-caption")).toBeInTheDocument()
-    })
-
-    // Review finding: `reactants && products` alone is truthy for `[]`,
-    // so a caller that normalises an absent `species` to empty arrays
-    // (`ReactionEntryPage.tsx` does exactly this) rendered a bare
-    // "Reaction: ⇌" with nothing on either side. This is the direct,
-    // targeted unit test of the gate itself -- see
-    // `ReactionEntryPage.test.tsx` for the end-to-end regression test
-    // through the actual caller, which is what review asked for
-    // specifically because a synthetic `undefined` here cannot prove the
-    // real caller's shape is handled.
-    it("omits the equation caption for EMPTY (not just absent) reactants/products arrays -- never a bare arrow", () => {
-        renderSection({ reactants: [], products: [] })
-        expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
+        expect(screen.getByTestId("dep-node-subject-calc_opt1")).toBeInTheDocument()
     })
 })
 
 describe("ReactionTransitionStatesSection — no dependency edges", () => {
-    it("renders neither the context block nor the graph when the TS entry has no dependencies", () => {
-        renderSection({ transitionStates: [TS_NO_DEPENDENCIES], reactants: REACTANTS, products: PRODUCTS })
-        expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
-        expect(screen.queryByTestId("dep-graph-subject-caption")).toBeNull()
+    it("renders neither the IRC note nor the graph when the TS entry has no dependencies", () => {
+        renderSection({ transitionStates: [TS_NO_DEPENDENCIES] })
+        expect(screen.queryByTestId("dep-graph-context-note")).toBeNull()
+        expect(screen.queryByTestId("dep-node-centre-calc_opt2")).toBeNull()
         expect(screen.getByText("No dependency edges are served for this TS entry's calculations.")).toBeInTheDocument()
+    })
+})
+
+// Owner complaint, round 3 (2026-09): "whats this whole thing about not
+// served by /full?" -- `/full` is internal API vocabulary, meaningless to
+// a scientist-facing reader. The Energy/Review columns that used to print
+// it (`TransitionStateCalculationSlot` never carries either field -- see
+// `backend/app/schemas/reads/scientific_provenance.py:227`) are gone
+// entirely, not replaced with softer wording for the same non-answer.
+describe("ReactionTransitionStatesSection — calculations-by-stage table has no unservable columns", () => {
+    it("renders only Stage / Level of theory / Software-workflow / Record -- no Energy or Review column, no /full jargon anywhere (mutation table item (b))", () => {
+        renderSection()
+        const table = screen.getByRole("table", { name: "Calculations for tse_test1" })
+        const headers = within(table).getAllByRole("columnheader").map((h) => h.textContent)
+        expect(headers).toEqual(["Stage", "Level of theory", "Software / workflow", "Record"])
+        expect(table.textContent).not.toMatch(/\/full/)
+        expect(screen.queryByText(/not served by/)).toBeNull()
+        expect(screen.queryByText(/structurally absent from this view/)).toBeNull()
     })
 })
