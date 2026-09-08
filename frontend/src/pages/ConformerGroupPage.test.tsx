@@ -461,8 +461,14 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByRole("heading", { name: "Observation-scoped evidence" })).toBeVisible()
         expect(screen.getByText("No deposited observations were returned for this conformer basin."))
             .toBeVisible()
-        // No disclosure control offered over an empty section.
-        expect(document.querySelector("details.disclosure")).toBeNull()
+        // No disclosure control offered over an EMPTY observation-scoped
+        // evidence section specifically -- scoped to that section, not the
+        // whole document: the page's own `EvidenceChecklist` coverage card
+        // (a DIFFERENT, always-present disclosure, per item 2) still
+        // renders its own `details.disclosure` regardless of whether this
+        // basin has any observations at all.
+        const observationSection = document.querySelector('section[aria-labelledby="observation-ledger"]') as HTMLElement
+        expect(observationSection.querySelector("details.disclosure")).toBeNull()
     })
 
     // This page renders exactly 2 sections at runtime (observation-scoped

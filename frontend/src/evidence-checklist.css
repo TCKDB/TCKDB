@@ -60,3 +60,12 @@
     margin: var(--s-3) 0 0;
     grid-template-columns: 1fr;
 }
+
+/* The collapsed-summary roll-up (`EvidenceChecklist.tsx`'s own `summary`
+   content, alongside the `.t-label` heading) -- muted, matching the
+   `Disclosure` primitive's own `.disclosure-count` treatment (design-
+   system.css), so a reader's eye lands on the heading first and the
+   present/absent counts read as supporting detail, not a second heading. */
+.coverage-checklist-summary {
+    color: var(--muted);
+}
