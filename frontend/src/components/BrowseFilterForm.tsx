@@ -191,21 +191,30 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
  *
  * Labeled "Reactant structures" / "Product structures" -- restored from an
  * earlier "...on one side" / "...on the other side" pair. That EARLIER
- * rename existed because the live endpoint runs `direction=either`
- * unconditionally: a value typed into the reactant field also matches
- * reactions where it is deposited as a PRODUCT (rows then say "Matched on
- * the reverse direction", `ReactionBrowseRow.tsx`), and "Reactant SMILES"
- * read as asserting a restriction the query never enforces. The owner
- * (a kineticist) asked for the conventional name back regardless -- it is
- * what a chemist scans for, and that is his call to make. The
- * either-direction behavior has not gone away; it now lives in each
- * field's hover/focus explanation (`TextField`'s `hint`, via
- * `InlineExplain`) instead of in the label itself, which is exactly what
- * that explanation is FOR. Each field accepts a COMMA-separated list
- * (`splitSmilesList`, `browseApi.ts`) -- every structure typed into ONE
- * field must sit together on the SAME side (AND, not OR); the hint spells
- * that out too, since `[NH4+]`/`[Na+].[Cl-]`-shaped SMILES rule out any
- * separator that isn't a plain comma.
+ * rename existed because the live endpoint used to run `direction=either`
+ * unconditionally, so a value typed into the reactant field could also
+ * match a reaction where it was deposited as a PRODUCT, and "Reactant
+ * SMILES" read as asserting a restriction the query never enforced. The
+ * owner (a kineticist) asked for the conventional name back regardless --
+ * it is what a chemist scans for, and that is his call to make.
+ *
+ * **Superseded by PR #418 (2026-09), stated here rather than left for a
+ * reader to discover by diffing two PRs against each other:** the backend
+ * now defaults `direction` to `forward` -- these two fields match ONLY the
+ * stored side they are named for unless the reader opts into
+ * "Also match the reverse direction" below, which is what actually makes
+ * "Reactant structures"/"Product structures" an honest pair of names again,
+ * not just a preference. The `DirectionField` control right after the two
+ * fields sends the backend's own `direction` param (`""` when untouched, so
+ * this form's default request is byte-identical to a bare API call --
+ * `BrowseFilters.direction`'s own comment in `browseApi.ts` has the full
+ * reasoning); `ReactionBrowseRow.tsx` still shows "Matched on the reverse
+ * direction" on exactly the rows that genuinely matched that way, whichever
+ * `direction` produced them. Each field still accepts a COMMA-separated
+ * list (`splitSmilesList`, `browseApi.ts`) -- every structure typed into
+ * ONE field must sit together on the SAME side (AND, not OR); the hint
+ * spells that out too, since `[NH4+]`/`[Na+].[Cl-]`-shaped SMILES rule out
+ * any separator that isn't a plain comma.
  */
 function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     const familyVocab = useVocabulary(loadReactionFamilies)
@@ -215,9 +224,10 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
     return <>
         <TextField
             hint={"Comma-separated SMILES (e.g. NN,[H]) — every one of them must sit together on the SAME side of "
-                + "the reaction. Matching runs in either direction, so a value here can also match a reaction "
-                + "where it was deposited as a product instead (rows then note “Matched on the reverse "
-                + "direction”). A SMILES this archive does not hold empties the result."}
+                + "the reaction. Matches the stored reactant side by default; tick “Also match the reverse "
+                + "direction” below to also match reactions where these structures were deposited as products "
+                + "instead (rows then note “Matched on the reverse direction”). A SMILES this archive does not "
+                + "hold empties the result."}
             label="Reactant structures"
             onChange={(value) => onChange({ reactantSmiles: value })}
             placeholder="NN,[H]"
@@ -225,13 +235,15 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
         />
         <TextField
             hint={"Comma-separated SMILES — every one of them must sit together on the side OPPOSITE the field "
-                + "above. Matching runs in either direction, the same as Reactant structures; combine both fields "
-                + "to pin a reaction down to a specific pair of sides."}
+                + "above. Matches the stored product side by default, the same “Also match the reverse "
+                + "direction” option below applies to this field too; combine both fields to pin a reaction down "
+                + "to a specific pair of sides."}
             label="Product structures"
             onChange={(value) => onChange({ productSmiles: value })}
             placeholder="C,[OH]"
             value={filters.productSmiles}
         />
+        <DirectionField filters={filters} onChange={onChange} />
         <div className="browse-filter-field">
             <label htmlFor={fieldId("Family")}>Family</label>
             <select
@@ -251,6 +263,41 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
             {familyVocab.status === "unavailable" && <p className="browse-filter-hint">Could not load family list.</p>}
         </div>
     </>
+}
+
+/**
+ * The `direction` control PR #418 made possible: the backend now defaults
+ * `reactant_smiles`/`product_smiles` matching to `forward` (only the stored
+ * side named), where it used to run `either` unconditionally. This
+ * checkbox is the honest choice the owner asked this branch to give back --
+ * "match the sides as named" (unchecked, the backend's own default) or
+ * "match either orientation" (checked), in a kineticist's own words for a
+ * forward/reverse reaction rather than the wire enum's literal tokens
+ * (`ReactionDirectionQuery.forward`/`.either`).
+ *
+ * Deliberately a two-state checkbox, not a three-option select exposing
+ * `reverse` too: `reverse` alone (stored product side only, matched against
+ * `reactant_smiles`) answers a question this form's two side-named fields
+ * do not ask -- a reader who wants that already has it, by typing the value
+ * into the OTHER field. The only new question PR #418 introduces for this
+ * form is "should a search also reach across the reaction's reverse
+ * direction", which is exactly on/off.
+ *
+ * `checked={filters.direction === "either"}` is intentionally the ONLY
+ * value that reads as checked -- an unrecognized value seeded from a
+ * hand-edited or old URL (`seedFiltersFromUrl`, `browseApi.ts`) shows
+ * unchecked rather than a control claiming a state this checkbox cannot
+ * represent, even though `buildReactionBrowseQuery` still sends that raw
+ * value verbatim until the reader next touches this control.
+ */
+function DirectionField({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    return (
+        <CheckField
+            label="Also match the reverse direction"
+            checked={filters.direction === "either"}
+            onChange={(checked) => onChange({ direction: checked ? "either" : "" })}
+        />
+    )
 }
 
 /**

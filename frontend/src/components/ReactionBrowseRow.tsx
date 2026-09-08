@@ -91,21 +91,30 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * needs to select or click through, so leaving them inside the click
  * target does not cost anything.
  *
- * `matched_direction` (review follow-up, round 2): a reactant/product
- * SMILES search matches EITHER side of a reversible reaction, so the
- * equation as served can list the searched species on the side OPPOSITE
- * the one the reader searched -- e.g. a `productSmiles` search for water
- * can return an entry whose served equation reads "H2O + CH3 <=> CH4 + HO",
- * water on the reactant side, because the archive matched the reverse
- * direction. Rendered as a plain note (never a pill -- this is not a
- * categorical fact about the record the way review/kinetics/TS are, it is
- * a fact about how THIS SEARCH matched) only when the served value is
- * `"reverse"`; `"forward"` (the default, and what every unfiltered row
- * carries) and an absent/null field (an older API) both render nothing,
- * per the same absent-vs-asserted contract `familyText` follows above --
- * "forward" is not itself news, so it says nothing, matching the site's
- * "never assert from absence" rule read the other way: an ordinary match
- * gets no caveat.
+ * `matched_direction` (review follow-up, round 2; behaviour re-checked
+ * after PR #418): a reactant/product SMILES search matches ONLY the stored
+ * side named UNLESS the reader ticks "Also match the reverse direction"
+ * (`DirectionField`, `BrowseFilterForm.tsx`), which sends `direction=either`
+ * and can then surface a reverse match -- e.g. a `productSmiles` search for
+ * water can return an entry whose served equation reads
+ * "H2O + CH3 <=> CH4 + HO", water on the reactant side, because the
+ * archive matched the reverse direction for THIS record. Rendered as a
+ * plain note (never a pill -- this is not a categorical fact about the
+ * record the way review/kinetics/TS are, it is a fact about how THIS
+ * SEARCH matched) only when the served value is `"reverse"`; `"forward"`
+ * (the backend's own default, and what every row carries unless the reader
+ * opted into either-direction matching) and an absent/null field (an older
+ * API) both render nothing, per the same absent-vs-asserted contract
+ * `familyText` follows above -- "forward" is not itself news, so it says
+ * nothing, matching the site's "never assert from absence" rule read the
+ * other way: an ordinary match gets no caveat. This condition itself
+ * (`record.matched_direction === "reverse"`) did not need to change for
+ * PR #418 -- `matched_direction` has always reported what genuinely
+ * matched for THIS record, regardless of which `direction` the request
+ * asked for, so the note was already truthful under either default; only
+ * this comment's description of how often a reader would SEE "reverse"
+ * has changed (default `forward` requests now report it only when a
+ * reader has explicitly widened the search).
  */
 export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) {
     const target = `/reactions/${record.reaction_ref}`

@@ -983,6 +983,60 @@ describe("reaction kind: the two structure fields are independent, and the evide
 })
 
 // ---------------------------------------------------------------------------
+// PR #418's own follow-up: the reaction browse endpoint's `direction`
+// param now defaults to `forward` server-side. This form must offer the
+// honest choice (match the named sides, or match either orientation) and
+// its own untouched default must agree with a bare API call -- i.e. it
+// must NOT send `direction` at all until the reader opts in.
+// ---------------------------------------------------------------------------
+
+describe("reaction kind: the direction control defaults to the backend's own default and opts into either-orientation matching explicitly", () => {
+    it('renders "Also match the reverse direction", unchecked by default', async () => {
+        server.use(...metaHandlers())
+        renderForm("reaction")
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+        expect(screen.getByLabelText("Also match the reverse direction")).not.toBeChecked()
+    })
+
+    it('an untouched form patches nothing -- EMPTY_BROWSE_FILTERS.direction is "", the same "let the backend default" value the checkbox reads as unchecked', () => {
+        expect(EMPTY_BROWSE_FILTERS.direction).toBe("")
+    })
+
+    it("checking the control patches direction to \"either\"; unchecking it patches direction back to \"\"", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="reaction" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-direction={filters.direction} data-testid="debug-direction" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        const checkbox = screen.getByLabelText("Also match the reverse direction")
+        await user.click(checkbox)
+        expect(screen.getByTestId("debug-direction")).toHaveAttribute("data-direction", "either")
+        expect(checkbox).toBeChecked()
+
+        await user.click(checkbox)
+        expect(screen.getByTestId("debug-direction")).toHaveAttribute("data-direction", "")
+        expect(checkbox).not.toBeChecked()
+    })
+
+    it('kind="species"/"vdw"/"transition_state": the direction control does not render -- /species/browse and /transition-states/browse have no such param', async () => {
+        for (const kind of ["species", "vdw", "transition_state"] as const) {
+            server.use(...metaHandlers())
+            renderForm(kind)
+            await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+            expect(screen.queryByLabelText("Also match the reverse direction")).not.toBeInTheDocument()
+            cleanup()
+        }
+    })
+})
+
+// ---------------------------------------------------------------------------
 // Item 1 (renamed "Reactant structures" / "Product structures", item 2):
 // the matching-rules prose that used to sit permanently under these two
 // fields must still be fully present -- comma separation, same-side
@@ -1007,28 +1061,30 @@ describe("Reactant/Product structures: the either-direction matching rule moved 
         expect(document.querySelectorAll(".browse-filter-hint")).toHaveLength(0)
     })
 
-    it("the Reactant structures hint states comma separation, same-side grouping, either-direction matching, and that an unheld SMILES empties the result", async () => {
+    it("the Reactant structures hint states comma separation, same-side grouping, the forward-by-default behaviour, the reverse-direction control, and that an unheld SMILES empties the result", async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
         const note = screen.getByText(/every one of them must sit together on the SAME side/)
         expect(note.textContent).toMatch(/Comma-separated/)
         expect(note.textContent).toMatch(/SAME side/)
-        expect(note.textContent).toMatch(/either direction/)
-        expect(note.textContent).toMatch(/deposited as a product/)
+        expect(note.textContent).toMatch(/stored reactant side by default/)
+        expect(note.textContent).toMatch(/Also match the reverse direction/)
+        expect(note.textContent).toMatch(/deposited as products/)
         expect(note.textContent).toMatch(/reverse direction/)
         expect(note.textContent).toMatch(/does not hold empties the result/)
         expect(note.textContent).not.toContain("--")
     })
 
-    it("the Product structures hint states comma separation, opposite-side grouping, and either-direction matching", async () => {
+    it("the Product structures hint states comma separation, opposite-side grouping, and the forward-by-default behaviour", async () => {
         server.use(...metaHandlers())
         renderForm("reaction")
         await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
         const note = screen.getByText(/every one of them must sit together on the side OPPOSITE/)
         expect(note.textContent).toMatch(/Comma-separated/)
         expect(note.textContent).toMatch(/OPPOSITE/)
-        expect(note.textContent).toMatch(/either direction/)
+        expect(note.textContent).toMatch(/stored product side by default/)
+        expect(note.textContent).toMatch(/Also match the reverse direction/)
         expect(note.textContent).not.toContain("--")
     })
 

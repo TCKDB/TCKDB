@@ -458,6 +458,42 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(query.get("has_kinetics")).toBe("true")
         expect(query.get("offset")).toBe("40")
     })
+
+    // PR #418: the backend's own `direction` param now defaults to
+    // `forward`. This builder must NOT send `direction` for an untouched
+    // filter set -- an omitted param and the backend's own default must
+    // stay in agreement, which is only guaranteed by never sending a
+    // locally-hardcoded "forward" that could drift from the backend's own
+    // default if it ever changes again.
+    describe("buildReactionBrowseQuery: direction (PR #418) is omitted by default and sent verbatim when set", () => {
+        it("an untouched filter set (direction: \"\") sends no direction param -- agrees with a bare API call", () => {
+            const query = buildReactionBrowseQuery(EMPTY_BROWSE_FILTERS, 0, 20)
+            expect(query.has("direction")).toBe(false)
+        })
+
+        it("direction: \"either\" (the control's checked state) is sent verbatim", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, direction: "either" }, 0, 20)
+            expect(query.get("direction")).toBe("either")
+        })
+
+        // MUTATION CHECK (mutation table item a): a build that silently
+        // drops `direction` even when set would leave the form and the
+        // outgoing request disagreeing about which orientation was asked
+        // for -- exactly the defect #418's own PR body warns a frontend
+        // follow-up must not reintroduce.
+        it("a value other than \"either\" (e.g. a URL-seeded \"reverse\") is still passed through, unvalidated", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, direction: "reverse" }, 0, 20)
+            expect(query.get("direction")).toBe("reverse")
+        })
+
+        it("composes with the two structure params on the same query", () => {
+            const query = buildReactionBrowseQuery(
+                { ...EMPTY_BROWSE_FILTERS, reactantSmiles: "[H]", direction: "either" }, 0, 20,
+            )
+            expect(query.getAll("reactant_smiles")).toEqual(["[H]"])
+            expect(query.get("direction")).toBe("either")
+        })
+    })
 })
 
 describe("hasActiveFilters: \"reaction\" only counts the fields the endpoint actually reads", () => {
@@ -495,16 +531,28 @@ describe("hasActiveFilters: \"reaction\" only counts the fields the endpoint act
         }
         expect(hasActiveFilters("reaction", filters)).toBe(false)
     })
+
+    // direction: "either" only WIDENS the result set (adds reverse matches
+    // a forward-only search would have missed) -- same "a widening toggle
+    // is not a narrowing filter" rule as includeRejected/includeDeprecated
+    // above, so it must never be the reason an empty listing is reported
+    // as "filters excluded everything".
+    it("direction: \"either\" alone does NOT count as active", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, direction: "either" }
+        expect(hasActiveFilters("reaction", filters)).toBe(false)
+    })
 })
 
 describe("clearInapplicableFilters: the reaction-only fields and the shared family field", () => {
-    it("leaving \"reaction\" clears reactantSmiles/productSmiles/hasKinetics/hasTransitionState", () => {
+    it("leaving \"reaction\" clears reactantSmiles/productSmiles/direction/hasKinetics/hasTransitionState", () => {
         const filters: BrowseFilters = {
-            ...EMPTY_BROWSE_FILTERS, reactantSmiles: "CCO", productSmiles: "CC=O", hasKinetics: "true", hasTransitionState: "true",
+            ...EMPTY_BROWSE_FILTERS, reactantSmiles: "CCO", productSmiles: "CC=O", direction: "either",
+            hasKinetics: "true", hasTransitionState: "true",
         }
         const cleared = clearInapplicableFilters("species", filters)
         expect(cleared.reactantSmiles).toBe("")
         expect(cleared.productSmiles).toBe("")
+        expect(cleared.direction).toBe("")
         expect(cleared.hasKinetics).toBe("")
         expect(cleared.hasTransitionState).toBe("")
     })
