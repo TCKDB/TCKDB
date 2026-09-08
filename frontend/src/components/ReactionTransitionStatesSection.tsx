@@ -59,17 +59,39 @@ const ENTRY_STATUS_STAGES: { key: string; label: string }[] = [
  *   OUT of the node's own pill/ref text (which is sized to fit today's
  *   `calc_...` refs at every layout width, `dependencyGraphLayout.ts`'s
  *   own box-sizing estimate) rather than risk overflow inside the SVG.
- * - `reactants`/`products`/`reversible` (new, OPTIONAL props -- omitted
- *   entirely renders no equation caption rather than a broken one) let
- *   this section reuse `ReactionEquation` for the reaction's own
- *   participants, each still linking to its species entry. Optional
- *   because `species` is itself a nullable §3A field on `/full`
- *   (`api/reactionEntryApi.ts`'s `reactionFullResponseSchema`) -- an
- *   absent equation is an honest "not served," never fabricated. A short,
- *   separate note makes explicit what the graph itself does and does NOT
+ * - `reactants`/`products`/`reversible` (new, OPTIONAL props, wired from
+ *   `ReactionEntryPage.tsx`'s own already-loaded `species.reactants`/
+ *   `.products`/`entry.reversible`) let this section reuse
+ *   `ReactionEquation` for the reaction's own participants, each still
+ *   linking to its species entry. The caption renders only when BOTH
+ *   sides carry at least one participant (`equationParticipants` below) --
+ *   `species` is a nullable §3A field on `/full`
+ *   (`api/reactionEntryApi.ts`'s `reactionFullResponseSchema`), and
+ *   `ReactionEntryPage.tsx` normalises that absence to `{reactants: [],
+ *   products: []}`, so a plain `reactants && products` truthiness check
+ *   (an earlier version of this gate) rendered a bare "Reaction: ⇌" for
+ *   every reaction `/full` omits `species` for -- caught in review since
+ *   this section's own unit tests passed `undefined` directly, a shape no
+ *   real caller produces, rather than exercising the page's own `[]`
+ *   normalisation. An absent equation is an honest "not served," never a
+ *   broken one.
+ * - A short, separate note on what the graph itself does and does NOT
  *   show: calculations and their data flow, never which species the IRC
- *   terminated at -- `/full` carries no such linkage (no species-level
- *   calculation edge of any kind), so the graph never draws one.
+ *   connects. Rendered only when this TS entry actually has an IRC
+ *   calculation (`ts.calculations.ts_irc`, `hasIrc` below) -- an earlier,
+ *   unconditional version named "the IRC" even for the 17 of 34 live TS
+ *   entries with only opt/freq/sp, asserting an IRC was run when none
+ *   was. The wording itself is deliberately narrower than "the archive
+ *   does not record this": the linkage genuinely CAN be recorded, on
+ *   `TransitionStateValidationEvidence` (`backend/app/db/models/
+ *   transition_state.py`, `reactant_participant_mapping`/
+ *   `product_participant_mapping`, served at `/scientific/transition-
+ *   state-entries/{ref}?include=validation_evidence`) -- it is only this
+ *   VIEW (`/full`, no species-level calculation edge of any kind) that
+ *   never carries it, and only true of today's deposited rows that the
+ *   evidence itself is empty. A claim that the ARCHIVE lacks it would
+ *   have kept asserting itself, wrongly, the day the first such row
+ *   lands.
  */
 export function ReactionTransitionStatesSection({ transitionStates, calculations, reactants, products, reversible }: {
     transitionStates: ReactionTransitionStateInFull[]
@@ -131,6 +153,21 @@ function TransitionStateBlock({ ts, calculationsByRef, reactants, products, reve
             }))
         : []
 
+    // Empty arrays are truthy: `reactants && products` alone renders a
+    // bare "Reaction: ⇌" caption when `/full` omits `species` and
+    // `ReactionEntryPage.tsx` normalises the absence to `[]` (the schema's
+    // own nullable `species` -- see `api/reactionEntryApi.ts`). Gated on
+    // actual content instead -- `null` (not a bare boolean) so the JSX
+    // below gets a type-narrowed, non-empty pair without a `!` assertion.
+    const equationParticipants = reactants?.length && products?.length ? { reactants, products } : null
+    // The IRC note names a SPECIFIC calculation kind ("the IRC") -- render
+    // it only when this TS entry actually has one (`ts.calculations.ts_irc`,
+    // the same slot the "Calculations by stage" table above reads). 17 of
+    // 34 live TS entries have only opt/freq/sp; for those, the unconditional
+    // wording asserted an IRC was run and only its endpoints were
+    // unrecorded, which is a stronger and false claim.
+    const hasIrc = Boolean(ts.calculations.ts_irc)
+
     return (
         <div className="reaction-ts-block">
             <dl className="kv-list">
@@ -189,20 +226,27 @@ function TransitionStateBlock({ ts, calculationsByRef, reactants, products, reve
                 ? (
                     <>
                         <div className="dep-graph-context">
-                            {reactants && products && (
+                            {equationParticipants && (
                                 <p className="note" data-testid="dep-graph-equation-caption">
                                     Reaction:{" "}
-                                    <ReactionEquation reactants={reactants} products={products} reversible={reversible ?? false} />
+                                    <ReactionEquation
+                                        reactants={equationParticipants.reactants}
+                                        products={equationParticipants.products}
+                                        reversible={reversible ?? false}
+                                    />
                                 </p>
                             )}
                             <p className="note" data-testid="dep-graph-subject-caption">
                                 The centre node below is this transition state's own geometry optimisation, from{" "}
                                 <Link to={`/transition-state-entries/${ts.transition_state_entry_ref}`}>{ts.transition_state_entry_ref}</Link>.
                             </p>
-                            <p className="note" data-testid="dep-graph-context-note">
-                                This graph shows calculations and how data flows between them — the archive does not
-                                record which of the reaction's species the IRC calculation terminated at.
-                            </p>
+                            {hasIrc && (
+                                <p className="note" data-testid="dep-graph-context-note">
+                                    This graph shows calculations and how data flows between them — it does not show
+                                    which species the IRC connects. That evidence, when deposited, lives on the
+                                    transition-state entry.
+                                </p>
+                            )}
                         </div>
                         <CalculationDependencyGraph dependencies={dependencies} ownRef={centreRef} ownType="opt" centreLinked />
                     </>

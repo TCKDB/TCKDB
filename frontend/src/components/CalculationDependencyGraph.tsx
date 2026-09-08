@@ -46,11 +46,17 @@ import { dependencyChildSentenceTemplate, dependencyParentSentenceTemplate, spli
  * owner's second complaint ("not clickable link to the calc"). When linked,
  * the pill+ref content wraps in the SAME `.dep-graph-node-link` a
  * parent/child node uses (hover/focus/visible-affordance CSS all apply
- * unchanged) and gets an accessible name built from the SAME
- * `${prefix} ${ref}` shape those nodes use -- `${pill.label} calculation
- * ${node.ref}` (e.g. "Optimisation calculation calc_xxx"), the centre
- * node's own known type standing in for the generic "Parent
- * calculation"/"Child calculation" prefix a satellite node gets.
+ * unchanged) and gets an accessible name of `${pill.label} ${node.ref}`
+ * (e.g. "Optimisation calc_xxx") -- the two visible text runs (the pill's
+ * own text, then the ref line) concatenated in their own on-screen reading
+ * order, nothing inserted between them. Review finding (SC 2.5.3, Label in
+ * Name): an earlier version inserted the word "calculation" between the
+ * two -- `"Optimisation calculation calc_xxx"` -- which is a real word in
+ * the accessible name that never appears on screen, breaking the visible
+ * label into two non-contiguous pieces of the name. A parent/child node
+ * has only ONE visible text run (its ref alone, no pill), so `${prefix}
+ * ${ref}` was already safe there -- the prefix is never visible, and the
+ * ref is a contiguous, unbroken tail of the name.
  *
  * Two full layouts (`computeWideLayout`/`computeNarrowLayout`,
  * `domain/dependencyGraphLayout.ts` -- see that module's own docstring
@@ -256,7 +262,7 @@ function DependencyGraphNode({ node, centreLinked }: { node: LayoutNode; centreL
                     ? (
                         <Link
                             to={`/calculations/${node.ref}`}
-                            aria-label={`${pill.label} calculation ${node.ref}`}
+                            aria-label={`${pill.label} ${node.ref}`}
                             className="dep-graph-node-link"
                         >
                             {content}

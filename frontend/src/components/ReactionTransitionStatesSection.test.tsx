@@ -14,8 +14,12 @@ afterEach(cleanup)
  * docstring: the centre node becomes a real link (`centreLinked`), a
  * subject caption names what the centre node's optimisation is OF, and an
  * (optional, since `species` is itself a nullable §3A field) reaction
- * equation caption gives the graph its chemistry context -- plus the
- * honest note on what the graph does/doesn't show.
+ * equation caption gives the graph its chemistry context -- plus an
+ * IRC-conditional note on what the graph does/doesn't show.
+ *
+ * `TS` has an `ts_irc` slot (17 of 34 live TS entries do not -- see
+ * `TS_NO_IRC` below for that case, which the honest note must stay silent
+ * on rather than naming an IRC that was never run).
  */
 
 const TS: ReactionTransitionStateInFull = {
@@ -28,6 +32,23 @@ const TS: ReactionTransitionStateInFull = {
         has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
         levels_of_theory: {},
     },
+    calculations: {
+        ts_opt: { calculation_ref: "calc_opt1", type: "opt" },
+        ts_freq: { calculation_ref: "calc_freq1", type: "freq" },
+        ts_irc: { calculation_ref: "calc_irc1", type: "irc" },
+    },
+    dependencies: [
+        { parent_calculation_ref: "calc_opt1", child_calculation_ref: "calc_freq1", role: "freq_on" },
+        { parent_calculation_ref: "calc_opt1", child_calculation_ref: "calc_irc1", role: "irc_start" },
+    ],
+}
+
+// Same shape as `TS`, but with no `ts_irc` slot at all -- the opt/freq/sp
+// -only case the honest note must not name an IRC for.
+const TS_NO_IRC: ReactionTransitionStateInFull = {
+    ...TS,
+    transition_state_entry_ref: "tse_test_no_irc",
+    evidence_summary: { ...TS.evidence_summary, has_irc: false },
     calculations: {
         ts_opt: { calculation_ref: "calc_opt1", type: "opt" },
         ts_freq: { calculation_ref: "calc_freq1", type: "freq" },
@@ -80,11 +101,24 @@ describe("ReactionTransitionStatesSection — subject caption", () => {
         const link = within(caption).getByRole("link", { name: "tse_test1" })
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
     })
+})
 
-    it("always renders the honest note on what the graph does/doesn't show", () => {
+describe("ReactionTransitionStatesSection — IRC-conditional honest note", () => {
+    it("renders the honest note, naming the IRC, when this TS entry has an ts_irc slot", () => {
         renderSection()
         const note = screen.getByTestId("dep-graph-context-note")
-        expect(note).toHaveTextContent(/does not record which of the reaction's species the IRC/)
+        expect(note).toHaveTextContent(/does not show which species the IRC connects/)
+        // The narrower claim from review: this VIEW lacks it, not "the
+        // archive" -- the evidence can exist elsewhere (the TS entry).
+        expect(note.textContent).not.toMatch(/archive does not record/)
+    })
+
+    it("does NOT render the honest note for a TS entry with no ts_irc slot -- no IRC was run, so nothing IRC-shaped should be named", () => {
+        renderSection({ transitionStates: [TS_NO_IRC] })
+        expect(screen.queryByTestId("dep-graph-context-note")).toBeNull()
+        // The subject caption still renders regardless -- only the
+        // IRC-specific note is conditional.
+        expect(screen.getByTestId("dep-graph-subject-caption")).toBeInTheDocument()
     })
 })
 
@@ -101,8 +135,22 @@ describe("ReactionTransitionStatesSection — reaction equation caption", () => 
     it("omits the equation caption entirely (no broken/empty equation) when reactants/products are not provided", () => {
         renderSection()
         expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
-        // The subject caption and honest note still render regardless.
+        // The subject caption still renders regardless.
         expect(screen.getByTestId("dep-graph-subject-caption")).toBeInTheDocument()
+    })
+
+    // Review finding: `reactants && products` alone is truthy for `[]`,
+    // so a caller that normalises an absent `species` to empty arrays
+    // (`ReactionEntryPage.tsx` does exactly this) rendered a bare
+    // "Reaction: ⇌" with nothing on either side. This is the direct,
+    // targeted unit test of the gate itself -- see
+    // `ReactionEntryPage.test.tsx` for the end-to-end regression test
+    // through the actual caller, which is what review asked for
+    // specifically because a synthetic `undefined` here cannot prove the
+    // real caller's shape is handled.
+    it("omits the equation caption for EMPTY (not just absent) reactants/products arrays -- never a bare arrow", () => {
+        renderSection({ reactants: [], products: [] })
+        expect(screen.queryByTestId("dep-graph-equation-caption")).toBeNull()
     })
 })
 

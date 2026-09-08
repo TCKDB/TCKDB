@@ -113,13 +113,33 @@ describe("CalculationDependencyGraph — centreLinked opt-in", () => {
         expect(link).toHaveAttribute("href", "/calculations/calc_own_ref")
     })
 
-    it("names the linked centre node with the same '<prefix> <ref>' accessible-name shape a parent/child node uses", () => {
+    it("names the linked centre node from its own visible pill text and ref, concatenated", () => {
         renderGraph([
             { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
         ], "calc_own_ref", "opt", true)
         const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
         const link = within(centreNode).getByRole("link")
-        expect(link).toHaveAccessibleName("Optimisation calculation calc_own_ref")
+        expect(link).toHaveAccessibleName("Optimisation calc_own_ref")
+    })
+
+    // SC 2.5.3 Label in Name: review finding -- an earlier version inserted
+    // the word "calculation" between the pill text and the ref
+    // ("Optimisation calculation calc_own_ref"), a word that never appears
+    // on screen, which breaks the two VISIBLE text runs (pill, then ref)
+    // into two non-contiguous pieces of the accessible name. Neither
+    // visible run is a substring check alone would catch that (both
+    // "Optimisation" and "calc_own_ref" are still individually present) --
+    // this asserts the exact concatenation, the only shape where nothing
+    // sits between them.
+    it("never inserts a word between the visible pill text and the visible ref text in the accessible name", () => {
+        renderGraph([
+            { role: "optimized_from", direction: "child", parent_calculation_ref: "calc_opt_parent", child_calculation_ref: "calc_own_ref" },
+        ], "calc_own_ref", "opt", true)
+        const centreNode = screen.getByTestId("dep-node-centre-calc_own_ref")
+        const link = within(centreNode).getByRole("link")
+        const pillText = within(centreNode).getByText("Optimisation").textContent
+        const refText = within(centreNode).getByText("calc_own_ref").textContent
+        expect(link).toHaveAccessibleName(`${pillText} ${refText}`)
     })
 
     it("still shows no link when centreLinked is explicitly false", () => {

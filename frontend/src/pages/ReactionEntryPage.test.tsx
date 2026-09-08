@@ -458,6 +458,41 @@ describe("ReactionEntryPage -- transition-state dependency graph", () => {
         expect(reactantLink).toHaveAttribute("href", "/species-entries/spe_water")
         const productLink = within(caption as HTMLElement).getByRole("link", { name: "CH4" })
         expect(productLink).toHaveAttribute("href", "/species-entries/spe_ch4")
+        // `reversible` reaches the caption via a THIRD prop the two link
+        // assertions above cannot exercise at all -- review finding:
+        // dropping `reversible={entry.reversible}` from the call site left
+        // the full suite green while the caption printed "→" instead of
+        // "⇌" for every one of this archive's reactions (all 42 live
+        // reaction entries are reversible), a false chemistry claim in an
+        // authoritative-looking position. `mockFull`'s own fixture is
+        // `reversible: true`.
+        expect(caption!.textContent).toContain("⇌")
+        expect(caption!.textContent).not.toContain("→")
+    })
+
+    // Review finding: `species` is a nullable §3A field
+    // (`api/reactionEntryApi.ts`'s `reactionFullResponseSchema`), and
+    // `EntryDetail` normalises its absence to `{reactants: [], products:
+    // []}` -- empty arrays, which are TRUTHY. An earlier version of the
+    // section's own gate (`reactants && products`) rendered a bare
+    // "Reaction:  ⇌ " with nothing on either side for exactly this
+    // response shape; the section's OWN test file could not catch it
+    // because it exercised the gate with `undefined`, a shape no real
+    // caller produces (the page always normalises to `[]`, never passes
+    // `undefined` through). Only a render of the real page against a
+    // payload with `species` genuinely omitted proves the fix.
+    it("renders no equation caption -- and never a bare arrow -- when /full omits species entirely", async () => {
+        const payload = mockFull()
+        delete (payload as Record<string, unknown>).species
+        handleFull(payload)
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const tsSection = container.querySelector('section[aria-labelledby="ts-heading"]')!
+        expect(tsSection.querySelector('[data-testid="dep-graph-equation-caption"]')).toBeNull()
+        expect(tsSection.textContent).not.toMatch(/⇌/)
+        expect(tsSection.textContent).not.toMatch(/Reaction:/)
+        // Everything that does NOT depend on species still renders.
+        expect(tsSection.querySelector('[data-testid="dep-graph-subject-caption"]')).not.toBeNull()
     })
 })
 
