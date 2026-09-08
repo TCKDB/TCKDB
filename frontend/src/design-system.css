@@ -73,7 +73,46 @@
        dt/th/legend that repeats many times per page and would read as
        too loose at kicker's tracking). Review found ONE style doing
        both these jobs plus five others (table header, disclosure
-       summary, pill, button, legend) at once; this is the split. */
+       summary, pill, button, legend) at once; this is the split.
+
+       SCIENTIFIC ERROR CLASS (recurred three times, 2026-09): every
+       `-transform` token below that is `uppercase` -- this one, `--type-
+       label-transform`, and `--type-label-strong-transform` -- gets
+       applied by a LOT of shared selectors (`.t-kicker`/`.t-label`/`.t-
+       label-strong`, `.data-table th`, every page's own axis-title/
+       legend/field-label rule) that a caller reaches for because the
+       TEXT is usually an English word ("Temperature", "Software",
+       "Status"). Uppercasing prose is fine -- case carries no meaning
+       there. But the SAME selectors, on a chart axis title or a table
+       header, sometimes carry a unit or quantity symbol instead --
+       `s⁻¹` (seconds), `log₁₀ k` (a rate coefficient), `Cp (J/mol·K)`
+       (heat capacity) -- and `text-transform: uppercase` cannot tell
+       the two apart. Shipped and re-shipped: `arrhenius-chart.css`'s
+       `s⁻¹` read `S⁻¹` (siemens, a different physical quantity) and
+       its `log₁₀ k` read `LOG₁₀ K` (kelvin, not a rate coefficient);
+       `thermo-cp-chart.css`'s `Cp (J/mol·K)` read `CP (J/MOL·K)`. Each
+       fix was a bespoke `text-transform: none` scoped to one selector
+       in one stylesheet -- correct for that one instance, but nothing
+       stopped the FOURTH stylesheet (a table header, a legend, a new
+       chart) from reintroducing the exact same defect with a selector
+       name none of the previous fixes could have named in advance.
+
+       `.t-preserve-case` (declared at the very end of this file -- see
+       that rule's own comment for why) is the shared escape hatch: apply
+       it directly to any element whose text is a unit, quantity symbol,
+       chemical formula, species/conformer label, or public reference,
+       wherever that element sits inside (or itself carries) one of
+       these uppercasing steps. `text-transform-scientific-guard.test.ts`
+       is this rule's other half -- it walks every stylesheet under
+       `src/`, resolves every rule's `text-transform` (including through
+       a `var(--*-transform)` chain back to this file), and fails the
+       build on any NEW selector that (a) matches a chart/axis/legend/
+       unit naming pattern and resolves to `uppercase`, or (b) resolves
+       to `uppercase` and is not on that test's own reviewed allowlist
+       of selectors confirmed to carry prose only. A new stylesheet
+       cannot ship this defect silently any more -- the guard fails
+       before a human has to notice a corrupted unit on a live page a
+       fourth time. */
     --type-kicker-font: 400 .72rem/1.3 var(--mono);
     --type-kicker-tracking: .10em;
     --type-kicker-transform: uppercase;
@@ -192,6 +231,13 @@
 .t-note { font: var(--type-note-font); letter-spacing: var(--type-note-tracking); text-transform: var(--type-note-transform); }
 .t-ui { font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); text-transform: var(--type-ui-transform); }
 .t-data-large { font: var(--type-data-large-font); letter-spacing: var(--type-data-large-tracking); text-transform: var(--type-data-large-transform); }
+
+/* `.t-preserve-case` is declared at the very END of this file, after
+   `.data-table th`/`.kv-list dt` -- see that rule's own comment, at the
+   bottom of this file, for why (a jsdom CSSOM cascade-order finding, not
+   a real-browser concern). Reached for from here (beside `--type-kicker-
+   transform` above) and from any other type-scale comment in this file
+   that references it. */
 
 /* ---------------------------------------------------------------------
  * Disclosure primitive -- see `components/Disclosure.tsx`. Consolidates
@@ -582,3 +628,49 @@
     outline: 3px solid var(--accent-300);
     outline-offset: 3px;
 }
+
+/* ---------------------------------------------------------------------
+ * `.t-preserve-case` -- see the long comment beside `--type-kicker-
+ * transform` (top of this file) for why this class exists at all: three
+ * shipped-and-reshipped incidents of a unit or quantity symbol ("s⁻¹",
+ * "log₁₀ k", "Cp (J/mol·K)") getting silently upper-cased by a shared
+ * prose-label primitive. Apply it directly to any element (a `<th>`, a
+ * `<dt>`, a chart axis title, a legend, a field label) whose own text is
+ * a unit, quantity symbol, chemical formula, species/conformer label, or
+ * public reference, wherever that element sits inside -- or itself
+ * carries -- one of this file's uppercasing type steps. Never apply it to
+ * a genuinely prose label "just in case": that silently drops the
+ * uppercase house style everywhere else on the page still uses correctly,
+ * for no reason. `text-transform-scientific-guard.test.ts` treats a bare
+ * `text-transform: none` scoped selector (the pre-existing fix in
+ * `arrhenius-chart.css`/`thermo-cp-chart.css`) as equally valid to this
+ * class -- neither is required over the other; this class exists for the
+ * common case where the SAME shared selector (`.data-table th`, `.kv-list
+ * dt`, both above in this file) serves both prose and scientific text
+ * across many different call sites, and no page-scoped CSS selector can
+ * name the one instance that needs the exception.
+ *
+ * DECLARED LAST IN THIS FILE, deliberately, and the selector is the class
+ * DOUBLED (not a typo) -- both belt-and-braces for the same underlying
+ * problem. `.data-table th`/`.kv-list dt` are each a class-plus-element
+ * compound selector, specificity (0,1,1); a bare `.t-preserve-case`
+ * (0,1,0) loses that fight on specificity alone, before `!important` even
+ * enters into it -- doubling the class raises this rule to (0,2,0), which
+ * beats (0,1,1) outright, in any spec-correct cascade. Declaring it last
+ * additionally covers this project's actual TEST environment: MEASURED
+ * directly (a throwaway jsdom probe, three rules, three orderings) that
+ * this repo's jsdom/`vite.config.ts`'s `test.css: true` setup resolves
+ * `getComputedStyle` by LAST DECLARATION WINS, full stop -- ignoring both
+ * specificity and `!important` entirely. A same-specificity `!important`
+ * rule declared earlier in a file LOST to a later, non-important,
+ * LOWER-specificity rule in that probe. `!important` is kept anyway (a
+ * real browser's cascade does honour it, and it costs nothing here), but
+ * "declared after everything it needs to beat, in this same file" is the
+ * only property that is provably reachable by this project's own
+ * `getComputedStyle` regression tests today. If a future edit adds
+ * another rule setting `text-transform` to this file AFTER this one,
+ * move this rule again -- `text-transform-scientific-guard.test.ts`
+ * cannot see jsdom's cascade quirk (it works on CSS source text, not a
+ * rendered DOM), so nothing else catches that silently.
+ * ------------------------------------------------------------------- */
+.t-preserve-case.t-preserve-case { text-transform: none !important; }

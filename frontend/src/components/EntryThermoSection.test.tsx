@@ -7,6 +7,11 @@ import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
 import { PageSectionsProvider } from "./PageSections"
 import { TableOfContents } from "./TableOfContents"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// -- see `ReactionEntryPage.test.tsx`'s identical import for why a
+// component test rendered in isolation needs it directly to exercise
+// `.t-preserve-case`'s real computed style.
+import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -285,6 +290,83 @@ describe("EntryThermoSection", () => {
         const highCells = within(highRow).getAllByRole("cell").slice(1).map((cell) => cell.textContent)
         expect(lowCells).toEqual(["1", "2", "3", "4", "5", "6", "7"])
         expect(highCells).toEqual(["8", "9", "10", "11", "12", "13", "14"])
+    })
+
+    // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+    // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.data-table th`
+    // (design-system.css) uppercases every header via `--type-label-
+    // strong-transform` -- correct for "Range"/"Interval" above but not
+    // for the NASA polynomial's own coefficient names, conventionally
+    // lower-case "a1".."a9" in the literature this format comes from. A
+    // `textContent` assertion (the tests above) cannot see this -- the DOM
+    // text stays correctly-cased; only the COMPUTED style differs -- so
+    // this asserts `getComputedStyle`, per `vite.config.ts`'s `test.css:
+    // true`.
+    it("computed text-transform is none on the NASA-7 and NASA-9 coefficient headers (a1..a9)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
+        const nasa7Table = within(alphaCard).getByRole("table", { name: /NASA-7 coefficients/ })
+        for (let i = 1; i <= 7; i++) {
+            expect(getComputedStyle(within(nasa7Table).getByRole("columnheader", { name: `a${i}` })).textTransform).toBe("none")
+        }
+
+        const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
+        const nasa9Table = within(betaCard).getByRole("table", { name: /NASA-9 intervals/ })
+        for (let i = 1; i <= 9; i++) {
+            expect(getComputedStyle(within(nasa9Table).getByRole("columnheader", { name: `a${i}` })).textTransform).toBe("none")
+        }
+    })
+
+    // SCIENTIFIC ERROR regression guard, same class as the test above:
+    // `.kv-list dt` (design-system.css) uppercases every fact label --
+    // correct for "B (K)" in the Wilhoit block but not for "Cp0 (J/mol·K)"/
+    // "Cp∞ (J/mol·K)"/"H0 (kJ/mol)"/"S0 (J/mol·K)"/"a0 / a1 / a2 / a3", and
+    // `.data-table th` similarly not for the group-additivity table's
+    // "H298 contribution (kJ/mol)"/"S298 contribution (J/mol·K)" headers.
+    it("computed text-transform is none on the Wilhoit block's unit-bearing dt's and the group-additivity table headers", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_gamma")
+        const gammaCard = screen.getByText("thm_gamma").closest("article") as HTMLElement
+        for (const label of ["Cp0 (J/mol·K)", "Cp∞ (J/mol·K)", "a0 / a1 / a2 / a3", "H0 (kJ/mol)", "S0 (J/mol·K)"]) {
+            const dt = within(gammaCard).getByText(label)
+            expect(getComputedStyle(dt).textTransform).toBe("none")
+        }
+        // "B (K)" is ordinary-cased prose either way -- pins that the fix
+        // stayed scoped to the actually-affected dt's, not a page-wide
+        // override of `.kv-list dt`'s own uppercase behaviour.
+        expect(getComputedStyle(within(gammaCard).getByText("B (K)")).textTransform).not.toBe("none")
+
+        const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
+        const gaTable = within(betaCard).getByRole("table", { name: "Group-additivity components" })
+        for (const name of ["H298 contribution (kJ/mol)", "S298 contribution (J/mol·K)"]) {
+            expect(getComputedStyle(within(gaTable).getByRole("columnheader", { name })).textTransform).toBe("none")
+        }
+    })
+
+    // SCIENTIFIC ERROR regression guard, same class as the tests above:
+    // the Evaluated-points table is the SAME "Cp (J/mol·K)" header the
+    // live Cp chart already had (`ThermoCpChart.test.tsx`'s own guard) --
+    // this is the table-header sibling of that exact defect.
+    it("computed text-transform is none on the Evaluated-points table's Cp/H/S/G headers", async () => {
+        const records = mockRecords()
+        const withPoints = {
+            ...records[0],
+            model_kind: "points",
+            points: [{ temperature_k: 298.15, cp_j_mol_k: 33.6, h_kj_mol: 0, s_j_mol_k: 240.1, g_kj_mol: -71.5 }],
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [withPoints, records[1], records[2]] }))))
+        page()
+        await screen.findByText("thm_alpha")
+        const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
+        fireEvent.click(within(alphaCard).getByText(/temperature point/))
+        const table = within(alphaCard).getByRole("table", { name: /Evaluated thermo points/ })
+        expect(getComputedStyle(within(table).getByRole("columnheader", { name: "T (K)" })).textTransform).not.toBe("none")
+        for (const name of ["Cp (J/mol·K)", "H (kJ/mol)", "S (J/mol·K)", "G (kJ/mol)"]) {
+            expect(getComputedStyle(within(table).getByRole("columnheader", { name })).textTransform).toBe("none")
+        }
     })
 
     it("binds NASA-7's T-low and T-high scalars to their own labelled row — never swapped", async () => {

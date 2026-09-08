@@ -4,6 +4,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { EntryTransportSection } from "./EntryTransportSection"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// -- see `ReactionEntryPage.test.tsx`'s identical import for why a
+// component test rendered in isolation needs it directly to exercise
+// `.t-preserve-case`'s real computed style.
+import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -142,6 +147,30 @@ describe("EntryTransportSection", () => {
         // epsilon/k at 1dp already matched its input's own precision.
         expect(ddFor(card, "Sigma (Å)")).toBe("3.800")
         expect(ddFor(card, "Epsilon / k (K)")).toBe("250.1")
+    })
+
+    // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+    // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.kv-list dt`
+    // (design-system.css) uppercases every fact label via `--type-label-
+    // transform`. "Epsilon / k (K)" is the sharpest instance -- lower-case
+    // `k` here is the Boltzmann constant, and upper-casing it collides
+    // visually with the unrelated unit "(K)" right after it: "EPSILON / K
+    // (K)". A `textContent` assertion (the test above) cannot see this --
+    // the DOM text stays correctly-cased; only the COMPUTED style differs
+    // -- so this asserts `getComputedStyle`, per `vite.config.ts`'s
+    // `test.css: true`.
+    it("computed text-transform is none on the Sigma/Epsilon-k/Dipole/Polarizability dt's", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            mockRecord({ transport: { ...mockRecord().transport, sigma_angstrom: 3.8, epsilon_over_k_k: 250.1 } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
+        for (const label of ["Sigma (Å)", "Epsilon / k (K)", "Dipole (Debye)", "Polarizability (Å³)"]) {
+            expect(getComputedStyle(within(card).getByText(label)).textTransform).toBe("none")
+        }
+        // Ordinary prose stays uppercased -- pins that the fix is scoped
+        // to these four dt's, not a page-wide override of `.kv-list dt`.
+        expect(getComputedStyle(within(card).getByText("Rotational relaxation")).textTransform).not.toBe("none")
     })
 
     it("formats dipole at its own 3dp spec, not the 1dp epsilon/k spec", async () => {

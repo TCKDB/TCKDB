@@ -6,6 +6,11 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CalculationDetailPage from "./CalculationDetailPage"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// -- see `ReactionEntryPage.test.tsx`'s identical import for why a page
+// test rendered in isolation needs it directly to exercise `.t-preserve-
+// case`'s real computed style.
+import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -1789,6 +1794,46 @@ describe("CalculationDetailPage", () => {
             const section = screen.getByText("Imaginary-mode projections").closest("details") as HTMLElement
             await within(section).findByText("Imaginary-mode projections loaded.")
             expect(ddFor(section, "Status")).toBe("determined")
+        })
+
+        // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+        // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.data-table
+        // th` (design-system.css) uppercases every header via `--type-
+        // label-strong-transform` -- "cm-1" (wavenumber, lower-case "cm"
+        // for centimetre) would read "CM-1" on both the Vibrational-modes
+        // table and its Imaginary-mode-projections sibling. A `textContent`
+        // assertion cannot see this -- the DOM text stays correctly-cased;
+        // only the COMPUTED style differs -- so this asserts
+        // `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+        it("computed text-transform is none on the Vibrational-modes table's 'Frequency (cm-1)' header", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+            page()
+            await findLoaded("Frequency")
+
+            fireEvent.click(screen.getByText("Vibrational modes"))
+            const vibTable = await screen.findByRole("table", { name: "Vibrational modes" })
+            expect(getComputedStyle(within(vibTable).getByRole("columnheader", { name: "Mode" })).textTransform).not.toBe("none")
+            expect(getComputedStyle(within(vibTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
+        })
+
+        it("computed text-transform is none on the Imaginary-mode-projections table's 'Frequency (cm-1)' header", async () => {
+            const record = mockRecord()
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: {
+                    ...record,
+                    imaginary_mode_projections: {
+                        ...(record as { imaginary_mode_projections: Record<string, unknown> }).imaginary_mode_projections,
+                        modes: [{ mode_index: 1, frequency_cm1: -412.3, declared_disposition: "reaction_coordinate", determination: "reaction_coordinate", agreement: "agrees" }],
+                    },
+                },
+            })))
+            page()
+            await findLoaded("Frequency")
+
+            fireEvent.click(screen.getByText("Imaginary-mode projections"))
+            const section = screen.getByText("Imaginary-mode projections").closest("details") as HTMLElement
+            const projTable = await within(section).findByRole("table", { name: "Imaginary mode projections" })
+            expect(getComputedStyle(within(projTable).getByRole("columnheader", { name: "Frequency (cm-1)" })).textTransform).toBe("none")
         })
     })
 })

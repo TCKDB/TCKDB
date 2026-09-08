@@ -383,3 +383,46 @@ describe("ThermoCpChart — no data anywhere", () => {
             .queryByRole("img")).not.toBeInTheDocument()
     })
 })
+
+// SCIENTIFIC ERROR regression guard (live-site finding, the same defect
+// class `ArrheniusChart.test.tsx` already guards for its own y-axis title):
+// `--type-label-transform` (design-system.css) is `uppercase` -- correct
+// for the X title ("Temperature (K)", ordinary prose) but not for this Y
+// title, whose own text is `` `Cp (${cpUnitLabel(unit)})` `` -- "Cp
+// (J/mol·K)" read "CP (J/MOL·K)" on the live page (confirmed:
+// https://tckdb.homecalvin.com/species-entries/spe_3agdbqfdhkd4yf4seviawkdpla/thermo).
+// A `textContent` assertion cannot see this (the DOM text is still
+// correctly-cased; only the COMPUTED style differs) -- this asserts
+// `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
+describe("ThermoCpChart — the y-axis title (Cp) is never visually uppercased into a different unit", () => {
+    it("computed text-transform is none on .cp-chart-axis-title--y in J/mol·K mode, textContent stays 'Cp (J/mol·K)'", () => {
+        renderChart([recordAlpha()])
+        const yTitle = document.querySelector(".cp-chart-axis-title--y") as HTMLElement
+        expect(yTitle.textContent).toBe("Cp (J/mol·K)")
+        expect(getComputedStyle(yTitle).textTransform).toBe("none")
+    })
+
+    it("computed text-transform is still none after toggling to cal/mol·K, textContent stays 'Cp (cal/mol·K)'", () => {
+        renderChart([recordAlpha()])
+        fireEvent.click(screen.getByRole("button", { name: "cal/mol·K" }))
+        const yTitle = document.querySelector(".cp-chart-axis-title--y") as HTMLElement
+        expect(yTitle.textContent).toBe("Cp (cal/mol·K)")
+        expect(getComputedStyle(yTitle).textTransform).toBe("none")
+    })
+
+    // The X title is ordinary prose where uppercasing carries no
+    // scientific-error risk -- pins that the y-axis fix stays scoped to
+    // `--y`, never a page-wide removal of the shared `.cp-chart-axis-title`
+    // rule's own uppercase behaviour. jsdom does not resolve
+    // `var(--type-label-transform)` to a literal keyword (see
+    // `ArrheniusChart.test.tsx`'s own comment on this), so this asserts the
+    // one thing jsdom CAN distinguish: the computed value is still the
+    // inherited `var(...)` token, not the explicit `"none"` an
+    // over-broadly-scoped fix would produce.
+    it("the X-axis title (ordinary prose) is NOT overridden to text-transform: none", () => {
+        renderChart([recordAlpha()])
+        const xTitle = document.querySelector(".cp-chart-axis-title--x") as HTMLElement
+        expect(xTitle.textContent).toBe("Temperature (K)")
+        expect(getComputedStyle(xTitle).textTransform).not.toBe("none")
+    })
+})

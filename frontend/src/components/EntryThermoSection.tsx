@@ -671,7 +671,19 @@ function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nas
                             <thead>
                                 <tr>
                                     <th scope="col">Range</th>
-                                    {Array.from({ length: 7 }, (_, index) => <th scope="col" key={`a${index + 1}`}>a{index + 1}</th>)}
+                                    {/* SCIENTIFIC ERROR fixed here (sweep finding, same
+                                        class as the Cp chart's y-axis title): `.data-table
+                                        th` (design-system.css) uppercases every header via
+                                        `--type-label-strong-transform` -- correct for
+                                        "Range" above, wrong for the NASA polynomial's own
+                                        coefficient names, which are conventionally
+                                        lower-case "a1".."a7" in the literature this format
+                                        comes from; "A1" reads as a different symbol.
+                                        `.t-preserve-case` (design-system.css) is the
+                                        shared fix. */}
+                                    {Array.from({ length: 7 }, (_, index) => (
+                                        <th className="t-preserve-case" scope="col" key={`a${index + 1}`}>a{index + 1}</th>
+                                    ))}
                                 </tr>
                             </thead>
                             <tbody>
@@ -708,7 +720,12 @@ function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["
                                 <th scope="col">Interval</th>
                                 <th scope="col">T min (K)</th>
                                 <th scope="col">T max (K)</th>
-                                {Array.from({ length: 9 }, (_, index) => <th scope="col" key={`a${index + 1}`}>a{index + 1}</th>)}
+                                {/* Same fix as the NASA-7 table above -- .t-preserve-case
+                                    keeps the coefficient names "a1".."a9" out of
+                                    .data-table th's uppercase transform. */}
+                                {Array.from({ length: 9 }, (_, index) => (
+                                    <th className="t-preserve-case" scope="col" key={`a${index + 1}`}>a{index + 1}</th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody>
@@ -740,14 +757,23 @@ function WilhoitBlock({ wilhoit, thermoRef, idSuffix = "" }: { wilhoit: ThermoRe
     return (
         <section aria-labelledby={`wilhoit-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`wilhoit-${thermoRef}${idSuffix}`}>Wilhoit form</h4>
+            {/* SCIENTIFIC ERROR fixed here (sweep finding, same class as the
+                Cp chart's y-axis title): `.kv-list dt` (design-system.css)
+                uppercases every fact label via `--type-label-transform` --
+                correct for "B (K)" above (already all-caps-safe), wrong for
+                "Cp0 (J/mol·K)"/"Cp∞ (J/mol·K)"/"H0 (kJ/mol)"/"S0 (J/mol·K)"
+                (the exact "Cp" + "mol" defect) and for the Wilhoit
+                coefficient names "a0 / a1 / a2 / a3" (conventionally
+                lower-case, same as the NASA-7/9 tables above).
+                `.t-preserve-case` (design-system.css) is the shared fix. */}
             {wilhoit ? (
                 <dl className="kv-list">
-                    <div><dt>Cp0 (J/mol·K)</dt><dd>{wilhoit.cp0_j_mol_k}</dd></div>
-                    <div><dt>Cp∞ (J/mol·K)</dt><dd>{wilhoit.cp_inf_j_mol_k}</dd></div>
+                    <div><dt className="t-preserve-case">Cp0 (J/mol·K)</dt><dd>{wilhoit.cp0_j_mol_k}</dd></div>
+                    <div><dt className="t-preserve-case">Cp∞ (J/mol·K)</dt><dd>{wilhoit.cp_inf_j_mol_k}</dd></div>
                     <div><dt>B (K)</dt><dd>{wilhoit.b_k}</dd></div>
-                    <div><dt>a0 / a1 / a2 / a3</dt><dd>{wilhoit.a0}, {wilhoit.a1}, {wilhoit.a2}, {wilhoit.a3}</dd></div>
-                    <div><dt>H0 (kJ/mol)</dt><dd>{wilhoit.h0_kj_mol ?? "not recorded"}</dd></div>
-                    <div><dt>S0 (J/mol·K)</dt><dd>{wilhoit.s0_j_mol_k ?? "not recorded"}</dd></div>
+                    <div><dt className="t-preserve-case">a0 / a1 / a2 / a3</dt><dd>{wilhoit.a0}, {wilhoit.a1}, {wilhoit.a2}, {wilhoit.a3}</dd></div>
+                    <div><dt className="t-preserve-case">H0 (kJ/mol)</dt><dd>{wilhoit.h0_kj_mol ?? "not recorded"}</dd></div>
+                    <div><dt className="t-preserve-case">S0 (J/mol·K)</dt><dd>{wilhoit.s0_j_mol_k ?? "not recorded"}</dd></div>
                 </dl>
             ) : <p className="empty-projection">No Wilhoit fit recorded for this record.</p>}
         </section>
@@ -765,10 +791,19 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
                             <thead>
                                 <tr>
                                     <th scope="col">T (K)</th>
-                                    <th scope="col">Cp (J/mol·K)</th>
-                                    <th scope="col">H (kJ/mol)</th>
-                                    <th scope="col">S (J/mol·K)</th>
-                                    <th scope="col">G (kJ/mol)</th>
+                                    {/* SCIENTIFIC ERROR fixed here (sweep finding -- the
+                                        exact "Cp (J/mol·K)" defect `thermo-cp-chart.css`
+                                        already fixes for the Cp chart's own y-axis, live
+                                        here too as a table header): `.data-table th`
+                                        (design-system.css) uppercases every header, and
+                                        "Cp (J/mol·K)" read "CP (J/MOL·K)" -- heat capacity
+                                        at constant pressure is not "CP", and "mol" is not
+                                        "MOL". `.t-preserve-case` (design-system.css) is
+                                        the shared fix. */}
+                                    <th className="t-preserve-case" scope="col">Cp (J/mol·K)</th>
+                                    <th className="t-preserve-case" scope="col">H (kJ/mol)</th>
+                                    <th className="t-preserve-case" scope="col">S (J/mol·K)</th>
+                                    <th className="t-preserve-case" scope="col">G (kJ/mol)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1010,8 +1045,12 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
                                 <th scope="col">Group</th>
                                 <th scope="col">Kind</th>
                                 <th scope="col">Count</th>
-                                <th scope="col">H298 contribution (kJ/mol)</th>
-                                <th scope="col">S298 contribution (J/mol·K)</th>
+                                {/* Same "Cp (J/mol·K)" defect class as the Evaluated-
+                                    points table above -- .t-preserve-case keeps
+                                    "kJ"/"mol" out of .data-table th's uppercase
+                                    transform. */}
+                                <th className="t-preserve-case" scope="col">H298 contribution (kJ/mol)</th>
+                                <th className="t-preserve-case" scope="col">S298 contribution (J/mol·K)</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -190,14 +190,24 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 <div><dt>Model kind</dt><dd>{token(record.model_kind)}</dd></div>
                 <div><dt>Origin</dt><dd>{token(record.scientific_origin)}</dd></div>
                 <div><dt>Review</dt><dd><span className={reviewPillClass(record.review.status)}>{token(record.review.status)}</span></dd></div>
+                {/* SCIENTIFIC ERROR fixed here (sweep finding): `.kv-list dt`
+                    (design-system.css) uppercases every fact label via
+                    `--type-label-transform`. "n" here is the Arrhenius
+                    temperature exponent -- upper-cased to "N" it collides
+                    visually with the unrelated symbol N, the same class of
+                    defect as "Epsilon / k (K)" (EntryTransportSection.tsx)
+                    and "log₁₀ k" (arrhenius-chart.css)'s own y-axis fix.
+                    "A"/"Ea" are the same Arrhenius-parameter family, kept
+                    consistent alongside it. `.t-preserve-case`
+                    (design-system.css) is the shared fix. */}
                 {record.parameters.A != null && (
-                    <div><dt>A</dt><dd><code className="data">{formatArrheniusValue(record.parameters.A)} {unitLabel}</code></dd></div>
+                    <div><dt className="t-preserve-case">A</dt><dd><code className="data">{formatArrheniusValue(record.parameters.A)} {unitLabel}</code></dd></div>
                 )}
                 {record.parameters.n != null && (
-                    <div><dt>n</dt><dd><code className="data">{formatArrheniusValue(record.parameters.n)}</code></dd></div>
+                    <div><dt className="t-preserve-case">n</dt><dd><code className="data">{formatArrheniusValue(record.parameters.n)}</code></dd></div>
                 )}
                 {record.parameters.Ea_kj_mol != null && (
-                    <div><dt>Ea</dt><dd><code className="data">{formatArrheniusValue(record.parameters.Ea_kj_mol)} kJ/mol</code></dd></div>
+                    <div><dt className="t-preserve-case">Ea</dt><dd><code className="data">{formatArrheniusValue(record.parameters.Ea_kj_mol)} kJ/mol</code></dd></div>
                 )}
                 {tRange && <div><dt>Fitted T range</dt><dd><code className="data">{tRange}</code></dd></div>}
                 {uncertaintyText && <div><dt>Uncertainty</dt><dd>{uncertaintyText}</dd></div>}

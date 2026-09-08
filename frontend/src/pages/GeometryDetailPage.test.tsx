@@ -5,6 +5,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 import { ANGSTROM_TO_BOHR } from "../domain/geometryXyz"
+// `design-system.css` is normally reached only via `index.css`'s `@import`
+// -- see `ReactionEntryPage.test.tsx`'s identical import for why a page
+// test rendered in isolation needs it directly to exercise `.t-preserve-
+// case`'s real computed style.
+import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -718,6 +723,33 @@ describe("GeometryDetailPage", () => {
             expect(within(table).getByRole("columnheader", { name: "y (bohr)" })).toBeVisible()
             expect(within(table).getByRole("columnheader", { name: "z (bohr)" })).toBeVisible()
             expect(within(table).queryByRole("columnheader", { name: "x (Å)" })).not.toBeInTheDocument()
+        })
+
+        // SCIENTIFIC ERROR regression guard (sweep finding, same class as
+        // `ArrheniusChart.test.tsx`'s "s⁻¹"/"log₁₀ k" guards): `.data-table
+        // th` (design-system.css) uppercases every header via `--type-
+        // label-strong-transform` -- "bohr" (the display-unit toggle) would
+        // read "BOHR", not the lower-case form the toggle button and the
+        // conversion-factor note both spell it as. A `textContent`
+        // assertion (the test above) cannot see this -- the DOM text stays
+        // correctly-cased; only the COMPUTED style differs -- so this
+        // asserts `getComputedStyle`, per `vite.config.ts`'s `test.css:
+        // true`.
+        it("computed text-transform is none on the x/y/z coordinate headers in both ångström and bohr", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            for (const name of ["x (Å)", "y (Å)", "z (Å)"]) {
+                expect(getComputedStyle(within(table).getByRole("columnheader", { name })).textTransform).toBe("none")
+            }
+
+            fireEvent.click(within(section).getByRole("button", { name: "bohr" }))
+
+            for (const name of ["x (bohr)", "y (bohr)", "z (bohr)"]) {
+                expect(getComputedStyle(within(table).getByRole("columnheader", { name })).textTransform).toBe("none")
+            }
         })
 
         it("renders every ångström decimal place the archive sent, never truncated to a fixed precision", async () => {
