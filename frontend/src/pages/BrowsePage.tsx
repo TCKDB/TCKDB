@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import "../browse.css"
 import {
+    BROWSE_KIND_CONTENT,
     BROWSE_KIND_LABELS,
     BROWSE_KIND_PATHS,
     DEFAULT_BROWSE_KIND,
@@ -10,6 +11,7 @@ import {
     clearInapplicableFilters,
     hasActiveFilters,
     isBrowseKind,
+    seedFiltersFromUrl,
 } from "../api/browseApi"
 import type { BrowseFilters, BrowseKind } from "../api/browseApi"
 import { BrowseFilterForm } from "../components/BrowseFilterForm"
@@ -76,34 +78,36 @@ export default function BrowsePage() {
     }, [legacyKind, location.pathname, location.search])
 
     // Seeded ONCE from the URL on mount (a lazy initializer, not an effect
-    // that keeps re-syncing) -- the one deep-link case this page needs to
-    // serve today is `SpeciesEntryPage`'s "Transition states for reactions
-    // of this species" link, which arrives as a fresh navigation (a
-    // different route, so `BrowsePage` mounts fresh and this runs with the
-    // real query params) carrying `?kind=transition_state&participant_
-    // smiles=...`. Not a general filters<->URL sync for every field --
-    // only `participant_smiles` has an external linker today, so only it
-    // is read back out.
+    // that keeps re-syncing) -- arrives as a fresh navigation (a different
+    // route, so `BrowsePage` mounts fresh and this runs with the real query
+    // params). See `seedFiltersFromUrl`'s own doc comment for which kinds
+    // seed what, and why this stays a hand-listed per-kind step rather than
+    // a general filters<->URL sync.
     const [filters, setFilters] = useState<BrowseFilters>(() => ({
         ...EMPTY_BROWSE_FILTERS,
-        participantSmiles: kind === "transition_state" ? (searchParams.get("participant_smiles") ?? "") : "",
+        ...seedFiltersFromUrl(kind, searchParams),
     }))
     const [offset, setOffset] = useState(0)
 
-    // NAVIGATES between the four kind paths now, rather than rewriting
-    // `?kind=` on the same route -- `BrowsePage` is the exact same
-    // component reference at all four (see `App.tsx`'s doc comment), so
+    // Runs alongside a real `<Link>` navigation now (`BrowseKindSelector`'s
+    // own doc comment), not a programmatic `navigate()` call this function
+    // makes itself -- the click handler only needs to clear whatever filters
+    // do not apply to `nextKind` and reset pagination before the browser's
+    // own navigation lands. `BrowsePage` is the exact same component
+    // reference at all four kind paths (see `App.tsx`'s doc comment), so
     // React Router keeps this component instance across the navigation
     // instead of remounting it: `filters`/`offset` state below survives the
-    // path change untouched, and `clearInapplicableFilters` (called first,
-    // synchronously, before the navigation) still drops whatever no longer
-    // applies to `nextKind` -- exactly the same filter-carrying contract as
-    // before, just driven by a real navigation instead of a query rewrite.
+    // path change untouched, and `clearInapplicableFilters` still drops
+    // whatever no longer applies to `nextKind` -- exactly the same
+    // filter-carrying contract as before. The equality guard is defensive
+    // only -- `BrowseKindSelector` never renders a link to the CURRENT kind
+    // (see its own doc comment), so `nextKind === kind` cannot fire from a
+    // real click today, but a stale/duplicated call must still no-op rather
+    // than clear filters and reset pagination for no navigation at all.
     function selectKind(nextKind: BrowseKind) {
         if (nextKind === kind) return
         setFilters((current) => clearInapplicableFilters(nextKind, current))
         setOffset(0)
-        navigate(BROWSE_KIND_PATHS[nextKind])
     }
 
     function updateFilters(patch: Partial<BrowseFilters>) {
@@ -112,22 +116,35 @@ export default function BrowsePage() {
     }
 
     const state = useBrowse(kind, filters, offset, PAGE_SIZE)
+    const content = BROWSE_KIND_CONTENT[kind]
 
     return (
         <section className="browse-page">
+            {/* Per-kind trail end, not the literal string "Browse" on all
+                four paths -- a breadcrumb is supposed to say where you ARE,
+                and "Browse" said the same thing regardless of which of the
+                four archives `location.pathname` actually named. */}
             <nav aria-label="Breadcrumb" className="record-breadcrumbs">
                 <Link to="/">TCKDB</Link>
                 <span aria-hidden="true">/</span>
-                <span aria-current="page">Browse</span>
+                <span aria-current="page">{content.breadcrumbLabel}</span>
             </nav>
             <PageShell>
+            {/* Each kind's own identity now (`BROWSE_KIND_CONTENT`,
+                `api/browseApi.ts`) -- was the SAME "Browse the archive" /
+                "Archive index" / "Choose what to browse, then narrow it
+                down…" on all four paths, which is the exact complaint the
+                owner raised three times ("Why is the browse reactions with
+                the species/transition/vanderwaals browsing page?"). The
+                heading now names the kind directly, and the intro states
+                what this specific index holds -- including, for species/
+                vdw, the one thing it deliberately does NOT (they hit the
+                same `/species/browse` endpoint under the hood, a distinction
+                no reader can see from the URL alone). */}
             <header className="browse-header">
-                <p className="eyebrow">Archive index</p>
-                <h1>Browse the archive</h1>
-                <p className="browse-intro">
-                    Read what is deposited without needing an identifier first. Choose what to browse, then narrow it
-                    down by composition, review status, or evidence.
-                </p>
+                <p className="eyebrow">{content.eyebrow}</p>
+                <h1>{content.heading}</h1>
+                <p className="browse-intro">{content.intro}</p>
             </header>
 
             <BrowseKindSelector kind={kind} onSelect={selectKind} />

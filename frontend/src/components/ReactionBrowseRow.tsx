@@ -24,15 +24,38 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * forked, per the plan's own instruction), then family, review, and the
  * two availability flags.
  *
- * Link target is `/reaction-entries/:ref`, per the plan's route key
- * (§2: `rxe_…` is the record page; `rxn_…` is the chooser). This row
- * links the ENTRY, not the identity, mirroring `TransitionStateBrowseRow`
- * linking `transition_state_entry_ref` rather than
- * `transition_state_ref`.
+ * Link target is `/reactions/:reaction_ref` (the CHOOSER), not
+ * `/reaction-entries/:reaction_entry_ref` (one deposit) -- owner-reported
+ * inconsistency fix: "when we browse the archive for reactions and select
+ * a reaction it should not go straight to the entry it should go to the
+ * reaction and there the user selects the relevant entry - like how we do
+ * with species". `SpeciesBrowseRow.tsx` already does exactly this
+ * (title -> `/species/:species_ref`, the identity/chooser; each entry ->
+ * its own `/species-entries/:ref` as a SEPARATE, secondary link) -- this
+ * row now mirrors that same identity/entry relationship instead of
+ * skipping straight to the one deposit. `ReactionOverviewPage.tsx`
+ * (`/reactions/:reactionRef`) is that chooser: it lists every entry under
+ * this reaction identity and lets the reader pick, the same job
+ * `SpeciesOverviewPage`-adjacent chooser semantics already serve for
+ * species. A `reaction_ref` handed a `rxe_...` value there redirects by
+ * prefix check, so `record.reaction_ref` (never `record.reaction_entry_ref`)
+ * is always the right target here.
  *
- * Owner-reported defect fixed here: this row used to render
- * `ReactionEquation` with its participant links left ON (one per
- * participant, to `/species-entries/:ref`) and stack an invisible
+ * The one entry this row itself represents is still reachable -- as a
+ * SECOND, explicit link in the footer (`browse-row-entry-link`,
+ * `/reaction-entries/:reaction_entry_ref`), not folded into the title.
+ * This is `SpeciesBrowseRow`'s own solution to reaching an individual
+ * deposit without nesting anchors, carried over: a link to the entry that
+ * is a SIBLING of the title link, never nested inside it. The footer
+ * already had to solve exactly this "must stay clickable/selectable
+ * despite the full-row stretched overlay" problem for the ref text (see
+ * the CSS mechanic below) -- putting the new entry link there costs no
+ * new elevation rule, since `.reaction-browse-row .browse-row-footer`
+ * already paints above the overlay.
+ *
+ * Owner-reported defect fixed previously (kept as-is here): this row used
+ * to render `ReactionEquation` with its participant links left ON (one
+ * per participant, to `/species-entries/:ref`) and stack an invisible
  * row-wide `.browse-row-stretched-link` UNDER it for the reaction itself
  * -- almost every pixel of the equation was a species link, and the
  * reaction link only caught the gaps between glyphs. The premise that
@@ -43,25 +66,30 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * specific participant can already reach it from the reaction entry page
  * this row links to, where `ReactionEquation` still renders them (see
  * `ReactionEntryPage.tsx`/`ReactionOverviewPage.tsx`, both unchanged).
- * So this row now passes `linkParticipants={false}` (the opt-out
+ * So this row still passes `linkParticipants={false}` (the opt-out
  * `ReactionEquation.tsx` added for exactly this caller), turning the
  * equation into plain text, and wraps that plain text in ONE real
- * `<Link>` to the reaction entry -- now safe, since there is no nested
- * anchor left to collide with. This is `TransitionStateBrowseRow`'s own
- * `.browse-row-title::after` mechanic (shared class, shared selector
- * shape, scoped by `.reaction-browse-row` in `browse.css` instead of
- * `.ts-browse-row`): the `<Link>` wraps the visible title content, and an
+ * `<Link>` to the reaction identity -- **still one click target for the
+ * whole card**, per the owner's own follow-up instruction that this stay
+ * true even after the target changes: nested anchors break, and
+ * per-participant links made the row nearly unclickable, so that earlier
+ * fix is preserved unchanged; only WHERE the title link now points has
+ * moved. This is `TransitionStateBrowseRow`'s own `.browse-row-title
+ * ::after` mechanic (shared class, shared selector shape, scoped by
+ * `.reaction-browse-row` in `browse.css` instead of `.ts-browse-row`):
+ * the `<Link>` wraps the visible title content, and an
  * absolutely-positioned empty `::after` pseudo-element stretches it
  * (`inset: 0`) to the row's full box against `.reaction-browse-row`'s own
  * `position: relative` -- a click anywhere in the card lands on that one
- * anchor. The footer (so the ref stays selectable, the same non-goal
- * `TransitionStateBrowseRow`'s own doc comment names) is given its own
- * `position: relative` there so it paints above the overlay per DOM
- * order, the identical mechanic that component's own comment documents
- * in more depth. The pills row (`.browse-row-entries`) is deliberately
- * NOT elevated, matching that component's own choice -- neither review
- * nor the two availability pills carry a value a reader needs to select,
- * so leaving them inside the click target does not cost anything.
+ * anchor. The footer (so the ref AND the new entry link stay reachable,
+ * the same non-goal `TransitionStateBrowseRow`'s own doc comment names)
+ * is given its own `position: relative` there so it paints above the
+ * overlay per DOM order, the identical mechanic that component's own
+ * comment documents in more depth. The pills row (`.browse-row-entries`)
+ * is deliberately NOT elevated, matching that component's own choice --
+ * neither review nor the two availability pills carry a value a reader
+ * needs to select or click through, so leaving them inside the click
+ * target does not cost anything.
  *
  * `matched_direction` (review follow-up, round 2): a reactant/product
  * SMILES search matches EITHER side of a reversible reaction, so the
@@ -80,7 +108,8 @@ function toEquationParticipants(participants: ReactionBrowseRecord["reactants"])
  * gets no caveat.
  */
 export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) {
-    const target = `/reaction-entries/${record.reaction_entry_ref}`
+    const target = `/reactions/${record.reaction_ref}`
+    const entryTarget = `/reaction-entries/${record.reaction_entry_ref}`
     const reviewStatusText = token(record.review.status)
     const familyText = record.family ? token(record.family) : null
     const matchedReverse = record.matched_direction === "reverse"
@@ -148,7 +177,17 @@ export function ReactionBrowseRow({ record }: { record: ReactionBrowseRecord }) 
                 {matchedReverse && (
                     <span className="browse-row-evidence">Matched on the reverse direction</span>
                 )}
-                <code className="browse-ref data">{record.reaction_entry_ref}</code>
+                <code className="browse-ref data">{record.reaction_ref}</code>
+                {/* The one deposit THIS row itself represents -- a second,
+                    SIBLING link (never nested inside the title's own
+                    `<Link>`), reachable even though the title now points at
+                    the reaction identity/chooser instead. Sits inside
+                    `.browse-row-footer`, which is already elevated above
+                    the full-row stretched overlay (see this component's own
+                    doc comment and the CSS rule below) for exactly this
+                    reason -- no new elevation rule needed on top of the one
+                    the ref text already required. */}
+                <Link className="browse-row-entry-link" to={entryTarget}>View this deposit</Link>
             </p>
         </li>
     )

@@ -2,7 +2,7 @@ import { StrictMode } from "react"
 import { delay, http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
@@ -300,7 +300,11 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    ["/species", "Browse the archive", undefined],
+    // Each browse kind now names itself in its own h1 (`BROWSE_KIND_CONTENT`,
+    // `api/browseApi.ts`) -- was the SAME "Browse the archive" on all four
+    // kind paths, the owner's own repeated complaint ("Why is the browse
+    // reactions with the species/transition/vanderwaals browsing page?").
+    ["/species", "Browse species", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     // The h1 states what the record IS ("Conformer basin"), not the
     // producer's own deposited label -- see `ConformerGroupPage.tsx`'s own
@@ -313,13 +317,14 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     // `/reactions` is no longer `RecordPlaceholderPage` -- it is `BrowsePage`
     // with the "reaction" kind fixed by the route (same component as
-    // `/species`, `/vdw-complexes`, `/transition-states`), so it does not
-    // fit this table's generic `heading`/`ref` string-equality check any
-    // more than `/species` does (see `/species`'s own entry above, whose
-    // heading is `BrowsePage`'s own "Browse the archive", not a per-kind
-    // title). It gets its own dedicated test below instead, the same
-    // treatment `/reactions/:reactionRef` already got when THAT stopped
-    // being `RecordPlaceholderPage`.
+    // `/species`, `/vdw-complexes`, `/transition-states`). Its heading IS a
+    // fixed, per-kind string now ("Browse reactions", `BROWSE_KIND_CONTENT`)
+    // -- it does not use this table because rendering it needs its own
+    // `/reactions/browse` mock, which this table's own per-path handler
+    // setup below does not provide (only `/species/*`/`/conformer-*`/
+    // `/calculations/*`/`/geometries/*` get one). It gets its own dedicated
+    // test below instead, the same treatment `/reactions/:reactionRef`
+    // already got when THAT stopped being `RecordPlaceholderPage`.
     // `/reactions/:reactionRef` is a real chooser page now (`ReactionOverviewPage`,
     // not `RecordPlaceholderPage`) -- its own dedicated test below builds a
     // realistic `reactions/search` fixture and asserts the rendered
@@ -466,8 +471,8 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
 // "reaction" kind fixed by the route -- so it gets its own test (per the
 // comment on its removal from `publicRoutes` above), not the generic
 // `heading`/`ref` table.
-describe("browse kind paths: each of the four renders BrowsePage with its own kind selected", () => {
-    it("/reactions renders BrowsePage with 'Reaction' selected and hits /reactions/browse, not /species/browse", async () => {
+describe("browse kind paths: each of the four renders BrowsePage with its own kind, its own heading", () => {
+    it("/reactions renders BrowsePage with the reaction kind's own heading and hits /reactions/browse, not /species/browse", async () => {
         let speciesCalls = 0
         server.use(
             ...emptyVocabHandlers(),
@@ -476,16 +481,17 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         )
         window.history.replaceState({}, "", "/reactions")
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "Browse the archive" })).toBeVisible()
-        expect(screen.getByRole("radio", { name: "Reaction" })).toBeChecked()
+        // Each kind names itself now (`BROWSE_KIND_CONTENT`) -- was the
+        // SAME "Browse the archive" heading on all four kind paths.
+        expect(await screen.findByRole("heading", { name: "Browse reactions" })).toBeVisible()
         expect(window.location.pathname).toBe("/reactions")
         expect(speciesCalls).toBe(0)
     })
 
     it.each([
-        ["/vdw-complexes", "Van der Waals complex"],
-        ["/transition-states", "Transition state"],
-    ])("%s renders BrowsePage with '%s' selected", async (path, radioName) => {
+        ["/vdw-complexes", "Browse van der Waals complexes"],
+        ["/transition-states", "Browse transition states"],
+    ])("%s renders BrowsePage with its own heading, '%s'", async (path, heading) => {
         server.use(
             ...emptyVocabHandlers(),
             http.get("/api/v1/scientific/species/browse", () => HttpResponse.json(emptyBrowseEnvelope())),
@@ -493,8 +499,7 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         )
         window.history.replaceState({}, "", path)
         render(<App />)
-        expect(await screen.findByRole("heading", { name: "Browse the archive" })).toBeVisible()
-        expect(screen.getByRole("radio", { name: radioName })).toBeChecked()
+        expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         expect(window.location.pathname).toBe(path)
     })
 })
@@ -513,7 +518,7 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
         const link = screen.getByRole("link", { name: "Reactions" })
         expect(link).toHaveAttribute("href", "/reactions")
         await user.click(link)
-        expect(await screen.findByRole("radio", { name: "Reaction" })).toBeChecked()
+        expect(await screen.findByRole("heading", { name: "Browse reactions" })).toBeVisible()
         expect(window.location.pathname).toBe("/reactions")
         // The old placeholder rendered an h1 literally reading "Reactions" --
         // confirms this is genuinely `BrowsePage`, not that page surviving
@@ -540,11 +545,18 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
         window.history.replaceState({}, "", path)
         render(<App />)
         await screen.findByText(/have been deposited in this archive yet/)
-        expect(screen.getByRole("link", { name: activeLabel })).toHaveAttribute("aria-current", "page")
+        // Scoped to the TOP nav (`aria-label="Primary navigation"`,
+        // `AppShell.tsx`) -- on `/reactions`, the browse-kind switcher
+        // (`nav[aria-label="Browse a different kind"]`) also renders a
+        // "Species" link (species is one of the OTHER three kinds from
+        // there), so an unscoped `getByRole("link", { name: "Species" })`
+        // would find two and throw.
+        const primaryNav = screen.getByRole("navigation", { name: "Primary navigation" })
+        expect(within(primaryNav).getByRole("link", { name: activeLabel })).toHaveAttribute("aria-current", "page")
         for (const [label, href] of [["Species", "/species"], ["Reactions", "/reactions"], ["Methods", "/methods"]] as const) {
             if (label === activeLabel) continue
-            expect(screen.getByRole("link", { name: label })).not.toHaveAttribute("aria-current")
-            expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href)
+            expect(within(primaryNav).getByRole("link", { name: label })).not.toHaveAttribute("aria-current")
+            expect(within(primaryNav).getByRole("link", { name: label })).toHaveAttribute("href", href)
         }
     })
 
@@ -557,8 +569,13 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
         window.history.replaceState({}, "", path)
         render(<App />)
         await screen.findByText(/have been deposited in this archive yet/)
-        expect(screen.getByRole("link", { name: "Species" })).not.toHaveAttribute("aria-current")
-        expect(screen.getByRole("link", { name: "Reactions" })).not.toHaveAttribute("aria-current")
+        // Scoped to the top nav -- see the aria-current test above for why
+        // an unscoped query is ambiguous (the browse-kind switcher also
+        // renders a "Species" link on these paths, species being one of
+        // the OTHER kinds from vdw/transition_state).
+        const primaryNav = screen.getByRole("navigation", { name: "Primary navigation" })
+        expect(within(primaryNav).getByRole("link", { name: "Species" })).not.toHaveAttribute("aria-current")
+        expect(within(primaryNav).getByRole("link", { name: "Reactions" })).not.toHaveAttribute("aria-current")
     })
 })
 

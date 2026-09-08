@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ReactionBrowseRecord } from "../api/browseApi"
 // Needed for the computed-style assertions below (the stretched-link/
@@ -203,32 +203,61 @@ describe("ReactionBrowseRow: has-kinetics / has-transition-state pills, read fro
     })
 })
 
-// Ref + link target: the row links `/reaction-entries/:reaction_entry_ref`
-// (the ENTRY page, per the plan's route key -- never `/reactions/:ref`,
-// the chooser), with the ref itself visible in the data face and kept
-// OUTSIDE the anchor so a drag-select over it does not start a link drag.
-describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable-ref split", () => {
-    it("renders the ref in a code.data element", () => {
-        renderRow(record({ reaction_entry_ref: "rxe_specific" }))
+// Ref + link target (owner-reported inconsistency, fixed here): the row's
+// TITLE now links `/reactions/:reaction_ref` (the CHOOSER -- "it should not
+// go straight to the entry it should go to the reaction and there the user
+// selects the relevant entry - like how we do with species"), never
+// `/reaction-entries/:reaction_entry_ref` directly. The one deposit this row
+// itself represents is still reachable, as a SECOND, sibling link in the
+// footer (`.browse-row-entry-link`) -- `SpeciesBrowseRow`'s own
+// identity-link/entry-link shape, carried over. The identity ref
+// (`reaction_ref`) sits in the data face, outside any anchor, so a
+// drag-select over it does not start a link drag -- same non-goal as
+// before, just showing the identity ref now instead of the entry ref.
+describe("ReactionBrowseRow: ref, link targets, and the stretched-link/selectable-ref split", () => {
+    it("renders the reaction (identity) ref in a code.data element", () => {
+        renderRow(record({ reaction_ref: "rxn_specific" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const ref = within(row).getByText("rxe_specific")
+        const ref = within(row).getByText("rxn_specific")
         expect(ref.tagName).toBe("CODE")
         expect(ref).toHaveClass("browse-ref")
         expect(ref).toHaveClass("data")
     })
 
-    it("links to /reaction-entries/:ref, not /reactions/:ref", () => {
-        renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_other" }))
-        const links = screen.getAllByRole("link")
-        const rowLink = links.find((el) => el.getAttribute("href") === "/reaction-entries/rxe_specific")
-        expect(rowLink).toBeTruthy()
-        expect(links.some((el) => el.getAttribute("href")?.startsWith("/reactions/"))).toBe(false)
+    // MUTATION CHECK (mutation table item a): pointing the title back at
+    // `/reaction-entries/:ref` is the exact owner-reported defect this test
+    // guards against.
+    it("the title links to /reactions/:reaction_ref (the chooser), never /reaction-entries/:ref directly", () => {
+        renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_specific" }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const title = within(row).getByRole("link", { name: /reacts reversibly with/ })
+        expect(title).toHaveAttribute("href", "/reactions/rxn_specific")
+        expect(title).not.toHaveAttribute("href", "/reaction-entries/rxe_specific")
     })
 
-    it("the ref text does NOT sit inside any anchor -- a drag-select over it cannot start a link drag", () => {
-        renderRow(record({ reaction_entry_ref: "rxe_specific" }))
+    it("a second link still reaches the one deposit this row represents, at /reaction-entries/:reaction_entry_ref", () => {
+        renderRow(record({ reaction_entry_ref: "rxe_specific", reaction_ref: "rxn_other" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const ref = within(row).getByText("rxe_specific")
+        const entryLink = within(row).getByRole("link", { name: "View this deposit" })
+        expect(entryLink).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+    })
+
+    // Mirrors `SpeciesBrowseRow`'s own shape: the entry link is a SIBLING
+    // of the title link, never nested inside it -- so there is no nested
+    // `<a>` in `<a>` hazard even though the title link is also present.
+    it("the entry link is NOT nested inside the title link", () => {
+        renderRow(record())
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const title = within(row).getByRole("link", { name: /reacts reversibly with/ })
+        const entryLink = within(row).getByRole("link", { name: "View this deposit" })
+        expect(title.contains(entryLink)).toBe(false)
+        expect(entryLink.contains(title)).toBe(false)
+    })
+
+    it("the reaction ref text does NOT sit inside any anchor -- a drag-select over it cannot start a link drag", () => {
+        renderRow(record({ reaction_ref: "rxn_specific" }))
+        const row = document.querySelector(".reaction-browse-row") as HTMLElement
+        const ref = within(row).getByText("rxn_specific")
         expect(ref.closest("a")).toBeNull()
     })
 
@@ -246,16 +275,12 @@ describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable
     // reads as a sentence, because the arrow's own nested `aria-label`
     // ("reacts reversibly with"/"reacts to form") is picked up by that
     // computation same as any other descendant text.
-    it("the row's link carries NO aria-label -- its accessible name is computed from its own visible content, not `record.equation`", () => {
-        renderRow(record({ reaction_entry_ref: "rxe_specific", equation: "O + [CH3] <=> C + [OH]" }))
+    it("the title link carries NO aria-label -- its accessible name is computed from its own visible content, not `record.equation`", () => {
+        renderRow(record({ reaction_ref: "rxn_specific", equation: "O + [CH3] <=> C + [OH]" }))
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const link = within(row).getByRole("link")
-        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+        const link = within(row).getByRole("link", { name: /reacts reversibly with/ })
+        expect(link).toHaveAttribute("href", "/reactions/rxn_specific")
         expect(link).not.toHaveAttribute("aria-label")
-        // The computed accessible name includes the arrow's own nested
-        // aria-label text -- proof the name is built from rendered
-        // content, not overridden.
-        expect(within(row).getByRole("link", { name: /reacts reversibly with/ })).toBe(link)
         // MUTATION CHECK: the raw served `equation` string must NOT be
         // (part of) the accessible name -- reintroducing the old
         // `aria-label={record.equation}` override would make this match.
@@ -263,32 +288,35 @@ describe("ReactionBrowseRow: ref, link target, and the stretched-link/selectable
     })
 
     it("behaves identically when `equation` is absent (older API) -- there was never a code path that used it for aria-label", () => {
-        const withoutEquation: ReactionBrowseRecord = record({ reaction_entry_ref: "rxe_specific" })
+        const withoutEquation: ReactionBrowseRecord = record({ reaction_ref: "rxn_specific" })
         delete withoutEquation.equation
         renderRow(withoutEquation)
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const link = within(row).getByRole("link")
-        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_specific")
+        const link = within(row).getByRole("link", { name: /reacts reversibly with/ })
+        expect(link).toHaveAttribute("href", "/reactions/rxn_specific")
         expect(link).not.toHaveAttribute("aria-label")
         expect(link.textContent).toContain("CH3")
     })
 
     // MUTATION CHECK (invariant: "a reaction browse row contains EXACTLY
-    // ONE link"): catches (b) participant links re-enabled -- which would
-    // add four more `<a>`s -- and (d) the row link deleted entirely --
-    // which would drop this to zero. Neither survives this assertion.
-    it("the row contains EXACTLY ONE link, and it is the reaction-entries link", () => {
+    // TWO links -- the reaction title and the one entry it represents"):
+    // catches (b) participant links re-enabled -- which would add four more
+    // `<a>`s -- and the row link (either one) deleted entirely -- which
+    // would drop this below two.
+    it("the row contains EXACTLY TWO links: the reaction title and the entry link", () => {
         renderRow(record())
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
         const links = within(row).getAllByRole("link")
-        expect(links).toHaveLength(1)
-        expect(links[0]).toHaveAttribute("href", "/reaction-entries/rxe_one")
+        expect(links).toHaveLength(2)
+        const hrefs = links.map((el) => el.getAttribute("href"))
+        expect(hrefs).toContain("/reactions/rxn_one")
+        expect(hrefs).toContain("/reaction-entries/rxe_one")
     })
 
-    it("the row's link wraps the equation content -- no nested <a> inside it", () => {
+    it("the title link wraps the equation content -- no nested <a> inside it", () => {
         renderRow(record())
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const link = within(row).getByRole("link")
+        const link = within(row).getByRole("link", { name: /reacts reversibly with/ })
         expect(link.textContent).toContain("CH3")
         expect(link.querySelector("a")).toBeNull()
     })
@@ -312,7 +340,7 @@ describe("ReactionBrowseRow: stretched-link CSS mechanic (computed styles)", () 
     it("the stretched-link overlay (the title link's own ::after) is absolutely positioned -- same mechanic as the TS row's .browse-row-title::after", () => {
         renderRow(record())
         const row = document.querySelector(".reaction-browse-row") as HTMLElement
-        const link = within(row).getByRole("link")
+        const link = within(row).getByRole("link", { name: /reacts reversibly with/ })
         expect(link).toHaveClass("browse-row-title")
         // jsdom does not compute pseudo-element styles, so the overlay
         // rule itself is covered by source-text assertions in

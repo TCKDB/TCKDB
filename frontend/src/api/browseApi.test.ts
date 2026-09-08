@@ -353,6 +353,62 @@ describe("buildReactionBrowseQuery: only the params the live endpoint accepts ar
         expect(both.get("product_smiles")).toBe("CC=O")
     })
 
+    // The multi-structure search (item 3 of the gap brief): the live
+    // endpoint accepts REPEATED `reactant_smiles`/`product_smiles` params,
+    // AND-ed by set containment against one side -- verified live,
+    // `?reactant_smiles=NN` -> 20 reactions, `?reactant_smiles=NN&
+    // reactant_smiles=[H]` -> 0. Comma is the one safe separator (a SMILES
+    // can carry `+` -- `[NH4+]` -- or `.` -- a disconnected-component
+    // SMILES), so the filter's own text value is comma-joined and split
+    // back out here into one `query.append` per token, never a single
+    // comma-joined `query.set`.
+    describe("buildReactionBrowseQuery: comma-separated SMILES become REPEATED params, never one joined param", () => {
+        it("a comma-separated reactantSmiles value produces TWO separate reactant_smiles params, in order", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: "NN,[H]" }, 0, 20)
+            expect(query.getAll("reactant_smiles")).toEqual(["NN", "[H]"])
+        })
+
+        it("the same for productSmiles", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, productSmiles: "C,[OH]" }, 0, 20)
+            expect(query.getAll("product_smiles")).toEqual(["C", "[OH]"])
+        })
+
+        it("a single value with no comma still produces exactly one param -- the pre-existing one-value shape is unaffected", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: "NN" }, 0, 20)
+            expect(query.getAll("reactant_smiles")).toEqual(["NN"])
+        })
+
+        it("surrounding whitespace and a stray trailing comma are trimmed away, never sent as a literal token", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: " NN , [H] ," }, 0, 20)
+            expect(query.getAll("reactant_smiles")).toEqual(["NN", "[H]"])
+        })
+
+        it("a value that is only commas/whitespace sends no reactant_smiles param at all -- the same 'empty means unfiltered' contract as a bare empty string", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: " , , " }, 0, 20)
+            expect(query.has("reactant_smiles")).toBe(false)
+        })
+
+        // MUTATION CHECK (mutation table item d): a comma-joined SINGLE
+        // param (the old, wrong shape a naive `query.set` fix would
+        // produce) must NOT be what is sent -- `getAll` returning a
+        // one-item array whose value still contains a literal comma is
+        // exactly that regression, indistinguishable from "it sent two
+        // repeated params" under a looser `query.get(...).includes(",")`
+        // style check, so this asserts the full array shape instead.
+        it("never sends a single comma-joined value -- always N repeated params for N comma-separated tokens", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: "NN,[H]" }, 0, 20)
+            const all = query.getAll("reactant_smiles")
+            expect(all).toHaveLength(2)
+            expect(all).not.toContain("NN,[H]")
+        })
+
+        it("reactantSmiles and productSmiles compose: both send their own repeated params on the same query", () => {
+            const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, reactantSmiles: "NN,[H]", productSmiles: "C,[OH]" }, 0, 20)
+            expect(query.getAll("reactant_smiles")).toEqual(["NN", "[H]"])
+            expect(query.getAll("product_smiles")).toEqual(["C", "[OH]"])
+        })
+    })
+
     it("has_kinetics and has_transition_state are sent as \"true\" when checked, omitted when \"\"", () => {
         const query = buildReactionBrowseQuery({ ...EMPTY_BROWSE_FILTERS, hasKinetics: "true" }, 0, 20)
         expect(query.get("has_kinetics")).toBe("true")

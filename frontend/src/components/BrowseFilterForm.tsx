@@ -170,8 +170,8 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
 }
 
 /**
- * The "reaction" kind's own findability fields (PR 4b): reactant SMILES,
- * product SMILES, and the family dropdown. `family` reuses the SAME
+ * The "reaction" kind's own findability fields (PR 4b): two structure
+ * fields, and the family dropdown. `family` reuses the SAME
  * `loadReactionFamilies` vocabulary call (and the same
  * count-filtering/`display_name` handling) as
  * `TransitionStateFindabilityFields` above -- both kinds narrow through the
@@ -182,10 +182,21 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
  * out just the family piece would leave two components each importing a
  * fragment of the other for no real reuse win.
  *
- * `reactantSmiles`/`productSmiles` map onto the backend's own
+ * The two structure fields still map onto the backend's own
  * `reactant_smiles`/`product_smiles` params (`buildReactionBrowseQuery`) --
  * unlike the TS kind's single `participant_smiles`, the reaction browse
- * endpoint filters each side independently.
+ * endpoint filters each side independently. Labeled "...on one side" /
+ * "...on the other side", not "Reactant SMILES" / "Product SMILES" (the
+ * labels this replaced): the live endpoint runs `direction=either`
+ * unconditionally, so a value typed into the first field also matches
+ * reactions where it is deposited as a PRODUCT (rows then say "Matched on
+ * the reverse direction", `ReactionBrowseRow.tsx`) -- "Reactant SMILES"
+ * asserted a restriction the query never enforces, which is the labels the
+ * owner flagged as lying. Each field accepts a COMMA-separated list
+ * (`splitSmilesList`, `browseApi.ts`) -- every structure typed into ONE
+ * field must sit together on the SAME side (AND, not OR); the hint spells
+ * that out, since `[NH4+]`/`[Na+].[Cl-]`-shaped SMILES rule out any
+ * separator that isn't a plain comma.
  */
 function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     const familyVocab = useVocabulary(loadReactionFamilies)
@@ -194,15 +205,20 @@ function ReactionFindabilityFields({ filters, onChange }: { filters: BrowseFilte
         : []
     return <>
         <TextField
-            label="Reactant SMILES"
+            hint={"Comma-separated SMILES (e.g. NN,[H]). All of them must sit together on ONE side of the reaction "
+                + "-- matched as reactants, or, in reverse, as products (rows then note “Matched on the reverse "
+                + "direction”). A SMILES this archive does not hold empties the result."}
+            label="Structures on one side"
             onChange={(value) => onChange({ reactantSmiles: value })}
-            placeholder="CCO"
+            placeholder="NN,[H]"
             value={filters.reactantSmiles}
         />
         <TextField
-            label="Product SMILES"
+            hint={"Comma-separated SMILES. All of them must sit together on the side OPPOSITE the field above -- "
+                + "combine both fields to pin a reaction down to a specific pair of sides, in either direction."}
+            label="Structures on the other side"
             onChange={(value) => onChange({ productSmiles: value })}
-            placeholder="CC=O"
+            placeholder="C,[OH]"
             value={filters.productSmiles}
         />
         <div className="browse-filter-field">
