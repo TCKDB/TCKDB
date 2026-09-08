@@ -42,7 +42,7 @@ _CHEB_MATRIX = [
     [0.0230819, -1.84333e-05, -4.53189e-06, 4.75099e-06],
     [0.00686308, 6.35813e-05, 4.01076e-05, 1.86553e-05],
 ]
-_CHEB_BOUNDS = dict(tmin_k=300.0, tmax_k=2000.0, pmin_bar=0.01, pmax_bar=100.0)
+_CHEB_BOUNDS = {"tmin_k": 300.0, "tmax_k": 2000.0, "pmin_bar": 0.01, "pmax_bar": 100.0}
 
 # network_kinetics_ref = nkin_lsoxdf26irod3nqr6tgjp4tlt4, model_kind=plog
 _PLOG_ENTRIES = [
