@@ -4,6 +4,7 @@ import { ThemeToggle } from "./ThemeToggle"
 const links = [
     ["Species", "/species"],
     ["Reactions", "/reactions"],
+    ["Transition states", "/transition-states"],
     ["Methods", "/methods"],
 ] as const
 

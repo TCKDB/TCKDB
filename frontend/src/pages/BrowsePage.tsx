@@ -15,7 +15,6 @@ import {
 } from "../api/browseApi"
 import type { BrowseFilters, BrowseKind } from "../api/browseApi"
 import { BrowseFilterForm } from "../components/BrowseFilterForm"
-import { BrowseKindSelector } from "../components/BrowseKindSelector"
 import { PageShell } from "../components/PageShell"
 import { ReactionBrowseRow } from "../components/ReactionBrowseRow"
 import { SpeciesBrowseRow } from "../components/SpeciesBrowseRow"
@@ -89,26 +88,19 @@ export default function BrowsePage() {
     }))
     const [offset, setOffset] = useState(0)
 
-    // Runs alongside a real `<Link>` navigation now (`BrowseKindSelector`'s
-    // own doc comment), not a programmatic `navigate()` call this function
-    // makes itself -- the click handler only needs to clear whatever filters
-    // do not apply to `nextKind` and reset pagination before the browser's
-    // own navigation lands. `BrowsePage` is the exact same component
-    // reference at all four kind paths (see `App.tsx`'s doc comment), so
-    // React Router keeps this component instance across the navigation
-    // instead of remounting it: `filters`/`offset` state below survives the
-    // path change untouched, and `clearInapplicableFilters` still drops
-    // whatever no longer applies to `nextKind` -- exactly the same
-    // filter-carrying contract as before. The equality guard is defensive
-    // only -- `BrowseKindSelector` never renders a link to the CURRENT kind
-    // (see its own doc comment), so `nextKind === kind` cannot fire from a
-    // real click today, but a stale/duplicated call must still no-op rather
-    // than clear filters and reset pagination for no navigation at all.
-    function selectKind(nextKind: BrowseKind) {
-        if (nextKind === kind) return
-        setFilters((current) => clearInapplicableFilters(nextKind, current))
+    // The kind is fixed by the ROUTE, and `BrowsePage` is the same component
+    // reference at all four kind paths, so React Router keeps this instance
+    // mounted across a kind change instead of remounting it -- filter state
+    // survives the navigation untouched. Without this, a species-only filter
+    // (formula, elements, heavy-atom bounds) would stay in state after moving
+    // to /reactions and be shown in a form that cannot send it. The kind
+    // switcher used to call `clearInapplicableFilters` on click; the switcher
+    // is gone (the owner does not want per-page kind buttons), so the clearing
+    // has to key on the resolved kind itself.
+    useEffect(() => {
+        setFilters((current) => clearInapplicableFilters(kind, current))
         setOffset(0)
-    }
+    }, [kind])
 
     function updateFilters(patch: Partial<BrowseFilters>) {
         setFilters((current) => ({ ...current, ...patch }))
@@ -147,7 +139,6 @@ export default function BrowsePage() {
                 <p className="browse-intro">{content.intro}</p>
             </header>
 
-            <BrowseKindSelector kind={kind} onSelect={selectKind} />
             <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
 
             <BrowseResults filters={filters} kind={kind} offset={offset} setOffset={setOffset} state={state} />
