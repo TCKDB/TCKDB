@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
     ARRHENIUS_SAMPLE_COUNT,
     type ArrheniusSeries,
+    arrheniusLog10AxisTitle,
     arrheniusPanelKey,
     arrheniusPointX,
     arrheniusUnitLabel,
@@ -95,6 +96,42 @@ describe("arrheniusUnitLabel", () => {
         expect(arrheniusUnitLabel("weird_future_unit")).toBe("weird future unit")
         expect(arrheniusUnitLabel(null)).toBe("unrecorded units")
         expect(arrheniusUnitLabel(undefined)).toBe("unrecorded units")
+    })
+})
+
+// Owner's report, round 3: switching the plotted unit moved the curve, the
+// table, and the caption -- but the y-axis title always read the bare
+// "log₁₀ k" it had before this fix, the one thing on the chart that never
+// said what was actually plotted. `arrheniusLog10AxisTitle` is the fix:
+// the axis states the log of a RATIO (`log₁₀ [k / <unit>]`), the
+// dimensionally correct form -- `log₁₀ k (<unit>)` reads as "the log
+// itself carries units", which is not a coherent statement (you cannot
+// take the logarithm of a dimensional quantity).
+describe("arrheniusLog10AxisTitle -- the dimensionally correct ratio form, never `log10 k (unit)`", () => {
+    it("wraps the unit in a ratio, for a bimolecular unit", () => {
+        expect(arrheniusLog10AxisTitle("cm3_mol_s")).toBe("log₁₀ [k / cm³ mol⁻¹ s⁻¹]")
+    })
+
+    it("uses the SAME ratio construction for the unimolecular (s⁻¹) case", () => {
+        expect(arrheniusLog10AxisTitle("per_s")).toBe("log₁₀ [k / s⁻¹]")
+    })
+
+    it("never renders the unit as a bare parenthetical suffix (log10 k (unit)) -- the log cannot itself carry units", () => {
+        const title = arrheniusLog10AxisTitle("cm3_mol_s")
+        expect(title).not.toMatch(/^log₁₀ k \(/)
+        expect(title).toMatch(/^log₁₀ \[k \/ .+\]$/)
+    })
+
+    it("falls through arrheniusUnitLabel for an unrecorded unit, exactly matching that function's own text", () => {
+        expect(arrheniusLog10AxisTitle(null)).toBe(`log₁₀ [k / ${arrheniusUnitLabel(null)}]`)
+    })
+
+    // MUTATION-CATCHING (mutation table item (b)): pins the exact rendered
+    // string, not just a regex shape -- a mutation that reverted to the
+    // parenthetical form (`log₁₀ k (cm³ mol⁻¹ s⁻¹)`) would still match a
+    // looser "contains the unit somewhere" assertion but fails this one.
+    it("pins the exact rendered string for the record this file's other tests hand-compute against", () => {
+        expect(arrheniusLog10AxisTitle("cm3_mol_s")).toBe("log₁₀ [k / cm³ mol⁻¹ s⁻¹]")
     })
 })
 

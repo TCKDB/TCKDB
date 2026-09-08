@@ -323,15 +323,24 @@ describe("ArrheniusChart -- the SVG is pinned to a fixed pixel size (defect (b) 
 })
 
 // Review finding (should-fix #5): only the aria-label was ever pinned to
-// the record's OWN A_units in a test -- the panel heading and the table's
+// the record's OWN A_units in a test -- the y-axis title and the table's
 // own caption/header are the VISIBLE statements of what unit a reader is
 // looking at, and neither was checked against a non-cm3_mol_s fixture. A
 // component that hardcoded "cm³ mol⁻¹ s⁻¹" in either place would have
 // stayed green.
-describe("ArrheniusChart -- the panel heading and table caption/header are pinned to the record's OWN A_units, not hardcoded", () => {
-    it("a per_s record's panel heading, table caption, and table header all read s⁻¹, not cm³ mol⁻¹ s⁻¹", () => {
+//
+// Round 3 (owner's report -- "when i do change units, it does change y
+// axis but it stil shows log10k there on the side"): the y-axis title is
+// now the primary statement of the plotted unit (`log₁₀ [k / <unit>]`),
+// replacing the old separate `.arrhenius-chart-panel-heading` caption
+// (retired -- restating the same unit a second time was the owner's other
+// complaint this round, "display units is confusing... can also be read
+// for x units"). These assertions read the axis title directly rather
+// than the retired heading class.
+describe("ArrheniusChart -- the y-axis title and table caption/header are pinned to the record's OWN A_units, not hardcoded", () => {
+    it("a per_s record's y-axis title, table caption, and table header all read s⁻¹, not cm³ mol⁻¹ s⁻¹", () => {
         render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
-        expect(screen.getByText("s⁻¹", { selector: ".arrhenius-chart-panel-heading" })).toBeInTheDocument()
+        expect(screen.getByText("log₁₀ [k / s⁻¹]", { selector: ".arrhenius-chart-axis-title--y" })).toBeInTheDocument()
 
         const table = document.querySelector(".kinetics-k-table") as HTMLTableElement
         expect(table.querySelector("caption")?.textContent).toMatch(/, in s⁻¹$/)
@@ -339,48 +348,59 @@ describe("ArrheniusChart -- the panel heading and table caption/header are pinne
         expect(table.querySelector("caption")?.textContent).not.toMatch(/cm³/)
     })
 
-    it("a cm3_mol_s record's panel heading, table caption, and table header all read cm³ mol⁻¹ s⁻¹, not s⁻¹", () => {
+    it("a cm3_mol_s record's y-axis title, table caption, and table header all read cm³ mol⁻¹ s⁻¹, not s⁻¹", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
-        expect(screen.getByText("cm³ mol⁻¹ s⁻¹", { selector: ".arrhenius-chart-panel-heading" })).toBeInTheDocument()
+        expect(screen.getByText("log₁₀ [k / cm³ mol⁻¹ s⁻¹]", { selector: ".arrhenius-chart-axis-title--y" })).toBeInTheDocument()
 
         const table = document.querySelector(".kinetics-k-table") as HTMLTableElement
         expect(table.querySelector("caption")?.textContent).toMatch(/, in cm³ mol⁻¹ s⁻¹$/)
         expect(table.querySelector("thead th:nth-child(2)")?.textContent).toBe("k (cm³ mol⁻¹ s⁻¹)")
     })
-})
 
-// SCIENTIFIC ERROR regression guard (should-fix #6): `--type-label-transform`
-// (design-system.css) is `uppercase`, which every OTHER caller of that
-// token wants (an English prose label) -- but this heading's text is a
-// UNIT STRING, and upper-casing "s⁻¹" renders "S⁻¹", siemens per second,
-// a genuinely different physical quantity. A `textContent` assertion
-// cannot see this (the DOM text is still lowercase; only the COMPUTED
-// style differs) -- PR 2 shipped exactly this class of rendering-blind bug
-// once already (`ReactionEntryPage.test.tsx`'s own "k(T) table header is
-// NOT uppercased" test and comment), so this asserts `getComputedStyle`,
-// per this project's `vite.config.ts` `test.css: true`.
-describe("ArrheniusChart -- the panel heading is never visually uppercased (a unit string, not a prose label)", () => {
-    it("computed text-transform is none on .arrhenius-chart-panel-heading, for a per_s record", () => {
-        render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
-        const heading = document.querySelector(".arrhenius-chart-panel-heading") as HTMLElement
-        expect(heading.textContent).toBe("s⁻¹")
-        expect(getComputedStyle(heading).textTransform).toBe("none")
+    // The old standalone unit caption above the legend is gone -- once the
+    // axis itself names the unit, that heading stated the same fact twice
+    // (owner: "this page stating the same thing twice").
+    it("renders no separate .arrhenius-chart-panel-heading caption any more", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        expect(document.querySelector(".arrhenius-chart-panel-heading")).toBeNull()
+    })
+
+    // MUTATION TARGET (c) -- "let the table caption and the axis title
+    // disagree": the two surfaces are driven from independent code paths
+    // (`ArrheniusPanelChart`'s own `displayUnits` for the axis;
+    // `displayUnitsByRef` for the table), so nothing in the TYPE SYSTEM
+    // stops a future edit from wiring one to the panel's default unit and
+    // the other to the live selection. This test switches the unit and
+    // then reads BOTH surfaces together, so a regression that updates only
+    // one of them fails here even if each surface's own single-unit test
+    // above still happens to pass on the default selection.
+    it("switching the panel's unit keeps the axis title and the table caption reading the SAME unit", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        fireEvent.change(screen.getByRole("combobox", { name: /Y-axis/ }), { target: { value: "m3_mol_s" } })
+
+        const yTitle = document.querySelector(".arrhenius-chart-axis-title--y") as HTMLElement
+        expect(yTitle.textContent).toBe("log₁₀ [k / m³ mol⁻¹ s⁻¹]")
+
+        const caption = document.querySelector(".kinetics-k-table caption")
+        expect(caption?.textContent).toMatch(/, in m³ mol⁻¹ s⁻¹$/)
+        expect(caption?.textContent).not.toMatch(/cm³/)
     })
 })
 
-// SCIENTIFIC ERROR regression guard (post-merge review finding, the SAME
-// defect class as the panel-heading test above): the y-axis title's own
-// text is literally "log₁₀ k" -- the shared `.arrhenius-chart-axis-title`
-// rule inherits `--type-label-transform` (`uppercase`), which renders it
-// "LOG₁₀ K", indistinguishable from kelvin on a plot whose x-axis reads
-// "TEMPERATURE (K)". A `textContent` assertion cannot see this (the DOM
-// text is still lowercase "log₁₀ k"; only the COMPUTED style differs) --
-// this asserts `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.
-describe("ArrheniusChart -- the y-axis title (log10 k) is never visually uppercased into kelvin", () => {
-    it("computed text-transform is none on .arrhenius-chart-axis-title--y, textContent stays lowercase log10 k", () => {
+// SCIENTIFIC ERROR regression guard (post-merge review finding): the
+// y-axis title's own text carries a rate-coefficient unit (e.g. "log₁₀
+// [k / s⁻¹]") -- the shared `.arrhenius-chart-axis-title` rule inherits
+// `--type-label-transform` (`uppercase`), which would render it "LOG₁₀ [K
+// / S⁻¹]", both "K" (kelvin, not the rate coefficient) and "S⁻¹" (siemens,
+// not seconds⁻¹) reading as the wrong physical quantity on a plot whose
+// x-axis reads "TEMPERATURE (K)". A `textContent` assertion cannot see
+// this (the DOM text is still lowercase); this asserts `getComputedStyle`,
+// per `vite.config.ts`'s `test.css: true`.
+describe("ArrheniusChart -- the y-axis title (log10 k / unit) is never visually uppercased into kelvin/siemens", () => {
+    it("computed text-transform is none on .arrhenius-chart-axis-title--y, textContent stays lowercase log10 k / unit", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
         const yTitle = document.querySelector(".arrhenius-chart-axis-title--y") as HTMLElement
-        expect(yTitle.textContent).toBe("log₁₀ k")
+        expect(yTitle.textContent).toBe("log₁₀ [k / cm³ mol⁻¹ s⁻¹]")
         expect(getComputedStyle(yTitle).textTransform).toBe("none")
     })
 
@@ -491,6 +511,27 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
         expect(select.getAttribute("aria-describedby")).toBe(note.id)
     })
 
+    // MUTATION TARGET (d) -- "hide the y control when there is no
+    // alternative": item (d) in the mutation table checks the control's
+    // presence; this checks it looks DELIBERATE rather than broken --
+    // owner's round-3 report on visual polish. The disabled chip carries
+    // its own modifier class (a quieter fill/border, never a dashed or
+    // faded-out look) while staying the same shape/position an enabled
+    // control has.
+    it("a per_s panel's disabled Y-axis control carries the deliberate-disabled modifier class, not the enabled chip's own styling", () => {
+        render(<ArrheniusChart kinetics={[unimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Y-axis/ })
+        const chip = select.closest(".arrhenius-chart-control") as HTMLElement
+        expect(chip.className).toContain("arrhenius-chart-control--disabled")
+    })
+
+    it("a bimolecular panel's enabled Y-axis control does NOT carry the disabled modifier class", () => {
+        render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
+        const select = screen.getByRole("combobox", { name: /Y-axis/ })
+        const chip = select.closest(".arrhenius-chart-control") as HTMLElement
+        expect(chip.className).not.toContain("arrhenius-chart-control--disabled")
+    })
+
     it("a bimolecular panel renders an ENABLED selector listing all three order-2 units, base unit first, defaulted to the record's own deposited unit", () => {
         render(<ArrheniusChart kinetics={[bimolecularRecord()]} />)
         const select = screen.getByRole("combobox", { name: /Y-axis \(bimolecular\)/ }) as HTMLSelectElement
@@ -518,7 +559,7 @@ describe("ArrheniusChart -- the per-panel unit selector", () => {
 
         const svg = screen.getByRole("img", { name: /Arrhenius plot/ })
         expect(svg.getAttribute("aria-label")).toMatch(/m³ mol⁻¹ s⁻¹/)
-        expect(screen.getByText("m³ mol⁻¹ s⁻¹", { selector: ".arrhenius-chart-panel-heading" })).toBeInTheDocument()
+        expect(screen.getByText("log₁₀ [k / m³ mol⁻¹ s⁻¹]", { selector: ".arrhenius-chart-axis-title--y" })).toBeInTheDocument()
 
         const yTicks = readTicks(svg, "arrhenius-chart-tick-label--y", "y")
         const yFromTicks = deriveLinearMapping(yTicks)

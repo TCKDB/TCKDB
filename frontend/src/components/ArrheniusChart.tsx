@@ -7,6 +7,7 @@ import {
     ARRHENIUS_CHART_WIDTH,
     type ArrheniusPanel as ArrheniusPanelData,
     type ArrheniusXAxisMode,
+    arrheniusLog10AxisTitle,
     arrheniusPanelKey,
     arrheniusPointX,
     arrheniusUnitLabel,
@@ -107,6 +108,27 @@ import { Disclosure } from "./Disclosure"
 // interactive element -- unlike the disabled select itself, which native
 // HTML excludes from the tab order entirely -- so a sighted keyboard-only
 // user can still reach it, not just a mouse or a screen reader).
+//
+// STYLING (round 3, owner: "the axis thing is still fucked... I would
+// prefer something more visually appealing for this graphing change" /
+// "I do not like the grey style"). Both controls used to be a bare native
+// `<select>` with no styling at all beyond its font -- literally the
+// browser default, sitting directly on the chart. `.arrhenius-chart-
+// control` (arrhenius-chart.css) now wraps label+select in the SAME
+// rounded-chip treatment this chart's own legend already uses
+// (`.arrhenius-chart-legend-item`, right above it in the DOM) -- a
+// deliberate echo, not a coincidence: the controls should read as another
+// piece of this chart's own visual language, not a form control dropped
+// on top of it. The `<select>` itself keeps native semantics (no custom
+// dropdown widget -- see this component's own accessibility notes above)
+// and its own OS-drawn arrow; only its border/background are stripped so
+// the surrounding chip reads as the control's boundary. A disabled Y-axis
+// control (no alternative unit) gets `.arrhenius-chart-control--disabled`
+// -- a quieter fill and hairline, not a dashed/greyed-out look that would
+// read as broken -- and keeps the exact same shape and position an
+// enabled control has, so "there is a Y control here, it simply has
+// nothing to switch to" reads at a glance, per the standing "never
+// silently omit the y control" rule above.
 // ---------------------------------------------------------------------------
 
 export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[] }) {
@@ -400,7 +422,10 @@ function ArrheniusYAxisSelect({ panel, selectedUnits, onSelectUnits }: {
 
     return (
         <span className="arrhenius-chart-y-control">
-            <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
+            <label
+                className={`arrhenius-chart-control arrhenius-chart-panel-unit-control${hasUnitChoice ? "" : " arrhenius-chart-control--disabled"}`}
+                htmlFor={selectId}
+            >
                 <span className="arrhenius-chart-control-label">Y-axis</span>
                 <select
                     id={selectId}
@@ -486,13 +511,28 @@ function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits, o
                     <ArrheniusYAxisSelect panel={panel} selectedUnits={selectedUnits} onSelectUnits={onSelectUnits} />
                 </ArrheniusControlsRow>
             )}
-            <p className="arrhenius-chart-panel-heading">{unitLabel}</p>
             <ArrheniusLegend
                 panel={panel}
                 displaySeriesDepositedUnits={(ref) => panel.series.find((series) => series.kinetics_ref === ref)?.depositedUnits ?? null}
             />
             <div className="arrhenius-chart-panel">
-                <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">log₁₀ k</p>
+                {/* Owner's report (round 3): switching the unit moved the
+                    curve, the table, and the caption, but the y-axis title
+                    stayed the bare "log₁₀ k" it always had -- the one thing
+                    on the chart that never said what was actually plotted.
+                    `arrheniusLog10AxisTitle` renders the dimensionally
+                    correct ratio form (`log₁₀ [k / <unit>]`, never `log₁₀ k
+                    (<unit>)` -- a log cannot itself carry units) and READS
+                    `displayUnits`, the same selection state the k(T) table
+                    below reads via `displayUnitsByRef`, so the two can never
+                    disagree about which unit is shown. This paragraph used
+                    to sit beside a separate `.arrhenius-chart-panel-heading`
+                    stating the unit a second time; once the axis itself
+                    names the unit, that heading said the same thing twice
+                    on a page whose owner had already objected to exactly
+                    that pattern once this round -- removed, not merely
+                    left unstyled. */}
+                <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(displayUnits ?? null)}</p>
                 <div className="arrhenius-chart-scroll">
                     <svg
                         width={ARRHENIUS_CHART_WIDTH}
