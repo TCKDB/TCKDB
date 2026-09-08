@@ -98,11 +98,17 @@
     gap: .9rem 1.1rem;
 }
 
+/* `position: relative` gives `InlineExplain.tsx`'s absolutely-positioned
+   `.inline-explain-note` box (`inline-explain.css`) a near ancestor to
+   anchor against -- without it the box would position against the whole
+   `.browse-filter-grid`, or further out, instead of sitting right under
+   ITS OWN field. */
 .browse-filter-field {
     display: flex;
     flex-direction: column;
     gap: .3rem;
     min-width: 0;
+    position: relative;
 }
 
 .browse-filter-field label {
@@ -110,6 +116,35 @@
     font: var(--type-label-font);
     letter-spacing: var(--type-label-tracking);
     text-transform: var(--type-label-transform);
+}
+
+/* The on-demand-explanation trigger (`TextField`'s `hint` path, item 1 of
+   this fix -- was a permanently-rendered paragraph under the field,
+   occupying more vertical space than the controls themselves). A dotted
+   underline plus `cursor: help` is the ONLY visual difference from a plain
+   field label: legible as "there's more here" without competing with the
+   value the reader actually typed, and `tabIndex` makes the label itself a
+   real keyboard stop so focus (not just mouse hover) reaches it -- see
+   `InlineExplain.tsx`'s own doc comment for why the field's `<input>` ALSO
+   drives the same box open on its own focus, so a keyboard user reaches the
+   explanation via the field's normal tab stop too, not only this one. */
+.browse-filter-field-label--explain {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--muted);
+    text-underline-offset: .2em;
+}
+
+.browse-filter-field-label--explain:hover,
+.browse-filter-field-label--explain:focus-visible {
+    color: var(--accent-700);
+    text-decoration-color: var(--accent-300);
+}
+
+.browse-filter-field-label--explain:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 2px;
+    border-radius: .15rem;
 }
 
 /* A typed value (charge, formula, SMILES...) reads at the `--type-value`

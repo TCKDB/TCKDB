@@ -1178,7 +1178,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
             reactionFamilyVocabHandler(),
         )
         renderAt("/reactions?reactant_smiles=NN")
-        expect(await screen.findByLabelText("Structures on one side")).toHaveValue("NN")
+        expect(await screen.findByLabelText("Reactant structures")).toHaveValue("NN")
         await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN"]))
         // The rendered count reflects the FILTERED corpus (1 of 2), not the
         // full unfiltered archive.
@@ -1204,7 +1204,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
             reactionFamilyVocabHandler(),
         )
         renderAt("/reactions?reactant_smiles=NN&reactant_smiles=%5BH%5D")
-        expect(await screen.findByLabelText("Structures on one side")).toHaveValue("NN,[H]")
+        expect(await screen.findByLabelText("Reactant structures")).toHaveValue("NN,[H]")
         await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN", "[H]"]))
         expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
     })
@@ -1223,7 +1223,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
             reactionFamilyVocabHandler(),
         )
         renderAt("/reactions?product_smiles=C")
-        expect(await screen.findByLabelText("Structures on the other side")).toHaveValue("C")
+        expect(await screen.findByLabelText("Product structures")).toHaveValue("C")
         expect(await screen.findByText("1 record · showing 1–1")).toBeVisible()
     })
 
@@ -1315,24 +1315,24 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
 
-        await user.type(screen.getByLabelText("Structures on one side"), "CCO")
+        await user.type(screen.getByLabelText("Reactant structures"), "CCO")
         await waitFor(() => expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO"))
         expect(capturedUrl?.searchParams.has("product_smiles")).toBe(false)
 
-        await user.type(screen.getByLabelText("Structures on the other side"), "CC=O")
+        await user.type(screen.getByLabelText("Product structures"), "CC=O")
         await waitFor(() => expect(capturedUrl?.searchParams.get("product_smiles")).toBe("CC=O"))
         expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("CCO") // unchanged by the product field
     })
 
     // Item 3's multi-structure search, end to end through the real page:
-    // typing a COMMA-separated value into "Structures on one side" must
+    // typing a COMMA-separated value into "Reactant structures" must
     // reach the wire as TWO repeated `reactant_smiles` params, verified
     // live -- `?reactant_smiles=NN` -> 20 reactions, `?reactant_smiles=NN&
     // reactant_smiles=[H]` -> 0. `fireEvent.change` (not `user.type`) sets
     // the field's value directly, since `[` and `]` are userEvent's own
     // special-character delimiters for `.type()` and NN/[H] genuinely need
     // literal brackets.
-    it("typing two comma-separated SMILES into 'Structures on one side' sends TWO repeated reactant_smiles params, and the result count changes", async () => {
+    it("typing two comma-separated SMILES into 'Reactant structures' sends TWO repeated reactant_smiles params, and the result count changes", async () => {
         let capturedUrl: URL | undefined
         server.use(
             ...handlers(),
@@ -1354,7 +1354,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
 
-        const field = screen.getByLabelText("Structures on one side")
+        const field = screen.getByLabelText("Reactant structures")
         fireEvent.change(field, { target: { value: "NN" } })
         await waitFor(() => expect(capturedUrl?.searchParams.getAll("reactant_smiles")).toEqual(["NN"]))
         await screen.findByText(/1 record · showing/)
@@ -1402,7 +1402,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         )
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
-        await user.type(screen.getByLabelText("Structures on one side"), "Xx999")
+        await user.type(screen.getByLabelText("Reactant structures"), "Xx999")
         expect(await screen.findByText(/No reaction entries match these filters/)).toBeVisible()
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
@@ -1437,7 +1437,7 @@ describe("browse page: the 'reaction' kind, end to end", () => {
         )
         renderAt("/reactions")
         await screen.findByText(/records · showing/)
-        await user.type(screen.getByLabelText("Structures on the other side"), "O")
+        await user.type(screen.getByLabelText("Product structures"), "O")
         await screen.findByText("Matched on the reverse direction")
 
         const rows = document.querySelectorAll(".reaction-browse-row")
