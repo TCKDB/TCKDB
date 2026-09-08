@@ -381,20 +381,23 @@ def browse_reactions(
     this endpoint exists to close (``reactions/search`` has no unfiltered
     form).
 
-    ``reactant_smiles`` / ``product_smiles`` are called with
-    ``direction=ReactionDirectionQuery.either`` below (unconditionally, not
-    caller-selectable), so despite their names neither list is restricted
-    to the stored role it names -- but each list is still matched as
-    **one group, against a single stored side, in a single orientation**,
-    not species-by-species: a ``reactant_smiles`` group is tried whole
-    against the stored reactants (forward) and whole against the stored
-    products (reverse), which is exactly why a matched record can come
-    back with ``matched_direction: "reverse"`` -- but a group mixing a
-    genuine reactant with a genuine product of the same reaction matches
-    in neither orientation, because no single stored side contains both.
-    The parameter names describe which query bucket a SMILES was placed
-    in, not which side of the stored equation it is individually
-    guaranteed to land on.
+    ``reactant_smiles`` / ``product_smiles`` are matched under
+    ``request.direction``, which now defaults to ``forward`` (changed
+    2026-09; it used to be a hardcoded, non-caller-selectable ``either``
+    -- see :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`
+    for the full account of why that was wrong). Under ``forward`` a
+    ``reactant_smiles`` group is matched only against the stored
+    reactants and ``product_smiles`` only against the stored products,
+    so the field names mean what they say. Under the caller-requested
+    ``either`` each list is still matched as **one group, against a
+    single stored side, in a single orientation**, not species-by-
+    species: a ``reactant_smiles`` group is tried whole against the
+    stored reactants (forward) and whole against the stored products
+    (reverse), which is why a matched record can come back with
+    ``matched_direction: "reverse"`` -- but a group mixing a genuine
+    reactant with a genuine product of the same reaction matches in
+    neither orientation, because no single stored side contains both.
+    ``reverse`` swaps the single orientation tried, symmetrically.
 
     Partial resolution is a hard empty, not a degraded match: if any
     SMILES in either list fails to resolve to a species TCKDB has on
@@ -452,7 +455,7 @@ def browse_reactions(
             session,
             reactant_species_ids=reactant_species_ids,
             product_species_ids=product_species_ids,
-            direction=ReactionDirectionQuery.either,
+            direction=request.direction,
             match=ReactionMatchMode.contains,
         )
     else:
@@ -555,7 +558,7 @@ def browse_reactions(
             entry_species=species_by_entry[e.id],
             reactant_species_ids=reactant_species_ids,
             product_species_ids=product_species_ids,
-            requested=ReactionDirectionQuery.either,
+            requested=request.direction,
             match=ReactionMatchMode.contains,
         )
 
@@ -1174,6 +1177,7 @@ def _browse_filter_echo(request: ReactionsBrowseRequest) -> dict[str, object]:
         echo["reactant_smiles"] = list(request.reactant_smiles)
     if request.product_smiles:
         echo["product_smiles"] = list(request.product_smiles)
+    echo["direction"] = request.direction.value
     if request.family is not None:
         echo["family"] = request.family
     if request.has_kinetics is not None:

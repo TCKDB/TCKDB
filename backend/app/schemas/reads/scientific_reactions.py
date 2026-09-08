@@ -182,20 +182,50 @@ class ReactionsBrowseRequest(BaseModel):
     Every SMILES within one field is matched **together, as one group,
     against a single stored side in a single orientation** -- not each
     SMILES independently against whichever side it happens to appear
-    on. The browse service calls the shared matcher with
-    ``direction=either`` (unconditionally), so a ``reactant_smiles``
-    group is tried against the stored reactants in the forward
-    orientation *and*, as a whole, against the stored products in the
-    reverse orientation (the returned record then carries
-    ``matched_direction: "reverse"``); symmetrically for
-    ``product_smiles``. Because the group moves together, a
-    ``reactant_smiles`` list mixing a species that is genuinely a
-    reactant of some reaction with a species that is genuinely a
+    on. Which orientation(s) are tried is now the caller's explicit
+    choice via ``direction`` (below), not a hardcoded setting.
+
+    **Behaviour change (2026-09):** ``direction`` defaults to
+    :attr:`ReactionDirectionQuery.forward`, not ``either``. Before this
+    field existed, the service called the matcher with ``direction=either``
+    unconditionally, so a ``reactant_smiles`` group matched an entry
+    whenever it appeared on **either** stored side -- including entries
+    where it is only a stored *product*, reached through the reverse
+    orientation of a reversible reaction (``matched_direction:
+    "reverse"``). That answers "is this species involved, in either
+    role" rather than the question the field name asks ("is this species
+    a reactant"), and it is why a plain ``reactant_smiles=[H]`` query
+    used to come back with results where ``[H]`` is never a stored
+    reactant at all. ``forward`` is the only default under which
+    ``reactant_smiles`` means "on the stored reactant side" and
+    ``product_smiles`` means "on the stored product side", so it is the
+    default now: a ``reactant_smiles`` group is tried only against the
+    stored reactants, and a ``product_smiles`` group only against the
+    stored products. A caller who wants the old either-direction
+    behaviour -- deliberately, e.g. to also catch reverse-oriented
+    matches on a reversible reaction -- must request
+    ``direction=either`` explicitly; every returned record still carries
+    ``matched_direction`` saying which orientation actually matched.
+    **Existing callers who relied on the old default for
+    ``reactant_smiles`` or ``product_smiles`` will see a different
+    (narrower, and correctly named) result set after this change.**
+
+    ``direction=reverse`` is also legal here: it tries a
+    ``reactant_smiles`` group against the stored *products* and a
+    ``product_smiles`` group against the stored *reactants* -- the
+    single-orientation swap, as opposed to ``either``'s "try both".
+    ``direction=exact`` is not a legal value of
+    :class:`ReactionDirectionQuery` and is rejected by Pydantic before
+    it reaches the service.
+
+    Because a group moves together under whichever orientation(s) are
+    tried, a ``reactant_smiles`` list mixing a species that is genuinely
+    a reactant of some reaction with a species that is genuinely a
     product of that *same* reaction matches in neither orientation --
     every member of the group must land on the *same* stored side at
     once. The field names describe which query bucket a SMILES was put
-    in, not which stored side it is individually guaranteed to land on;
-    an empty field is unconstrained (per
+    in, not which stored side it is individually guaranteed to land on
+    under ``either``/``reverse``; an empty field is unconstrained (per
     :class:`ReactionMatchMode.contains`).
 
     If any supplied SMILES (on either side) fails to resolve to a species
@@ -217,6 +247,7 @@ class ReactionsBrowseRequest(BaseModel):
         default_factory=list,
         max_length=_MAX_PARTICIPANTS_PER_REACTION,
     )
+    direction: ReactionDirectionQuery = ReactionDirectionQuery.forward
     has_kinetics: bool | None = None
     has_transition_state: bool | None = None
 

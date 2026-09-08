@@ -346,6 +346,26 @@ class TestReactionsBrowse:
         assert query["reactant_smiles"] == ["C", "[OH]"]
         assert query["product_smiles"] == ["N"]
 
+    def test_direction_omitted_by_default(self):
+        """Left ``None``, ``direction`` is not sent -- the server default applies."""
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_reactions(reactant_smiles="[NH2]")
+
+        query = _query_of(str(seen[0].url))
+        assert "direction" not in query
+
+    def test_direction_lands_in_the_query_string(self):
+        """``direction`` mirrors ``search_reactions``'s spelling/values."""
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.browse_reactions(reactant_smiles="[NH2]", direction="either")
+
+        query = _query_of(str(seen[0].url))
+        assert query["direction"] == ["either"]
+
 
 # ---------------------------------------------------------------------------
 # Reference libraries

@@ -1326,6 +1326,7 @@ class TCKDBClient:
         family: str | None = None,
         reactant_smiles: str | list[str] | None = None,
         product_smiles: str | list[str] | None = None,
+        direction: str | None = None,
         has_kinetics: bool | None = None,
         has_transition_state: bool | None = None,
         min_review_status: str | None = None,
@@ -1353,12 +1354,30 @@ class TCKDBClient:
         is no ``reaction_ref`` / ``reaction_entry_ref`` parameter here; a
         caller who already has one wants :meth:`search_reactions`.
 
-        Despite the parameter names, matching is not restricted to the
-        stored role named: the server matches with ``direction=either``, so
-        a species supplied via ``reactant_smiles`` can also match a
-        reaction where it is stored as a product, reached in reverse (the
-        returned record then carries ``matched_direction: "reverse"``),
-        and symmetrically for ``product_smiles``.
+        ``direction`` selects which stored side(s) ``reactant_smiles`` /
+        ``product_smiles`` are matched against -- the same vocabulary
+        :meth:`search_reactions` uses (``"forward"``, ``"reverse"``,
+        ``"either"``; ``"exact"`` is not legal here or there).
+
+        **Behaviour change (2026-09):** the server default is now
+        ``"forward"``, not ``"either"``. Before this parameter existed,
+        the server always matched with the equivalent of ``either``, so
+        a species supplied via ``reactant_smiles`` could match a
+        reaction where it is stored only as a product, reached in
+        reverse (the returned record then carries ``matched_direction:
+        "reverse"``) -- a parameter named ``reactant_smiles`` could
+        return exclusively reactions where the species is never a
+        stored reactant. With the new default, ``reactant_smiles``
+        matches only the stored reactant side and ``product_smiles``
+        only the stored product side, so the field names mean what they
+        say. **Existing code that relied on the old either-direction
+        default for ``reactant_smiles`` or ``product_smiles`` will see a
+        narrower result set** unless it now passes
+        ``direction="either"`` explicitly to keep the old, broader
+        behaviour; ``matched_direction`` on each record still reports
+        which orientation actually matched. Left ``None`` here, the
+        parameter is not sent and the server default (``"forward"``)
+        applies.
 
         Returns the parsed ``ScientificReactionSearchResponse`` JSON
         envelope -- field-for-field identical to ``search_reactions``'s
@@ -1370,6 +1389,7 @@ class TCKDBClient:
             "family": family,
             "reactant_smiles": reactant_smiles,
             "product_smiles": product_smiles,
+            "direction": direction,
             "has_kinetics": has_kinetics,
             "has_transition_state": has_transition_state,
             "min_review_status": min_review_status,
