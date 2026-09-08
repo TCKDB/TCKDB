@@ -400,3 +400,301 @@ def test_full_handles_multiple_ts_dependency_roles(db_session):
         CalculationDependencyRole.freq_on.value,
         CalculationDependencyRole.single_point_on.value,
     }
+
+
+# ---------------------------------------------------------------------------
+# TS calculation slot: energy + review (this task)
+# ---------------------------------------------------------------------------
+#
+# TransitionStateCalculationSlot previously carried only
+# calculation_id/calculation_ref/type/method. These tests pin the two new
+# fields: energy_hartree (the one energy quantity a calculation's own
+# result row canonically holds — sp/opt only, never a fabricated zero) and
+# review (the calculation's own review badge, never one borrowed from its
+# owning TS entry or reaction entry).
+
+
+def _setup_reaction_with_ts_entry(db_session):
+    """Reaction entry with one bare TransitionState + TransitionStateEntry."""
+    from app.db.models.transition_state import (
+        TransitionState,
+        TransitionStateEntry,
+    )
+
+    _, entry = _setup_reaction_with_kinetics(db_session)
+    ts = TransitionState(reaction_entry_id=entry.id)
+    db_session.add(ts)
+    db_session.flush()
+    ts_entry = TransitionStateEntry(
+        transition_state_id=ts.id, charge=0, multiplicity=1
+    )
+    db_session.add(ts_entry)
+    db_session.flush()
+    return entry, ts_entry
+
+
+def test_ts_calc_slot_serves_sp_electronic_energy(db_session):
+    """sp slot serves calc_sp_result.electronic_energy_hartree verbatim."""
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType
+    from tests.services.scientific_read._factories import attach_sp_result
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.sp, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+    attach_sp_result(
+        db_session, calculation=calc, electronic_energy_hartree=-40.123456
+    )
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    slot = response.transition_states[0].calculations["ts_sp"]
+    assert slot.energy_hartree == -40.123456
+
+
+def test_ts_calc_slot_serves_opt_final_energy(db_session):
+    """opt slot serves calc_opt_result.final_energy_hartree verbatim."""
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType
+    from tests.services.scientific_read._factories import attach_opt_result
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.opt, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+    attach_opt_result(
+        db_session, calculation=calc, final_energy_hartree=-40.654321
+    )
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    slot = response.transition_states[0].calculations["ts_opt"]
+    assert slot.energy_hartree == -40.654321
+
+
+def test_ts_calc_slot_freq_never_reports_an_energy(db_session):
+    """freq has no energy column of its own -- always None, never 0."""
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType
+    from tests.services.scientific_read._factories import attach_freq_result
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.freq, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-300.0, 500.0],
+        zpe_hartree=0.045,
+    )
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    slot = response.transition_states[0].calculations["ts_freq"]
+    assert slot.energy_hartree is None
+
+
+def test_ts_calc_slot_energy_absent_when_no_result_row(db_session):
+    """An sp calculation with no calc_sp_result row serves None, not 0."""
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.sp, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+    # No attach_sp_result call: the calc has no result row at all.
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    slot = response.transition_states[0].calculations["ts_sp"]
+    assert slot.energy_hartree is None
+
+
+def test_ts_calc_slot_review_reflects_the_calculation_own_badge(db_session):
+    """slot.review is the CALCULATION's own badge, not the TS entry's.
+
+    Sets the TS entry to ``approved`` and the calculation to
+    ``under_review`` to prove the two do not collapse onto one status.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType, RecordReviewStatus
+    from tests.services.scientific_read._factories import (
+        attach_sp_result,
+        set_review,
+    )
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.sp, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+    attach_sp_result(db_session, calculation=calc, electronic_energy_hartree=-1.0)
+
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=ts_entry.id,
+        status=RecordReviewStatus.approved,
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        status=RecordReviewStatus.under_review,
+    )
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    ts_record = response.transition_states[0]
+    assert ts_record.review.status == RecordReviewStatus.approved
+    slot = ts_record.calculations["ts_sp"]
+    assert slot.review.status == RecordReviewStatus.under_review
+
+
+def test_ts_calc_slot_review_defaults_to_not_reviewed(db_session):
+    """No record_review row -> not_reviewed, same default as elsewhere."""
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType, RecordReviewStatus
+
+    entry, ts_entry = _setup_reaction_with_ts_entry(db_session)
+    calc = Calculation(
+        type=CalculationType.opt, transition_state_entry_id=ts_entry.id
+    )
+    db_session.add(calc)
+    db_session.flush()
+
+    response = get_reaction_full(
+        db_session,
+        reaction_entry_id=entry.id,
+        request=ReactionFullReadRequest(include=["transition_states"]),
+    )
+    slot = response.transition_states[0].calculations["ts_opt"]
+    assert slot.review.status == RecordReviewStatus.not_reviewed
+
+
+def test_ts_calc_energy_and_review_do_not_scale_with_calc_count(db_session):
+    """Loading energy + review for the TS calc graph is bulk, not per-calc.
+
+    Regression guard for the N+1 this task explicitly calls out. The whole
+    ``/full?include=transition_states`` read issues *some* per-TS-entry
+    statements unrelated to this change (evidence summary, atom-map
+    lookups, ...), so counting every statement would make this fixture
+    sensitive to costs this task did not touch. Instead this counts only
+    the statements that hit the three tables this task's bulk loaders
+    touch -- ``calc_sp_result``, ``calc_opt_result`` (energy) and
+    ``record_review`` (review, shared with the pre-existing per-document
+    TS-entry badge load) -- by SQL text. Those three must stay a FLAT
+    count regardless of how many TS entries/calculations exist: two
+    statements load every calculation's energy (one per result table) and
+    two load every review badge (one for TS entries, one for
+    calculations), no matter how many rows come back. A per-entry or
+    per-calculation round trip for either value would grow this count
+    with N; the current bulk implementation does not.
+    """
+    from sqlalchemy import event
+
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType, RecordReviewStatus
+    from app.db.models.transition_state import (
+        TransitionState,
+        TransitionStateEntry,
+    )
+    from tests.services.scientific_read._factories import (
+        attach_sp_result,
+        set_review,
+    )
+
+    _, entry = _setup_reaction_with_kinetics(db_session)
+
+    def _build_ts_entries(n: int, *, offset: int):
+        for i in range(n):
+            ts = TransitionState(reaction_entry_id=entry.id, label=f"tsN-{offset + i}")
+            db_session.add(ts)
+            db_session.flush()
+            ts_entry = TransitionStateEntry(
+                transition_state_id=ts.id, charge=0, multiplicity=1
+            )
+            db_session.add(ts_entry)
+            db_session.flush()
+            calc = Calculation(
+                type=CalculationType.sp, transition_state_entry_id=ts_entry.id
+            )
+            db_session.add(calc)
+            db_session.flush()
+            attach_sp_result(
+                db_session,
+                calculation=calc,
+                electronic_energy_hartree=-1.0 - offset - i,
+            )
+            set_review(
+                db_session,
+                record_type=SubmissionRecordType.calculation,
+                record_id=calc.id,
+                status=RecordReviewStatus.approved,
+            )
+
+    #: Substrings identifying a statement as touching one of the three
+    #: tables this task's bulk loaders read.
+    _WATCHED_TABLES = ("calc_sp_result", "calc_opt_result", "record_review")
+
+    def _count_watched_statements() -> int:
+        count = 0
+        engine = db_session.connection().engine
+
+        @event.listens_for(engine, "before_cursor_execute")
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            nonlocal count
+            if any(table in statement for table in _WATCHED_TABLES):
+                count += 1
+
+        try:
+            response = get_reaction_full(
+                db_session,
+                reaction_entry_id=entry.id,
+                request=ReactionFullReadRequest(include=["transition_states"]),
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        assert response.transition_states is not None
+        return count
+
+    _build_ts_entries(2, offset=0)
+    small = _count_watched_statements()
+    _build_ts_entries(8, offset=2)
+    large = _count_watched_statements()
+
+    assert small == large, (
+        f"{small} watched statements (calc_sp_result/calc_opt_result/"
+        f"record_review) for the small TS graph vs {large} for the larger "
+        "one -- energy/review loading should be a fixed handful of bulk "
+        "statements regardless of how many TS entries or calculations "
+        "exist; a growing count means a per-entry or per-calculation "
+        "query was (re)introduced"
+    )

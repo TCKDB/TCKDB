@@ -229,12 +229,45 @@ class TransitionStateCalculationSlot(BaseModel):
 
     Phase B: ``calculation_ref`` is the public stable handle alongside
     ``calculation_id``.
+
+    ``energy_hartree`` is the one energy quantity this calculation's own
+    result row canonically holds, in the fixed hartree unit every
+    ``calc_*_result`` energy column already uses (``docs/unit_policy.md``)
+    -- read from the same columns
+    :func:`app.services.scientific_read.calculations._build_sp_summary` /
+    ``_build_opt_summary`` project on ``GET /scientific/calculations/{ref}``,
+    never a second, independently-derived number:
+
+    - ``sp``: ``calc_sp_result.electronic_energy_hartree``.
+    - ``opt``: ``calc_opt_result.final_energy_hartree`` -- populated only
+      when the optimisation itself recorded a converged energy; many
+      opt rows do not.
+    - ``freq``, ``irc``, ``path_search`` (``ts_guess``): always ``None``.
+      None of those result tables carry an energy of the calculation
+      itself -- ``calc_freq_result`` carries a zero-point *correction*,
+      not an electronic energy, and ``calc_scan_result``'s
+      ``zero_energy_reference_hartree`` is a scan reference point, not
+      this calculation's own energy.
+
+    ``None`` here means "this calculation's result row has nothing to
+    report" -- a calculation with no result row at all and a result row
+    whose energy column is itself null both serve ``None``, never ``0``.
+
+    ``review`` is this calculation's own review badge: the same
+    ``RecordReviewStatus`` vocabulary and the same
+    :func:`app.services.scientific_read.common.fetch_review_badges`
+    lookup (keyed by ``SubmissionRecordType.calculation`` and this
+    calculation's id) that produces ``CalculationCoreBlock.review`` on
+    ``GET /scientific/calculations/{ref}`` -- never a status borrowed
+    from the owning TS entry or the reaction entry.
     """
 
     calculation_id: int
     calculation_ref: str
     type: str
     method: str | None = None  # populated for path-search calcs
+    energy_hartree: float | None = None
+    review: RecordReviewBadge
 
 
 class TransitionStateDependency(BaseModel):

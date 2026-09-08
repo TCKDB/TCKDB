@@ -18,11 +18,14 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationGeometryValidation,
+    CalculationOptResult,
     CalculationSCFStability,
+    CalculationSPResult,
 )
 from app.db.models.common import (
     CalculationType,
     ReactionRole,
+    RecordReviewStatus,
     SubmissionRecordType,
 )
 from app.db.models.geometry import Geometry
@@ -750,6 +753,18 @@ def _build_transition_states_section(
     ts_levels = levels_of_theory.for_transition_state_entries(
         session, ts_entry_ids
     )
+    # Energy + review, bulk-loaded across every calculation in the
+    # document's whole TS graph -- two statements plus the one
+    # ``fetch_review_badges`` issues, never a per-calculation round trip.
+    all_ts_calc_ids = [
+        c.id for calcs in calcs_by_ts_entry.values() for c in calcs
+    ]
+    energy_by_calc_id = _load_ts_calc_energies(session, all_ts_calc_ids)
+    calc_review_by_id = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.calculation,
+        record_ids=all_ts_calc_ids,
+    )
 
     out: list[TransitionStateInFull] = []
     for ts_entry in ts_entry_rows:
@@ -774,7 +789,11 @@ def _build_transition_states_section(
                 status=ts_entry.status,
                 review=badge,
                 evidence_summary=evidence,
-                calculations=_format_ts_calc_slots(ts_calcs),
+                calculations=_format_ts_calc_slots(
+                    ts_calcs,
+                    energy_by_calc_id=energy_by_calc_id,
+                    review_by_calc_id=calc_review_by_id,
+                ),
                 dependencies=_format_ts_deps(
                     deps_by_ts_entry.get(ts_entry.id, []), calc_refs
                 ),
@@ -1347,14 +1366,66 @@ def _calcs_by_ts_entry(
     return grouped
 
 
+def _load_ts_calc_energies(
+    session: Session, calculation_ids: list[int]
+) -> dict[int, float]:
+    """Bulk-load the one energy quantity each TS calculation's result row
+    canonically holds, keyed by ``calculation_id``.
+
+    Two statements total for the whole document's TS calculation graph
+    (never one per calculation): ``calc_sp_result.electronic_energy_hartree``
+    for ``sp`` calculations, ``calc_opt_result.final_energy_hartree`` for
+    ``opt`` calculations -- the same columns
+    ``app.services.scientific_read.calculations._build_sp_summary`` /
+    ``_build_opt_summary`` project on the calculation detail endpoint, so
+    the two can never disagree. ``freq``/``irc``/``path_search`` calculations
+    have no matching row in either table and are simply absent from the
+    returned mapping -- callers must treat a missing key as "no energy",
+    not as ``0``.
+    """
+    if not calculation_ids:
+        return {}
+    energy_by_calc_id: dict[int, float] = {}
+    sp_rows = session.execute(
+        select(
+            CalculationSPResult.calculation_id,
+            CalculationSPResult.electronic_energy_hartree,
+        ).where(CalculationSPResult.calculation_id.in_(calculation_ids))
+    ).all()
+    for calc_id, energy in sp_rows:
+        if energy is not None:
+            energy_by_calc_id[calc_id] = energy
+    opt_rows = session.execute(
+        select(
+            CalculationOptResult.calculation_id,
+            CalculationOptResult.final_energy_hartree,
+        ).where(CalculationOptResult.calculation_id.in_(calculation_ids))
+    ).all()
+    for calc_id, energy in opt_rows:
+        if energy is not None:
+            energy_by_calc_id[calc_id] = energy
+    return energy_by_calc_id
+
+
 def _format_ts_calc_slots(
     calcs: list[Calculation],
+    *,
+    energy_by_calc_id: dict[int, float] | None = None,
+    review_by_calc_id: dict[int, RecordReviewBadge] | None = None,
 ) -> dict[str, TransitionStateCalculationSlot]:
     """Map calculation_type → slot for the per-TS-entry calculations dict.
 
     Uses canonical short keys (ts_opt, ts_freq, ts_sp, ts_guess, ts_irc).
     Multiple calcs of the same type — the most recent wins.
+
+    ``energy_by_calc_id`` / ``review_by_calc_id`` are the bulk-loaded maps
+    from :func:`_load_ts_calc_energies` / ``fetch_review_badges`` built once
+    per document by the caller -- this function does no querying of its
+    own, so it stays safe to call once per TS entry without a per-entry (or
+    per-calculation) round trip.
     """
+    energy_by_calc_id = energy_by_calc_id or {}
+    review_by_calc_id = review_by_calc_id or {}
     type_to_key = {
         CalculationType.opt: "ts_opt",
         CalculationType.freq: "ts_freq",
@@ -1379,6 +1450,10 @@ def _format_ts_calc_slots(
             calculation_ref=c.public_ref,
             type=c.type.value,
             method=method,
+            energy_hartree=energy_by_calc_id.get(c.id),
+            review=review_by_calc_id.get(
+                c.id, RecordReviewBadge(status=RecordReviewStatus.not_reviewed)
+            ),
         )
     return by_key
 
