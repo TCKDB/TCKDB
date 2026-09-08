@@ -27,11 +27,20 @@ class NetworkKineticsEvaluatedPoint(BaseModel):
     """One evaluated (T, P) -> k point.
 
     ``in_range`` is ``False`` (never omitted) when the requested point
-    falls outside the fit's own stated ``[tmin_k, tmax_k]`` x
-    ``[pmin_bar, pmax_bar]`` validity range. The value is still computed
-    and served — refusing outright would make a caller unable to see
-    "roughly how far off is this" — but it must never be presented, or
-    mistaken for, an interpolated value.
+    falls outside the fit's own stated validity range on *either* axis.
+    For a Chebyshev fit that is ``[tmin_k, tmax_k]`` x ``[pmin_bar,
+    pmax_bar]`` exactly as echoed on the response envelope. For a PLOG
+    fit, the **pressure** axis is judged against the table's own fitted
+    pressures instead — always present and always the true interpolation
+    anchors, unlike the envelope's ``pmin_bar``/``pmax_bar``, which is
+    optional metadata that need not exactly bracket the table — while
+    the **temperature** axis is judged against the same envelope
+    ``tmin_k``/``tmax_k`` Chebyshev uses (a PLOG entry carries no
+    per-row temperature bound of its own). See
+    ``app/chemistry/network_kinetics_eval.py`` for the full reasoning.
+    The value is still computed and served — refusing outright would
+    make a caller unable to see "roughly how far off is this" — but it
+    must never be presented, or mistaken for, an interpolated value.
     """
 
     temperature_k: float

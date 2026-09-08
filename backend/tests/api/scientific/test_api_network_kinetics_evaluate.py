@@ -212,12 +212,121 @@ def test_evaluate_out_of_range_point_is_flagged_not_refused(client, db_session):
     assert isinstance(point["k"], float)
 
 
+def test_evaluate_plog_out_of_range_temperature_flagged_at_api_level(client, db_session):
+    """Live-reachable regression at the HTTP layer: a PLOG record whose
+    table is stored 300-2000K (the factory default) must not report
+    in_range=True for 2001K just because 1 bar sits inside the table's
+    pressure span."""
+    _, channel, solve = _build_channel(db_session)
+    kin = make_network_kinetics(
+        db_session,
+        channel=channel,
+        solve=solve,
+        model_kind=NetworkKineticsModelKind.plog,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    for pressure_bar, a, n, ea in [
+        (0.01, 59828.5, 2.40236, 225.147),
+        (0.1, 59747.1, 2.40253, 225.147),
+        (1.0, 58937.7, 2.40426, 225.144),
+        (10.0, 51368.2, 2.42166, 225.117),
+        (100.0, 13579.5, 2.58976, 224.788),
+    ]:
+        attach_network_kinetics_plog(
+            db_session, kinetics=kin, pressure_bar=pressure_bar, a=a, n=n, ea_kj_mol=ea
+        )
+
+    resp = client.get(_evaluate_url(kin.public_ref, temperature_k=2001.0, pressure_bar=1.0))
+    assert resp.status_code == 200, resp.text
+    point = resp.json()["points"][0]
+    assert point["in_range"] is False, point
+
+    inside = client.get(_evaluate_url(kin.public_ref, temperature_k=2000.0, pressure_bar=1.0))
+    assert inside.json()["points"][0]["in_range"] is True
+
+
+def test_evaluate_plog_negative_duplicate_a_returns_coded_422_not_generic(client, db_session):
+    """A Chemkin DUPLICATE pair with a negative pre-exponential factor
+    that drives a bracket's summed k non-positive must come back as
+    this module's own coded 422, never the app-wide generic
+    ``validation_error`` fallback carrying a raw ``math domain error``
+    message."""
+    _, channel, solve = _build_channel(db_session)
+    kin = make_network_kinetics(
+        db_session,
+        channel=channel,
+        solve=solve,
+        model_kind=NetworkKineticsModelKind.plog,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=1.0, entry_index=1, a=1.0e10, n=0.0, ea_kj_mol=50.0,
+    )
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=1.0, entry_index=2, a=-1.05e10, n=0.0, ea_kj_mol=50.0,
+    )
+    attach_network_kinetics_plog(
+        db_session, kinetics=kin, pressure_bar=10.0, entry_index=1, a=1.0e10, n=0.0, ea_kj_mol=50.0,
+    )
+
+    resp = client.get(_evaluate_url(kin.public_ref, temperature_k=1000.0, pressure_bar=5.0))
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "network_kinetics_evaluate_invalid_point", body
+    assert "math domain error" not in body.get("detail", "")
+
+
+def test_evaluate_infinite_temperature_refused_identically_for_both_model_kinds(
+    client, db_session
+):
+    _, channel, solve = _build_channel(db_session)
+    cheb_kin = make_network_kinetics(
+        db_session,
+        channel=channel,
+        solve=solve,
+        model_kind=NetworkKineticsModelKind.chebyshev,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+        stores_log10_k=True,
+    )
+    attach_network_kinetics_chebyshev(
+        db_session, kinetics=cheb_kin, n_temperature=6, n_pressure=4,
+        coefficients=_CHEB_MATRIX,
+    )
+    plog_kin = make_network_kinetics(
+        db_session,
+        channel=channel,
+        solve=solve,
+        model_kind=NetworkKineticsModelKind.plog,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+    )
+    attach_network_kinetics_plog(
+        db_session, kinetics=plog_kin, pressure_bar=1.0, a=1e12, n=0.0, ea_kj_mol=100.0,
+    )
+
+    cheb_resp = client.get(_evaluate_url(cheb_kin.public_ref, temperature_k="inf", pressure_bar=1.0))
+    plog_resp = client.get(_evaluate_url(plog_kin.public_ref, temperature_k="inf", pressure_bar=1.0))
+    assert cheb_resp.status_code == 422, cheb_resp.text
+    assert plog_resp.status_code == 422, plog_resp.text
+    assert cheb_resp.json()["code"] == "network_kinetics_evaluate_invalid_point"
+    assert plog_resp.json()["code"] == "network_kinetics_evaluate_invalid_point"
+
+
 # ---------------------------------------------------------------------------
 # Refusals
 # ---------------------------------------------------------------------------
 
 
 def test_evaluate_grid_too_large_returns_coded_422(client, db_session):
+    """Pins TRUE Cartesian-PRODUCT semantics, not just "some axis is big".
+
+    Shape is deliberately two-dimensional with neither axis alone
+    exceeding the cap: ``n_temps = cap//2 + 2`` and ``n_press = 3``, so
+    ``max(n_temps, n_press) < cap`` while ``n_temps * n_press > cap``. A
+    regression that swapped the product for e.g.
+    ``max(len(temperature_k), len(pressure_bar))`` would let this
+    request through (and admit up to ``cap * cap`` points) while every
+    single-axis-overflow test still passed.
+    """
     _, channel, solve = _build_channel(db_session)
     kin = make_network_kinetics(
         db_session,
@@ -231,12 +340,46 @@ def test_evaluate_grid_too_large_returns_coded_422(client, db_session):
         db_session, kinetics=kin, n_temperature=6, n_pressure=4,
         coefficients=_CHEB_MATRIX,
     )
-    # (cap + 1) temperatures x 1 pressure exceeds the cap.
-    temps = "&".join(f"temperature_k={300 + i}" for i in range(EVALUATE_GRID_POINT_CAP + 1))
-    url = f"/api/v1/scientific/network-kinetics/{kin.public_ref}/evaluate?{temps}&pressure_bar=1"
+    n_temps = EVALUATE_GRID_POINT_CAP // 2 + 2
+    n_press = 3
+    assert max(n_temps, n_press) < EVALUATE_GRID_POINT_CAP
+    assert n_temps * n_press > EVALUATE_GRID_POINT_CAP
+    temps = "&".join(f"temperature_k={300 + i}" for i in range(n_temps))
+    press = "&".join(f"pressure_bar={1 + i}" for i in range(n_press))
+    url = f"/api/v1/scientific/network-kinetics/{kin.public_ref}/evaluate?{temps}&{press}"
     resp = client.get(url)
     assert resp.status_code == 422, resp.text
     assert resp.json()["code"] == "network_kinetics_evaluate_grid_too_large"
+
+
+def test_evaluate_grid_at_exact_cap_two_dimensional_is_accepted(client, db_session):
+    """Companion to the product pin above: a genuinely two-dimensional
+    grid landing exactly on the cap (never a single axis carrying it
+    alone) must be accepted, proving the cap really is inclusive and
+    really is evaluated as a product of both axes."""
+    _, channel, solve = _build_channel(db_session)
+    kin = make_network_kinetics(
+        db_session,
+        channel=channel,
+        solve=solve,
+        model_kind=NetworkKineticsModelKind.chebyshev,
+        rate_units=ArrheniusAUnits.cm3_mol_s,
+        stores_log10_k=True,
+    )
+    attach_network_kinetics_chebyshev(
+        db_session, kinetics=kin, n_temperature=6, n_pressure=4,
+        coefficients=_CHEB_MATRIX,
+    )
+    n_press = 4
+    n_temps = EVALUATE_GRID_POINT_CAP // n_press
+    assert n_temps * n_press == EVALUATE_GRID_POINT_CAP
+    assert n_temps > 1 and n_press > 1
+    temps = "&".join(f"temperature_k={300 + i}" for i in range(n_temps))
+    press = "&".join(f"pressure_bar={1 + i}" for i in range(n_press))
+    url = f"/api/v1/scientific/network-kinetics/{kin.public_ref}/evaluate?{temps}&{press}"
+    resp = client.get(url)
+    assert resp.status_code == 200, resp.text
+    assert len(resp.json()["points"]) == EVALUATE_GRID_POINT_CAP
 
 
 def test_evaluate_missing_rate_units_returns_coded_422(client, db_session):

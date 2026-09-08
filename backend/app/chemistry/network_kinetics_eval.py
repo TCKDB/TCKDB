@@ -48,7 +48,23 @@ Two parameterizations are supported, matching what
   the table's own pressure range, the convention is flat extrapolation:
   the nearest single bracketing Arrhenius expression is used unchanged
   (never extrapolated in log-log slope), and the point is flagged
-  ``in_range=False``.
+  ``in_range=False``. Validity on the **pressure** axis is judged
+  against the table's own fitted pressures (``min(entries.pressure_bar)``
+  .. ``max(...)``), not the parent row's declared ``pmin_bar``/
+  ``pmax_bar`` — deliberately: the fitted pressures are exactly where
+  the interpolation has real anchors, and are always present (a PLOG
+  row cannot exist with zero entries), whereas ``pmin_bar``/``pmax_bar``
+  are optional metadata that need not exactly bracket the table. Judging
+  by the entries is the scientifically tighter, more honest claim: it is
+  never wider than the metadata could claim, only ever equal or
+  narrower. Validity on the **temperature** axis, by contrast, has no
+  per-entry analogue to fall back on — a PLOG entry is a modified-
+  Arrhenius expression valid over *some* T range that the table itself
+  does not encode point-by-point — so it is judged against the parent
+  row's declared ``tmin_k``/``tmax_k`` (the same bounds Chebyshev uses).
+  When those are not recorded, the temperature axis cannot be judged and
+  is treated as unbounded (never the reason a point is flagged
+  out-of-range) rather than refusing evaluation outright.
 
 No database or HTTP dependency: every function here takes plain floats /
 sequences and returns a plain result. The caller (a service module) owns
@@ -91,12 +107,20 @@ class PlogEntry:
         parent ``NetworkKinetics.rate_units`` names.
     :param n: Temperature exponent.
     :param ea_kj_mol: Activation energy, kJ/mol.
+    :param a_units: This entry's own recorded units, if the ingester
+        populated the per-row ``a_units`` rather than leaving it to the
+        parent ``NetworkKinetics.rate_units``. Optional and otherwise
+        unused by evaluation — its only job here is letting
+        :func:`evaluate_plog` refuse to silently sum two Chemkin
+        ``DUPLICATE`` entries that disagree about what unit their sum
+        would even be in.
     """
 
     pressure_bar: float
     a: float
     n: float
     ea_kj_mol: float
+    a_units: str | None = None
 
 
 @dataclass(frozen=True)
@@ -107,9 +131,17 @@ class EvaluatedKPoint:
         under (Chebyshev's ``rate_units`` / PLOG's ``a_units``) — this
         module never converts units, only evaluates the stored numbers.
     :param in_range: ``True`` iff both T and P fall within the fit's own
-        stated validity bounds (inclusive). ``False`` marks the point as
-        an extrapolation: still computed, never silently presented as
-        interpolated.
+        validity bounds (inclusive). ``False`` marks the point as an
+        extrapolation: still computed, never silently presented as
+        interpolated. What counts as "the fit's own bounds" differs by
+        model kind — for Chebyshev it is ``[tmin_k, tmax_k]`` x
+        ``[pmin_bar, pmax_bar]`` exactly; for PLOG the pressure axis
+        uses the table's own fitted pressures rather than any bound
+        passed in separately, while the temperature axis uses
+        ``tmin_k``/``tmax_k`` the same way Chebyshev does. See
+        :func:`evaluate_plog` for why. Either way, both axes are always
+        judged — a point cannot be "in range" merely because one axis
+        happens to be.
     """
 
     temperature_k: float
@@ -153,9 +185,10 @@ def chebyshev_reduced_temperature(
     ``[-1, 1]`` instead is the classic way to get this formula backwards:
     it still returns a plausible-looking number, just the wrong one.
     """
-    if not (temperature_k > 0):
+    if not (temperature_k > 0) or not math.isfinite(temperature_k):
         raise KineticsEvaluationError(
-            f"temperature_k must be > 0, got {temperature_k!r}"
+            f"temperature_k must be a finite positive number, got "
+            f"{temperature_k!r}"
         )
     if not (tmin_k > 0 and tmax_k > 0 and tmax_k > tmin_k):
         raise KineticsEvaluationError(
@@ -178,9 +211,10 @@ def chebyshev_reduced_pressure(
     linearly), so a Chebyshev PDep fit's pressure axis is always a
     log-pressure axis.
     """
-    if not (pressure_bar > 0):
+    if not (pressure_bar > 0) or not math.isfinite(pressure_bar):
         raise KineticsEvaluationError(
-            f"pressure_bar must be > 0, got {pressure_bar!r}"
+            f"pressure_bar must be a finite positive number, got "
+            f"{pressure_bar!r}"
         )
     if not (pmin_bar > 0 and pmax_bar > 0 and pmax_bar > pmin_bar):
         raise KineticsEvaluationError(
@@ -298,6 +332,8 @@ def evaluate_plog(
     pressure_bar: float,
     *,
     entries: Sequence[PlogEntry],
+    tmin_k: float | None = None,
+    tmax_k: float | None = None,
 ) -> EvaluatedKPoint:
     """Evaluate a PLOG fit at one (T, P) point.
 
@@ -324,18 +360,56 @@ def evaluate_plog(
     wrong curve between the fitted points even though it agrees with the
     fit exactly *at* them.
 
-    Outside ``[min(pressures), max(pressures)]``: flat extrapolation —
-    the nearest single bracketing Arrhenius expression is evaluated
-    as-is (not log-log extrapolated past it), and the point is flagged
-    ``in_range=False``.
+    ``in_range`` is the AND of two independently-judged axes:
+
+    * **Pressure** — against ``[min(entries.pressure_bar),
+      max(entries.pressure_bar)]``, i.e. the table's own fitted
+      pressures, not any bound passed in separately. Outside that
+      range: flat extrapolation — the nearest single bracketing
+      Arrhenius expression is evaluated as-is (never log-log
+      extrapolated past it).
+    * **Temperature** — against ``[tmin_k, tmax_k]`` when both are
+      supplied (typically the parent ``NetworkKinetics`` row's own
+      declared bounds — the same ones Chebyshev uses). A PLOG entry is
+      a modified-Arrhenius expression with no per-row temperature bound
+      of its own, unlike pressure, so there is nothing else to judge it
+      against; when one or both bounds are unavailable the temperature
+      axis is treated as unbounded (never the reason a point is flagged
+      out of range) rather than refusing evaluation. Getting this axis
+      wrong is a real, live-reachable defect this signature closes: a
+      pressure-only ``in_range`` would call a PLOG evaluation at 5000 K
+      against a table only ever fit to 2000 K "in range" merely because
+      the pressure happened to fall inside the table, understating how
+      far outside the fit's actual validity the point sits — while the
+      Chebyshev fit of the very same physical channel correctly flags
+      the same point as extrapolated.
 
     :raises KineticsEvaluationError: no entries (a channel/fit with no
-        kinetics must not be evaluated as if it had a k of 0).
+        kinetics must not be evaluated as if it had a k of 0); two
+        entries sharing one fitted pressure disagree about their
+        recorded ``a_units`` (summing them would not even be summing
+        the same unit); or a bracket's summed rate coefficient is
+        non-positive or non-finite (a Chemkin ``DUPLICATE`` pair with a
+        negative pre-exponential factor, used to fit curvature, can
+        legitimately drive the sum to <= 0 in some region of T — that
+        region cannot be log-interpolated or served as a rate
+        coefficient, so it is refused with a coded error rather than
+        crashing on an unguarded ``math.log10``).
     """
     if not entries:
         raise KineticsEvaluationError(
             "PLOG entry list is empty; this channel's fit carries no "
             "pressure-keyed Arrhenius entries to evaluate."
+        )
+    if not math.isfinite(temperature_k) or not (temperature_k > 0):
+        raise KineticsEvaluationError(
+            f"temperature_k must be a finite positive number, got "
+            f"{temperature_k!r}"
+        )
+    if not math.isfinite(pressure_bar) or not (pressure_bar > 0):
+        raise KineticsEvaluationError(
+            f"pressure_bar must be a finite positive number, got "
+            f"{pressure_bar!r}"
         )
 
     by_pressure: dict[float, list[PlogEntry]] = defaultdict(list)
@@ -349,27 +423,66 @@ def evaluate_plog(
 
     def k_at_fitted_pressure(p: float) -> float:
         # Chemkin DUPLICATE convention: entries sharing one fitted
-        # pressure contribute additively, not by overwrite/average.
+        # pressure contribute additively, not by overwrite/average --
+        # but only once they are confirmed to be additions of the same
+        # unit. A per-entry a_units that disagrees with its siblings at
+        # the same pressure means "sum" is not even a well-defined
+        # operation on these numbers.
+        group = by_pressure[p]
+        units = {e.a_units for e in group if e.a_units is not None}
+        if len(units) > 1:
+            raise KineticsEvaluationError(
+                f"PLOG entries at pressure_bar={p!r} disagree on a_units "
+                f"({sorted(units)!r}); refusing to sum them as if they "
+                "shared one unit."
+            )
         return sum(
             modified_arrhenius_k(temperature_k, a=e.a, n=e.n, ea_kj_mol=e.ea_kj_mol)
-            for e in by_pressure[p]
+            for e in group
         )
 
+    def positive_finite_k(k: float, *, where: str) -> float:
+        if not math.isfinite(k) or not (k > 0):
+            raise KineticsEvaluationError(
+                f"PLOG evaluation produced a non-positive or non-finite "
+                f"rate coefficient ({k!r}) {where}; a summed Chemkin "
+                "DUPLICATE pair with a negative pre-exponential factor "
+                "can legitimately drive the sum negative in some region "
+                "of T -- refusing rather than serving a value that "
+                "cannot be log-interpolated or interpreted as a rate "
+                "coefficient."
+            )
+        return k
+
     p_min, p_max = fitted_pressures[0], fitted_pressures[-1]
-    in_range = p_min <= pressure_bar <= p_max
+    in_range_pressure = p_min <= pressure_bar <= p_max
+    in_range_temperature = True
+    if tmin_k is not None and tmax_k is not None:
+        in_range_temperature = tmin_k <= temperature_k <= tmax_k
+    in_range = in_range_pressure and in_range_temperature
 
     if pressure_bar <= p_min:
-        k = k_at_fitted_pressure(p_min)
+        k = positive_finite_k(
+            k_at_fitted_pressure(p_min), where=f"at pressure_bar={p_min!r}"
+        )
     elif pressure_bar >= p_max:
-        k = k_at_fitted_pressure(p_max)
+        k = positive_finite_k(
+            k_at_fitted_pressure(p_max), where=f"at pressure_bar={p_max!r}"
+        )
     else:
         lower = max(p for p in fitted_pressures if p <= pressure_bar)
         upper = min(p for p in fitted_pressures if p >= pressure_bar)
         if lower == upper:
-            k = k_at_fitted_pressure(lower)
+            k = positive_finite_k(
+                k_at_fitted_pressure(lower), where=f"at pressure_bar={lower!r}"
+            )
         else:
-            k_lower = k_at_fitted_pressure(lower)
-            k_upper = k_at_fitted_pressure(upper)
+            k_lower = positive_finite_k(
+                k_at_fitted_pressure(lower), where=f"at the lower bracket ({lower!r} bar)"
+            )
+            k_upper = positive_finite_k(
+                k_at_fitted_pressure(upper), where=f"at the upper bracket ({upper!r} bar)"
+            )
             log_p = math.log10(pressure_bar)
             log_lower, log_upper = math.log10(lower), math.log10(upper)
             fraction = (log_p - log_lower) / (log_upper - log_lower)

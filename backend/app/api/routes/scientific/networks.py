@@ -543,11 +543,16 @@ def scientific_network_kinetics_evaluate(
     ``network_kinetics_evaluate_grid_too_large`` above the cap, rather
     than silently truncated.
 
-    A requested point outside the fit's own stated
-    ``[tmin_k, tmax_k]`` x ``[pmin_bar, pmax_bar]`` range is still
-    evaluated — extrapolation is mathematically well-defined for both
-    supported forms — but its ``in_range`` flag is ``False``. Never
-    silently presented as interpolated.
+    A requested point outside the fit's own stated validity range on
+    either axis is still evaluated — extrapolation is mathematically
+    well-defined for both supported forms — but its ``in_range`` flag
+    is ``False``. Never silently presented as interpolated. For
+    Chebyshev that range is exactly ``[tmin_k, tmax_k]`` x
+    ``[pmin_bar, pmax_bar]`` as echoed on the response; for PLOG the
+    pressure axis is judged against the fit's own table of fitted
+    pressures instead (see
+    ``NetworkKineticsEvaluatedPoint`` for why), with temperature judged
+    against the same ``tmin_k``/``tmax_k``.
     """
     return evaluate_network_kinetics(
         session,

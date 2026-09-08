@@ -18,6 +18,7 @@ See ``backend/docs/specs/scientific_network_reads.md``.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Mapping
 from typing import Any
 
@@ -234,13 +235,28 @@ def evaluate_network_kinetics(
             "at least one pressure_bar value is required to evaluate "
             "/scientific/network-kinetics/{ref}/evaluate.",
         )
-    bad_temperatures = [t for t in temperatures_k if not (t > 0)]
-    bad_pressures = [p for p in pressures_bar if not (p > 0)]
+    # A single point screen shared by both model kinds, so a request
+    # that is invalid (non-finite, non-positive) is refused identically
+    # regardless of whether the record turns out to be Chebyshev or
+    # PLOG -- rather than each per-model evaluator making its own
+    # (potentially inconsistent) decision about what to do with e.g.
+    # ``inf``. ``t > 0`` alone is not enough: it is True for ``+inf``,
+    # which would otherwise sail through to the Chebyshev evaluator (no
+    # crash, just a silently-computed, effectively meaningless point)
+    # while the same value is correctly refused by PLOG's Arrhenius
+    # evaluator -- an asymmetry between the two model kinds this screen
+    # closes by construction.
+    bad_temperatures = [
+        t for t in temperatures_k if not (math.isfinite(t) and t > 0)
+    ]
+    bad_pressures = [
+        p for p in pressures_bar if not (math.isfinite(p) and p > 0)
+    ]
     if bad_temperatures or bad_pressures:
         raise CodedValueError(
             "network_kinetics_evaluate_invalid_point",
-            "temperature_k and pressure_bar must be strictly positive; got "
-            f"invalid temperature_k={bad_temperatures!r}, "
+            "temperature_k and pressure_bar must be finite and strictly "
+            f"positive; got invalid temperature_k={bad_temperatures!r}, "
             f"invalid pressure_bar={bad_pressures!r}.",
         )
     grid_size = len(temperatures_k) * len(pressures_bar)
@@ -405,12 +421,26 @@ def _evaluate_plog_points(
             "one."
         )
     entries = [
-        PlogEntry(pressure_bar=r.pressure_bar, a=r.a, n=r.n, ea_kj_mol=r.ea_kj_mol)
+        PlogEntry(
+            pressure_bar=r.pressure_bar,
+            a=r.a,
+            n=r.n,
+            ea_kj_mol=r.ea_kj_mol,
+            a_units=r.a_units.value if r.a_units is not None else None,
+        )
         for r in rows
     ]
     try:
         results = [
-            evaluate_plog(t, p, entries=entries)
+            # tmin_k/tmax_k: PLOG has no per-entry temperature bound (only
+            # pressure is discretized by the table), so the temperature
+            # axis of in_range is judged against the parent row's own
+            # declared bounds -- the same ones Chebyshev uses. Omitting
+            # these here is exactly the bug that let a PLOG record call
+            # 5000 K "in range" on a table only ever fit to 2000 K.
+            evaluate_plog(
+                t, p, entries=entries, tmin_k=nk.tmin_k, tmax_k=nk.tmax_k
+            )
             for t in temperatures_k
             for p in pressures_bar
         ]

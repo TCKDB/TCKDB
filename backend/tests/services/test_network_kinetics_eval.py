@@ -227,14 +227,20 @@ def test_chebyshev_stores_log10_k_none_defaults_to_log10_convention() -> None:
 
 def test_modified_arrhenius_k_matches_hand_computation() -> None:
     """k = A * T^n * exp(-Ea/RT) at T=1000K for the P=1 bar PLOG entry
-    (a=58937.7, n=2.40426, ea_kj_mol=225.144), R=8.314462618 J/mol/K:
+    (a=58937.7, n=2.40426, ea_kj_mol=225.144), R=8.314462618 J/mol/K.
 
-    Ea/R = 225144 / 8.314462618 = 27080.0... K
-    Ea/(R*T) = 27.0800...
-    exp(-27.0800) = 1.7469e-12
-    1000**2.40426 = 10**(2.40426*3) = 10**7.21278 = 1.63191e7
-    k = 58937.7 * 1.63191e7 * 1.7469e-12 = 1.6798... (calculator value
-    below is carried to more digits: 1.671425).
+    Independent calculator working (corrected: an earlier version of
+    this comment carried Ea/R as 27080.0 and the chain product as
+    1.6798, neither of which reproduces the pinned value below --
+    the pin itself was always correct, only the shown working was
+    wrong; this is the actual working that reproduces it):
+
+    Ea/R = 225144 / 8.314462618 = 27078.599104238583 K
+    Ea/(R*T) = 27078.599104238583 / 1000 = 27.078599104238585
+    exp(-27.078599104238585) = 1.7374560647980963e-12
+    1000**2.40426 = 16322249.043535251
+    k = 58937.7 * 16322249.043535251 * 1.7374560647980963e-12
+      = 1.6714254673444082
     """
     k = modified_arrhenius_k(1000.0, a=58937.7, n=2.40426, ea_kj_mol=225.144)
     assert k == pytest.approx(1.671425, rel=1e-5)
@@ -252,21 +258,46 @@ def test_plog_evaluate_at_fitted_pressure_matches_hand_computation() -> None:
 
 def test_plog_evaluate_agrees_with_chebyshev_for_the_same_real_channel() -> None:
     """These two fixtures are the SAME stored channel
-    (source=N=N(E)+H2, sink=2 NH2) fit two different ways. A Chebyshev
-    polynomial fit and a PLOG interpolation of the same underlying
-    k(T,P) surface should agree to a few percent, not merely to the
-    right order of magnitude -- this is the strongest cross-check
-    available (real archived data, two independent representations),
-    at three points spanning the grid including both corners."""
-    for t, p in [(1000.0, 1.0), (300.0, 0.01), (2000.0, 100.0)]:
+    (source=N=N(E)+H2, sink=2 NH2) fit two different ways -- the
+    strongest cross-check available (real archived data, two
+    independent representations of one physical rate).
+
+    Measured (independent calculator, scanning T in [300, 2000] every
+    20 K and P as a dense log grid in [0.01, 100] bar -- 91x41 points
+    on this one channel): worst relative deviation is **15.20%**, at
+    (T=580K, P=100bar): cheb=1.2794e-9, plog=1.1106e-9 cm3/mol/s. The
+    three corner/mid points originally pinned here individually agree
+    much tighter (1.3%, 4.3%, 0.8%), which is why an earlier version of
+    this test carried a much tighter rel=0.05 tolerance -- that
+    tolerance was only ever exercised at those three easy points, not
+    at the worst point on the surface, and was already at 4.31% of its
+    own 5% budget on the loosest of the three.
+
+    Why 15% and not <1%: this is a global 6x4 Chebyshev polynomial
+    fit (24 coefficients spanning the WHOLE T/P rectangle at once)
+    being compared against a 5-pressure PLOG table that log-linearly
+    interpolates ONLY between its two immediate bracketing isobars.
+    They are both real fits of the same underlying master-equation
+    solution, not the same function evaluated two ways -- disagreement
+    is fit residual, concentrated (as measured above) in the
+    mid-temperature / high-pressure region where this channel's k(T,P)
+    surface has the most curvature (a falloff-like transition), which
+    is exactly where a 4th-order pressure polynomial and a 5-point
+    log-linear table are least likely to agree with each other even
+    though both are individually reasonable fits of the true surface.
+    rel=0.20 is chosen to sit just above the measured 15.20% worst
+    case with headroom, while still catching a formula-level bug (which
+    produces disagreement of orders of magnitude, not tens of percent
+    -- see the other tests in this file for exactly that failure mode).
+    """
+    for t, p in [(1000.0, 1.0), (300.0, 0.01), (2000.0, 100.0), (580.0, 100.0)]:
         cheb = evaluate_chebyshev(
             t, p, coefficients=_CHEB_MATRIX, stores_log10_k=True, **_CHEB_BOUNDS
         )
-        plog = evaluate_plog(t, p, entries=_PLOG_ENTRIES)
-        # PLOG is exact at its own fitted pressures/corners; Chebyshev is
-        # a polynomial fit of that same surface, so a few-percent residual
-        # is the expected shape of agreement, not a coincidence.
-        assert cheb.k == pytest.approx(plog.k, rel=0.05), (t, p, cheb.k, plog.k)
+        plog = evaluate_plog(
+            t, p, entries=_PLOG_ENTRIES, tmin_k=300.0, tmax_k=2000.0
+        )
+        assert cheb.k == pytest.approx(plog.k, rel=0.20), (t, p, cheb.k, plog.k)
 
 
 def test_plog_log_log_interpolation_matches_hand_computation() -> None:
@@ -334,6 +365,137 @@ def test_plog_flat_extrapolation_below_and_above_table_range() -> None:
     assert above.in_range is False
     assert at_max.in_range is True
     assert above.k == pytest.approx(at_max.k)
+
+
+def test_plog_in_range_considers_temperature_not_only_pressure() -> None:
+    """Live-reachable regression: a PLOG record whose table is only
+    ever fit to [300, 2000] K must not report in_range=True for a
+    temperature outside that range merely because the *pressure*
+    happens to fall inside the table's pressure span. Before this was
+    fixed, ``evaluate_plog`` had no ``tmin_k``/``tmax_k`` parameter at
+    all and computed ``in_range`` from pressure alone -- so
+    nkin_lsoxdf26irod3nqr6tgjp4tlt4 (stored 300-2000K) returned
+    ``in_range: true`` for 5000 K, 3000 K, 250 K and 100 K at 1 bar,
+    while the Chebyshev fit of the SAME physical channel correctly
+    flagged the same points as extrapolated -- two representations of
+    one rate disagreeing about validity, with the PLOG one wrong.
+
+    Checked here at 2001 K / 299 K (just outside each bound) and at
+    exactly 2000 K / 300 K (the inclusive boundary itself), all at
+    P=1 bar (comfortably inside the table's pressure span, so pressure
+    contributes nothing to in_range in this test -- isolating the
+    temperature axis specifically).
+    """
+    just_above_tmax = evaluate_plog(
+        2001.0, 1.0, entries=_PLOG_ENTRIES, tmin_k=300.0, tmax_k=2000.0
+    )
+    just_below_tmin = evaluate_plog(
+        299.0, 1.0, entries=_PLOG_ENTRIES, tmin_k=300.0, tmax_k=2000.0
+    )
+    at_tmax = evaluate_plog(
+        2000.0, 1.0, entries=_PLOG_ENTRIES, tmin_k=300.0, tmax_k=2000.0
+    )
+    at_tmin = evaluate_plog(
+        300.0, 1.0, entries=_PLOG_ENTRIES, tmin_k=300.0, tmax_k=2000.0
+    )
+    assert just_above_tmax.in_range is False
+    assert just_below_tmin.in_range is False
+    assert at_tmax.in_range is True
+    assert at_tmin.in_range is True
+
+    # The value is still computed at the out-of-range points (never
+    # refused outright), matching the module's general extrapolation
+    # contract.
+    assert math.isfinite(just_above_tmax.k) and just_above_tmax.k > 0
+    assert math.isfinite(just_below_tmin.k) and just_below_tmin.k > 0
+
+
+def test_plog_in_range_temperature_unbounded_when_bounds_not_supplied() -> None:
+    """When the caller has no ``tmin_k``/``tmax_k`` to pass (the
+    record never recorded them), the temperature axis is treated as
+    unbounded -- never the reason a point is refused or flagged -- so a
+    genuinely wild temperature is still judged purely on pressure."""
+    result = evaluate_plog(50000.0, 1.0, entries=_PLOG_ENTRIES)
+    assert result.in_range is True  # 1 bar is within [0.01, 100]
+
+
+def test_plog_duplicate_entries_with_disagreeing_a_units_refuses() -> None:
+    """Two entries sharing one fitted pressure must not be silently
+    summed if they disagree about what unit their sum would even be
+    in -- a guard the evaluator owns, since the invariant is enforced
+    on ingestion by only one ingester and nothing prevents a caller of
+    this pure function from handing it inconsistent entries directly."""
+    with pytest.raises(KineticsEvaluationError):
+        evaluate_plog(
+            1000.0,
+            1.0,
+            entries=[
+                PlogEntry(
+                    pressure_bar=1.0, a=1e10, n=0.0, ea_kj_mol=50.0,
+                    a_units="cm3_mol_s",
+                ),
+                PlogEntry(
+                    pressure_bar=1.0, a=1e10, n=0.0, ea_kj_mol=50.0,
+                    a_units="cm3_molecule_s",
+                ),
+            ],
+        )
+    # Agreeing (or unrecorded) a_units must not be refused.
+    ok = evaluate_plog(
+        1000.0,
+        1.0,
+        entries=[
+            PlogEntry(
+                pressure_bar=1.0, a=1e10, n=0.0, ea_kj_mol=50.0,
+                a_units="cm3_mol_s",
+            ),
+            PlogEntry(
+                pressure_bar=1.0, a=1e10, n=0.0, ea_kj_mol=50.0,
+                a_units="cm3_mol_s",
+            ),
+        ],
+    )
+    assert math.isfinite(ok.k)
+
+
+def test_plog_negative_duplicate_a_refuses_with_coded_error_not_a_crash() -> None:
+    """A Chemkin DUPLICATE pair fitting curvature with a negative
+    pre-exponential factor is a standard, uploadable construct (the
+    schema places no sign constraint on ``a``). If the two entries at
+    one bracket pressure sum to a non-positive rate coefficient, taking
+    log10 of it is undefined -- this must be refused with
+    KineticsEvaluationError (which the service layer turns into a
+    proper coded 422), never let ``math.log10`` raise an uncaught
+    ``ValueError: math domain error`` that surfaces as a generic,
+    uncoded validation failure."""
+    entries = [
+        # At 1 bar: a large positive term plus a nearly-cancelling
+        # negative term drives the summed k slightly negative.
+        PlogEntry(pressure_bar=1.0, a=1.0e10, n=0.0, ea_kj_mol=50.0),
+        PlogEntry(pressure_bar=1.0, a=-1.05e10, n=0.0, ea_kj_mol=50.0),
+        # A normal, single positive entry at the other bracket pressure
+        # so interpolation is actually attempted (not just a
+        # single-fitted-pressure lookup).
+        PlogEntry(pressure_bar=10.0, a=1.0e10, n=0.0, ea_kj_mol=50.0),
+    ]
+    with pytest.raises(KineticsEvaluationError):
+        evaluate_plog(1000.0, 5.0, entries=entries)
+
+
+def test_chebyshev_and_plog_reject_infinite_temperature_identically() -> None:
+    """Chebyshev and PLOG must behave the same way when asked to
+    evaluate at a non-finite temperature: both refuse. Before this was
+    fixed, ``not (t > 0)`` (True for ``+inf`` being > 0) let ``inf``
+    through Chebyshev's own bound check silently, while PLOG's
+    Arrhenius evaluator already rejected it via its own
+    ``math.isfinite`` guard -- an asymmetry between the two model
+    kinds for the identical malformed input."""
+    with pytest.raises(KineticsEvaluationError):
+        evaluate_chebyshev(
+            float("inf"), 1.0, coefficients=_CHEB_MATRIX, **_CHEB_BOUNDS
+        )
+    with pytest.raises(KineticsEvaluationError):
+        evaluate_plog(float("inf"), 1.0, entries=_PLOG_ENTRIES)
 
 
 def test_plog_duplicate_pressure_entries_are_summed() -> None:
