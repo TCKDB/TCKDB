@@ -70,6 +70,7 @@ PROFILE_METHODS = _typed_methods_for("profile")
 #: Methods whose first parameter is a required handle, and a value for it.
 _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "download_artifact": ("a" * 64,),
+    "evaluate_network_kinetics": ("nkin_1",),
     "export_chemkin": ({"species_refs": ["spc_1"]},),
     "get_calculation": ("calc_1",),
     "get_calculation_irc": ("calc_1",),

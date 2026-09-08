@@ -446,6 +446,33 @@ class TestNetworkKineticsEvaluate:
         assert result["points"][0]["k"] == 1.69
         assert result["points"][0]["in_range"] is True
 
+    def test_profile_reaches_the_wire(self):
+        """Same contract every other typed scientific read method carries
+        (see ``tests/test_read_profile.py``, which also parametrizes over
+        this method generically): ``profile`` lands on the query string
+        alongside the repeated ``temperature_k``/``pressure_bar`` params,
+        and is simply absent when not supplied -- never a default value
+        smuggled in on the caller's behalf.
+        """
+        handler, seen = _capture(self._evaluate_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics(
+            "nkin_1", temperature_k=1000.0, pressure_bar=1.0, profile="curated"
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["profile"] == ["curated"]
+        assert query["temperature_k"] == ["1000.0"]
+        assert query["pressure_bar"] == ["1.0"]
+
+        handler2, seen2 = _capture(self._evaluate_body())
+        client2, _ = make_client(handler2)
+        client2.evaluate_network_kinetics(
+            "nkin_1", temperature_k=1000.0, pressure_bar=1.0
+        )
+        assert "profile" not in _query_of(str(seen2[0].url))
+
 
 # ---------------------------------------------------------------------------
 # Reference libraries

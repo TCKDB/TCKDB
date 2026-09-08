@@ -1958,8 +1958,9 @@ class TCKDBClient:
         self,
         network_kinetics_ref_or_id: int | str,
         *,
-        temperature_k: float | list[float],
-        pressure_bar: float | list[float],
+        temperature_k: float | list[float] | None = None,
+        pressure_bar: float | list[float] | None = None,
+        profile: str | None = None,
     ) -> NetworkKineticsEvaluateResponse:
         """``GET /scientific/network-kinetics/{ref}/evaluate`` -- server-side k(T,P).
 
@@ -1991,13 +1992,31 @@ class TCKDBClient:
         (``network_kinetics_evaluate_grid_too_large``) rather than
         silently truncated.
 
+        ``temperature_k`` / ``pressure_bar`` default to ``None`` and are
+        then omitted from the request, matching every other filter/
+        parameter on this client -- "at least one is required" is a
+        server-side rule (422 ``network_kinetics_evaluate_missing_
+        temperature`` / ``..._missing_pressure``), not a client-side
+        one, the same division of responsibility ``search_network_kinetics``
+        and every other typed method already use. A caller who actually
+        wants a result must supply both; this signature does not
+        second-guess that with a default temperature or pressure of its
+        own invention, which would silently answer a different
+        question than the one asked.
+
         :param network_kinetics_ref_or_id: Integer id or ``nkin_…`` ref.
         :param temperature_k: One or more temperatures, K.
         :param pressure_bar: One or more pressures, bar.
+        :param profile: Read profile selecting which curated view of the
+            archive this read is answered from (see
+            ``backend/docs/specs/dataset_release_and_profiles.md``).
+            Forwarded like every other typed scientific read method;
+            omitted, the server default applies.
         """
         params = {
             "temperature_k": temperature_k,
             "pressure_bar": pressure_bar,
+            "profile": profile,
         }
         return self.request_json(
             "GET",
