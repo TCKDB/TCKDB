@@ -1,3 +1,4 @@
+import { useId, useState } from "react"
 import "../arrhenius-chart.css"
 import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 import {
@@ -5,32 +6,58 @@ import {
     ARRHENIUS_CHART_MARGIN,
     ARRHENIUS_CHART_WIDTH,
     type ArrheniusPanel as ArrheniusPanelData,
+    type ArrheniusXAxisMode,
+    arrheniusPanelKey,
+    arrheniusPointX,
     arrheniusUnitLabel,
     buildArrheniusChartData,
+    convertArrheniusSeriesUnits,
     panelLog10KDomain,
-    panelTemperatureDomain,
+    panelXDomain,
 } from "../domain/arrheniusChartLayout"
+import { arrheniusUnitConversionFactor, FAMILY_NAME } from "../domain/arrheniusUnits"
 import { formatTicks, linearScale } from "../domain/chartScale"
-import { computeKineticsTable, log10Text, scientificText } from "../domain/kineticsTable"
+import { computeKineticsTable, convertKineticsTableRows, log10Text, scientificText } from "../domain/kineticsTable"
 import { niceTicks, seriesColor } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
 
 // ---------------------------------------------------------------------------
 // Hand-rolled SVG, no charting library -- same precedent `ThermoCpChart.tsx`
-// follows (see that file's own header comment). One panel per DISTINCT
-// `A_units` (plan §4: "a page mixing per_s and cm3_mol_s gets two panels"):
-// unlike Cp records, which all share one unit family, kinetics records on
-// one reaction entry can legitimately report rate constants in physically
-// different units (a unimolecular record in s⁻¹ beside a bimolecular one in
+// follows (see that file's own header comment). One panel per ORDER FAMILY
+// (unimolecular/`per_s`, bimolecular, termolecular): unlike Cp records,
+// which all share one unit family, kinetics records on one reaction entry
+// can legitimately report rate constants in physically different order
+// families (a unimolecular record in s⁻¹ beside a bimolecular one in
 // cm³ mol⁻¹ s⁻¹), and overlaying those on one y-axis would silently compare
-// two different quantities on the same scale.
+// two different quantities on the same scale. Two records that merely
+// differ in WHICH unit of the same family they were deposited in
+// (`cm3_mol_s` vs `m3_mol_s`) now share ONE panel -- that's the whole point
+// of the per-panel unit selector below, and grouping them apart (as this
+// file used to, by the raw `A_units` token) made them uncomparable on a
+// page whose job is comparing deposits.
 //
-// x = temperature (K), linear, over the UNION of every plotted series' own
-// fitted range for that panel; each curve is drawn only within ITS OWN
-// `record_min_k..record_max_k`, so a narrower-range record's line stops
-// short of a wider panel's own axis rather than being extrapolated past its
-// stated validity. y = log10(k) -- the Arrhenius equation's own log-linear
-// axis, over several orders of magnitude for most real rate constants.
+// x = temperature (K) by default, or 1000/T (K⁻¹, high T on the left) when
+// the top-level axis-mode control is switched -- one control governs every
+// panel at once, since which axis a reader wants is a reading-convention
+// choice, not a per-record fact. Either way the x-domain is the UNION of
+// every plotted series' own fitted range for that panel; each curve is
+// drawn only within ITS OWN `record_min_k..record_max_k`
+// (`arrheniusPointX` only re-projects an already-sampled point, it never
+// resamples). y = log10(k) -- the Arrhenius equation's own log-linear axis.
+//
+// Each convertible panel (order family known, more than one unit in it)
+// carries its own unit `<select>`, defaulted to the unit most of that
+// panel's OWN records were deposited in
+// (`arrheniusChartLayout.ts`'s `modalDepositedUnit`). Selecting a different
+// unit re-converts every series in the panel via `convertArrheniusSeriesUnits`
+// (`domain/arrheniusUnits.ts`'s conversion factor -- NEVER offered across
+// order families) and, per this PR's own "the k(T) table must follow the
+// same selection" rule, the SAME selection also re-converts that panel's
+// records' own k(T) tables (`convertKineticsTableRows`) -- one piece of
+// state (`selectedUnitsByPanel` below) feeds both surfaces, so they cannot
+// drift apart. A record's OWN deposited unit stays visible regardless of
+// the current selection: the legend chip below states it explicitly
+// (`series N — ref (deposited: …)`).
 //
 // PLOG/Chebyshev/falloff-fitted records have no single k(T) curve without a
 // stated pressure, and a third-body record's rate depends on a bath-gas
@@ -49,6 +76,31 @@ import { Disclosure } from "./Disclosure"
 export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[] }) {
     const { panels, excluded } = buildArrheniusChartData(kinetics)
 
+    // ONE control for the whole section (see header comment above) --
+    // default unchanged from before this PR: temperature in K.
+    const [xAxisMode, setXAxisMode] = useState<ArrheniusXAxisMode>("temperature")
+    // Per-panel unit selection, keyed by `arrheniusPanelKey` -- lifted to
+    // THIS component (not local to a panel's own sub-component) because the
+    // k(T) table below, keyed by kinetics_ref rather than by panel, needs
+    // to read the very same selection the chart is currently showing.
+    const [selectedUnitsByPanel, setSelectedUnitsByPanel] = useState<Record<string, string>>({})
+
+    // The unit each panel is CURRENTLY displaying -- the user's own choice
+    // if they've made one for that panel, else the panel's own modal
+    // deposited unit, else (unrecorded/unrecognised units) `undefined`.
+    // Built once here and handed to both the chart panels and the table
+    // below, so neither can read a stale or differently-derived value.
+    const displayUnitsByPanelKey = new Map<string, string | undefined>()
+    for (const panel of panels) {
+        const key = arrheniusPanelKey(panel)
+        displayUnitsByPanelKey.set(key, selectedUnitsByPanel[key] ?? panel.defaultUnits)
+    }
+    const displayUnitsByRef = new Map<string, string | undefined>()
+    for (const panel of panels) {
+        const displayUnits = displayUnitsByPanelKey.get(arrheniusPanelKey(panel))
+        for (const series of panel.series) displayUnitsByRef.set(series.kinetics_ref, displayUnits)
+    }
+
     // Every record whose OWN k(T) table is computable -- the chart's text
     // equivalent set. `computeKineticsTable` (`domain/kineticsTable.ts`)
     // gates on the SAME four conditions `exclusionReasons` below does --
@@ -63,15 +115,40 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
 
     return (
         <div className="arrhenius-chart-section">
+            {panels.length > 0 && (
+                <div className="arrhenius-chart-controls">
+                    <label className="arrhenius-chart-control">
+                        <span className="arrhenius-chart-control-label">X-axis</span>
+                        <select
+                            className="arrhenius-chart-control-select"
+                            value={xAxisMode}
+                            onChange={(event) => setXAxisMode(event.target.value as ArrheniusXAxisMode)}
+                        >
+                            <option value="temperature">Temperature (K)</option>
+                            <option value="inverse_temperature">1000 / T (K⁻¹)</option>
+                        </select>
+                    </label>
+                </div>
+            )}
+
             {panels.length === 0 ? (
                 <p className="empty-projection">
                     No rate coefficient among this reaction entry's kinetics records can be rendered as a single
                     k(T) curve.
                 </p>
             ) : (
-                panels.map((panel) => (
-                    <ArrheniusPanelChart key={panel.aUnits ?? "\0unrecorded"} panel={panel} />
-                ))
+                panels.map((panel) => {
+                    const key = arrheniusPanelKey(panel)
+                    return (
+                        <ArrheniusPanelChart
+                            key={key}
+                            panel={panel}
+                            xAxisMode={xAxisMode}
+                            selectedUnits={displayUnitsByPanelKey.get(key)}
+                            onSelectUnits={(units) => setSelectedUnitsByPanel((prev) => ({ ...prev, [key]: units }))}
+                        />
+                    )
+                })
             )}
 
             {excluded.length > 0 && (
@@ -99,7 +176,18 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
             {tableRecords.length > 0 && (
                 <div className="arrhenius-chart-tables">
                     {tableRecords.map(({ record, table }) => {
-                        const unitLabel = record.parameters.A_units ? arrheniusUnitLabel(record.parameters.A_units) : ""
+                        const depositedUnits = record.parameters.A_units ?? null
+                        // Falls back to the record's OWN deposited unit
+                        // (never to some other unit) when it isn't part of
+                        // any panel's selection map for some reason -- this
+                        // table must never show a unit the chart never
+                        // offered for this exact record.
+                        const displayUnits = displayUnitsByRef.get(record.kinetics_ref) ?? depositedUnits
+                        const factor = depositedUnits != null && displayUnits != null
+                            ? arrheniusUnitConversionFactor(depositedUnits, displayUnits) ?? 1
+                            : 1
+                        const displayRows = convertKineticsTableRows(table, factor)
+                        const unitLabel = displayUnits ? arrheniusUnitLabel(displayUnits) : ""
                         return (
                             <Disclosure
                                 key={record.kinetics_ref}
@@ -112,7 +200,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                                 // uniqueness assumption used throughout
                                 // `ReactionEntryPage.test.tsx`.
                                 summary={<code className="data">{`k(T) table — ${record.kinetics_ref}`}</code>}
-                                count={table.length}
+                                count={displayRows.length}
                             >
                                 <div className="table-scroll">
                                     <table className="data-table kinetics-k-table" aria-label={`k(T) for ${record.kinetics_ref}`}>
@@ -125,7 +213,7 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {table.map((row) => (
+                                            {displayRows.map((row) => (
                                                 <tr key={row.temperatureK}>
                                                     <td className="num" data-label="T (K)">{row.temperatureK.toFixed(2)}</td>
                                                     <td className="num" data-label="k">{scientificText(row.k)}</td>
@@ -144,46 +232,103 @@ export function ArrheniusChart({ kinetics }: { kinetics: ReactionKineticsRecord[
     )
 }
 
-function ArrheniusLegend({ panel }: { panel: ArrheniusPanelData }) {
+function ArrheniusLegend({ panel, displaySeriesDepositedUnits }: { panel: ArrheniusPanelData, displaySeriesDepositedUnits: (ref: string) => string | null }) {
     return (
         <ul className="arrhenius-chart-legend" aria-label="Kinetics record series">
             {panel.series.map((series, index) => (
                 <li key={series.kinetics_ref} className="arrhenius-chart-legend-item" data-testid={`arrhenius-legend-${series.kinetics_ref}`}>
                     <span className="arrhenius-chart-swatch" style={{ background: seriesColor(index) }} aria-hidden="true" />
-                    {/* The ref is folded into ONE text run ("series N — ref"),
+                    {/* The ref is folded into ONE text run with the record's
+                        OWN deposited unit ("series N — ref (deposited: …)"),
                         never a bare `<code>{series.kinetics_ref}</code>` leaf
                         on its own -- see the excluded-notes comment above
                         for why a second isolated leaf node with the exact
                         ref text breaks `ReactionEntryPage.test.tsx`'s
-                        `findByText(ref)` uniqueness assumption. */}
-                    <code className="data">{`series ${index + 1} — ${series.kinetics_ref}`}</code>
+                        `findByText(ref)` uniqueness assumption. Stating the
+                        DEPOSITED unit here (not the panel's currently
+                        SELECTED one) is this PR's own invariant: a record's
+                        deposited units must remain visible somewhere on its
+                        own surface regardless of what the panel is
+                        currently displaying. */}
+                    <code className="data">
+                        {`series ${index + 1} — ${series.kinetics_ref} (deposited: ${arrheniusUnitLabel(displaySeriesDepositedUnits(series.kinetics_ref))})`}
+                    </code>
                 </li>
             ))}
         </ul>
     )
 }
 
-function ArrheniusPanelChart({ panel }: { panel: ArrheniusPanelData }) {
-    const temperatureDomain = panelTemperatureDomain(panel)
-    const kDomain = panelLog10KDomain(panel)
+function ArrheniusPanelChart({ panel, xAxisMode, selectedUnits, onSelectUnits }: {
+    panel: ArrheniusPanelData
+    xAxisMode: ArrheniusXAxisMode
+    selectedUnits: string | undefined
+    onSelectUnits: (units: string) => void
+}) {
+    const selectId = useId()
+    const displayUnits = selectedUnits ?? panel.defaultUnits
+    // `panel.series` itself, UNCONVERTED, in every place only the
+    // temperature range matters (unit conversion never touches
+    // `minK`/`maxK`) -- conversion is only applied where log10(k) is
+    // actually read (`displaySeries` below).
+    const displaySeries = displayUnits != null
+        ? panel.series.map((series) => convertArrheniusSeriesUnits(series, displayUnits))
+        : panel.series
+    const unitLabel = arrheniusUnitLabel(displayUnits ?? null)
+    // A control with a single option (`per_s`'s own family, or an
+    // unrecorded/unrecognised panel's empty `availableUnits`) is never
+    // rendered at all (plan §4).
+    const showUnitSelector = panel.availableUnits.length > 1
+
+    const xDomain = panelXDomain(panel.series, xAxisMode)
+    const kDomain = panelLog10KDomain(displaySeries)
     const { top, right, bottom, left } = ARRHENIUS_CHART_MARGIN
     const plotWidth = ARRHENIUS_CHART_WIDTH - left - right
     const plotHeight = ARRHENIUS_CHART_HEIGHT - top - bottom
-    const xScale = linearScale(temperatureDomain, [left, left + plotWidth])
+    const xScale = linearScale(xDomain, [left, left + plotWidth])
     const yScale = linearScale(kDomain, [top + plotHeight, top])
-    const xTicks = niceTicks(temperatureDomain, 5)
+    const xTicks = niceTicks(xDomain, 5)
     const yTicks = niceTicks(kDomain, 5)
     const xTickLabels = formatTicks(xTicks)
     const yTickLabels = formatTicks(yTicks)
 
     const refList = panel.series.map((series) => series.kinetics_ref).join(", ")
-    const ariaLabel = `Arrhenius plot, log10 k versus temperature, in ${panel.unitLabel}: `
+    // The axis clause names what x actually is, and -- in the inverse mode
+    // -- states BOTH the reading convention (high T at the left) and the
+    // straight-line fact this PR's brief calls out explicitly, since the
+    // `aria-label` is this panel's own accessible substitute for seeing
+    // the axis drawn.
+    const axisDescription = xAxisMode === "temperature"
+        ? "temperature in kelvin"
+        : "1000 divided by temperature in inverse kelvin, high temperature at the left; a simple Arrhenius record draws as a straight line on this axis"
+    const ariaLabel = `Arrhenius plot, log10 k versus ${axisDescription}, in ${unitLabel}: `
         + `${panel.series.length} record${panel.series.length === 1 ? "" : "s"} (${refList})`
 
     return (
         <div className="arrhenius-chart-panel-wrap">
-            <p className="arrhenius-chart-panel-heading">{panel.unitLabel}</p>
-            <ArrheniusLegend panel={panel} />
+            <div className="arrhenius-chart-panel-heading-row">
+                <p className="arrhenius-chart-panel-heading">{unitLabel}</p>
+                {showUnitSelector && (
+                    <label className="arrhenius-chart-control arrhenius-chart-panel-unit-control" htmlFor={selectId}>
+                        <span className="arrhenius-chart-control-label">Display units</span>
+                        <select
+                            id={selectId}
+                            className="arrhenius-chart-control-select"
+                            aria-label={`Display units (${FAMILY_NAME[panel.orderFamily!]})`}
+                            value={displayUnits ?? panel.availableUnits[0]}
+                            onChange={(event) => onSelectUnits(event.target.value)}
+                        >
+                            {panel.availableUnits.map((units) => (
+                                <option key={units} value={units}>{arrheniusUnitLabel(units)}</option>
+                            ))}
+                        </select>
+                    </label>
+                )}
+            </div>
+            <ArrheniusLegend
+                panel={panel}
+                displaySeriesDepositedUnits={(ref) => panel.series.find((series) => series.kinetics_ref === ref)?.depositedUnits ?? null}
+            />
             <div className="arrhenius-chart-panel">
                 <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">log₁₀ k</p>
                 <div className="arrhenius-chart-scroll">
@@ -213,11 +358,11 @@ function ArrheniusPanelChart({ panel }: { panel: ArrheniusPanelData }) {
                         ))}
                         <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} className="arrhenius-chart-axis-line" />
                         <line x1={left} x2={left} y1={top} y2={top + plotHeight} className="arrhenius-chart-axis-line" />
-                        {panel.series.map((series, index) => (
+                        {displaySeries.map((series, index) => (
                             <polyline
                                 key={series.kinetics_ref}
                                 data-testid={`arrhenius-line-${series.kinetics_ref}`}
-                                points={series.points.map((point) => `${xScale(point.temperatureK)},${yScale(point.log10k)}`).join(" ")}
+                                points={series.points.map((point) => `${xScale(arrheniusPointX(point, xAxisMode))},${yScale(point.log10k)}`).join(" ")}
                                 fill="none"
                                 stroke={seriesColor(index)}
                                 strokeWidth={1.75}
@@ -238,7 +383,7 @@ function ArrheniusPanelChart({ panel }: { panel: ArrheniusPanelData }) {
                         className="arrhenius-chart-axis-title arrhenius-chart-axis-title--x"
                         style={{ marginLeft: left, width: plotWidth }}
                     >
-                        Temperature (K)
+                        {xAxisMode === "temperature" ? "Temperature (K)" : "1000 / T (K⁻¹)"}
                     </p>
                 </div>
             </div>

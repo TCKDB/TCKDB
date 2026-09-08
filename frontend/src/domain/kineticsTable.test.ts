@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { arrheniusTermK, computeKineticsTable, formatArrheniusValue, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
+import { arrheniusTermK, computeKineticsTable, convertKineticsTableRows, formatArrheniusValue, log10Text, scientificText, TABLE_POINT_COUNT } from "./kineticsTable"
 
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300–3000 K --
 // `kin_spkzatwjlvmmnja3i5im4fl7hq`'s own live values, independently
@@ -89,6 +89,28 @@ describe("computeKineticsTable", () => {
 
     it("returns null when there is no A to compute from at all", () => {
         expect(computeKineticsTable(record({ parameters: { A: null, n: null, Ea_kj_mol: null } }))).toBeNull()
+    })
+})
+
+describe("convertKineticsTableRows -- the table's own half of the unit selector", () => {
+    it("factor 1 (identity -- viewing the record's own deposited unit) returns the SAME array, no float churn", () => {
+        const rows = computeKineticsTable(record())!
+        const converted = convertKineticsTableRows(rows, 1)
+        expect(converted).toBe(rows)
+        expect(converted[0].k).toBe(rows[0].k)
+    })
+
+    // Independently hand-computed (python): 17028.619287800688 * 1e-6 =
+    // 0.017028619287800688 -- the SAME cm³->m³ factor `arrheniusUnits.test.ts`
+    // and `arrheniusChartLayout.test.ts` pin for the chart's own curve, so a
+    // wrong factor here would put the table and the chart in disagreement
+    // even if each looked internally consistent on its own.
+    it("multiplies every row's k by the given factor, leaving temperatureK untouched", () => {
+        const rows = computeKineticsTable(record())!
+        const converted = convertKineticsTableRows(rows, 1e-6)
+        expect(converted[0].temperatureK).toBe(rows[0].temperatureK)
+        expect(converted[0].k).toBeCloseTo(0.017028619287800688, 12)
+        expect(converted[0].k).toBeCloseTo(rows[0].k * 1e-6, 12)
     })
 })
 

@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest"
 import {
     ARRHENIUS_SAMPLE_COUNT,
+    arrheniusPanelKey,
+    arrheniusPointX,
     arrheniusUnitLabel,
     buildArrheniusChartData,
     computeArrheniusSeries,
+    convertArrheniusSeriesUnits,
     panelLog10KDomain,
     panelTemperatureDomain,
+    panelXDomain,
 } from "./arrheniusChartLayout"
+import { convertArrheniusValue } from "./arrheniusUnits"
 
 // The SAME live values `kineticsTable.test.ts` pins (`kin_spkzatwjlvmmnja3i5im4fl7hq`,
 // A=3025.44 cm³ mol⁻¹ s⁻¹, n=3.11242, Ea=39.9711 kJ/mol, 300-3000 K) --
@@ -41,6 +46,13 @@ describe("computeArrheniusSeries -- k(T) at the domain ends against the hand-com
         expect(series.points[series.points.length - 1].temperatureK).toBe(3000)
         expect(series.minK).toBe(300)
         expect(series.maxK).toBe(3000)
+    })
+
+    it("carries the record's OWN deposited A_units, unconverted", () => {
+        const series = computeArrheniusSeries(record())!
+        expect(series.depositedUnits).toBe("cm3_mol_s")
+        const unrecorded = computeArrheniusSeries(record({ parameters: { A, n, Ea_kj_mol: Ea, A_units: null } }))!
+        expect(unrecorded.depositedUnits).toBeNull()
     })
 
     it("k(300 K) and k(3000 K) match the independently hand-computed values", () => {
@@ -85,8 +97,8 @@ describe("arrheniusUnitLabel", () => {
     })
 })
 
-describe("buildArrheniusChartData -- per-unit panel split", () => {
-    it("a page mixing per_s and cm3_mol_s records gets two panels, each holding only its own unit's series", () => {
+describe("buildArrheniusChartData -- per-ORDER-FAMILY panel split (defect fix: no longer per raw A_units token)", () => {
+    it("a page mixing per_s and cm3_mol_s records gets two panels (different order families), each holding only its own family's series", () => {
         const perSRecord = record({
             kinetics_ref: "kin_unimolecular",
             parameters: { A: 9444750000, n: 0, Ea_kj_mol: 10, A_units: "per_s" },
@@ -96,9 +108,9 @@ describe("buildArrheniusChartData -- per-unit panel split", () => {
 
         expect(excluded).toHaveLength(0)
         expect(panels).toHaveLength(2)
-        expect(panels[0].aUnits).toBe("per_s")
+        expect(panels[0].orderFamily).toBe(1)
         expect(panels[0].series.map((s) => s.kinetics_ref)).toEqual(["kin_unimolecular"])
-        expect(panels[1].aUnits).toBe("cm3_mol_s")
+        expect(panels[1].orderFamily).toBe(2)
         expect(panels[1].series.map((s) => s.kinetics_ref)).toEqual(["kin_bimolecular"])
     })
 
@@ -108,6 +120,81 @@ describe("buildArrheniusChartData -- per-unit panel split", () => {
         const { panels } = buildArrheniusChartData([first, second])
         expect(panels).toHaveLength(1)
         expect(panels[0].series.map((s) => s.kinetics_ref)).toEqual(["kin_a", "kin_b"])
+    })
+
+    // THE headline fix: a cm3_mol_s record and an m3_mol_s record are the
+    // SAME physical quantity, 1e6 apart -- they must now land in ONE panel
+    // (the old per-raw-token grouping put them in two uncomparable panels).
+    it("a cm3_mol_s record and an m3_mol_s record -- same order family -- share ONE panel", () => {
+        const cm3Record = record({ kinetics_ref: "kin_cm3" })
+        const m3Record = record({ kinetics_ref: "kin_m3", parameters: { A, n, Ea_kj_mol: Ea, A_units: "m3_mol_s" } })
+        const { panels } = buildArrheniusChartData([cm3Record, m3Record])
+        expect(panels).toHaveLength(1)
+        expect(panels[0].orderFamily).toBe(2)
+        expect(panels[0].series.map((s) => s.kinetics_ref)).toEqual(["kin_cm3", "kin_m3"])
+    })
+
+    it("availableUnits lists every unit in the panel's family, base unit first, regardless of which ones were actually deposited", () => {
+        const cm3Record = record({ kinetics_ref: "kin_cm3" })
+        const { panels } = buildArrheniusChartData([cm3Record])
+        expect(panels[0].availableUnits).toEqual(["cm3_mol_s", "m3_mol_s", "cm3_molecule_s"])
+    })
+
+    it("a per_s panel's availableUnits has exactly one member -- no selector control should ever be offered", () => {
+        const perSRecord = record({ kinetics_ref: "kin_uni", parameters: { A: 1, n: 0, Ea_kj_mol: 0, A_units: "per_s" } })
+        const { panels } = buildArrheniusChartData([perSRecord])
+        expect(panels[0].availableUnits).toEqual(["per_s"])
+    })
+
+    it("defaultUnits is the panel's own modal deposited unit -- a single-record panel defaults to that record's own unit", () => {
+        const cm3Record = record({ kinetics_ref: "kin_cm3" })
+        const { panels } = buildArrheniusChartData([cm3Record])
+        expect(panels[0].defaultUnits).toBe("cm3_mol_s")
+    })
+
+    // Tie-break rule (documented on `ArrheniusPanel.defaultUnits`): the
+    // tied unit whose FIRST deposit appears earliest in served order. Two
+    // cm3_mol_s records (first) vs one m3_mol_s (2 vs 1) -- cm3_mol_s wins
+    // outright here (no tie), pinning the non-tied majority case.
+    it("defaultUnits is the STRICT majority when one unit outnumbers the others", () => {
+        const a = record({ kinetics_ref: "kin_a" })
+        const b = record({ kinetics_ref: "kin_b" })
+        const c = record({ kinetics_ref: "kin_c", parameters: { A, n, Ea_kj_mol: Ea, A_units: "m3_mol_s" } })
+        const { panels } = buildArrheniusChartData([a, b, c])
+        expect(panels[0].defaultUnits).toBe("cm3_mol_s")
+    })
+
+    // A genuine tie (one m3_mol_s, one cm3_mol_s): the winner is whichever
+    // unit's FIRST deposit came first in the served array -- here m3_mol_s
+    // is served FIRST, so it wins the tie despite not being the family's
+    // "base" unit. A tie-break that instead used `arrheniusUnits.ts`'s own
+    // base-first table order would pick cm3_mol_s here and this test would
+    // catch it.
+    it("a genuine tie breaks on served order, not on the family table's own base-first order", () => {
+        const m3First = record({ kinetics_ref: "kin_m3_first", parameters: { A, n, Ea_kj_mol: Ea, A_units: "m3_mol_s" } })
+        const cm3Second = record({ kinetics_ref: "kin_cm3_second" })
+        const { panels } = buildArrheniusChartData([m3First, cm3Second])
+        expect(panels[0].defaultUnits).toBe("m3_mol_s")
+    })
+
+    it("an unrecorded-units record keeps its own panel, with no available units and no default", () => {
+        const unrecorded = record({ kinetics_ref: "kin_unrecorded", parameters: { A, n, Ea_kj_mol: Ea, A_units: null } })
+        const { panels } = buildArrheniusChartData([unrecorded])
+        expect(panels).toHaveLength(1)
+        expect(panels[0].orderFamily).toBeNull()
+        expect(panels[0].availableUnits).toEqual([])
+        expect(panels[0].defaultUnits).toBeUndefined()
+    })
+
+    it("an unrecognised A_units token gets its own panel too, distinct from unrecorded and from a known family, and names itself as the (unconvertible) default", () => {
+        const weird = record({ kinetics_ref: "kin_weird", parameters: { A, n, Ea_kj_mol: Ea, A_units: "weird_future_unit" } })
+        const unrecorded = record({ kinetics_ref: "kin_unrecorded", parameters: { A, n, Ea_kj_mol: Ea, A_units: null } })
+        const { panels } = buildArrheniusChartData([weird, unrecorded])
+        expect(panels).toHaveLength(2)
+        expect(panels[0].orderFamily).toBeNull()
+        expect(panels[0].availableUnits).toEqual([])
+        expect(panels[0].defaultUnits).toBe("weird_future_unit")
+        expect(panels[1].defaultUnits).toBeUndefined()
     })
 })
 
@@ -169,13 +256,66 @@ describe("buildArrheniusChartData -- PLOG/Chebyshev/falloff/third-body exclusion
     })
 })
 
+describe("arrheniusPanelKey", () => {
+    it("is stable and distinct per family/unrecorded/unrecognised-token panel", () => {
+        const perS = buildArrheniusChartData([record({ kinetics_ref: "kin_uni", parameters: { A: 1, n: 0, Ea_kj_mol: 0, A_units: "per_s" } })]).panels[0]
+        const cm3 = buildArrheniusChartData([record({ kinetics_ref: "kin_cm3" })]).panels[0]
+        const unrecorded = buildArrheniusChartData([record({ kinetics_ref: "kin_none", parameters: { A, n, Ea_kj_mol: Ea, A_units: null } })]).panels[0]
+        const keys = [perS, cm3, unrecorded].map(arrheniusPanelKey)
+        expect(new Set(keys).size).toBe(3)
+        // Deterministic across independent computations of the "same" panel identity.
+        expect(arrheniusPanelKey(perS)).toBe(arrheniusPanelKey(perS))
+    })
+})
+
 describe("panelTemperatureDomain -- the union of every plotted series' own fitted range", () => {
     it("takes the min of every series' minK and the max of every series' maxK, unpadded", () => {
         const narrow = computeArrheniusSeries(record({ kinetics_ref: "kin_narrow", temperature_coverage: { record_min_k: 500, record_max_k: 1500 } }))!
         const wide = computeArrheniusSeries(record({ kinetics_ref: "kin_wide", temperature_coverage: { record_min_k: 300, record_max_k: 3000 } }))!
-        const [lo, hi] = panelTemperatureDomain({ aUnits: "cm3_mol_s", unitLabel: "cm³ mol⁻¹ s⁻¹", series: [narrow, wide] })
+        const [lo, hi] = panelTemperatureDomain([narrow, wide])
         expect(lo).toBe(300)
         expect(hi).toBe(3000)
+    })
+})
+
+describe("arrheniusPointX / panelXDomain -- the inverse-temperature (1000/T) axis", () => {
+    it("temperature mode: x is T itself, unchanged", () => {
+        const series = computeArrheniusSeries(record())!
+        expect(arrheniusPointX(series.points[0], "temperature")).toBe(300)
+        expect(arrheniusPointX(series.points[series.points.length - 1], "temperature")).toBe(3000)
+        expect(panelXDomain([series], "temperature")).toEqual([300, 3000])
+    })
+
+    it("inverse_temperature mode: x is 1000/T -- pinned against hand-computed values", () => {
+        const series = computeArrheniusSeries(record())!
+        expect(arrheniusPointX(series.points[0], "inverse_temperature")).toBeCloseTo(1000 / 300, 9) // 3.3333...
+        expect(arrheniusPointX(series.points[series.points.length - 1], "inverse_temperature")).toBeCloseTo(1000 / 3000, 9) // 0.3333...
+    })
+
+    // MUTATION TARGET (c): plotting T instead of 1000/T in inverse mode.
+    // This test fails if `arrheniusPointX` (or its caller) ever returns the
+    // raw temperature under `"inverse_temperature"` mode.
+    it("inverse_temperature mode is genuinely a DIFFERENT value from temperature mode at the same point", () => {
+        const series = computeArrheniusSeries(record())!
+        const point = series.points[0]
+        expect(arrheniusPointX(point, "inverse_temperature")).not.toBeCloseTo(arrheniusPointX(point, "temperature"), 0)
+    })
+
+    // High temperature must map to the SMALL end of the 1000/T domain (the
+    // domain's own `[0]` slot, which `linearScale` always places at the LOW
+    // pixel end) -- that is what puts high T at the left on the rendered
+    // axis. domain[0] = 1000/maxK (the smallest 1000/T value, from the
+    // HIGHEST T), domain[1] = 1000/minK (the largest 1000/T value, from the
+    // LOWEST T) -- the reverse of the temperature-mode domain's own
+    // [minK, maxK] ordering.
+    it("inverse_temperature domain is [1000/maxK, 1000/minK] -- reversed relative to the temperature domain's own [minK, maxK]", () => {
+        const series = computeArrheniusSeries(record())!
+        const [tLo, tHi] = panelXDomain([series], "temperature")
+        const [invLo, invHi] = panelXDomain([series], "inverse_temperature")
+        expect(tLo).toBe(300)
+        expect(tHi).toBe(3000)
+        expect(invLo).toBeCloseTo(1000 / 3000, 9)
+        expect(invHi).toBeCloseTo(1000 / 300, 9)
     })
 })
 
@@ -195,7 +335,7 @@ describe("computeArrheniusSeries -- per-record range clipping when panelled besi
 
         expect(panels).toHaveLength(1) // same A_units -> one panel, so the union domain is genuinely wider than the narrow record
         const panel = panels[0]
-        const [unionLo, unionHi] = panelTemperatureDomain(panel)
+        const [unionLo, unionHi] = panelTemperatureDomain(panel.series)
         expect(unionLo).toBe(300)
         expect(unionHi).toBe(3000)
 
@@ -222,9 +362,80 @@ describe("computeArrheniusSeries -- per-record range clipping when panelled besi
 describe("panelLog10KDomain -- padded, but strictly wider than the raw log10k extremes", () => {
     it("returns a domain that contains every plotted log10k value with room either side", () => {
         const series = computeArrheniusSeries(record())!
-        const [lo, hi] = panelLog10KDomain({ aUnits: "cm3_mol_s", unitLabel: "cm³ mol⁻¹ s⁻¹", series: [series] })
+        const [lo, hi] = panelLog10KDomain([series])
         const rawValues = series.points.map((p) => p.log10k)
         expect(lo).toBeLessThan(Math.min(...rawValues))
         expect(hi).toBeGreaterThan(Math.max(...rawValues))
+    })
+})
+
+describe("convertArrheniusSeriesUnits -- the series-level half of the unit selector", () => {
+    // MUTATION TARGET (a): the cm³->m³ factor. 1e-6, not 1e6 --
+    // independently hand-computed as 3025.44 * 1e-6 = 0.00302544 (matches
+    // `arrheniusUnits.test.ts`'s own pinned value for the same conversion).
+    it("cm3_mol_s -> m3_mol_s multiplies k by 1e-6, shifting log10k down by exactly 6", () => {
+        const series = computeArrheniusSeries(record())!
+        const converted = convertArrheniusSeriesUnits(series, "m3_mol_s")
+        expect(converted.points[0].k).toBeCloseTo(17028.619287800688 * 1e-6, 9)
+        expect(converted.points[0].k).toBeCloseTo(0.017028619287800688, 9)
+        expect(converted.points[0].log10k).toBeCloseTo(series.points[0].log10k - 6, 6)
+    })
+
+    // MUTATION TARGET (b): dropping the N_A division for the per-molecule
+    // unit. Independently hand-computed (python): 17028.619287800688 /
+    // 6.02214076e23 = 2.827668758742313e-20.
+    it("cm3_mol_s -> cm3_molecule_s divides k by N_A -- NOT left unconverted", () => {
+        const series = computeArrheniusSeries(record())!
+        const converted = convertArrheniusSeriesUnits(series, "cm3_molecule_s")
+        const expected = 2.827668758742313e-20
+        expect(Math.abs(converted.points[0].k - expected) / expected).toBeLessThan(1e-9)
+        // Sanity: genuinely different from the unconverted value, by many
+        // orders of magnitude -- catches a no-op conversion outright.
+        expect(converted.points[0].k / series.points[0].k).toBeLessThan(1e-15)
+    })
+
+    it("converting a unit to ITSELF is the exact identity -- no float churn at all", () => {
+        const series = computeArrheniusSeries(record())!
+        const converted = convertArrheniusSeriesUnits(series, "cm3_mol_s")
+        expect(converted.points[0].k).toBe(series.points[0].k)
+        expect(converted).toBe(series) // the function's own documented identity shortcut
+    })
+
+    // MUTATION TARGET (d): letting a cross-family conversion through. A
+    // per_s series asked to convert into a bimolecular unit must be
+    // returned UNCHANGED (the factor is refused, `null`), never silently
+    // reinterpreted as a bimolecular value.
+    it("refuses a cross-family conversion -- returns the series unconverted, never a fabricated cross-family value", () => {
+        const perSSeries = computeArrheniusSeries(record({
+            kinetics_ref: "kin_uni",
+            parameters: { A: 9444750000, n: 0, Ea_kj_mol: 10, A_units: "per_s" },
+        }))!
+        const attempted = convertArrheniusSeriesUnits(perSSeries, "cm3_mol_s")
+        expect(attempted.points[0].k).toBe(perSSeries.points[0].k)
+        expect(attempted).toBe(perSSeries)
+    })
+
+    // NOTE: `convertArrheniusSeriesUnits` always converts FROM the series'
+    // own IMMUTABLE `depositedUnits` (never from "whatever unit the points
+    // currently happen to be in") -- `panel.series` (the raw, deposited-unit
+    // array) is what every render starts from, never a previously-converted
+    // series, so there is no real "convert, then convert the RESULT again"
+    // path in this app. This test instead checks the series-level
+    // conversion agrees with the value-level round trip
+    // (`arrheniusUnits.ts`'s own `convertArrheniusValue`, converting the
+    // ALREADY-converted k back using the SAME from/to pair) -- the
+    // meaningful cross-check that the two mechanisms compute the identical
+    // factor, not a chain this function was never meant to support.
+    it("the value-level round trip on a series-converted k reproduces the original k with no meaningful drift", () => {
+        const series = computeArrheniusSeries(record())!
+        const toM3 = convertArrheniusSeriesUnits(series, "m3_mol_s")
+        const back = convertArrheniusValue(toM3.points[0].k, "m3_mol_s", "cm3_mol_s")!
+        expect(back).toBeCloseTo(series.points[0].k, 6)
+    })
+
+    it("a series with unrecorded units is returned unchanged (nothing to convert from)", () => {
+        const unrecorded = computeArrheniusSeries(record({ parameters: { A, n, Ea_kj_mol: Ea, A_units: null } }))!
+        const attempted = convertArrheniusSeriesUnits(unrecorded, "cm3_mol_s")
+        expect(attempted).toBe(unrecorded)
     })
 })

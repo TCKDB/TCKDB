@@ -31,6 +31,57 @@
     margin-top: 2rem;
 }
 
+/* The single, page-wide x-axis-mode control (temperature vs 1000/T) --
+   sits ABOVE every panel, never duplicated per panel: which axis a reader
+   wants is a reading-convention choice, not a per-record fact the way the
+   per-panel unit selector below is. */
+.arrhenius-chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 0 0 1.25rem;
+}
+
+.arrhenius-chart-control {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font: var(--type-data-font);
+    color: var(--ink-2);
+}
+
+.arrhenius-chart-control-label {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+}
+
+.arrhenius-chart-control-select {
+    font: var(--type-data-font);
+}
+
+/* Panel heading + its own unit selector share one row -- the heading
+   states the unit CURRENTLY shown (updates live as the selector changes),
+   the selector lets a reader change it. Wraps on a narrow viewport rather
+   than forcing the fixed-width SVG below it any wider. */
+.arrhenius-chart-panel-heading-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+    margin: 0 0 .5rem;
+}
+
+.arrhenius-chart-panel-heading-row .arrhenius-chart-panel-heading {
+    margin: 0;
+}
+
+.arrhenius-chart-panel-unit-control {
+    margin: 0;
+}
+
 /* SCIENTIFIC ERROR fixed here (PR 3 review finding): `--type-label-transform`
    (design-system.css) is `uppercase` -- every OTHER caller of this token is
    an English prose label, where case carries no meaning. This heading's own
