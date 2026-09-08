@@ -470,23 +470,102 @@ def test_duplicate_smiles_in_query_returns_same_records_as_single_smiles(
     assert {r["reaction_entry_ref"] for r in single["records"]} == {entry.public_ref}
 
 
-def test_reactant_smiles_matches_either_stored_side(client, db_session):
-    """``reactant_smiles`` is not restricted to the stored reactant role.
+def test_default_direction_excludes_reverse_matches(client, db_session):
+    """The headline defect this task exists to fix -- reproduced live.
 
-    ``browse_reactions`` always calls the matcher with
-    ``direction=either``, so a species stored as a PRODUCT still matches
-    when supplied via ``reactant_smiles`` -- the record then carries
-    ``matched_direction: "reverse"``. Pre-existing behaviour; this only
-    asserts it survives the scalar-to-list migration.
+    ``entry`` is a REVERSIBLE reaction with ``EIR_B`` stored only on the
+    PRODUCT side. Under the OLD default (``direction=either``,
+    unconditional), a plain ``?reactant_smiles=EIR_B`` query returned
+    this entry via the reverse orientation -- so a parameter named
+    ``reactant_smiles`` came back with a reaction where ``EIR_B`` is
+    never a stored reactant at all. Under the NEW default
+    (``direction=forward``), the same query must NOT return it: the
+    field means what it says now.
+    """
+    entry = _entry(db_session, reactant_smiles="EIR_A", product_smiles="EIR_B")
+    assert entry.reaction.reversible is True
+
+    body = client.get(_browse_url_multi(reactant_smiles=["EIR_B"])).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert entry.public_ref not in refs
+
+
+def test_explicit_direction_either_still_matches_reverse_orientation(
+    client, db_session
+):
+    """The old either-direction behaviour stays reachable, opt-in.
+
+    Same fixture as the default-direction test above: ``EIR_B`` is
+    stored only as a product of a reversible reaction. Passing
+    ``direction=either`` explicitly must still surface it, carrying
+    ``matched_direction: "reverse"`` so a caller can tell how it
+    matched.
     """
     entry = _entry(db_session, reactant_smiles="EIR_A", product_smiles="EIR_B")
 
-    body = client.get(_browse_url_multi(reactant_smiles=["EIR_B"])).json()
+    body = client.get(
+        _browse_url_multi(reactant_smiles=["EIR_B"], direction="either")
+    ).json()
     matches = [
         r for r in body["records"] if r["reaction_entry_ref"] == entry.public_ref
     ]
     assert len(matches) == 1
     assert matches[0]["matched_direction"] == "reverse"
+
+
+def test_explicit_direction_forward_matches_named_side_only(client, db_session):
+    """``direction=forward`` (also the default) pins the orientation."""
+    matching = _entry(db_session, reactant_smiles="DFW_A", product_smiles="DFW_B")
+    non_matching = _entry(db_session, reactant_smiles="DFW_C", product_smiles="DFW_A")
+
+    body = client.get(
+        _browse_url_multi(reactant_smiles=["DFW_A"], direction="forward")
+    ).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert matching.public_ref in refs
+    assert non_matching.public_ref not in refs
+
+
+def test_direction_reverse_swaps_the_single_orientation(client, db_session):
+    """``direction=reverse`` matches ``reactant_smiles`` against stored products."""
+    entry = _entry(db_session, reactant_smiles="DRV_A", product_smiles="DRV_B")
+
+    forward_hit = client.get(
+        _browse_url_multi(reactant_smiles=["DRV_B"], direction="forward")
+    ).json()
+    assert entry.public_ref not in {
+        r["reaction_entry_ref"] for r in forward_hit["records"]
+    }
+
+    reverse_hit = client.get(
+        _browse_url_multi(reactant_smiles=["DRV_B"], direction="reverse")
+    ).json()
+    reverse_refs = {r["reaction_entry_ref"] for r in reverse_hit["records"]}
+    assert entry.public_ref in reverse_refs
+    matched = next(
+        r
+        for r in reverse_hit["records"]
+        if r["reaction_entry_ref"] == entry.public_ref
+    )
+    assert matched["matched_direction"] == "reverse"
+
+
+def test_direction_exact_is_rejected(client, db_session):
+    """``direction=exact`` is not a legal enum value on browse, matching search."""
+    resp = client.get(_browse_url(reactant_smiles="X", direction="exact"))
+    assert resp.status_code == 422
+
+
+def test_filters_echo_includes_direction(client, db_session):
+    """The echoed filter always states which direction was matched under,
+    mirroring ``/reactions/search``'s ``request.filter.direction``."""
+    _entry(db_session, reactant_smiles="ECHODIR_A", product_smiles="ECHODIR_B")
+
+    default_body = client.get(_browse_url()).json()
+    assert default_body["request"]["filter"]["direction"] == "forward"
+
+    either_body = client.get(_browse_url(direction="either")).json()
+    assert either_body["request"]["filter"]["direction"] == "either"
 
 
 def test_filters_echo_round_trips_multiple_smiles(client, db_session):

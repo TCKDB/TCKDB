@@ -40,6 +40,7 @@ from app.schemas.reads._field_bounds import (
     MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
 )
 from app.schemas.reads.scientific_reactions import (
+    ReactionDirectionQuery,
     ReactionsBrowseRequest,
     ScientificReactionSearchResponse,
 )
@@ -98,16 +99,14 @@ def scientific_reactions_browse(
             "``request.filter.reactant_smiles`` shape changed, from a "
             "bare string to a one-item list. With more than one value, "
             "all of them are matched together as a single group against "
-            "one stored side in one orientation, not independently: "
-            "``direction=either`` (browse's fixed setting) tries the "
-            "whole group against the stored reactants (forward) and "
-            "against the stored products (reverse), so a list mixing a "
-            "genuine reactant with a genuine product of the same "
-            "reaction matches in neither orientation. The product side "
-            "is unconstrained unless ``product_smiles`` is also given. "
-            "If any supplied SMILES does not resolve to a species TCKDB "
-            "has, the result is empty rather than a partial match on "
-            "the ones that did."
+            "one stored side in one orientation, not independently -- "
+            "which side(s) that group is tried against is governed by "
+            "``direction`` (below): with the default ``forward`` this "
+            "group is matched only against the stored reactants, "
+            "leaving the product side unconstrained unless "
+            "``product_smiles`` is also given. If any supplied SMILES "
+            "does not resolve to a species TCKDB has, the result is "
+            "empty rather than a partial match on the ones that did."
         ),
     ),
     product_smiles: list[str] | None = Query(
@@ -123,16 +122,43 @@ def scientific_reactions_browse(
             "``request.filter.product_smiles`` shape changed, from a "
             "bare string to a one-item list. With more than one value, "
             "all of them are matched together as a single group against "
-            "one stored side in one orientation, not independently: "
-            "``direction=either`` (browse's fixed setting) tries the "
-            "whole group against the stored products (forward) and "
-            "against the stored reactants (reverse), so a list mixing a "
-            "genuine product with a genuine reactant of the same "
-            "reaction matches in neither orientation. The reactant side "
-            "is unconstrained unless ``reactant_smiles`` is also given. "
-            "If any supplied SMILES does not resolve to a species TCKDB "
-            "has, the result is empty rather than a partial match on "
-            "the ones that did."
+            "one stored side in one orientation, not independently -- "
+            "which side(s) that group is tried against is governed by "
+            "``direction`` (below): with the default ``forward`` this "
+            "group is matched only against the stored products, "
+            "leaving the reactant side unconstrained unless "
+            "``reactant_smiles`` is also given. If any supplied SMILES "
+            "does not resolve to a species TCKDB has, the result is "
+            "empty rather than a partial match on the ones that did."
+        ),
+    ),
+    direction: ReactionDirectionQuery = Query(
+        ReactionDirectionQuery.forward,
+        description=(
+            "Which stored orientation(s) ``reactant_smiles`` / "
+            "``product_smiles`` are matched against. **Behaviour change "
+            "(2026-09):** the default is ``forward`` -- "
+            "``reactant_smiles`` matches only the stored reactant side "
+            "and ``product_smiles`` only the stored product side. "
+            "Before this parameter existed, the service always matched "
+            "with the equivalent of ``either``, so ``reactant_smiles`` "
+            "could match a species that is only ever a stored *product*, "
+            "reached through the reverse orientation of a reversible "
+            "reaction -- a caller asking for a species 'as a reactant' "
+            "could get back exclusively reactions where it is a product. "
+            "That is why the default changed: existing callers relying "
+            "on the old either-direction default for ``reactant_smiles`` "
+            "or ``product_smiles`` will see a different (narrower) "
+            "result set now. Pass ``direction=either`` explicitly to "
+            "restore the old matching behaviour -- every returned record "
+            "still carries ``matched_direction`` saying which "
+            "orientation actually matched. ``direction=reverse`` swaps "
+            "the single orientation tried (``reactant_smiles`` against "
+            "stored products, ``product_smiles`` against stored "
+            "reactants). Mirrors ``/scientific/reactions/search``'s "
+            "``direction`` parameter and vocabulary "
+            "(:class:`~app.schemas.reads.scientific_reactions.ReactionDirectionQuery`); "
+            "``direction=exact`` is not a legal value here either."
         ),
     ),
     has_kinetics: bool | None = Query(None),
@@ -163,17 +189,32 @@ def scientific_reactions_browse(
     operation has none to accept.
 
     ``reactant_smiles`` / ``product_smiles`` are each matched as a group
-    against **either** stored side of the reaction (forward tries the
-    named side, reverse tries the swap), not just the side the
-    parameter names -- but every SMILES within one parameter's group
-    must land on that same side together; see the parameter
+    against the stored side(s) selected by ``direction``, not just
+    species-by-species -- every SMILES within one parameter's group must
+    land on the same stored side together; see the parameter
     descriptions and
     :func:`app.services.scientific_read.reactions.browse_reactions`.
+
+    **Behaviour change (2026-09), stated plainly:** ``direction``
+    defaults to ``forward``. Previously this route matched
+    ``reactant_smiles`` / ``product_smiles`` with the equivalent of
+    ``direction=either`` unconditionally, so ``reactant_smiles=[H]``
+    could -- and, in the archive that exposed this, exclusively did --
+    return reactions where ``[H]`` is a stored *product*, reached in
+    reverse. A parameter named ``reactant_smiles`` returning only
+    reactions where the species is not a stored reactant was a
+    correctness defect, not a documented feature; ``forward`` is now the
+    default so the field means what it says. Existing callers depending
+    on the old either-direction default must add ``direction=either``
+    explicitly to keep receiving that broader, reverse-inclusive result
+    set; ``matched_direction`` on each record still reports which
+    orientation matched.
     """
     request = ReactionsBrowseRequest(
         family=family,
         reactant_smiles=_drop_blank_smiles(reactant_smiles),
         product_smiles=_drop_blank_smiles(product_smiles),
+        direction=direction,
         has_kinetics=has_kinetics,
         has_transition_state=has_transition_state,
         min_review_status=min_review_status,
