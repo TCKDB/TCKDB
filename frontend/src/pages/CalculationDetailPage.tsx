@@ -374,31 +374,31 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     ].filter((entry): entry is RefEntry => typeof entry.value === "string" && entry.value.length > 0)
 
     // Identity subject for the h1 -- "Optimisation of C2H4" / "Optimisation
-    // of TS0". A species entry prefers its formula, rendered through the
-    // SAME `Formula` component `RecordIdentityHeader`'s own identity tier
-    // uses (subscripted element counts), falling back to the plain
+    // of tse_...". A species entry prefers its formula, rendered through
+    // the SAME `Formula` component `RecordIdentityHeader`'s own identity
+    // tier uses (subscripted element counts), falling back to the plain
     // canonical SMILES only when no formula was derived. A TS entry has
     // no formula the way a species does, so it falls back through its own
-    // label/ref instead.
-    // SHOULD-FIX-8 ("record-page residuals" re-review): when a TS-owned
-    // calculation's transition state has no depositor label, this used to
-    // fall back to the RAW ref, printed straight into the h1 as plain
-    // serif display text ("Optimisation of tse_aq5…") -- an identifier
-    // with no data-run styling at all, MEASURED as the one raw ref on
-    // these pages rendered in the wrong face. `.data` (mono, the same
-    // step every other ref on this page uses) is the honest treatment for
-    // a ref, even when it happens to sit inside an h1 -- `font-size:
-    // inherit` on `.calc-headline-ref` (`calculation-detail.css`) is what
-    // keeps it at the h1's own 52px serif-adjacent scale rather than
-    // dropping to `--type-data-font`'s bare 13px baseline-aligned inside
-    // it (post-review fix: MEASURED, a 13px mono ref sitting on the
-    // baseline of a 52px heading).
+    // ref instead -- never the depositor's own `transition_state.label`
+    // (e.g. "TS0"), which this page no longer reads at all (house rule
+    // widened 2026-09: no depositor-typed labels on public pages).
+    // SHOULD-FIX-8 ("record-page residuals" re-review): the ref fallback
+    // used to print as plain serif display text ("Optimisation of
+    // tse_aq5…") -- an identifier with no data-run styling at all,
+    // MEASURED as the one raw ref on these pages rendered in the wrong
+    // face. `.data` (mono, the same step every other ref on this page
+    // uses) is the honest treatment for a ref, even when it happens to sit
+    // inside an h1 -- `font-size: inherit` on `.calc-headline-ref`
+    // (`calculation-detail.css`) is what keeps it at the h1's own 52px
+    // serif-adjacent scale rather than dropping to `--type-data-font`'s
+    // bare 13px baseline-aligned inside it (post-review fix: MEASURED, a
+    // 13px mono ref sitting on the baseline of a 52px heading).
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
-            ? (identity.label ?? (identity.transitionStateEntryRef
+            ? (identity.transitionStateEntryRef
                 ? <code className="data calc-headline-ref">{identity.transitionStateEntryRef}</code>
-                : "this record"))
+                : "this record")
             : "this record"
 
     return (
@@ -469,12 +469,16 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             (`App.tsx:52`). `RecordIdentityHeader`'s own TS branch
                             renders the ref as plain `<code>` (a shared component
                             used by pages that don't all have this route), so the
-                            link lives here instead, right below it. */}
+                            link lives here instead, right below it. The link
+                            text is always the ref itself, never `ownerTS.label`
+                            (the depositor's own `transition_state.label`, e.g.
+                            "TS0") -- house rule widened 2026-09: no
+                            depositor-typed labels on public pages. */}
                         {ownerTS && (
                             <p className="note record-identity-note">
                                 This calculation belongs to the transition-state entry{" "}
                                 <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
-                                    {ownerTS.label ?? ownerTS.transition_state_entry_ref}
+                                    {ownerTS.transition_state_entry_ref}
                                 </Link>.
                             </p>
                         )}

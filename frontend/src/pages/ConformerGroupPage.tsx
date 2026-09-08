@@ -97,16 +97,19 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             ARC-assigned producer string (the value this
                             component's own comment elsewhere calls out as "not
                             TCKDB semantics"), not a description of what this
-                            record IS. The h1 now states what the record is;
-                            the producer's own label, when one was deposited,
-                            moves into the identity list below as a plain
-                            secondary fact next to the stable ref -- the
-                            same treatment `species_entry_label` gets
-                            everywhere else in this app: expanded through
-                            `stereoChip` (`domain/recordFacets.ts`) rather
-                            than shown as the raw server-computed
-                            discriminator string, which read as a bare
-                            "R" with no explanation on a real record. */}
+                            record IS. The h1 now states what the record is; the
+                            producer's own label, when one was deposited, used to
+                            move into the identity list below as a plain "Producer
+                            label" secondary fact -- REMOVED entirely (house rule
+                            widened 2026-09: no depositor-typed labels on public
+                            pages at all, not even demoted to a secondary fact;
+                            see the "Group ref" fact's own comment below). This is
+                            NOT the same treatment `species_entry_label` gets --
+                            that field is server-COMPUTED from real chemistry
+                            facets (stereo/electronic-state/isotope), not
+                            depositor free text, which is why it still renders
+                            (expanded through `stereoChip`,
+                            `domain/recordFacets.ts`) while this one does not. */}
                         {/* SHOULD-FIX-7 (PR B review): wrapped in the SAME
                             `.record-identity-header` div `RecordIdentityHeader`
                             itself renders, not left as bare siblings -- an
@@ -157,9 +160,21 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                         <CopyButton value={basin.conformer_group_ref} label="Group ref" srLabel="value" />
                                     </dd>
                                 </div>
-                                {basin.label && (
-                                    <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
-                                )}
+                                {/* The "Producer label" fact (`basin.label`, e.g.
+                                    "conformer_1") used to render here, ONLY when
+                                    deposited -- REMOVED (house rule widened
+                                    2026-09: no depositor-typed labels on public
+                                    pages at all, not even demoted to a secondary
+                                    fact). This page's h1 already states what the
+                                    record IS ("Conformer basin"), and the Group
+                                    ref above already names it; the primary way a
+                                    reader still picks a conformer BASIN by name
+                                    across this app -- the auto-numbering
+                                    convention `conformerEvidence.ts`'s
+                                    `conformerLabel` expands to "Conformer Group
+                                    N" -- is unaffected, since that heading lives
+                                    on the pages that LIST several basins side by
+                                    side, not on this single basin's own page. */}
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>

@@ -479,6 +479,19 @@ span.browse-row-title {
     letter-spacing: var(--type-note-tracking);
 }
 
+/* The reaction deposit this TS entry belongs to ("from reaction entry
+   rxe_..."). Same note-step register as the evidence line beside it in
+   `.browse-row-footer` -- this is the fact that actually tells apart the
+   several rows one saddle point can produce when it was deposited once per
+   reaction submission (see `TransitionStateBrowseRow.tsx`'s own comment on
+   `depositRef`); the ref inside it takes `.data` (the shared mono step)
+   like every other ref on this row. */
+.browse-row-deposit {
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+}
+
 .browse-row-entries {
     display: flex;
     flex-wrap: wrap;

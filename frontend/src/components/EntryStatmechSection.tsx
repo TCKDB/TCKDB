@@ -1163,7 +1163,11 @@ function ConformerAndReviewSection({ records, conformersState, reviewState, onOp
                                                 ? conformerRows.map((row, index) => (
                                                     <span key={row.conformer_group_ref}>
                                                         {index > 0 && " · "}
-                                                        <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.label ?? row.conformer_group_ref}</Link>
+                                                        {/* The ref, never `row.label` (the depositor's own
+                                                            `conformer_group.label`, e.g. "conformer_1") --
+                                                            house rule widened 2026-09: no depositor-typed
+                                                            labels on public pages. */}
+                                                        <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.conformer_group_ref}</Link>
                                                     </span>
                                                 ))
                                                 : "not recorded"}

@@ -58,7 +58,10 @@ export type TransitionStateIdentity = {
     multiplicity: number
     transitionStateRef?: string
     transitionStateEntryRef?: string
-    label?: string | null
+    // No `label` field here -- `transition_state.label` (e.g. "TS0") is a
+    // depositor-typed string this app never renders (house rule, widened
+    // 2026-09), so this type carries nothing for `RecordIdentityHeader` to
+    // accidentally read and display.
 }
 
 export type RecordIdentity =
@@ -198,7 +201,9 @@ export function identityFromCalculationOwner(owner: CalculationOwnerWire | null 
             multiplicity: entry.multiplicity,
             transitionStateRef: entry.transition_state_ref,
             transitionStateEntryRef: entry.transition_state_entry_ref,
-            label: entry.label,
+            // `entry.label` (the wire's `transition_state.label`) is
+            // deliberately dropped here -- see `TransitionStateIdentity`'s
+            // own comment for why this type carries no label field at all.
         }
     }
     return { kind: "absent" }
