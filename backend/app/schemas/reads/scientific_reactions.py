@@ -165,20 +165,38 @@ class ReactionsBrowseRequest(BaseModel):
     are lists of exact-match SMILES filters, one repeated query parameter per
     side (``?reactant_smiles=C&reactant_smiles=[OH]``) -- the browse
     analogue of search's ``reactants`` / ``products`` lists, bounded at
-    :data:`_MAX_PARTICIPANTS_PER_REACTION` items per side. A single value
-    behaves exactly as the old single-SMILES filter did: this is an
-    additive change, not a breaking one. Every supplied SMILES on a side
-    must appear among that reaction's participants (set containment, per
-    :class:`ReactionMatchMode.contains`); an empty side is unconstrained.
+    :data:`_MAX_PARTICIPANTS_PER_REACTION` items per side. This is an
+    additive change over the old ``str | None`` field, not a breaking
+    one: a request supplying one value matches exactly the same records
+    the old scalar filter matched, with the same ``matched_direction``.
+    It is not byte-identical end to end, though -- the echoed
+    ``request.filter.reactant_smiles`` / ``.product_smiles`` is now
+    always a list (``["CCO"]``), never the bare string the old filter
+    echoed (``"CCO"``), because that is the honest shape of the field
+    now that it holds a list. The route (``reactions_browse.py``) drops
+    blank/whitespace-only entries before constructing this model, so
+    ``?reactant_smiles=`` (present but empty) still means "not
+    supplied" -- the same as omitting the parameter -- rather than
+    querying for a literal empty-string SMILES.
 
-    Matching is by *participant*, not by *role*: the browse service calls
-    the shared matcher with ``direction=either``, so ``reactant_smiles``
-    also matches a species that is stored as a PRODUCT and reached in
-    reverse (the returned record then carries
-    ``matched_direction: "reverse"``), and symmetrically for
-    ``product_smiles``. The field names describe which query bucket a
-    SMILES was put in, not which side of the stored equation it is
-    required to land on.
+    Every SMILES within one field is matched **together, as one group,
+    against a single stored side in a single orientation** -- not each
+    SMILES independently against whichever side it happens to appear
+    on. The browse service calls the shared matcher with
+    ``direction=either`` (unconditionally), so a ``reactant_smiles``
+    group is tried against the stored reactants in the forward
+    orientation *and*, as a whole, against the stored products in the
+    reverse orientation (the returned record then carries
+    ``matched_direction: "reverse"``); symmetrically for
+    ``product_smiles``. Because the group moves together, a
+    ``reactant_smiles`` list mixing a species that is genuinely a
+    reactant of some reaction with a species that is genuinely a
+    product of that *same* reaction matches in neither orientation --
+    every member of the group must land on the *same* stored side at
+    once. The field names describe which query bucket a SMILES was put
+    in, not which stored side it is individually guaranteed to land on;
+    an empty field is unconstrained (per
+    :class:`ReactionMatchMode.contains`).
 
     If any supplied SMILES (on either side) fails to resolve to a species
     TCKDB has on file, the whole response is empty -- never a degraded

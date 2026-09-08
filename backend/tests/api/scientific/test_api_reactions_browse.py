@@ -319,13 +319,67 @@ def test_default_sort_orders_records_review_rank_then_has_kinetics(client, db_se
 
 
 def test_single_reactant_smiles_still_behaves_as_before(client, db_session):
-    """A single repeated-param value is byte-identical to the old scalar filter."""
+    """A single repeated-param value matches the same records as the old
+    scalar filter did (the echoed filter *shape* changed -- string to a
+    one-item list -- but the matched records and ``matched_direction``
+    did not)."""
     matching = _entry(db_session, reactant_smiles="[NH2]", product_smiles="N")
     _entry(db_session, reactant_smiles="O", product_smiles="F")
 
     body = client.get(_browse_url_multi(reactant_smiles="[NH2]")).json()
     refs = {r["reaction_entry_ref"] for r in body["records"]}
     assert refs == {matching.public_ref}
+
+
+def test_empty_reactant_smiles_value_means_unfiltered(client, db_session):
+    """``?reactant_smiles=`` (present, empty) must still mean "no filter".
+
+    FastAPI parses a present-but-empty repeated query value as ``[""]``
+    for a ``list[str]`` parameter -- a non-empty, truthy list containing
+    one blank string. Without stripping that blank before it reaches
+    :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`,
+    it would hit the unresolvable-SMILES guard (no species has an
+    empty-string SMILES) and hard-empty the response -- a regression
+    from the old ``str | None`` filter, where an empty string was
+    itself falsy and therefore already meant "not supplied".
+    """
+    entry = _entry(db_session, reactant_smiles="EMPTYVAL_A", product_smiles="EMPTYVAL_B")
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_value = client.get(_browse_url(reactant_smiles="")).json()
+
+    assert empty_value["pagination"]["total"] == unfiltered["pagination"]["total"]
+    refs = {r["reaction_entry_ref"] for r in empty_value["records"]}
+    assert entry.public_ref in refs
+
+
+def test_empty_product_smiles_value_means_unfiltered(client, db_session):
+    """Same regression check, product side."""
+    entry = _entry(db_session, reactant_smiles="EMPTYVALP_A", product_smiles="EMPTYVALP_B")
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_value = client.get(_browse_url(product_smiles="")).json()
+
+    assert empty_value["pagination"]["total"] == unfiltered["pagination"]["total"]
+    refs = {r["reaction_entry_ref"] for r in empty_value["records"]}
+    assert entry.public_ref in refs
+
+
+def test_mixed_reactant_and_product_smiles_in_one_group_does_not_match(
+    client, db_session
+):
+    """Documents the corrected claim in the field descriptions: a
+    ``reactant_smiles`` group mixing a genuine reactant with a genuine
+    product of the SAME reaction matches in neither orientation, because
+    every member of the group must land on the same stored side at once
+    -- there is no orientation where one stored side holds both a
+    reaction's reactant and its product.
+    """
+    entry = _entry_multi(db_session, reactant_smiles=["MIX_A"], product_smiles=["MIX_C"])
+
+    body = client.get(_browse_url_multi(reactant_smiles=["MIX_A", "MIX_C"])).json()
+    refs = {r["reaction_entry_ref"] for r in body["records"]}
+    assert entry.public_ref not in refs
 
 
 def test_two_reactant_smiles_requires_both_present(client, db_session):
@@ -386,20 +440,34 @@ def test_unresolvable_product_smiles_among_valid_ones_returns_empty(client, db_s
     assert body["records"] == []
 
 
-def test_duplicate_smiles_in_query_does_not_falsely_empty(client, db_session):
-    """Repeating the SAME resolvable SMILES must not look like a partial miss.
+def test_duplicate_smiles_in_query_returns_same_records_as_single_smiles(
+    client, db_session
+):
+    """Repeating the SAME resolvable SMILES must return exactly the
+    single-value result -- record for record, not just "non-empty".
 
-    ``_resolve_smiles_to_species_ids`` de-duplicates internally, so the
-    empty-on-partial-resolution guard has to compare against the count of
-    *distinct* valid inputs -- ``?reactant_smiles=A&reactant_smiles=A``
-    must behave like a single ``A``, not like two different species of
-    which only one resolved.
+    ``_resolve_smiles_to_species_ids`` (``reactions.py``) does NOT
+    de-duplicate its input; for ``["DUP_A", "DUP_A"]`` it resolves to
+    ``[id, id]`` (index/count-aligned with the request list, duplicates
+    preserved), which is exactly what makes the guard's raw
+    ``len(resolved) != len(request.reactant_smiles)`` check correct
+    without any pre-dedup step: a duplicated-but-resolvable SMILES
+    contributes the same count on both sides of that comparison. This
+    test asserts the *observable* consequence -- the duplicated query
+    and the single-value query serve identical records -- so it stays
+    meaningful regardless of how resolution is implemented underneath,
+    unlike a bare "records is non-empty" check.
     """
-    matching = _entry(db_session, reactant_smiles="DUP_A", product_smiles="DUP_B")
+    entry = _entry(db_session, reactant_smiles="DUP_A", product_smiles="DUP_B")
 
-    body = client.get(_browse_url_multi(reactant_smiles=["DUP_A", "DUP_A"])).json()
-    refs = {r["reaction_entry_ref"] for r in body["records"]}
-    assert refs == {matching.public_ref}
+    single = client.get(_browse_url_multi(reactant_smiles=["DUP_A"])).json()
+    duplicated = client.get(
+        _browse_url_multi(reactant_smiles=["DUP_A", "DUP_A"])
+    ).json()
+
+    assert single["records"] != []
+    assert duplicated["records"] == single["records"]
+    assert {r["reaction_entry_ref"] for r in single["records"]} == {entry.public_ref}
 
 
 def test_reactant_smiles_matches_either_stored_side(client, db_session):

@@ -384,12 +384,17 @@ def browse_reactions(
     ``reactant_smiles`` / ``product_smiles`` are called with
     ``direction=ReactionDirectionQuery.either`` below (unconditionally, not
     caller-selectable), so despite their names neither list is restricted
-    to the stored role it names: a species supplied as ``reactant_smiles``
-    also matches a reaction where it is stored as a product and the whole
-    equation is read in reverse, which is exactly why a matched record can
-    come back with ``matched_direction: "reverse"``. The parameter names
-    describe which query bucket a SMILES was placed in, not which side of
-    the stored equation it is required to land on.
+    to the stored role it names -- but each list is still matched as
+    **one group, against a single stored side, in a single orientation**,
+    not species-by-species: a ``reactant_smiles`` group is tried whole
+    against the stored reactants (forward) and whole against the stored
+    products (reverse), which is exactly why a matched record can come
+    back with ``matched_direction: "reverse"`` -- but a group mixing a
+    genuine reactant with a genuine product of the same reaction matches
+    in neither orientation, because no single stored side contains both.
+    The parameter names describe which query bucket a SMILES was placed
+    in, not which side of the stored equation it is individually
+    guaranteed to land on.
 
     Partial resolution is a hard empty, not a degraded match: if any
     SMILES in either list fails to resolve to a species TCKDB has on
@@ -397,13 +402,16 @@ def browse_reactions(
     *did* resolve would answer a query the caller did not ask (fewer
     required species than they supplied) and serve it as if it were the
     one they did -- a wrong answer presented as a right one. Concretely:
-    resolution is checked against the count of *distinct* valid SMILES in
-    each list, because :func:`_resolve_smiles_to_species_ids` both
-    de-duplicates its input internally (via a ``smiles -> id`` dict) and
-    silently drops anything that fails to resolve, so its output is not
-    index-aligned with its input and a naive length check against the raw
-    (possibly duplicate-containing) request list would be wrong in either
-    direction.
+    :func:`_resolve_smiles_to_species_ids` *preserves* duplicates and
+    ordering -- it drops only the occurrences that fail to resolve, so
+    its output is index/count-aligned with the raw request list -- which
+    is what lets the length check below compare
+    ``len(reactant_species_ids)`` directly against
+    ``len(request.reactant_smiles)`` (no de-duplication needed first) and
+    have the mismatch mean exactly "some requested SMILES occurrence did
+    not resolve", with or without duplicates in the query. This mirrors
+    the identical check :func:`search_reactions` already makes against
+    ``request.reactants`` / ``request.products``.
 
     :param session: SQLAlchemy session.
     :param request: Parsed request model.
@@ -413,20 +421,11 @@ def browse_reactions(
     """
     offset, limit = validate_pagination(request.offset, request.limit)
 
-    # De-duplicate before resolving/counting: `_resolve_smiles_to_species_ids`
-    # already collapses duplicate SMILES onto one id via its internal dict,
-    # so comparing its output length against a *distinct* input count (not
-    # the raw, possibly-repeating request list) is what makes the
-    # length-mismatch check below mean "some requested SMILES did not
-    # resolve" rather than "the caller repeated one".
-    reactant_smiles_distinct = list(dict.fromkeys(request.reactant_smiles))
-    product_smiles_distinct = list(dict.fromkeys(request.product_smiles))
-
     reactant_species_ids = _resolve_smiles_to_species_ids(
-        session, reactant_smiles_distinct
+        session, request.reactant_smiles
     )
     product_species_ids = _resolve_smiles_to_species_ids(
-        session, product_smiles_distinct
+        session, request.product_smiles
     )
     # Correctness trap: with a LIST, "some ids resolved" is not "all ids
     # resolved". A reaction_entry can only ever contain species TCKDB has,
@@ -434,12 +433,17 @@ def browse_reactions(
     # the whole response must be empty, not narrowed to the SMILES that did
     # resolve (which would silently drop a caller-required species from an
     # AND query and return a wrong answer that looks like a right one).
-    if reactant_smiles_distinct and len(reactant_species_ids) != len(
-        reactant_smiles_distinct
+    # No de-duplication is needed first: `_resolve_smiles_to_species_ids`
+    # preserves duplicates and skips only unresolved occurrences, so its
+    # output length compared against the raw request list's length is
+    # already exactly "did every occurrence resolve" -- the same check
+    # `search_reactions` makes against `request.reactants` / `.products`.
+    if request.reactant_smiles and len(reactant_species_ids) != len(
+        request.reactant_smiles
     ):
         return _empty_browse_response(request, offset, limit)
-    if product_smiles_distinct and len(product_species_ids) != len(
-        product_smiles_distinct
+    if request.product_smiles and len(product_species_ids) != len(
+        request.product_smiles
     ):
         return _empty_browse_response(request, offset, limit)
 
