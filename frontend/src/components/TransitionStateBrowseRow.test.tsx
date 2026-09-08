@@ -35,7 +35,7 @@ function record(overrides: Partial<TransitionStateBrowseRecord> = {}): Transitio
         },
         reaction: {
             reaction_ref: "rxn_one",
-            reaction_entry_ref: "rxe_one",
+            reaction_entry_ref: "rxe_deposit_one",
             equation: "A <=> B",
             reversible: true,
             family: "R_Addition_MultipleBond",
@@ -64,11 +64,18 @@ function record(overrides: Partial<TransitionStateBrowseRecord> = {}): Transitio
     } as TransitionStateBrowseRecord
 }
 
-// Item 3: the pill used to fuse the label onto the status ("TS0 ·
-// optimized"). The label now lives on the meta line as plain text; the
-// pill carries the status alone.
-describe("TransitionStateBrowseRow: pill is status only, label moved to the meta line", () => {
-    it("renders the status alone in the classification pill, and the label in the meta line instead", () => {
+// Item 3: the pill carries the status alone, never fused with the
+// depositor's own label ("TS0 · optimized").
+//
+// The depositor's `transition_state.label` is a house-rule-banned
+// depositor-typed label (widened 2026-09: "no labels on the front end,
+// they make no sense like TS0 and TS1") and must never render anywhere on
+// this row, regardless of whether one was deposited -- there is no
+// fallback text naming the label's absence either, unlike the fields this
+// row DOES claim to state (e.g. "family not recorded"), because the
+// archive is not making a claim about a label at all any more.
+describe("TransitionStateBrowseRow: pill is status only, no depositor label anywhere on the row", () => {
+    it("renders the status alone in the classification pill, and never the depositor label", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         expect(row).toBeTruthy()
@@ -85,19 +92,59 @@ describe("TransitionStateBrowseRow: pill is status only, label moved to the meta
         expect(reviewPill).toHaveClass("value-pill--muted")
         expect(kindPill).not.toBe(reviewPill)
 
-        // The label is visible as plain text in the meta line.
-        const meta = row.querySelector(".browse-row-meta") as HTMLElement
-        expect(meta).toBeTruthy()
-        expect(within(meta).getByText(/TS0/)).toBeInTheDocument()
+        // The depositor label is not rendered anywhere on the row, deposited
+        // ("TS0") or not.
+        expect(within(row).queryByText(/TS0/)).not.toBeInTheDocument()
+        expect(within(row).queryByText(/Unlabeled transition state/)).not.toBeInTheDocument()
     })
 
-    it("falls back to 'Unlabeled transition state' in the meta line when no label was deposited", () => {
+    it("renders nothing label-shaped when no label was deposited either -- same row either way", () => {
         renderRow(record({ transition_state: { transition_state_ref: "ts_one", label: null, note: null, review: { status: "not_reviewed" } } }))
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        const meta = row.querySelector(".browse-row-meta") as HTMLElement
-        expect(within(meta).getByText(/Unlabeled transition state/)).toBeVisible()
-        // Still just "optimized" in the pill, not fused with the fallback label.
+        expect(within(row).queryByText(/Unlabeled transition state/)).not.toBeInTheDocument()
         expect(within(row).getByText("optimized")).toBeVisible()
+    })
+})
+
+// Job 1: the fact that actually distinguishes several TS deposits of the
+// SAME reaction is which reaction deposit each belongs to
+// (`reaction.reaction_entry_ref`) -- MEASURED live: level of theory,
+// software and the deposited date (truncated to a plain date) are not
+// enough on their own, since real same-reaction deposits share all three.
+describe("TransitionStateBrowseRow: the reaction deposit ref distinguishes same-reaction rows", () => {
+    it("renders 'from reaction entry <ref>' in the footer", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const deposit = row.querySelector(".browse-row-deposit") as HTMLElement
+        expect(deposit).toBeTruthy()
+        expect(deposit.textContent).toContain("from reaction entry")
+        expect(within(deposit).getByText("rxe_deposit_one")).toBeVisible()
+    })
+
+    it("renders nothing deposit-shaped when the archive gave no reaction entry ref", () => {
+        renderRow(record({ reaction: { reaction_ref: "rxn_one", reaction_entry_ref: null, equation: "A <=> B", reversible: true, family: "R_Addition_MultipleBond" } }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(row.querySelector(".browse-row-deposit")).toBeNull()
+    })
+
+    it("gives two rows that would otherwise be identical (same LOT, software, status, deposited date) a distinct deposit ref", () => {
+        const shared = record()
+        const other = record({
+            transition_state_entry: {
+                ...shared.transition_state_entry,
+                transition_state_entry_ref: "tse_two",
+            },
+            transition_state: { transition_state_ref: "ts_two", label: "TS1", note: null, review: { status: "not_reviewed" } },
+            reaction: { ...shared.reaction, reaction_entry_ref: "rxe_deposit_two" },
+        })
+        const { unmount } = renderRow(shared)
+        const rowA = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(rowA).getByText("rxe_deposit_one")).toBeVisible()
+        unmount()
+        renderRow(other)
+        const rowB = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(rowB).getByText("rxe_deposit_two")).toBeVisible()
+        expect(within(rowB).queryByText("rxe_deposit_one")).not.toBeInTheDocument()
     })
 })
 
@@ -263,7 +310,7 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
 // sit OUTSIDE the link element, the inverse of the old test suite (which
 // asserted they were INSIDE it).
 describe("TransitionStateBrowseRow: link wraps only the equation", () => {
-    it("has an accessible name of exactly the equation plus the label, not the ref or the whole row", () => {
+    it("has an accessible name of exactly the equation plus the reaction deposit, never the depositor label", () => {
         renderRow(record())
         const link = screen.getByRole("link")
         // Exact, not a length bound or a substring match: an aria-label
@@ -272,9 +319,15 @@ describe("TransitionStateBrowseRow: link wraps only the equation", () => {
         // "<30 chars" bound that would still pass with unrelated content
         // swapped in. The ~170-character accessible name the old
         // whole-row link produced (equation + family + charge/spin + both
-        // pills + evidence text + ref) is gone.
-        expect(link).toHaveAccessibleName("A <=> B (TS0)")
+        // pills + evidence text + ref) is gone, and so is the depositor
+        // label ("TS0") the accessible name used to carry.
+        expect(link).toHaveAccessibleName("A <=> B (deposit rxe_deposit_one)")
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
+    })
+
+    it("falls back to the bare equation for the accessible name when no reaction entry ref was served", () => {
+        renderRow(record({ reaction: { reaction_ref: "rxn_one", reaction_entry_ref: null, equation: "A <=> B", reversible: true, family: "R_Addition_MultipleBond" } }))
+        expect(screen.getByRole("link")).toHaveAccessibleName("A <=> B")
     })
 
     it("does not contain the ref, the pills, or the evidence line", () => {

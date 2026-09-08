@@ -400,7 +400,16 @@ describe("CalculationDetailPage", () => {
     // Item 1 (BLOCKING): a TS-owned calculation's owner now links to the
     // real `/transition-state-entries/:ref` route, plus a breadcrumb
     // branch mirroring `TransitionStateEntryPage`'s own.
-    it("links a transition-state owner to its entry page, with a breadcrumb branch, instead of unlinked plain text", async () => {
+    //
+    // The fixture's `transition_state_entry.label: "TS0"` is deliberately
+    // populated but MUST NOT appear anywhere -- house rule widened 2026-09:
+    // no depositor-typed labels on public pages. The h1 and the owner link
+    // both read the entry ref instead, whether or not a label was
+    // deposited (see the sibling test below for the no-label case, kept as
+    // a separate fixture so a regression that starts branching on the
+    // wire's `label` field again would only break one of the two, not
+    // both identically).
+    it("links a transition-state owner to its entry page by ref, with a breadcrumb branch, instead of unlinked plain text or the depositor label", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 owner: {
@@ -420,10 +429,12 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         const h1 = await findLoaded("Frequency")
-        expect(h1).toHaveTextContent("Frequency of TS0")
+        expect(h1).toHaveTextContent("Frequency of tse_demo")
+        expect(h1).not.toHaveTextContent("TS0")
 
-        const link = screen.getByRole("link", { name: "TS0" })
+        const link = screen.getByRole("link", { name: "tse_demo" })
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_demo")
+        expect(screen.queryByRole("link", { name: "TS0" })).not.toBeInTheDocument()
         // No more "does not yet have a dedicated page" disclaimer.
         expect(screen.queryByText(/does not yet have a dedicated page/)).not.toBeInTheDocument()
 
@@ -439,12 +450,11 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).queryByRole("link", { name: "Reaction entry" })).not.toBeInTheDocument()
     })
 
-    // SHOULD-FIX-8 (re-review pass): the only TS-owner fixture above
-    // always carries `label: "TS0"`, so `titleSubject`'s OTHER branch --
-    // a TS-owned calculation whose transition state has no depositor
-    // label at all -- was never actually exercised by a test, even
-    // though it is the one path that renders a raw ref inside the h1.
-    it("falls back to the raw ref, wrapped as a data run, when the TS owner has no label", async () => {
+    // SHOULD-FIX-8 (re-review pass): the ref-fallback path, now also the
+    // ONLY path -- `titleSubject` no longer branches on the depositor
+    // label at all, so this and the test above must render identically
+    // apart from the ref value itself.
+    it("renders the raw ref, wrapped as a data run, when the TS owner has no label either", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 owner: {

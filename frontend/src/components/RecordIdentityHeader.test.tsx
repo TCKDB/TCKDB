@@ -76,6 +76,20 @@ describe("RecordIdentityHeader", () => {
         expect(screen.getByText("not recorded")).toBeVisible()
     })
 
+    // House rule widened 2026-09: no depositor-typed labels on public
+    // pages at all. `TransitionStateIdentity` no longer even carries a
+    // `label` field (see that type's own comment), but this asserts the
+    // RENDER side directly and defensively -- even if a future caller
+    // passes an identity object that still happens to carry a stray
+    // `label` property at runtime (TypeScript erases the type, not the
+    // property), this header must never turn it into a "Label" fact or
+    // show the string anywhere.
+    it("never renders a 'Label' fact or a depositor-typed label string, even if the identity object carries one", () => {
+        renderHeader({ identity: { ...tsIdentity, label: "TS0" } as unknown as RecordIdentity })
+        expect(screen.queryByText("Label")).not.toBeInTheDocument()
+        expect(screen.queryByText("TS0")).not.toBeInTheDocument()
+    })
+
     it("renders a transition-state's unmapped SMILES when one was deposited", () => {
         renderHeader({ identity: { ...tsIdentity, unmappedSmiles: "[CH2]OO[CH2]" } })
         expect(screen.getByText("[CH2]OO[CH2]")).toBeVisible()

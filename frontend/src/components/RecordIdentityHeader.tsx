@@ -298,22 +298,17 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
             )}
             <dl className="kv-list record-identity-facts">
                 {ownRefFact}
-                {/* The producer's own label (e.g. "TS0") -- BLOCKING-1 fix
-                    (PR B review): this used to be its own `.tse-label-facet`
-                    span in `TransitionStateEntryPage.tsx`'s kicker row, a
-                    class this stylesheet consolidation retired without
-                    updating that page's markup to match, leaving an
-                    unstyled 16px sans span next to an 11.5px pill. A plain
-                    identity fact -- the same tier as charge/multiplicity
-                    and the entry ref below -- needs no page-local class of
-                    its own. Only rendered when the identity actually
-                    carries a label: `GeometryDetailPage`'s TS-owned-
-                    geometry identity (`GeometryTransitionStateIdentity`)
-                    never serves this field, so this fact is silently
-                    absent there rather than showing an empty row. */}
-                {identity.label && (
-                    <IdentityFact label="Label">{identity.label}</IdentityFact>
-                )}
+                {/* The producer's own `transition_state.label` (e.g. "TS0")
+                    used to render here as a plain "Label" fact -- REMOVED
+                    (house rule widened: no depositor-typed labels on public
+                    pages at all; an arbitrary producer string like "TS0"
+                    tells a reader nothing, and MEASURED live, every one of
+                    four separate deposits of the same reaction 1 saddle
+                    point carries the identical label "TS1"). The entry ref
+                    below and, on the transition-state-entry page itself,
+                    the reaction-deposit context already distinguish the
+                    record; this header never reads `identity.label` for
+                    display any more. */}
                 <IdentityFact label="Reaction SMILES (unmapped)" wide copy={identity.unmappedSmiles ?? undefined}>
                     {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>

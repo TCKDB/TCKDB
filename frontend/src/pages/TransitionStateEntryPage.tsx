@@ -206,7 +206,11 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         charge: entry.charge,
         multiplicity: entry.multiplicity,
         transitionStateRef: ts.transition_state_ref,
-        label: ts.label,
+        // No `label` here any more -- `ts.label` is the depositor's own
+        // `transition_state.label` (e.g. "TS1"), which this page no longer
+        // reads for display (house rule widened 2026-09: no depositor-typed
+        // labels on public pages). See `TransitionStateIdentity`'s own
+        // comment.
     }
 
     const calculationsAvailability = sectionAvailability(record.calculations)
@@ -295,16 +299,16 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             `RecordIdentityHeader` (item 1, design/foundations
                             PR B). The review pill is the header's ONE pill
                             slot. The producer's own label (e.g. "TS0") is
-                            NOT a second pill in that slot any more (BLOCKING-1
-                            fix, PR B review) -- it is a plain identity fact
-                            in `RecordIdentityHeader`'s own `.kv-list`, the
-                            same tier as charge/multiplicity, via
-                            `identity.label`; see that component's own
-                            comment. The trust verdict is likewise NOT a
-                            second pill -- it is a plain fact in the
-                            provenance `.kv-list` below, the same treatment
-                            every other computed verdict on these five pages
-                            gets.
+                            not rendered anywhere on this page at all any
+                            more (house rule widened 2026-09: no
+                            depositor-typed labels on public pages -- it used
+                            to be a plain identity fact via `identity.label`,
+                            which `RecordIdentityHeader` no longer even
+                            accepts; see that component's own comment). The
+                            trust verdict is likewise NOT a second pill -- it
+                            is a plain fact in the provenance `.kv-list`
+                            below, the same treatment every other computed
+                            verdict on these five pages gets.
                             explainTransitionStateIdentity=false: the Reaction
                             section's own lede below is this page's one
                             "no canonical SMILES" sentence -- see that
@@ -385,15 +389,20 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             const reviewStatus = sibling.transition_state_entry.review.status
                             return (
                                 <li key={siblingRef}>
+                                    {/* The link text is the sibling's own ref, never
+                                        `sibling.transition_state.label` (house rule
+                                        widened 2026-09: no depositor-typed labels on
+                                        public pages -- three siblings on one reaction
+                                        used to all read "TS4", indistinguishable, and
+                                        a fourth reaction on this same page's own
+                                        MEASURED live data carries the identical label
+                                        "TS1" on every one of its own siblings). Deposit
+                                        date + level of theory + software below already
+                                        do the differentiating work the label never
+                                        could. */}
                                     <Link to={`/transition-state-entries/${siblingRef}`}>
-                                        {sibling.transition_state.label ?? "Unlabeled transition state"}
+                                        {siblingRef}
                                     </Link>
-                                    {/* Own ref + deposited date -- MEASURED report: three
-                                        siblings on one reaction (hydrazine TS8's page) all
-                                        read "TS4 · MRCI+Davidson/... · Molpro (version not
-                                        recorded) · NOT REVIEWED", indistinguishable without
-                                        these two facts. */}
-                                    <code>{siblingRef}</code>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>

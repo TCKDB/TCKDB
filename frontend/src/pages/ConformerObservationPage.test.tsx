@@ -267,12 +267,14 @@ describe("ConformerObservationPage", () => {
         const speciesEntryLink = within(identityHeader).getByRole("link", { name: "CH3 · ground state" })
         expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
 
-        // The conformer-basin label ("conformer_1") is a DIFFERENT fact
-        // (a depositor label on the conformer group, not the species
-        // entry) and is out of scope for this fix -- see the PR body's
-        // "Other depositor strings still rendered" list.
-        expect(screen.getByRole("link", { name: "conformer_1" }))
+        // The conformer-basin link text is always the stable ref now, never
+        // the depositor's own `conformer_group.label` (e.g. "conformer_1"
+        // -- house rule widened 2026-09: no depositor-typed labels on
+        // public pages at all). `mockRecord()` still deposits
+        // `label: "conformer_1"` on the wire; it must never surface.
+        expect(screen.getByRole("link", { name: "cg_demo" }))
             .toHaveAttribute("href", "/conformer-groups/cg_demo")
+        expect(screen.queryByText("conformer_1")).not.toBeInTheDocument()
 
         // Stable public refs stay visible and copyable even when a label exists.
         expect(screen.getByText("co_one", { selector: "code" })).toBeVisible()

@@ -149,11 +149,12 @@ describe("TransitionStateEntryPage", () => {
         page()
         expect(await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })).toBeVisible()
 
-        // The label is demoted to a plain identity fact in the header's
-        // `.kv-list`, not the h1 and not a second pill beside the review one
-        // (BLOCKING-1, PR B review).
-        expect(screen.getByText("Label", { selector: "dt" })).toBeVisible()
-        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
+        // The depositor's own label is not rendered anywhere on the page,
+        // not as a pill and not as an identity fact -- house rule widened
+        // 2026-09: no depositor-typed labels on public pages. `mockRecord()`
+        // still deposits `label: "TS0"` on the wire; it must never surface.
+        expect(screen.queryByText("Label", { selector: "dt" })).not.toBeInTheDocument()
+        expect(screen.queryByText("TS0")).not.toBeInTheDocument()
 
         // The unmapped SMILES the API actually serves is shown, relabeled...
         const unmappedRow = screen.getByText("Reaction SMILES (unmapped)").closest("div")
@@ -638,18 +639,19 @@ describe("TransitionStateEntryPage", () => {
         expect(await screen.findByText("Transition state entry not found")).toBeVisible()
     })
 
-    it("states the label and the charge/multiplicity fact exactly once each", async () => {
+    it("never states the depositor label anywhere, and states the charge/multiplicity fact exactly once", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // "TS0" appears exactly once on the page now -- the "Label" identity
-        // fact in the header's `.kv-list` -- not also in the h1 (now the
-        // equation) or a formula-fallback slot in the identity header.
-        expect(document.body.textContent?.match(/TS0/g)).toHaveLength(1)
-        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
+        // "TS0" appears zero times on the page -- house rule widened
+        // 2026-09: no depositor-typed labels on public pages at all.
+        // `mockRecord()` still deposits `label: "TS0"` on the wire; it must
+        // never surface, not in the h1, not as a "Label" identity fact.
+        expect(document.body.textContent?.match(/TS0/g)).toBeNull()
+        expect(screen.queryByText("Label", { selector: "dt" })).not.toBeInTheDocument()
         expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
             .toHaveLength(1)
     })
@@ -772,8 +774,10 @@ describe("TransitionStateEntryPage", () => {
                             // Same label AND same level-of-theory/software as
                             // the row above -- MEASURED report: three
                             // indistinguishable "TS4 · ... · NOT REVIEWED"
-                            // rows on the hydrazine reaction's own page.
-                            // Distinguishable now only by ref and date.
+                            // rows on the hydrazine reaction's own page. The
+                            // label is not rendered at all any more (house
+                            // rule widened 2026-09); distinguishable by ref
+                            // and date instead.
                             transition_state_entry: { transition_state_entry_ref: "tse_sibling_2", created_at: "2026-07-15T00:00:00", review: { status: "not_reviewed" } },
                             transition_state: { label: "TS1" },
                             calculations: [{
@@ -793,20 +797,23 @@ describe("TransitionStateEntryPage", () => {
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // Excludes itself -- only the other two entries show.
+        // Excludes itself -- only the other two entries show. Neither
+        // depositor label ("TS0"/"TS1") renders anywhere in the section --
+        // house rule widened 2026-09: no depositor-typed labels on public
+        // pages.
         const siblingsSection = await screen.findByText("Other saddle points deposited for this reaction")
         const section = siblingsSection.closest("section") as HTMLElement
         expect(within(section).queryByText("TS0")).not.toBeInTheDocument()
-
-        const links = within(section).getAllByRole("link", { name: "TS1" })
-        expect(links).toHaveLength(2)
-        expect(links[0]).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
-        expect(links[1]).toHaveAttribute("href", "/transition-state-entries/tse_sibling_2")
+        expect(within(section).queryByText("TS1")).not.toBeInTheDocument()
 
         // The two same-label, same-lot, same-software siblings are told
-        // apart by their own ref and deposited date.
-        expect(within(section).getByText("tse_sibling")).toBeVisible()
-        expect(within(section).getByText("tse_sibling_2")).toBeVisible()
+        // apart by their own ref (now the link text itself) and deposited
+        // date.
+        const linkSibling1 = within(section).getByRole("link", { name: "tse_sibling" })
+        expect(linkSibling1).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
+        const linkSibling2 = within(section).getByRole("link", { name: "tse_sibling_2" })
+        expect(linkSibling2).toHaveAttribute("href", "/transition-state-entries/tse_sibling_2")
+
         expect(within(section).getByText(/deposited 2026-08-02/)).toBeVisible()
         expect(within(section).getByText(/deposited 2026-07-15/)).toBeVisible()
 

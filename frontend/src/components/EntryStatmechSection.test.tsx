@@ -1216,7 +1216,11 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         }
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(2)
-        expect(cellAt(rows[0], "Conformer")).toContain("conformer_1")
+        // The cell shows the conformer group's own ref, never the
+        // depositor's own `label` (e.g. "conformer_1") -- house rule
+        // widened 2026-09: no depositor-typed labels on public pages.
+        expect(cellAt(rows[0], "Conformer")).toContain("cg_one")
+        expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
         expect(cellAt(rows[0], "Review")).toBe("not reviewed")
     })
 
@@ -1249,8 +1253,10 @@ describe("EntryStatmechSection: conformer context & review history fold into one
         const table = await screen.findByRole("table", { name: "Conformer context and review history" })
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(1)
-        expect(cellAt(rows[0], "Conformer")).toContain("conformer_1")
-        expect(cellAt(rows[0], "Conformer")).toContain("conformer_2")
+        expect(cellAt(rows[0], "Conformer")).toContain("cg_one")
+        expect(cellAt(rows[0], "Conformer")).toContain("cg_two")
+        expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_1")
+        expect(cellAt(rows[0], "Conformer")).not.toContain("conformer_2")
         expect(cellAt(rows[0], "Review")).toContain("not reviewed")
         expect(cellAt(rows[0], "Review")).toContain("approved")
     })

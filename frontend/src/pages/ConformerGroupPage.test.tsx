@@ -319,18 +319,21 @@ describe("ConformerGroupPage", () => {
 
     // The header used to be TITLED by the producer's own label (e.g.
     // "conformer_1", an ARC-assigned string, not TCKDB semantics) at a
-    // 120px h1. The h1 now always states what the record is; the ref is
-    // always shown as its own identity row, and a deposited producer label
-    // -- when there is one -- is a separate, secondary row next to it,
-    // never a substitute for either.
-    it("titles the record by what it is, and lists both the stable ref and the producer's own label as separate identity facts", async () => {
+    // 120px h1, then demoted to a secondary "Producer label" identity fact.
+    // That fact is now REMOVED entirely (house rule widened 2026-09: no
+    // depositor-typed labels on public pages at all) -- the h1 always
+    // states what the record is, and the ref is the one identity fact this
+    // page still shows. `payload.record.conformer_group.label` is still
+    // deposited ("conformer_1", see the fixture above); it must never
+    // surface.
+    it("titles the record by what it is, lists the stable ref, and never shows the producer's own label", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         expect(screen.getByText("Group ref")).toBeVisible()
         expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
-        expect(screen.getByText("Producer label")).toBeVisible()
-        expect(screen.getByText("conformer_1", { selector: "dd" })).toBeVisible()
+        expect(screen.queryByText("Producer label")).not.toBeInTheDocument()
+        expect(screen.queryByText("conformer_1")).not.toBeInTheDocument()
     })
 
     // Owner decision: "yes show each record's own ref inline" -- this
@@ -382,7 +385,7 @@ describe("ConformerGroupPage", () => {
         expect(table.closest(".table-scroll")).not.toBeNull()
     })
 
-    it("omits the 'Producer label' row when the group has no deposited label, but still shows the ref", async () => {
+    it("omits the 'Producer label' row when the group has no deposited label either, but still shows the ref", async () => {
         const noLabelPayload = {
             record: {
                 ...payload.record,

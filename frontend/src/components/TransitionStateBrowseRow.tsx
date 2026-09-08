@@ -162,10 +162,23 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     const equation = record.reaction.equation ?? "Equation not recorded"
     const target = tsRowTarget(record)
 
-    const entryLabel = record.transition_state.label ?? "Unlabeled transition state"
+    // The depositor's own `transition_state.label` (e.g. "TS0"/"TS1") no
+    // longer renders here at all (house rule widened: no depositor-typed
+    // labels on public pages -- an arbitrary producer string is meaningless
+    // to a reader and, MEASURED live, four separate deposits of the same
+    // reaction 1 saddle point all carry the identical label "TS1"). The
+    // fact that actually tells same-reaction deposits apart is which
+    // REACTION DEPOSIT each one belongs to (`reaction.reaction_entry_ref`,
+    // already served by this endpoint) -- MEASURED against the live
+    // archive 2026-09-08: in all 4 reactions with more than one TS deposit
+    // (16 of 34 rows), at least two members within each group share
+    // identical level-of-theory, software AND deposit date once truncated
+    // to a plain date, so those two signals alone do not fully distinguish
+    // them; the reaction-entry ref does, because it IS the deposit
+    // identity `transition_state.reaction_entry_id` actually points at.
+    const depositRef = record.reaction.reaction_entry_ref ?? null
     // Item 3: the pill is the entry's STATUS only now ("optimized"), not
-    // the label fused onto it ("TS0 · optimized") -- the label moved to
-    // the meta line as plain text, alongside family/charge/spin/deposited.
+    // the label fused onto it ("TS0 · optimized").
     const entryStatusText = token(record.transition_state_entry.status)
     const entryReviewStatusText = token(record.transition_state_entry.review.status)
     const entryRef = record.transition_state_entry.transition_state_entry_ref
@@ -183,20 +196,19 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                     ? (
                         // `aria-label` (not a visually-hidden child span) is
                         // what makes the accessible name an EXACT, testable
-                        // string ("equation (+ label)") -- letting the
+                        // string ("equation (+ deposit)") -- letting the
                         // browser's accname algorithm concatenate a visible
                         // text node with a nested element's trimmed text
-                        // produced inconsistent spacing ("A <=> B(TS0)",
-                        // missing the space before the parenthesis) that
-                        // depended on undocumented whitespace-collapsing
-                        // behavior around JSX text nodes. The equation still
-                        // renders as ordinary visible text as the Link's
-                        // child; `aria-label` only overrides what a screen
-                        // reader announces, not what is on screen -- the
-                        // label is separately visible on `.browse-row-meta`
+                        // produced inconsistent spacing that depended on
+                        // undocumented whitespace-collapsing behavior around
+                        // JSX text nodes. The equation still renders as
+                        // ordinary visible text as the Link's child;
+                        // `aria-label` only overrides what a screen reader
+                        // announces, not what is on screen -- the deposit
+                        // ref is separately visible on `.browse-row-footer`
                         // below, so this does not duplicate it visually.
                         <Link
-                            aria-label={`${equation} (${entryLabel})`}
+                            aria-label={depositRef ? `${equation} (deposit ${depositRef})` : equation}
                             className="browse-row-title"
                             to={target}
                         >
@@ -205,8 +217,6 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                     )
                     : <span className="browse-row-title">{equation}</span>}
                 <span className="browse-row-meta">
-                    {entryLabel}
-                    {" · "}
                     {record.reaction.family ? token(record.reaction.family) : <span className="absent">family not recorded</span>}
                     {" · "}
                     charge {chargeDisplay(record.transition_state_entry.charge)} · spin {spinDisplay(record.transition_state_entry.multiplicity)}
@@ -227,6 +237,11 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
             </ul>
             <p className="browse-row-footer">
                 <span className="browse-row-evidence">{evidenceText}</span>
+                {depositRef && (
+                    <span className="browse-row-deposit">
+                        from reaction entry <code className="data">{depositRef}</code>
+                    </span>
+                )}
                 <code className="browse-ref data">{entryRef}</code>
             </p>
         </li>

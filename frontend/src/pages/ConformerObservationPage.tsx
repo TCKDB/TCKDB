@@ -164,22 +164,25 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 </div>
                                 <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
                                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
+                                {/* The link text used to be `group.label ?? group
+                                    .conformer_group_ref` -- the producer's own
+                                    depositor-typed label (e.g. "conformer_1") when
+                                    one was deposited, with a separate "Group ref"
+                                    row appearing alongside it in that case. REMOVED
+                                    (house rule widened 2026-09: no depositor-typed
+                                    labels on public pages at all): the link text is
+                                    now always the stable ref, so the conditional
+                                    second row is gone too -- it would only ever
+                                    have duplicated the same ref the link itself now
+                                    shows. */}
                                 <div>
                                     <dt>Conformer basin</dt>
                                     <dd>
                                         <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
-                                            {group.label ?? group.conformer_group_ref}
+                                            <code className="data">{group.conformer_group_ref}</code>
                                         </Link>
                                     </dd>
                                 </div>
-                                {/* Separate ref row only when the link above is showing
-                                    something OTHER than the ref -- see
-                                    `CalculationDetailPage.tsx`'s `OwnerCard` for the
-                                    measured defect (species_entry_label null on every
-                                    sampled entry) this same shape was fixed for. */}
-                                {group.label && (
-                                    <div><dt>Group ref</dt><dd><code className="data">{group.conformer_group_ref}</code></dd></div>
-                                )}
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>
