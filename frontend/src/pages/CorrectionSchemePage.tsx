@@ -94,7 +94,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                 )}
             >
                 <section className="ledger-section" aria-labelledby="ecs-parameters-heading">
-                    <SectionHeading id="ecs-parameters-heading" kicker="Deposited evidence" intro="This scheme's full parameter table, exactly as deposited -- never summarised or truncated.">
+                    <SectionHeading id="ecs-parameters-heading" kicker="Deposited evidence" intro="This scheme's full parameter table, exactly as deposited — never summarised or truncated.">
                         Correction parameters
                     </SectionHeading>
                     {record.available_sections.has_corrections && (record.corrections?.length ?? 0) > 0 ? (

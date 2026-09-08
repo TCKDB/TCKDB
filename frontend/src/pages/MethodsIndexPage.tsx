@@ -67,7 +67,7 @@ export default function MethodsIndexPage() {
                     <SectionHeading
                         id="methods-lot-heading"
                         kicker="Provenance vocabulary"
-                        intro="One row per distinct level-of-theory identity -- two levels can share a method and basis while differing in dispersion, solvent, or spin treatment, so this table never groups on that display text."
+                        intro="One row per distinct level-of-theory identity — two levels can share a method and basis while differing in dispersion, solvent, or spin treatment, so this table never groups on that display text."
                     >
                         Levels of theory
                     </SectionHeading>
