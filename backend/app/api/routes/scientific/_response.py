@@ -418,15 +418,15 @@ ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS = IncludeGatedSections(
 )
 
 # ``/level-of-theories/{ref}``, ``/level-of-theories/search``. ``software``
-# is deliberately not a key here: it is not yet a legal include token (see
-# ``app/services/scientific_read/level_of_theory.py``'s own docstring), so
-# there is no field for a caller to under-request -- it 422s instead.
+# (methods-surface plan §5.3) is the LOT-scoped software/workflow-tool
+# usage breakdown -- see ``app/services/scientific_read/level_of_theory.py``.
 LEVEL_OF_THEORY_RECORD_SECTIONS = IncludeGatedSections(
     surface="/api/v1/scientific/level-of-theories",
     sections={
         "correction_schemes": ("correction_schemes",),
         "frequency_scale_factors": ("frequency_scale_factors",),
         "used_by": ("used_by",),
+        "software": ("software",),
     },
 )
 

@@ -2042,6 +2042,10 @@
             "title": "Has Frequency Scale Factors",
             "type": "boolean"
           },
+          "has_software": {
+            "title": "Has Software",
+            "type": "boolean"
+          },
           "has_used_by": {
             "title": "Has Used By",
             "type": "boolean"
@@ -2050,7 +2054,8 @@
         "required": [
           "has_correction_schemes",
           "has_frequency_scale_factors",
-          "has_used_by"
+          "has_used_by",
+          "has_software"
         ],
         "title": "AvailableLevelOfTheorySections",
         "type": "object"
@@ -21189,6 +21194,61 @@
         "title": "LevelOfTheorySearchRequest",
         "type": "object"
       },
+      "LevelOfTheorySoftwareBreakdown": {
+        "description": "``include=software`` -- which software (and workflow tool) actually\nran calculations at this level of theory, and how many.\n\nUsage-derived, same ``INNER JOIN`` discipline as ``list_software`` /\n``list_workflow_tools`` in ``app/services/scientific_read/meta.py``\n(2026-08): a software package or workflow tool with zero calculations\nat *this* level of theory is absent from the corresponding list, never\npresent with a zero count. This is the closed gap named in the\nmethods-surface plan §5.3 -- establishing this mapping by hand cost 12\n``calculations/search?lot_ref=&software=`` calls before this endpoint\nexisted.",
+        "properties": {
+          "software": {
+            "items": {
+              "$ref": "#/components/schemas/LevelOfTheorySoftwareUsage"
+            },
+            "title": "Software",
+            "type": "array"
+          },
+          "workflow_tools": {
+            "items": {
+              "$ref": "#/components/schemas/LevelOfTheoryWorkflowToolUsage"
+            },
+            "title": "Workflow Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "software",
+          "workflow_tools"
+        ],
+        "title": "LevelOfTheorySoftwareBreakdown",
+        "type": "object"
+      },
+      "LevelOfTheorySoftwareUsage": {
+        "description": "One ``(software, version)`` pair observed running >=1 calculation\nat this level of theory.\n\n``version`` is ``None`` -- never ``\"\"`` -- when the ``software_release``\nrow(s) behind this pair carry no recorded version. Absence is stated,\nnot implied: on the live archive, 2 of 3 software packages have no\nversion recorded at all, and rendering that as a blank string would\nread as \"we asked and it was blank\" rather than \"no one recorded it\".",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "software": {
+            "title": "Software",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "software",
+          "calculation_count"
+        ],
+        "title": "LevelOfTheorySoftwareUsage",
+        "type": "object"
+      },
       "LevelOfTheorySummary": {
         "description": "Lightweight LoT shape used in scientific provenance summaries.\n\nPhase B: ``level_of_theory_ref`` is the public stable handle; the\nexisting ``level_of_theory_id`` integer stays for the compatibility\nwindow. See ``docs/specs/public_identifier_policy.md``.",
         "properties": {
@@ -21272,6 +21332,36 @@
           "display"
         ],
         "title": "LevelOfTheorySummary",
+        "type": "object"
+      },
+      "LevelOfTheoryWorkflowToolUsage": {
+        "description": "One ``(workflow_tool, version)`` pair observed running >=1\ncalculation at this level of theory. Same absent-version rule as\n:class:`LevelOfTheorySoftwareUsage` -- on the live archive only 10 of\nARC's 416 calculations carry a recorded workflow-tool-release version.",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "workflow_tool": {
+            "title": "Workflow Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workflow_tool",
+          "calculation_count"
+        ],
+        "title": "LevelOfTheoryWorkflowToolUsage",
         "type": "object"
       },
       "LiteratureAuthorRead": {
@@ -34449,6 +34539,17 @@
           },
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryCoreBlock"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySoftwareBreakdown"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "x-tckdb-include-gated": "software"
           },
           "used_by": {
             "anyOf": [

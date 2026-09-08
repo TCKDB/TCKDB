@@ -750,7 +750,9 @@ def test_the_parametrisation_asserts_its_own_size():
     # 88 after ``networks`` joined REACTION_FULL_SECTIONS.
     # 91 after ``level-of-theories`` added LEVEL_OF_THEORY_RECORD_SECTIONS
     # (correction_schemes, frequency_scale_factors, used_by).
-    assert len(sections_under_test) == 91
+    # 92 after ``include=software`` (methods-surface plan §5.3) added a
+    # fourth field to that same table.
+    assert len(sections_under_test) == 92
 
 
 # ---------------------------------------------------------------------------

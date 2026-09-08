@@ -3365,8 +3365,10 @@ class TCKDBClient:
         The methods-surface reference page: identity (method, basis,
         dispersion, solvent, spin treatment), the correction schemes and
         frequency scale factor(s) actually deposited against it
-        (``include=correction_schemes,frequency_scale_factors``), and a
-        bounded usage list (``include=used_by``).
+        (``include=correction_schemes,frequency_scale_factors``), a
+        bounded usage list (``include=used_by``), and which software (and
+        workflow tool) ran calculations at this level of theory
+        (``include=software``).
         """
 
         return self._get_scientific_detail(

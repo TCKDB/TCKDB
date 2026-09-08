@@ -279,8 +279,9 @@ def test_the_marker_registry_only_names_declared_sections():
     # 104 since ``networks`` joined REACTION_FULL_SECTIONS (and therefore
     # ScientificReactionFullResponse's entry here, via fields_by_token()),
     # and ScientificLevelOfTheoryRecord added three of its own
-    # (correction_schemes, frequency_scale_factors, used_by).
-    assert marked == 104, f"the marker registry names {marked} properties"
+    # (correction_schemes, frequency_scale_factors, used_by). 105 after
+    # ``include=software`` (methods-surface plan §5.3) added a fourth.
+    assert marked == 105, f"the marker registry names {marked} properties"
 
 
 def test_the_hosted_document_marks_the_gated_properties(client):
@@ -299,8 +300,9 @@ def test_the_hosted_document_marks_the_gated_properties(client):
             checked += 1
 
     # 104 since ``networks`` joined REACTION_FULL_SECTIONS, and
-    # ScientificLevelOfTheoryRecord added three of its own.
-    assert checked == 104, f"the hosted document carries {checked} markers"
+    # ScientificLevelOfTheoryRecord added three of its own. 105 after
+    # ``include=software`` added a fourth.
+    assert checked == 105, f"the hosted document carries {checked} markers"
 
 
 def test_the_marker_is_not_stamped_on_ungated_properties():

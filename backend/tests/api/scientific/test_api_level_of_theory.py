@@ -204,16 +204,17 @@ def test_lot_detail_include_all_expands_to_public_tokens(client, db_session):
     assert "correction_schemes" in echo
     assert "frequency_scale_factors" in echo
     assert "used_by" in echo
-    # ``software`` is not yet a legal token (methods-surface plan §5.3,
-    # not yet built) -- it must not appear even under ``all``.
-    assert "software" not in echo
+    # ``software`` (methods-surface plan §5.3) is now a legal public token
+    # and expands under ``all`` like every other non-internal section.
+    assert "software" in echo
 
 
-def test_lot_detail_include_software_is_rejected(client, db_session):
-    """Asking for the not-yet-built LOT-scoped software breakdown 422s
-    rather than silently answering with nothing."""
+def test_lot_detail_include_software_unknown_token_still_rejects_typos(
+    client, db_session
+):
+    """``software`` is legal now; a near-miss token must still 422."""
     lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
-    resp = client.get(_detail_url(lot.public_ref, include="software"))
+    resp = client.get(_detail_url(lot.public_ref, include="softwares"))
     assert resp.status_code == 422
     assert "unknown_include_token" in resp.text
 
@@ -428,6 +429,327 @@ def test_lot_detail_distinct_software_count(client, db_session):
     )
     body = client.get(_detail_url(lot.public_ref)).json()
     assert body["record"]["evidence_summary"]["distinct_software_count"] == 2
+
+
+# ===========================================================================
+# include=software -- LOT-scoped software/workflow-tool usage aggregation
+# (methods-surface plan §5.3)
+# ===========================================================================
+
+
+def test_lot_detail_include_software_returns_package_and_calculation_count(
+    client, db_session
+):
+    lot = make_lot(db_session, method="b3lyp-sw", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWA"))
+    entry = make_species_entry(db_session, species)
+    gaussian = make_software_release(db_session, name="gaussian16-a", version="16")
+    for _ in range(3):
+        make_calculation(
+            db_session,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+            software_release_id=gaussian.id,
+        )
+
+    body = client.get(_detail_url(lot.public_ref, include="software")).json()
+    software = body["record"]["software"]["software"]
+    assert software == [
+        {"software": "gaussian16-a", "version": "16", "calculation_count": 3}
+    ]
+
+
+def test_lot_detail_include_software_excludes_zero_calculation_package(
+    client, db_session
+):
+    """Mutation target (a): a software package with zero calculations at
+    *this* level of theory must be absent from the list, not present with
+    a zero count.
+
+    ``orca`` is registered (a ``SoftwareRelease`` row exists) but never
+    cited by any calculation at ``lot`` -- only ``gaussian`` is. If the
+    join were ever loosened from ``INNER`` to ``OUTER`` (mirroring the
+    2026-08 vocabulary-dropdown defect this repo already fixed once,
+    where 110 of 125 families could never return a result), ``orca``
+    would leak back in with ``calculation_count: 0``.
+    """
+    lot = make_lot(db_session, method="b3lyp-sw-zero", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWB"))
+    entry = make_species_entry(db_session, species)
+    gaussian = make_software_release(db_session, name="gaussian16-b", version="16")
+    make_software_release(db_session, name="orca-unused-b", version="5.0")
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+        software_release_id=gaussian.id,
+    )
+
+    body = client.get(_detail_url(lot.public_ref, include="software")).json()
+    names = {row["software"] for row in body["record"]["software"]["software"]}
+    assert names == {"gaussian16-b"}
+    assert "orca-unused-b" not in names
+
+
+def test_lot_detail_include_software_scoped_to_correct_lot(client, db_session):
+    """Mutation target (b): counts must come from *this* level of theory,
+    not a sibling one.
+
+    Two LOTs, two different software packages, one calculation each.
+    Asking LOT A must never return LOT B's package or count.
+    """
+    lot_a = make_lot(db_session, method="lot-a-scope", basis="def2tzvp")
+    lot_b = make_lot(db_session, method="lot-b-scope", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWC"))
+    entry = make_species_entry(db_session, species)
+    gaussian = make_software_release(db_session, name="gaussian-scope-a", version="16")
+    orca = make_software_release(db_session, name="orca-scope-b", version="5.0")
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot_a.id,
+        software_release_id=gaussian.id,
+    )
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot_b.id,
+        software_release_id=orca.id,
+    )
+
+    body_a = client.get(_detail_url(lot_a.public_ref, include="software")).json()
+    body_b = client.get(_detail_url(lot_b.public_ref, include="software")).json()
+    names_a = {row["software"] for row in body_a["record"]["software"]["software"]}
+    names_b = {row["software"] for row in body_b["record"]["software"]["software"]}
+    assert names_a == {"gaussian-scope-a"}
+    assert names_b == {"orca-scope-b"}
+
+
+def test_lot_detail_include_software_unrecorded_version_is_null(client, db_session):
+    """Mutation target (c): an unrecorded version must read as ``null``,
+    never as ``""``. Absence is stated, not implied (this archive's
+    house rule) -- rendering it blank would read as "we asked and there
+    was nothing there" rather than "no one recorded it"."""
+    lot = make_lot(db_session, method="b3lyp-sw-noversion", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWD"))
+    entry = make_species_entry(db_session, species)
+    molpro = make_software_release(db_session, name="molpro-noversion", version=None)
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+        software_release_id=molpro.id,
+    )
+
+    body = client.get(_detail_url(lot.public_ref, include="software")).json()
+    row = body["record"]["software"]["software"][0]
+    assert row["version"] is None
+    assert row["calculation_count"] == 1
+
+
+def test_lot_detail_include_software_carries_workflow_tool_breakdown(
+    client, db_session
+):
+    lot = make_lot(db_session, method="b3lyp-sw-wt", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWE"))
+    entry = make_species_entry(db_session, species)
+    arc = make_workflow_tool_release(db_session, name="arc-sw-wt", version=None)
+    gaussian = make_software_release(db_session, name="gaussian-sw-wt", version="16")
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+        software_release_id=gaussian.id,
+        workflow_tool_release_id=arc.id,
+    )
+
+    body = client.get(_detail_url(lot.public_ref, include="software")).json()
+    wt = body["record"]["software"]["workflow_tools"]
+    assert wt == [
+        {"workflow_tool": "arc-sw-wt", "version": None, "calculation_count": 1}
+    ]
+
+
+def test_lot_detail_evidence_distinct_software_count_matches_software_breakdown(
+    client, db_session
+):
+    """PR 1's ``distinct_software_count`` scalar and ``include=software``'s
+    breakdown are built from the same query (see
+    ``build_level_of_theory_record`` in
+    ``app/services/scientific_read/level_of_theory.py``) and must always
+    agree. Two software packages, two versions of one of them -- the
+    scalar counts *distinct packages* (2), not distinct (package,
+    version) rows (3)."""
+    lot = make_lot(db_session, method="b3lyp-sw-consistency", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWF"))
+    entry = make_species_entry(db_session, species)
+    gaussian_v1 = make_software_release(
+        db_session, name="gaussian-consistency", version="09"
+    )
+    gaussian_v2 = make_software_release(
+        db_session, name="gaussian-consistency", version="16"
+    )
+    orca = make_software_release(db_session, name="orca-consistency", version="5.0")
+    for release in (gaussian_v1, gaussian_v2, orca):
+        make_calculation(
+            db_session,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+            software_release_id=release.id,
+        )
+
+    body = client.get(_detail_url(lot.public_ref, include="software")).json()
+    breakdown = body["record"]["software"]["software"]
+    distinct_names_in_breakdown = {row["software"] for row in breakdown}
+    assert len(breakdown) == 3  # 3 distinct (package, version) rows
+    assert distinct_names_in_breakdown == {"gaussian-consistency", "orca-consistency"}
+    assert body["record"]["evidence_summary"]["distinct_software_count"] == len(
+        distinct_names_in_breakdown
+    )
+
+
+def test_lot_detail_available_sections_has_software(client, db_session):
+    lot_with = make_lot(db_session, method="b3lyp-sw-avail-yes", basis="def2tzvp")
+    lot_without = make_lot(db_session, method="b3lyp-sw-avail-no", basis="def2tzvp")
+    _with_usage(db_session, lot_without, method_suffix="AVAILNO")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWG"))
+    entry = make_species_entry(db_session, species)
+    gaussian = make_software_release(db_session, name="gaussian-avail", version="16")
+    make_calculation(
+        db_session,
+        species_entry_id=entry.id,
+        lot_id=lot_with.id,
+        software_release_id=gaussian.id,
+    )
+
+    body_with = client.get(_detail_url(lot_with.public_ref)).json()
+    body_without = client.get(_detail_url(lot_without.public_ref)).json()
+    assert body_with["record"]["available_sections"]["has_software"] is True
+    assert body_without["record"]["available_sections"]["has_software"] is False
+
+
+def test_lot_detail_include_software_live_shaped_fixture(client, db_session):
+    """The archive-shaped fixture the methods-surface plan names directly
+    (§5.3's PR 2 paragraph): 4 levels of theory, 3 distinct software
+    packages, one 1:1:1 LOT-to-package mapping, plus the one workflow
+    tool (ARC) alongside the b3lyp/def2tzvp package. Counts are scaled
+    down from the live 416/78/39/39 for test speed; the *shape* --
+    exactly one package per LOT, absent everywhere else -- is what this
+    pins.
+    """
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWH"))
+    entry = make_species_entry(db_session, species)
+
+    lot_b3lyp = make_lot(db_session, method="b3lyp-live", basis="def2tzvp")
+    lot_wb97xd = make_lot(db_session, method="wb97xd-live", basis="def2tzvp")
+    lot_ccsdt = make_lot(db_session, method="ccsd(t)-f12-live", basis="cc-pvtz-f12")
+    lot_mrci = make_lot(
+        db_session, method="mrci+davidson-live", basis="aug-cc-pv(t+d)z"
+    )
+
+    gaussian16 = make_software_release(db_session, name="Gaussian 16", version=None)
+    gaussian09 = make_software_release(db_session, name="Gaussian 09", version=None)
+    orca = make_software_release(db_session, name="ORCA", version=None)
+    molpro = make_software_release(db_session, name="Molpro", version=None)
+    arc = make_workflow_tool_release(db_session, name="ARC", version=None)
+
+    mapping = {
+        lot_b3lyp: (gaussian16, "Gaussian 16", 4, arc),
+        lot_wb97xd: (gaussian09, "Gaussian 09", 3, None),
+        lot_ccsdt: (orca, "ORCA", 2, None),
+        lot_mrci: (molpro, "Molpro", 2, None),
+    }
+    for lot, (release, _name, count, workflow_release) in mapping.items():
+        for _ in range(count):
+            make_calculation(
+                db_session,
+                species_entry_id=entry.id,
+                lot_id=lot.id,
+                software_release_id=release.id,
+                workflow_tool_release_id=(
+                    workflow_release.id if workflow_release else None
+                ),
+            )
+
+    reported: dict[str, dict] = {}
+    for lot, (_release, name, count, _workflow_release) in mapping.items():
+        body = client.get(_detail_url(lot.public_ref, include="software")).json()
+        software = body["record"]["software"]["software"]
+        assert len(software) == 1, f"{lot.method}: expected exactly one package"
+        assert software[0]["software"] == name
+        assert software[0]["calculation_count"] == count
+        assert body["record"]["evidence_summary"]["distinct_software_count"] == 1
+        reported[lot.method] = body["record"]["software"]
+
+    # Only the b3lyp LOT carries the ARC workflow-tool usage.
+    assert reported["b3lyp-live"]["workflow_tools"] == [
+        {"workflow_tool": "ARC", "version": None, "calculation_count": 4}
+    ]
+    assert reported["wb97xd-live"]["workflow_tools"] == []
+    assert reported["ccsd(t)-f12-live"]["workflow_tools"] == []
+    assert reported["mrci+davidson-live"]["workflow_tools"] == []
+
+
+def test_lot_detail_include_software_statement_count_is_flat_per_package(
+    client, db_session
+):
+    """Mutation target (d): a per-package query inside a loop must be
+    caught here.
+
+    Six software packages at one level of theory. The number of SQL
+    statements the ``include=software`` resolver issues must not grow
+    with the number of distinct packages -- it is two bulk, grouped
+    queries (software side, workflow-tool side) regardless of how many
+    rows either returns. A regression that re-introduces a per-package
+    query (looping over distinct names and querying each one, the exact
+    shape the 12-manual-call gap this endpoint closes had before it
+    existed) would make this scale with package count instead of staying
+    flat.
+    """
+    from sqlalchemy import event
+
+    lot = make_lot(db_session, method="b3lyp-sw-n1", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("LOTSWI"))
+    entry = make_species_entry(db_session, species)
+    for i in range(6):
+        release = make_software_release(
+            db_session, name=f"package-n1-{i}", version=None
+        )
+        make_calculation(
+            db_session,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+            software_release_id=release.id,
+        )
+
+    from app.services.scientific_read.level_of_theory import get_level_of_theory
+
+    engine = db_session.connection().engine
+    count = 0
+
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal count
+        count += 1
+
+    event.listen(engine, "before_cursor_execute", _before)
+    try:
+        response = get_level_of_theory(
+            db_session,
+            level_of_theory_handle=lot.public_ref,
+            include=["software"],
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+
+    assert len(response.record.software.software) == 6
+    # Measured baseline is 6 statements (handle resolution, core row,
+    # calc-usage, has_schemes, has_fsf, and the bulk software/workflow-tool
+    # aggregation). A per-package loop over 6 distinct packages adds 6 more
+    # (measured: 12 with the loop reintroduced). The ceiling sits well
+    # above the real baseline for headroom, and well below what a
+    # per-package loop over 6 packages would produce -- what matters is
+    # that six distinct packages did not add six statements.
+    assert count <= 8, f"expected a flat statement count, got {count}"
 
 
 # ===========================================================================

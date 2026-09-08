@@ -762,6 +762,13 @@ class LevelOfTheoryRecord(TypedDict, total=False):
     underlying ``frequency_scale_factor_ref`` and its own provenance --
     see the backend schema's docstring for why the ten near-duplicate
     rows deposited for one live level of theory do not collapse to one.
+    ``software`` (``include=software``) is the LOT-scoped
+    software/workflow-tool usage breakdown: ``{"software": [...],
+    "workflow_tools": [...]}``, each row ``{software|workflow_tool,
+    version, calculation_count}``. A package or tool with zero
+    calculations at this level of theory is absent from its list, never
+    present with a zero count; ``version`` is ``null``, never ``""``,
+    when no version was recorded.
     """
 
     level_of_theory: Required[JSONDict]
@@ -770,6 +777,7 @@ class LevelOfTheoryRecord(TypedDict, total=False):
     correction_schemes: list[JSONDict] | None
     frequency_scale_factors: list[JSONDict] | None
     used_by: list[JSONDict] | None
+    software: JSONDict | None
 
 
 class FrequencyScaleFactorRecord(TypedDict, total=False):
