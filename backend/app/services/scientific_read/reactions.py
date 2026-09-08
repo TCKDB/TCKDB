@@ -381,6 +381,38 @@ def browse_reactions(
     this endpoint exists to close (``reactions/search`` has no unfiltered
     form).
 
+    ``reactant_smiles`` / ``product_smiles`` are called with
+    ``direction=ReactionDirectionQuery.either`` below (unconditionally, not
+    caller-selectable), so despite their names neither list is restricted
+    to the stored role it names -- but each list is still matched as
+    **one group, against a single stored side, in a single orientation**,
+    not species-by-species: a ``reactant_smiles`` group is tried whole
+    against the stored reactants (forward) and whole against the stored
+    products (reverse), which is exactly why a matched record can come
+    back with ``matched_direction: "reverse"`` -- but a group mixing a
+    genuine reactant with a genuine product of the same reaction matches
+    in neither orientation, because no single stored side contains both.
+    The parameter names describe which query bucket a SMILES was placed
+    in, not which side of the stored equation it is individually
+    guaranteed to land on.
+
+    Partial resolution is a hard empty, not a degraded match: if any
+    SMILES in either list fails to resolve to a species TCKDB has on
+    file, the response is ``[]``. Silently matching only the SMILES that
+    *did* resolve would answer a query the caller did not ask (fewer
+    required species than they supplied) and serve it as if it were the
+    one they did -- a wrong answer presented as a right one. Concretely:
+    :func:`_resolve_smiles_to_species_ids` *preserves* duplicates and
+    ordering -- it drops only the occurrences that fail to resolve, so
+    its output is index/count-aligned with the raw request list -- which
+    is what lets the length check below compare
+    ``len(reactant_species_ids)`` directly against
+    ``len(request.reactant_smiles)`` (no de-duplication needed first) and
+    have the mismatch mean exactly "some requested SMILES occurrence did
+    not resolve", with or without duplicates in the query. This mirrors
+    the identical check :func:`search_reactions` already makes against
+    ``request.reactants`` / ``request.products``.
+
     :param session: SQLAlchemy session.
     :param request: Parsed request model.
     :returns: ``ScientificReactionSearchResponse`` — same envelope shape
@@ -390,14 +422,29 @@ def browse_reactions(
     offset, limit = validate_pagination(request.offset, request.limit)
 
     reactant_species_ids = _resolve_smiles_to_species_ids(
-        session, [request.reactant_smiles] if request.reactant_smiles else []
+        session, request.reactant_smiles
     )
     product_species_ids = _resolve_smiles_to_species_ids(
-        session, [request.product_smiles] if request.product_smiles else []
+        session, request.product_smiles
     )
-    if request.reactant_smiles and not reactant_species_ids:
+    # Correctness trap: with a LIST, "some ids resolved" is not "all ids
+    # resolved". A reaction_entry can only ever contain species TCKDB has,
+    # so any unresolved SMILES on a side makes that side unsatisfiable --
+    # the whole response must be empty, not narrowed to the SMILES that did
+    # resolve (which would silently drop a caller-required species from an
+    # AND query and return a wrong answer that looks like a right one).
+    # No de-duplication is needed first: `_resolve_smiles_to_species_ids`
+    # preserves duplicates and skips only unresolved occurrences, so its
+    # output length compared against the raw request list's length is
+    # already exactly "did every occurrence resolve" -- the same check
+    # `search_reactions` makes against `request.reactants` / `.products`.
+    if request.reactant_smiles and len(reactant_species_ids) != len(
+        request.reactant_smiles
+    ):
         return _empty_browse_response(request, offset, limit)
-    if request.product_smiles and not product_species_ids:
+    if request.product_smiles and len(product_species_ids) != len(
+        request.product_smiles
+    ):
         return _empty_browse_response(request, offset, limit)
 
     if reactant_species_ids or product_species_ids:
@@ -1123,10 +1170,10 @@ def _empty_response(
 
 def _browse_filter_echo(request: ReactionsBrowseRequest) -> dict[str, object]:
     echo: dict[str, object] = {}
-    if request.reactant_smiles is not None:
-        echo["reactant_smiles"] = request.reactant_smiles
-    if request.product_smiles is not None:
-        echo["product_smiles"] = request.product_smiles
+    if request.reactant_smiles:
+        echo["reactant_smiles"] = list(request.reactant_smiles)
+    if request.product_smiles:
+        echo["product_smiles"] = list(request.product_smiles)
     if request.family is not None:
         echo["family"] = request.family
     if request.has_kinetics is not None:

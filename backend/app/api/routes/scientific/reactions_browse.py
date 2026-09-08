@@ -36,6 +36,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.db.models.common import RecordReviewStatus
+from app.schemas.reads._field_bounds import (
+    MAX_PARTICIPANTS_PER_REACTION as _MAX_PARTICIPANTS_PER_REACTION,
+)
 from app.schemas.reads.scientific_reactions import (
     ReactionsBrowseRequest,
     ScientificReactionSearchResponse,
@@ -46,6 +49,29 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.reactions import browse_reactions
 
 router = APIRouter(prefix="/reactions")
+
+
+def _drop_blank_smiles(values: list[str] | None) -> list[str]:
+    """Filter out blank/whitespace-only entries so an empty value stays a no-op.
+
+    FastAPI parses a *present but empty* repeated query value
+    (``?reactant_smiles=``) as ``[""]`` for a ``list[str]`` parameter --
+    a non-empty, truthy list containing one blank string. The old scalar
+    ``str | None`` filter never had this problem: an empty string is
+    itself falsy in Python, so ``if request.reactant_smiles and ...``
+    treated ``reactant_smiles=""`` the same as "not supplied" and left
+    the catalogue unfiltered. Under the list migration that same query
+    (``?reactant_smiles=``) would otherwise reach
+    :class:`~app.schemas.reads.scientific_reactions.ReactionsBrowseRequest`
+    as ``[""]``, hit the unresolvable-SMILES guard in
+    :func:`app.services.scientific_read.reactions.browse_reactions` (no
+    species has an empty-string SMILES), and hard-empty the response --
+    a real regression. Dropping blank entries here, before the request
+    model ever sees them, restores "empty value means unconstrained".
+    """
+    if not values:
+        return []
+    return [v for v in values if v.strip()]
 
 
 @router.get("/browse", response_model=ScientificReactionSearchResponse)
@@ -59,20 +85,54 @@ def scientific_reactions_browse(
             "values). Unknown values return an empty result, not a 422."
         ),
     ),
-    reactant_smiles: str | None = Query(
+    reactant_smiles: list[str] | None = Query(
         None,
         description=(
-            "Exact-match SMILES filter over the reactant side. Narrows "
-            "an open listing to reaction entries with this species among "
-            "their reactants; the product side is unconstrained."
+            "One or more exact-match SMILES filters; repeat the "
+            "parameter for more than one "
+            "(?reactant_smiles=C&reactant_smiles=[OH]), up to "
+            f"{_MAX_PARTICIPANTS_PER_REACTION} per call; an empty value "
+            "(?reactant_smiles=) means unfiltered, the same as omitting "
+            "it. With one value, the matched records are identical to "
+            "the old scalar filter's -- only the echoed "
+            "``request.filter.reactant_smiles`` shape changed, from a "
+            "bare string to a one-item list. With more than one value, "
+            "all of them are matched together as a single group against "
+            "one stored side in one orientation, not independently: "
+            "``direction=either`` (browse's fixed setting) tries the "
+            "whole group against the stored reactants (forward) and "
+            "against the stored products (reverse), so a list mixing a "
+            "genuine reactant with a genuine product of the same "
+            "reaction matches in neither orientation. The product side "
+            "is unconstrained unless ``product_smiles`` is also given. "
+            "If any supplied SMILES does not resolve to a species TCKDB "
+            "has, the result is empty rather than a partial match on "
+            "the ones that did."
         ),
     ),
-    product_smiles: str | None = Query(
+    product_smiles: list[str] | None = Query(
         None,
         description=(
-            "Exact-match SMILES filter over the product side. Narrows "
-            "an open listing to reaction entries with this species among "
-            "their products; the reactant side is unconstrained."
+            "One or more exact-match SMILES filters; repeat the "
+            "parameter for more than one "
+            "(?product_smiles=N&product_smiles=[NH2]), up to "
+            f"{_MAX_PARTICIPANTS_PER_REACTION} per call; an empty value "
+            "(?product_smiles=) means unfiltered, the same as omitting "
+            "it. With one value, the matched records are identical to "
+            "the old scalar filter's -- only the echoed "
+            "``request.filter.product_smiles`` shape changed, from a "
+            "bare string to a one-item list. With more than one value, "
+            "all of them are matched together as a single group against "
+            "one stored side in one orientation, not independently: "
+            "``direction=either`` (browse's fixed setting) tries the "
+            "whole group against the stored products (forward) and "
+            "against the stored reactants (reverse), so a list mixing a "
+            "genuine product with a genuine reactant of the same "
+            "reaction matches in neither orientation. The reactant side "
+            "is unconstrained unless ``reactant_smiles`` is also given. "
+            "If any supplied SMILES does not resolve to a species TCKDB "
+            "has, the result is empty rather than a partial match on "
+            "the ones that did."
         ),
     ),
     has_kinetics: bool | None = Query(None),
@@ -101,11 +161,19 @@ def scientific_reactions_browse(
     "review rank, then an availability flag, then recency, then id".
     There is no client-supplied ``sort=`` parameter to reject; this
     operation has none to accept.
+
+    ``reactant_smiles`` / ``product_smiles`` are each matched as a group
+    against **either** stored side of the reaction (forward tries the
+    named side, reverse tries the swap), not just the side the
+    parameter names -- but every SMILES within one parameter's group
+    must land on that same side together; see the parameter
+    descriptions and
+    :func:`app.services.scientific_read.reactions.browse_reactions`.
     """
     request = ReactionsBrowseRequest(
         family=family,
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
+        reactant_smiles=_drop_blank_smiles(reactant_smiles),
+        product_smiles=_drop_blank_smiles(product_smiles),
         has_kinetics=has_kinetics,
         has_transition_state=has_transition_state,
         min_review_status=min_review_status,

@@ -129,18 +129,30 @@ class ReactionSearchRequest(BaseModel):
         ``CodedValueError`` because ``app.schemas.reads`` is on the wire
         side of the schema layer; both are caught by the same handler.
         """
-        for item in value:
-            if len(item) > _MAX_SMILES_LENGTH:
-                raise CodedValidationError(
-                    "smiles_too_long",
-                    "participant SMILES exceeds "
-                    f"the maximum length of {_MAX_SMILES_LENGTH}.",
-                    context={
-                        "max_length": _MAX_SMILES_LENGTH,
-                        "length": len(item),
-                    },
-                )
-        return value
+        return _bound_smiles_list_lengths(value)
+
+
+def _bound_smiles_list_lengths(value: list[str]) -> list[str]:
+    """Shared per-item SMILES length bound for any list-of-SMILES field.
+
+    Factored out of :meth:`ReactionSearchRequest._bound_participant_lengths`
+    so :class:`ReactionsBrowseRequest`'s ``reactant_smiles`` /
+    ``product_smiles`` reject an oversized item with the identical
+    ``smiles_too_long`` coded error rather than a second, drifting copy of
+    the same check.
+    """
+    for item in value:
+        if len(item) > _MAX_SMILES_LENGTH:
+            raise CodedValidationError(
+                "smiles_too_long",
+                "participant SMILES exceeds "
+                f"the maximum length of {_MAX_SMILES_LENGTH}.",
+                context={
+                    "max_length": _MAX_SMILES_LENGTH,
+                    "length": len(item),
+                },
+            )
+    return value
 
 
 class ReactionsBrowseRequest(BaseModel):
@@ -150,17 +162,61 @@ class ReactionsBrowseRequest(BaseModel):
     field here is required, mirroring
     ``TransitionStatesBrowseRequest``'s relationship to
     ``TransitionStatesSearchRequest``. ``reactant_smiles`` / ``product_smiles``
-    are single exact-match SMILES filters (unlike search's ``reactants`` /
-    ``products`` lists) -- narrowing an open listing by one structure per
-    side, not building a multi-species equation query. There is
-    deliberately no ``reaction_ref`` / ``reaction_entry_ref`` field: a
-    caller who already has one of those wants
+    are lists of exact-match SMILES filters, one repeated query parameter per
+    side (``?reactant_smiles=C&reactant_smiles=[OH]``) -- the browse
+    analogue of search's ``reactants`` / ``products`` lists, bounded at
+    :data:`_MAX_PARTICIPANTS_PER_REACTION` items per side. This is an
+    additive change over the old ``str | None`` field, not a breaking
+    one: a request supplying one value matches exactly the same records
+    the old scalar filter matched, with the same ``matched_direction``.
+    It is not byte-identical end to end, though -- the echoed
+    ``request.filter.reactant_smiles`` / ``.product_smiles`` is now
+    always a list (``["CCO"]``), never the bare string the old filter
+    echoed (``"CCO"``), because that is the honest shape of the field
+    now that it holds a list. The route (``reactions_browse.py``) drops
+    blank/whitespace-only entries before constructing this model, so
+    ``?reactant_smiles=`` (present but empty) still means "not
+    supplied" -- the same as omitting the parameter -- rather than
+    querying for a literal empty-string SMILES.
+
+    Every SMILES within one field is matched **together, as one group,
+    against a single stored side in a single orientation** -- not each
+    SMILES independently against whichever side it happens to appear
+    on. The browse service calls the shared matcher with
+    ``direction=either`` (unconditionally), so a ``reactant_smiles``
+    group is tried against the stored reactants in the forward
+    orientation *and*, as a whole, against the stored products in the
+    reverse orientation (the returned record then carries
+    ``matched_direction: "reverse"``); symmetrically for
+    ``product_smiles``. Because the group moves together, a
+    ``reactant_smiles`` list mixing a species that is genuinely a
+    reactant of some reaction with a species that is genuinely a
+    product of that *same* reaction matches in neither orientation --
+    every member of the group must land on the *same* stored side at
+    once. The field names describe which query bucket a SMILES was put
+    in, not which stored side it is individually guaranteed to land on;
+    an empty field is unconstrained (per
+    :class:`ReactionMatchMode.contains`).
+
+    If any supplied SMILES (on either side) fails to resolve to a species
+    TCKDB has on file, the whole response is empty -- never a degraded
+    match against only the SMILES that did resolve, because no stored
+    reaction can contain a species the archive does not have.
+
+    There is deliberately no ``reaction_ref`` / ``reaction_entry_ref``
+    field: a caller who already has one of those wants
     ``/scientific/reactions/search``, an exact lookup.
     """
 
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
-    reactant_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
-    product_smiles: str | None = Field(default=None, max_length=_MAX_SMILES_LENGTH)
+    reactant_smiles: list[str] = Field(
+        default_factory=list,
+        max_length=_MAX_PARTICIPANTS_PER_REACTION,
+    )
+    product_smiles: list[str] = Field(
+        default_factory=list,
+        max_length=_MAX_PARTICIPANTS_PER_REACTION,
+    )
     has_kinetics: bool | None = None
     has_transition_state: bool | None = None
 
@@ -170,6 +226,15 @@ class ReactionsBrowseRequest(BaseModel):
 
     offset: int = 0
     limit: int = 50
+
+    @field_validator("reactant_smiles", "product_smiles")
+    @classmethod
+    def _bound_browse_smiles_lengths(cls, value: list[str]) -> list[str]:
+        """Reject an over-length SMILES with the same coded 422 as search.
+
+        See :func:`_bound_smiles_list_lengths`.
+        """
+        return _bound_smiles_list_lengths(value)
 
 
 # ---------------------------------------------------------------------------

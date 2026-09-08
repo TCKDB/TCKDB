@@ -1324,8 +1324,8 @@ class TCKDBClient:
         self,
         *,
         family: str | None = None,
-        reactant_smiles: str | None = None,
-        product_smiles: str | None = None,
+        reactant_smiles: str | list[str] | None = None,
+        product_smiles: str | list[str] | None = None,
         has_kinetics: bool | None = None,
         has_transition_state: bool | None = None,
         min_review_status: str | None = None,
@@ -1342,12 +1342,23 @@ class TCKDBClient:
         is required, unlike ``search_reactions``, which 422s
         (``missing_reaction_search_filter``) on a request with neither a
         chemistry filter nor an explicit ref. ``reactant_smiles`` /
-        ``product_smiles`` are single exact-match SMILES filters -- the
-        browse analogue of ``search_reactions``'s ``reactants`` /
-        ``products`` lists, narrowing one side of an open listing rather
-        than building a multi-species equation query. There is no
-        ``reaction_ref`` / ``reaction_entry_ref`` parameter here; a caller
-        who already has one wants :meth:`search_reactions`.
+        ``product_smiles`` each accept one exact-match SMILES string or a
+        list of several -- the browse analogue of ``search_reactions``'s
+        ``reactants`` / ``products`` lists, narrowing an open listing by
+        set containment on one or both sides. A list serializes as a
+        repeated query parameter (``?reactant_smiles=C&reactant_smiles=O``);
+        every supplied SMILES must appear among a reaction's participants,
+        and if any of them fails to resolve to a species TCKDB has, the
+        server returns an empty result rather than a partial match. There
+        is no ``reaction_ref`` / ``reaction_entry_ref`` parameter here; a
+        caller who already has one wants :meth:`search_reactions`.
+
+        Despite the parameter names, matching is not restricted to the
+        stored role named: the server matches with ``direction=either``, so
+        a species supplied via ``reactant_smiles`` can also match a
+        reaction where it is stored as a product, reached in reverse (the
+        returned record then carries ``matched_direction: "reverse"``),
+        and symmetrically for ``product_smiles``.
 
         Returns the parsed ``ScientificReactionSearchResponse`` JSON
         envelope -- field-for-field identical to ``search_reactions``'s

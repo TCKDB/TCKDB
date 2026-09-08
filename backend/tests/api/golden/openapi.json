@@ -71404,7 +71404,7 @@
     },
     "/api/v1/scientific/reactions/browse": {
       "get": {
-        "description": "List reaction entries with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/reactions/search``\n(:class:`~app.schemas.reads.scientific_reactions.ReactionScientificRecord`)\n-- equation, participants (with ``formula``/``stoichiometry``),\nreview, availability -- so a browse row and a search row render\nidentically. Unlike search, no filter is required: with none\nsupplied, every reaction entry in the corpus is a candidate.\n\n``limit`` is capped at 200 (default 50, matching\n``/reactions/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, has_kinetics DESC,\nhas_transition_state DESC, created_at DESC, id DESC`` -- the same\norder ``/reactions/search`` uses, in the species-browse style of\n\"review rank, then an availability flag, then recency, then id\".\nThere is no client-supplied ``sort=`` parameter to reject; this\noperation has none to accept.",
+        "description": "List reaction entries with no filter required, for a catalogue page.\n\nSame record shape as ``GET/POST /scientific/reactions/search``\n(:class:`~app.schemas.reads.scientific_reactions.ReactionScientificRecord`)\n-- equation, participants (with ``formula``/``stoichiometry``),\nreview, availability -- so a browse row and a search row render\nidentically. Unlike search, no filter is required: with none\nsupplied, every reaction entry in the corpus is a candidate.\n\n``limit`` is capped at 200 (default 50, matching\n``/reactions/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nDefault sort is ``review_rank ASC, has_kinetics DESC,\nhas_transition_state DESC, created_at DESC, id DESC`` -- the same\norder ``/reactions/search`` uses, in the species-browse style of\n\"review rank, then an availability flag, then recency, then id\".\nThere is no client-supplied ``sort=`` parameter to reject; this\noperation has none to accept.\n\n``reactant_smiles`` / ``product_smiles`` are each matched as a group\nagainst **either** stored side of the reaction (forward tries the\nnamed side, reverse tries the swap), not just the side the\nparameter names -- but every SMILES within one parameter's group\nmust land on that same side together; see the parameter\ndescriptions and\n:func:`app.services.scientific_read.reactions.browse_reactions`.",
         "operationId": "scientific_reactions_browse_api_v1_scientific_reactions_browse_get",
         "parameters": [
           {
@@ -71426,38 +71426,44 @@
             }
           },
           {
-            "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+            "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?reactant_smiles=C&reactant_smiles=[OH]), up to 32 per call; an empty value (?reactant_smiles=) means unfiltered, the same as omitting it. With one value, the matched records are identical to the old scalar filter's -- only the echoed ``request.filter.reactant_smiles`` shape changed, from a bare string to a one-item list. With more than one value, all of them are matched together as a single group against one stored side in one orientation, not independently: ``direction=either`` (browse's fixed setting) tries the whole group against the stored reactants (forward) and against the stored products (reverse), so a list mixing a genuine reactant with a genuine product of the same reaction matches in neither orientation. The product side is unconstrained unless ``product_smiles`` is also given. If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
             "in": "query",
             "name": "reactant_smiles",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Exact-match SMILES filter over the reactant side. Narrows an open listing to reaction entries with this species among their reactants; the product side is unconstrained.",
+              "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?reactant_smiles=C&reactant_smiles=[OH]), up to 32 per call; an empty value (?reactant_smiles=) means unfiltered, the same as omitting it. With one value, the matched records are identical to the old scalar filter's -- only the echoed ``request.filter.reactant_smiles`` shape changed, from a bare string to a one-item list. With more than one value, all of them are matched together as a single group against one stored side in one orientation, not independently: ``direction=either`` (browse's fixed setting) tries the whole group against the stored reactants (forward) and against the stored products (reverse), so a list mixing a genuine reactant with a genuine product of the same reaction matches in neither orientation. The product side is unconstrained unless ``product_smiles`` is also given. If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
               "title": "Reactant Smiles"
             }
           },
           {
-            "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+            "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?product_smiles=N&product_smiles=[NH2]), up to 32 per call; an empty value (?product_smiles=) means unfiltered, the same as omitting it. With one value, the matched records are identical to the old scalar filter's -- only the echoed ``request.filter.product_smiles`` shape changed, from a bare string to a one-item list. With more than one value, all of them are matched together as a single group against one stored side in one orientation, not independently: ``direction=either`` (browse's fixed setting) tries the whole group against the stored products (forward) and against the stored reactants (reverse), so a list mixing a genuine product with a genuine reactant of the same reaction matches in neither orientation. The reactant side is unconstrained unless ``reactant_smiles`` is also given. If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
             "in": "query",
             "name": "product_smiles",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Exact-match SMILES filter over the product side. Narrows an open listing to reaction entries with this species among their products; the reactant side is unconstrained.",
+              "description": "One or more exact-match SMILES filters; repeat the parameter for more than one (?product_smiles=N&product_smiles=[NH2]), up to 32 per call; an empty value (?product_smiles=) means unfiltered, the same as omitting it. With one value, the matched records are identical to the old scalar filter's -- only the echoed ``request.filter.product_smiles`` shape changed, from a bare string to a one-item list. With more than one value, all of them are matched together as a single group against one stored side in one orientation, not independently: ``direction=either`` (browse's fixed setting) tries the whole group against the stored products (forward) and against the stored reactants (reverse), so a list mixing a genuine product with a genuine reactant of the same reaction matches in neither orientation. The reactant side is unconstrained unless ``reactant_smiles`` is also given. If any supplied SMILES does not resolve to a species TCKDB has, the result is empty rather than a partial match on the ones that did.",
               "title": "Product Smiles"
             }
           },
