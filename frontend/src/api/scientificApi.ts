@@ -182,16 +182,28 @@ const REACTION_PARTICIPATION_LIMIT = 5
 
 /**
  * Reactions where any of `smilesValues` participates, on EITHER side
- * (`GET /scientific/reactions/browse?reactant_smiles=…`; per that route's
- * own contract, `direction=either` is fixed server-side, so naming the
- * param `reactant_smiles` still matches a species that only ever appears
- * as a product). One call per distinct SMILES value, not one call with
- * every value as a multi-value `reactant_smiles` list -- the browse route
- * matches a multi-value list as ONE group (AND) against a single stored
- * side, which is the wrong semantics for "does species A participate, OR
- * does species B" (an exact-structure search can occasionally resolve to
- * more than one species, e.g. distinct stereo entries). Results are
- * merged and de-duplicated by `reaction_entry_ref`.
+ * (`GET /scientific/reactions/browse?reactant_smiles=…&direction=either`).
+ * One call per distinct SMILES value, not one call with every value as a
+ * multi-value `reactant_smiles` list -- the browse route matches a
+ * multi-value list as ONE group (AND) against a single stored side, which
+ * is the wrong semantics for "does species A participate, OR does species
+ * B" (an exact-structure search can occasionally resolve to more than one
+ * species, e.g. distinct stereo entries). Results are merged and
+ * de-duplicated by `reaction_entry_ref`.
+ *
+ * **`direction=either` is sent explicitly (PR #418 follow-up, 2026-09).**
+ * The browse route used to run the equivalent of `direction=either`
+ * unconditionally, so naming the param `reactant_smiles` still matched a
+ * species that only ever appears as a product -- this function's own doc
+ * comment said so. #418 changed the route's OWN default to `forward`
+ * (`reactant_smiles` matches only the stored reactant side). This
+ * function's job is unchanged by that: "reactions involving this species"
+ * means either side, the way a reader means the question, so it must keep
+ * asking for either-direction matching -- now as an explicit `direction`
+ * param rather than getting it for free from the endpoint's old default.
+ * Letting the endpoint's new default silently narrow this call to
+ * forward-only matches would understate "reactions involving X" by
+ * exactly the species that appear only as a product.
  *
  * The backend match is a literal string comparison against the stored
  * SMILES (not RDKit-canonicalized) -- callers should pass the ARCHIVE'S
@@ -208,7 +220,9 @@ export async function searchReactionParticipation(
     if (unique.length === 0) return { matches: [], total: 0 }
 
     const perSmiles = await Promise.all(unique.map(async (smiles) => {
-        const query = new URLSearchParams({ reactant_smiles: smiles, limit: String(REACTION_PARTICIPATION_LIMIT) })
+        const query = new URLSearchParams({
+            reactant_smiles: smiles, direction: "either", limit: String(REACTION_PARTICIPATION_LIMIT),
+        })
         return parseScientificResponse(
             reactionParticipationResponseSchema,
             await requestScientificJson(`/api/v1/scientific/reactions/browse?${query}`, signal),

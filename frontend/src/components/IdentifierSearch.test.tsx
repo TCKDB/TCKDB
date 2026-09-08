@@ -358,7 +358,37 @@ describe("structure query also finds reactions", () => {
         const region = await screen.findByRole("region", { name: "Reactions found" })
         expect(within(region).getAllByRole("listitem")).toHaveLength(5)
         const seeAll = within(region).getByRole("link", { name: /See all 20 reactions/ })
-        expect(seeAll).toHaveAttribute("href", `/reactions?reactant_smiles=${encodeURIComponent("NN")}`)
+        // `direction=either` MUST travel with the link (PR #418 follow-up):
+        // the 20-count above came from `searchReactionParticipation` asking
+        // for either-direction matches explicitly; a landing page that fell
+        // back to the browse endpoint's own `forward` default would show a
+        // DIFFERENT (narrower) count than the one this link just promised.
+        expect(seeAll).toHaveAttribute("href", `/reactions?reactant_smiles=${encodeURIComponent("NN")}&direction=either`)
+    })
+
+    // PR #418 follow-up (mutation-table item e): the browse endpoint's own
+    // default narrowed from "either side" to "stored reactant side only".
+    // "Reactions involving X" means either side, the way a reader means the
+    // question -- `searchReactionParticipation` (`scientificApi.ts`) must
+    // keep asking for that explicitly rather than silently narrowing.
+    it("searchReactionParticipation requests direction=either explicitly, not just reactant_smiles", async () => {
+        let capturedUrl: URL | undefined
+        server.use(
+            http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [nn] })),
+            http.get("/api/v1/scientific/reactions/browse", ({ request }) => {
+                capturedUrl = new URL(request.url)
+                return HttpResponse.json({
+                    records: [reactionRecord("rxe_a0000000000000000000000001")],
+                    pagination: { offset: 0, limit: 5, returned: 1, total: 1 },
+                })
+            }),
+        )
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:NN")
+
+        await screen.findByRole("region", { name: "Reactions found" })
+        expect(capturedUrl?.searchParams.get("reactant_smiles")).toBe("NN")
+        expect(capturedUrl?.searchParams.get("direction")).toBe("either")
     })
 
     // Honesty rule: an absence is a real result and must be SAID, not left
