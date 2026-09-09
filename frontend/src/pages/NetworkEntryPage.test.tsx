@@ -238,3 +238,70 @@ describe("NetworkEntryPage -- reactions table", () => {
         expect(screen.getByText("none — barrierless")).toBeVisible()
     })
 })
+
+describe("NetworkEntryPage — every ref that has a record page is a link to it", () => {
+    // The page originally rendered these as inert <code>, which is the same
+    // dead-end this PR's own ReactionEntryPage change removed in the opposite
+    // direction. Each assertion names the route the ref must reach, so a
+    // wrong-route regression fails here rather than 404ing in a browser.
+    it("the reaction entry ref links to /reaction-entries/:ref", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        page()
+        const link = await screen.findByRole("link", { name: "rxe_test1" })
+        expect(link).toHaveAttribute("href", "/reaction-entries/rxe_test1")
+    })
+
+    it("the transition state entry ref links to /transition-state-entries/:ref", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        page()
+        const link = await screen.findByRole("link", { name: "tse_test1" })
+        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
+    })
+})
+
+describe("NetworkEntryPage — solve-internal source calculations link to the calculation page", () => {
+    // These two live inside the collapsed "Solve-internal state & channel
+    // energies" disclosure, so they are queried by text and asserted through
+    // the closest <a> -- a closed <details> is not role-queryable (see the
+    // composition_hash guard above for the same constraint).
+    it("a state energy's source calculation ref links to /calculations/:ref", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        handleSolveDetail("nsolve_test1", [{
+            state_composition_hash: "hash_well",
+            energy_kj_mol: 0,
+            energy_zero_convention: "lowest_state",
+            correction_convention: "electronic_only",
+            source_calculation_ref: "calc_state1",
+        }])
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        page()
+        const cell = await screen.findByText("calc_state1")
+        expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_state1")
+    })
+
+    it("a channel barrier's source calculation ref links to /calculations/:ref", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        handleSolveDetail("nsolve_test1", [], [{
+            channel_key: "channel_1",
+            reaction_entry_ref: "rxe_test1",
+            transition_state_entry_ref: "tse_test1",
+            forward_barrier_kj_mol: 12.5,
+            reverse_barrier_kj_mol: 30.25,
+            energy_zero_convention: "lowest_state",
+            correction_convention: "electronic_only",
+            source_calculation_ref: "calc_barrier1",
+        }])
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        page()
+        const cell = await screen.findByText("calc_barrier1")
+        expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_barrier1")
+    })
+})
