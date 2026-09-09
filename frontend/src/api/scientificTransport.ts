@@ -145,6 +145,15 @@ function fetchOnce(path: string, signal?: AbortSignal): Promise<Response> {
     return fetch(`${API_BASE}${path}`, { headers: { Accept: "application/json" }, signal })
 }
 
+function fetchOncePost(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
+    return fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+    })
+}
+
 /**
  * A 429 is transient by construction -- the anonymous-read budget resets
  * every window (`rate_limit_anon_read_per_minute`,
@@ -188,6 +197,39 @@ export async function requestScientificJson(
     await sleep(retryAfterSeconds * 1000, signal)
 
     const second = await fetchOnce(path, signal)
+    if (second.status === 429) {
+        throw new ScientificRateLimitError(parseRetryAfterSeconds(second))
+    }
+    if (!second.ok) return throwForFailedResponse(second)
+    return second.json()
+}
+
+/**
+ * `POST` counterpart to `requestScientificJson` -- same automatic single
+ * 429-retry (see that function's own header comment), same error-envelope
+ * handling, the only difference being an `application/json` body instead
+ * of no body at all. Introduced for
+ * `POST /scientific/networks/{ref}/kinetics/evaluate` (the k(T,P) batch
+ * evaluation endpoint), the first anonymous-read POST this app's frontend
+ * calls -- every prior scientific-read endpoint is `GET`.
+ */
+export async function requestScientificJsonPost(
+    path: string,
+    body: unknown,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<unknown> {
+    const first = await fetchOncePost(path, body, signal)
+    if (first.status !== 429) {
+        if (!first.ok) return throwForFailedResponse(first)
+        return first.json()
+    }
+
+    const retryAfterSeconds = parseRetryAfterSeconds(first)
+    onRateLimited?.(retryAfterSeconds)
+    await sleep(retryAfterSeconds * 1000, signal)
+
+    const second = await fetchOncePost(path, body, signal)
     if (second.status === 429) {
         throw new ScientificRateLimitError(parseRetryAfterSeconds(second))
     }

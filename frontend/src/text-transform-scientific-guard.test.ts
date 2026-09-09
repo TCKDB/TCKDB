@@ -221,6 +221,14 @@ const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
         ".theme-toggle-option", // "Light" / "Dark" / "System"
         ".identifier-search-mode-option", // "Species" / "Reactions" (IdentifierSearch.tsx's SearchModeToggle)
     ],
+    "network-ktp-chart.css": [
+        // `<legend>{`Channels (${selectedGroups.length} of ${groups.length} shown)`}</legend>`
+        // (NetworkKtpChart.tsx) -- a count sentence around the literal word
+        // "Channels", no unit/symbol/formula. The channel's own chemistry
+        // label ("NN to [NH-][NH3+]") renders inside a sibling
+        // `.network-ktp-channel-option`, not this legend.
+        ".network-ktp-channel-fieldset legend",
+    ],
     "page-shell.css": [
         ".page-toc nav::before", // "On this page" (generated content, not app text)
     ],
