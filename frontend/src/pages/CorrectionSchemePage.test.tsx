@@ -44,6 +44,13 @@ function mockResponse(overrides: Record<string, unknown> = {}) {
                 label: null,
                 display: "b3lyp/def2tzvp",
             },
+            // Measured live shape (#439, deployed): software backfilled
+            // cleanly on both schemes (empty `software_release_ref` --
+            // the row stores a vendor, not a release, to point at);
+            // workflow_tool_release stayed null (only 10 of 416
+            // calculations recorded one, no single release derivable).
+            software_release: { software_release_ref: "", software: "Gaussian", version: null },
+            workflow_tool_release: null,
             literature: null,
             evidence_summary: { atom_param_count: 0, bond_param_count: 2, component_param_count: 0, has_corrections: true, applied_usage_count: 82, has_applied_usage: true, has_literature_source: false },
             available_sections: { has_corrections: true, has_used_by: true, has_literature: false },
@@ -140,5 +147,57 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         const dt = screen.getByText("Literature source")
         expect(dt).toBeVisible()
         expect(dt.nextElementSibling).toHaveTextContent("not recorded")
+    })
+
+    /**
+     * #439 (deployed) added `software_id`/`workflow_tool_release_id` to
+     * `energy_correction_scheme`; this page fetches both (always present
+     * on the record, not include-gated) and now renders them as their own
+     * rows. Software renders through `softwareLabel` -- text only, never
+     * a link built from `software_release_ref` (measured empty on every
+     * live row; see this page's own comment on the field for why a link
+     * there would be broken).
+     */
+    it("renders deposited software and workflow-tool release as their own rows", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            workflow_tool_release: { workflow_tool_release_ref: "wfr_one", workflow_tool: "ARC", version: "1.1.0" },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const softwareDt = screen.getByText("Software")
+        expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian")
+        // Never a link -- `software_release_ref` is measured empty live.
+        expect(screen.queryByRole("link", { name: /Gaussian/ })).not.toBeInTheDocument()
+        const toolDt = screen.getByText("Workflow-tool release")
+        expect(toolDt.nextElementSibling).toHaveTextContent("ARC 1.1.0")
+    })
+
+    /**
+     * MUTATION TABLE (d): omit an absent field entirely instead of
+     * stating it. Workflow-tool release is null on every live row today
+     * (the archive could not derive one unambiguously from 10 of 416
+     * calculations); citation is null for an unrelated reason (nobody
+     * recorded one). The task brief's own rule: these are two DIFFERENT
+     * absences and the page must not conflate them into one row or one
+     * sentence -- so each keeps its OWN `<dt>`/`<dd>` pair, and neither
+     * one's copy claims to know why the value is missing (never "not
+     * applicable" -- a claim about chemistry this archive cannot make).
+     */
+    it("states a missing workflow-tool release plainly, as its own row distinct from the citation row, without narrating a cause", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            workflow_tool_release: null,
+            literature: null,
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const toolDt = screen.getByText("Workflow-tool release")
+        expect(toolDt).toBeVisible()
+        expect(toolDt.nextElementSibling).toHaveTextContent("not recorded")
+        const litDt = screen.getByText("Literature source")
+        expect(litDt).toBeVisible()
+        expect(litDt.nextElementSibling).toHaveTextContent("not recorded")
+        // Two separate rows, not one merged statement about both.
+        expect(toolDt).not.toBe(litDt)
+        expect(screen.queryByText(/not applicable/i)).not.toBeInTheDocument()
     })
 })

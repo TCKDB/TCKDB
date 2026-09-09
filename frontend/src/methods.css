@@ -14,18 +14,41 @@
  * element).
  */
 
+/* Each correction scheme is now its own collapsible `Disclosure` box
+   (owner: "expandable boxes for AEC and BAC") rather than a plain div
+   separated from its neighbour by a top border -- the box chrome (border
+   on all four sides, radius, background) comes from `.disclosure`
+   itself (design-system.css); this file only adds the vertical rhythm
+   between one scheme's box and the next, and the internal stacking
+   (identity facts / parameter table / footer note) `.disclosure-body`
+   does not itself provide (it is a plain padded box, no `gap`). */
 .correction-scheme-block {
-    display: grid;
-    gap: var(--s-3);
-    margin: var(--s-5) 0;
-    padding-top: var(--s-4);
-    border-top: 1px solid var(--line);
+    margin: var(--s-4) 0;
 }
 
 .correction-scheme-block:first-child {
     margin-top: 0;
-    padding-top: 0;
-    border-top: none;
+}
+
+.correction-scheme-block > summary {
+    flex-wrap: wrap;
+}
+
+.correction-scheme-block .disclosure-body {
+    display: grid;
+    gap: var(--s-3);
+}
+
+/* The collapsed-summary roll-up on each scheme box -- same intent and
+   same measured sizing fix as `evidence-checklist.css`'s own
+   `.coverage-checklist-summary` (quieter than the heading beside it, so
+   the roll-up reads as supporting detail, not a second heading), kept as
+   its own rule rather than importing that file: `evidence-checklist.css`
+   is `EvidenceChecklist.tsx`'s own component stylesheet, not something
+   this page's boxes are instances of. */
+.correction-scheme-summary-rollup {
+    color: var(--muted);
+    font: 400 .72rem/1.3 var(--sans);
 }
 
 .correction-scheme-absence-list {

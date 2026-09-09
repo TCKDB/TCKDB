@@ -39,3 +39,27 @@ export const SCHEME_KIND_LABELS: Record<string, string> = {
 export function schemeKindLabel(kind: string): string {
     return SCHEME_KIND_LABELS[kind] ?? words(kind)
 }
+
+/**
+ * The factual roll-up a collapsed correction-scheme box carries in its own
+ * summary line (`LevelOfTheoryPage.tsx`'s per-scheme `Disclosure`) --
+ * total deposited parameter rows, computed from the SAME
+ * `evidence_summary` counts the open table itself renders from, never a
+ * restated category count. Exists for the same reason
+ * `EvidenceChecklist.tsx`'s own `summarizeRows`/`summary` contract does
+ * (see that component's docstring): a collapsed box that answers nothing
+ * -- or answers a fixed, misleading number -- defeats the point of
+ * collapsing it. A live scheme here is atom-XOR-bond-XOR-component (never
+ * two of the three at once), so the sum is exactly the one table's own
+ * row count -- "8 parameters" for `ecs_q5potmkzrmm6ynh2behv5kbfdu`
+ * (atom-keyed), "45 parameters" for `ecs_5dzse4an2emubgyxge2dpj4ae4`
+ * (bond-keyed), measured live.
+ */
+export function schemeParameterRollup(evidence: {
+    atom_param_count: number
+    bond_param_count: number
+    component_param_count: number
+}): string {
+    const total = evidence.atom_param_count + evidence.bond_param_count + evidence.component_param_count
+    return `${total} parameter${total === 1 ? "" : "s"}`
+}
