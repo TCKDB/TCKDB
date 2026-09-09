@@ -386,7 +386,12 @@ function NetworkSection({ state }: { state: NetworksState }) {
                         <tr key={network.network_ref}>
                             <td data-label="Network">{network.name ?? "not recorded"}</td>
                             <td data-label="Ref">
-                                <code className="data">{network.network_ref}</code>
+                                {/* `/networks/:ref` is a real page now (PR 2 of
+                                    `docs/plans/pressure-dependent-network-surface.md`)
+                                    -- this ref used to render as inert `<code>`
+                                    with nothing to click because the route did
+                                    not exist. */}
+                                <Link to={`/networks/${network.network_ref}`}><code className="data">{network.network_ref}</code></Link>
                                 <CopyButton value={network.network_ref} label="Network" srLabel="reference" />
                             </td>
                             <td className="num" data-label="Solve T range">
