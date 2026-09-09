@@ -141,16 +141,26 @@ function NetworkDiagramSvg({ layout, nodeCount, channelCount }: { layout: { node
                                 key={`${edge.channelKey ?? "unkeyed"}-${index}`}
                                 href={`#${channelRowId(edge.channelKey, index)}`}
                                 className="net-edge-link"
-                                aria-label={`Channel ${edge.channelKey ?? "unkeyed"}, ${edge.kind}, ${sourceLabel} to ${sinkLabel}`}
+                                // Identified by its chemistry, never by
+                                // `channel_key`. An aria-label is user-facing
+                                // text -- it is a screen reader user's PRIMARY
+                                // label for this edge -- so leaking the
+                                // depositor string here would break the same
+                                // rule a visible caption would, and break it
+                                // only for the readers least able to work
+                                // around it. The dashed encoding is
+                                // visual-only, so it is spelled out too.
+                                aria-label={`${edge.kind} channel, ${sourceLabel} to ${sinkLabel}${edge.hasKinetics ? "" : ", no kinetics fit deposited"}`}
                             >
                                 <line
                                     x1={edge.x1}
                                     y1={edge.y1}
                                     x2={edge.x2}
                                     y2={edge.y2}
-                                    // `channel_key` (invariant 1) never sits on
-                                    // a `<text>` element -- only here, a
-                                    // `data-*` attribute, and the table row.
+                                    // `channel_key` lives in exactly two
+                                    // places: this `data-*` hook and the
+                                    // table row. Not in a `<text>`, and not
+                                    // in an aria-label either.
                                     data-channel-key={edge.channelKey ?? undefined}
                                     className={`net-edge ${edgeKindClass(edge.kind)}`}
                                     strokeDasharray={edge.hasKinetics ? undefined : "4 3"}

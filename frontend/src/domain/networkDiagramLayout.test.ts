@@ -121,3 +121,61 @@ describe("shouldDegradeNetworkDiagram -- the chosen threshold", () => {
         expect(shouldDegradeNetworkDiagram(10, completeAtThreshold + 1)).toBe(true)
     })
 })
+
+describe("computeNetworkDiagramLayout — the layout fills the canvas it is given", () => {
+    // A dense graph (every state joined to most others) is the case that
+    // collapses: attraction along many edges overwhelms repulsion between
+    // few nodes, so without an explicit fit the whole graph sits in a small
+    // central blob. Measured on the live hydrazine network before the fit
+    // step: 23% of width, 31% of height.
+    function denseFixture(stateCount: number) {
+        const states = Array.from({ length: stateCount }, (_unused, i) => state(`hash_${i}`, i % 2 === 0 ? "well" : "bimolecular", `S${i}`))
+        const channels: NetworkChannel[] = []
+        for (let i = 0; i < stateCount; i++) {
+            for (let j = i + 1; j < stateCount; j++) {
+                channels.push(channel(`channel_${i}_${j}`, `hash_${i}`, `hash_${j}`))
+            }
+        }
+        return { states, channels }
+    }
+
+    it("spans at least 98% of the inner rect on its limiting axis", () => {
+        const { states, channels } = denseFixture(7)
+        const layout = computeNetworkDiagramLayout(states, channels)
+        const xs = layout.nodes.map((n) => n.x)
+        const ys = layout.nodes.map((n) => n.y)
+        const spanX = Math.max(...xs) - Math.min(...xs)
+        const spanY = Math.max(...ys) - Math.min(...ys)
+        // Same margins the layout reserves for labels.
+        const innerW = NETWORK_DIAGRAM_WIDTH - 2 * Math.min(220, NETWORK_DIAGRAM_WIDTH * 0.22)
+        const innerH = NETWORK_DIAGRAM_HEIGHT - 2 * Math.min(140, NETWORK_DIAGRAM_HEIGHT * 0.22)
+        const fill = Math.max(spanX / innerW, spanY / innerH)
+        expect(fill).toBeGreaterThan(0.98)
+    })
+
+    it("does not distort: the fit is one uniform scale, so relative distances are preserved", () => {
+        // Guards the wrong fix (independent per-axis scaling), which would
+        // fill the canvas while stretching the shape the force pass found.
+        const { states, channels } = denseFixture(6)
+        const layout = computeNetworkDiagramLayout(states, channels)
+        const wide = computeNetworkDiagramLayout(states, channels, NETWORK_DIAGRAM_WIDTH * 2, NETWORK_DIAGRAM_HEIGHT)
+        function ratio(nodes: { x: number; y: number }[]) {
+            const d = (a: number, b: number) => Math.hypot(nodes[a].x - nodes[b].x, nodes[a].y - nodes[b].y)
+            return d(0, 1) / d(0, 2)
+        }
+        // Widening the canvas may change the scale, but must not change the
+        // SHAPE: the ratio between two distances is scale-invariant.
+        expect(ratio(wide.nodes)).toBeCloseTo(ratio(layout.nodes), 6)
+    })
+
+    it("stays inside the canvas after fitting", () => {
+        const { states, channels } = denseFixture(7)
+        const layout = computeNetworkDiagramLayout(states, channels)
+        for (const node of layout.nodes) {
+            expect(node.x).toBeGreaterThanOrEqual(0)
+            expect(node.x).toBeLessThanOrEqual(NETWORK_DIAGRAM_WIDTH)
+            expect(node.y).toBeGreaterThanOrEqual(0)
+            expect(node.y).toBeLessThanOrEqual(NETWORK_DIAGRAM_HEIGHT)
+        }
+    })
+})

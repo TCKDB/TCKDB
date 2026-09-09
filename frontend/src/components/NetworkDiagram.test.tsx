@@ -68,7 +68,44 @@ describe("NetworkDiagram -- node/edge counts match the served data", () => {
     })
 })
 
-describe("NetworkDiagram -- channel_key never renders as an SVG text label", () => {
+describe("NetworkDiagram -- channel_key never reaches a reader, by any route", () => {
+    it("appears in no user-facing text on the SVG: not a <text>, not an aria-label, not a title", () => {
+        // The first version of this test checked `<text>` only, and passed
+        // while every edge carried aria-label="Channel channel_1, ...". An
+        // aria-label IS user-facing -- it is a screen reader user's primary
+        // label for the edge -- so checking the element type rather than the
+        // rule let the depositor string through to exactly the readers least
+        // able to work around it. Check every route a label can take.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        // Scoped to the whole container, NOT to `querySelector("svg")`: the
+        // legend renders swatch <svg>s before the diagram, so grabbing "the
+        // first svg" silently scopes this to a 16x16 icon and the loop
+        // iterates nothing. That is how the first draft of this test passed
+        // against the very leak it was written to catch.
+        const labelled = Array.from(container.querySelectorAll("[aria-label], [title]"))
+        expect(labelled.length).toBeGreaterThan(0)
+        for (const el of labelled) {
+            expect(el.getAttribute("aria-label") ?? "").not.toMatch(/channel_\d/)
+            expect(el.getAttribute("title") ?? "").not.toMatch(/channel_\d/)
+        }
+        for (const el of Array.from(container.querySelectorAll("title, desc"))) {
+            expect(el.textContent ?? "").not.toMatch(/channel_\d/)
+        }
+    })
+
+    it("still describes each edge by its chemistry, so the aria-label is not merely emptied", () => {
+        // Guards the obvious wrong fix: deleting the aria-label passes the
+        // assertion above and leaves the edge unlabelled.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const labels = Array.from(container.querySelectorAll("svg a.net-edge-link"))
+            .map((el) => el.getAttribute("aria-label") ?? "")
+        expect(labels.length).toBeGreaterThan(0)
+        for (const label of labels) {
+            expect(label).not.toBe("")
+            expect(label).toMatch(/ to /)
+        }
+    })
+
     it("channel_1 appears as a data-channel-key attribute and in the table, never inside <text>", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
         const svgTexts = Array.from(container.querySelectorAll("svg text"))
