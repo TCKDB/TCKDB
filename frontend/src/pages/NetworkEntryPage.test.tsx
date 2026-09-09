@@ -130,11 +130,11 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
     })
 
-    it("does NOT render a diagram or k(T,P) section -- PR 2 leaves those seams for PR 3/PR 4", async () => {
+    it("renders the network diagram section (PR 3) but not yet a k(T,P) section -- PR 4 leaves that seam open", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "hydrazine" })
-        expect(screen.queryByRole("heading", { name: /network diagram/i })).not.toBeInTheDocument()
+        expect(screen.getByRole("heading", { name: "Network diagram" })).toBeVisible()
         expect(screen.queryByRole("heading", { name: "k(T,P)" })).not.toBeInTheDocument()
     })
 
@@ -205,19 +205,49 @@ describe("NetworkEntryPage -- composition_hash never renders where chemistry bel
 })
 
 describe("NetworkEntryPage -- channel_key never renders as a bare label", () => {
-    it("channel_key (channel_1) appears only inside a code.data cell, in the Reactions table's Channel column", async () => {
+    it("channel_key (channel_1) appears only inside code.data cells, never as a heading/dt/caption or an SVG <text>", async () => {
         handleEverything()
         const { container } = page()
         await screen.findByRole("heading", { name: "hydrazine" })
-        const channelCell = container.querySelector('td[data-label="Channel"]')!
-        expect(channelCell.textContent).toBe("channel_1")
-        const code = channelCell.querySelector("code.data")
-        expect(code).not.toBeNull()
-        expect(code!.textContent).toBe("channel_1")
-        // Never inside a heading, a <dt>, or a <caption> anywhere on the page.
-        for (const el of Array.from(container.querySelectorAll("h1, h2, h3, dt, caption"))) {
+        const channelCells = Array.from(container.querySelectorAll('td[data-label="Channel"]'))
+        expect(channelCells.some((cell) => cell.textContent === "channel_1")).toBe(true)
+        for (const cell of channelCells) {
+            if (cell.textContent === "channel_1") expect(cell.querySelector("code.data")!.textContent).toBe("channel_1")
+        }
+        // Never inside a heading, a <dt>, a <caption>, or an SVG <text>
+        // anywhere on the page (invariant 1 of PR 3's diagram brief --
+        // grepping the rendered DOM, not just trusting the component).
+        for (const el of Array.from(container.querySelectorAll("h1, h2, h3, dt, caption, svg text"))) {
             expect(el.textContent).not.toContain("channel_1")
         }
+    })
+})
+
+describe("NetworkEntryPage -- network diagram (PR 3)", () => {
+    it("renders one node link per state and one edge link per channel, matching evidence_summary", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        expect(container.querySelectorAll(".net-node-link")).toHaveLength(2)
+        expect(container.querySelectorAll(".net-edge-link")).toHaveLength(1)
+    })
+
+    it("renders every visible node label from composition.state_label, never the composition_hash", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)
+        expect(svgTexts).toContain("NN")
+        expect(container.innerHTML).not.toContain("hash_well")
+        expect(container.innerHTML).not.toContain("hash_bim")
+    })
+
+    it("the accessible states/channels tables always render, alongside the SVG", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        expect(screen.getByRole("table", { name: "States in this network" })).toBeInTheDocument()
+        expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
     })
 })
 

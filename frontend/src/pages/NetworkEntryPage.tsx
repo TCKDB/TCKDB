@@ -11,6 +11,7 @@ import type { NetworkChannel, NetworkFullRecord, ReactionEntryLite } from "../ap
 import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { NetworkDiagram } from "../components/NetworkDiagram"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -20,14 +21,14 @@ import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
 /**
- * `/networks/:networkRef` -- PR 2 of
- * `docs/plans/pressure-dependent-network-surface.md` (§3: identity,
- * evidence incl. the live-computed energy-coverage fact, reactions,
- * review). No diagram, no k(T,P) chart -- those are PR 3/PR 4; this page
- * leaves their sections out entirely rather than stub them, so `SectionHeading`
- * never registers a heading for content that does not exist yet (a stubbed
- * empty section would show up in the page's own table of contents pointing
- * at nothing). Built to the reviewed design mock,
+ * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
+ * live-computed energy-coverage fact, reactions, review) and PR 3 (§3.3:
+ * network diagram) of `docs/plans/pressure-dependent-network-surface.md`.
+ * No k(T,P) chart yet -- that is PR 4; this page still leaves that
+ * section out entirely rather than stub it, so `SectionHeading` never
+ * registers a heading for content that does not exist yet (a stubbed
+ * empty section would show up in the page's own table of contents
+ * pointing at nothing). Built to the reviewed design mock,
  * `docs/plans/mocks/network-entry.html` (branch `network-page-mock`).
  */
 export default function NetworkEntryPage() {
@@ -156,6 +157,17 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         note={`Counts reflect what this network's own record carries today, not an assumption about the underlying chemistry. "None deposited" describes the archive, not the chemistry.`}
                     />
                     <EnergyCoverageCard record={record} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="diagram-heading">
+                    <p className="t-kicker section-kicker">States as nodes, channels as edges</p>
+                    <SectionHeading id="diagram-heading">Network diagram</SectionHeading>
+                    <p className="t-body section-intro">
+                        {`${record.evidence_summary.state_count} state${record.evidence_summary.state_count === 1 ? "" : "s"}, ${record.evidence_summary.channel_count} channel${record.evidence_summary.channel_count === 1 ? "" : "s"}. No energy axis — see `}
+                        <a href="#energy-coverage">Energy coverage</a>
+                        {" above for why. This is topology, not a potential-energy surface."}
+                    </p>
+                    <NetworkDiagram states={record.states} channels={record.channels} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="reactions-heading">

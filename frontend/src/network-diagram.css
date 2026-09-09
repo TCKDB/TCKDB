@@ -1,0 +1,155 @@
+/*
+ * `NetworkDiagram.tsx` -- PR 3 of
+ * `docs/plans/pressure-dependent-network-surface.md`. Adopted (renamed,
+ * not redesigned) from the reviewed PR 0 mock's own mock-local `<style>`
+ * block, `docs/plans/mocks/network-entry.html` -- that file's own header
+ * comment says these `.net-*` rules are "scoped under class names chosen
+ * so the eventual real component can adopt them with a rename, not a
+ * redesign," and this is that rename. Every colour is `var(--token)`
+ * (`theme.css.test.ts` enforces this against every stylesheet in `src/`,
+ * this one included).
+ *
+ * FIXED-WIDTH SVG, same pattern as `arrhenius-chart.css`'s own
+ * `.arrhenius-chart-svg` (see that file's header comment for the
+ * accessibility-floor defect this pattern exists to avoid): the
+ * component sets `width`/`height` as real SVG attributes, never scaled
+ * by CSS, and `.network-diagram` gives the fixed-size SVG somewhere to
+ * overflow into horizontally instead.
+ */
+
+.network-diagram {
+    margin: var(--s-4) 0 0;
+    overflow-x: auto;
+}
+
+.network-diagram-svg {
+    display: block;
+    width: 1000px;
+    min-width: 1000px;
+    max-width: 1000px;
+    height: auto;
+}
+
+/* ---- Nodes: kind is a SHAPE, never inferred from label text (plan §2.2/invariant 6) ---- */
+.net-node-shape {
+    stroke-width: 2.5;
+}
+.net-node-well {
+    fill: var(--accent-50);
+    stroke: var(--accent);
+}
+.net-node-bimolecular {
+    fill: var(--surface);
+    stroke: var(--muted);
+    stroke-width: 2.25;
+}
+.net-node-link:hover .net-node-well,
+.net-node-link:focus-visible .net-node-well {
+    stroke: var(--accent-700);
+}
+.net-node-link:hover .net-node-bimolecular,
+.net-node-link:focus-visible .net-node-bimolecular {
+    stroke: var(--accent);
+}
+.net-node-link:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
+}
+
+/* Label carries a surface-coloured halo (paint-order trick) so an edge
+   passing near a node's label never renders as a line drawn straight
+   through the letters. `composition.state_label` only -- never
+   `channel_key` (invariant 1) and never `states[].label` (invariant 2). */
+.net-node-label {
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+    fill: var(--ink);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+
+/* ---- Edges: colour = channel.kind, dash = has_kinetics (two independent
+   encodings, invariant 6) ---- */
+.net-edge {
+    /* Overridden by every `.net-edge-*` kind class below (same
+       specificity, later in the cascade) -- this default only shows on
+       the legend's own "no kinetics fit deposited" dash sample, which
+       carries `.net-edge` alone with no kind class. */
+    stroke: var(--muted);
+    stroke-width: 1.6;
+    opacity: 0.68;
+    fill: none;
+}
+.net-edge-isomerization {
+    stroke: var(--chart-series-1);
+    stroke-width: 3;
+    opacity: 0.95;
+}
+.net-edge-association {
+    stroke: var(--chart-series-3);
+}
+.net-edge-exchange {
+    stroke: var(--chart-series-2);
+}
+/* Any channel kind other than the three enum values measured against the
+   live archive -- a defensive fourth colour so a future kind still reads
+   as ONE consistent category rather than silently falling back to the
+   plain `.net-edge` grey (which is reserved for the legend's own
+   "no kinetics fit" dash swatch). */
+.net-edge-other {
+    stroke: var(--chart-series-4);
+}
+.net-edge-link:hover .net-edge,
+.net-edge-link:focus-visible .net-edge {
+    opacity: 1;
+    stroke-width: 3;
+}
+.net-edge-link:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 1px;
+}
+
+/* ---- Legend ---- */
+.net-legend-icon {
+    flex: none;
+    display: block;
+}
+.net-legend-line {
+    flex: none;
+    display: inline-block;
+    width: 1.4rem;
+    height: 2px;
+}
+/* Legend swatches use `background-color`, not `stroke` -- these are plain
+   `<span>`s, not SVG shapes, so the `.net-edge-*` classes above (which
+   set `stroke`, an SVG-only property) do nothing here. Same colour per
+   kind, a different CSS property to reach it. */
+.net-legend-line-isomerization {
+    background: var(--chart-series-1);
+}
+.net-legend-line-association {
+    background: var(--chart-series-3);
+}
+.net-legend-line-exchange {
+    background: var(--chart-series-2);
+}
+.net-legend-line-other {
+    background: var(--chart-series-4);
+}
+
+/* ---- Degrade-to-table banner (plan §2.2's explicit fallback -- never a
+   silently blank diagram) ---- */
+.net-diagram-degraded {
+    margin: var(--s-4) 0 0;
+}
+
+/* ---- Accessible-table participant lists ---- */
+.net-participant-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.3rem;
+}
