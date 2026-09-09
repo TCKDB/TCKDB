@@ -1,7 +1,7 @@
 # Pressure-dependent network surface — implementation plan
 
-Status: **PRs 0, 1 and 2 are merged and deployed; PRs 3 and 4 remain.** See
-"Build status" below. Base: `main` at `45dc4afe`
+Status: **COMPLETE — every PR in this plan is merged and deployed.** See
+"Build status" below for what shipped and what was learned against it. Base: `main` at `45dc4afe`
 (the reaction-entry-page and Arrhenius-chart plan is fully landed — PRs 0–4 of
 `docs/plans/reaction-entry-page.md` are merged). Sibling plans:
 `docs/plans/provenance-first-website.md` (running house rules),
@@ -17,10 +17,55 @@ either reuse or explicitly decline to extend).
 | 1 | Server-side Chebyshev/PLOG evaluation (`app/chemistry/network_kinetics_eval.py`) | merged, deployed. **Per-record only** — the batch endpoint PR 4 needs was deliberately not built |
 | 2 | Network record page (identity, evidence, reactions, review) | merged #442, deployed |
 | — | Follow-ups found on the deployed page | #443 (refs were inert `<code>`, now linked), #444 (an unreadable solve blanked the whole page, now degrades with an explicit note) |
-| 3 | Network diagram | not started |
-| 4 | k(T,P) chart | not started — **blocked on the batch endpoint** |
+| 3 | Network diagram | merged #446, deployed |
+| — | Batch k(T,P) evaluation endpoint | merged #447, deployed. PR 1 shipped per-record only; this is what unblocked PR 4 |
+| 4 | k(T,P) chart | merged #448, deployed |
 
-Two things a PR 3/PR 4 builder should not inherit from the text below.
+### What the build found that this plan got wrong
+
+**Every channel carries TWO fits, not one.** The live network has 21 channels
+and **42** `network_kinetics` rows — a Chebyshev *and* a PLOG parameterization
+each. §5's "one panel per selected channel" and §6's PR 4 criterion both assume
+1:1 channel-to-fit. They disagree materially: measured on `channel_1` at 1 bar,
+PLOG gives 1.6x the Chebyshev rate at 400 K and 2.4x at 1500 K.
+
+Everything downstream had to change: the batch endpoint keys its response by
+`network_kinetics_ref` rather than by channel, and the chart draws both series
+per channel. Neither picks, prefers, averages, or hides one — presenting a
+single number as *the* rate for a channel would be a false scientific claim,
+and the disagreement is itself the finding. Anyone extending this surface
+should preserve that property.
+
+**Defects found by looking at the deployed pages, not by tests:**
+
+- #443 — every ref on the record page was inert `<code>` while the routes it
+  named already existed.
+- #444 — one malformed row in the supplementary solve request blanked the
+  entire page, including sections served by a different, well-formed request.
+- #446 — `channel_key` leaked through an `aria-label`, so the depositor string
+  reached screen reader users as the edge's primary label while a test
+  asserting "never inside `<text>`" passed. Also: the force layout never fit
+  its canvas (23% of width / 31% of height used), because attraction along 21
+  edges beats repulsion between 7 nodes and the clamp was never binding.
+- #448 — the y-axis title sat outside the grid that positions it, rendering as
+  a vertical run of characters above the plot.
+
+**Two vacuous tests shipped and were caught only by mutation**, both worth
+knowing as patterns: a DOM query scoped to `container.querySelector("svg")`
+silently grabbed a 16x16 legend swatch instead of the diagram and iterated
+nothing; and `expect(el.className).toContain("arrhenius-chart-panel")` passed
+against the broken layout because the wrapper is named
+`arrhenius-chart-panel-wrap`. Prefer `classList.contains`, scope queries to a
+specific class, and assert the queried set is non-empty.
+
+**Provenance gap, unrelated to this plan but found during it:** the live
+network was written outside the API on 2026-08-02 — no submission row, no
+idempotency record, no audit trail. Eight duplicate reaction entries created
+that way were deleted 2026-09-09 (backup
+`~/backups/tckdb-predelete-dupes-20260909-234730.dump`). The ingestion route
+itself is unchanged, so a re-ingest by the same path would duplicate again.
+
+Two things a later builder should not inherit from the text below.
 
 **The "0 of 7 states have reachable energies" finding in §0 is wrong**, and so
 is PR 2's red-first criterion that repeats it. Measured on the deployed
