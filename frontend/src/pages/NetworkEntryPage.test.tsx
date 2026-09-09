@@ -602,3 +602,28 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
         await waitFor(() => expect(section.textContent ?? "").toContain("does not record a temperature/pressure range"))
     })
 })
+
+describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track built for it", () => {
+    it("is a direct child of .arrhenius-chart-panel, not a sibling before it", async () => {
+        // `.arrhenius-chart-axis-title--y` is placed with `grid-column: 1`,
+        // so it only lands beside the axis when its parent is the grid.
+        // Shipped as a sibling BEFORE the panel, it fell into normal flow and
+        // rendered the rotated title as a vertical run of characters floating
+        // above the plot. jsdom computes no layout, so the structural parent
+        // relationship is the testable part of that defect.
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        const title = await waitFor(() => {
+            const el = container.querySelector(".arrhenius-chart-axis-title--y")
+            expect(el).not.toBeNull()
+            return el!
+        })
+        expect(title.parentElement).not.toBeNull()
+        // `classList.contains`, NOT `className.toContain`: the wrapper one
+        // level out is `arrhenius-chart-panel-wrap`, whose name CONTAINS
+        // "arrhenius-chart-panel" as a substring, so a substring assertion
+        // passes against the exact broken layout it is meant to catch.
+        expect(title.parentElement!.classList.contains("arrhenius-chart-panel")).toBe(true)
+    })
+})

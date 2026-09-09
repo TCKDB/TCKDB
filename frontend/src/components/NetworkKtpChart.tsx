@@ -231,8 +231,14 @@ function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGro
                     </li>
                 )}
             </ul>
-            <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(axisUnits)}</p>
             <div className="arrhenius-chart-panel">
+                {/* Inside the grid, not before it. `--y` is placed with
+                    `grid-column: 1`, so as a SIBLING of the panel it fell
+                    into normal flow -- rendering the rotated title as a
+                    vertical run of characters floating above the plot
+                    instead of beside the axis. `ArrheniusChart.tsx` has it
+                    as a direct child of the panel for exactly this reason. */}
+                <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(axisUnits)}</p>
                 <div className="arrhenius-chart-scroll">
                     <svg
                         width={ARRHENIUS_CHART_WIDTH}
