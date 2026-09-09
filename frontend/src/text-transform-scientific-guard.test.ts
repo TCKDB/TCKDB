@@ -213,12 +213,13 @@ const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
     ],
     "index.css": [
         ".accession-rail", // "species" / "entry" / "record"
-        ".identifier-search label", // "Exact species identifier"
+        ".identifier-search label", // "Exact species identifier" / "Exact reaction equation" (mode-dependent, both prose)
         ".destination > span:last-child", // "Coming soon" / "Open catalogue"
         ".brand", // "TCKDB" (already all-caps)
         ".brand span", // "T" (single letter, case-invariant)
         ".eyebrow", // "Archive index" / "Not found" / "Species record · chemical identity" / ...
         ".theme-toggle-option", // "Light" / "Dark" / "System"
+        ".identifier-search-mode-option", // "Species" / "Reactions" (IdentifierSearch.tsx's SearchModeToggle)
     ],
     "page-shell.css": [
         ".page-toc nav::before", // "On this page" (generated content, not app text)

@@ -18,9 +18,11 @@ function page() {
  * search (`IdentifierSearch`).
  */
 describe("ArchiveHomePage: no structure/SMILES search on the front page", () => {
-    it("renders the exact-identifier search", () => {
+    it("renders the exact-identifier search, defaulting to species mode", () => {
         page()
-        expect(screen.getByLabelText("Exact species or reaction identifier")).toBeInTheDocument()
+        expect(screen.getByLabelText("Exact species identifier")).toBeInTheDocument()
+        expect(screen.getByRole("radio", { name: "Species" })).toHaveAttribute("aria-checked", "true")
+        expect(screen.getByRole("radio", { name: "Reactions" })).toHaveAttribute("aria-checked", "false")
     })
 
     it("does not render a structure-search mode fieldset, a SMARTS toggle, or a 'Search structures' control", () => {
