@@ -45,7 +45,7 @@ export function NetworkDiagram({ states, channels }: { states: NetworkState[]; c
                             This network's diagram would not stay legible; showing the channel table.
                         </p>
                         <p className="note" style={{ marginTop: ".6rem" }}>
-                            {`This network has ${states.length} states -- past ${NETWORK_DIAGRAM_NODE_THRESHOLD} states (or an equally dense smaller network), a diagram on this canvas stops being readable. The accessible tables below are unaffected.`}
+                            {`This network has ${states.length} states — past ${NETWORK_DIAGRAM_NODE_THRESHOLD} states (or an equally dense smaller network), a diagram on this canvas stops being readable. The accessible tables below are unaffected.`}
                         </p>
                     </div>
                 )
@@ -256,7 +256,7 @@ function NetworkChannelsTable({ channels, states }: { channels: NetworkChannel[]
                     </thead>
                     <tbody>
                         {channels.map((channel, index) => (
-                            <tr key={`${channel.channel_key ?? "unkeyed"}-${index}`} id={channelRowId(channel.channel_key, index)}>
+                            <tr key={`${channel.channel_key ?? "unkeyed"}-${index}`} id={channelRowId(channel.channel_key ?? null, index)}>
                                 <td data-label="Channel">
                                     {channel.channel_key
                                         ? <code className="data">{channel.channel_key}</code>

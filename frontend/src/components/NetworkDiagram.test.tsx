@@ -1,9 +1,11 @@
-import { describe, expect, it } from "vitest"
-import { render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it } from "vitest"
+import { cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import "../design-system.css"
 import type { NetworkChannel, NetworkState } from "../api/networkEntryApi"
 import { NetworkDiagram } from "./NetworkDiagram"
+
+afterEach(() => cleanup())
 
 function state(hash: string, kind: string, label: string, participants: { ref: string; smiles: string; stoich?: number }[] = []): NetworkState {
     return {
@@ -87,17 +89,24 @@ describe("NetworkDiagram -- every visible node label is composition.state_label"
         const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)
         expect(svgTexts).toContain("NN")
         expect(svgTexts).toContain("2 [NH2]")
-        expect(container.innerHTML).not.toContain("hash_n1")
+        // The raw hash legitimately appears in a `data-composition-hash`
+        // attribute (a programmatic join key, never rendered as text) --
+        // check rendered TEXT, not the serialised markup.
+        expect(container.textContent ?? "").not.toContain("hash_n1")
     })
 })
 
 describe("NetworkDiagram -- node shape encodes kind, never inferred from label text", () => {
     it("a well state renders a <circle>, a bimolecular state renders a <polygon>", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        expect(container.querySelectorAll(".net-node-well")).toHaveLength(2)
-        expect(container.querySelectorAll(".net-node-bimolecular")).toHaveLength(2)
-        expect(container.querySelector("circle.net-node-well")).not.toBeNull()
-        expect(container.querySelector("polygon.net-node-bimolecular")).not.toBeNull()
+        // Scoped to the actual diagram SVG: the legend also carries one
+        // small illustrative `.net-node-well`/`.net-node-bimolecular` icon
+        // each, which is not one of this fixture's real nodes.
+        const svg = container.querySelector(".network-diagram-svg")!
+        expect(svg.querySelectorAll(".net-node-well")).toHaveLength(2)
+        expect(svg.querySelectorAll(".net-node-bimolecular")).toHaveLength(2)
+        expect(svg.querySelector("circle.net-node-well")).not.toBeNull()
+        expect(svg.querySelector("polygon.net-node-bimolecular")).not.toBeNull()
     })
 })
 
