@@ -71,12 +71,22 @@ type ReactionQuerySuccess = Extract<ReactionQueryClassification, { valid: true }
  * description of what this heading is ABOUT to search, not an echo of the
  * input syntax; which individual rows matched forward versus in reverse
  * is stated per-row instead (`ReactionMatchRow`'s `matchedDirection` note).
+ *
+ * A one-sided equation (`classifyReactionQuery`'s own comment on `<>
+ * [NH2]`/`[NH2] <>`) leaves `reactants`/`products` empty on the unwritten
+ * side -- `.trim()` here drops only the stray edge space that side's own
+ * empty `join` would otherwise leave next to the arrow ("⇌ [NH2]", never
+ * " ⇌ [NH2]"), not a second sentence explaining why. No copy here says the
+ * empty side does not narrow the search: `ReactionMatchRow`'s per-row
+ * `matchedDirection` label already carries that truth, honestly, once per
+ * row that needs it -- adding it here too would be the same explaining-
+ * instead-of-removing mistake the arrow-direction copy already was.
  */
 function describeReactionQuery(query: ReactionQuerySuccess): string {
     if (query.kind === "participation") {
         return query.smiles.length > 1 ? `${query.smiles.join(" and ")} together` : query.smiles[0]
     }
-    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`
+    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`.trim()
 }
 
 /**

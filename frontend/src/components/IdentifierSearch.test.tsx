@@ -600,16 +600,89 @@ describe("reaction mode: a malformed equation is a parse failure, distinct from 
         expect(screen.queryByText(/No reaction in this archive/)).not.toBeInTheDocument()
     })
 
-    it("rejects an equation missing one side without ever calling the archive", async () => {
+    it("rejects a bare arrow with nothing on either side, without ever calling the archive", async () => {
         server.use(http.get("/api/v1/scientific/reactions/browse", () => {
             throw new Error("a parse failure must never reach the network")
         }))
         const user = userEvent.setup(); page()
-        await searchReactions(user, "NN,[H] <> ")
+        await searchReactions(user, " <> ")
 
-        const message = await screen.findByText(/both sides/i)
+        const message = await screen.findByText(/at least one side/i)
         expect(message).toBeVisible()
         expect(screen.queryByText(/No reaction in this archive/)).not.toBeInTheDocument()
+    })
+})
+
+/**
+ * Owner: "what if they only know the products but not the reactants they
+ * are searching for? maybe they can do just `<>[NH2]`". A one-sided
+ * equation now reaches the network -- sending ONLY the side actually
+ * given, never a guessed or empty-string value for the unwritten side
+ * (`buildReactionBrowseQuery`/`splitSmilesList` already omit the param
+ * entirely for an empty array, the same mechanic a bare "participation"
+ * query's missing `product_smiles` already relies on). Still always
+ * `direction=either`, same as every other reaction-mode query -- there is
+ * no separate mode this shape narrows into. OWNER MEASURED: the side
+ * written does not filter the result (every reaction here is reversible,
+ * and either-direction matching finds a structure on whichever side it
+ * actually sits) -- so this suite asserts the REQUEST shape and that rows
+ * still carry their own honest `matchedDirection` label, never a message
+ * claiming the query was narrowed by the side written.
+ */
+describe("reaction mode: a one-sided equation (products-only or reactants-only) sends only the side given", () => {
+    it("'<> [NH2]' sends only product_smiles, no reactant_smiles, still direction=either", async () => {
+        const { handler, capturedUrl } = reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1)
+        server.use(handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "<> [NH2]")
+
+        await screen.findByRole("region", { name: "Reactions found" })
+        expect(capturedUrl()?.searchParams.getAll("product_smiles")).toEqual(["[NH2]"])
+        expect(capturedUrl()?.searchParams.getAll("reactant_smiles")).toEqual([])
+        expect(capturedUrl()?.searchParams.get("direction")).toBe("either")
+    })
+
+    it("'[NH2] <>' sends only reactant_smiles, no product_smiles, still direction=either", async () => {
+        const { handler, capturedUrl } = reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1)
+        server.use(handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "[NH2] <>")
+
+        await screen.findByRole("region", { name: "Reactions found" })
+        expect(capturedUrl()?.searchParams.getAll("reactant_smiles")).toEqual(["[NH2]"])
+        expect(capturedUrl()?.searchParams.getAll("product_smiles")).toEqual([])
+        expect(capturedUrl()?.searchParams.get("direction")).toBe("either")
+    })
+
+    // A one-sided query's results are ordinary reaction rows, each still
+    // carrying its own `matchedDirection` -- the per-row label is the
+    // honest signal for how a match was found, not a sentence attached to
+    // the query description explaining that the unwritten side did not
+    // narrow anything.
+    it("a one-sided query's rows still carry their own matched-direction label", async () => {
+        server.use(reactionsBrowseHandler(
+            [
+                reactionRecord("rxe_a0000000000000000000000001", true, "reverse"),
+                reactionRecord("rxe_b0000000000000000000000002", true, "forward"),
+            ],
+            2,
+        ).handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "<> [NH2]")
+
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        const rows = within(region).getAllByRole("listitem")
+        expect(within(rows[0]).getByText("Matched on the reverse direction")).toBeVisible()
+        expect(within(rows[1]).queryByText("Matched on the reverse direction")).not.toBeInTheDocument()
+    })
+
+    it("the heading reads cleanly with no stray space next to the arrow on either side", async () => {
+        server.use(reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1).handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "<> [NH2]")
+
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        expect(within(region).getByRole("heading", { name: "Reactions matching ⇌ [NH2]" })).toBeVisible()
     })
 })
 
