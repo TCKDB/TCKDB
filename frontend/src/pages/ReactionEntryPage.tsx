@@ -18,7 +18,7 @@ import "../record-identity-header.css"
 import "../reaction-entry.css"
 import type { NetworkMembership, ReactionEntrySpeciesParticipant, ReactionFullRecord } from "../api/reactionEntryApi"
 import { loadReactionEntry, loadReactionEntryNetworksFallback } from "../api/reactionEntryApi"
-import { Formula } from "../components/Formula"
+import { SpeciesFace } from "../components/Formula"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { ReactionKineticsSection } from "../components/ReactionKineticsSection"
 import { ReactionTransitionStatesSection } from "../components/ReactionTransitionStatesSection"
@@ -311,6 +311,17 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     )
 }
 
+// The "Formula" and "SMILES" columns this table used to carry SEPARATELY
+// are now one "Species" column: since `SpeciesFace` (`../components/
+// Formula.tsx`) already leads with SMILES and brackets the formula after
+// it, a dedicated SMILES column beside it would print the exact same
+// SMILES string twice in one row. Consolidating is the deliberate call
+// here (owner ruling: "SMILES leads, formula follows in brackets",
+// applied generally) -- the Ref column this table's own earlier PR split
+// out from the Formula cell (owner: "we should add a 4th column ... that
+// is the reference rather than it being in the same column as Formula")
+// is untouched: this table still never folds the species-entry ref or
+// its copy button into the identity cell.
 function ParticipantsTable({ label, participants }: {
     label: "Reactants" | "Products"
     participants: ReactionEntrySpeciesParticipant[]
@@ -322,8 +333,7 @@ function ParticipantsTable({ label, participants }: {
                 <table className="data-table" aria-label={`${label === "Reactants" ? "Reactant" : "Product"} participants`}>
                     <thead>
                         <tr>
-                            <th scope="col">Formula</th>
-                            <th scope="col">SMILES</th>
+                            <th scope="col">Species</th>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
                         </tr>
@@ -331,12 +341,11 @@ function ParticipantsTable({ label, participants }: {
                     <tbody>
                         {participants.map((participant) => (
                             <tr key={participant.species_entry_ref}>
-                                <td data-label="Formula">
+                                <td data-label="Species">
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
-                                        {participant.formula ? <Formula value={participant.formula} /> : participant.smiles}
+                                        <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
                                 </td>
-                                <td data-label="SMILES"><code className="data">{participant.smiles}</code></td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>
                                     <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />

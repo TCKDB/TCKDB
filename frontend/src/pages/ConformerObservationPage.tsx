@@ -203,6 +203,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                             still rides along after it. */}
                                         <SpeciesEntryLink
                                             speciesEntryRef={species.species_entry_ref}
+                                            smiles={species.canonical_smiles}
                                             formula={species.formula}
                                             speciesEntryLabel={species.species_entry_label}
                                         />

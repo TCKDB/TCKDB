@@ -231,11 +231,14 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 }
 
 /*
- * Chemistry-first search result rows. Formula and SMILES carry the row
- * (the link's whole point is to be told apart by chemistry, not decoded
- * as a base32 string); charge/spin/entry-count give supporting context;
- * the public reference stays visible and selectable but demoted below
- * both, in monospace, outside the link.
+ * Chemistry-first search result rows (SMILES-leads-formula-in-brackets
+ * change: SMILES is now always the primary headline, the formula its
+ * parenthesised follower -- swapped from the formula-primary/SMILES-
+ * secondary styling this block used to carry, since two isomers sharing a
+ * formula is exactly the ambiguity a formula-primary headline could not
+ * resolve). Charge/spin/entry-count give supporting context; the public
+ * reference stays visible and selectable but demoted below both, in
+ * monospace, outside the link.
  */
 .search-result {
     padding: .7rem 0;
@@ -247,7 +250,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     color: var(--ink);
 }
 .search-result-link:hover .search-result-formula,
-.search-result-link:hover .search-result-smiles-primary {
+.search-result-link:hover .species-face-smiles {
     color: var(--accent-700);
 }
 .search-result-headline {
@@ -257,20 +260,29 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     gap: .4rem;
     overflow-wrap: anywhere;
 }
-.search-result-formula {
-    font: 600 1.05rem var(--serif);
+/* The leading SMILES (`SpeciesFace`'s own `.species-face-smiles`,
+   `./Formula.tsx`) is this row's primary headline now -- scoped here
+   rather than styled by `SpeciesFace` itself, matching how
+   `.reaction-equation-chip` is scoped per caller in `reaction-entry.css`/
+   `browse.css` instead of carrying a default style of its own. */
+.search-result-headline .species-face-smiles {
+    font-size: .95rem;
     color: var(--ink);
 }
-.search-result-smiles {
+/* The parenthesised formula that follows the leading SMILES
+   (`species-face-formula`, from `SpeciesFace`) -- demoted from this
+   block's old primary/bold-serif treatment now that SMILES leads. Also
+   the style for the rare no-SMILES fallback headline (`.search-result-
+   formula`, used directly there since there is no `SpeciesFace` wrapper
+   to scope into), where the formula is all there is. */
+.search-result-headline .species-face-formula,
+.search-result-formula {
     font: .82rem var(--mono);
     color: var(--muted);
     overflow-wrap: anywhere;
 }
-.search-result-smiles-primary {
-    font-size: .95rem;
-    color: var(--ink);
-}
-.search-result-formula-missing {
+.search-result-formula-missing,
+.search-result-smiles-missing {
     font-size: .72rem;
     color: var(--faint);
     font-style: italic;

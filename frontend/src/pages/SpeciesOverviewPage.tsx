@@ -91,9 +91,17 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
             <header className="species-header">
                 <p className="eyebrow">Species record · chemical identity</p>
                 {/* `formula` typeset with subscripts when the archive computed
-                    one, matching `IdentifierSearch.tsx`'s headline rule; the
-                    SMILES fallback is not chemistry-formula text, so it is
-                    never run through `Formula`. */}
+                    one; the SMILES fallback is not chemistry-formula text,
+                    so it is never run through `Formula`.
+                    Deliberately NOT SMILES-leads-formula-in-brackets (owner
+                    ruling, applied everywhere else a species is shown):
+                    this h1 is this ONE species' own record-page title, not
+                    two participants a reader could mistake for each other
+                    -- and `species.canonical_smiles` already renders three
+                    rows below, in this same header's own identity grid, so
+                    a SMILES-led h1 here would only make the title harder to
+                    read (a long SMILES string as a page heading) without
+                    resolving an ambiguity this page did not already have. */}
                 <h1>{species.formula ? <Formula value={species.formula} /> : species.canonical_smiles}</h1>
                 <dl className="kv-list species-identity-grid">
                     <Identity identifier wide label="Species ref" value={species.species_ref} />

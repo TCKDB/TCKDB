@@ -362,15 +362,23 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).getByRole("link", { name: "Species entry" }))
             .toHaveAttribute("href", "/species-entries/spe_demo")
 
-        // The identity header's "Species entry" fact links out using the
-        // entry's own formula as its text, followed by the served
-        // discriminator expanded via `recordFacets.ts`'s `stereoChip`
-        // (never the raw `species_entry_label` string alone) -- see
+        // The identity header's "Species entry" fact links out using
+        // `SpeciesFace` (SMILES leads, formula in parentheses) as its
+        // text, followed by the served discriminator expanded via
+        // `recordFacets.ts`'s `stereoChip` (never the raw
+        // `species_entry_label` string alone) -- see
         // `RecordIdentityHeader.tsx`'s "Species entry" fact comment.
-        // `mockRecord()`'s owner formula is "CH3", label "ground state"
-        // (not one of the four stereo tokens `stereoChip` expands, so it
-        // passes through unchanged).
-        expect(screen.getByRole("link", { name: "CH3 · ground state" })).toHaveAttribute("href", "/species-entries/spe_demo")
+        // `mockRecord()`'s owner is SMILES "[CH3]"/formula "CH3", label
+        // "ground state" (not one of the four stereo tokens `stereoChip`
+        // expands, so it passes through unchanged). Queried by href and
+        // asserted on textContent, not accessible name: `getByRole(...,
+        // { name })` collapses the whitespace between the SMILES `code`
+        // and the bracketed-formula `span` differently from raw
+        // `textContent` (see `RecordIdentityHeader.test.tsx`'s identical
+        // comment).
+        const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
+        const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
+        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3) · ground state")
 
         // The calculation's own ref is visible at rest, first in the
         // identity block -- never behind the collapsed References

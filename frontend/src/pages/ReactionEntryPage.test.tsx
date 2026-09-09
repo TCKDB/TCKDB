@@ -572,13 +572,17 @@ describe("ReactionEntryPage -- individual facts are wired, not hard-coded (post-
         expect(checklist).toBeVisible()
     })
 
-    it("the Participants table's SMILES column renders each participant's own served SMILES, never blank", async () => {
+    // The old, separate "SMILES" column is gone (SMILES leads inside the
+    // "Species" column now -- see `ParticipantsTable`'s own comment); this
+    // asserts the same underlying fact the old test did, that every
+    // participant's own served SMILES shows up, never blank.
+    it("the Participants table's Species column renders each participant's own served SMILES, never blank", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
-        const smilesCells = Array.from(container.querySelectorAll('td[data-label="SMILES"]')).map((td) => td.textContent)
-        expect(smilesCells).toEqual(["O", "[CH3]", "C", "[OH]"])
-        expect(smilesCells.every((text) => text && text.length > 0)).toBe(true)
+        const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"] code.data')).map((code) => code.textContent)
+        expect(speciesCells).toEqual(["O", "[CH3]", "C", "[OH]"])
+        expect(speciesCells.every((text) => text && text.length > 0)).toBe(true)
     })
 
     it("the Pressure-dependent network table's T/P ranges and channel count are each their own served value", async () => {
@@ -709,48 +713,62 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
 // reference rather than it being in the same column as Formula" -- the
 // Formula cell used to carry the linked formula PLUS the spe_... ref PLUS
 // its own copy button, rendering as "C₉H₉ spe_... Copy" in one cell.
-describe("ReactionEntryPage -- Participants table: the reference has its own column, not the Formula cell", () => {
-    it("the Formula cell carries only the linked formula (or its SMILES fallback) -- no ref, no copy button", async () => {
+// (The old "Formula" and "SMILES" columns were later consolidated into
+// one "Species" column -- SMILES-leads-formula-in-brackets -- but the Ref
+// column this describe block covers is unaffected: it still carries only
+// the ref and its copy button, never folded back into the identity cell.)
+describe("ReactionEntryPage -- Participants table: the reference has its own column, not the Species cell", () => {
+    it("the Species cell carries only the linked SMILES/formula -- no ref, no copy button", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
-        const formulaCells = Array.from(container.querySelectorAll('td[data-label="Formula"]'))
-        expect(formulaCells.length).toBeGreaterThan(0)
-        for (const cell of formulaCells) {
-            expect(cell.querySelector("code.data")).toBeNull()
+        const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"]'))
+        expect(speciesCells.length).toBeGreaterThan(0)
+        for (const cell of speciesCells) {
             expect(cell.querySelector(".copy-button")).toBeNull()
         }
-        // The formula cell still links to the participant's species-entry page.
-        const waterCell = formulaCells.find((cell) => cell.textContent?.includes("H2O") || cell.textContent === "H₂O")
+        // The species cell still links to the participant's species-entry page.
+        const waterCell = speciesCells.find((cell) => cell.textContent?.includes("H2O") || cell.textContent === "H₂O")
         expect(waterCell?.querySelector("a")).not.toBeNull()
     })
 
     // MUTATION GUARD (mandatory mutation table item a): putting the ref
-    // back into the Formula cell must turn this red.
-    it("MUTATION GUARD: the participant's own species_entry_ref never appears inside a Formula cell", async () => {
+    // back into the Species cell must turn this red.
+    it("MUTATION GUARD: the participant's own species_entry_ref never appears inside a Species cell", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
-        const formulaCells = Array.from(container.querySelectorAll('td[data-label="Formula"]'))
+        const speciesCells = Array.from(container.querySelectorAll('td[data-label="Species"]'))
         for (const ref of ["spe_water", "spe_ch3", "spe_ch4", "spe_oh"]) {
-            for (const cell of formulaCells) {
+            for (const cell of speciesCells) {
                 expect(cell.textContent).not.toContain(ref)
             }
         }
     })
 
-    it("adds a Ref column header, between SMILES and Review, carrying the ref and its copy button", async () => {
+    it("carries a Ref column header, between Species and Review, carrying the ref and its copy button", async () => {
         handleFull(mockFull())
         const { container } = page()
         await screen.findByText("kin_test1")
         const table = container.querySelector('table[aria-label="Reactant participants"]') as HTMLElement
         const headers = Array.from(table.querySelectorAll("thead th")).map((th) => th.textContent)
-        expect(headers).toEqual(["Formula", "SMILES", "Ref", "Review"])
+        expect(headers).toEqual(["Species", "Ref", "Review"])
 
         const refCell = table.querySelector('td[data-label="Ref"]') as HTMLElement
         expect(refCell).not.toBeNull()
         expect(refCell.querySelector("code.data")?.textContent).toBe("spe_water")
         expect(refCell.querySelector(".copy-button")).not.toBeNull()
+    })
+
+    // SMILES-leads-formula-in-brackets consolidation (owner ruling):
+    // the Species cell renders "O (H2O)", not a bare formula that two
+    // different structures sharing a formula could render identically.
+    it("the Species cell leads with SMILES and brackets the formula after it", async () => {
+        handleFull(mockFull())
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        const link = container.querySelector('td[data-label="Species"] a[href="/species-entries/spe_water"]')
+        expect(link?.textContent).toBe("O (H2O)")
     })
 
     it("every participant ref still appears exactly once outside References -- moved column, not a new/lost mention", async () => {

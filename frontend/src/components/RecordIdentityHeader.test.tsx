@@ -43,7 +43,12 @@ const tsIdentity: RecordIdentity = {
 describe("RecordIdentityHeader", () => {
     it("renders a known species identity with SMILES and InChIKey", () => {
         renderHeader({ identity: speciesIdentity })
-        expect(screen.getByText("[CH3]")).toBeVisible()
+        // Scoped to the "SMILES" fact specifically: the species-entry link
+        // just below it (`SpeciesEntryLink`, SMILES-leads-formula-in-
+        // brackets) ALSO renders the bare identity SMILES as part of its
+        // own text now, so an unscoped `getByText("[CH3]")` would match
+        // two elements.
+        expect(screen.getByText("SMILES").closest("div")).toHaveTextContent("[CH3]")
         expect(screen.getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
     })
 
@@ -278,10 +283,11 @@ describe("RecordIdentityHeader", () => {
     // identity columns that make one entry differ from its siblings
     // (stereo_label, electronic_state_kind/label, term_symbol,
     // isotope_key), omitting anything at the default -- the live "R" is
-    // the entry's stereo label (R enantiomer). The link now shows the
-    // entry's own formula (same `<Formula>` rendering the h1 uses, so
-    // subscripts match) -- or the entry ref as `<code className="data">`
-    // when none was served -- followed by the EXPANDED label via
+    // the entry's stereo label (R enantiomer). The link now shows
+    // `SpeciesFace` (SMILES leads, formula in parentheses -- same
+    // `<Formula>` rendering the h1 uses, so subscripts match) -- or the
+    // entry ref as `<code className="data">` when NEITHER a SMILES nor a
+    // formula was served -- followed by the EXPANDED label via
     // `recordFacets.ts`'s own `stereoChip` helper (documented at
     // `domain/recordFacets.ts:53-68`) when one was served, never the raw
     // discriminator string alone.
@@ -289,30 +295,45 @@ describe("RecordIdentityHeader", () => {
     // This fact now delegates to `SpeciesEntryLink`
     // (`./SpeciesEntryLink.tsx`) rather than re-deriving the expression
     // here -- see that component's own test file for the exhaustive
-    // formula/label matrix. These three cases stay here as an
-    // integration check that this header actually wires `identity.formula`
-    // / `identity.speciesEntryLabel` through, and -- per the unified
+    // SMILES/formula/label matrix. These cases stay here as an
+    // integration check that this header actually wires
+    // `identity.canonicalSmiles` / `identity.formula` /
+    // `identity.speciesEntryLabel` through, and -- per the unified
     // fallback rule across all four species-entry-link call sites (this
     // header, `ConformerGroupPage`, `ConformerObservationPage`) -- that
     // the fallback is the entry REF, never the literal words "Species
     // entry" (the `<dt>` beside this `<dd>` already says that).
     describe("the species-entry link expands the served discriminator via the shared stereoChip helper", () => {
-        it("shows the formula plus the EXPANDED label ('R' -> 'R enantiomer'), reusing recordFacets.ts's own stereoChip wording", () => {
+        // `getByRole(..., { name })` uses accessible-name computation, which
+        // collapses the whitespace between the SMILES `code` and the
+        // bracketed-formula `span` differently from raw `textContent`
+        // (confirmed elsewhere via `.textContent` assertions) -- queried by
+        // `href` and asserted on `textContent` here instead, to check the
+        // actual rendered text rather than the accname algorithm's own
+        // normalisation of it.
+        it("shows SMILES-leads-formula-in-brackets plus the EXPANDED label ('R' -> 'R enantiomer'), reusing recordFacets.ts's own stereoChip wording", () => {
             renderHeader({
                 identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: "R" },
             })
-            const link = screen.getByRole("link", { name: "CH3 · R enantiomer" })
-            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+            const link = document.querySelector('a[href="/species-entries/spe_demo"]')!
+            expect(link.textContent).toBe("[CH3] (CH3) · R enantiomer")
         })
 
-        it("shows the formula alone when the identity carries no label", () => {
+        it("shows SMILES-leads-formula-in-brackets alone when the identity carries no label", () => {
             renderHeader({ identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: null } })
-            const link = screen.getByRole("link", { name: "CH3" })
-            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+            const link = document.querySelector('a[href="/species-entries/spe_demo"]')!
+            expect(link.textContent).toBe("[CH3] (CH3)")
         })
 
-        it("falls back to the entry ref, as a data code run, when the identity carries no formula and no label", () => {
+        it("no formula served, SMILES still is: the SMILES stands alone (no bracketed formula)", () => {
             renderHeader({ identity: { ...speciesIdentity, formula: null, speciesEntryLabel: null } })
+            const link = screen.getByRole("link", { name: "[CH3]" })
+            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+            expect(link.querySelector("code.data")?.textContent).toBe("[CH3]")
+        })
+
+        it("falls back to the entry ref, as a data code run, when the identity carries no SMILES, no formula, and no label", () => {
+            renderHeader({ identity: { ...speciesIdentity, canonicalSmiles: "", formula: null, speciesEntryLabel: null } })
             const link = screen.getByRole("link", { name: "spe_demo" })
             expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
             const code = link.querySelector("code")

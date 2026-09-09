@@ -13,7 +13,7 @@ import { classifyIdentifier, looksLikeReferenceAttempt, resultPath, type Identif
 import { classifyReactionQuery, type ReactionQueryClassification } from "../domain/reactionQuery"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
-import { Formula } from "./Formula"
+import { Formula, SpeciesFace } from "./Formula"
 import { ReactionEquation } from "./ReactionEquation"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 
@@ -71,12 +71,22 @@ type ReactionQuerySuccess = Extract<ReactionQueryClassification, { valid: true }
  * description of what this heading is ABOUT to search, not an echo of the
  * input syntax; which individual rows matched forward versus in reverse
  * is stated per-row instead (`ReactionMatchRow`'s `matchedDirection` note).
+ *
+ * A one-sided equation (`classifyReactionQuery`'s own comment on `<>
+ * [NH2]`/`[NH2] <>`) leaves `reactants`/`products` empty on the unwritten
+ * side -- `.trim()` here drops only the stray edge space that side's own
+ * empty `join` would otherwise leave next to the arrow ("⇌ [NH2]", never
+ * " ⇌ [NH2]"), not a second sentence explaining why. No copy here says the
+ * empty side does not narrow the search: `ReactionMatchRow`'s per-row
+ * `matchedDirection` label already carries that truth, honestly, once per
+ * row that needs it -- adding it here too would be the same explaining-
+ * instead-of-removing mistake the arrow-direction copy already was.
  */
 function describeReactionQuery(query: ReactionQuerySuccess): string {
     if (query.kind === "participation") {
         return query.smiles.length > 1 ? `${query.smiles.join(" and ")} together` : query.smiles[0]
     }
-    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`
+    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`.trim()
 }
 
 /**
@@ -179,7 +189,12 @@ export function IdentifierSearch() {
                 if (isStructureQueryKind(classified.identifier.kind)) {
                     const smilesValues = [...new Set(found.map((match) => match.smiles).filter((value): value is string => Boolean(value)))]
                     if (smilesValues.length > 0) {
-                        setCrossLink({ smiles: smilesValues, headline: found[0].formula ?? found[0].smiles ?? classified.identifier.value })
+                        // SMILES leads (owner ruling), same order as `MatchHeadline`
+                        // below: this names the ONE structure that was searched
+                        // for ("Also search reactions involving …"), and a bare
+                        // formula is still not the honest identity fact on its
+                        // own, even here, wherever a species is presented.
+                        setCrossLink({ smiles: smilesValues, headline: found[0].smiles ?? found[0].formula ?? classified.identifier.value })
                     }
                 }
             }
@@ -511,29 +526,36 @@ function spinContext(match: SearchMatch) {
 }
 
 /**
- * The row's headline. Formula, typeset with subscripts, leads when the
- * archive computed one; SMILES always follows it, because two isomers can
- * share a formula and only the structure string tells them apart.
+ * The row's headline. SMILES leads (owner ruling: SMILES leads, formula
+ * follows in parentheses), typeset in `code.data` through `SpeciesFace`
+ * (`./Formula.tsx`); the formula -- still typeset with subscripts -- is
+ * the parenthesised follower, because two isomers can share a formula and
+ * only the structure string tells them apart.
  *
  * `formula` is nullable (#251: it is computed, and can legitimately come
  * back null) and structure-search matches never carry one at all -- see
  * `scientificApi.ts`'s `SearchMatch.formula`. Either way this says so
- * explicitly rather than leaving a blank where the formula would be, and
- * never falls back to the public reference: that fallback is the exact
- * defect this component exists to fix.
+ * explicitly ("formula not available") rather than leaving a blank where
+ * the formula would be. Symmetrically, `smiles` is also nullable/optional
+ * on the wire; a formula/ref match that somehow carries no SMILES falls
+ * back to the bare formula with its own explicit "SMILES not available"
+ * note, rather than silently promoting the formula to the primary spot
+ * with no explanation for why SMILES is missing. Neither case falls back
+ * to the public reference: that fallback is the exact defect this
+ * component exists to fix.
  */
 function MatchHeadline({ match }: { match: SearchMatch }) {
+    if (match.smiles) {
+        return <span className="search-result-headline">
+            <SpeciesFace smiles={match.smiles} formula={match.formula} />
+            {!match.formula && <>{" "}<span className="search-result-formula-missing">formula not available</span></>}
+        </span>
+    }
     if (match.formula) {
         return <span className="search-result-headline">
             <span className="search-result-formula"><Formula value={match.formula} /></span>
-            {match.smiles && <>{" "}<span className="search-result-smiles">{match.smiles}</span></>}
-        </span>
-    }
-    if (match.smiles) {
-        return <span className="search-result-headline">
-            <span className="search-result-smiles search-result-smiles-primary">{match.smiles}</span>
             {" "}
-            <span className="search-result-formula-missing">formula not available</span>
+            <span className="search-result-smiles-missing">SMILES not available</span>
         </span>
     }
     // Neither a formula nor a SMILES is known for this match -- there is

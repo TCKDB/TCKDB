@@ -75,9 +75,10 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        // The result reads as chemistry (formula + SMILES), not as the raw
-        // ref -- the ref stays present, but demoted, alongside it.
-        const result = await screen.findByRole("link", { name: /^Cl \[Cl\]/ })
+        // The result reads as chemistry (SMILES leads, formula follows in
+        // parentheses), not as the raw ref -- the ref stays present, but
+        // demoted, alongside it.
+        const result = await screen.findByRole("link", { name: /^\[Cl\] \(Cl\)/ })
         expect(result).toBeVisible()
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(screen.getByText(speciesRef)).toBeVisible()
@@ -91,7 +92,7 @@ describe("public archive shell", () => {
         await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
-        expect(await screen.findByRole("link", { name: /^H2O O /})).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^O \(H2O\)/})).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
         expect(button).toHaveAttribute("aria-busy", "false")
     })
@@ -175,9 +176,9 @@ describe("public archive shell", () => {
         // Each row reads by its own chemistry, not by an interchangeable ref:
         // the two matches share the same formula prefix but diverge past it,
         // and each keeps its own entry count ("1 entry" vs "0 entries").
-        const result = await screen.findByRole("link", { name: /^H2O O charge 0 · spin singlet \(1\) · 1 entry$/ })
+        const result = await screen.findByRole("link", { name: /^O \(H2O\) charge 0 · spin singlet \(1\) · 1 entry$/ })
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
-        const other = screen.getByRole("link", { name: /^H2O2 OO charge 0 · spin singlet \(1\) · 0 entries$/ })
+        const other = screen.getByRole("link", { name: /^OO \(H2O2\) charge 0 · spin singlet \(1\) · 0 entries$/ })
         expect(other).toBeVisible()
         expect(other).toHaveAttribute("href", `/species/${speciesRefTwo}`)
         // The ref stays present and copyable alongside the chemistry, just demoted.
@@ -227,8 +228,8 @@ describe("public archive shell", () => {
         await user.type(input, "H2O"); await user.click(screen.getByRole("button", { name: "Search" }))
         await user.clear(input); await user.type(input, "H2"); await user.click(screen.getByRole("button", { name: "Search" }))
         // The stale, slower "H2O" response must never overwrite the "H2" result.
-        expect(await screen.findByRole("link", { name: /^H2 \[H\]\[H\]/ })).toBeVisible()
-        expect(screen.queryByRole("link", { name: /^H2O O/ })).not.toBeInTheDocument()
+        expect(await screen.findByRole("link", { name: /^\[H\]\[H\] \(H2\)/ })).toBeVisible()
+        expect(screen.queryByRole("link", { name: /^O \(H2O\)/ })).not.toBeInTheDocument()
         cleanup(); await delay(60); expect(window.location.pathname).toBe("/")
     })
 
@@ -292,7 +293,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Br” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        const result = await screen.findByRole("link", { name: /^Br \[Br\]/ })
+        const result = await screen.findByRole("link", { name: /^\[Br\] \(Br\)/ })
         expect(result).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
     })
