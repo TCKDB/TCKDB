@@ -12,6 +12,7 @@ import { loadNetworkEntry } from "../api/networkEntryApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { NetworkDiagram } from "../components/NetworkDiagram"
+import { NetworkKtpChart } from "../components/NetworkKtpChart"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -22,14 +23,11 @@ import { useScientificRecord } from "../hooks/useScientificRecord"
 
 /**
  * `/networks/:networkRef` -- PR 2 (§3: identity, evidence incl. the
- * live-computed energy-coverage fact, reactions, review) and PR 3 (§3.3:
- * network diagram) of `docs/plans/pressure-dependent-network-surface.md`.
- * No k(T,P) chart yet -- that is PR 4; this page still leaves that
- * section out entirely rather than stub it, so `SectionHeading` never
- * registers a heading for content that does not exist yet (a stubbed
- * empty section would show up in the page's own table of contents
- * pointing at nothing). Built to the reviewed design mock,
- * `docs/plans/mocks/network-entry.html` (branch `network-page-mock`).
+ * live-computed energy-coverage fact, reactions, review), PR 3 (§3.3:
+ * network diagram) and PR 4 (§2.4/§3.4: k(T,P) chart) of
+ * `docs/plans/pressure-dependent-network-surface.md`. Built to the
+ * reviewed design mock, `docs/plans/mocks/network-entry.html` (branch
+ * `network-page-mock`).
  */
 export default function NetworkEntryPage() {
     const { networkRef = "" } = useParams<{ networkRef: string }>()
@@ -168,6 +166,15 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         {" above for why. This is topology, not a potential-energy surface."}
                     </p>
                     <NetworkDiagram states={record.states} channels={record.channels} />
+                </section>
+
+                <section className="ledger-section" aria-labelledby="ktp-heading">
+                    <p className="t-kicker section-kicker">Evaluated, server-side, from the stored fits — never re-derived here</p>
+                    <SectionHeading id="ktp-heading">k(T,P)</SectionHeading>
+                    <p className="t-body section-intro">
+                        {`A channel carrying more than one fit — a Chebyshev and a PLOG parameterization of the same channel is the norm on this network, not an edge case — shows every one of them, never a single picked or averaged rate.`}
+                    </p>
+                    <NetworkKtpChart networkRef={network.network_ref} network={network} channels={record.channels} states={record.states} />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="reactions-heading">

@@ -1,0 +1,100 @@
+/*
+ * `NetworkKtpChart.tsx` -- the network entry page's k(T,P) section. Own
+ * stylesheet per this project's convention (see `arrhenius-chart.css`'s
+ * own header comment): a component's styling should not depend on
+ * another file's stylesheet having loaded first. Every colour below is
+ * `var(--token)` -- see `theme.css` (`theme.css.test.ts` enforces this
+ * against every stylesheet in `src/`).
+ *
+ * Reuses `arrhenius-chart.css`'s own chip/legend/axis/scroll classes
+ * directly (imported alongside this file in the component, never
+ * duplicated here) -- this file only adds what that chart shell has no
+ * equivalent for: the channel multi-select and the dashed/solid line
+ * swatches distinguishing "outside this fit's own stated validity range"
+ * in the legend without a decorative `<svg>` (deliberately -- a legend
+ * swatch built from `<svg>` is exactly the element
+ * `container.querySelector("svg")` picks up FIRST in a naive test query,
+ * ahead of the chart's own plot `<svg>`; this component's tests scope
+ * queries by class regardless, but avoiding the shape entirely here
+ * removes the footgun rather than merely working around it).
+ */
+
+.network-ktp-section {
+    margin-top: 1.5rem;
+}
+
+/* The channel multi-select -- a `<fieldset>` of checkboxes, one per
+   channel carrying at least one served fit. Deliberately NOT a
+   `<select multiple>`: a native multi-select's own interaction model
+   (ctrl/cmd-click to add to a selection) is not discoverable, and this
+   list can run to 21 entries on the live archive -- checkboxes let a
+   reader see every option and its current state at a glance. */
+.network-ktp-channel-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin: 0 0 1.25rem;
+    padding: .9rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
+}
+
+.network-ktp-channel-fieldset legend {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+    padding: 0 .3rem;
+}
+
+.network-ktp-channel-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem .75rem;
+}
+
+.network-ktp-channel-option {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    font: var(--type-data-font);
+    color: var(--ink-2);
+    cursor: pointer;
+}
+
+.network-ktp-channel-option:has(input:checked) {
+    border-color: var(--accent-300);
+    background: var(--accent-50);
+    color: var(--ink);
+}
+
+.network-ktp-channel-option input {
+    margin: 0;
+}
+
+.network-ktp-panel-heading {
+    font: var(--type-heading-2-font);
+    color: var(--ink);
+    margin: 0 0 .5rem;
+}
+
+/* A short line, not a dot (`.arrhenius-chart-swatch` is a circle, reused
+   as-is for the model-kind colour swatches) -- this one specifically
+   reads as "a line style", matching what it stands for in the plotted
+   curve itself. */
+.network-ktp-line-swatch {
+    display: inline-block;
+    width: 1.4rem;
+    height: 0;
+    border-top: 2px solid var(--ink-2);
+    flex: none;
+}
+
+.network-ktp-line-swatch--dashed {
+    border-top-style: dashed;
+}

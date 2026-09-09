@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
@@ -110,12 +110,66 @@ function handleReactionEntry(ref: string, equation: string, status = "not_review
     })))
 }
 
+// ---------------------------------------------------------------------------
+// k(T,P) evaluate -- POST /networks/{ref}/kinetics/evaluate (PR 4)
+// ---------------------------------------------------------------------------
+
+function ktpPoint(temperatureK: number, pressureBar: number, k: number, inRange = true) {
+    return { temperature_k: temperatureK, pressure_bar: pressureBar, k, in_range: inRange }
+}
+
+function ktpFitFixture(overrides: Record<string, unknown> = {}) {
+    return {
+        network_kinetics_ref: "nk_test1",
+        channel_key: "channel_1",
+        channel_kind: "isomerization",
+        source_state_composition_hash: "hash_bim",
+        sink_state_composition_hash: "hash_well",
+        network_solve_ref: "nsolve_test1",
+        model_kind: "chebyshev",
+        k_units: "per_s",
+        tmin_k: 300,
+        tmax_k: 2000,
+        pmin_bar: 0.01,
+        pmax_bar: 100,
+        points: [],
+        ...overrides,
+    }
+}
+
+/** Two fits (Chebyshev + PLOG) for `channel_1`, one point per requested
+ * `(T, P)` combination -- built from whatever grid the component actually
+ * requested, so this fixture works regardless of the exact T/P counts
+ * `networkKtpChartLayout.ts` picks. */
+function defaultKtpFits(temperaturesK: number[], pressuresBar: number[]) {
+    const gridPoints = (kAtOneKelvinOneBar: number) => temperaturesK.flatMap((t) => pressuresBar.map((p) => ktpPoint(t, p, kAtOneKelvinOneBar * t)))
+    return [
+        ktpFitFixture({ network_kinetics_ref: "nk_cheb1", model_kind: "chebyshev", points: gridPoints(2) }),
+        ktpFitFixture({ network_kinetics_ref: "nk_plog1", model_kind: "plog", points: gridPoints(3) }),
+    ]
+}
+
+/** Call count is tracked on the object itself (not a module-level `let`)
+ * so each test's own counter is trivially inspectable without resetting
+ * shared state between tests -- `server.resetHandlers()` in `afterEach`
+ * already drops the handler (and its counter) between tests. */
+function handleKtpEvaluate(buildFits: (temperaturesK: number[], pressuresBar: number[]) => object[] = defaultKtpFits) {
+    const calls: { temperature_k: number[]; pressure_bar: number[] }[] = []
+    server.use(http.post(`/api/v1/scientific/networks/${NETWORK_REF}/kinetics/evaluate`, async ({ request }) => {
+        const body = await request.json() as { temperature_k: number[]; pressure_bar: number[] }
+        calls.push(body)
+        return HttpResponse.json({ network_ref: NETWORK_REF, fits: buildFits(body.temperature_k, body.pressure_bar) })
+    }))
+    return calls
+}
+
 /** Every fetch this page's default fixture needs, wired at once. */
 function handleEverything(overrides: { stateEnergies?: object[]; channelBarriers?: object[]; thermoCounts?: Record<string, number> } = {}) {
     handleNetworkDetail(networkDetailFixture())
     handleSolveDetail("nsolve_test1", overrides.stateEnergies ?? [], overrides.channelBarriers ?? [])
     handleThermo(overrides.thermoCounts ?? { spe_well: 0, spe_h2: 0 })
     handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+    handleKtpEvaluate()
 }
 
 describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
@@ -130,12 +184,12 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
     })
 
-    it("renders the network diagram section (PR 3) but not yet a k(T,P) section -- PR 4 leaves that seam open", async () => {
+    it("renders the network diagram section (PR 3) and the k(T,P) section (PR 4)", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "hydrazine" })
         expect(screen.getByRole("heading", { name: "Network diagram" })).toBeVisible()
-        expect(screen.queryByRole("heading", { name: "k(T,P)" })).not.toBeInTheDocument()
+        expect(await screen.findByRole("heading", { name: "k(T,P)" })).toBeVisible()
     })
 
     it("no rendered copy names an endpoint, an include= fragment, or a bare URL", async () => {
@@ -273,6 +327,7 @@ describe("NetworkEntryPage -- reactions table", () => {
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_barrierless", "2 [NH2] <=> NN")
+        handleKtpEvaluate()
         page()
         await screen.findByText("2 [NH2] <=> NN")
         expect(screen.getByText("none — barrierless")).toBeVisible()
@@ -289,6 +344,7 @@ describe("NetworkEntryPage — every ref that has a record page is a link to it"
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         page()
         const link = await screen.findByRole("link", { name: "rxe_test1" })
         expect(link).toHaveAttribute("href", "/reaction-entries/rxe_test1")
@@ -299,6 +355,7 @@ describe("NetworkEntryPage — every ref that has a record page is a link to it"
         handleSolveDetail("nsolve_test1")
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         page()
         const link = await screen.findByRole("link", { name: "tse_test1" })
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_test1")
@@ -321,6 +378,7 @@ describe("NetworkEntryPage — solve-internal source calculations link to the ca
         }])
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         page()
         const cell = await screen.findByText("calc_state1")
         expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_state1")
@@ -340,6 +398,7 @@ describe("NetworkEntryPage — solve-internal source calculations link to the ca
         }])
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         page()
         const cell = await screen.findByText("calc_barrier1")
         expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_barrier1")
@@ -369,6 +428,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         malformedSolve()
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         page()
         expect(await screen.findByRole("heading", { name: "hydrazine" })).toBeVisible()
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeInTheDocument()
@@ -379,6 +439,7 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         malformedSolve()
         handleThermo({ spe_well: 0, spe_h2: 0 })
         handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate()
         const { container } = page()
         await screen.findByRole("heading", { name: "hydrazine" })
         expect(container.textContent ?? "").toContain("could not read")
@@ -390,5 +451,179 @@ describe("NetworkEntryPage — an unreadable solve degrades, it does not blank t
         const { container } = page()
         await screen.findByRole("heading", { name: "hydrazine" })
         expect(container.textContent ?? "").not.toContain("could not read")
+    })
+})
+
+describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
+    it("renders BOTH fits for the default channel -- a Chebyshev and a PLOG series, never collapsed to one", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        // `nk_cheb1` and `nk_plog1` are `defaultKtpFits`' two fits for
+        // `channel_1` -- both must render as their own line group.
+        await waitFor(() => {
+            expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0)
+            expect(container.querySelectorAll('[data-testid="ktp-line-nk_plog1"]').length).toBeGreaterThan(0)
+        })
+        // Distinguishable, not just present: a chebyshev and a plog series
+        // on the SAME channel must not share a stroke colour.
+        const chebyshevLine = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline')
+        const plogLine = container.querySelector('[data-testid="ktp-line-nk_plog1"] polyline')
+        expect(chebyshevLine).not.toBeNull()
+        expect(plogLine).not.toBeNull()
+        expect(chebyshevLine!.getAttribute("stroke")).not.toBe(plogLine!.getAttribute("stroke"))
+    })
+
+    it("issues exactly ONE POST to the batch evaluate endpoint per page load -- not one per channel, not one per fit", async () => {
+        // TWO channels carrying kinetics, not one -- a per-channel-loop
+        // regression (call the endpoint once per channel instead of once
+        // for the whole page) is indistinguishable from the correct
+        // behaviour on a one-channel fixture, since both produce exactly
+        // one call. This is the fixture that actually exercises the
+        // distinction (confirmed via mutation -- see this PR's report).
+        handleNetworkDetail(networkDetailFixture({
+            channels: [
+                {
+                    channel_key: "channel_1", kind: "isomerization", mechanism: "elementary",
+                    source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true,
+                    microreactions: [{ reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", path_kind: "saddle_point" }],
+                },
+                {
+                    channel_key: "channel_2", kind: "association", mechanism: "elementary",
+                    source_state_composition_hash: "hash_well", sink_state_composition_hash: "hash_bim", has_kinetics: true,
+                    microreactions: [],
+                },
+            ],
+        }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        const calls = handleKtpEvaluate()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+        expect(calls.length).toBe(1)
+
+        // Client-side interaction -- toggling which channel is shown, and
+        // switching the shared pressure selector -- must never fire a
+        // second request. The batch endpoint already returned every
+        // channel's every fit in the one call above; selection is a pure
+        // client-side filter over that one response.
+        const pressureSelect = screen.getByLabelText("Pressure") as HTMLSelectElement
+        fireEvent.change(pressureSelect, { target: { value: pressureSelect.options[pressureSelect.options.length - 1].value } })
+        expect(calls.length).toBe(1)
+    })
+
+    it("a point outside a fit's own stated validity range renders dashed, never presented as interpolated", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate((temperaturesK, pressuresBar) => [
+            ktpFitFixture({
+                network_kinetics_ref: "nk_cheb1",
+                model_kind: "chebyshev",
+                points: temperaturesK.flatMap((t, index) => pressuresBar.map((p) => ktpPoint(t, p, 2 * t, index < temperaturesK.length - 2))),
+            }),
+            ktpFitFixture({
+                network_kinetics_ref: "nk_plog1",
+                model_kind: "plog",
+                points: temperaturesK.flatMap((t) => pressuresBar.map((p) => ktpPoint(t, p, 3 * t))),
+            }),
+        ])
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        // Checks the ACTUAL rendered `stroke-dasharray`, not just the
+        // `data-in-range` bookkeeping attribute alongside it -- a mutation
+        // that stops applying the dasharray while leaving `data-in-range`
+        // untouched must still fail this test.
+        await waitFor(() => {
+            const dashed = container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"] polyline[stroke-dasharray="4 3"]')
+            expect(dashed.length).toBeGreaterThan(0)
+        })
+        const chebyshevSolid = container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')
+        expect(chebyshevSolid.length).toBeGreaterThan(0)
+        const plogDashed = container.querySelectorAll('[data-testid="ktp-line-nk_plog1"] polyline[stroke-dasharray="4 3"]')
+        expect(plogDashed.length).toBe(0)
+    })
+
+    it("channel_key never appears as visible text in the k(T,P) section -- chemistry labels the channel instead", async () => {
+        handleEverything()
+        const { container } = page()
+        const heading = await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+        const section = heading.closest("section")!
+        expect(section.textContent ?? "").not.toContain("channel_1")
+        // Confirms the section actually rendered channel-scoped content
+        // (so the assertion above is not vacuously true on empty markup)
+        // -- `channel_key` is present as a `data-*` attribute, per
+        // invariant 4, just never as rendered text.
+        expect(section.querySelector('[data-channel-key="channel_1"]')).not.toBeNull()
+    })
+
+    it("degrades honestly when no channel on this network carries kinetics -- no empty chart, no request fired", async () => {
+        handleNetworkDetail(networkDetailFixture({
+            evidence_summary: {
+                species_count: 2, reaction_count: 1, state_count: 2, channel_count: 1, solve_count: 1,
+                kinetics_count: 0, source_calculation_count: 4, has_chebyshev: false, has_plog: false, has_point_kinetics: false,
+            },
+            channels: [{
+                channel_key: "channel_1", kind: "isomerization", mechanism: "elementary",
+                source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: false,
+                microreactions: [],
+            }],
+        }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        // Deliberately NOT calling handleKtpEvaluate() -- MSW's
+        // `onUnhandledRequest: "error"` fails this test if the component
+        // fires the batch request anyway when no channel has kinetics.
+        page()
+        const heading = await screen.findByRole("heading", { name: "k(T,P)" })
+        const section = heading.closest("section")!
+        await waitFor(() => expect(section.textContent ?? "").toContain("No k(T,P) fits are deposited on this network."))
+    })
+
+    it("degrades honestly when the solve carries no temperature/pressure range -- no request fired", async () => {
+        handleNetworkDetail(networkDetailFixture({
+            network: {
+                network_ref: NETWORK_REF, name: "hydrazine", description: null,
+                solve_temperature_min_k: null, solve_temperature_max_k: null, solve_pressure_min_bar: null, solve_pressure_max_bar: null,
+                review: { status: "not_reviewed" },
+            },
+        }))
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        // Same "no unmocked request" guard as above.
+        page()
+        const heading = await screen.findByRole("heading", { name: "k(T,P)" })
+        const section = heading.closest("section")!
+        await waitFor(() => expect(section.textContent ?? "").toContain("does not record a temperature/pressure range"))
+    })
+})
+
+describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track built for it", () => {
+    it("is a direct child of .arrhenius-chart-panel, not a sibling before it", async () => {
+        // `.arrhenius-chart-axis-title--y` is placed with `grid-column: 1`,
+        // so it only lands beside the axis when its parent is the grid.
+        // Shipped as a sibling BEFORE the panel, it fell into normal flow and
+        // rendered the rotated title as a vertical run of characters floating
+        // above the plot. jsdom computes no layout, so the structural parent
+        // relationship is the testable part of that defect.
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        const title = await waitFor(() => {
+            const el = container.querySelector(".arrhenius-chart-axis-title--y")
+            expect(el).not.toBeNull()
+            return el!
+        })
+        expect(title.parentElement).not.toBeNull()
+        // `classList.contains`, NOT `className.toContain`: the wrapper one
+        // level out is `arrhenius-chart-panel-wrap`, whose name CONTAINS
+        // "arrhenius-chart-panel" as a substring, so a substring assertion
+        // passes against the exact broken layout it is meant to catch.
+        expect(title.parentElement!.classList.contains("arrhenius-chart-panel")).toBe(true)
     })
 })
