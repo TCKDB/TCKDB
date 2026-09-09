@@ -287,10 +287,13 @@ describe("ReactionEntryPage -- three-state network wording", () => {
         // row, not a related-ref citation) -- exactly one mention.
         expect(occurrencesOutsideRefs(container, "net_test1")).toBe(1)
 
-        // `/networks/:ref` is a site 404 today (no network page yet, plan
-        // §1's own non-goal) -- the ref renders in the data face with a
-        // copy button, NOT as a link to a page that doesn't exist.
-        expect(screen.queryByRole("link", { name: "net_test1" })).not.toBeInTheDocument()
+        // `/networks/:ref` is a real page now (PR 2 of
+        // `docs/plans/pressure-dependent-network-surface.md`) -- the ref
+        // renders as a link to it, in the data face, alongside its own copy
+        // button (both, not one instead of the other -- matching every
+        // other `Ref` column on this page).
+        const refLink = screen.getByRole("link", { name: "net_test1" })
+        expect(refLink).toHaveAttribute("href", "/networks/net_test1")
         const refCell = screen.getByText("net_test1").closest("td")!
         expect(refCell.querySelector(".copy-button")).not.toBeNull()
     })

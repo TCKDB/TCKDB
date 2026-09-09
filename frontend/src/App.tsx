@@ -16,6 +16,7 @@ const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactor
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
 const MethodsIndexPage = lazy(() => import("./pages/MethodsIndexPage"))
+const NetworkEntryPage = lazy(() => import("./pages/NetworkEntryPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
 const ReactionEntryPage = lazy(() => import("./pages/ReactionEntryPage"))
 const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
@@ -111,6 +112,12 @@ function App() {
                 other kind uses. */}
             <Route path={BROWSE_KIND_PATHS.reaction} element={<BrowsePage />} />
             <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
+            {/* PR 2 of `docs/plans/pressure-dependent-network-surface.md` --
+                the record page a `net_...` ref finally has somewhere to
+                link to. `NetworkSection` on `ReactionEntryPage.tsx` used to
+                render that ref as inert `<code>`, with nothing to click,
+                because this route did not exist; it links here now. */}
+            <Route path="/networks/:networkRef" element={<NetworkEntryPage />} />
             {/* Was `<RecordPlaceholderPage kind="Methods" />` -- the last
                 consumer of that component (see its own file: every other
                 route that used to render it now has a real page). Three
