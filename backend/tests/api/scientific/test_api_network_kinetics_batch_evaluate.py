@@ -325,6 +325,24 @@ def test_batch_rejects_non_positive_pressure(client, db_session):
     assert resp.json()["code"] == "network_kinetics_evaluate_invalid_point"
 
 
+def test_batch_validates_axes_before_the_fit_count_can_hide_it(client, db_session):
+    """A network with *zero* stored fits skips the per-fit loop entirely
+    -- the only place axis validation would otherwise happen a second
+    time via the reused ``evaluate_network_kinetics`` call. This is the
+    one scenario that isolates the batch endpoint's *own* upfront axis
+    checks: without them, an invalid grid against a fit-less network
+    would silently come back ``200 {"fits": []}`` instead of a 422,
+    since nothing downstream ever runs to catch it."""
+    network, _channels, _solve = _build_network(db_session, n_channels=0)
+
+    resp = client.post(
+        _batch_url(network.public_ref),
+        json={"temperature_k": [], "pressure_bar": [1.0]},
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "network_kinetics_evaluate_missing_temperature"
+
+
 def test_batch_rejects_unknown_query_string_fields(client, db_session):
     """POST search endpoints on this router reject query-string keys
     other than profile/release, so a caller cannot silently have a
