@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import MethodsIndexPage from "./MethodsIndexPage"
 
@@ -59,7 +60,11 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
         )
         page()
         expect(await screen.findByRole("heading", { name: "Methods", level: 1 })).toBeVisible()
-        const lotLink = await screen.findByRole("link", { name: "b3lyp" })
+        // The link covers the WHOLE identity (method AND basis), not method
+        // alone -- owner: "the highlighting of the Method but not basis is
+        // weird". Its accessible name is "b3lyp/def2tzvp" (`lotLabel()`),
+        // never a bare "b3lyp".
+        const lotLink = await screen.findByRole("link", { name: "b3lyp/def2tzvp" })
         expect(lotLink).toHaveAttribute("href", "/methods/lot_one")
         const lotTable = screen.getByRole("table", { name: "Levels of theory" })
         expect(within(lotTable).getByText("416")).toBeVisible()
@@ -109,8 +114,123 @@ describe("MethodsIndexPage: loads and renders the three provenance-vocabulary ta
         // so this count is the only thing that distinguishes "grouped by
         // ref" from "grouped by method/basis text".
         expect(rows).toHaveLength(3)
-        const links = within(table).getAllByRole("link", { name: "b3lyp" })
+        const links = within(table).getAllByRole("link", { name: "b3lyp/def2tzvp" })
         expect(links).toHaveLength(2)
         expect(links.map((link) => link.getAttribute("href")).sort()).toEqual(["/methods/lot_no_disp", "/methods/lot_with_disp"])
+    })
+
+    /**
+     * Owner: "the not recorded and solvent not recorded ... like it
+     * suggests that someone missed it when rather these are records
+     * without, so should be like none instead." A NULL dispersion/solvent
+     * now states the chemistry plainly instead of implying a deposit gap.
+     * MUTATION TABLE (a): reverting the solvent cell back to
+     * `record.level_of_theory.solvent ?? "not recorded"` must fail this
+     * test.
+     */
+    it("renders 'none'/'gas phase' for a NULL dispersion/solvent, never 'not recorded'", async () => {
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({
+                records: [lotRecord()],
+                pagination: { offset: 0, limit: 200, returned: 1, total: 1 },
+            })),
+            ...emptyVocab(),
+        )
+        page()
+        const table = await screen.findByRole("table", { name: "Levels of theory" })
+        expect(within(table).getByText("none")).toBeVisible()
+        expect(within(table).getByText("gas phase")).toBeVisible()
+        expect(within(table).queryByText("not recorded")).not.toBeInTheDocument()
+    })
+})
+
+describe("MethodsIndexPage: the levels-of-theory filter", () => {
+    function twoLotRecords() {
+        return [
+            lotRecord({
+                level_of_theory: { ...lotRecord().level_of_theory, level_of_theory_ref: "lot_b3lyp", method: "b3lyp", basis: "def2tzvp" },
+                evidence_summary: { calculation_usage_count: 416, has_correction_schemes: true, has_frequency_scale_factors: true, distinct_software_count: 1 },
+            }),
+            lotRecord({
+                level_of_theory: { ...lotRecord().level_of_theory, level_of_theory_ref: "lot_ccsd", method: "CCSD(T)-F12", basis: "cc-pVTZ-F12" },
+                evidence_summary: { calculation_usage_count: 39, has_correction_schemes: false, has_frequency_scale_factors: true, distinct_software_count: 1 },
+            }),
+        ]
+    }
+
+    /**
+     * Owner: "i do wonder the bigger the LoT, how easy is it to search?"
+     * MUTATION TABLE (c): making `filterLevelOfTheoryRecords` a no-op (e.g.
+     * always returning `records` unfiltered) must fail this test -- both
+     * rows would stay visible after typing "b3lyp".
+     */
+    it("narrows to the matching row when the reader types into the method/basis filter", async () => {
+        const user = userEvent.setup()
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: twoLotRecords(), pagination: { offset: 0, limit: 200, returned: 2, total: 2 } })),
+            ...emptyVocab(),
+        )
+        page()
+        const table = await screen.findByRole("table", { name: "Levels of theory" })
+        expect(within(table).getAllByRole("row")).toHaveLength(3)
+
+        await user.type(screen.getByLabelText("Method or basis"), "b3lyp")
+
+        expect(within(table).getAllByRole("row")).toHaveLength(2)
+        expect(within(table).getByRole("link", { name: "b3lyp/def2tzvp" })).toBeVisible()
+        expect(within(table).queryByRole("link", { name: "CCSD(T)-F12/cc-pVTZ-F12" })).not.toBeInTheDocument()
+    })
+
+    it("also matches on basis text, not just method", async () => {
+        const user = userEvent.setup()
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: twoLotRecords(), pagination: { offset: 0, limit: 200, returned: 2, total: 2 } })),
+            ...emptyVocab(),
+        )
+        page()
+        const table = await screen.findByRole("table", { name: "Levels of theory" })
+        await user.type(screen.getByLabelText("Method or basis"), "cc-pVTZ")
+        expect(within(table).getAllByRole("row")).toHaveLength(2)
+        expect(within(table).getByRole("link", { name: "CCSD(T)-F12/cc-pVTZ-F12" })).toBeVisible()
+    })
+
+    it("narrows to the matching row when the reader checks 'correction schemes'", async () => {
+        const user = userEvent.setup()
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: twoLotRecords(), pagination: { offset: 0, limit: 200, returned: 2, total: 2 } })),
+            ...emptyVocab(),
+        )
+        page()
+        const table = await screen.findByRole("table", { name: "Levels of theory" })
+        expect(within(table).getAllByRole("row")).toHaveLength(3)
+
+        await user.click(screen.getByRole("checkbox", { name: "correction schemes" }))
+
+        expect(within(table).getAllByRole("row")).toHaveLength(2)
+        expect(within(table).getByRole("link", { name: "b3lyp/def2tzvp" })).toBeVisible()
+    })
+
+    it("shows a filter-specific empty state (not the archive-wide one) when nothing matches", async () => {
+        const user = userEvent.setup()
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: twoLotRecords(), pagination: { offset: 0, limit: 200, returned: 2, total: 2 } })),
+            ...emptyVocab(),
+        )
+        page()
+        await screen.findByRole("table", { name: "Levels of theory" })
+        await user.type(screen.getByLabelText("Method or basis"), "wb97xd")
+        expect(await screen.findByText("No levels of theory match this filter.")).toBeVisible()
+        expect(screen.queryByText("No levels of theory have been deposited in this archive yet.")).not.toBeInTheDocument()
+        expect(screen.queryByRole("table", { name: "Levels of theory" })).not.toBeInTheDocument()
+    })
+
+    it("does not render the filter fields at all when the archive has no levels of theory to filter", async () => {
+        server.use(
+            http.get(LOT_ENDPOINT, () => HttpResponse.json({ records: [], pagination: { offset: 0, limit: 200, returned: 0, total: 0 } })),
+            ...emptyVocab(),
+        )
+        page()
+        expect(await screen.findByText("No levels of theory have been deposited in this archive yet.")).toBeVisible()
+        expect(screen.queryByLabelText("Method or basis")).not.toBeInTheDocument()
     })
 })

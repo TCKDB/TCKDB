@@ -66,9 +66,16 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     it("renders the scheme identity, its parameter table, its owning level of theory (linked), and its applications", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse())))
         page()
-        expect(await screen.findByRole("heading", { name: "bac_petersson", level: 1 })).toBeVisible()
-        const lotLink = screen.getByRole("link", { name: "b3lyp/def2tzvp" })
-        expect(lotLink).toHaveAttribute("href", "/methods/lot_b3lyp")
+        // Titled from the controlled `scheme_kind` vocabulary plus the
+        // owning level of theory -- NOT the depositor's own `name` text
+        // (see the dedicated mutation-table test below).
+        expect(await screen.findByRole("heading", { name: "Petersson bond-additivity correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        // Two links to the SAME level of theory -- one inside the title
+        // (the new fix) and one in the identity kv-list below it, which
+        // already linked before this change and is unaffected by it.
+        const lotLinks = screen.getAllByRole("link", { name: "b3lyp/def2tzvp" })
+        expect(lotLinks).toHaveLength(2)
+        for (const link of lotLinks) expect(link).toHaveAttribute("href", "/methods/lot_b3lyp")
 
         const paramTable = screen.getByRole("table", { name: "Bond correction parameters" })
         expect(within(paramTable).getByText("C-H")).toBeVisible()
@@ -83,7 +90,55 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     it("reads a null level_of_theory honestly, as 'not tied to a specific level of theory' -- never 'any level of theory' or blank", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({ level_of_theory: null }))))
         page()
-        await screen.findByRole("heading", { name: "bac_petersson", level: 1 })
+        // No level-of-theory suffix at all when there is none to link.
+        await screen.findByRole("heading", { name: "Petersson bond-additivity correction", level: 1 })
         expect(screen.getByText("not tied to a specific level of theory")).toBeVisible()
+    })
+
+    /**
+     * MUTATION TABLE: titles this page from `scheme.scheme_kind` via the
+     * controlled `schemeKindLabel` vocabulary, never from the depositor's
+     * own free-text `energy_correction_scheme.name` (owner: "I kinda
+     * don't want labels almost in general to never appear on the front
+     * end"). `name` here is deliberately something a controlled-vocabulary
+     * label could never produce, so a regression that reverts the heading
+     * to `scheme.name` is unambiguous: this test would then find the
+     * literal depositor string on the page instead of the archive's own
+     * label, and the `getByRole("heading", ...)` query below would find no
+     * match at all (fail, not silently pass).
+     */
+    it("titles the page from the controlled scheme_kind vocabulary, never the depositor's free-text name", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            energy_correction_scheme: { ...mockResponse().record.energy_correction_scheme, name: "Bob's custom BAC v3 (DO NOT USE)", scheme_kind: "atom_energy" },
+        }))))
+        page()
+        expect(await screen.findByRole("heading", { name: "Atom-energy correction b3lyp/def2tzvp", level: 1 })).toBeVisible()
+        expect(screen.queryByText("Bob's custom BAC v3 (DO NOT USE)")).not.toBeInTheDocument()
+    })
+
+    it("renders a deposited literature source", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            literature: { literature_ref: "lit_one", title: "A BAC parameterisation study", year: 2019, doi: null },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        expect(screen.getByText("Literature source")).toBeVisible()
+        expect(screen.getByText("A BAC parameterisation study (2019)")).toBeVisible()
+    })
+
+    /**
+     * Coordinator follow-up: the page fetches `literature` and never
+     * rendered it. Its absence must read as an absence (an explicit row
+     * stating "not recorded"), not as a silently omitted row -- the live
+     * archive holds ZERO literature rows today, so this IS the case a
+     * reader actually sees.
+     */
+    it("states a missing literature source plainly, as its own row, rather than omitting it", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({ literature: null }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const dt = screen.getByText("Literature source")
+        expect(dt).toBeVisible()
+        expect(dt.nextElementSibling).toHaveTextContent("not recorded")
     })
 })

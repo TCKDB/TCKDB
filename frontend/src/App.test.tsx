@@ -538,7 +538,7 @@ describe("/methods renders the real methods index, not RecordPlaceholderPage", (
         render(<App />)
         expect(await screen.findByRole("heading", { name: "Methods" })).toBeVisible()
         expect(window.location.pathname).toBe("/methods")
-        const lotLink = await screen.findByRole("link", { name: "b3lyp" })
+        const lotLink = await screen.findByRole("link", { name: "b3lyp/def2tzvp" })
         expect(lotLink).toHaveAttribute("href", "/methods/lot_abc")
         expect(await screen.findByText("Gaussian")).toBeVisible()
         expect(await screen.findByText("ARC")).toBeVisible()
