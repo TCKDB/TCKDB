@@ -464,6 +464,21 @@
  * `.value-pill` regardless of source order. `Disclosure.tsx` no longer
  * imports this file at all (`index.css` already does, once, globally).
  * ------------------------------------------------------------------- */
+/* `letter-spacing: normal` (measured fix, 2026-09): `letter-spacing` is
+   inherited as an already-resolved LENGTH, not recomputed per descendant
+   font-size -- so a `.value-pill` sitting inside `.t-display-1` (a big
+   heading with `letter-spacing: -.03em`, computed at THAT element's own
+   ~64px font) inherited a fixed ~-1.8px tracking meant for 64px text onto
+   this pill's 11.52px text, cramming several characters into the space of
+   one and rendering as illegible overlapping glyphs. Found via
+   `CorrectionSchemePage.tsx`'s new level-of-theory pill inside its `<h1>`
+   ("b3lyp/def2tzvp" measured, live: `letter-spacing: -1.8px` computed,
+   glyphs visibly overlapping in a screenshot) -- but the SAME defect
+   already existed, unnoticed, on `FrequencyScaleFactorPage.tsx`'s
+   scale-kind pill (also inside a `.t-display-1` heading; measured live:
+   identical `-1.8px`). Fixed at the shared rule so both call sites (and
+   any future one) are covered, not with a one-off override at either
+   page. */
 .value-pill {
     display: inline-block;
     padding: .2rem .6rem;
@@ -472,6 +487,7 @@
     background: var(--accent-50);
     color: var(--accent-700);
     font: 600 .72rem/1.3 var(--sans);
+    letter-spacing: normal;
     white-space: nowrap;
 }
 
@@ -483,6 +499,7 @@
     background: var(--surface-sunken);
     color: var(--muted);
     font: 600 .72rem/1.3 var(--sans);
+    letter-spacing: normal;
     white-space: nowrap;
 }
 
