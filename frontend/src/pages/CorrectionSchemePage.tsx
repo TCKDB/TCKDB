@@ -9,7 +9,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
 import { schemeKindLabel } from "../domain/correctionSchemeFormat"
-import { words } from "../domain/provenanceFormat"
+import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
 
@@ -76,17 +76,22 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Energy-correction scheme · deposited evidence</span>
                             </div>
-                            {/* No SOFTWARE in the title -- a review-follow-up plan
-                                proposes titling these schemes by the software that
-                                produced them once a `software`/`software_release`
-                                column exists on `energy_correction_scheme`. It does
-                                not exist today (measured: neither the ORM model nor
-                                `ScientificLevelOfTheoryRecord`'s embedded scheme
-                                shape carries one), so this titles from what IS
-                                actually on the record now -- `scheme_kind` plus the
-                                level of theory, when tied to one -- and leaves room
-                                for software to slot in as a THIRD identity element
-                                later rather than guessing at that shape today. */}
+                            {/* Still no SOFTWARE in the TITLE here -- #439 (deployed)
+                                added `software_id`/`workflow_tool_release_id` to
+                                `energy_correction_scheme` and this page now renders
+                                both (facts list below), but this standalone page's
+                                own `<h1>` keeps titling from `scheme_kind` plus the
+                                level of theory it is tied to, unchanged. Software
+                                titles the PER-LOT box on `LevelOfTheoryPage.tsx`
+                                instead (owner ruling: those boxes are "the software
+                                or something", never the depositor's `name`) -- a
+                                different surface with a different reason to need it:
+                                a LOT page can hold two schemes of different kinds
+                                at once, so software disambiguates two anonymous
+                                boxes the reader has not yet opened. This page is
+                                already keyed to one scheme; adding software to the
+                                heading here would repeat a fact the facts list
+                                already states, not disambiguate anything. */}
                             <h1 className="t-display-1 record-identity-title">
                                 {title}
                                 {record.level_of_theory && (
@@ -111,6 +116,36 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
                                         </dd>
                                     </div>
+                                    {/* Software and workflow-tool release, added by #439
+                                        (deployed). Both are ALWAYS their own row, same
+                                        rule as the literature row below: an absence here
+                                        is a fact about this record that the reader needs
+                                        to see was checked, not a row that silently isn't
+                                        there. The two are null for genuinely different
+                                        reasons on the live archive today -- software
+                                        backfilled cleanly (both schemes: Gaussian);
+                                        workflow-tool release stayed null because only 10
+                                        of 416 calculations recorded one and no single
+                                        release could be derived unambiguously, so the
+                                        backfill deliberately left it absent rather than
+                                        guess -- but this page states each absence
+                                        plainly, without narrating a cause it cannot
+                                        verify from the API response alone. Never a link:
+                                        `record.software_release.software_release_ref` is
+                                        measured empty on every live row (the scheme
+                                        stores a vendor, not a release row to point at,
+                                        same limitation `FrequencyScaleFactor` already
+                                        has) -- `softwareLabel` renders name/version only,
+                                        exactly like every other software_release
+                                        consumer in this app. */}
+                                    <div>
+                                        <dt>Software</dt>
+                                        <dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Workflow-tool release</dt>
+                                        <dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd>
+                                    </div>
                                     {/* Fetched (`loadCorrectionScheme` always requests
                                         `include=literature`) but never rendered before
                                         this fix -- the archive was hiding a citation it
@@ -121,7 +156,12 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         either deposited scheme today, so the reader
                                         needs to see that this was checked and found
                                         absent, not wonder whether the row was simply
-                                        left out. */}
+                                        left out. Absent for a DIFFERENT reason than the
+                                        two rows above (nobody has recorded one, not an
+                                        archive-side derivation the field couldn't
+                                        resolve) -- stated with the same plain "not
+                                        recorded" text, never "not applicable" (a claim
+                                        about the chemistry this archive cannot make). */}
                                     <div>
                                         <dt>Literature source</dt>
                                         <dd>

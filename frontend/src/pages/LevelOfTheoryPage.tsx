@@ -8,7 +8,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
-import { SCHEME_KIND_LABELS, schemeKindLabel } from "../domain/correctionSchemeFormat"
+import { SCHEME_KIND_LABELS, schemeKindLabel, schemeParameterRollup } from "../domain/correctionSchemeFormat"
 import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useLevelOfTheory } from "../hooks/useLevelOfTheory"
@@ -208,6 +208,41 @@ function SoftwareSection({ breakdown, available }: {
  * fix), shared with `CorrectionSchemePage.tsx`'s own heading -- see that
  * module's doc comment for why the old `SCHEME_KIND_LABELS[kind] ??
  * scheme.name` fallback here is gone.
+ *
+ * Each DEPOSITED scheme is now its own collapsible box (owner ruling,
+ * verbatim: "should be more like also expandable boxes for AEC and BAC
+ * but their names are the software or something") -- built on the shared
+ * `Disclosure` primitive, titled `{scheme_kind label} {software}`, NEVER
+ * the depositor's own free-text `energy_correction_scheme.name` (both
+ * live rows carry `name === scheme_kind` verbatim, so a `name` fallback
+ * here would silently repeat the kind back in the depositor's own
+ * spelling the moment a future scheme deposits a real custom name -- see
+ * `correctionSchemeFormat.ts` for why this app never titles a public page
+ * from `name` at all). Software comes from `scheme.software_release`
+ * (#439, deployed) via the shared `softwareLabel` formatter -- never a
+ * link, `software_release_ref` is measured empty on every live row (see
+ * `CorrectionSchemePage.tsx`'s own comment on the same field for why).
+ *
+ * **A scheme with no recorded software** (reachable: the backfill leaves
+ * `software_id` null wherever a level of theory resolves to more than one
+ * program) falls back to the text "software not recorded", styled through
+ * `.value-pill--muted` rather than the plain `.value-pill` a real name
+ * gets -- the same present/absent pill-tone split
+ * `EvidenceChecklist.tsx`'s own `RowValue` already uses. Chosen over
+ * falling back to `name` (ruled off public pages entirely) and over
+ * falling back to silence (an unlabelled box reads as a bug, not an
+ * absence) -- the muted pill reads as "checked, not found" rather than as
+ * a second real identity sitting beside the real one.
+ *
+ * **Collapsed by default, per the same owner ask that shaped
+ * `EvidenceChecklist.tsx`** ("Evidence blocks should be expandable
+ * rather"). A closed box that says nothing but its title answers nothing
+ * -- the exact defect that component's own docstring documents fixing
+ * elsewhere on this app ("Joined-record review counts" collapsing to "6
+ * rows" while the real total was 4) -- so the collapsed summary also
+ * carries a true roll-up, `schemeParameterRollup(evidence_summary)`
+ * ("8 parameters" / "45 parameters" on the live archive), computed from
+ * the SAME counts the open parameter table itself renders from.
  */
 
 // Every scheme kind this archive's vocabulary recognises (`EnergyCorrectionSchemeKind`,
@@ -232,33 +267,48 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                 Correction schemes
             </SectionHeading>
             {available && rows.length > 0 ? (
-                rows.map((scheme) => (
-                    <div key={scheme.energy_correction_scheme.energy_correction_scheme_ref} className="correction-scheme-block">
-                        <h3 className="t-heading-2">
-                            {schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}
-                        </h3>
-                        <dl className="kv-list">
-                            <div>
-                                <dt>Scheme ref</dt>
-                                <dd><Link to={correctionSchemePath(scheme.energy_correction_scheme.energy_correction_scheme_ref)}><code className="data">{scheme.energy_correction_scheme.energy_correction_scheme_ref}</code></Link></dd>
-                            </div>
-                            {scheme.energy_correction_scheme.note && (
-                                <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
+                rows.map((scheme) => {
+                    const ref = scheme.energy_correction_scheme.energy_correction_scheme_ref
+                    const software = softwareLabel(scheme.software_release)
+                    return (
+                        <Disclosure
+                            key={ref}
+                            id={`scheme-${ref}`}
+                            className="correction-scheme-block"
+                            defaultOpen={false}
+                            summary={(
+                                <>
+                                    <span className="t-heading-2">{schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}</span>
+                                    {software
+                                        ? <span className="value-pill">{software}</span>
+                                        : <span className="value-pill value-pill--muted">software not recorded</span>}
+                                    <span className="correction-scheme-summary-rollup">{schemeParameterRollup(scheme.evidence_summary)}</span>
+                                </>
                             )}
-                            <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
-                        </dl>
-                        <CorrectionSchemeTable
-                            corrections={scheme.corrections ?? []}
-                            units={scheme.energy_correction_scheme.units}
-                        />
-                        <p className="note">
-                            The full recipe and its application list live on this scheme's own page —{" "}
-                            <Link to={correctionSchemePath(scheme.energy_correction_scheme.energy_correction_scheme_ref)}>
-                                open {scheme.energy_correction_scheme.energy_correction_scheme_ref}
-                            </Link>.
-                        </p>
-                    </div>
-                ))
+                        >
+                            <dl className="kv-list">
+                                <div>
+                                    <dt>Scheme ref</dt>
+                                    <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
+                                </div>
+                                {scheme.energy_correction_scheme.note && (
+                                    <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
+                                )}
+                                <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
+                            </dl>
+                            <CorrectionSchemeTable
+                                corrections={scheme.corrections ?? []}
+                                units={scheme.energy_correction_scheme.units}
+                            />
+                            <p className="note">
+                                The full recipe and its application list live on this scheme's own page —{" "}
+                                <Link to={correctionSchemePath(ref)}>
+                                    open {ref}
+                                </Link>.
+                            </p>
+                        </Disclosure>
+                    )
+                })
             ) : (
                 <div className="correction-scheme-absence-list">
                     {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => (

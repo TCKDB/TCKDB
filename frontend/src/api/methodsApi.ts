@@ -108,6 +108,23 @@ const ecsAvailableSectionsSchema = z.object({
 export const energyCorrectionSchemeRecordSchema = z.object({
     energy_correction_scheme: ecsCoreSchema,
     level_of_theory: lotSummarySchema.nullable().optional(),
+    // Added by #439 (deployed): backfilled from each scheme's own level of
+    // theory (both live rows: Gaussian). `software_release_ref` is
+    // measured live as `""` -- the row stores `software_id` (a vendor),
+    // not a release id, so the backend synthesizes this summary shape
+    // with no real release to link (see
+    // `backend/app/services/scientific_read/energy_correction_schemes.py`
+    // `_build_software_release_summary`, which mirrors
+    // `FrequencyScaleFactor`'s identical limitation). Real backend
+    // behaviour, not a serialisation artefact -- never build a link from
+    // this ref; render through `softwareLabel` (name/version only) like
+    // every other `software_release` consumer in this app already does.
+    software_release: softwareReleaseSchema.nullable().optional(),
+    // Stayed null on both live rows -- 10 of 416 calculations recorded a
+    // workflow-tool release and no single one could be derived
+    // unambiguously, so the backfill deliberately left this absent rather
+    // than guess.
+    workflow_tool_release: workflowToolReleaseSchema.nullable().optional(),
     literature: literatureSchema.nullable().optional(),
     evidence_summary: ecsEvidenceSummarySchema,
     available_sections: ecsAvailableSectionsSchema,
