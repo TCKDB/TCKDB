@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Network entry mock — net_o6bt63kjeyvhvxx26w6kdi433a</title>
+<link rel="stylesheet" href="../../../frontend/src/theme.css">
+<link rel="stylesheet" href="../../../frontend/src/design-system.css">
+<link rel="stylesheet" href="../../../frontend/src/index.css">
+<link rel="stylesheet" href="../../../frontend/src/page-shell.css">
+<link rel="stylesheet" href="../../../frontend/src/conformer-group.css">
+<link rel="stylesheet" href="../../../frontend/src/record-identity-header.css">
+<link rel="stylesheet" href="../../../frontend/src/evidence-checklist.css">
+<link rel="stylesheet" href="../../../frontend/src/refs-disclosure.css">
+<link rel="stylesheet" href="../../../frontend/src/thermo-cp-chart.css">
+<style>
+/*
+ * PR 0 static mock — the ONLY mock-local styling on this page, following
+ * the reaction-entry-page mock's own precedent (frontend/mocks/reaction-
+ * entry.html, PR 0 of docs/plans/reaction-entry-page.md, since deleted by
+ * that plan's PR 2): every other rule above is a real app stylesheet.
+ * `network-diagram.css` does not exist yet — it ships in PR 3 (§5 of this
+ * plan) — so the diagram's own layout/shape/colour rules live here,
+ * scoped under `.net-*` class names chosen so the eventual real component
+ * can adopt them with a rename, not a redesign. Deleted whole once PR 3
+ * lands its own stylesheet, same as the reaction-entry mock's own
+ * `.arr-chart-*` block was.
+ */
+
+/* ---- Network diagram: layout shell (mirrors .dep-graph / .arr-chart-panel) ---- */
+.network-diagram { margin: var(--s-4) 0 0; overflow-x: auto; }
+.network-diagram-svg { display: block; width: 1000px; min-width: 1000px; max-width: 1000px; height: auto; }
+
+/* ---- Nodes: kind is a SHAPE, never inferred from label text (plan §2.2) ---- */
+.net-node-shape { stroke-width: 2.5; }
+.net-node-well { fill: var(--accent-50); stroke: var(--accent); }
+.net-node-bimolecular { fill: var(--surface); stroke: var(--muted); stroke-width: 2.25; }
+.net-node-link:hover .net-node-well,
+.net-node-link:focus-visible .net-node-well { stroke: var(--accent-700); }
+.net-node-link:hover .net-node-bimolecular,
+.net-node-link:focus-visible .net-node-bimolecular { stroke: var(--accent); }
+.net-node-link:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
+
+/* Label carries a surface-coloured halo (paint-order trick) so the many
+   chords passing near a node's outward label never render as a line
+   drawn straight through the letters. `composition.state_label` only —
+   never `channel_key` (plan §1/§5's channel-identity finding). */
+.net-node-label {
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+    fill: var(--ink);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+
+/* ---- Edges: colour = channel.kind, dash = has_kinetics (two independent
+   encodings, plan §2.2/§5) ---- */
+.net-edge { stroke-width: 1.6; opacity: .68; fill: none; }
+.net-edge-isomerization { stroke: var(--chart-series-1); stroke-width: 3; opacity: .95; }
+.net-edge-association { stroke: var(--chart-series-3); }
+.net-edge-exchange { stroke: var(--chart-series-2); }
+.net-edge-link:hover .net-edge,
+.net-edge-link:focus-visible .net-edge { opacity: 1; stroke-width: 3; }
+.net-edge-link:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 1px; }
+
+/* ---- Legend ---- */
+.net-legend-icon { flex: none; display: block; }
+.net-legend-line { flex: none; display: inline-block; width: 1.4rem; height: 2px; }
+
+/* ---- Accessible-table participant lists ---- */
+.net-participant-list { margin: 0; padding: 0; list-style: none; display: grid; gap: .3rem; }
+
+/* ---- Degrade-to-table illustration (clearly NOT real network data) ---- */
+.net-illustrative-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 22rem) 1fr;
+    gap: var(--s-5);
+    align-items: center;
+}
+@media (max-width: 62rem) { .net-illustrative-panel { grid-template-columns: 1fr; } }
+.net-illustrative-svg { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: .4rem; background: var(--surface-sunken); }
+.net-illustrative-edge { stroke: var(--muted); stroke-width: 1; opacity: .55; }
+.net-illustrative-node { fill: var(--muted-2); }
+
+/* ---- k(T,P) chart placeholder frame — shows WHERE the PR 4 chart goes,
+   never fake data inside it (plan §3.4/§5). ---- */
+.net-ktp-placeholder {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    column-gap: .3rem;
+    margin: var(--s-4) 0;
+}
+.net-ktp-placeholder-frame {
+    grid-column: 2; grid-row: 1;
+    height: 320px;
+    border: 1.5px dashed var(--line-2);
+    border-radius: .4rem;
+    background: var(--surface-sunken);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--s-5);
+}
+.net-ktp-placeholder-text { max-width: 28rem; color: var(--muted); font: var(--type-note-font); }
+.net-ktp-axis-title--y {
+    grid-column: 1; grid-row: 1;
+    align-self: center; justify-self: center;
+    margin: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+}
+.net-ktp-placeholder-select {
+    margin-top: var(--s-3);
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: .3rem;
+    background: var(--surface);
+    color: var(--muted);
+    font: var(--type-ui-font);
+}
+</style>
+</head>
+<body>
+<div class="archive-shell">
+<a class="skip-link" href="#main-content">Skip to content</a>
+<header class="utility-bar">
+    <a class="brand" href="#" aria-label="TCKDB home"><span>T</span> TCKDB</a>
+    <div class="utility-bar-end">
+        <nav aria-label="Primary navigation">
+            <a href="#">Species</a>
+            <a href="#">Reactions</a>
+            <a href="#" aria-current="page">Networks</a>
+            <a href="#">Methods</a>
+        </nav>
+        <div class="theme-toggle" role="radiogroup" aria-label="Theme">
+            <button type="button" role="radio" aria-checked="true" class="theme-toggle-option" data-active="true">Light</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">Dark</button>
+            <button type="button" role="radio" aria-checked="false" class="theme-toggle-option" data-active="false">System</button>
+        </div>
+    </div>
+</header>
+<main id="main-content">
+<section class="conformer-page tse-page">
+    <nav class="record-breadcrumbs" aria-label="Breadcrumb">
+        <a href="#">TCKDB</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">Pressure-dependent network</span>
+    </nav>
+    <div class="page-shell-layout">
+    <div class="page-shell-content">
+    <div class="page-shell-identity">
+    <header class="basin-header">
+        <div class="record-identity-header">
+            <div class="record-identity-kicker-row">
+                <span class="t-kicker record-identity-kicker">Pressure-dependent network · deposited scientific record</span>
+                <span class="value-pill value-pill--muted">not reviewed</span>
+            </div>
+            <h1 class="t-display-2 record-identity-title">hydrazine</h1>
+            <div class="record-identity-known">
+                <dl class="kv-list record-identity-facts">
+                    <div>
+                        <dt>Network ref</dt>
+                        <dd class="record-identity-fact-copyable">
+                            <code class="data">net_o6bt63kjeyvhvxx26w6kdi433a</code>
+                            <button type="button" class="copy-button" aria-label="Copy Network ref value">Copy</button>
+                        </dd>
+                    </div>
+                    <div><dt>Solve temperature range</dt><dd><code class="data">300–2000 K</code></dd></div>
+                    <div><dt>Solve pressure range</dt><dd><code class="data">0.01–100 bar</code></dd></div>
+                    <div><dt>ME method</dt><dd>modified strong collision</dd></div>
+                    <div><dt>Interpolation model</dt><dd>chebyshev</dd></div>
+                    <div><dt>Software (solve)</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                    <div><dt>Workflow tool</dt><dd>Arkane 3.2.0</dd></div>
+                    <div><dt>Literature</dt><dd><span class="record-identity-absent-inline">not recorded</span></dd></div>
+                </dl>
+            </div>
+        </div>
+        <details class="disclosure">
+            <summary>Description (depositor-authored)</summary>
+            <div class="disclosure-body">
+                <p class="t-body" style="margin:0">
+                    Hydrazine pressure-dependent network, dual-form k(T,P). Chebyshev fits from the Arkane run
+                    Final_MRCI_PDep; PLOG fits from the sister run MRCI_davidson_Plog, which is the same network
+                    re-fitted with interpolationModel=PDepArrhenius. The two runs label isodiazene differently
+                    (H2NN vs NH2N) while pointing at the same Data/NH2N.py and SMILES [N-]=[NH2+]; NH2N was
+                    normalised to H2NN before the dual-form build so the 21 channels align. Built with
+                    scripts.pdep_ingestion.builder.build_dual_form_request, whose topology check requires both
+                    runs to yield an identical (source, sink) channel set.
+                </p>
+                <p class="note" style="margin:.9rem 0 0">
+                    Per the plan's §7 ruling, <code>network.name</code>/<code>.description</code> are displayed
+                    as-is — depositor prose, not curated fact. This disclosure is that labelling: the summary
+                    names it as deposited, the title above states only the name itself.
+                </p>
+            </div>
+        </details>
+        <div class="refs-disclosure">
+        <details class="disclosure refs-disclosure">
+            <summary>References <span class="disclosure-count">(2)</span></summary>
+            <div class="disclosure-body">
+                <div class="ref-item">
+                    <span class="ref-item-label">Network solve</span>
+                    <span class="ref-item-value">nsolve_sfskjknpl7an4uhorhcgpitiv4</span>
+                    <button type="button" class="copy-button" aria-label="Copy Network solve reference">Copy</button>
+                </div>
+                <div class="ref-item">
+                    <span class="ref-item-label">Workflow tool release</span>
+                    <span class="ref-item-value">wfr_t2hh3acu6cwwqrgauqo5rqlyxy</span>
+                    <button type="button" class="copy-button" aria-label="Copy Workflow tool release reference">Copy</button>
+                </div>
+            </div>
+        </details>
+        </div>
+    </header>
+    </div>
+
+    <section class="ledger-section" aria-labelledby="evidence-heading">
+        <p class="t-kicker section-kicker">What this network carries</p>
+        <h2 class="t-heading-1" id="evidence-heading">Evidence on this network</h2>
+        <div class="card card--derived coverage-card" data-component="evidence-checklist">
+            <span class="t-label">Evidence on this network</span>
+            <span class="coverage-checklist-summary">9 present, 1 absent</span>
+            <dl class="kv-list coverage-checklist">
+                <div><dt>Participant species</dt><dd><span class="value-pill">10 deposited</span></dd></div>
+                <div><dt>States</dt><dd><a class="value-pill" href="#diagram-heading">7 deposited</a></dd></div>
+                <div><dt>Channels</dt><dd><a class="value-pill" href="#diagram-heading">21 deposited</a></dd></div>
+                <div><dt>Elementary reactions (microreactions)</dt><dd><a class="value-pill" href="#reactions-heading">6 deposited</a></dd></div>
+                <div><dt>Network solves</dt><dd><span class="value-pill">1 deposited</span></dd></div>
+                <div><dt>Kinetics fits</dt><dd><a class="value-pill" href="#kinetics-heading">42 deposited</a></dd></div>
+                <div><dt>Source calculations</dt><dd><span class="value-pill">25 deposited</span></dd></div>
+                <div><dt>Chebyshev model</dt><dd><span class="value-pill">present</span></dd></div>
+                <div><dt>PLOG model</dt><dd><span class="value-pill">present</span></dd></div>
+                <div><dt>Point kinetics (single-pressure Arrhenius)</dt><dd><span class="value-pill value-pill--muted">none deposited</span></dd></div>
+            </dl>
+            <p class="note">Counts are of served arrays only, from a live fetch of <code>GET /scientific/networks/net_o6bt63kjeyvhvxx26w6kdi433a?include=states,channels,kinetics</code>. "None deposited" describes the archive, not the chemistry.</p>
+        </div>
+
+        <div class="card" style="margin-top:1.25rem" id="energy-coverage">
+            <span class="t-label">Energy coverage</span>
+            <p class="t-body" style="margin:.6rem 0 0">
+                None of the 9 species entries this network's states are built from carry a deposited thermo
+                (H298) record — measured directly against <code>GET /scientific/species-entries/{ref}/thermo</code>
+                for all 9. A properly-corrected, thermal free-energy surface needs that, so it cannot be drawn
+                from species-level data today, and the diagram below has no energy axis.
+            </p>
+            <p class="t-body" style="margin:.6rem 0 0">
+                That is a different claim from "no energies are deposited on this network" — this network's own
+                solve (<code class="data">nsolve_sfskjknpl7an4uhorhcgpitiv4</code>) separately carries a relative
+                <em>electronic-only</em> energy, referenced to its own lowest state, for all 7 states, and a
+                forward/reverse electronic barrier for 4 of the 21 channels. That is real, deposited data — found
+                against <code>GET /scientific/network-solves/{ref}?include=state_energies,channel_barriers</code>,
+                an endpoint outside this plan's original §1 measurement (see this mock's own README for why that
+                matters). It is an internal modified-strong-collision solver input, not thermo-grade H298, and
+                mixing the two conventions on one axis would misrepresent the surface — so it is shown below as
+                its own disclosure, not folded into a PES.
+            </p>
+            <details class="disclosure disclosure--inset" style="margin-top:.9rem">
+                <summary>Solve-internal state &amp; channel energies (electronic-only, referenced to the lowest state)</summary>
+                <div class="disclosure-body" style="display:block">
+                    <p class="t-heading-2" style="font:var(--type-heading-2-font);margin:0 0 .5rem">States — 7 of 7</p>
+                    <div class="table-scroll">
+                    <table class="data-table" aria-label="Solve-internal state energies">
+                        <thead><tr><th scope="col">State</th><th scope="col">Relative energy</th><th scope="col">Source calculation</th></tr></thead>
+                        <tbody>
+                            <tr><td data-label="State"><a href="#state-row-n1">NN</a></td><td class="num" data-label="Relative energy">0.000 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_mdpih3yotzrbs2oq5yucucs3gi</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n7">N=N (E) + [H][H]</a></td><td class="num" data-label="Relative energy">123.729 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_askuywryvfa2yc5fww25jhaavq</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td><td class="num" data-label="Relative energy">146.744 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_askuywryvfa2yc5fww25jhaavq</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n2">[NH-][NH3+]</a></td><td class="num" data-label="Relative energy">180.068 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_nfyn7z7uij3wrn7dkvslcjdoou</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td><td class="num" data-label="Relative energy">233.338 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_askuywryvfa2yc5fww25jhaavq</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n6">2 [NH2]</a></td><td class="num" data-label="Relative energy">281.842 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_s2xm6wz5s2xtwfrja25shet32m</code></td></tr>
+                            <tr><td data-label="State"><a href="#state-row-n5">[H] + [NH]N</a></td><td class="num" data-label="Relative energy">380.921 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_epip6xgtia6u5wf3ez4gdrc2oe</code></td></tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <p class="t-heading-2" style="font:var(--type-heading-2-font);margin:1.1rem 0 .5rem">Channel barriers — 4 of 21</p>
+                    <div class="table-scroll">
+                    <table class="data-table" aria-label="Solve-internal channel barriers">
+                        <thead><tr><th scope="col">Channel</th><th scope="col">Forward barrier</th><th scope="col">Reverse barrier</th><th scope="col">Source calculation</th></tr></thead>
+                        <tbody>
+                            <tr><td data-label="Channel"><a href="#channel-row-channel_1">channel_1</a></td><td class="num" data-label="Forward barrier">94.633 kJ/mol</td><td class="num" data-label="Reverse barrier">274.701 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_pfq7icpszyuzxbgqgqh4ewzbeq</code></td></tr>
+                            <tr><td data-label="Channel"><a href="#channel-row-channel_2">channel_2</a></td><td class="num" data-label="Forward barrier">267.671 kJ/mol</td><td class="num" data-label="Reverse barrier">414.415 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_2jmtlcqgbva2ejwi3ozzhgj7ju</code></td></tr>
+                            <tr><td data-label="Channel"><a href="#channel-row-channel_3">channel_3</a></td><td class="num" data-label="Forward barrier">113.814 kJ/mol</td><td class="num" data-label="Reverse barrier">347.152 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_lzaxvbprjolmofczjowt2q6t7i</code></td></tr>
+                            <tr><td data-label="Channel"><a href="#channel-row-channel_11">channel_11</a></td><td class="num" data-label="Forward barrier">226.856 kJ/mol</td><td class="num" data-label="Reverse barrier">170.517 kJ/mol</td><td data-label="Source calculation"><code class="data">calc_xkjj35rb3l55224x3h5jkzja3u</code></td></tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <p class="note" style="margin-top:.9rem">
+                        The 4 covered channels are exactly the 4 with a saddle-point microreaction on file
+                        (see Reactions below) — the solve only carries a barrier where a transition state exists
+                        to compute one from; the 2 barrierless associations and the 15 well-skipping channels
+                        have none. Even by this internal convention, coverage is 4 of 21 edges, not 21 — one more
+                        reason the diagram stays topology-only for now.
+                    </p>
+                </div>
+            </details>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="diagram-heading">
+        <p class="t-kicker section-kicker">States as nodes, channels as edges</p>
+        <h2 class="t-heading-1" id="diagram-heading">Network diagram</h2>
+        <p class="t-body section-intro">
+            7 states, 21 channels — a complete graph on this network (every pair of states happens to have exactly
+            one channel; the schema does not guarantee that in general, see the note below the channel table). No
+            energy axis: see <a href="#energy-coverage">Energy coverage</a> above for why. This is topology, not a
+            potential-energy surface.
+        </p>
+        <ul class="cp-chart-legend" aria-label="Diagram encoding">
+            <li class="cp-chart-legend-item">
+                <svg class="net-legend-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="var(--accent-50)" stroke="var(--accent)" stroke-width="2"></circle></svg>
+                <span>Well (1 state, 1 potential minimum)</span>
+            </li>
+            <li class="cp-chart-legend-item">
+                <svg class="net-legend-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><polygon points="15,8 11.5,13.7 4.5,13.7 1,8 4.5,2.3 11.5,2.3" fill="var(--surface)" stroke="var(--muted)" stroke-width="2"></polygon></svg>
+                <span>Bimolecular (2+ species, incl. "2 × the same species")</span>
+            </li>
+            <li class="cp-chart-legend-item">
+                <span class="net-legend-line" style="background:var(--chart-series-1)"></span>
+                <span>isomerization (1 channel here)</span>
+            </li>
+            <li class="cp-chart-legend-item">
+                <span class="net-legend-line" style="background:var(--chart-series-3)"></span>
+                <span>association (10 channels here)</span>
+            </li>
+            <li class="cp-chart-legend-item">
+                <span class="net-legend-line" style="background:var(--chart-series-2)"></span>
+                <span>exchange (10 channels here)</span>
+            </li>
+            <li class="cp-chart-legend-item">
+                <svg class="net-legend-icon" width="22" height="10" viewBox="0 0 22 10" aria-hidden="true"><line x1="1" y1="5" x2="21" y2="5" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 3"></line></svg>
+                <span>no kinetics fit deposited (0 of 21 channels here — every channel on this network has one; shown for the encoding, not because it appears below)</span>
+            </li>
+        </ul>
+        <div class="network-diagram">
+        <svg class="network-diagram-svg" viewBox="0 0 1000 720" role="img" aria-label="Network diagram: 7 states, 21 channels, hydrazine network net_o6bt63kjeyvhvxx26w6kdi433a">
+            <g aria-hidden="true">
+                <!-- edges (behind nodes) -->
+                <a href="#channel-row-channel_1" class="net-edge-link" aria-label="Channel channel_1, isomerization, [NH-][NH3+] to NN"><line x1="620.85" y1="233.01" x2="523.34" y2="186.05" class="net-edge net-edge-isomerization" data-channel-key="channel_1"></line></a>
+                <a href="#channel-row-channel_2" class="net-edge-link" aria-label="Channel channel_2, association, N=N (Z) + [H][H] to NN"><line x1="671.67" y1="397.80" x2="513.07" y2="198.93" class="net-edge net-edge-association" data-channel-key="channel_2"></line></a>
+                <a href="#channel-row-channel_3" class="net-edge-link" aria-label="Channel channel_3, association, [H][H] + [N-]=[NH2+] to NN"><line x1="572.88" y1="533.13" x2="498.23" y2="206.07" class="net-edge net-edge-association" data-channel-key="channel_3"></line></a>
+                <a href="#channel-row-channel_4" class="net-edge-link" aria-label="Channel channel_4, association, [H] + [NH]N to NN"><line x1="407.12" y1="533.13" x2="481.77" y2="206.07" class="net-edge net-edge-association" data-channel-key="channel_4"></line></a>
+                <a href="#channel-row-channel_5" class="net-edge-link" aria-label="Channel channel_5, association, 2 [NH2] to NN"><line x1="308.33" y1="397.80" x2="466.93" y2="198.93" class="net-edge net-edge-association" data-channel-key="channel_5"></line></a>
+                <a href="#channel-row-channel_6" class="net-edge-link" aria-label="Channel channel_6, association, N=N (E) + [H][H] to NN"><line x1="359.15" y1="233.01" x2="456.66" y2="186.05" class="net-edge net-edge-association" data-channel-key="channel_6"></line></a>
+                <a href="#channel-row-channel_7" class="net-edge-link" aria-label="Channel channel_7, association, N=N (Z) + [H][H] to [NH-][NH3+]"><line x1="686.50" y1="390.66" x2="662.42" y2="285.14" class="net-edge net-edge-association" data-channel-key="channel_7"></line></a>
+                <a href="#channel-row-channel_8" class="net-edge-link" aria-label="Channel channel_8, association, [H][H] + [N-]=[NH2+] to [NH-][NH3+]"><line x1="589.35" y1="533.13" x2="645.95" y2="285.14" class="net-edge net-edge-association" data-channel-key="channel_8"></line></a>
+                <a href="#channel-row-channel_9" class="net-edge-link" aria-label="Channel channel_9, association, [H] + [NH]N to [NH-][NH3+]"><line x1="421.95" y1="540.28" x2="631.12" y2="277.99" class="net-edge net-edge-association" data-channel-key="channel_9"></line></a>
+                <a href="#channel-row-channel_10" class="net-edge-link" aria-label="Channel channel_10, association, 2 [NH2] to [NH-][NH3+]"><line x1="318.60" y1="410.68" x2="620.85" y2="265.12" class="net-edge net-edge-association" data-channel-key="channel_10"></line></a>
+                <a href="#channel-row-channel_11" class="net-edge-link" aria-label="Channel channel_11, association, N=N (E) + [H][H] to [NH-][NH3+]"><line x1="362.82" y1="249.07" x2="617.18" y2="249.07" class="net-edge net-edge-association" data-channel-key="channel_11"></line></a>
+                <a href="#channel-row-channel_12" class="net-edge-link" aria-label="Channel channel_12, exchange, [H][H] + [N-]=[NH2+] to N=N (Z) + [H][H]"><line x1="604.18" y1="540.28" x2="671.67" y2="455.66" class="net-edge net-edge-exchange" data-channel-key="channel_12"></line></a>
+                <a href="#channel-row-channel_13" class="net-edge-link" aria-label="Channel channel_13, exchange, [H] + [NH]N to N=N (Z) + [H][H]"><line x1="432.22" y1="553.15" x2="661.40" y2="442.78" class="net-edge net-edge-exchange" data-channel-key="channel_13"></line></a>
+                <a href="#channel-row-channel_14" class="net-edge-link" aria-label="Channel channel_14, exchange, 2 [NH2] to N=N (Z) + [H][H]"><line x1="322.27" y1="426.73" x2="657.73" y2="426.73" class="net-edge net-edge-exchange" data-channel-key="channel_14"></line></a>
+                <a href="#channel-row-channel_15" class="net-edge-link" aria-label="Channel channel_15, exchange, N=N (E) + [H][H] to N=N (Z) + [H][H]"><line x1="359.15" y1="265.12" x2="661.40" y2="410.68" class="net-edge net-edge-exchange" data-channel-key="channel_15"></line></a>
+                <a href="#channel-row-channel_16" class="net-edge-link" aria-label="Channel channel_16, exchange, [H] + [NH]N to [H][H] + [N-]=[NH2+]"><line x1="435.88" y1="569.20" x2="544.12" y2="569.20" class="net-edge net-edge-exchange" data-channel-key="channel_16"></line></a>
+                <a href="#channel-row-channel_17" class="net-edge-link" aria-label="Channel channel_17, exchange, 2 [NH2] to [H][H] + [N-]=[NH2+]"><line x1="318.60" y1="442.78" x2="547.78" y2="553.15" class="net-edge net-edge-exchange" data-channel-key="channel_17"></line></a>
+                <a href="#channel-row-channel_18" class="net-edge-link" aria-label="Channel channel_18, exchange, N=N (E) + [H][H] to [H][H] + [N-]=[NH2+]"><line x1="348.88" y1="277.99" x2="558.05" y2="540.28" class="net-edge net-edge-exchange" data-channel-key="channel_18"></line></a>
+                <a href="#channel-row-channel_19" class="net-edge-link" aria-label="Channel channel_19, exchange, 2 [NH2] to [H] + [NH]N"><line x1="308.33" y1="455.66" x2="375.82" y2="540.28" class="net-edge net-edge-exchange" data-channel-key="channel_19"></line></a>
+                <a href="#channel-row-channel_20" class="net-edge-link" aria-label="Channel channel_20, exchange, N=N (E) + [H][H] to [H] + [NH]N"><line x1="334.05" y1="285.14" x2="390.65" y2="533.13" class="net-edge net-edge-exchange" data-channel-key="channel_20"></line></a>
+                <a href="#channel-row-channel_21" class="net-edge-link" aria-label="Channel channel_21, exchange, N=N (E) + [H][H] to 2 [NH2]"><line x1="317.58" y1="285.14" x2="293.50" y2="390.66" class="net-edge net-edge-exchange" data-channel-key="channel_21"></line></a>
+            </g>
+            <g>
+                <!-- nodes (front) -->
+                <a href="#state-row-n1" class="net-node-link" aria-label="State NN, well">
+                    <circle cx="490.00" cy="170.00" r="34" class="net-node-shape net-node-well"></circle>
+                    <text x="490.00" y="110.00" text-anchor="middle" class="net-node-label">NN</text>
+                </a>
+                <a href="#state-row-n2" class="net-node-link" aria-label="State [NH-][NH3+], well">
+                    <circle cx="654.18" cy="249.07" r="34" class="net-node-shape net-node-well"></circle>
+                    <text x="697.97" y="210.15" text-anchor="start" class="net-node-label">[NH-][NH3+]</text>
+                </a>
+                <a href="#state-row-n3" class="net-node-link" aria-label="State N=N (Z) + [H][H], bimolecular">
+                    <polygon points="728.73,426.73 711.73,456.17 677.73,456.17 660.73,426.73 677.73,397.28 711.73,397.28" class="net-node-shape net-node-bimolecular"></polygon>
+                    <text x="749.33" y="444.19" text-anchor="start" class="net-node-label">N=N (Z) + [H][H]</text>
+                </a>
+                <a href="#state-row-n4" class="net-node-link" aria-label="State [H][H] + [N-]=[NH2+], bimolecular">
+                    <polygon points="615.12,569.20 598.12,598.65 564.12,598.65 547.12,569.20 564.12,539.76 598.12,539.76" class="net-node-shape net-node-bimolecular"></polygon>
+                    <text x="605.41" y="635.66" text-anchor="start" class="net-node-label">[H][H] + [N-]=[NH2+]</text>
+                </a>
+                <a href="#state-row-n5" class="net-node-link" aria-label="State [H] + [NH]N, bimolecular">
+                    <polygon points="432.88,569.20 415.88,598.65 381.88,598.65 364.88,569.20 381.88,539.76 415.88,539.76" class="net-node-shape net-node-bimolecular"></polygon>
+                    <text x="374.59" y="635.66" text-anchor="end" class="net-node-label">[H] + [NH]N</text>
+                </a>
+                <a href="#state-row-n6" class="net-node-link" aria-label="State 2 [NH2], bimolecular">
+                    <polygon points="319.27,426.73 302.27,456.17 268.27,456.17 251.27,426.73 268.27,397.28 302.27,397.28" class="net-node-shape net-node-bimolecular"></polygon>
+                    <text x="230.67" y="444.19" text-anchor="end" class="net-node-label">2 [NH2]</text>
+                </a>
+                <a href="#state-row-n7" class="net-node-link" aria-label="State N=N (E) + [H][H], bimolecular">
+                    <polygon points="359.82,249.07 342.82,278.51 308.82,278.51 291.82,249.07 308.82,219.62 342.82,219.62" class="net-node-shape net-node-bimolecular"></polygon>
+                    <text x="282.03" y="210.15" text-anchor="end" class="net-node-label">N=N (E) + [H][H]</text>
+                </a>
+            </g>
+        </svg>
+        </div>
+        <p class="note">
+            Layout: nodes placed on a circle for this hand-built mock, in the order the API served <code>states[]</code>
+            — an easy layout to hand-author precisely, not a claim about the real algorithm. PR 3's actual diagram
+            computes a force-directed layout client-side from the same <code>states[]</code>/<code>channels[]</code>
+            arrays (plan §5); node/edge <em>positions</em> here are illustrative, the node/edge <em>encoding</em>
+            (shape, colour, dash) is the real design under review. Click a node or edge (or tab to it) to jump to
+            its row in the table below — the same pattern <code>CalculationDependencyGraph</code> already uses.
+        </p>
+
+        <details class="disclosure" open style="margin-top:1.5rem">
+            <summary>Table equivalent — states <span class="disclosure-count">(7)</span></summary>
+            <div class="disclosure-body" style="display:block">
+                <div class="table-scroll">
+                <table class="data-table" aria-label="States in this network">
+                    <thead><tr><th scope="col">State</th><th scope="col">Kind</th><th scope="col">Participants</th><th scope="col">Composition hash</th></tr></thead>
+                    <tbody>
+<tr id="state-row-n1">
+    <td data-label="State"><code class="data">n1</code> · NN</td>
+    <td data-label="Kind"><span class="value-pill">well</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">NN</code></a> — <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">5cc6a8a697bb6f2fcb468ef02cf2a76e9ad3f5da223682f1ca29288836ee66b3</code></td>
+</tr>
+<tr id="state-row-n2">
+    <td data-label="State"><code class="data">n2</code> · [NH-][NH3+]</td>
+    <td data-label="Kind"><span class="value-pill">well</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[NH-][NH3+]</code></a> — <code class="data">spe_zsvxdy7fbktworbhss2da62doi</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">6a3266ae70e7604bafe1ced885beda0fb1265d229529f3457594fb0d0a473873</code></td>
+</tr>
+<tr id="state-row-n3">
+    <td data-label="State"><code class="data">n3</code> · N=N (Z) + [H][H]</td>
+    <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">N=N</code></a> (Z) — <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code></li><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">81a48bd8aada91545d3b75d2e0f42c6537f49c433ec0918dc36c8e81c01abc89</code></td>
+</tr>
+<tr id="state-row-n4">
+    <td data-label="State"><code class="data">n4</code> · [H][H] + [N-]=[NH2+]</td>
+    <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li><li><a href="#"><code class="data">[N-]=[NH2+]</code></a> — <code class="data">spe_fvlbwfuoauoeknq6l5esaozqai</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">9304efc09ccfd37847d2dd50d7551ff9355697f34431eef61e352c01bb652ea2</code></td>
+</tr>
+<tr id="state-row-n5">
+    <td data-label="State"><code class="data">n5</code> · [H] + [NH]N</td>
+    <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[H]</code></a> — <code class="data">spe_knzmwhplnwnpodfp6frphrl7ei</code></li><li><a href="#"><code class="data">[NH]N</code></a> — <code class="data">spe_c4ty3ixcmyuljgqfs73pdecmte</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">95e3e725ec705e320f496bddb6bca429fdd850b1a97ac1df080ba13aa222149c</code></td>
+</tr>
+<tr id="state-row-n6">
+    <td data-label="State"><code class="data">n6</code> · 2 [NH2]</td>
+    <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li>2× <a href="#"><code class="data">[NH2]</code></a> — <code class="data">spe_gzk56q4jegyyg7ylbcdqb2xvka</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">d77b91b236b374758c280099553ac7d0ab25c84dcee6969054c5279d0e83896b</code></td>
+</tr>
+<tr id="state-row-n7">
+    <td data-label="State"><code class="data">n7</code> · N=N (E) + [H][H]</td>
+    <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
+    <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">N=N</code></a> (E) — <code class="data">spe_qefrbgmpyryylyocpghhc2ikki</code></li><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li></ul></td>
+    <td data-label="Composition hash"><code class="data">32f50400f89f1533ba4a7fb6b5d1a988e2bc32ed20163e815e4f81ee9f8f9d5d</code></td>
+</tr>
+                    </tbody>
+                </table>
+                </div>
+                <p class="note">
+                    "2 [NH2]" (n6) is <code>kind: bimolecular</code> despite having ONE distinct participant species
+                    — the schema's own kind field, not the participant COUNT, is what tells a well from a
+                    bimolecular state (a dimer of the same radical is still two separate molecules colliding).
+                    Composition hash is 64 hex characters, measured — the plan's own §1 said 65; corrected here
+                    against the live payload.
+                </p>
+            </div>
+        </details>
+
+        <details class="disclosure" open style="margin-top:1rem">
+            <summary>Table equivalent — channels <span class="disclosure-count">(21)</span></summary>
+            <div class="disclosure-body" style="display:block">
+                <div class="table-scroll">
+                <table class="data-table" aria-label="Channels in this network">
+                    <thead><tr><th scope="col">Channel</th><th scope="col">Kind</th><th scope="col">Mechanism</th><th scope="col">Source state</th><th scope="col">Sink state</th><th scope="col">Kinetics</th><th scope="col">Microreaction</th></tr></thead>
+                    <tbody>
+<tr id="channel-row-channel_1">
+    <td data-label="Channel"><code class="data">channel_1</code></td>
+    <td data-label="Kind"><span class="value-pill">isomerization</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_5yjt23ioefahk5wxmo5qjbxcza"><code class="data">rxe_5yjt23ioefahk5wxmo5qjbxcza</code></a><div class="note">TS <code class="data">tse_pfcm4ej4mx2zkakxcwqqiwxzle</code> · saddle point</div></td>
+</tr>
+<tr id="channel-row-channel_2">
+    <td data-label="Channel"><code class="data">channel_2</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_tku6xu2lt3girf2rsiwl5uds4e"><code class="data">rxe_tku6xu2lt3girf2rsiwl5uds4e</code></a><div class="note">TS <code class="data">tse_iqutn7tzf3rbgv6j67g7yt7l2u</code> · saddle point</div></td>
+</tr>
+<tr id="channel-row-channel_3">
+    <td data-label="Channel"><code class="data">channel_3</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_gw4unjmagt7lzc6dmpjfm5t6xu"><code class="data">rxe_gw4unjmagt7lzc6dmpjfm5t6xu</code></a><div class="note">TS <code class="data">tse_s5lfvm2a3tvftb7hjqbkinibwq</code> · saddle point</div></td>
+</tr>
+<tr id="channel-row-channel_4">
+    <td data-label="Channel"><code class="data">channel_4</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_h3z3f7tjfsj3gbvvh7lmmpikx4"><code class="data">rxe_h3z3f7tjfsj3gbvvh7lmmpikx4</code></a><div class="note">no transition state · barrierless</div></td>
+</tr>
+<tr id="channel-row-channel_5">
+    <td data-label="Channel"><code class="data">channel_5</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_fe7of3yivmx4fks3ozh2777nnm"><code class="data">rxe_fe7of3yivmx4fks3ozh2777nnm</code></a><div class="note">no transition state · barrierless</div></td>
+</tr>
+<tr id="channel-row-channel_6">
+    <td data-label="Channel"><code class="data">channel_6</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n1">NN</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_7">
+    <td data-label="Channel"><code class="data">channel_7</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_8">
+    <td data-label="Channel"><code class="data">channel_8</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_9">
+    <td data-label="Channel"><code class="data">channel_9</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Sink state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_10">
+    <td data-label="Channel"><code class="data">channel_10</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_11">
+    <td data-label="Channel"><code class="data">channel_11</code></td>
+    <td data-label="Kind"><span class="value-pill">association</span></td>
+    <td data-label="Mechanism">elementary</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n2">[NH-][NH3+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><a href="#reaction-row-rxe_giy6dryz7zy6mh466ed2bgj6iq"><code class="data">rxe_giy6dryz7zy6mh466ed2bgj6iq</code></a><div class="note">TS <code class="data">tse_4fzvo2qpovgytr5yduytj3mmh4</code> · saddle point</div></td>
+</tr>
+<tr id="channel-row-channel_12">
+    <td data-label="Channel"><code class="data">channel_12</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_13">
+    <td data-label="Channel"><code class="data">channel_13</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Sink state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_14">
+    <td data-label="Channel"><code class="data">channel_14</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_15">
+    <td data-label="Channel"><code class="data">channel_15</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n3">N=N (Z) + [H][H]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_16">
+    <td data-label="Channel"><code class="data">channel_16</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Sink state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_17">
+    <td data-label="Channel"><code class="data">channel_17</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_18">
+    <td data-label="Channel"><code class="data">channel_18</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n4">[H][H] + [N-]=[NH2+]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_19">
+    <td data-label="Channel"><code class="data">channel_19</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_20">
+    <td data-label="Channel"><code class="data">channel_20</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n5">[H] + [NH]N</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+<tr id="channel-row-channel_21">
+    <td data-label="Channel"><code class="data">channel_21</code></td>
+    <td data-label="Kind"><span class="value-pill">exchange</span></td>
+    <td data-label="Mechanism">well skipping</td>
+    <td data-label="Source state"><a href="#state-row-n7">N=N (E) + [H][H]</a></td>
+    <td data-label="Sink state"><a href="#state-row-n6">2 [NH2]</a></td>
+    <td data-label="Kinetics"><span class="value-pill">has kinetics</span></td>
+    <td data-label="Microreaction"><span class="record-identity-absent-inline">no elementary reaction on file</span></td>
+</tr>
+                    </tbody>
+                </table>
+                </div>
+                <p class="note">
+                    <code>channel_key</code> (e.g. <code>channel_1</code>) is depositor free text with no public
+                    reference of its own today (plan §1/§7) — it appears here, in the diagram's own
+                    <code>data-channel-key</code> attribute, and nowhere else; the diagram never renders it as a
+                    label. 21 channels on 7 states is the maximum possible undirected pairing (<code>C(7,2) =
+                    21</code>) — this network is a complete graph, confirmed by the source/sink pairs above, which
+                    the schema itself does not guarantee (<code>(source_state_id, sink_state_id)</code> is
+                    explicitly not a unique constraint — a future network could carry two distinct channels between
+                    the same pair of states).
+                </p>
+            </div>
+        </details>
+
+        <div class="card card--sunken" style="margin-top:2rem">
+            <p class="t-kicker section-kicker" style="margin-bottom:.4rem">Illustrative — not this network's real data</p>
+            <h3 class="t-heading-2" style="margin:0 0 .6rem">What the table-only fallback looks like</h3>
+            <p class="t-body" style="margin:0 0 1rem">
+                Plan §2.2's degrade threshold: past roughly 15–20 nodes on the same chart budget, the same circle
+                (or a real force-directed) layout stops being legible — this network's own 7 nodes / 21 edges sits
+                comfortably under that. The sketch below is a synthetic, unlabeled 26-node / 52-edge graph built
+                only to show what "too dense" looks like — no species, no real chemistry, generated from a fixed
+                random seed for this mock.
+            </p>
+            <div class="net-illustrative-panel">
+                <div class="card" style="padding:1rem">
+                    <p class="t-label" style="margin:0 0 .5rem">Past the threshold</p>
+                    <p class="empty-projection" style="margin:0">
+                        This network's diagram would not stay legible; showing the channel table.
+                    </p>
+                    <p class="note" style="margin-top:.6rem">
+                        The banner replaces the diagram entirely — the accessible table below it (same shape as the
+                        two "Table equivalent" disclosures above) is unaffected either way, since it always renders
+                        regardless of node/edge count or SVG state.
+                    </p>
+                </div>
+                <svg class="net-illustrative-svg" viewBox="0 0 560 260" role="img" aria-label="Illustrative dense graph, not real network data">
+<line x1="191.9" y1="56.7" x2="256.6" y2="88.0" class="net-illustrative-edge"></line>
+<line x1="191.9" y1="56.7" x2="102.1" y2="49.7" class="net-illustrative-edge"></line>
+<line x1="191.9" y1="56.7" x2="187.1" y2="148.0" class="net-illustrative-edge"></line>
+<line x1="191.9" y1="56.7" x2="152.0" y2="145.6" class="net-illustrative-edge"></line>
+<line x1="355.5" y1="40.2" x2="303.9" y2="38.2" class="net-illustrative-edge"></line>
+<line x1="355.5" y1="40.2" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<line x1="355.5" y1="40.2" x2="349.5" y2="103.2" class="net-illustrative-edge"></line>
+<line x1="355.5" y1="40.2" x2="370.2" y2="114.8" class="net-illustrative-edge"></line>
+<line x1="297.9" y1="101.8" x2="318.6" y2="108.3" class="net-illustrative-edge"></line>
+<line x1="297.9" y1="101.8" x2="256.6" y2="88.0" class="net-illustrative-edge"></line>
+<line x1="297.9" y1="101.8" x2="349.5" y2="103.2" class="net-illustrative-edge"></line>
+<line x1="297.9" y1="101.8" x2="303.9" y2="38.2" class="net-illustrative-edge"></line>
+<line x1="59.0" y1="131.6" x2="48.7" y2="116.1" class="net-illustrative-edge"></line>
+<line x1="59.0" y1="131.6" x2="120.4" y2="147.1" class="net-illustrative-edge"></line>
+<line x1="59.0" y1="131.6" x2="59.8" y2="68.3" class="net-illustrative-edge"></line>
+<line x1="59.0" y1="131.6" x2="91.9" y2="71.9" class="net-illustrative-edge"></line>
+<line x1="48.7" y1="116.1" x2="59.8" y2="68.3" class="net-illustrative-edge"></line>
+<line x1="48.7" y1="116.1" x2="91.9" y2="71.9" class="net-illustrative-edge"></line>
+<line x1="48.7" y1="116.1" x2="64.9" y2="44.0" class="net-illustrative-edge"></line>
+<line x1="64.9" y1="44.0" x2="59.8" y2="68.3" class="net-illustrative-edge"></line>
+<line x1="64.9" y1="44.0" x2="102.1" y2="49.7" class="net-illustrative-edge"></line>
+<line x1="64.9" y1="44.0" x2="91.9" y2="71.9" class="net-illustrative-edge"></line>
+<line x1="242.3" y1="198.6" x2="292.6" y2="208.8" class="net-illustrative-edge"></line>
+<line x1="242.3" y1="198.6" x2="184.2" y2="196.4" class="net-illustrative-edge"></line>
+<line x1="242.3" y1="198.6" x2="187.1" y2="148.0" class="net-illustrative-edge"></line>
+<line x1="242.3" y1="198.6" x2="343.7" y2="224.0" class="net-illustrative-edge"></line>
+<line x1="91.9" y1="71.9" x2="102.1" y2="49.7" class="net-illustrative-edge"></line>
+<line x1="91.9" y1="71.9" x2="59.8" y2="68.3" class="net-illustrative-edge"></line>
+<line x1="343.7" y1="224.0" x2="292.6" y2="208.8" class="net-illustrative-edge"></line>
+<line x1="343.7" y1="224.0" x2="427.2" y2="171.8" class="net-illustrative-edge"></line>
+<line x1="343.7" y1="224.0" x2="370.2" y2="114.8" class="net-illustrative-edge"></line>
+<line x1="318.6" y1="108.3" x2="349.5" y2="103.2" class="net-illustrative-edge"></line>
+<line x1="318.6" y1="108.3" x2="370.2" y2="114.8" class="net-illustrative-edge"></line>
+<line x1="318.6" y1="108.3" x2="256.6" y2="88.0" class="net-illustrative-edge"></line>
+<line x1="518.1" y1="34.8" x2="520.1" y2="49.8" class="net-illustrative-edge"></line>
+<line x1="518.1" y1="34.8" x2="459.2" y2="85.8" class="net-illustrative-edge"></line>
+<line x1="518.1" y1="34.8" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<line x1="459.2" y1="85.8" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<line x1="459.2" y1="85.8" x2="520.1" y2="49.8" class="net-illustrative-edge"></line>
+<line x1="459.2" y1="85.8" x2="427.2" y2="171.8" class="net-illustrative-edge"></line>
+<line x1="102.1" y1="49.7" x2="59.8" y2="68.3" class="net-illustrative-edge"></line>
+<line x1="184.2" y1="196.4" x2="187.1" y2="148.0" class="net-illustrative-edge"></line>
+<line x1="184.2" y1="196.4" x2="152.0" y2="145.6" class="net-illustrative-edge"></line>
+<line x1="184.2" y1="196.4" x2="120.4" y2="147.1" class="net-illustrative-edge"></line>
+<line x1="120.4" y1="147.1" x2="152.0" y2="145.6" class="net-illustrative-edge"></line>
+<line x1="120.4" y1="147.1" x2="187.1" y2="148.0" class="net-illustrative-edge"></line>
+<line x1="349.5" y1="103.2" x2="370.2" y2="114.8" class="net-illustrative-edge"></line>
+<line x1="349.5" y1="103.2" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<line x1="303.9" y1="38.2" x2="256.6" y2="88.0" class="net-illustrative-edge"></line>
+<line x1="370.2" y1="114.8" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<line x1="187.1" y1="148.0" x2="152.0" y2="145.6" class="net-illustrative-edge"></line>
+<line x1="427.2" y1="171.8" x2="394.7" y2="85.5" class="net-illustrative-edge"></line>
+<circle cx="191.9" cy="56.7" r="5" class="net-illustrative-node"></circle>
+<circle cx="355.5" cy="40.2" r="5" class="net-illustrative-node"></circle>
+<circle cx="297.9" cy="101.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="59.0" cy="131.6" r="5" class="net-illustrative-node"></circle>
+<circle cx="48.7" cy="116.1" r="5" class="net-illustrative-node"></circle>
+<circle cx="64.9" cy="44.0" r="5" class="net-illustrative-node"></circle>
+<circle cx="242.3" cy="198.6" r="5" class="net-illustrative-node"></circle>
+<circle cx="91.9" cy="71.9" r="5" class="net-illustrative-node"></circle>
+<circle cx="343.7" cy="224.0" r="5" class="net-illustrative-node"></circle>
+<circle cx="318.6" cy="108.3" r="5" class="net-illustrative-node"></circle>
+<circle cx="518.1" cy="34.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="459.2" cy="85.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="102.1" cy="49.7" r="5" class="net-illustrative-node"></circle>
+<circle cx="184.2" cy="196.4" r="5" class="net-illustrative-node"></circle>
+<circle cx="120.4" cy="147.1" r="5" class="net-illustrative-node"></circle>
+<circle cx="349.5" cy="103.2" r="5" class="net-illustrative-node"></circle>
+<circle cx="303.9" cy="38.2" r="5" class="net-illustrative-node"></circle>
+<circle cx="59.8" cy="68.3" r="5" class="net-illustrative-node"></circle>
+<circle cx="370.2" cy="114.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="187.1" cy="148.0" r="5" class="net-illustrative-node"></circle>
+<circle cx="256.6" cy="88.0" r="5" class="net-illustrative-node"></circle>
+<circle cx="427.2" cy="171.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="152.0" cy="145.6" r="5" class="net-illustrative-node"></circle>
+<circle cx="292.6" cy="208.8" r="5" class="net-illustrative-node"></circle>
+<circle cx="394.7" cy="85.5" r="5" class="net-illustrative-node"></circle>
+<circle cx="520.1" cy="49.8" r="5" class="net-illustrative-node"></circle>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="kinetics-heading">
+        <p class="t-kicker section-kicker">Evaluated rate coefficients — not yet served</p>
+        <h2 class="t-heading-1" id="kinetics-heading">k(T,P)</h2>
+        <p class="t-body section-intro">
+            No evaluation endpoint exists yet (plan §2.4/§4A) — the table below lists fit <em>metadata</em> only,
+            never a computed rate. Every one of the 21 channels carries <strong>both</strong> a Chebyshev (6×4) and
+            a PLOG (5-entry) fit over the identical 300–2000 K, 0.01–100 bar range — the dual-form deposit the
+            description above names, not two different results at odds with each other.
+        </p>
+        <details class="disclosure" open>
+            <summary>Fit metadata by channel <span class="disclosure-count">(21)</span></summary>
+            <div class="disclosure-body" style="display:block">
+                <div class="table-scroll">
+                <table class="data-table" aria-label="Kinetics fit metadata by channel">
+                    <caption class="note" style="text-align:left;caption-side:top;padding:0 0 .5rem">
+                        All 21 rows share the same fitted range: 300–2000 K, 0.01–100 bar.
+                    </caption>
+                    <thead><tr><th scope="col">Channel</th><th scope="col">Kind</th><th scope="col">Chebyshev shape</th><th scope="col">PLOG entries</th></tr></thead>
+                    <tbody>
+<tr id="ktp-row-channel_1"><td data-label="Channel"><code class="data">channel_1</code></td><td data-label="Kind"><span class="value-pill">isomerization</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_2"><td data-label="Channel"><code class="data">channel_2</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_3"><td data-label="Channel"><code class="data">channel_3</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_4"><td data-label="Channel"><code class="data">channel_4</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_5"><td data-label="Channel"><code class="data">channel_5</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_6"><td data-label="Channel"><code class="data">channel_6</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_7"><td data-label="Channel"><code class="data">channel_7</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_8"><td data-label="Channel"><code class="data">channel_8</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_9"><td data-label="Channel"><code class="data">channel_9</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_10"><td data-label="Channel"><code class="data">channel_10</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_11"><td data-label="Channel"><code class="data">channel_11</code></td><td data-label="Kind"><span class="value-pill">association</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_12"><td data-label="Channel"><code class="data">channel_12</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_13"><td data-label="Channel"><code class="data">channel_13</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_14"><td data-label="Channel"><code class="data">channel_14</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_15"><td data-label="Channel"><code class="data">channel_15</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_16"><td data-label="Channel"><code class="data">channel_16</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_17"><td data-label="Channel"><code class="data">channel_17</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_18"><td data-label="Channel"><code class="data">channel_18</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_19"><td data-label="Channel"><code class="data">channel_19</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_20"><td data-label="Channel"><code class="data">channel_20</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+<tr id="ktp-row-channel_21"><td data-label="Channel"><code class="data">channel_21</code></td><td data-label="Kind"><span class="value-pill">exchange</span></td><td class="num" data-label="Chebyshev shape">6×4</td><td class="num" data-label="PLOG entries">5</td></tr>
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        </details>
+
+        <h3 class="t-heading-2" style="margin-top:1.75rem">Where the chart goes</h3>
+        <p class="t-body">
+            PR 4 ships this once PR 1's evaluation endpoint and PR 3's diagram both exist — y = log₁₀ k, x =
+            temperature, one curve per selected pressure, dashed/solid split by the served <code>in_range</code>
+            flag, reusing <code>chartScale.ts</code> the same way <code>ArrheniusChart</code> already does (plan
+            §5). Nothing below this line is real or computed data.
+        </p>
+        <div class="net-ktp-placeholder">
+            <p class="net-ktp-axis-title--y">log₁₀ k</p>
+            <div class="net-ktp-placeholder-frame">
+                <div>
+                    <p class="net-ktp-placeholder-text">
+                        k(T,P) chart — ships in PR 4. One curve per selected pressure, over this channel's own
+                        Chebyshev/PLOG fit.
+                    </p>
+                    <select class="net-ktp-placeholder-select" disabled aria-label="Pressure selector (not yet functional)">
+                        <option>Pressure: 1 bar (placeholder)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <p class="t-body" style="text-align:center;margin-top:-.5rem;color:var(--muted);font:var(--type-label-font);letter-spacing:var(--type-label-tracking);text-transform:var(--type-label-transform)">Temperature (K)</p>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="reactions-heading">
+        <p class="t-kicker section-kicker">Elementary steps with a deposited reaction entry</p>
+        <h2 class="t-heading-1" id="reactions-heading">Reactions</h2>
+        <p class="t-body section-intro">
+            6 of this network's 21 channels carry a directly deposited elementary reaction/TS pair — 2 of those
+            (channel_4, channel_5) are barrierless, so no transition state. The remaining 15 channels are
+            well-skipping association/exchange pathways with no elementary reaction or TS on file (see the
+            Mechanism column in the channel table above) — an archive gap, not something this page invents around.
+        </p>
+        <div class="table-scroll">
+        <table class="data-table" aria-label="Reaction entries admitted to this network">
+            <thead><tr><th scope="col">Equation (as deposited)</th><th scope="col">Channel</th><th scope="col">Path kind</th><th scope="col">Transition state</th><th scope="col">Review</th><th scope="col">Ref</th></tr></thead>
+            <tbody>
+                <tr id="reaction-row-rxe_5yjt23ioefahk5wxmo5qjbxcza">
+                    <td data-label="Equation"><code class="data">NN &lt;=&gt; [NH-][NH3+]</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_1"><code class="data">channel_1</code></a></td>
+                    <td data-label="Path kind">saddle point</td>
+                    <td data-label="Transition state"><code class="data">tse_pfcm4ej4mx2zkakxcwqqiwxzle</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_5yjt23ioefahk5wxmo5qjbxcza</code></td>
+                </tr>
+                <tr id="reaction-row-rxe_tku6xu2lt3girf2rsiwl5uds4e">
+                    <td data-label="Equation"><code class="data">NN &lt;=&gt; [H][H] + N=N</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_2"><code class="data">channel_2</code></a></td>
+                    <td data-label="Path kind">saddle point</td>
+                    <td data-label="Transition state"><code class="data">tse_iqutn7tzf3rbgv6j67g7yt7l2u</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_tku6xu2lt3girf2rsiwl5uds4e</code></td>
+                </tr>
+                <tr id="reaction-row-rxe_gw4unjmagt7lzc6dmpjfm5t6xu">
+                    <td data-label="Equation"><code class="data">NN &lt;=&gt; [H][H] + [N-]=[NH2+]</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_3"><code class="data">channel_3</code></a></td>
+                    <td data-label="Path kind">saddle point</td>
+                    <td data-label="Transition state"><code class="data">tse_s5lfvm2a3tvftb7hjqbkinibwq</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_gw4unjmagt7lzc6dmpjfm5t6xu</code></td>
+                </tr>
+                <tr id="reaction-row-rxe_h3z3f7tjfsj3gbvvh7lmmpikx4">
+                    <td data-label="Equation"><code class="data">NN &lt;=&gt; [H] + [NH]N</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_4"><code class="data">channel_4</code></a></td>
+                    <td data-label="Path kind">barrierless</td>
+                    <td data-label="Transition state"><span class="record-identity-absent-inline">none — barrierless</span></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_h3z3f7tjfsj3gbvvh7lmmpikx4</code></td>
+                </tr>
+                <tr id="reaction-row-rxe_fe7of3yivmx4fks3ozh2777nnm">
+                    <td data-label="Equation"><code class="data">[NH2] + [NH2] &lt;=&gt; NN</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_5"><code class="data">channel_5</code></a></td>
+                    <td data-label="Path kind">barrierless</td>
+                    <td data-label="Transition state"><span class="record-identity-absent-inline">none — barrierless</span></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_fe7of3yivmx4fks3ozh2777nnm</code></td>
+                </tr>
+                <tr id="reaction-row-rxe_giy6dryz7zy6mh466ed2bgj6iq">
+                    <td data-label="Equation"><code class="data">[NH-][NH3+] &lt;=&gt; [H][H] + N=N</code></td>
+                    <td data-label="Channel"><a href="#channel-row-channel_11"><code class="data">channel_11</code></a></td>
+                    <td data-label="Path kind">saddle point</td>
+                    <td data-label="Transition state"><code class="data">tse_4fzvo2qpovgytr5yduytj3mmh4</code></td>
+                    <td data-label="Review"><span class="value-pill value-pill--muted">not reviewed</span></td>
+                    <td data-label="Ref"><code class="data">rxe_giy6dryz7zy6mh466ed2bgj6iq</code></td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        <p class="note">
+            Measured live: <code>GET /scientific/reactions/search?network_ref=...</code> returns
+            <code>422 missing_reaction_search_filter</code> — <code>network_ref</code> is not a legal filter on
+            that endpoint, so the plan §3's "already-existing pattern from <code>reactions/search?network_ref=</code>"
+            does not work as written. The 6 rows above come entirely from the channels payload's own
+            <code>microreactions[]</code>, joined to each reaction entry's own <code>/full</code> (for the equation
+            text) — no working <code>network_ref</code> filter was needed or used.
+        </p>
+    </section>
+
+    <section class="ledger-section" aria-labelledby="review-heading">
+        <p class="t-kicker section-kicker">Curation status</p>
+        <h2 class="t-heading-1" id="review-heading">Review</h2>
+        <div class="card card--derived coverage-card" data-component="evidence-checklist">
+            <span class="t-label">Network review</span>
+            <dl class="kv-list coverage-checklist">
+                <div><dt>Approved</dt><dd>0</dd></div>
+                <div><dt>Under review</dt><dd>0</dd></div>
+                <div><dt>Not reviewed</dt><dd>1</dd></div>
+                <div><dt>Deprecated</dt><dd>0</dd></div>
+                <div><dt>Rejected</dt><dd>0</dd></div>
+                <div><dt>Total</dt><dd>1</dd></div>
+            </dl>
+            <p class="note">
+                Measured live: this total stays 1 regardless of which <code>include</code> tokens are requested on
+                <code>GET /scientific/networks/{ref}</code>, including <code>include=review</code> — unlike the
+                reaction-entry page's review section (which sums review status across every joined species,
+                kinetics record and TS entry), this endpoint counts only the network's own review record. States,
+                channels and kinetics fits carry no independent review status of their own in this API today, so
+                there is nothing further to sum.
+            </p>
+        </div>
+    </section>
+
+    </div>
+    <div class="page-toc">
+        <nav aria-label="Sections on this page">
+            <ul>
+                <li><a href="#evidence-heading" class="page-toc-active" aria-current="location">Evidence on this network</a></li>
+                <li><a href="#diagram-heading">Network diagram</a></li>
+                <li><a href="#kinetics-heading">k(T,P)</a></li>
+                <li><a href="#reactions-heading">Reactions</a></li>
+                <li><a href="#review-heading">Review</a></li>
+            </ul>
+        </nav>
+    </div>
+    </div>
+</section>
+</main>
+<footer class="archive-footer"><span>TCKDB · Theoretical Chemical Kinetics Database</span><span>Public scientific records</span></footer>
+</div>
+</body>
+</html>
