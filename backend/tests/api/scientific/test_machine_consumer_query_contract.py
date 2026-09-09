@@ -127,6 +127,11 @@ def test_frequency_scale_factor_deferred_filters_fail_closed(client):
 
 
 def test_energy_correction_scheme_deferred_filters_fail_closed(client):
+    """``software`` gained a real backing column (correction-scheme-
+    provenance plan) and is no longer deferred -- only
+    ``software_version`` (no release granularity on this table, matching
+    FrequencyScaleFactor's own grain) and ``used_by_thermo`` still fail
+    closed."""
     response = client.post(
         "/api/v1/scientific/energy-correction-schemes/search",
         json={
@@ -139,7 +144,6 @@ def test_energy_correction_scheme_deferred_filters_fail_closed(client):
 
     _assert_unsupported_filter(
         response,
-        "software",
         "software_version",
         "used_by_thermo",
     )

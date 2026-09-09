@@ -1685,6 +1685,8 @@ Table energy_correction_scheme {
   name text [not null]
   level_of_theory_id bigint [ref: > level_of_theory.id]
   source_literature_id bigint [ref: > literature.id]
+  software_id bigint [ref: > software.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   version text
   units EnergyUnit
   note text
@@ -1694,7 +1696,7 @@ Table energy_correction_scheme {
 
   indexes {
     public_ref [unique, name: 'ix_energy_correction_scheme_public_ref']
-    (kind, name, level_of_theory_id, version) [unique, name: 'uq_energy_correction_scheme_kind_name_lot_version']
+    (kind, name, level_of_theory_id, version, source_literature_id, software_id, workflow_tool_release_id) [unique, name: 'uq_energy_correction_scheme_identity']
   }
 
   Note: 'Reusable energy-correction parameter set.'

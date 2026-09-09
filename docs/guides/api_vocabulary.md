@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
 | Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 174 | `backend/app/api/code_catalogue.py` |
-| **total** | **459** | |
+| Refusal codes a caller can receive | 178 | `backend/app/api/code_catalogue.py` |
+| **total** | **463** | |
 
 ## How a record is named
 
@@ -660,7 +660,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_statmech_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (19 codes)
+### HTTP 409 (23 codes)
 
 | Code | Names |
 | --- | --- |
@@ -669,6 +669,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `curation_policy_version_conflict` | a relationship — read `context` |
 | `doi_already_recorded` | a relationship — read `context` |
 | `email_taken` | a thing |
+| `energy_correction_scheme_identity_conflict` | a relationship — read `context` |
+| `energy_correction_scheme_literature_already_set` | a thing |
+| `energy_correction_scheme_software_already_set` | a thing |
+| `energy_correction_scheme_workflow_tool_release_already_set` | a thing |
 | `energy_transfer_scope_columns_disagree` | a relationship — read `context` |
 | `idempotency_conflict` | a relationship — read `context` |
 | `manifest_already_frozen` | a thing |

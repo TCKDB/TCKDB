@@ -112,6 +112,10 @@ class RejectionCode(str, Enum):
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
     EMAIL_TAKEN = "email_taken"
+    ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT = "energy_correction_scheme_identity_conflict"
+    ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET = "energy_correction_scheme_literature_already_set"
+    ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET = "energy_correction_scheme_software_already_set"
+    ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET = "energy_correction_scheme_workflow_tool_release_already_set"
     ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
     EXPORT_SEED_EMPTY = "export_seed_empty"
@@ -410,6 +414,10 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
         RejectionCode.DOI_ALREADY_RECORDED,
         RejectionCode.EMAIL_TAKEN,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
@@ -468,6 +476,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
     RejectionCode.EMAIL_TAKEN: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET: frozenset({409}),
     RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE: frozenset({409}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),

@@ -792,6 +792,10 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         # sat green until the next pull request that did.
         ("GET", "/api/v1/admin/artifact-storage/capacity"),
         ("POST", "/api/v1/admin/artifact-storage/capacity/clear"),
+        (
+            "PATCH",
+            "/api/v1/admin/energy-correction-schemes/{ref}/provenance",
+        ),
         ("GET", "/api/v1/admin/machine-review/curator-tasks"),
         (
             "POST",

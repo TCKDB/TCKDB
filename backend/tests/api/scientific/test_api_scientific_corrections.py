@@ -23,6 +23,7 @@ from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
     make_statmech,
+    make_workflow_tool_release,
     next_inchi_key,
 )
 
@@ -655,6 +656,49 @@ def test_ecs_search_by_literature_ref(client, db_session):
         for r in body["records"]
     }
     assert ecs.public_ref in refs
+
+
+def test_ecs_search_by_software(client, db_session):
+    """The ``software`` filter is now backed by ``software_id`` (was
+    deferred/422 before the correction-scheme-provenance widening)."""
+    sw = make_software(db_session, name="orca")
+    ecs = make_energy_correction_scheme(db_session, software=sw)
+    body = client.get(_ecs_search_url(software="orca")).json()
+    refs = {
+        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
+        for r in body["records"]
+    }
+    assert ecs.public_ref in refs
+
+
+def test_ecs_search_by_software_version_still_deferred(client, db_session):
+    """ECS only carries a bare software identity (no release), matching
+    FrequencyScaleFactor's own grain -- ``software_version`` stays
+    rejected rather than silently ignored."""
+    resp = client.get(_ecs_search_url(software_version="16"))
+    assert resp.status_code == 422
+    assert "unsupported_filter" in resp.text
+
+
+def test_ecs_detail_serves_software_and_workflow_tool_release(client, db_session):
+    sw = make_software(db_session, name="gaussian")
+    wtr = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
+    ecs = make_energy_correction_scheme(
+        db_session, software=sw, workflow_tool_release=wtr
+    )
+    body = client.get(_ecs_detail_url(ecs.public_ref)).json()
+
+    assert body["record"]["software_release"]["software"] == "gaussian"
+    assert body["record"]["workflow_tool_release"]["workflow_tool"] == "arc"
+    assert body["record"]["evidence_summary"]["has_software"] is True
+
+
+def test_ecs_detail_has_software_false_when_absent(client, db_session):
+    ecs = make_energy_correction_scheme(db_session)
+    body = client.get(_ecs_detail_url(ecs.public_ref)).json()
+
+    assert body["record"]["software_release"] is None
+    assert body["record"]["evidence_summary"]["has_software"] is False
 
 
 def test_ecs_search_has_corrections_true_and_false(client, db_session):

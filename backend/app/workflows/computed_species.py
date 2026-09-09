@@ -686,6 +686,7 @@ def persist_computed_species_upload(
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
+            warnings=upload_warnings,
         )
 
         statmech_row = _persist_statmech_block(
@@ -719,6 +720,7 @@ def persist_computed_species_upload(
             calc_keys_to_id=calc_keys_to_id,
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             created_by=created_by,
+            warnings=upload_warnings,
         )
 
         session.flush()
@@ -801,6 +803,7 @@ def _persist_thermo_block(
     conformer_keys_to_observation_id: dict[str, int],
     default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
+    warnings: list[UploadWarning] | None = None,
 ) -> tuple[Thermo | None, list[int]]:
     """Persist optional thermo + nested AECs.
 
@@ -809,6 +812,13 @@ def _persist_thermo_block(
 
     ``default_workflow_tool_release`` is the bundle-level fallback used
     when the thermo block names no workflow tool of its own.
+
+    ``warnings``, when supplied, is where each nested applied
+    correction's *newly created* scheme's non-blocking provenance
+    warnings (missing citation, missing software, ambiguous uncited
+    sibling — see ``collect_energy_correction_scheme_provenance_warnings``)
+    land, the same accumulator every other bundle-level warning source
+    already appends to.
     """
     if request.thermo is None:
         return None, []
@@ -926,6 +936,7 @@ def _persist_thermo_block(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
 
@@ -940,6 +951,7 @@ def _persist_top_level_applied_corrections(
     calc_keys_to_id: dict[str, Calculation],
     conformer_keys_to_observation_id: dict[str, int],
     created_by: int | None,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[int]:
     """Persist bundle-level applied energy corrections (AEC/BAC).
 
@@ -951,7 +963,8 @@ def _persist_top_level_applied_corrections(
     written via the shared ``create_applied_energy_correction`` service.
 
     Returns the list of created AEC ids so the caller can record review
-    state for each one.
+    state for each one. ``warnings`` mirrors ``_persist_thermo_block``'s
+    parameter of the same name.
     """
     if not request.applied_energy_corrections:
         return []
@@ -995,6 +1008,7 @@ def _persist_top_level_applied_corrections(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
     return applied_correction_ids

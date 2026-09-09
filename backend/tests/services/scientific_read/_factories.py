@@ -2026,6 +2026,8 @@ def make_energy_correction_scheme(
     kind: EnergyCorrectionSchemeKind = EnergyCorrectionSchemeKind.bac_petersson,
     lot: LevelOfTheory | None = None,
     source_literature: Literature | None = None,
+    software: Software | None = None,
+    workflow_tool_release: WorkflowToolRelease | None = None,
     version: str | None = None,
     units: EnergyUnit | None = EnergyUnit.hartree,
     note: str | None = None,
@@ -2037,6 +2039,10 @@ def make_energy_correction_scheme(
         level_of_theory_id=lot.id if lot is not None else None,
         source_literature_id=(
             source_literature.id if source_literature is not None else None
+        ),
+        software_id=software.id if software is not None else None,
+        workflow_tool_release_id=(
+            workflow_tool_release.id if workflow_tool_release is not None else None
         ),
         version=version,
         units=units,

@@ -68,6 +68,26 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
+    # Software dimension: the same LOT run in Gaussian vs ORCA can yield
+    # different atom-energy/BAC parameters (mirrors FrequencyScaleFactor's
+    # identical comment and column below).
+    software_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("software.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+    )
+    # Set when the scheme was sourced from a workflow tool's data file (e.g.
+    # Arkane's quantum_corrections table) rather than directly from a paper.
+    workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "workflow_tool_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_workflow_tool_release_id",
+        ),
+        nullable=True,
+    )
 
     version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     units: Mapped[Optional[EnergyUnit]] = mapped_column(
@@ -79,6 +99,8 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     # Relationships
     level_of_theory: Mapped[Optional["LevelOfTheory"]] = relationship()
     source_literature: Mapped[Optional["Literature"]] = relationship()
+    software: Mapped[Optional["Software"]] = relationship()
+    workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship()
 
     atom_params: Mapped[list["EnergyCorrectionSchemeAtomParam"]] = relationship(
         back_populates="scheme",
@@ -95,11 +117,14 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
 
     __table_args__ = (
         Index(
-            "uq_energy_correction_scheme_kind_name_lot_version",
+            "uq_energy_correction_scheme_identity",
             "kind",
             "name",
             "level_of_theory_id",
             "version",
+            "source_literature_id",
+            "software_id",
+            "workflow_tool_release_id",
             unique=True,
             postgresql_nulls_not_distinct=True,
         ),
