@@ -137,14 +137,14 @@ describe("IdentifierSearch chemistry-first results (species mode)", () => {
         expect(rows).toHaveLength(2)
 
         const methylRow = within(rows[0])
-        expect(methylRow.getByRole("link", { name: /^CH3 \[CH3\]/ })).toHaveAttribute(
+        expect(methylRow.getByRole("link", { name: /^\[CH3\] \(CH3\)/ })).toHaveAttribute(
             "href", `/species/${methylRadical.species_ref}`,
         )
         expect(methylRow.getByText("charge 0 · spin doublet (2) · 1 entry", { exact: false })).toBeVisible()
         expect(methylRow.getByText(methylRadical.species_ref)).toBeVisible()
 
         const hydroxideRow = within(rows[1])
-        expect(hydroxideRow.getByRole("link", { name: /^HO \[OH-\]/ })).toHaveAttribute(
+        expect(hydroxideRow.getByRole("link", { name: /^\[OH-\] \(HO\)/ })).toHaveAttribute(
             "href", `/species/${hydroxideIon.species_ref}`,
         )
         expect(hydroxideRow.getByText("charge −1 · spin singlet (1) · 3 entries", { exact: false })).toBeVisible()

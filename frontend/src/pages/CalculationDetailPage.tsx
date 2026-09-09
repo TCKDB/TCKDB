@@ -378,7 +378,20 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // of tse_...". A species entry prefers its formula, rendered through
     // the SAME `Formula` component `RecordIdentityHeader`'s own identity
     // tier uses (subscripted element counts), falling back to the plain
-    // canonical SMILES only when no formula was derived. A TS entry has
+    // canonical SMILES only when no formula was derived.
+    //
+    // Deliberately NOT SMILES-leads-formula-in-brackets (owner ruling,
+    // applied everywhere else a species is shown): this h1 is a sentence
+    // ("Optimisation of C2H4"), not a bare identity chip, and this
+    // calculation belongs to exactly ONE species -- no second participant
+    // for a bare formula to be confused with. `identity.canonicalSmiles`
+    // already renders in this same header's own identity block a few
+    // lines below (`RecordIdentityHeader`'s "SMILES" fact), so leading
+    // the sentence with a long SMILES string ("Optimisation of [CH2]SO
+    // (CH3OS)") would only make the h1 harder to read for no
+    // disambiguation this page did not already have.
+    //
+    // A TS entry has
     // no formula the way a species does, so it falls back through its own
     // ref instead -- never the depositor's own `transition_state.label`
     // (e.g. "TS0"), which this page no longer reads at all (house rule

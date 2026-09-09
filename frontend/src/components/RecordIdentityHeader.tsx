@@ -253,6 +253,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity, ownRef }: {
                                 rather than shown raw. */}
                             <SpeciesEntryLink
                                 speciesEntryRef={identity.speciesEntryRef}
+                                smiles={identity.canonicalSmiles}
                                 formula={identity.formula}
                                 speciesEntryLabel={identity.speciesEntryLabel}
                             />

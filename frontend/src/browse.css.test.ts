@@ -150,12 +150,15 @@ describe(".browse-row-meta -- --type-note, not a bare mono .76rem", () => {
     })
 })
 
-describe(".browse-row-smiles -- --type-data (mono), consolidated from two split rules", () => {
-    it("uses var(--type-data-font), and the class is declared exactly once", () => {
-        const rule = extractRule(css, ".browse-row-smiles")
-        expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
-        const occurrences = css.match(/\.browse-row-smiles\s*\{/g) ?? []
-        expect(occurrences).toHaveLength(1)
+// `.browse-row-smiles` (once tested here for its own consolidated rule)
+// was RETIRED alongside `SpeciesBrowseRow.tsx`'s switch to `SpeciesFace`
+// (SMILES-leads-formula-in-brackets change): the SMILES now renders
+// inside the row's own title, so a second line repeating it had zero
+// remaining consumers. See this file's own `.browse-row-smiles` rule
+// removal comment for the fuller history.
+describe(".browse-row-smiles -- retired, no rule left in the stylesheet", () => {
+    it("has no rule of its own any more", () => {
+        expect(css).not.toMatch(/\.browse-row-smiles\s*\{/)
     })
 })
 

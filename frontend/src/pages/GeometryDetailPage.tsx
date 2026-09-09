@@ -184,6 +184,24 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             `ConformerObservationPage`'s hand-matched headers
                             put it BEFORE identity -- three different
                             orders for the same fact). */}
+                        {/* `title` is a plain string, not run through
+                            `Formula` -- `displayFormula` is either the
+                            archive's own served formula or (see
+                            `formulaIsFallback` below) a client-computed
+                            Hill formula, neither of which is chemistry-
+                            typeset text here the way the identity block's
+                            own facts are. Deliberately NOT SMILES-leads-
+                            formula-in-brackets (owner ruling, applied
+                            everywhere else a species is shown): this h1
+                            names ONE geometry record, not two participants
+                            a reader could confuse, and (when `identity` is
+                            a known species/TS owner) the owning species'
+                            own SMILES already renders a few lines below in
+                            this same header's identity block -- a SMILES-
+                            led title here ("[CH2]SO (CH3OS) geometry")
+                            would only make the heading harder to read for
+                            no disambiguation this page did not already
+                            have. */}
                         <RecordIdentityHeader
                             kicker="Geometry · deposited evidence"
                             title={displayFormula ? `${displayFormula} geometry` : "Geometry"}

@@ -205,6 +205,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                             says that). */}
                                         <SpeciesEntryLink
                                             speciesEntryRef={species.species_entry_ref}
+                                            smiles={species.canonical_smiles}
                                             formula={species.formula}
                                             speciesEntryLabel={species.species_entry_label}
                                         />

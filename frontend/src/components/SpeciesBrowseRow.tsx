@@ -1,32 +1,36 @@
 import { Link } from "react-router-dom"
 import type { SpeciesBrowseRecord } from "../api/browseApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
-import { Formula } from "./Formula"
+import { SpeciesFace } from "./Formula"
 
 function token(value: string) {
     return value.replaceAll("_", " ")
 }
 
 /**
- * A species row leads with FORMULA AND STRUCTURE -- the brief's own
+ * A species row leads with STRUCTURE AND FORMULA -- the brief's own
  * distinction from the transition-state row, which has no formula and
- * leads with the reaction it connects instead. Formula falls back to the
- * SMILES headline (never to the public ref, matching `IdentifierSearch`'s
- * `MatchHeadline` rule) when the archive computed no formula for this
- * species (#251).
+ * leads with the reaction it connects instead. `SpeciesFace` (owner
+ * ruling: SMILES leads, formula follows in parentheses) renders SMILES
+ * alone (never falling back to the public ref, matching
+ * `IdentifierSearch`'s `MatchHeadline` rule) when the archive computed no
+ * formula for this species (#251). The title used to be formula-only with
+ * a SEPARATE `.browse-row-smiles` line underneath carrying the SMILES --
+ * retired here (along with that now-dead CSS rule, `browse.css`) because
+ * `SpeciesFace` already puts the SMILES in the title; a second line below
+ * would just repeat it.
  */
 export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
     return (
         <li className="browse-row card species-browse-row">
             <div className="browse-row-headline">
                 <Link className="browse-row-title" to={`/species/${record.species_ref}`}>
-                    {record.formula ? <Formula value={record.formula} /> : record.canonical_smiles}
+                    <SpeciesFace smiles={record.canonical_smiles} formula={record.formula} />
                 </Link>
                 <span className="browse-row-meta">
                     charge {chargeDisplay(record.charge)} · spin {spinDisplay(record.multiplicity)}
                 </span>
             </div>
-            {record.formula && <p className="browse-row-smiles">{record.canonical_smiles}</p>}
             <ul className="browse-row-entries">
                 {record.entries.map((entry) => (
                     // Two SEPARATE pills, not one shared box -- classification
