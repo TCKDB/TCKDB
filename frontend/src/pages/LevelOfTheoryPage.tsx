@@ -8,6 +8,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
+import { SCHEME_KIND_LABELS, schemeKindLabel } from "../domain/correctionSchemeFormat"
 import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import { softwareLabel, toolReleaseLabel, words } from "../domain/provenanceFormat"
 import { useLevelOfTheory } from "../hooks/useLevelOfTheory"
@@ -91,8 +92,19 @@ function LevelOfTheoryDetail({ record }: { record: LevelOfTheoryRecord }) {
                                     </div>
                                     <div><dt>Method</dt><dd>{lot.method}</dd></div>
                                     <div><dt>Basis</dt><dd>{lot.basis ?? "not recorded"}</dd></div>
-                                    <div><dt>Dispersion</dt><dd>{lot.dispersion ?? "not recorded"}</dd></div>
-                                    <div><dt>Solvent</dt><dd>{lot.solvent ?? "not recorded"}{lot.solvent_model ? ` (${lot.solvent_model})` : ""}</dd></div>
+                                    {/* "none"/"gas phase", not "not recorded" -- see
+                                        `MethodsIndexPage.tsx`'s own doc comment above its
+                                        `NO_DISPERSION_TEXT`/`NO_SOLVENT_TEXT` constants for the
+                                        full measurement this wording is based on: dispersion
+                                        correction and an implicit solvent model are optional
+                                        method choices a calculation can genuinely run without,
+                                        unlike `basis` (kept as "not recorded" here, unchanged --
+                                        a real gap for methods that do take one) or
+                                        `spin_treatment` below (DR-0034 gave that field an actual
+                                        `unknown` state precisely because it is NOT this kind of
+                                        optional-and-absent field). */}
+                                    <div><dt>Dispersion</dt><dd>{lot.dispersion ?? "none"}</dd></div>
+                                    <div><dt>Solvent</dt><dd>{lot.solvent ?? "gas phase"}{lot.solvent_model ? ` (${lot.solvent_model})` : ""}</dd></div>
                                     <div><dt>Spin treatment</dt><dd>{lot.spin_treatment ? words(lot.spin_treatment) : "not recorded"}</dd></div>
                                     {lot.aux_basis && <div><dt>Auxiliary basis</dt><dd>{lot.aux_basis}</dd></div>}
                                     {lot.cabs_basis && <div><dt>CABS basis</dt><dd>{lot.cabs_basis}</dd></div>}
@@ -190,15 +202,13 @@ function SoftwareSection({ breakdown, available }: {
  * chemistry the archive cannot make) -- so an absent scheme is stated
  * plainly, once per possible scheme kind this archive's own vocabulary
  * recognises, never as "not applicable" and never as a blank row.
+ *
+ * `SCHEME_KIND_LABELS`/`schemeKindLabel` now live in
+ * `domain/correctionSchemeFormat.ts` (moved 2026-09, live-rule-violation
+ * fix), shared with `CorrectionSchemePage.tsx`'s own heading -- see that
+ * module's doc comment for why the old `SCHEME_KIND_LABELS[kind] ??
+ * scheme.name` fallback here is gone.
  */
-const SCHEME_KIND_LABELS: Record<string, string> = {
-    atom_energy: "Atom-energy correction",
-    bac_petersson: "Petersson bond-additivity correction",
-    bac_melius: "Melius bond-additivity correction",
-    atom_hf: "Atomic enthalpy of formation",
-    atom_thermal: "Atomic thermal contribution",
-    soc: "Spin-orbit correction",
-}
 
 // Every scheme kind this archive's vocabulary recognises (`EnergyCorrectionSchemeKind`,
 // `backend/app/db/models/common.py`) that CAN be tied to a level of theory --
@@ -225,7 +235,7 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                 rows.map((scheme) => (
                     <div key={scheme.energy_correction_scheme.energy_correction_scheme_ref} className="correction-scheme-block">
                         <h3 className="t-heading-2">
-                            {SCHEME_KIND_LABELS[scheme.energy_correction_scheme.scheme_kind] ?? scheme.energy_correction_scheme.name}
+                            {schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}
                         </h3>
                         <dl className="kv-list">
                             <div>

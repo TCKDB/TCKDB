@@ -8,6 +8,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton } from "../components/RefsDisclosure"
+import { schemeKindLabel } from "../domain/correctionSchemeFormat"
 import { words } from "../domain/provenanceFormat"
 import { useCorrectionScheme } from "../hooks/useCorrectionScheme"
 import type { EnergyCorrectionSchemeRecord, EnergyCorrectionSchemeUsage } from "../api/methodsApi"
@@ -45,6 +46,18 @@ export default function CorrectionSchemePage() {
 function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeRecord }) {
     const scheme = record.energy_correction_scheme
     const usage = record.used_by ?? []
+    // Title from the archive's own controlled vocabulary (`scheme_kind`),
+    // never the depositor's free-text `scheme.name` -- owner: "I kinda
+    // don't want labels almost in general to never appear on the front
+    // end". Measured live: both deposited schemes have `name` exactly
+    // equal to `kind` (`atom_energy`/`bac_petersson`), so the old heading
+    // was only ever repeating the kind back in the depositor's own
+    // spelling -- never adding identity information `kind` alone does not
+    // already carry. `schemeKindLabel` is shared with
+    // `LevelOfTheoryPage.tsx`'s own per-LOT scheme heading
+    // (`domain/correctionSchemeFormat.ts`) so the two pages can never label
+    // the same scheme kind two different ways.
+    const title = schemeKindLabel(scheme.scheme_kind)
 
     return (
         <section className="conformer-page methods-page">
@@ -53,7 +66,7 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                 <span aria-hidden="true">/</span>
                 <Link to="/methods">Methods</Link>
                 <span aria-hidden="true">/</span>
-                <span aria-current="page">{scheme.name}</span>
+                <span aria-current="page">{title}</span>
             </nav>
 
             <PageShell
@@ -63,7 +76,23 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Energy-correction scheme · deposited evidence</span>
                             </div>
-                            <h1 className="t-display-1 record-identity-title">{scheme.name}</h1>
+                            {/* No SOFTWARE in the title -- a review-follow-up plan
+                                proposes titling these schemes by the software that
+                                produced them once a `software`/`software_release`
+                                column exists on `energy_correction_scheme`. It does
+                                not exist today (measured: neither the ORM model nor
+                                `ScientificLevelOfTheoryRecord`'s embedded scheme
+                                shape carries one), so this titles from what IS
+                                actually on the record now -- `scheme_kind` plus the
+                                level of theory, when tied to one -- and leaves room
+                                for software to slot in as a THIRD identity element
+                                later rather than guessing at that shape today. */}
+                            <h1 className="t-display-1 record-identity-title">
+                                {title}
+                                {record.level_of_theory && (
+                                    <> <span className="value-pill"><LevelOfTheoryLink levelOfTheory={record.level_of_theory} /></span></>
+                                )}
+                            </h1>
                             <div className="record-identity-known">
                                 <dl className="kv-list record-identity-facts">
                                     <div>
@@ -80,6 +109,25 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                             {record.level_of_theory
                                                 ? <LevelOfTheoryLink levelOfTheory={record.level_of_theory} />
                                                 : <span className="record-identity-absent-inline">not tied to a specific level of theory</span>}
+                                        </dd>
+                                    </div>
+                                    {/* Fetched (`loadCorrectionScheme` always requests
+                                        `include=literature`) but never rendered before
+                                        this fix -- the archive was hiding a citation it
+                                        already had in hand. ALWAYS a row (unlike
+                                        `CalculationDetailPage.tsx`'s literature row,
+                                        which omits itself entirely when absent): the
+                                        live archive holds ZERO literature rows for
+                                        either deposited scheme today, so the reader
+                                        needs to see that this was checked and found
+                                        absent, not wonder whether the row was simply
+                                        left out. */}
+                                    <div>
+                                        <dt>Literature source</dt>
+                                        <dd>
+                                            {record.literature
+                                                ? <>{record.literature.title ?? record.literature.literature_ref}{record.literature.year ? ` (${record.literature.year})` : ""}</>
+                                                : "not recorded"}
                                         </dd>
                                     </div>
                                     {scheme.note && <div><dt>Note</dt><dd>{scheme.note}</dd></div>}
