@@ -25,6 +25,7 @@ from app.db.models.energy_correction import (
     FrequencyScaleFactor,
 )
 from app.schemas.fragments.refs import FreqScaleFactorRef
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
     EnergyCorrectionSchemeRef,
@@ -35,6 +36,9 @@ from app.services.calculation_resolution import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_declared_key
+from app.services.provenance_warnings import (
+    collect_energy_correction_scheme_provenance_warnings,
+)
 from app.services.software_resolution import resolve_software
 
 #: An applied correction names a source the enclosing upload never declared.
@@ -126,14 +130,33 @@ def resolve_or_create_scheme(
     ref: EnergyCorrectionSchemeRef,
     *,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> EnergyCorrectionScheme:
     """Resolve or create an energy correction scheme.
 
-    Dedup key: (kind, name, level_of_theory_id, version).
+    Dedup key: the full DB identity tuple ``(kind, name,
+    level_of_theory_id, version, source_literature_id, software_id,
+    workflow_tool_release_id)`` — matches
+    ``uq_energy_correction_scheme_identity``. A supplied citation or
+    software identity that differs from an existing same-``(kind, name,
+    lot, version)`` row is never dropped: it is scientifically distinct
+    identity, so it resolves to (or creates) a *different* row rather
+    than silently overwriting or ignoring what the depositor sent. Two
+    rows that agree on every field including these three still collapse
+    into one, exactly as before this widening — that residual ambiguity
+    (same kind/LOT/software, both uncited) is real and is reported, not
+    resolved, via ``warnings_out``.
 
     :param session: Active SQLAlchemy session.
     :param ref: Upload-facing scheme reference.
     :param created_by: Optional application user id.
+    :param warnings_out: Optional sink for non-blocking provenance
+        warnings (missing citation, missing software for a
+        software-scoped kind, an ambiguous uncited sibling). Only
+        populated when a *new* row is created — reusing an existing row
+        already produced whatever warning applied when it was first
+        created. ``None`` (the default) means "caller does not want
+        these," matching every existing call site.
     :returns: Existing or newly created scheme row.
     """
     lot = (
@@ -143,36 +166,48 @@ def resolve_or_create_scheme(
     )
     lot_id = lot.id if lot else None
 
+    literature = (
+        resolve_or_create_literature(session, ref.source_literature)
+        if ref.source_literature is not None
+        else None
+    )
+    lit_id = literature.id if literature else None
+
+    software_id = None
+    if ref.software is not None:
+        sw = resolve_software(session, ref.software.name)
+        software_id = sw.id
+
+    wtr_id = None
+    if ref.workflow_tool_release is not None:
+        wtr = resolve_workflow_tool_release_ref(session, ref.workflow_tool_release)
+        wtr_id = wtr.id if wtr is not None else None
+
+    def _match(col, val):
+        return col == val if val is not None else col.is_(None)
+
     existing = session.scalar(
         select(EnergyCorrectionScheme).where(
             EnergyCorrectionScheme.kind == ref.kind,
             EnergyCorrectionScheme.name == ref.name,
-            (
-                EnergyCorrectionScheme.level_of_theory_id == lot_id
-                if lot_id is not None
-                else EnergyCorrectionScheme.level_of_theory_id.is_(None)
-            ),
-            (
-                EnergyCorrectionScheme.version == ref.version
-                if ref.version is not None
-                else EnergyCorrectionScheme.version.is_(None)
-            ),
+            _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
+            _match(EnergyCorrectionScheme.version, ref.version),
+            _match(EnergyCorrectionScheme.source_literature_id, lit_id),
+            _match(EnergyCorrectionScheme.software_id, software_id),
+            _match(EnergyCorrectionScheme.workflow_tool_release_id, wtr_id),
         )
     )
+    created = existing is None
     if existing is not None:
         scheme = existing
     else:
-        literature = (
-            resolve_or_create_literature(session, ref.source_literature)
-            if ref.source_literature is not None
-            else None
-        )
-
         scheme = EnergyCorrectionScheme(
             kind=ref.kind,
             name=ref.name,
             level_of_theory_id=lot_id,
-            source_literature_id=literature.id if literature else None,
+            source_literature_id=lit_id,
+            software_id=software_id,
+            workflow_tool_release_id=wtr_id,
             version=ref.version,
             units=ref.units,
             note=ref.note,
@@ -182,6 +217,13 @@ def resolve_or_create_scheme(
         session.flush()
 
     _merge_scheme_params(session, scheme, ref)
+
+    if warnings_out is not None and created:
+        warnings_out.extend(
+            collect_energy_correction_scheme_provenance_warnings(
+                session, scheme=scheme
+            )
+        )
 
     return scheme
 
@@ -456,6 +498,7 @@ def create_applied_energy_correction(
     source_conformer_observation_id: int | None = None,
     source_calculation_id: int | None = None,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> AppliedEnergyCorrection:
     """Resolve provenance refs and create an applied energy correction.
 
@@ -473,6 +516,9 @@ def create_applied_energy_correction(
     :param source_conformer_observation_id: Resolved source conformer id.
     :param source_calculation_id: Resolved source calculation id.
     :param created_by: Optional application user id.
+    :param warnings_out: Optional sink for the scheme's non-blocking
+        provenance warnings (see :func:`resolve_or_create_scheme`).
+        ``None`` (the default) is a no-op, matching every existing caller.
     :returns: Newly created ``AppliedEnergyCorrection`` row.
     """
     scheme_id = None
@@ -480,7 +526,7 @@ def create_applied_energy_correction(
 
     if payload.scheme is not None:
         scheme = resolve_or_create_scheme(
-            session, payload.scheme, created_by=created_by
+            session, payload.scheme, created_by=created_by, warnings_out=warnings_out
         )
         scheme_id = scheme.id
 

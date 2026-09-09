@@ -138,6 +138,8 @@ class EnergyCorrectionSchemeUpdate(SchemaBase):
     name: str | None = None
     level_of_theory_id: int | None = None
     source_literature_id: int | None = None
+    software_id: int | None = None
+    workflow_tool_release_id: int | None = None
     version: str | None = None
     units: EnergyUnit | None = None
     note: str | None = None
@@ -146,6 +148,8 @@ class EnergyCorrectionSchemeUpdate(SchemaBase):
 class EnergyCorrectionSchemeRead(
     EnergyCorrectionSchemeBase, TimestampedCreatedByReadSchema
 ):
+    software_id: int | None = None
+    workflow_tool_release_id: int | None = None
     atom_params: list[EnergyCorrectionSchemeAtomParamRead] = Field(default_factory=list)
     bond_params: list[EnergyCorrectionSchemeBondParamRead] = Field(default_factory=list)
     component_params: list[EnergyCorrectionSchemeComponentParamRead] = Field(

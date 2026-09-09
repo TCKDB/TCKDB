@@ -29,10 +29,14 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
 )
 from app.db.models.literature import Literature
+from app.db.models.software import Software
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
     ReviewStatusSummary,
+    SoftwareReleaseSummary,
+    WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_energy_correction_scheme import (
     AvailableEnergyCorrectionSchemeSections,
@@ -132,6 +136,7 @@ def build_energy_correction_scheme_record(
         applied_usage_count=applied_n,
         has_applied_usage=applied_n > 0,
         has_literature_source=ecs.source_literature_id is not None,
+        has_software=ecs.software_id is not None,
     )
     available = AvailableEnergyCorrectionSchemeSections(
         has_corrections=total_terms > 0,
@@ -140,6 +145,10 @@ def build_energy_correction_scheme_record(
     )
 
     lot_summary = _build_lot_summary(session, ecs.level_of_theory_id)
+    sw_summary = _build_software_release_summary(session, ecs.software_id)
+    wf_summary = _build_workflow_release_summary(
+        session, ecs.workflow_tool_release_id
+    )
     lit_summary = _build_literature_summary(session, ecs.source_literature_id)
 
     core = EnergyCorrectionSchemeCoreBlock(
@@ -164,6 +173,8 @@ def build_energy_correction_scheme_record(
     return ScientificEnergyCorrectionSchemeRecord(
         energy_correction_scheme=core,
         level_of_theory=lot_summary,
+        software_release=sw_summary,
+        workflow_tool_release=wf_summary,
         literature=lit_summary,
         evidence_summary=evidence,
         available_sections=available,
@@ -412,6 +423,58 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         label=None,
+    )
+
+
+def _build_software_release_summary(
+    session: Session, software_id: int | None
+) -> SoftwareReleaseSummary | None:
+    """ECS row stores ``software_id`` (the software vendor), not a release.
+
+    Mirrors ``FrequencyScaleFactor``'s identical shape/limitation exactly
+    (see ``app.services.scientific_read.frequency_scale_factors``): no
+    release granularity on this row, so the summary shows the vendor
+    name without a version. Synthesizes a ``SoftwareReleaseSummary``
+    shape for symmetry with the rest of the surface.
+    """
+    if software_id is None:
+        return None
+    sw = session.get(Software, software_id)
+    if sw is None:
+        return None
+    return SoftwareReleaseSummary(
+        software_release_id=0,
+        software_release_ref="",
+        software=sw.name,
+        version=None,
+    )
+
+
+def _build_workflow_release_summary(
+    session: Session, workflow_tool_release_id: int | None
+) -> WorkflowToolReleaseSummary | None:
+    if workflow_tool_release_id is None:
+        return None
+    row = session.execute(
+        select(
+            WorkflowToolRelease.id,
+            WorkflowToolRelease.public_ref,
+            WorkflowToolRelease.version,
+            WorkflowTool.name,
+        )
+        .join(
+            WorkflowTool,
+            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
+        )
+        .where(WorkflowToolRelease.id == workflow_tool_release_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    return WorkflowToolReleaseSummary(
+        workflow_tool_release_id=row.id,
+        workflow_tool_release_ref=row.public_ref,
+        workflow_tool=row.name,
+        version=row.version,
     )
 
 

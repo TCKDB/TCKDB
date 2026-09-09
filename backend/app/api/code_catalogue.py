@@ -1010,6 +1010,34 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "registration does not already disclose by refusing at "
                 "all -- and that argument covers this endpoint only."
             )),
+    ApiCode("energy_correction_scheme_identity_conflict", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            shape=Shape.relationship,
+            note=(
+                "The admin attach-provenance route "
+                "(PATCH /admin/energy-correction-schemes/{ref}/provenance) "
+                "fills a null source_literature_id/software_id/"
+                "workflow_tool_release_id on an existing scheme row. If the "
+                "resulting tuple collides with another scheme's full "
+                "identity under uq_energy_correction_scheme_identity, the "
+                "write is refused rather than silently merging two rows."
+            )),
+    ApiCode("energy_correction_scheme_literature_already_set", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            note=(
+                "Same admin route as energy_correction_scheme_identity_"
+                "conflict, and its sibling _software_already_set / "
+                "_workflow_tool_release_already_set. Per-field, "
+                "append-only: refuses to overwrite a value already "
+                "recorded on the row rather than silently ignoring or "
+                "replacing it."
+            )),
+    ApiCode("energy_correction_scheme_software_already_set", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py"),
+    ApiCode(
+        "energy_correction_scheme_workflow_tool_release_already_set", 409,
+        Surface.message_prefix, "backend/app/api/routes/admin.py",
+    ),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py",
             shape=Shape.relationship),

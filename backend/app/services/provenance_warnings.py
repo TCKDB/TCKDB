@@ -26,12 +26,17 @@ Two complementary behaviors are expected and live elsewhere:
 
 from __future__ import annotations
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from app.db.models.common import (
+    EnergyCorrectionSchemeKind,
     NetworkEnergyTransferScope,
     NetworkSolveKind,
     ScientificOriginKind,
     TunnelingModel,
 )
+from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
@@ -62,6 +67,35 @@ W_MISSING_TUNNELING_APPLICATION = "missing_tunneling_application_evidence"
 W_MISSING_TS_INTERPRETATION = "missing_kinetics_transition_state_interpretation"
 W_NETWORK_WIDE_ENERGY_TRANSFER = "network_wide_energy_transfer_scope"
 W_REPORTED_NETWORK_SOLVE = "reported_network_solve"
+
+# Energy-correction-scheme provenance gaps (correction-scheme-provenance
+# plan §4). Distinct from the request-level codes above because
+# ``EnergyCorrectionSchemeRef`` is a nested fragment with no
+# ``scientific_origin`` of its own — these are computed from the resolved
+# scheme row itself, not from a request's declared origin.
+W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE = (
+    "missing_energy_correction_scheme_software"
+)
+W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE = (
+    "ambiguous_energy_correction_scheme_without_literature"
+)
+W_ENERGY_CORRECTION_SCHEME_LITERATURE_NOT_ATTACHED = (
+    "energy_correction_scheme_literature_not_attached"
+)
+
+# The three EnergyCorrectionSchemeKind values whose numeric parameters are
+# literally computed by a specific program at a specific level of theory
+# (plan §1.6). atom_hf/atom_thermal/soc are physical/reference constants —
+# the software axis does not apply to them (NOT_APPLICABLE in spirit, but
+# expressed here as "never judged" rather than the sentinel object, since
+# every scheme has a kind and there is no field-not-present case to guard).
+_SOFTWARE_SCOPED_SCHEME_KINDS: frozenset[EnergyCorrectionSchemeKind] = frozenset(
+    {
+        EnergyCorrectionSchemeKind.atom_energy,
+        EnergyCorrectionSchemeKind.bac_petersson,
+        EnergyCorrectionSchemeKind.bac_melius,
+    }
+)
 
 
 # Origins for which computational provenance (software + workflow tool)
@@ -612,3 +646,142 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
             )
         )
     return warnings
+
+
+# ---------------------------------------------------------------------------
+# Energy correction scheme provenance (correction-scheme-provenance plan §4)
+# ---------------------------------------------------------------------------
+
+
+def collect_energy_correction_scheme_provenance_warnings(
+    session: Session,
+    *,
+    scheme: "EnergyCorrectionScheme",
+) -> list[UploadWarning]:
+    """Report provenance a freshly created correction scheme lacks.
+
+    Called only for a scheme row this upload just *created* (see
+    ``resolve_or_create_scheme``'s ``warnings_out``/``created`` handling)
+    — reusing an existing row already produced whatever warning applied
+    when that row was first created, so warning again on every reuse
+    would repeat the same message on every future deposit that cites the
+    same scheme.
+
+    Three checks, all non-blocking (ADR 0008: never reject a
+    scientifically correct record for missing-but-optional provenance):
+
+    1. **No citation.** Every new scheme without ``source_literature_id``
+       is flagged — the owner's ruling (§0.3) is that a citation is
+       "strongly advised", never required.
+    2. **No software, for the three kinds where it is load-bearing.**
+       ``atom_hf``/``atom_thermal``/``soc`` are physical/reference
+       constants the software axis does not apply to (§1.6) and are
+       never judged here.
+    3. **An ambiguous uncited sibling.** When this new scheme is *also*
+       uncited, and another row already shares its ``(kind,
+       level_of_theory_id, software_id, workflow_tool_release_id)`` and
+       is *also* uncited, the two are indistinguishable by every axis
+       this plan added (§2.4) — flagged by name, not resolved, because
+       the archive genuinely does not know whether they are the same
+       correction deposited twice or two different sets of numbers.
+
+    :param session: Active SQLAlchemy session.
+    :param scheme: The scheme row just created (already flushed, so
+        ``scheme.id``/``scheme.public_ref`` are populated).
+    :returns: Zero or more :class:`UploadWarning`.
+    """
+    warnings: list[UploadWarning] = []
+
+    if scheme.source_literature_id is None:
+        warnings.append(_energy_correction_scheme_literature_warning())
+
+    if (
+        scheme.kind in _SOFTWARE_SCOPED_SCHEME_KINDS
+        and scheme.software_id is None
+    ):
+        warnings.append(_energy_correction_scheme_software_warning(scheme.kind))
+
+    if scheme.source_literature_id is None:
+        sibling = session.scalar(
+            select(EnergyCorrectionScheme)
+            .where(
+                EnergyCorrectionScheme.id != scheme.id,
+                EnergyCorrectionScheme.kind == scheme.kind,
+                (
+                    EnergyCorrectionScheme.level_of_theory_id
+                    == scheme.level_of_theory_id
+                    if scheme.level_of_theory_id is not None
+                    else EnergyCorrectionScheme.level_of_theory_id.is_(None)
+                ),
+                (
+                    EnergyCorrectionScheme.software_id == scheme.software_id
+                    if scheme.software_id is not None
+                    else EnergyCorrectionScheme.software_id.is_(None)
+                ),
+                (
+                    EnergyCorrectionScheme.workflow_tool_release_id
+                    == scheme.workflow_tool_release_id
+                    if scheme.workflow_tool_release_id is not None
+                    else EnergyCorrectionScheme.workflow_tool_release_id.is_(None)
+                ),
+                EnergyCorrectionScheme.source_literature_id.is_(None),
+            )
+            .limit(1)
+        )
+        if sibling is not None:
+            warnings.append(
+                _energy_correction_scheme_ambiguous_warning(sibling.public_ref)
+            )
+
+    return warnings
+
+
+def _energy_correction_scheme_literature_warning(
+    field: str = "scheme.source_literature",
+) -> UploadWarning:
+    return UploadWarning(
+        field=field,
+        code=W_MISSING_LITERATURE_PROVENANCE,
+        message=(
+            "No literature provenance was supplied for this new energy "
+            "correction scheme. A citation is strongly advised, though "
+            "not required, so the source of these correction parameters "
+            "can be audited."
+        ),
+    )
+
+
+def _energy_correction_scheme_software_warning(
+    kind: EnergyCorrectionSchemeKind,
+    field: str = "scheme.software",
+) -> UploadWarning:
+    return UploadWarning(
+        field=field,
+        code=W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE,
+        message=(
+            f"No software was supplied for this {kind.value} scheme. "
+            "Unlike a literature citation, this archive's own "
+            "calculations already know which program produced these "
+            "numbers -- atom-energy and bond-additivity corrections are "
+            "software-dependent, so an unattributed scheme cannot be "
+            "distinguished from a different program's values at the "
+            "same level of theory."
+        ),
+    )
+
+
+def _energy_correction_scheme_ambiguous_warning(
+    sibling_ref: str,
+    field: str = "scheme",
+) -> UploadWarning:
+    return UploadWarning(
+        field=field,
+        code=W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE,
+        message=(
+            f"This scheme and {sibling_ref} share a kind, level of "
+            "theory, and recorded software, and neither carries a "
+            "citation, so the archive cannot say whether they are the "
+            "same correction deposited twice or two genuinely different "
+            "sets of numbers."
+        ),
+    )

@@ -261,6 +261,92 @@
         "title": "AdminCuratorTaskStartReviewRequest",
         "type": "object"
       },
+      "AdminEnergyCorrectionSchemeProvenanceRequest": {
+        "additionalProperties": false,
+        "description": "Provenance to attach to an existing, already-deposited scheme.\n\nEvery field is optional and independent: an admin may fill only the\ncitation, only the software, only the workflow-tool release, or any\ncombination -- whichever the row is missing. Supplying a field whose\nslot on the row is already non-null is refused (409), never\nsilently ignored or overwritten.",
+        "properties": {
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "AdminEnergyCorrectionSchemeProvenanceRequest",
+        "type": "object"
+      },
+      "AdminEnergyCorrectionSchemeProvenanceResponse": {
+        "additionalProperties": false,
+        "description": "Auditable from the response alone: the scheme's own ref plus every\nresolved provenance ref it now carries (not just the ones this call\njust set).",
+        "properties": {
+          "energy_correction_scheme_ref": {
+            "title": "Energy Correction Scheme Ref",
+            "type": "string"
+          },
+          "software_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Ref"
+          },
+          "source_literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Literature Ref"
+          },
+          "workflow_tool_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Release Ref"
+          }
+        },
+        "required": [
+          "energy_correction_scheme_ref"
+        ],
+        "title": "AdminEnergyCorrectionSchemeProvenanceResponse",
+        "type": "object"
+      },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
         "description": "Admin-only machine-review projection for one linked record.",
@@ -14317,6 +14403,10 @@
           "has_literature_source": {
             "title": "Has Literature Source",
             "type": "boolean"
+          },
+          "has_software": {
+            "title": "Has Software",
+            "type": "boolean"
           }
         },
         "required": [
@@ -14326,7 +14416,8 @@
           "has_corrections",
           "applied_usage_count",
           "has_applied_usage",
-          "has_literature_source"
+          "has_literature_source",
+          "has_software"
         ],
         "title": "EnergyCorrectionSchemeEvidenceSummary",
         "type": "object"
@@ -14417,6 +14508,17 @@
             ],
             "title": "Note"
           },
+          "software_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Id"
+          },
           "source_literature_id": {
             "anyOf": [
               {
@@ -14448,6 +14550,17 @@
               }
             ],
             "title": "Version"
+          },
+          "workflow_tool_release_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Release Id"
           }
         },
         "required": [
@@ -14461,7 +14574,7 @@
       },
       "EnergyCorrectionSchemeRef": {
         "additionalProperties": false,
-        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists (by kind + name + LoT + version),\nit is reused. Otherwise a new scheme is created.",
+        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, version, source_literature, software,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software identity that differs from an\nexisting same-``(kind, name, level_of_theory, version)`` scheme is\nnever dropped: it makes this a scientifically distinct scheme (a\ndifferent citation, or a different program's numbers), so it\nresolves to a different row rather than silently overwriting or\ndiscarding what was supplied.\n\n:param software: The program that computed this scheme's parameters\n    (e.g. Gaussian). Mirrors ``FreqScaleFactorRef.software`` exactly\n    — name only, no version. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
         "properties": {
           "atom_params": {
             "items": {
@@ -14513,6 +14626,16 @@
             ],
             "title": "Note"
           },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_literature": {
             "anyOf": [
               {
@@ -14543,6 +14666,16 @@
               }
             ],
             "title": "Version"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -34147,6 +34280,16 @@
               }
             ]
           },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "used_by": {
             "anyOf": [
               {
@@ -34161,6 +34304,16 @@
             ],
             "title": "Used By",
             "x-tckdb-include-gated": "used_by"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__reads__scientific_common__WorkflowToolReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -51035,6 +51188,123 @@
           }
         },
         "summary": "Clear Artifact Storage Capacity",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/energy-correction-schemes/{ref}/provenance": {
+      "patch": {
+        "description": "Fill missing citation/software provenance on a scheme (admin only).\n\nPath handle accepts an integer ``energy_correction_scheme.id`` or a\npublic ref of the form ``ecs_...``; unknown handles 404. Each of\n``source_literature``/``software``/``workflow_tool_release`` is\nrefused with 409 if the corresponding column is already non-null on\nthe row (per-field, not all-or-nothing -- one call can fill the\ncitation on a scheme that already has software recorded, or vice\nversa). Resolution reuses the exact same services the upload path\nuses (``resolve_or_create_literature``, ``resolve_software``,\n``resolve_workflow_tool_release_ref``), so a citation/software that\nalready exists elsewhere in the archive is reused, not duplicated.\n\nMutating these fields on an already-inserted row does not regenerate\nits public ref -- refs are content-derived only at INSERT time\n(``PublicRefMixin``), and keeping the ref stable across a\nprovenance-fill matters more than the ref perfectly reflecting the\nrow's current content. If the resulting (kind, name, lot, version,\nliterature, software, workflow_tool_release) tuple collides with\nanother existing scheme row, the write is refused with 409 rather\nthan silently merging two rows' identities.",
+        "operationId": "attach_energy_correction_scheme_provenance_api_v1_admin_energy_correction_schemes__ref__provenance_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "title": "Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminEnergyCorrectionSchemeProvenanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminEnergyCorrectionSchemeProvenanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Energy Correction Scheme Provenance",
         "tags": [
           "admin"
         ]

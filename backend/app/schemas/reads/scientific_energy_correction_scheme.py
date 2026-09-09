@@ -29,6 +29,8 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    SoftwareReleaseSummary,
+    WorkflowToolReleaseSummary,
 )
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ class EnergyCorrectionSchemeEvidenceSummary(BaseModel):
     applied_usage_count: int
     has_applied_usage: bool
     has_literature_source: bool
+    has_software: bool
 
 
 class AvailableEnergyCorrectionSchemeSections(BaseModel):
@@ -178,6 +181,8 @@ class ScientificEnergyCorrectionSchemeRecord(BaseModel):
 
     energy_correction_scheme: EnergyCorrectionSchemeCoreBlock
     level_of_theory: LevelOfTheorySummary | None = None
+    software_release: SoftwareReleaseSummary | None = None
+    workflow_tool_release: WorkflowToolReleaseSummary | None = None
     literature: LiteratureSummary | None = None
     evidence_summary: EnergyCorrectionSchemeEvidenceSummary
     available_sections: AvailableEnergyCorrectionSchemeSections

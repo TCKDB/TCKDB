@@ -14,9 +14,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_write_db, require_admin
+from app.api.errors import not_found
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -27,12 +29,17 @@ from app.db.models.common import (
     MachineReviewStatus,
     SubmissionRecordType,
 )
+from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
+from app.schemas.fragments.refs import SoftwareRef, WorkflowToolReleaseRef
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
     append_observation,
     current_full_state,
 )
+from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.literature_resolution import resolve_or_create_literature
 from app.services.machine_review import (
     MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
@@ -48,6 +55,10 @@ from app.services.machine_review import (
     run_admin_fake_machine_review,
     start_curator_task_review,
 )
+from app.services.scientific_read.handles import (
+    resolve_energy_correction_scheme_handle,
+)
+from app.services.software_resolution import resolve_software
 
 router = APIRouter()
 
@@ -703,3 +714,161 @@ def clear_artifact_storage_capacity(
         created_by=_admin.id,
     )
     return _capacity_state_response(current_full_state(session))
+
+
+# ---------------------------------------------------------------------------
+# Energy-correction-scheme provenance attach (admin-only, append-only)
+# ---------------------------------------------------------------------------
+#
+# correction-scheme-provenance plan §4.3: the only path that can add a
+# citation or software identity to a scheme deposited before it had one.
+# ``resolve_or_create_scheme`` (the upload path) never mutates an
+# existing row's identity fields -- a differing citation/software makes
+# a *new* row under the widened unique index rather than editing the old
+# one. This route is the deliberate exception: narrow, admin-gated, and
+# append-only per field. It fills a null; it never overwrites a value
+# someone already recorded, so it cannot be used to silently rewrite a
+# scheme's provenance out from under every ``applied_energy_correction``
+# that cites it. ``kind``/``name``/``level_of_theory_id``/``version``/
+# ``units`` are not accepted here on purpose -- rewriting those is a far
+# bigger surface than "attach missing provenance" (``EnergyCorrectionSchemeUpdate``
+# already exists and is deliberately left unrouted for that reason).
+
+
+class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
+    """Provenance to attach to an existing, already-deposited scheme.
+
+    Every field is optional and independent: an admin may fill only the
+    citation, only the software, only the workflow-tool release, or any
+    combination -- whichever the row is missing. Supplying a field whose
+    slot on the row is already non-null is refused (409), never
+    silently ignored or overwritten.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_literature: LiteratureUploadRequest | None = None
+    software: SoftwareRef | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+
+class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
+    """Auditable from the response alone: the scheme's own ref plus every
+    resolved provenance ref it now carries (not just the ones this call
+    just set)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    energy_correction_scheme_ref: str
+    source_literature_ref: str | None = None
+    software_ref: str | None = None
+    workflow_tool_release_ref: str | None = None
+
+
+_ALREADY_SET_CODES: dict[str, str] = {
+    "literature": "energy_correction_scheme_literature_already_set",
+    "software": "energy_correction_scheme_software_already_set",
+    "workflow_tool_release": (
+        "energy_correction_scheme_workflow_tool_release_already_set"
+    ),
+}
+
+
+def _already_set_conflict(field: str) -> HTTPException:
+    code = _ALREADY_SET_CODES[field]
+    return HTTPException(
+        status_code=409,
+        detail=(
+            f"{code}: this scheme already carries a recorded "
+            f"{field.replace('_', ' ')}. This route only fills a missing "
+            "field -- it never overwrites a value someone already "
+            "recorded."
+        ),
+    )
+
+
+@router.patch(
+    "/energy-correction-schemes/{ref}/provenance",
+    response_model=AdminEnergyCorrectionSchemeProvenanceResponse,
+)
+def attach_energy_correction_scheme_provenance(
+    ref: str,
+    request: AdminEnergyCorrectionSchemeProvenanceRequest,
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_write_db),
+) -> AdminEnergyCorrectionSchemeProvenanceResponse:
+    """Fill missing citation/software provenance on a scheme (admin only).
+
+    Path handle accepts an integer ``energy_correction_scheme.id`` or a
+    public ref of the form ``ecs_...``; unknown handles 404. Each of
+    ``source_literature``/``software``/``workflow_tool_release`` is
+    refused with 409 if the corresponding column is already non-null on
+    the row (per-field, not all-or-nothing -- one call can fill the
+    citation on a scheme that already has software recorded, or vice
+    versa). Resolution reuses the exact same services the upload path
+    uses (``resolve_or_create_literature``, ``resolve_software``,
+    ``resolve_workflow_tool_release_ref``), so a citation/software that
+    already exists elsewhere in the archive is reused, not duplicated.
+
+    Mutating these fields on an already-inserted row does not regenerate
+    its public ref -- refs are content-derived only at INSERT time
+    (``PublicRefMixin``), and keeping the ref stable across a
+    provenance-fill matters more than the ref perfectly reflecting the
+    row's current content. If the resulting (kind, name, lot, version,
+    literature, software, workflow_tool_release) tuple collides with
+    another existing scheme row, the write is refused with 409 rather
+    than silently merging two rows' identities.
+    """
+    scheme_id = resolve_energy_correction_scheme_handle(session, ref)
+    scheme = session.get(EnergyCorrectionScheme, scheme_id)
+    if scheme is None:  # pragma: no cover — defended by resolver 404
+        raise not_found(
+            "energy_correction_scheme", row_id=scheme_id, code="handle_not_found"
+        )
+
+    if request.source_literature is not None:
+        if scheme.source_literature_id is not None:
+            raise _already_set_conflict("literature")
+        literature = resolve_or_create_literature(session, request.source_literature)
+        scheme.source_literature_id = literature.id
+
+    if request.software is not None:
+        if scheme.software_id is not None:
+            raise _already_set_conflict("software")
+        sw = resolve_software(session, request.software.name)
+        scheme.software_id = sw.id
+
+    if request.workflow_tool_release is not None:
+        if scheme.workflow_tool_release_id is not None:
+            raise _already_set_conflict("workflow_tool_release")
+        wtr = resolve_workflow_tool_release_ref(session, request.workflow_tool_release)
+        scheme.workflow_tool_release_id = wtr.id if wtr is not None else None
+
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "energy_correction_scheme_identity_conflict: attaching this "
+                "provenance would make this scheme identical to another "
+                "existing scheme row."
+            ),
+        ) from exc
+
+    return AdminEnergyCorrectionSchemeProvenanceResponse(
+        energy_correction_scheme_ref=scheme.public_ref,
+        source_literature_ref=(
+            scheme.source_literature.public_ref
+            if scheme.source_literature_id is not None
+            else None
+        ),
+        software_ref=(
+            scheme.software.public_ref if scheme.software_id is not None else None
+        ),
+        workflow_tool_release_ref=(
+            scheme.workflow_tool_release.public_ref
+            if scheme.workflow_tool_release_id is not None
+            else None
+        ),
+    )

@@ -384,21 +384,28 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     resolver/database treats as part of the row's identity, plus the
     fields the schema considers metadata of a distinct scheme version.
 
-    The database uniqueness constraint and
-    ``resolve_or_create_scheme`` both dedup on
-    ``(kind, name, level_of_theory_id, version)``; ``source_literature_id``
-    and ``units`` are not part of that key but a different value of
-    either still means a scientifically distinct scheme (different
-    citation, different unit convention). Two rows that the resolver
-    treats as distinct must therefore get distinct refs — otherwise
-    the ``ix_energy_correction_scheme_public_ref`` unique index trips
-    on insert.
+    The database uniqueness constraint (``uq_energy_correction_scheme_
+    identity``) and ``resolve_or_create_scheme`` both dedup on
+    ``(kind, name, level_of_theory_id, version, source_literature_id,
+    software_id, workflow_tool_release_id)`` as of the
+    correction-scheme-provenance plan — ``source_literature_id``,
+    ``software_id`` and ``workflow_tool_release_id`` are part of that
+    key (added to close a real bug: a differing citation or software
+    identity used to collapse into the first row and get silently
+    dropped). ``units`` is not part of the DB key but a different value
+    still means a scientifically distinct scheme (a different unit
+    convention). Two rows that the resolver treats as distinct must
+    therefore get distinct refs — otherwise the
+    ``ix_energy_correction_scheme_public_ref`` unique index trips on
+    insert.
     """
     return (
         f"ecs:kind={getattr(obj.kind, 'value', obj.kind)};"
         f"name={(obj.name or '').strip().lower()};"
         f"level_of_theory_id={obj.level_of_theory_id};"
         f"source_literature_id={obj.source_literature_id};"
+        f"software_id={obj.software_id};"
+        f"workflow_tool_release_id={obj.workflow_tool_release_id};"
         f"version={(obj.version or '').strip().lower()};"
         f"units={getattr(obj.units, 'value', obj.units)}"
     )

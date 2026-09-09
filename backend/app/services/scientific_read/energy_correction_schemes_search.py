@@ -23,6 +23,7 @@ from app.db.models.energy_correction import (
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.software import Software
 from app.schemas.reads.scientific_common import ReviewStatusSummary
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
@@ -55,6 +56,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "scheme_kind",
     "method",
     "basis",
+    "software",
     "literature_ref",
     "has_corrections",
     "used_by_calculation",
@@ -62,8 +64,12 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 
 # Legacy grouping name for declared filters without a backing path.
 # The service rejects these before querying; none is treated as a no-op.
+# ``software`` moved out of this group once ``energy_correction_scheme``
+# gained a ``software_id`` column (correction-scheme-provenance plan);
+# ``software_version`` stays deferred because ECS only carries the bare
+# software identity (no release), matching FrequencyScaleFactor's own
+# grain and its own identical ``software_version`` deferral.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = (
-    "software",
     "software_version",
     "used_by_thermo",
 )
@@ -88,7 +94,6 @@ def search_energy_correction_schemes(
 
     reject_unsupported_filters(
         {
-            "software": request.software,
             "software_version": request.software_version,
             "used_by_thermo": request.used_by_thermo,
         },
@@ -134,6 +139,10 @@ def search_energy_correction_schemes(
             stmt = stmt.where(LevelOfTheory.method == request.method)
         if request.basis is not None:
             stmt = stmt.where(LevelOfTheory.basis == request.basis)
+    if request.software is not None:
+        stmt = stmt.join(
+            Software, Software.id == EnergyCorrectionScheme.software_id
+        ).where(Software.name == request.software)
     if request.has_corrections is not None:
         ex = or_(
             exists().where(

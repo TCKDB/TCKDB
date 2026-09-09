@@ -211,6 +211,24 @@ JUDGED_SITES: dict[str, str] = {
         "old behaviour kept deliberately for the case where naming a field "
         "would be a guess."
     ),
+    "backend/app/api/routes/admin.py::attach_energy_correction_scheme_provenance": (
+        "The energy-correction-scheme provenance-attach route "
+        "(correction-scheme-provenance plan §4.3) mutates an existing "
+        "scheme's source_literature_id/software_id/workflow_tool_release_id "
+        "in place and flushes; the only way that flush's IntegrityError can "
+        "fire is uq_energy_correction_scheme_identity -- the widened tuple "
+        "this call would produce already belongs to another row. The caught "
+        "IntegrityError carries a raw psycopg constraint name and SQLSTATE, "
+        "neither meaningful to a caller; the handler replaces it with "
+        "`energy_correction_scheme_identity_conflict`, a coded, catalogued "
+        "409 (backend/app/api/code_catalogue.py) naming exactly what "
+        "happened. What a client loses: nothing worth having -- the "
+        "alternative is a raw driver message under an uncatalogued code. "
+        "This is the same shape #225's `email_taken`/`username_taken` "
+        "judged, not the shape that rule warns about: there is one "
+        "constraint this flush can violate, so the classification is not a "
+        "guess."
+    ),
 }
 
 #: A site the scan must find, so a scan that matches nothing cannot pass.
