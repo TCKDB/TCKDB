@@ -157,6 +157,20 @@ export type ReactionParticipationMatch = {
     reversible: boolean
     reactants: EquationParticipantInput[]
     products: EquationParticipantInput[]
+    /**
+     * `"reverse"` when THIS record matched the search's participants on
+     * the opposite stored side from how the request named them (identical
+     * meaning and identical source field, `matched_direction`, as
+     * `ReactionBrowseRecord`'s own -- see `ReactionBrowseRow.tsx`'s doc
+     * comment). `"forward"` or an absent/null value both mean "matched as
+     * named, nothing to caveat" and render nothing, the same absent-vs-
+     * asserted rule that component follows. Every search here now runs
+     * `direction=either` regardless of which arrow was typed (or none), so
+     * THIS field -- not the arrow, not a second query mode -- is how a
+     * reader learns a given row only matched because the archive also
+     * checked the reverse orientation.
+     */
+    matchedDirection: string | null
 }
 
 export type ReactionSearchResult = {
@@ -171,35 +185,42 @@ export const REACTION_SEARCH_LIMIT = 5
 /**
  * One request onto `GET /scientific/reactions/browse`, built with
  * `buildReactionBrowseQuery` (`api/browseApi.ts`) from an explicit
- * `reactants`/`products`/`direction` triple -- the exact same
- * query-building code path `BrowsePage`'s own reaction filters use, so a
- * home-page reaction search can never drift from what the browse page's
- * "See all" link-through actually runs. `direction` is always sent
- * explicitly (never the empty string `buildReactionBrowseQuery` would
- * otherwise read as "let the backend apply its own default") -- this
- * caller always knows, from the arrow the reader typed (or the fixed
- * "either side" meaning of a bare structure), which direction it means;
- * see `classifyReactionQuery`'s own doc comment for that mapping.
+ * `reactants`/`products` pair -- the exact same query-building code path
+ * `BrowsePage`'s own reaction filters use, so a home-page reaction search
+ * can never drift from what the browse page's "See all" link-through
+ * actually runs.
+ *
+ * **Always `direction=either`, never derived from the arrow (owner
+ * correction).** An earlier version of this call site branched on which
+ * arrow `classifyReactionQuery` saw -- a hidden mode a reader typing `<>`
+ * had no way to discover `->` even existed, let alone that it meant
+ * something narrower. Every search now asks the archive to check BOTH
+ * stored sides regardless of syntax, and each returned record's own
+ * `matched_direction` (mapped through to `ReactionParticipationMatch.
+ * matchedDirection`) says whether THAT row matched as written or in
+ * reverse -- the reader gets the full set, labelled, rather than a
+ * silently narrower one they would have had to already know to widen.
  *
  * The backend match is a literal string comparison against the stored
  * SMILES per participant (not RDKit-canonicalized) and, for `reactants`/
  * `products` with more than one entry, an ALL-of-these-together (AND)
  * match on that one side -- both measured live against
- * `/scientific/reactions/browse` (`?reactant_smiles=NN` -> 20,
- * `?reactant_smiles=NN&reactant_smiles=[H]` -> 0). This function does not
- * resolve the reader's typed spelling to the archive's own canonical form
- * first (contrast the OLD `searchReactionParticipation`, which did, via a
- * species structure-search) -- reaction mode is meant to be typed straight
- * from the equation a kineticist already has in hand and mapped directly
- * onto the browse filter a reader could type into that page too, not
- * silently re-interpreted through a second RDKit-backed lookup first.
+ * `/scientific/reactions/browse` (`?reactant_smiles=NN&direction=either`
+ * -> 20, `?reactant_smiles=NN&reactant_smiles=[H]&direction=either` -> 0).
+ * This function does not resolve the reader's typed spelling to the
+ * archive's own canonical form first (contrast the OLD
+ * `searchReactionParticipation`, which did, via a species structure-
+ * search) -- reaction mode is meant to be typed straight from the
+ * equation a kineticist already has in hand and mapped directly onto the
+ * browse filter a reader could type into that page too, not silently
+ * re-interpreted through a second RDKit-backed lookup first.
  */
 export async function searchReactionEquation(
-    { reactants, products, direction }: { reactants: string[]; products: string[]; direction: "forward" | "either" },
+    { reactants, products }: { reactants: string[]; products: string[] },
     signal?: AbortSignal,
 ): Promise<ReactionSearchResult> {
     const query = buildReactionBrowseQuery(
-        { ...EMPTY_BROWSE_FILTERS, reactantSmiles: reactants.join(","), productSmiles: products.join(","), direction },
+        { ...EMPTY_BROWSE_FILTERS, reactantSmiles: reactants.join(","), productSmiles: products.join(","), direction: "either" },
         0,
         REACTION_SEARCH_LIMIT,
     )
@@ -215,6 +236,7 @@ export async function searchReactionEquation(
             reversible: record.reversible,
             reactants: record.reactants,
             products: record.products,
+            matchedDirection: record.matched_direction ?? null,
         })),
         total: parsed.pagination.total,
     }

@@ -19,6 +19,21 @@
  * re-decided, so equation entry on this page and on the browse page can
  * never quietly disagree about what a comma means.
  *
+ * **Every recognized arrow means the same thing** (owner correction,
+ * reversing an earlier design here that mapped `<>`/`<=>`/`<->` to
+ * `direction=either` and `=>`/`->` to `direction=forward`): "how would the
+ * user know there is a forward-only one... you are getting stuck on the
+ * look of the arrow". A reader typing `<>` had no way to discover that
+ * `->` existed or meant something different -- a hidden mode the syntax
+ * itself could never teach. The arrow here ONLY separates reactants from
+ * products; `IdentifierSearch.tsx` always searches `direction=either`
+ * regardless of which arrow was typed, and labels each individual result
+ * with how it actually matched (`ReactionParticipationMatch.matchedDirection`,
+ * the same `matched_direction`/"Matched on the reverse direction" the
+ * archive's own `/reactions` browse index already surfaces via
+ * `ReactionBrowseRow.tsx`) rather than asking the reader to already know a
+ * second arrow exists. One syntax, everything found, each row says how.
+ *
  * A recognized or reference-SHAPED value (`rxn_…`, `spc_…`, an unrouted
  * `thm_…`, …) never reaches this grammar at all -- `IdentifierSearch.tsx`
  * checks `looksLikeReferenceAttempt` (`recordModel.ts`) FIRST, before
@@ -32,28 +47,20 @@ import { splitSmilesList } from "../api/browseApi"
 
 export type ReactionQueryClassification =
     | { valid: true; kind: "participation"; smiles: string[] }
-    | { valid: true; kind: "equation"; reactants: string[]; products: string[]; direction: "forward" | "either"; arrow: string }
+    | { valid: true; kind: "equation"; reactants: string[]; products: string[] }
     | { valid: false; message: string }
 
 const EQUATION_EXAMPLE = "NN,[H] <> N,[NH2]"
 
 /**
- * Reversible arrows map to `direction=either` (match either stored side);
- * directional arrows map to `direction=forward` (match the sides exactly
- * as written) -- the arrow the reader types already states the direction
- * they mean, the same way it would on paper, so the syntax carries that
- * fact instead of a separate control repeating it. Ordered longest-first
- * within each alternation group so `<->` is never mis-matched as a bare
- * `<>` missing its middle character, and `ARROW_PATTERN` itself lists the
- * 3-character forms before the 2-character ones for the same reason.
+ * Every arrow shape this grammar accepts -- liberal on purpose (owner:
+ * "be liberal in what you accept"), and, per the correction above, NONE of
+ * them carry a direction any more; they are interchangeable ways to write
+ * "reactants on the left, products on the right". Ordered longest-first so
+ * `<->` is never mis-matched as a bare `<>` missing its middle character.
  */
-const REVERSIBLE_ARROWS = ["<=>", "<->", "<>"]
-const FORWARD_ARROWS = ["=>", "->"]
 const ARROW_PATTERN = /<=>|<->|<>|=>|->/g
-
-function isReversibleArrow(arrow: string): boolean {
-    return (REVERSIBLE_ARROWS as string[]).includes(arrow)
-}
+const RECOGNIZED_ARROWS = ["<=>", "<->", "<>", "=>", "->"]
 
 export function classifyReactionQuery(input: string): ReactionQueryClassification {
     const value = input.trim()
@@ -88,17 +95,10 @@ export function classifyReactionQuery(input: string): ReactionQueryClassificatio
             message: `An equation needs a structure on both sides of the arrow, e.g. ${EQUATION_EXAMPLE}.`,
         }
     }
-    return {
-        valid: true,
-        kind: "equation",
-        reactants,
-        products,
-        direction: isReversibleArrow(arrow) ? "either" : "forward",
-        arrow,
-    }
+    return { valid: true, kind: "equation", reactants, products }
 }
 
 /** True for an arrow token this grammar recognizes -- exported only for the arrow-set's own unit coverage. */
 export function isRecognizedArrow(token: string): boolean {
-    return isReversibleArrow(token) || (FORWARD_ARROWS as string[]).includes(token)
+    return RECOGNIZED_ARROWS.includes(token)
 }

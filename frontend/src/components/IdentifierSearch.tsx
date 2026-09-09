@@ -45,7 +45,7 @@ const PLACEHOLDER: Record<SearchMode, string> = {
 
 const HELP: Record<SearchMode, string> = {
     species: "Exact only · no common-name or external resolver lookup",
-    reactions: "Exact only · <> is either direction, => is forward · empty is a real result, not an error",
+    reactions: "Exact only · searches both directions · empty is a real result, not an error",
 }
 
 /**
@@ -61,13 +61,22 @@ function isStructureQueryKind(kind: string): boolean {
 
 type ReactionQuerySuccess = Extract<ReactionQueryClassification, { valid: true }>
 
-/** The "Reactions matching …" heading and the "no match" honesty message both need to describe, in words, what was actually searched -- built once here so the two can never quietly disagree about what the query meant. */
+/**
+ * The "Reactions matching …" heading and the "no match" honesty message
+ * both need to describe, in words, what was actually searched -- built
+ * once here so the two can never quietly disagree about what the query
+ * meant. The equation glyph is always "⇌" (never "→") regardless of which
+ * arrow the reader typed -- every search runs `direction=either` now (see
+ * `searchReactionEquation`'s own doc comment), so "⇌" is the honest
+ * description of what this heading is ABOUT to search, not an echo of the
+ * input syntax; which individual rows matched forward versus in reverse
+ * is stated per-row instead (`ReactionMatchRow`'s `matchedDirection` note).
+ */
 function describeReactionQuery(query: ReactionQuerySuccess): string {
     if (query.kind === "participation") {
         return query.smiles.length > 1 ? `${query.smiles.join(" and ")} together` : query.smiles[0]
     }
-    const arrowGlyph = query.direction === "either" ? "⇌" : "→"
-    return `${query.reactants.join(" + ")} ${arrowGlyph} ${query.products.join(" + ")}`
+    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`
 }
 
 /**
@@ -92,18 +101,18 @@ function reactionEmptyMessage(query: ReactionQuerySuccess): string {
  * (`reactant_smiles`/`product_smiles`/`direction`) `BrowsePage` reads on
  * mount (`seedFiltersFromUrl`, `api/browseApi.ts`), so the landing page
  * shows the identical query the count above just promised, never a
- * narrower or differently-directed one.
+ * narrower one. `direction=either` always, matching `searchReactionEquation`
+ * -- there is no other direction this search ever runs any more.
  */
 function reactionSeeAllHref(query: ReactionQuerySuccess): string {
     const params = new URLSearchParams()
     if (query.kind === "participation") {
         for (const smiles of query.smiles) params.append("reactant_smiles", smiles)
-        params.set("direction", "either")
     } else {
         for (const smiles of query.reactants) params.append("reactant_smiles", smiles)
         for (const smiles of query.products) params.append("product_smiles", smiles)
-        params.set("direction", query.direction)
     }
+    params.set("direction", "either")
     return `/reactions?${params}`
 }
 
@@ -196,10 +205,10 @@ export function IdentifierSearch() {
         activeRequest.current = controller
         clearResults(); setIsSearching(true)
         try {
-            const { reactants, products, direction } = classified.kind === "equation"
+            const { reactants, products } = classified.kind === "equation"
                 ? classified
-                : { reactants: classified.smiles, products: [] as string[], direction: "either" as const }
-            const { matches: found, total } = await searchReactionEquation({ reactants, products, direction }, controller.signal)
+                : { reactants: classified.smiles, products: [] as string[] }
+            const { matches: found, total } = await searchReactionEquation({ reactants, products }, controller.signal)
             if (activeRequest.current !== controller || controller.signal.aborted) return
             if (found.length === 0) setMessage(reactionEmptyMessage(classified))
             else setReactionResult({ matches: found, total, query: classified })
@@ -429,6 +438,19 @@ function ReactionResultsSection({ result }: { result: ReactionResultState }) {
  * already uses for the identical reason: the row itself is wrapped in ONE
  * `<Link>` to `/reaction-entries/:ref`, and per-participant links would
  * nest `<a>` inside `<a>`.
+ *
+ * `matchedDirection === "reverse"` renders "Matched on the reverse
+ * direction" -- the SAME wording, the SAME condition, and the SAME
+ * `.browse-row-evidence`-equivalent note styling `ReactionBrowseRow.tsx`
+ * already uses on `/reactions` for the identical fact, reused rather than
+ * re-invented so a reader sees one consistent phrase for "this row only
+ * matched because the archive also checked the reverse orientation"
+ * wherever they encounter it. This is now the ONLY place that fact is
+ * surfaced -- every search here runs `direction=either` regardless of
+ * which arrow (if any) was typed, so there is no separate "forward-only"
+ * mode whose absence would need explaining; a reverse match is simply
+ * labelled, not hidden behind syntax the reader would have had to already
+ * know to type differently.
  */
 function ReactionMatchRow({ match }: { match: ReactionParticipationMatch }) {
     return <>
@@ -442,6 +464,9 @@ function ReactionMatchRow({ match }: { match: ReactionParticipationMatch }) {
                 />
             </span>
         </Link>
+        {match.matchedDirection === "reverse" && (
+            <span className="search-result-evidence">Matched on the reverse direction</span>
+        )}
         <code className="search-result-ref">{match.reactionEntryRef}</code>
     </>
 }

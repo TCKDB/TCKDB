@@ -93,11 +93,12 @@ async function searchReactions(user: ReturnType<typeof userEvent.setup>, value: 
  * `reactionBrowseRecordSchema` (`api/browseApi.ts`) requires `review` and
  * `availability`, which the old participation-only fixtures never needed.
  */
-function reactionRecord(entryRef: string, reversible = true) {
+function reactionRecord(entryRef: string, reversible = true, matchedDirection: string | null = null) {
     return {
         reaction_ref: `rxn_${entryRef.slice(4)}`,
         reaction_entry_ref: entryRef,
         reversible,
+        matched_direction: matchedDirection,
         review: { status: "not_reviewed" },
         reactants: [{ species_entry_ref: "spe_h2n_a", smiles: "[NH2]", stoichiometry: 2, participant_index: 0 }],
         products: [{ species_entry_ref: "spe_nn_a", smiles: "NN", stoichiometry: 1, participant_index: 0 }],
@@ -447,7 +448,11 @@ describe("reaction mode: label, placeholder, and help text are reaction-specific
         const input = screen.getByLabelText("Exact reaction equation")
         expect(input.getAttribute("placeholder")).toMatch(/rxn_|rxe_/)
         expect(input.getAttribute("placeholder")).not.toContain("formula")
-        expect(screen.getByText(/either direction/i)).toBeVisible()
+        expect(screen.getByText(/searches both directions/i)).toBeVisible()
+        // The help text no longer explains arrow semantics at all -- every
+        // arrow means the same thing now (owner correction), so there is
+        // no per-arrow behaviour left to document here.
+        expect(screen.queryByText(/is forward/i)).not.toBeInTheDocument()
     })
 })
 
@@ -505,11 +510,18 @@ describe("reaction mode: a bare structure is a participation search (either side
     })
 })
 
-describe("reaction mode: a full equation splits reactants/products and the arrow sets direction", () => {
-    it.each([
-        ["<=>", "either"], ["<->", "either"], ["<>", "either"],
-        ["=>", "forward"], ["->", "forward"],
-    ] as const)("arrow %s sends direction=%s", async (arrow, direction) => {
+/**
+ * Owner correction: an earlier version of this component mapped `<>`/
+ * `<=>`/`<->` to "either direction" and `=>`/`->` to "forward only" -- a
+ * hidden mode a reader typing `<>` had no way to discover `->` even
+ * existed. "every arrow means the same thing" replaces that: all five
+ * recognised arrows split reactants from products identically and the
+ * request is ALWAYS `direction=either`, regardless of which one was
+ * typed. Which individual rows only matched because the archive checked
+ * the reverse orientation is stated per-row instead (next describe block).
+ */
+describe("reaction mode: every arrow splits reactants/products the same way and always searches direction=either", () => {
+    it.each(["<=>", "<->", "<>", "=>", "->"])("arrow %s sends the identical request", async (arrow) => {
         const { handler, capturedUrl } = reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001")], 1)
         server.use(handler)
         const user = userEvent.setup(); page()
@@ -518,18 +530,60 @@ describe("reaction mode: a full equation splits reactants/products and the arrow
         await screen.findByRole("region", { name: "Reactions found" })
         expect(capturedUrl()?.searchParams.getAll("reactant_smiles")).toEqual(["NN", "[H]"])
         expect(capturedUrl()?.searchParams.getAll("product_smiles")).toEqual(["N", "[NH2]"])
-        expect(capturedUrl()?.searchParams.get("direction")).toBe(direction)
+        expect(capturedUrl()?.searchParams.get("direction")).toBe("either")
     })
 
-    // Mutation-table item (e): the arrow's direction must actually reach
-    // the request, not be ignored in favour of a hardcoded `either`.
-    it("a directional arrow sends direction=forward, distinctly from a reversible arrow's direction=either", async () => {
-        const forward = reactionsBrowseHandler([], 0)
-        server.use(forward.handler)
+    // Mutation-table item (e'): if the request silently narrowed to
+    // `direction=forward`, a reaction the archive holds only in the
+    // opposite orientation would be lost from the result entirely --
+    // not mislabelled, GONE. This is the regression the always-either
+    // rule exists to prevent.
+    it("finds a reaction that only matches in reverse -- proving direction=either actually reaches the request, not a narrower default", async () => {
+        const { handler, capturedUrl } = reactionsBrowseHandler(
+            [reactionRecord("rxe_a0000000000000000000000001", true, "reverse")], 1,
+        )
+        server.use(handler)
         const user = userEvent.setup(); page()
         await searchReactions(user, "NN,[H] -> N,[NH2]")
-        await screen.findByText(/No reaction in this archive matches/)
-        expect(forward.capturedUrl()?.searchParams.get("direction")).toBe("forward")
+
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        expect(within(region).getByRole("heading")).toBeVisible()
+        expect(capturedUrl()?.searchParams.get("direction")).toBe("either")
+    })
+})
+
+/**
+ * Mutation-table item (h): a reverse match that renders with no
+ * indication of HOW it matched leaves a reader unable to tell a row that
+ * matched as written from one that only matched because the archive also
+ * checked the opposite orientation -- exactly the information the arrow
+ * used to (badly) imply and now must be stated per row instead.
+ */
+describe("reaction mode: a reverse match is labelled on the row itself, the same wording /reactions uses", () => {
+    it("renders 'Matched on the reverse direction' only for a row whose matched_direction is reverse", async () => {
+        server.use(reactionsBrowseHandler(
+            [
+                reactionRecord("rxe_a0000000000000000000000001", true, "reverse"),
+                reactionRecord("rxe_b0000000000000000000000002", true, "forward"),
+            ],
+            2,
+        ).handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "NN")
+
+        const region = await screen.findByRole("region", { name: "Reactions found" })
+        const rows = within(region).getAllByRole("listitem")
+        expect(within(rows[0]).getByText("Matched on the reverse direction")).toBeVisible()
+        expect(within(rows[1]).queryByText("Matched on the reverse direction")).not.toBeInTheDocument()
+    })
+
+    it("renders no note at all when matched_direction is absent (an older API) -- never asserts a fact the archive did not send", async () => {
+        server.use(reactionsBrowseHandler([reactionRecord("rxe_a0000000000000000000000001", true, null)], 1).handler)
+        const user = userEvent.setup(); page()
+        await searchReactions(user, "NN")
+
+        await screen.findByRole("region", { name: "Reactions found" })
+        expect(screen.queryByText("Matched on the reverse direction")).not.toBeInTheDocument()
     })
 })
 

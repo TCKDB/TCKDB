@@ -34,17 +34,20 @@ describe("classifyReactionQuery: bare structure or comma-list -> participation, 
     })
 })
 
-describe("classifyReactionQuery: the arrow carries the direction", () => {
-    it.each([
-        ["<=>", "either"], ["<->", "either"], ["<>", "either"],
-        ["=>", "forward"], ["->", "forward"],
-    ] as const)("maps %s to direction=%s", (arrow, direction) => {
+describe("classifyReactionQuery: every recognized arrow means the same thing -- only splits sides", () => {
+    // Owner correction: an earlier version of this grammar mapped `<>`/
+    // `<=>`/`<->` to "either direction" and `=>`/`->` to "forward only" --
+    // a hidden mode a reader typing `<>` had no way to discover. Every
+    // arrow now produces the identical `{reactants, products}` shape; the
+    // "either direction" search and the per-result "matched in reverse"
+    // label live in `IdentifierSearch.tsx`, not here.
+    it.each(["<=>", "<->", "<>", "=>", "->"])("splits reactants/products the same way for arrow %s", (arrow) => {
         const result = classifyReactionQuery(`NN,[H] ${arrow} N,[NH2]`)
         expect(result.valid).toBe(true)
         if (!result.valid) return
         expect(result.kind).toBe("equation")
         if (result.kind !== "equation") return
-        expect(result.direction).toBe(direction)
+        expect(result).not.toHaveProperty("direction")
         expect(result.reactants).toEqual(["NN", "[H]"])
         expect(result.products).toEqual(["N", "[NH2]"])
     })
