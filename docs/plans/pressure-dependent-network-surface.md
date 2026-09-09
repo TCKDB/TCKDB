@@ -1,12 +1,40 @@
 # Pressure-dependent network surface — implementation plan
 
-Status: draft for the owner's rulings, then builders. Base: `main` at `45dc4afe`
+Status: **PRs 0, 1 and 2 are merged and deployed; PRs 3 and 4 remain.** See
+"Build status" below. Base: `main` at `45dc4afe`
 (the reaction-entry-page and Arrhenius-chart plan is fully landed — PRs 0–4 of
 `docs/plans/reaction-entry-page.md` are merged). Sibling plans:
 `docs/plans/provenance-first-website.md` (running house rules),
 `docs/plans/reaction-entry-page.md` (the `NetworkSection` this plan replaces
 with a real page, and the `ArrheniusChart`/`kineticsTable.ts` this plan must
 either reuse or explicitly decline to extend).
+
+## Build status
+
+| PR | What | State |
+|---|---|---|
+| 0 | Design mock (`docs/plans/mocks/network-entry.html`) | merged #441 |
+| 1 | Server-side Chebyshev/PLOG evaluation (`app/chemistry/network_kinetics_eval.py`) | merged, deployed. **Per-record only** — the batch endpoint PR 4 needs was deliberately not built |
+| 2 | Network record page (identity, evidence, reactions, review) | merged #442, deployed |
+| — | Follow-ups found on the deployed page | #443 (refs were inert `<code>`, now linked), #444 (an unreadable solve blanked the whole page, now degrades with an explicit note) |
+| 3 | Network diagram | not started |
+| 4 | k(T,P) chart | not started — **blocked on the batch endpoint** |
+
+Two things a PR 3/PR 4 builder should not inherit from the text below.
+
+**The "0 of 7 states have reachable energies" finding in §0 is wrong**, and so
+is PR 2's red-first criterion that repeats it. Measured on the deployed
+archive: the solve carries a relative electronic-only energy for **7 of 7**
+states and a forward/reverse barrier for **4 of 21** channels. The
+species-level thermo gap is real and separate (2 of 9 participants carry a
+thermo record). The shipped page states both, and its coverage sentence is
+computed from the payload, so it was never at risk of asserting the wrong
+number — but the plan's prose still says otherwise. Keeping the page
+topology-only remains right (mixed conventions, sparse barriers); "no PES
+ever" and "no PES yet" are just different claims.
+
+**`reactions/search?network_ref=…` does not exist** (422). Anything below
+that assumes it does needs a different join.
 
 ## 0. The gap, restated after measurement
 
@@ -404,8 +432,12 @@ chart on the site, so no new scale primitives are needed. Table-behind-
   incl. the live-computed energy-coverage fact, reactions, review) — no
   diagram or k(T,P) chart yet, so this PR does not depend on PR 1. Red
   first: DOM-vs-payload identity on the hydrazine fixture; energy-coverage
-  fact recomputes to 0/7 against the live fixture and does not regress to a
+  fact recomputes against the live fixture and does not regress to a
   hardcoded string; `NetworkSection`'s `net_…` ref becomes a real link.
+  (This originally said the fact "recomputes to 0/7". That number was wrong
+  — see "Build status" above. The criterion that mattered, and the one the
+  shipped tests enforce, is that the sentence is computed from the payload
+  rather than fixed, so changing the fixture changes the sentence.)
 - **PR 3 — network diagram** (§3.3, §5). Red first: node/edge counts match
   `evidence_summary`; degrade-to-table fires past the chosen threshold on an
   injected larger fixture; accessible table always renders regardless of
