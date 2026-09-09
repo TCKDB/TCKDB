@@ -1,5 +1,6 @@
 import { z } from "zod"
 import type { EquationParticipantInput } from "../domain/reactionEquation"
+import { buildReactionBrowseQuery, EMPTY_BROWSE_FILTERS, reactionBrowseRecordSchema } from "./browseApi"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 export { ScientificApiError, ScientificRateLimitError } from "./scientificTransport"
 
@@ -132,34 +133,21 @@ export async function searchSpeciesExact(
 }
 
 // ---------------------------------------------------------------------------
-// Reaction participation ("Reactions involving …", second group under a
-// structure-query result -- see IdentifierSearch.tsx)
+// Reaction search (reaction mode on the archive home page -- see
+// `IdentifierSearch.tsx` / `domain/reactionQuery.ts`): a bare structure (or
+// comma-list of structures), a full equation, or a species cross-link,
+// all resolve to ONE call against the same browse endpoint the reaction
+// catalogue itself reads.
 // ---------------------------------------------------------------------------
 
-// This module owns its own response schema end to end (same convention
-// `api/browseApi.ts`'s `reactionBrowseRecordSchema` documents for itself)
-// rather than importing that sibling module's schema -- deliberately, to
-// keep the two read surfaces decoupled; this endpoint call only needs a
-// small slice of the same server shape.
-const reactionParticipationParticipantSchema = z.object({
-    species_entry_ref: z.string(),
-    species_entry_label: z.string().nullable().optional(),
-    smiles: z.string(),
-    formula: z.string().nullable().optional(),
-    stoichiometry: z.number(),
-    participant_index: z.number(),
-}).passthrough()
-
-const reactionParticipationRecordSchema = z.object({
-    reaction_ref: z.string(),
-    reaction_entry_ref: z.string(),
-    reversible: z.boolean(),
-    reactants: z.array(reactionParticipationParticipantSchema),
-    products: z.array(reactionParticipationParticipantSchema),
-}).passthrough()
-
-const reactionParticipationResponseSchema = z.object({
-    records: z.array(reactionParticipationRecordSchema),
+// One schema for the whole read surface: `reactionBrowseRecordSchema`
+// (`api/browseApi.ts`) already describes exactly this endpoint's row shape
+// (this call and `BrowsePage`'s own reaction listing are the SAME route,
+// `GET /scientific/reactions/browse`, just with different query params) --
+// importing it here keeps the two callers from ever describing one server
+// shape two different ways. Pagination only needs `total` for this read.
+const reactionSearchResponseSchema = z.object({
+    records: z.array(reactionBrowseRecordSchema),
     pagination: z.object({ total: z.number() }).passthrough(),
 }).passthrough()
 
@@ -169,81 +157,87 @@ export type ReactionParticipationMatch = {
     reversible: boolean
     reactants: EquationParticipantInput[]
     products: EquationParticipantInput[]
+    /**
+     * `"reverse"` when THIS record matched the search's participants on
+     * the opposite stored side from how the request named them (identical
+     * meaning and identical source field, `matched_direction`, as
+     * `ReactionBrowseRecord`'s own -- see `ReactionBrowseRow.tsx`'s doc
+     * comment). `"forward"` or an absent/null value both mean "matched as
+     * named, nothing to caveat" and render nothing, the same absent-vs-
+     * asserted rule that component follows. Every search here now runs
+     * `direction=either` regardless of which arrow was typed (or none), so
+     * THIS field -- not the arrow, not a second query mode -- is how a
+     * reader learns a given row only matched because the archive also
+     * checked the reverse orientation.
+     */
+    matchedDirection: string | null
 }
 
-export type ReactionParticipationResult = {
+export type ReactionSearchResult = {
     matches: ReactionParticipationMatch[]
-    /** Server-reported total across every resolved species SMILES -- can exceed `matches.length` (only the first page is fetched per SMILES); see `IdentifierSearch`'s "See all N reactions" link-through. */
+    /** Server-reported total, which can exceed `matches.length` -- only the first page is fetched here; see `IdentifierSearch`'s "See all N reactions" link-through. */
     total: number
 }
 
-/** Rows requested per distinct species SMILES -- kept small since this is a secondary group under the primary species results, not the archive's own browse page (which the "See all" link hands off to for the rest). */
-const REACTION_PARTICIPATION_LIMIT = 5
+/** Rows requested from the search -- kept small since this is a landing-page preview, not the archive's own browse page (which the "See all" link hands off to for the rest). */
+export const REACTION_SEARCH_LIMIT = 5
 
 /**
- * Reactions where any of `smilesValues` participates, on EITHER side
- * (`GET /scientific/reactions/browse?reactant_smiles=…&direction=either`).
- * One call per distinct SMILES value, not one call with every value as a
- * multi-value `reactant_smiles` list -- the browse route matches a
- * multi-value list as ONE group (AND) against a single stored side, which
- * is the wrong semantics for "does species A participate, OR does species
- * B" (an exact-structure search can occasionally resolve to more than one
- * species, e.g. distinct stereo entries). Results are merged and
- * de-duplicated by `reaction_entry_ref`.
+ * One request onto `GET /scientific/reactions/browse`, built with
+ * `buildReactionBrowseQuery` (`api/browseApi.ts`) from an explicit
+ * `reactants`/`products` pair -- the exact same query-building code path
+ * `BrowsePage`'s own reaction filters use, so a home-page reaction search
+ * can never drift from what the browse page's "See all" link-through
+ * actually runs.
  *
- * **`direction=either` is sent explicitly (PR #418 follow-up, 2026-09).**
- * The browse route used to run the equivalent of `direction=either`
- * unconditionally, so naming the param `reactant_smiles` still matched a
- * species that only ever appears as a product -- this function's own doc
- * comment said so. #418 changed the route's OWN default to `forward`
- * (`reactant_smiles` matches only the stored reactant side). This
- * function's job is unchanged by that: "reactions involving this species"
- * means either side, the way a reader means the question, so it must keep
- * asking for either-direction matching -- now as an explicit `direction`
- * param rather than getting it for free from the endpoint's old default.
- * Letting the endpoint's new default silently narrow this call to
- * forward-only matches would understate "reactions involving X" by
- * exactly the species that appear only as a product.
+ * **Always `direction=either`, never derived from the arrow (owner
+ * correction).** An earlier version of this call site branched on which
+ * arrow `classifyReactionQuery` saw -- a hidden mode a reader typing `<>`
+ * had no way to discover `->` even existed, let alone that it meant
+ * something narrower. Every search now asks the archive to check BOTH
+ * stored sides regardless of syntax, and each returned record's own
+ * `matched_direction` (mapped through to `ReactionParticipationMatch.
+ * matchedDirection`) says whether THAT row matched as written or in
+ * reverse -- the reader gets the full set, labelled, rather than a
+ * silently narrower one they would have had to already know to widen.
  *
  * The backend match is a literal string comparison against the stored
- * SMILES (not RDKit-canonicalized) -- callers should pass the ARCHIVE'S
- * OWN canonical SMILES for the matched species (as returned by
- * `searchSpeciesExact`), not the raw user-typed spelling, so a
- * non-canonical query spelling that the structure-search endpoint still
- * resolved does not silently miss every reaction.
+ * SMILES per participant (not RDKit-canonicalized) and, for `reactants`/
+ * `products` with more than one entry, an ALL-of-these-together (AND)
+ * match on that one side -- both measured live against
+ * `/scientific/reactions/browse` (`?reactant_smiles=NN&direction=either`
+ * -> 20, `?reactant_smiles=NN&reactant_smiles=[H]&direction=either` -> 0).
+ * This function does not resolve the reader's typed spelling to the
+ * archive's own canonical form first (contrast the OLD
+ * `searchReactionParticipation`, which did, via a species structure-
+ * search) -- reaction mode is meant to be typed straight from the
+ * equation a kineticist already has in hand and mapped directly onto the
+ * browse filter a reader could type into that page too, not silently
+ * re-interpreted through a second RDKit-backed lookup first.
  */
-export async function searchReactionParticipation(
-    smilesValues: string[],
+export async function searchReactionEquation(
+    { reactants, products }: { reactants: string[]; products: string[] },
     signal?: AbortSignal,
-): Promise<ReactionParticipationResult> {
-    const unique = [...new Set(smilesValues.map((value) => value.trim()).filter((value) => value !== ""))]
-    if (unique.length === 0) return { matches: [], total: 0 }
-
-    const perSmiles = await Promise.all(unique.map(async (smiles) => {
-        const query = new URLSearchParams({
-            reactant_smiles: smiles, direction: "either", limit: String(REACTION_PARTICIPATION_LIMIT),
-        })
-        return parseScientificResponse(
-            reactionParticipationResponseSchema,
-            await requestScientificJson(`/api/v1/scientific/reactions/browse?${query}`, signal),
-            "reaction participation",
-        )
-    }))
-
-    const byEntryRef = new Map<string, ReactionParticipationMatch>()
-    let total = 0
-    for (const parsed of perSmiles) {
-        total += parsed.pagination.total
-        for (const record of parsed.records) {
-            if (byEntryRef.has(record.reaction_entry_ref)) continue
-            byEntryRef.set(record.reaction_entry_ref, {
-                reactionRef: record.reaction_ref,
-                reactionEntryRef: record.reaction_entry_ref,
-                reversible: record.reversible,
-                reactants: record.reactants,
-                products: record.products,
-            })
-        }
+): Promise<ReactionSearchResult> {
+    const query = buildReactionBrowseQuery(
+        { ...EMPTY_BROWSE_FILTERS, reactantSmiles: reactants.join(","), productSmiles: products.join(","), direction: "either" },
+        0,
+        REACTION_SEARCH_LIMIT,
+    )
+    const parsed = parseScientificResponse(
+        reactionSearchResponseSchema,
+        await requestScientificJson(`/api/v1/scientific/reactions/browse?${query}`, signal),
+        "reaction search",
+    )
+    return {
+        matches: parsed.records.map((record) => ({
+            reactionRef: record.reaction_ref,
+            reactionEntryRef: record.reaction_entry_ref,
+            reversible: record.reversible,
+            reactants: record.reactants,
+            products: record.products,
+            matchedDirection: record.matched_direction ?? null,
+        })),
+        total: parsed.pagination.total,
     }
-    return { matches: [...byEntryRef.values()].slice(0, REACTION_PARTICIPATION_LIMIT), total }
 }

@@ -1,118 +1,186 @@
-import { useEffect, useRef, useState, type FormEvent } from "react"
+import type { FormEvent, KeyboardEvent } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import {
     ScientificApiError,
     ScientificRateLimitError,
-    searchReactionParticipation,
+    searchReactionEquation,
     searchSpeciesExact,
     type ReactionParticipationMatch,
     type SearchMatch,
 } from "../api/scientificApi"
-import { classifyIdentifier, resultPath, type IdentifierClassification } from "../domain/recordModel"
+import { classifyIdentifier, looksLikeReferenceAttempt, resultPath, type IdentifierClassification } from "../domain/recordModel"
+import { classifyReactionQuery, type ReactionQueryClassification } from "../domain/reactionQuery"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { Formula } from "./Formula"
 import { ReactionEquation } from "./ReactionEquation"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 
+type SearchMode = "species" | "reactions"
+
+/**
+ * The reader states intent up front (owner: "it should do species or you
+ * click a button or something to switch it to reaction searching") instead
+ * of this component guessing from the shape of what was typed -- the
+ * defect the whole redesign exists to fix. Every piece of copy below is
+ * keyed by mode so the field's label, placeholder, and help text say what
+ * THIS mode accepts, not the union of everything the old single field had
+ * to explain at once.
+ */
+const MODES: { value: SearchMode; label: string }[] = [
+    { value: "species", label: "Species" },
+    { value: "reactions", label: "Reactions" },
+]
+
+const FIELD_LABEL: Record<SearchMode, string> = {
+    species: "Exact species identifier",
+    reactions: "Exact reaction equation",
+}
+
+const PLACEHOLDER: Record<SearchMode, string> = {
+    species: "SMILES, formula, spc_/spe_ ref, InChI, or InChIKey",
+    reactions: "e.g. NN,[H] <> N,[NH2], a structure, or rxn_/rxe_ ref",
+}
+
+const HELP: Record<SearchMode, string> = {
+    species: "Exact only · no common-name or external resolver lookup",
+    reactions: "Exact only · searches both directions · empty is a real result, not an error",
+}
+
 /**
  * Only a structure query (SMILES/InChI/InChIKey) has chemistry a reaction
  * can be searched by -- `formula` is deliberately excluded (a reaction has
  * no formula, so a formula query stays species-only), and the ref kinds
- * never reach `runSearch` at all (they navigate directly, see `submit`).
+ * never reach `runSpeciesSearch` at all (they navigate directly, see
+ * `runReferenceLookup`).
  */
 function isStructureQueryKind(kind: string): boolean {
     return kind === "smiles" || kind === "inchi" || kind === "inchi-key"
 }
 
-type ReactionParticipationState =
-    | { status: "idle" }
-    | { status: "ready"; matches: ReactionParticipationMatch[]; total: number; headline: string; querySmiles: string[] }
-    | { status: "error"; message: string }
+type ReactionQuerySuccess = Extract<ReactionQueryClassification, { valid: true }>
+
+/**
+ * The "Reactions matching …" heading and the "no match" honesty message
+ * both need to describe, in words, what was actually searched -- built
+ * once here so the two can never quietly disagree about what the query
+ * meant. The equation glyph is always "⇌" (never "→") regardless of which
+ * arrow the reader typed -- every search runs `direction=either` now (see
+ * `searchReactionEquation`'s own doc comment), so "⇌" is the honest
+ * description of what this heading is ABOUT to search, not an echo of the
+ * input syntax; which individual rows matched forward versus in reverse
+ * is stated per-row instead (`ReactionMatchRow`'s `matchedDirection` note).
+ */
+function describeReactionQuery(query: ReactionQuerySuccess): string {
+    if (query.kind === "participation") {
+        return query.smiles.length > 1 ? `${query.smiles.join(" and ")} together` : query.smiles[0]
+    }
+    return `${query.reactants.join(" + ")} ⇌ ${query.products.join(" + ")}`
+}
+
+/**
+ * Honesty rule (species search already follows it): an absence is a real
+ * result and must be SAID, not left implied by rendering nothing. The
+ * backend's own all-or-nothing structure match (`searchReactionEquation`'s
+ * own doc comment) means an unmatched structure empties the result rather
+ * than erroring -- this says so in the message itself, not just in help
+ * text a reader may not have read.
+ */
+function reactionEmptyMessage(query: ReactionQuerySuccess): string {
+    if (query.kind === "participation") {
+        return query.smiles.length > 1
+            ? `No reaction in this archive lists ${query.smiles.join(" and ")} together on one side.`
+            : `No reaction in this archive lists ${query.smiles[0]} as a participant.`
+    }
+    return `No reaction in this archive matches ${describeReactionQuery(query)}.`
+}
+
+/**
+ * The "See all N" link-through target -- built with the SAME param names
+ * (`reactant_smiles`/`product_smiles`/`direction`) `BrowsePage` reads on
+ * mount (`seedFiltersFromUrl`, `api/browseApi.ts`), so the landing page
+ * shows the identical query the count above just promised, never a
+ * narrower one. `direction=either` always, matching `searchReactionEquation`
+ * -- there is no other direction this search ever runs any more.
+ */
+function reactionSeeAllHref(query: ReactionQuerySuccess): string {
+    const params = new URLSearchParams()
+    if (query.kind === "participation") {
+        for (const smiles of query.smiles) params.append("reactant_smiles", smiles)
+    } else {
+        for (const smiles of query.reactants) params.append("reactant_smiles", smiles)
+        for (const smiles of query.products) params.append("product_smiles", smiles)
+    }
+    params.set("direction", "either")
+    return `/reactions?${params}`
+}
+
+type ReactionResultState = { matches: ReactionParticipationMatch[]; total: number; query: ReactionQuerySuccess }
+
+/** The species-mode "search reactions involving this too" cross-link -- see the file-level comment on `CrossLinkToReactions` for what this replaces and why. */
+type CrossLink = { smiles: string[]; headline: string }
 
 export function IdentifierSearch() {
     const navigate = useNavigate()
+    const [mode, setMode] = useState<SearchMode>("species")
     const [query, setQuery] = useState("")
     const [message, setMessage] = useState<string | null>(null)
     const [ambiguousInput, setAmbiguousInput] = useState<string | null>(null)
-    const [matches, setMatches] = useState<Awaited<ReturnType<typeof searchSpeciesExact>>>([])
+    const [matches, setMatches] = useState<SearchMatch[]>([])
+    const [crossLink, setCrossLink] = useState<CrossLink | null>(null)
+    const [reactionResult, setReactionResult] = useState<ReactionResultState | null>(null)
     const [isSearching, setIsSearching] = useState(false)
-    const [reactionState, setReactionState] = useState<ReactionParticipationState>({ status: "idle" })
     const activeRequest = useRef<AbortController | null>(null)
-    // A second, independent in-flight request -- the reaction-participation
-    // lookup is enrichment of an already-successful species result, not
-    // part of the species request/response cycle it runs alongside (see
-    // `runSearch`: it is fired only AFTER species matches resolve, and its
-    // own failure never touches `message`/`matches`). Aborted separately so
-    // a stale reaction fetch from a superseded search cannot land after a
-    // newer one, the same guard `activeRequest` gives the species request.
-    const activeReactionRequest = useRef<AbortController | null>(null)
 
-    useEffect(() => () => {
-        activeRequest.current?.abort(); activeRequest.current = null
-        activeReactionRequest.current?.abort(); activeReactionRequest.current = null
-    }, [])
+    useEffect(() => () => { activeRequest.current?.abort(); activeRequest.current = null }, [])
 
     function abortActiveRequest() {
         activeRequest.current?.abort()
         activeRequest.current = null
         setIsSearching(false)
-        activeReactionRequest.current?.abort()
-        activeReactionRequest.current = null
+    }
+
+    function clearResults() {
+        setMatches([]); setCrossLink(null); setReactionResult(null); setMessage(null)
     }
 
     /**
-     * "Reactions involving …", the second group beneath a structure
-     * query's species matches. Fired only for a SMILES/InChI/InChIKey
-     * query that resolved at least one species (see `runSearch`) -- a
-     * formula query never reaches this (a reaction has no formula), and a
-     * structure query with zero species matches has no resolved species
-     * SMILES to key a reaction lookup on. Queried by the ARCHIVE'S OWN
-     * canonical SMILES for the matched species (`match.smiles`), not the
-     * raw user-typed spelling -- `searchReactionParticipation`'s own doc
-     * explains why (the backend match is literal-string, not RDKit).
-     * Failures here never touch the species `message`/`matches` state --
-     * a failed enrichment must not blank out a successful primary result.
+     * Switching mode is the reader RE-STATING intent, not a hint this
+     * component tries to keep running with -- any results or message on
+     * screen belonged to the mode that produced them, so they clear
+     * immediately rather than lingering, mislabeled, under the new mode's
+     * (now stale) field label. The typed query text itself is left alone:
+     * a reader who typed a structure meaning to search species and
+     * realizes they wanted reactions should not have to retype it.
      */
-    async function loadReactionParticipation(
-        headline: string,
-        speciesMatches: SearchMatch[],
-        controller: AbortController,
-    ) {
-        const querySmiles = [...new Set(speciesMatches.map((match) => match.smiles).filter((value): value is string => Boolean(value)))]
-        if (querySmiles.length === 0) { setReactionState({ status: "idle" }); return }
-        try {
-            const { matches: reactionMatches, total } = await searchReactionParticipation(querySmiles, controller.signal)
-            if (activeReactionRequest.current !== controller || controller.signal.aborted) return
-            setReactionState({ status: "ready", matches: reactionMatches, total, headline, querySmiles })
-        } catch (error) {
-            if (activeReactionRequest.current !== controller || controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return
-            const reactionMessage = error instanceof ScientificRateLimitError
-                ? `The archive is receiving too many requests right now. Wait ${formatWaitSeconds(error.retryAfterSeconds)} and reload the page.`
-                : "The archive could not load reactions for this structure. Try again."
-            setReactionState({ status: "error", message: reactionMessage })
-        }
+    function selectMode(next: SearchMode) {
+        if (next === mode) return
+        abortActiveRequest()
+        setMode(next)
+        clearResults()
+        setAmbiguousInput(null)
     }
 
-    async function runSearch(classified: Extract<IdentifierClassification, { valid: true }>) {
+    async function runSpeciesSearch(classified: Extract<IdentifierClassification, { valid: true }>) {
         abortActiveRequest()
         const controller = new AbortController()
         activeRequest.current = controller
-        setMatches([]); setMessage(null); setAmbiguousInput(null); setIsSearching(true)
-        setReactionState({ status: "idle" })
+        clearResults(); setIsSearching(true)
         try {
-            const matches = await searchSpeciesExact(classified.identifier, controller.signal)
+            const found = await searchSpeciesExact(classified.identifier, controller.signal)
             if (activeRequest.current !== controller || controller.signal.aborted) return
-            if (matches.length === 0) setMessage(`No exact ${classified.label} record was found.`)
-            else if (classified.identifier.kind === "species-ref" || classified.identifier.kind === "species-entry-ref") {
-                navigate(resultPath(matches[0]))
+            if (found.length === 0) {
+                setMessage(`No exact ${classified.label} record was found.`)
+            } else if (classified.identifier.kind === "species-ref" || classified.identifier.kind === "species-entry-ref") {
+                navigate(resultPath(found[0]))
             } else {
-                setMatches(matches)
+                setMatches(found)
                 if (isStructureQueryKind(classified.identifier.kind)) {
-                    const reactionController = new AbortController()
-                    activeReactionRequest.current = reactionController
-                    const headline = matches[0].formula ?? matches[0].smiles ?? classified.identifier.value
-                    void loadReactionParticipation(headline, matches, reactionController)
+                    const smilesValues = [...new Set(found.map((match) => match.smiles).filter((value): value is string => Boolean(value)))]
+                    if (smilesValues.length > 0) {
+                        setCrossLink({ smiles: smilesValues, headline: found[0].formula ?? found[0].smiles ?? classified.identifier.value })
+                    }
                 }
             }
         } catch (error) {
@@ -121,20 +189,7 @@ export function IdentifierSearch() {
             // is a DIFFERENT fact from "the archive was searched and holds no
             // such record" -- the former says the input itself is malformed,
             // the latter says the input was understood and came up empty.
-            // Collapsing them into one generic message would tell a chemist
-            // their syntactically bad SMILES "was not found", which reads as
-            // "this molecule is absent from the archive" -- exactly the wrong
-            // answer this fix exists to stop giving. The archive's own `code`
-            // (`app/api/error_contract.py`) distinguishes the two; see
-            // `structure_search.py`'s `invalid_structure_query` raises.
             if (error instanceof ScientificRateLimitError) {
-                // Distinct from the generic "could not complete that
-                // search" below -- `requestScientificJson` already
-                // retried once automatically, and this only fires when
-                // the archive was STILL over its anonymous-read budget a
-                // `Retry-After` window later. Same plain-language wording
-                // as every other rate-limited surface (`RecordStatus`,
-                // `SpeciesEntryPage`, `SpeciesOverviewPage`, `BrowsePage`).
                 setMessage(`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(error.retryAfterSeconds)} and reload the page.`)
             } else if (error instanceof ScientificApiError && error.code === "invalid_structure_query") {
                 setMessage(`"${classified.identifier.value}" could not be parsed as a valid ${classified.label} — check the syntax and try again.`)
@@ -144,51 +199,108 @@ export function IdentifierSearch() {
         } finally { if (activeRequest.current === controller && !controller.signal.aborted) setIsSearching(false) }
     }
 
-    function submit(event: FormEvent<HTMLFormElement>) {
-        event.preventDefault()
-        const classified = classifyIdentifier(query)
+    async function runReactionSearch(classified: ReactionQuerySuccess) {
         abortActiveRequest()
-        if (!classified.valid) {
-            setMatches([]); setMessage(classified.message); setAmbiguousInput(classified.ambiguousValue ?? null)
-            setReactionState({ status: "idle" })
-            return
-        }
-        // A recognised public reference this frontend already routes
-        // (`rxn_`/`rxe_`/`tse_`/… -- see `classifyIdentifier`'s
-        // `routedPublicRefPrefixes`) navigates straight to its record page,
-        // same as clicking a link -- no verifying search call first (unlike
-        // `species-ref`/`species-entry-ref`, which still go through
-        // `runSearch` below). The destination page's own `RecordStatus`
-        // reports "not found" honestly if the ref does not resolve.
+        const controller = new AbortController()
+        activeRequest.current = controller
+        clearResults(); setIsSearching(true)
+        try {
+            const { reactants, products } = classified.kind === "equation"
+                ? classified
+                : { reactants: classified.smiles, products: [] as string[] }
+            const { matches: found, total } = await searchReactionEquation({ reactants, products }, controller.signal)
+            if (activeRequest.current !== controller || controller.signal.aborted) return
+            if (found.length === 0) setMessage(reactionEmptyMessage(classified))
+            else setReactionResult({ matches: found, total, query: classified })
+        } catch (error) {
+            if (activeRequest.current !== controller || controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return
+            if (error instanceof ScientificRateLimitError) {
+                setMessage(`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(error.retryAfterSeconds)} and reload the page.`)
+            } else {
+                setMessage("The archive could not complete that search. Check the equation and try again.")
+            }
+        } finally { if (activeRequest.current === controller && !controller.signal.aborted) setIsSearching(false) }
+    }
+
+    /**
+     * A recognised public reference (`rxn_`/`rxe_`/`spc_`/… -- anything
+     * `looksLikeReferenceAttempt` flags as reference-SHAPED) is unambiguous
+     * on its own: no arrow or comma can appear inside its fixed shape, so
+     * it means the same thing regardless of which mode is currently
+     * selected. This is what makes a `rxe_…` ref pasted while "Species" is
+     * selected still route to the reaction-entry page instead of being fed
+     * to the species/formula grammar and reported invalid -- the exact
+     * defect fixed earlier for the single-field search, now preserved
+     * across BOTH directions of the new mode switch.
+     */
+    async function runReferenceLookup(trimmed: string) {
+        const classified = classifyIdentifier(trimmed)
+        clearResults(); setAmbiguousInput(null)
+        if (!classified.valid) { setMessage(classified.message); return }
         if (classified.identifier.kind === "record-ref") {
-            setMatches([]); setMessage(null); setAmbiguousInput(null)
-            setReactionState({ status: "idle" })
             navigate(classified.identifier.path)
             return
         }
-        void runSearch(classified)
+        void runSpeciesSearch(classified)
+    }
+
+    function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        const trimmed = query.trim()
+        abortActiveRequest()
+        setAmbiguousInput(null)
+
+        if (looksLikeReferenceAttempt(trimmed)) { void runReferenceLookup(trimmed); return }
+
+        if (mode === "species") {
+            const classified = classifyIdentifier(trimmed)
+            if (!classified.valid) {
+                clearResults(); setMessage(classified.message); setAmbiguousInput(classified.ambiguousValue ?? null)
+                return
+            }
+            void runSpeciesSearch(classified)
+            return
+        }
+
+        const classified = classifyReactionQuery(trimmed)
+        if (!classified.valid) { clearResults(); setMessage(classified.message); return }
+        void runReactionSearch(classified)
     }
 
     function chooseAmbiguous(kind: "formula" | "smiles") {
         const value = query.trim()
         if (!ambiguousInput || value !== ambiguousInput) return
         const choice = classifyIdentifier(`${kind}:${value}`)
-        if (choice.valid) void runSearch(choice)
+        if (choice.valid) void runSpeciesSearch(choice)
+    }
+
+    /** The species-mode cross-link into reaction mode -- see `CrossLinkToReactions`'s own comment. */
+    function followCrossLink() {
+        if (!crossLink) return
+        const joined = crossLink.smiles.join(",")
+        const classified = classifyReactionQuery(joined)
+        abortActiveRequest()
+        setMode("reactions")
+        setQuery(joined)
+        clearResults()
+        if (!classified.valid) { setMessage(classified.message); return }
+        void runReactionSearch(classified)
     }
 
     return <form className="identifier-search" onSubmit={submit} noValidate>
-        <label htmlFor="identifier">Exact species or reaction identifier</label>
+        <SearchModeToggle mode={mode} onSelect={selectMode} />
+        <label htmlFor="identifier">{FIELD_LABEL[mode]}</label>
         <div className="search-row">
             <span aria-hidden="true">⌕</span>
             <input id="identifier" value={query} onChange={(event) => {
                 setQuery(event.target.value); setMessage(null); setAmbiguousInput(null)
             }}
-                placeholder="SMILES, formula, spc_/spe_/rxn_/rxe_/tse_ ref, InChI, or InChIKey" autoComplete="off" />
+                placeholder={PLACEHOLDER[mode]} autoComplete="off" aria-describedby="identifier-search-help" />
             <button type="submit" aria-busy={isSearching}>Search</button>
         </div>
-        <p className="search-help">Exact only · no common-name or external resolver lookup</p>
+        <p className="search-help" id="identifier-search-help">{HELP[mode]}</p>
         {message && <p className="search-message" role="status">{message}</p>}
-        {ambiguousInput && <fieldset className="identifier-choice">
+        {mode === "species" && ambiguousInput && <fieldset className="identifier-choice">
             <legend>Search “{ambiguousInput}” as</legend>
             {/* SMILES leads: a structure string is the identifier a chemist
                 reaches for first, and this archive is searched by structure far
@@ -199,7 +311,7 @@ export function IdentifierSearch() {
             <button type="button" onClick={() => chooseAmbiguous("smiles")}>SMILES</button>
             <button type="button" onClick={() => chooseAmbiguous("formula")}>Formula</button>
         </fieldset>}
-        {matches.length > 0 && <section className="search-results" aria-label="Exact search results">
+        {mode === "species" && matches.length > 0 && <section className="search-results" aria-label="Exact search results">
             <h2>Exact matches</h2>
             <ul>{matches.map((match) => {
                 const ref = match.entryRef ?? match.speciesRef
@@ -209,54 +321,105 @@ export function IdentifierSearch() {
                     </SectionErrorBoundary>
                 </li>
             })}</ul>
+            {crossLink && <CrossLinkToReactions headline={crossLink.headline} onFollow={followCrossLink} />}
         </section>}
-        <ReactionParticipationResults state={reactionState} />
+        {mode === "reactions" && reactionResult && <ReactionResultsSection result={reactionResult} />}
     </form>
 }
 
 /**
- * The second, clearly-labelled group beneath a structure query's species
- * matches -- "find reactions where that species participates" (owner
- * brief). Renders only for `reactionState.status === "ready"`, which
- * `runSearch`/`loadReactionParticipation` only ever reach for a SMILES/
- * InChI/InChIKey query that resolved at least one species; a formula query
- * or an unresolved structure query leaves `reactionState` at `"idle"`
- * (rendering nothing here) rather than ever asserting a reaction fact
- * about a species this archive did not find.
+ * Two-way choice, rendered like `ThemeToggle`'s Light/Dark/System pill
+ * (`components/ThemeToggle.tsx`) -- the site's own established idiom for
+ * "exactly one of a small fixed set is always the active choice", reused
+ * here rather than a THIRD idiom invented for this one control (the browse
+ * filters and the chart's axis controls both reach for a `<select>` for a
+ * many-option facet; a two-way MODE switch that changes what the whole
+ * field means is closer to what the theme toggle already is than to a
+ * filter facet).
  *
- * A genuine zero-reaction result IS rendered (as a stated absence, "No
- * reactions in this archive list … as a participant") -- this archive's
- * honesty rule is that an absence must be SAID, never left implied by
- * silence, the same rule the species-match "No exact … record was found"
- * message already follows one level up.
+ * A real `role="radiogroup"` of `role="radio"` buttons, not a div with
+ * click handlers -- exactly one of the two is ever "the" mode (never none,
+ * never both), which is what a mode switch IS. Arrow keys move focus AND
+ * selection together (the radiogroup convention: there is nothing to
+ * preview separately from selecting, unlike a tablist), with a roving
+ * `tabIndex` so Tab reaches the group once, not twice.
  */
-function ReactionParticipationResults({ state }: { state: ReactionParticipationState }) {
-    if (state.status === "idle") return null
-    if (state.status === "error") return <p className="search-message reaction-search-message" role="status">{state.message}</p>
-    if (state.matches.length === 0) {
-        return <p className="search-message reaction-search-message" role="status">
-            No reactions in this archive list {state.headline} as a participant.
-        </p>
+function SearchModeToggle({ mode, onSelect }: { mode: SearchMode; onSelect: (mode: SearchMode) => void }) {
+    const optionRefs = useRef<Partial<Record<SearchMode, HTMLButtonElement | null>>>({})
+
+    function focusMode(value: SearchMode) {
+        optionRefs.current[value]?.focus()
     }
-    const hasMore = state.total > state.matches.length
-    // `direction=either` MUST travel with `reactant_smiles` here (PR #418
-    // follow-up): `state.total`/`state.matches` above come from
-    // `searchReactionParticipation`, which now asks the browse endpoint for
-    // `direction=either` explicitly (see that function's own doc comment in
-    // `scientificApi.ts`) rather than getting it for free from the
-    // endpoint's old unconditional-either default. `BrowsePage` seeds its
-    // OWN request straight from this URL's query params
-    // (`seedFiltersFromUrl`, `browseApi.ts`), including `direction` -- if
-    // this link omitted it, the browse page would silently fall back to the
-    // endpoint's new `forward` default and land on a DIFFERENT, narrower
-    // result set than the "See all N" count above just promised, the same
-    // class of link/landing-count disagreement `seedFiltersFromUrl`'s own
-    // repeated-param handling was already written to prevent.
-    const browseQuery = state.querySmiles.map((smiles) => `reactant_smiles=${encodeURIComponent(smiles)}`).join("&")
-        + "&direction=either"
+
+    function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+            event.preventDefault()
+            const next = MODES[(index + 1) % MODES.length].value
+            focusMode(next); onSelect(next)
+        } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+            event.preventDefault()
+            const next = MODES[(index - 1 + MODES.length) % MODES.length].value
+            focusMode(next); onSelect(next)
+        }
+    }
+
+    return (
+        <div className="identifier-search-mode" role="radiogroup" aria-label="Search kind">
+            {MODES.map(({ value, label }, index) => (
+                <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={mode === value}
+                    tabIndex={mode === value ? 0 : -1}
+                    className="identifier-search-mode-option"
+                    data-active={mode === value}
+                    ref={(node) => { optionRefs.current[value] = node }}
+                    onClick={() => onSelect(value)}
+                    onKeyDown={(event) => handleKeyDown(event, index)}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    )
+}
+
+/**
+ * What replaced the old "Reactions involving …" group that used to render
+ * unconditionally beneath a structure query's species matches (owner
+ * brief: that automatic secondary fetch is the exact kind of INFERRED
+ * intent this redesign exists to remove -- species mode means "search
+ * species", full stop). A reader who typed a structure and got species
+ * matches back is one click from continuing into reaction mode with the
+ * SAME structure, pre-filled -- discoverable, but never fetched until
+ * asked for. Rendered only when `crossLink` is set, which
+ * `runSpeciesSearch` only ever does for a SMILES/InChI/InChIKey query that
+ * resolved at least one species match (a formula query never gets one --
+ * a reaction has no formula).
+ */
+function CrossLinkToReactions({ headline, onFollow }: { headline: string; onFollow: () => void }) {
+    return <p className="search-cross-link">
+        <button type="button" className="search-cross-link-button" onClick={onFollow}>
+            Also search reactions involving {headline} →
+        </button>
+    </p>
+}
+
+/**
+ * Reaction mode's own primary results group -- what "Reactions involving
+ * …" became now that reaction mode is an explicit, asked-for search rather
+ * than enrichment tacked onto a species result. Renders only when
+ * `reactionResult` holds at least one match; a genuine zero-match search
+ * is a stated `message` instead (`reactionEmptyMessage`), same honesty
+ * rule the species side already follows for "No exact … record was found."
+ */
+function ReactionResultsSection({ result }: { result: ReactionResultState }) {
+    const { matches, total, query } = result
+    const hasMore = total > matches.length
     return <section className="search-results reaction-search-results" aria-label="Reactions found">
-        <h2>Reactions involving {state.headline}</h2>
-        <ul>{state.matches.map((match) => (
+        <h2>Reactions matching {describeReactionQuery(query)}</h2>
+        <ul>{matches.map((match) => (
             <li className="search-result" key={match.reactionEntryRef}>
                 <SectionErrorBoundary fallback={<ReactionFallbackRow match={match} />}>
                     <ReactionMatchRow match={match} />
@@ -264,7 +427,7 @@ function ReactionParticipationResults({ state }: { state: ReactionParticipationS
             </li>
         ))}</ul>
         {hasMore && <p className="search-results-more">
-            <Link to={`/reactions?${browseQuery}`}>See all {state.total} reactions involving {state.headline}</Link>
+            <Link to={reactionSeeAllHref(query)}>See all {total} reactions</Link>
         </p>}
     </section>
 }
@@ -275,6 +438,19 @@ function ReactionParticipationResults({ state }: { state: ReactionParticipationS
  * already uses for the identical reason: the row itself is wrapped in ONE
  * `<Link>` to `/reaction-entries/:ref`, and per-participant links would
  * nest `<a>` inside `<a>`.
+ *
+ * `matchedDirection === "reverse"` renders "Matched on the reverse
+ * direction" -- the SAME wording, the SAME condition, and the SAME
+ * `.browse-row-evidence`-equivalent note styling `ReactionBrowseRow.tsx`
+ * already uses on `/reactions` for the identical fact, reused rather than
+ * re-invented so a reader sees one consistent phrase for "this row only
+ * matched because the archive also checked the reverse orientation"
+ * wherever they encounter it. This is now the ONLY place that fact is
+ * surfaced -- every search here runs `direction=either` regardless of
+ * which arrow (if any) was typed, so there is no separate "forward-only"
+ * mode whose absence would need explaining; a reverse match is simply
+ * labelled, not hidden behind syntax the reader would have had to already
+ * know to type differently.
  */
 function ReactionMatchRow({ match }: { match: ReactionParticipationMatch }) {
     return <>
@@ -288,6 +464,9 @@ function ReactionMatchRow({ match }: { match: ReactionParticipationMatch }) {
                 />
             </span>
         </Link>
+        {match.matchedDirection === "reverse" && (
+            <span className="search-result-evidence">Matched on the reverse direction</span>
+        )}
         <code className="search-result-ref">{match.reactionEntryRef}</code>
     </>
 }
@@ -368,3 +547,4 @@ function MatchHeadline({ match }: { match: SearchMatch }) {
 function FallbackRow({ match }: { match: SearchMatch }) {
     return <Link className="search-result-link" to={resultPath(match)}>{match.entryRef ?? match.speciesRef}</Link>
 }
+

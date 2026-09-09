@@ -124,6 +124,35 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    600 .72rem) is the named step for a short, weighted field label like
    this one ("Exact species identifier"). */
 .identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
+/*
+ * Species/Reactions mode switch (`IdentifierSearch.tsx`'s
+ * `SearchModeToggle`) -- the SAME pill-radiogroup recipe `.theme-toggle`
+ * already established (own class names, since this is a different control
+ * in a different part of the page, but identical visual language: a
+ * sunken track, one raised "active" pill, no third idiom invented for a
+ * two-way mode choice next to the browse filters'/chart axis controls'
+ * `<select>`-based facets). Centered above the search row, with a little
+ * breathing room below it before the field it governs.
+ */
+.identifier-search-mode { display: inline-flex; gap: .2rem; margin: 0 0 .85rem; padding: .2rem; border: 1px solid var(--line); border-radius: .5rem; background: var(--surface-sunken); }
+.identifier-search-mode-option {
+    border: 0;
+    border-radius: .35rem;
+    padding: .4rem 1rem;
+    background: none;
+    color: var(--muted-2);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
+    cursor: pointer;
+}
+.identifier-search-mode-option:hover { color: var(--accent-700); }
+.identifier-search-mode-option[data-active="true"] {
+    background: var(--surface);
+    color: var(--accent-700);
+    box-shadow: 0 1px 2px var(--shadow-color);
+}
+.identifier-search-mode-option:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 2px; }
 .search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }
 .search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }
 /* The search-icon glyph ("⌕") -- a decorative symbol sized to sit
@@ -144,6 +173,13 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }
 .search-results ul { margin: 0; padding: 0; list-style: none; }
 .identifier-choice { display: flex; gap: .6rem; align-items: center; margin: .8rem 0 0; padding: .7rem; border: 1px solid var(--line); background: var(--surface); }.identifier-choice legend { padding: 0 .25rem; color: var(--ink-2); font-size: .78rem; }.identifier-choice button { border: 1px solid var(--accent); border-radius: .25rem; padding: .35rem .55rem; background: var(--surface); color: var(--accent-700); font-weight: 600; cursor: pointer; }.identifier-choice button:hover { background: var(--accent-50); }
+/* Species-mode "search reactions too" cross-link (`CrossLinkToReactions`,
+   `IdentifierSearch.tsx`) -- a real `<button>` styled as an inline text
+   link (state change + mode switch, not a URL navigation), sitting quietly
+   under the species match list rather than competing with it. */
+.search-cross-link { margin: .75rem 0 0; }
+.search-cross-link-button { border: 0; padding: 0; background: none; color: var(--accent-700); font: var(--type-note-font); text-decoration: underline; text-underline-offset: .15em; cursor: pointer; }
+.search-cross-link-button:hover { color: var(--accent); }
 
 /*
  * Theme toggle (`components/ThemeToggle.tsx`) — Light/Dark/System, a
@@ -258,12 +294,24 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     overflow-wrap: anywhere;
     user-select: all;
 }
-/* The reaction-participation group ("Reactions involving …") that follows
-   a structure query's species matches -- second `.search-results` block,
-   separated with its own top margin so it doesn't read as a continuation
-   of the species list above it. */
-.reaction-search-results { margin-top: 1rem; }
-.reaction-search-message { margin-top: 1rem; }
+/* "Matched on the reverse direction" (`ReactionMatchRow`, reaction mode) --
+   the identical note text AND note-step styling `.browse-row-evidence`
+   (browse.css) gives the same fact on `/reactions`, redeclared under its
+   own class here rather than importing that page's stylesheet wholesale
+   for one rule; see `ReactionMatchRow`'s own doc comment for why the
+   wording must match. */
+.search-result-evidence {
+    display: block;
+    margin-top: .3rem;
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
+}
+/* Reaction mode's own primary results group ("Reactions matching …") --
+   the shared `.search-results` rule already gives this its spacing/
+   border/background/heading treatment; `.reaction-search-results` is kept
+   as a class hook (not a style override) for the reaction-specific row
+   shape (`ReactionMatchRow`) that renders inside it. */
 .search-results-more { margin: .75rem 0 0; font-size: .82rem; }
 /* Box styling (border/radius/background) comes from the shared `.card`
    primitive now (`.destination card` in `ArchiveHomePage.tsx`); this rule
