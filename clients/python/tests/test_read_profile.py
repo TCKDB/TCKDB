@@ -71,6 +71,7 @@ PROFILE_METHODS = _typed_methods_for("profile")
 _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "download_artifact": ("a" * 64,),
     "evaluate_network_kinetics": ("nkin_1",),
+    "evaluate_network_kinetics_batch": ("net_1",),
     "export_chemkin": ({"species_refs": ["spc_1"]},),
     "get_calculation": ("calc_1",),
     "get_calculation_irc": ("calc_1",),
@@ -92,6 +93,18 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_species_thermo": ("spe_1",),
     "get_transition_state": ("ts_1",),
     "get_transition_state_entry": ("tse_1",),
+}
+
+#: Methods with required *keyword-only* parameters beyond the handle in
+#: ``_REQUIRED_ARGUMENTS`` -- e.g. ``evaluate_network_kinetics_batch``'s
+#: ``temperature_k``/``pressure_bar`` grid, which (unlike the per-record
+#: ``evaluate_network_kinetics``'s optional scalar-or-list form) has no
+#: sensible default to fall back on.
+_REQUIRED_KEYWORD_ARGUMENTS: dict[str, dict] = {
+    "evaluate_network_kinetics_batch": {
+        "temperature_k": [1000.0],
+        "pressure_bar": [1.0],
+    },
 }
 
 _ENVELOPE = {
@@ -119,7 +132,8 @@ def _query(request: httpx.Request) -> dict[str, list[str]]:
 
 def _invoke(client: TCKDBClient, name: str, **kwargs):
     args = _REQUIRED_ARGUMENTS.get(name, ())
-    result = getattr(client, name)(*args, **kwargs)
+    call_kwargs = {**_REQUIRED_KEYWORD_ARGUMENTS.get(name, {}), **kwargs}
+    result = getattr(client, name)(*args, **call_kwargs)
     # The NDJSON exports return lazy iterators; the request has already been
     # issued by then, but draining keeps the generator from being collected
     # mid-assertion.

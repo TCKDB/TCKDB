@@ -157,6 +157,7 @@ class RejectionCode(str, Enum):
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+    NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE = "network_kinetics_batch_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE = "network_kinetics_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_INVALID_POINT = "network_kinetics_evaluate_invalid_point"
     NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE = "network_kinetics_evaluate_missing_pressure"
@@ -325,6 +326,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT,
         RejectionCode.NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE,
@@ -521,6 +523,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE: frozenset({422}),

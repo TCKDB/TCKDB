@@ -404,6 +404,12 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         _NEW_METHOD_TESTS,
     ),
     (
+        "POST",
+        "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate",
+        "evaluate_network_kinetics_batch", None, None,
+        _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/network-solves/search",
         "search_network_solves", "iter_network_solves", None,
         "tests/test_network_solve_client.py",

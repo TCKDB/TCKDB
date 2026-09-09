@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 103 |
+| typed | 104 |
 | raw_only | 106 |
 | not_applicable | 40 |
-| **total** | **249** |
+| **total** | **250** |
 
 ## Typed coverage
 
@@ -91,6 +91,7 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/networks/browse` | yes | `browse_networks` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/networks/search` | yes | `search_networks` | `iter_networks` | — | `tests/test_typed_scientific.py` |
+| `POST /api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate` | yes | `evaluate_network_kinetics_batch` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/full` | yes | `get_reaction_full` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/reaction-entries/{reaction_entry_id}/kinetics` | yes | `get_reaction_kinetics` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/reactions/browse` | yes | `browse_reactions` | — | — | `tests/test_typed_parity_methods.py` |

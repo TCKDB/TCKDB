@@ -1324,6 +1324,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("network_kinetics_batch_evaluate_grid_too_large", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics_batch_evaluate.py",
+            shape=Shape.relationship,
+            note=(
+                "The network-scoped batch evaluate endpoint's own cap, "
+                "distinct from network_kinetics_evaluate_grid_too_large: "
+                "that one bounds one fit's own (temperature_k x "
+                "pressure_bar) grid (reused here unchanged as a per-fit "
+                "pre-check) and is raised from network_kinetics.py; this "
+                "one bounds fit_count * grid_size, since the batch "
+                "endpoint evaluates every stored fit for the network with "
+                "no channel filter to shrink fit_count. Context carries "
+                "fit_count, grid_size, total_points and cap."
+            )),
     ApiCode("network_kinetics_evaluate_grid_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics.py",
             shape=Shape.relationship,
@@ -1331,7 +1345,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Same shape as export_all_cap_exceeded: context carries "
                 "grid_size (len(temperature_k) * len(pressure_bar)) and cap "
                 "(settings.public_max_limit) so a client can see by how much "
-                "it overshot rather than re-deriving the cap from the docs."
+                "it overshot rather than re-deriving the cap from the docs. "
+                "Also raised (reused, same code) by "
+                "network_kinetics_batch_evaluate.py's per-fit pre-check "
+                "ahead of the batch endpoint's own aggregate cap "
+                "(network_kinetics_batch_evaluate_grid_too_large)."
             )),
     ApiCode("network_kinetics_evaluate_invalid_point", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics.py",
