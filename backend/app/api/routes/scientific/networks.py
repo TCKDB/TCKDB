@@ -28,6 +28,10 @@ from app.schemas.reads.scientific_network import (
 from app.schemas.reads.scientific_network_kinetics import (
     ScientificNetworkKineticsDetailResponse,
 )
+from app.schemas.reads.scientific_network_kinetics_batch_evaluate import (
+    NetworkKineticsBatchEvaluateRequest,
+    NetworkKineticsBatchEvaluateResponse,
+)
 from app.schemas.reads.scientific_network_kinetics_evaluate import (
     NetworkKineticsEvaluateResponse,
 )
@@ -49,6 +53,9 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.network_kinetics import (
     evaluate_network_kinetics,
     get_network_kinetics,
+)
+from app.services.scientific_read.network_kinetics_batch_evaluate import (
+    evaluate_network_kinetics_batch,
 )
 from app.services.scientific_read.network_kinetics_search import (
     search_network_kinetics,
@@ -212,6 +219,84 @@ def scientific_network_detail(
         payload,
         table=NETWORK_RECORD_SECTIONS,
         scope=DETAIL_SCOPE,
+    )
+
+
+@router.post(
+    "/{network_ref_or_id}/kinetics/evaluate",
+    response_model=NetworkKineticsBatchEvaluateResponse,
+)
+def scientific_network_kinetics_batch_evaluate(
+    request: Request,
+    body: NetworkKineticsBatchEvaluateRequest,
+    network_ref_or_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+):
+    """Evaluate every stored k(T,P) fit belonging to one network, in one call.
+
+    The network-scoped batch companion to
+    ``GET /scientific/network-kinetics/{ref}/evaluate``: that endpoint
+    evaluates one stored fit, so a chart covering a whole network would
+    need one request per fit (42 on the live hydrazine network — 21
+    channels, each carrying both a Chebyshev and a PLOG fit). This
+    endpoint evaluates all of them at one caller-supplied
+    ``(temperature_k, pressure_bar)`` grid, in one request.
+
+    Body carries the grid (JSON, not query params, since a chart-quality
+    grid times a real network's fit count is larger than this repo's
+    other POST-search-form bodies) — ``temperature_k`` and
+    ``pressure_bar``, each a non-empty list of values, both required.
+    Query-string keys other than ``profile``/``release`` (the router-level
+    read-profile dependency) are rejected the same way the POST search
+    endpoints on this surface reject them, so a caller cannot silently
+    have a query-string field ignored.
+
+    Response is keyed by ``network_kinetics_ref``, **not** by channel: a
+    channel routinely carries more than one fit (Chebyshev + PLOG on the
+    same channel is the norm here, not an edge case), and the two are
+    never picked, preferred, averaged, or otherwise collapsed into one
+    value — they can disagree materially. Every stored fit's evaluated
+    points are served, each entry also carrying its ``channel_key`` +
+    composition-hash pair and its ``network_solve_ref`` so a client can
+    group and label the results honestly.
+
+    Path handle accepts an integer ``network.id`` or a public ref of the
+    form ``net_…``, matching every other detail surface here. A network
+    that exists but has no stored kinetics yet returns ``fits: []``, not
+    a 404.
+
+    Two bounded-size 422s, checked in that order: a per-fit grid larger
+    than ``settings.public_max_limit`` points
+    (``network_kinetics_evaluate_grid_too_large`` — the exact cap and
+    code the per-record endpoint enforces for one fit's own grid), and an
+    aggregate ``fit_count * grid_size`` larger than that cap squared
+    (``network_kinetics_batch_evaluate_grid_too_large``). Refused, never
+    truncated — a chart silently missing channels would misrepresent the
+    network's evaluated coverage as complete. See
+    ``app/services/scientific_read/network_kinetics_batch_evaluate.py``
+    for the exact arithmetic.
+
+    A requested point outside a fit's own stated validity range is still
+    evaluated but flagged ``in_range=False``, identically to the
+    per-record endpoint (including PLOG's pressure axis being judged
+    against its own fitted-pressure table rather than the envelope's
+    ``pmin_bar``/``pmax_bar``) — never silently presented as interpolated.
+    """
+    forbidden = set(request.query_params.keys()) - _POST_ALLOWED_QS_KEYS
+    if forbidden:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "post_search_fields_must_be_in_body: query-string keys "
+                f"{sorted(forbidden)!r} are not accepted on POST; supply "
+                "temperature_k / pressure_bar in the JSON body."
+            ),
+        )
+    return evaluate_network_kinetics_batch(
+        session,
+        network_handle=network_ref_or_id,
+        temperatures_k=body.temperature_k,
+        pressures_bar=body.pressure_bar,
     )
 
 

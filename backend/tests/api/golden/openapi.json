@@ -23587,6 +23587,151 @@
         "title": "NetworkEvidenceSummary",
         "type": "object"
       },
+      "NetworkKineticsBatchEvaluateRequest": {
+        "description": "Request body for ``POST /scientific/networks/{ref}/kinetics/evaluate``.\n\nBoth axes are required. Non-emptiness is enforced service-side, not\nhere with a Pydantic ``min_length`` — deliberately, so an empty list\nis still a *valid* body that reaches\n:func:`app.services.scientific_read.network_kinetics_batch_evaluate.evaluate_network_kinetics_batch`\nand is refused there with the same coded 422s the per-record endpoint\nuses for the identical check\n(``network_kinetics_evaluate_missing_temperature`` /\n``..._missing_pressure``), rather than with FastAPI's generic\n``request_validation_error``. A caller who wants a result must supply\nboth non-empty; this one shared grid is evaluated against *every* fit\nstored for the network — there is no per-fit or per-channel override,\nsince the whole point of the batch endpoint is one grid, one request,\nevery fit.",
+        "properties": {
+          "pressure_bar": {
+            "description": "One or more pressures, bar. Shared by every fit.",
+            "items": {
+              "type": "number"
+            },
+            "title": "Pressure Bar",
+            "type": "array"
+          },
+          "temperature_k": {
+            "description": "One or more temperatures, K. Shared by every fit.",
+            "items": {
+              "type": "number"
+            },
+            "title": "Temperature K",
+            "type": "array"
+          }
+        },
+        "required": [
+          "temperature_k",
+          "pressure_bar"
+        ],
+        "title": "NetworkKineticsBatchEvaluateRequest",
+        "type": "object"
+      },
+      "NetworkKineticsBatchEvaluateResponse": {
+        "description": "Response envelope for\n``POST /scientific/networks/{ref}/kinetics/evaluate``.\n\n``fits`` is empty (never a 404) for a network that exists but has no\nstored kinetics yet — an honest \"nothing to evaluate\", the same\n\"absent, not zero\" stance the rest of this surface takes. One entry\nper stored ``network_kinetics`` row, in ascending row-id order.",
+        "properties": {
+          "fits": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkKineticsBatchFitEvaluation"
+            },
+            "title": "Fits",
+            "type": "array"
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_ref"
+        ],
+        "title": "NetworkKineticsBatchEvaluateResponse",
+        "type": "object"
+      },
+      "NetworkKineticsBatchFitEvaluation": {
+        "description": "One evaluated stored fit within a batch response.\n\n``channel_key`` is depositor-supplied free text (``NetworkChannel`` has\nno public ref — see ``docs/plans/pressure-dependent-network-surface.md``\n§1) but is the identifier already carried on the network detail\nendpoint's ``channels[].channel_key``, so it is what lets a client join\nthis entry back to the channel it rendered from that earlier call.\n``source_state_composition_hash`` / ``sink_state_composition_hash``\nare carried alongside it as the server-computed, non-arbitrary\nanchor — the same pair ``NetworkKineticsChannelContext`` and\n``NetworkChannelSummary`` already expose — for a client that wants a\nsturdier join than depositor text.\n\n``k_units`` / ``tmin_k`` / ``tmax_k`` / ``pmin_bar`` / ``pmax_bar`` are\ncarried per fit, not once at the envelope level, because two fits on\nthe same channel (a Chebyshev and a PLOG) are not guaranteed to share a\nvalidity range or even a rate-unit convention.",
+        "properties": {
+          "channel_key": {
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "channel_kind": {
+            "$ref": "#/components/schemas/NetworkChannelKind"
+          },
+          "k_units": {
+            "$ref": "#/components/schemas/ArrheniusAUnits"
+          },
+          "model_kind": {
+            "$ref": "#/components/schemas/NetworkKineticsModelKind"
+          },
+          "network_kinetics_ref": {
+            "title": "Network Kinetics Ref",
+            "type": "string"
+          },
+          "network_solve_ref": {
+            "title": "Network Solve Ref",
+            "type": "string"
+          },
+          "pmax_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmax Bar"
+          },
+          "pmin_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmin Bar"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkKineticsEvaluatedPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "sink_state_composition_hash": {
+            "title": "Sink State Composition Hash",
+            "type": "string"
+          },
+          "source_state_composition_hash": {
+            "title": "Source State Composition Hash",
+            "type": "string"
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          }
+        },
+        "required": [
+          "network_kinetics_ref",
+          "channel_key",
+          "channel_kind",
+          "source_state_composition_hash",
+          "sink_state_composition_hash",
+          "network_solve_ref",
+          "model_kind",
+          "k_units"
+        ],
+        "title": "NetworkKineticsBatchFitEvaluation",
+        "type": "object"
+      },
       "NetworkKineticsChannelContext": {
         "description": "Lightweight parent-channel pointer for a network-kinetics record.\n\n``NetworkChannel`` has no public_ref today, so ``network_channel_ref``\nis always ``None``. The composition_hash pair acts as the stable\nper-network address.",
         "properties": {
@@ -73553,6 +73698,90 @@
           }
         },
         "summary": "Scientific Network Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate": {
+      "post": {
+        "description": "Evaluate every stored k(T,P) fit belonging to one network, in one call.\n\nThe network-scoped batch companion to\n``GET /scientific/network-kinetics/{ref}/evaluate``: that endpoint\nevaluates one stored fit, so a chart covering a whole network would\nneed one request per fit (42 on the live hydrazine network — 21\nchannels, each carrying both a Chebyshev and a PLOG fit). This\nendpoint evaluates all of them at one caller-supplied\n``(temperature_k, pressure_bar)`` grid, in one request.\n\nBody carries the grid (JSON, not query params, since a chart-quality\ngrid times a real network's fit count is larger than this repo's\nother POST-search-form bodies) — ``temperature_k`` and\n``pressure_bar``, each a non-empty list of values, both required.\nQuery-string keys other than ``profile``/``release`` (the router-level\nread-profile dependency) are rejected the same way the POST search\nendpoints on this surface reject them, so a caller cannot silently\nhave a query-string field ignored.\n\nResponse is keyed by ``network_kinetics_ref``, **not** by channel: a\nchannel routinely carries more than one fit (Chebyshev + PLOG on the\nsame channel is the norm here, not an edge case), and the two are\nnever picked, preferred, averaged, or otherwise collapsed into one\nvalue — they can disagree materially. Every stored fit's evaluated\npoints are served, each entry also carrying its ``channel_key`` +\ncomposition-hash pair and its ``network_solve_ref`` so a client can\ngroup and label the results honestly.\n\nPath handle accepts an integer ``network.id`` or a public ref of the\nform ``net_…``, matching every other detail surface here. A network\nthat exists but has no stored kinetics yet returns ``fits: []``, not\na 404.\n\nTwo bounded-size 422s, checked in that order: a per-fit grid larger\nthan ``settings.public_max_limit`` points\n(``network_kinetics_evaluate_grid_too_large`` — the exact cap and\ncode the per-record endpoint enforces for one fit's own grid), and an\naggregate ``fit_count * grid_size`` larger than that cap squared\n(``network_kinetics_batch_evaluate_grid_too_large``). Refused, never\ntruncated — a chart silently missing channels would misrepresent the\nnetwork's evaluated coverage as complete. See\n``app/services/scientific_read/network_kinetics_batch_evaluate.py``\nfor the exact arithmetic.\n\nA requested point outside a fit's own stated validity range is still\nevaluated but flagged ``in_range=False``, identically to the\nper-record endpoint (including PLOG's pressure axis being judged\nagainst its own fitted-pressure table rather than the envelope's\n``pmin_bar``/``pmax_bar``) — never silently presented as interpolated.",
+        "operationId": "scientific_network_kinetics_batch_evaluate_api_v1_scientific_networks__network_ref_or_id__kinetics_evaluate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "network_ref_or_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Network Ref Or Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkKineticsBatchEvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkKineticsBatchEvaluateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Network Kinetics Batch Evaluate",
         "tags": [
           "scientific"
         ]
