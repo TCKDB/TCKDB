@@ -305,3 +305,50 @@ describe("NetworkEntryPage — solve-internal source calculations link to the ca
         expect(cell.closest("a")).toHaveAttribute("href", "/calculations/calc_barrier1")
     })
 })
+
+describe("NetworkEntryPage — an unreadable solve degrades, it does not blank the page", () => {
+    // Before this, a single malformed channel_barrier row rejected the whole
+    // load and replaced the page with "Pressure-dependent network data could
+    // not be read" -- losing the identity header, the reactions table and the
+    // review section, none of which come from the solve request.
+    function malformedSolve() {
+        server.use(http.get("/api/v1/scientific/network-solves/nsolve_test1", () => HttpResponse.json({
+            record: {
+                network_solve: { network_solve_ref: "nsolve_test1" },
+                state_energies: [],
+                // Missing reaction_entry_ref / transition_state_entry_ref /
+                // both convention fields, all of which the served contract
+                // marks required, so the schema rejects the row.
+                channel_barriers: [{ channel_key: "channel_1", forward_barrier_kj_mol: 1, reverse_barrier_kj_mol: 2 }],
+            },
+        })))
+    }
+
+    it("keeps the identity header, the reactions table and the review section", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        malformedSolve()
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        page()
+        expect(await screen.findByRole("heading", { name: "hydrazine" })).toBeVisible()
+        expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeInTheDocument()
+    })
+
+    it("says the energies were unreadable rather than rendering as though none exist", async () => {
+        handleNetworkDetail(networkDetailFixture())
+        malformedSolve()
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        const { container } = page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        expect(container.textContent ?? "").toContain("could not read")
+        expect(container.textContent ?? "").toContain("not a statement that no energies were deposited")
+    })
+
+    it("a network whose solve reads fine says no such thing", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        expect(container.textContent ?? "").not.toContain("could not read")
+    })
+})

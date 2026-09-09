@@ -225,6 +225,17 @@ function EnergyCoverageCard({ record }: { record: NetworkFullRecord }) {
             <span className="t-label">Energy coverage</span>
             <p className="t-body" style={{ margin: ".6rem 0 0" }}>{speciesThermoSentence(speciesCoverage.withThermo, speciesCoverage.total)}</p>
             {solveSentence && <p className="t-body" style={{ margin: ".6rem 0 0" }}>{solveSentence}</p>}
+            {record.solveEnergiesUnavailable && (
+                // Read failure, not an absence. Without this the page would
+                // render identically to a network that deposited no solve
+                // energies at all, which understates the archive -- the same
+                // conflation the sentence above exists to prevent.
+                <p className="t-body" style={{ margin: ".6rem 0 0" }}>
+                    This network has a deposited solve, but its state and channel energies came back in a form
+                    this page could not read, so they are not shown. That is a read failure on this page, not a
+                    statement that no energies were deposited.
+                </p>
+            )}
             {(stateEnergies.length > 0 || channelBarriers.length > 0) && (
                 <Disclosure
                     className="disclosure--inset"

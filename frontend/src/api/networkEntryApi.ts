@@ -262,7 +262,19 @@ export type NetworkFullRecord = {
     /** `null` when this network has no deposited solve to fetch. */
     stateEnergies: NetworkStateEnergy[] | null
     channelBarriers: NetworkChannelBarrier[] | null
+    /**
+     * True when a solve exists but its energies could not be read. Distinct
+     * from `stateEnergies === null`, which means no solve was deposited at
+     * all. The page must not let the two collapse: rendering an unreadable
+     * solve as an empty one silently understates the archive.
+     */
+    solveEnergiesUnavailable: boolean
 }
+
+type SolveFetch =
+    | { status: "absent" }
+    | { status: "unavailable" }
+    | { status: "ok"; detail: z.infer<typeof solveDetailResponseSchema> }
 
 const NETWORK_INCLUDE = ["states", "channels", "solves"]
 
@@ -273,11 +285,21 @@ const NETWORK_INCLUDE = ["states", "channels", "solves"]
  * thermo-presence check for every unique participant species entry (the
  * energy-coverage fact's species half), and the equation/review for every
  * unique reaction entry a channel's microreaction names (the Reactions
- * section). A failure in any one of these sub-fetches fails the whole load
- * -- there is no backend surface that joins them, so a partial success here
- * would mean silently rendering some sections against complete data and
- * others against none, which is worse than one honest "unavailable" state
- * (`RecordStatus`'s own contract).
+ * section). A failure in the network detail, the thermo presence checks, or
+ * the reaction-entry lookups fails the whole load -- there is no backend
+ * surface that joins them, and each one feeds a *counted* claim ("2 of 9
+ * participants carry thermo", "6 of 21 channels carry a reaction"), so a
+ * partial success would render a number that is quietly wrong. One honest
+ * "unavailable" state beats a false count (`RecordStatus`'s own contract).
+ *
+ * The solve detail is the deliberate exception. It is supplementary: it
+ * feeds one optional disclosure, and the page already renders correctly
+ * without it (a network with no deposited solve). Letting it fail the whole
+ * load meant a single malformed barrier row blanked the identity header,
+ * the reactions table and the review section -- all of which came from a
+ * different, well-formed request. So it degrades instead, and reports
+ * `solveEnergiesUnavailable` so the page can say the energies were
+ * unreadable rather than render as though none exist.
  */
 export async function loadNetworkEntry(
     ref: string,
@@ -315,17 +337,27 @@ export async function loadNetworkEntry(
             return [entryRef, entry] as const
         })),
         solves[0]
-            ? (async () => {
+            ? (async (): Promise<SolveFetch> => {
                 const solveQuery = new URLSearchParams()
                 solveQuery.append("include", "state_energies")
                 solveQuery.append("include", "channel_barriers")
-                const payload = await requestScientificJson(
-                    `/api/v1/scientific/network-solves/${encodeURIComponent(solves[0].network_solve_ref)}?${solveQuery}`,
-                    signal,
-                )
-                return parseScientificResponse(solveDetailResponseSchema, payload, "network solve")
+                try {
+                    const payload = await requestScientificJson(
+                        `/api/v1/scientific/network-solves/${encodeURIComponent(solves[0].network_solve_ref)}?${solveQuery}`,
+                        signal,
+                    )
+                    return { status: "ok", detail: parseScientificResponse(solveDetailResponseSchema, payload, "network solve") }
+                } catch (error) {
+                    // An abort means the component unmounted or the ref
+                    // changed. That is not an archive failure and must
+                    // propagate, or a cancelled request would render as
+                    // unreadable data.
+                    if (signal?.aborted) throw error
+                    if (error instanceof DOMException && error.name === "AbortError") throw error
+                    return { status: "unavailable" }
+                }
             })()
-            : Promise.resolve(null),
+            : Promise.resolve<SolveFetch>({ status: "absent" }),
     ])
 
     return {
@@ -341,7 +373,8 @@ export async function loadNetworkEntry(
         speciesEntryRefs,
         speciesThermoPresence: Object.fromEntries(thermoResults),
         reactionEntries: Object.fromEntries(reactionResults),
-        stateEnergies: solveDetail?.record.state_energies ?? null,
-        channelBarriers: solveDetail?.record.channel_barriers ?? null,
+        stateEnergies: solveDetail.status === "ok" ? (solveDetail.detail.record.state_energies ?? null) : null,
+        channelBarriers: solveDetail.status === "ok" ? (solveDetail.detail.record.channel_barriers ?? null) : null,
+        solveEnergiesUnavailable: solveDetail.status === "unavailable",
     }
 }
