@@ -240,27 +240,24 @@
                 <div><dt>PLOG model</dt><dd><span class="value-pill">present</span></dd></div>
                 <div><dt>Point kinetics (single-pressure Arrhenius)</dt><dd><span class="value-pill value-pill--muted">none deposited</span></dd></div>
             </dl>
-            <p class="note">Counts are of served arrays only, from a live fetch of <code>GET /scientific/networks/net_o6bt63kjeyvhvxx26w6kdi433a?include=states,channels,kinetics</code>. "None deposited" describes the archive, not the chemistry.</p>
+            <p class="note">Counts reflect what this network's own record carries today, not an assumption about the underlying chemistry. "None deposited" describes the archive, not the chemistry.</p>
         </div>
 
         <div class="card" style="margin-top:1.25rem" id="energy-coverage">
             <span class="t-label">Energy coverage</span>
             <p class="t-body" style="margin:.6rem 0 0">
-                None of the 9 species entries this network's states are built from carry a deposited thermo
-                (H298) record — measured directly against <code>GET /scientific/species-entries/{ref}/thermo</code>
-                for all 9. A properly-corrected, thermal free-energy surface needs that, so it cannot be drawn
-                from species-level data today, and the diagram below has no energy axis.
+                No thermochemistry is deposited for the species these states are built from — none of the 9
+                participant species entries carry a thermo (H298) record. A thermal free-energy surface needs
+                that, so it cannot be drawn from species-level data today, and the diagram below has no energy
+                axis.
             </p>
             <p class="t-body" style="margin:.6rem 0 0">
-                That is a different claim from "no energies are deposited on this network" — this network's own
-                solve (<code class="data">nsolve_sfskjknpl7an4uhorhcgpitiv4</code>) separately carries a relative
-                <em>electronic-only</em> energy, referenced to its own lowest state, for all 7 states, and a
-                forward/reverse electronic barrier for 4 of the 21 channels. That is real, deposited data — found
-                against <code>GET /scientific/network-solves/{ref}?include=state_energies,channel_barriers</code>,
-                an endpoint outside this plan's original §1 measurement (see this mock's own README for why that
-                matters). It is an internal modified-strong-collision solver input, not thermo-grade H298, and
-                mixing the two conventions on one axis would misrepresent the surface — so it is shown below as
-                its own disclosure, not folded into a PES.
+                That is a different claim from "no energies are deposited on this network." This network's own
+                solve separately carries a relative <em>electronic-only</em> energy, referenced to its own lowest
+                state, for all 7 states, and a forward/reverse electronic barrier for 4 of the 21 channels — real,
+                deposited data. It is an internal modified-strong-collision solver input, not thermo-grade H298,
+                and mixing the two conventions on one axis would misrepresent the surface — so it is shown below
+                as its own disclosure, not folded into a PES.
             </p>
             <details class="disclosure disclosure--inset" style="margin-top:.9rem">
                 <summary>Solve-internal state &amp; channel energies (electronic-only, referenced to the lowest state)</summary>
@@ -399,12 +396,10 @@
         </svg>
         </div>
         <p class="note">
-            Layout: nodes placed on a circle for this hand-built mock, in the order the API served <code>states[]</code>
-            — an easy layout to hand-author precisely, not a claim about the real algorithm. PR 3's actual diagram
-            computes a force-directed layout client-side from the same <code>states[]</code>/<code>channels[]</code>
-            arrays (plan §5); node/edge <em>positions</em> here are illustrative, the node/edge <em>encoding</em>
-            (shape, colour, dash) is the real design under review. Click a node or edge (or tab to it) to jump to
-            its row in the table below — the same pattern <code>CalculationDependencyGraph</code> already uses.
+            Layout: nodes are placed on a circle for this mock, an easy layout to draw precisely by hand — not a
+            claim about the real page's layout. Node/edge <em>positions</em> here are illustrative; the node/edge
+            <em>encoding</em> (shape, colour, dash) is the real design under review. Click a node or edge (or tab
+            to it) to jump to its row in the table below.
         </p>
 
         <details class="disclosure" open style="margin-top:1.5rem">
@@ -412,49 +407,42 @@
             <div class="disclosure-body" style="display:block">
                 <div class="table-scroll">
                 <table class="data-table" aria-label="States in this network">
-                    <thead><tr><th scope="col">State</th><th scope="col">Kind</th><th scope="col">Participants</th><th scope="col">Composition hash</th></tr></thead>
+                    <thead><tr><th scope="col">State</th><th scope="col">Kind</th><th scope="col">Participants</th></tr></thead>
                     <tbody>
-<tr id="state-row-n1">
+<tr id="state-row-n1" data-composition-hash="5cc6a8a697bb6f2fcb468ef02cf2a76e9ad3f5da223682f1ca29288836ee66b3">
     <td data-label="State"><code class="data">n1</code> · NN</td>
     <td data-label="Kind"><span class="value-pill">well</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">NN</code></a> — <code class="data">spe_wi6mz65sb47vzsyop3tqrqrcai</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">5cc6a8a697bb6f2fcb468ef02cf2a76e9ad3f5da223682f1ca29288836ee66b3</code></td>
 </tr>
-<tr id="state-row-n2">
+<tr id="state-row-n2" data-composition-hash="6a3266ae70e7604bafe1ced885beda0fb1265d229529f3457594fb0d0a473873">
     <td data-label="State"><code class="data">n2</code> · [NH-][NH3+]</td>
     <td data-label="Kind"><span class="value-pill">well</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[NH-][NH3+]</code></a> — <code class="data">spe_zsvxdy7fbktworbhss2da62doi</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">6a3266ae70e7604bafe1ced885beda0fb1265d229529f3457594fb0d0a473873</code></td>
 </tr>
-<tr id="state-row-n3">
+<tr id="state-row-n3" data-composition-hash="81a48bd8aada91545d3b75d2e0f42c6537f49c433ec0918dc36c8e81c01abc89">
     <td data-label="State"><code class="data">n3</code> · N=N (Z) + [H][H]</td>
     <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">N=N</code></a> (Z) — <code class="data">spe_cft35qrkqphdifcfqlcenqgdau</code></li><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">81a48bd8aada91545d3b75d2e0f42c6537f49c433ec0918dc36c8e81c01abc89</code></td>
 </tr>
-<tr id="state-row-n4">
+<tr id="state-row-n4" data-composition-hash="9304efc09ccfd37847d2dd50d7551ff9355697f34431eef61e352c01bb652ea2">
     <td data-label="State"><code class="data">n4</code> · [H][H] + [N-]=[NH2+]</td>
     <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li><li><a href="#"><code class="data">[N-]=[NH2+]</code></a> — <code class="data">spe_fvlbwfuoauoeknq6l5esaozqai</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">9304efc09ccfd37847d2dd50d7551ff9355697f34431eef61e352c01bb652ea2</code></td>
 </tr>
-<tr id="state-row-n5">
+<tr id="state-row-n5" data-composition-hash="95e3e725ec705e320f496bddb6bca429fdd850b1a97ac1df080ba13aa222149c">
     <td data-label="State"><code class="data">n5</code> · [H] + [NH]N</td>
     <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">[H]</code></a> — <code class="data">spe_knzmwhplnwnpodfp6frphrl7ei</code></li><li><a href="#"><code class="data">[NH]N</code></a> — <code class="data">spe_c4ty3ixcmyuljgqfs73pdecmte</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">95e3e725ec705e320f496bddb6bca429fdd850b1a97ac1df080ba13aa222149c</code></td>
 </tr>
-<tr id="state-row-n6">
+<tr id="state-row-n6" data-composition-hash="d77b91b236b374758c280099553ac7d0ab25c84dcee6969054c5279d0e83896b">
     <td data-label="State"><code class="data">n6</code> · 2 [NH2]</td>
     <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li>2× <a href="#"><code class="data">[NH2]</code></a> — <code class="data">spe_gzk56q4jegyyg7ylbcdqb2xvka</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">d77b91b236b374758c280099553ac7d0ab25c84dcee6969054c5279d0e83896b</code></td>
 </tr>
-<tr id="state-row-n7">
+<tr id="state-row-n7" data-composition-hash="32f50400f89f1533ba4a7fb6b5d1a988e2bc32ed20163e815e4f81ee9f8f9d5d">
     <td data-label="State"><code class="data">n7</code> · N=N (E) + [H][H]</td>
     <td data-label="Kind"><span class="value-pill">bimolecular</span></td>
     <td data-label="Participants"><ul class="net-participant-list"><li><a href="#"><code class="data">N=N</code></a> (E) — <code class="data">spe_qefrbgmpyryylyocpghhc2ikki</code></li><li><a href="#"><code class="data">[H][H]</code></a> — <code class="data">spe_7ioiqvdqm6cyumgnrammbhefum</code></li></ul></td>
-    <td data-label="Composition hash"><code class="data">32f50400f89f1533ba4a7fb6b5d1a988e2bc32ed20163e815e4f81ee9f8f9d5d</code></td>
 </tr>
                     </tbody>
                 </table>
@@ -463,8 +451,23 @@
                     "2 [NH2]" (n6) is <code>kind: bimolecular</code> despite having ONE distinct participant species
                     — the schema's own kind field, not the participant COUNT, is what tells a well from a
                     bimolecular state (a dimer of the same radical is still two separate molecules colliding).
-                    Composition hash is 64 hex characters, measured — the plan's own §1 said 65; corrected here
-                    against the live payload.
+                </p>
+                <details class="disclosure disclosure--inset refs-disclosure" style="margin-top:.75rem">
+                    <summary>Composition hashes <span class="disclosure-count">(7)</span></summary>
+                    <div class="disclosure-body">
+                        <div class="ref-item"><span class="ref-item-label">n1 · NN</span><span class="ref-item-value">5cc6a8a697bb6f2fcb468ef02cf2a76e9ad3f5da223682f1ca29288836ee66b3</span><button type="button" class="copy-button" aria-label="Copy n1 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n2 · [NH-][NH3+]</span><span class="ref-item-value">6a3266ae70e7604bafe1ced885beda0fb1265d229529f3457594fb0d0a473873</span><button type="button" class="copy-button" aria-label="Copy n2 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n3 · N=N (Z) + [H][H]</span><span class="ref-item-value">81a48bd8aada91545d3b75d2e0f42c6537f49c433ec0918dc36c8e81c01abc89</span><button type="button" class="copy-button" aria-label="Copy n3 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n4 · [H][H] + [N-]=[NH2+]</span><span class="ref-item-value">9304efc09ccfd37847d2dd50d7551ff9355697f34431eef61e352c01bb652ea2</span><button type="button" class="copy-button" aria-label="Copy n4 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n5 · [H] + [NH]N</span><span class="ref-item-value">95e3e725ec705e320f496bddb6bca429fdd850b1a97ac1df080ba13aa222149c</span><button type="button" class="copy-button" aria-label="Copy n5 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n6 · 2 [NH2]</span><span class="ref-item-value">d77b91b236b374758c280099553ac7d0ab25c84dcee6969054c5279d0e83896b</span><button type="button" class="copy-button" aria-label="Copy n6 composition hash">Copy</button></div>
+                        <div class="ref-item"><span class="ref-item-label">n7 · N=N (E) + [H][H]</span><span class="ref-item-value">32f50400f89f1533ba4a7fb6b5d1a988e2bc32ed20163e815e4f81ee9f8f9d5d</span><button type="button" class="copy-button" aria-label="Copy n7 composition hash">Copy</button></div>
+                    </div>
+                </details>
+                <p class="note" style="margin-top:.5rem">
+                    Composition hash is the join key channels below use to reach a state — real, but not something
+                    a reader acts on, so it sits behind this disclosure (and on each row's own
+                    <code>data-composition-hash</code> attribute) rather than in the table above.
                 </p>
             </div>
         </details>
@@ -670,7 +673,7 @@
                 </div>
                 <p class="note">
                     <code>channel_key</code> (e.g. <code>channel_1</code>) is depositor free text with no public
-                    reference of its own today (plan §1/§7) — it appears here, in the diagram's own
+                    reference of its own today — it appears here, in the diagram's own
                     <code>data-channel-key</code> attribute, and nowhere else; the diagram never renders it as a
                     label. 21 channels on 7 states is the maximum possible undirected pairing (<code>C(7,2) =
                     21</code>) — this network is a complete graph, confirmed by the source/sink pairs above, which
@@ -791,8 +794,8 @@
         <p class="t-kicker section-kicker">Evaluated rate coefficients — not yet served</p>
         <h2 class="t-heading-1" id="kinetics-heading">k(T,P)</h2>
         <p class="t-body section-intro">
-            No evaluation endpoint exists yet (plan §2.4/§4A) — the table below lists fit <em>metadata</em> only,
-            never a computed rate. Every one of the 21 channels carries <strong>both</strong> a Chebyshev (6×4) and
+            Rate coefficients from these fits are not yet evaluated anywhere — the table below lists fit
+            <em>metadata</em> only, never a computed rate. Every one of the 21 channels carries <strong>both</strong> a Chebyshev (6×4) and
             a PLOG (5-entry) fit over the identical 300–2000 K, 0.01–100 bar range — the dual-form deposit the
             description above names, not two different results at odds with each other.
         </p>
@@ -835,17 +838,16 @@
 
         <h3 class="t-heading-2" style="margin-top:1.75rem">Where the chart goes</h3>
         <p class="t-body">
-            PR 4 ships this once PR 1's evaluation endpoint and PR 3's diagram both exist — y = log₁₀ k, x =
-            temperature, one curve per selected pressure, dashed/solid split by the served <code>in_range</code>
-            flag, reusing <code>chartScale.ts</code> the same way <code>ArrheniusChart</code> already does (plan
-            §5). Nothing below this line is real or computed data.
+            A future chart here would plot y = log₁₀ k against x = temperature, one curve per selected pressure,
+            with a dashed/solid split marking whether a point falls inside the fitted temperature/pressure range.
+            Nothing below this line is real or computed data.
         </p>
         <div class="net-ktp-placeholder">
             <p class="net-ktp-axis-title--y">log₁₀ k</p>
             <div class="net-ktp-placeholder-frame">
                 <div>
                     <p class="net-ktp-placeholder-text">
-                        k(T,P) chart — ships in PR 4. One curve per selected pressure, over this channel's own
+                        k(T,P) chart — not yet available. One curve per selected pressure, over this channel's own
                         Chebyshev/PLOG fit.
                     </p>
                     <select class="net-ktp-placeholder-select" disabled aria-label="Pressure selector (not yet functional)">
@@ -921,14 +923,6 @@
             </tbody>
         </table>
         </div>
-        <p class="note">
-            Measured live: <code>GET /scientific/reactions/search?network_ref=...</code> returns
-            <code>422 missing_reaction_search_filter</code> — <code>network_ref</code> is not a legal filter on
-            that endpoint, so the plan §3's "already-existing pattern from <code>reactions/search?network_ref=</code>"
-            does not work as written. The 6 rows above come entirely from the channels payload's own
-            <code>microreactions[]</code>, joined to each reaction entry's own <code>/full</code> (for the equation
-            text) — no working <code>network_ref</code> filter was needed or used.
-        </p>
     </section>
 
     <section class="ledger-section" aria-labelledby="review-heading">
@@ -945,12 +939,8 @@
                 <div><dt>Total</dt><dd>1</dd></div>
             </dl>
             <p class="note">
-                Measured live: this total stays 1 regardless of which <code>include</code> tokens are requested on
-                <code>GET /scientific/networks/{ref}</code>, including <code>include=review</code> — unlike the
-                reaction-entry page's review section (which sums review status across every joined species,
-                kinetics record and TS entry), this endpoint counts only the network's own review record. States,
-                channels and kinetics fits carry no independent review status of their own in this API today, so
-                there is nothing further to sum.
+                This count reflects the network's own review record only. States, channels and kinetics fits carry
+                no independent review status of their own today, so there is nothing further to add.
             </p>
         </div>
     </section>

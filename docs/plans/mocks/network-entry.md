@@ -7,6 +7,46 @@ slice's own PR 0 mock was (see the git history of the now-deleted
 relative path, real component class names copied by hand, every value pasted
 from a live fetch — no product code, no placeholders, no invented chemistry.
 
+## Review round: endpoint names out of page copy, hash demoted, scaffolding trimmed
+
+First-pass review (coordinator, citing an owner ruling already made on the
+reaction-entry page: "whats this whole thing about not served by /full?") — a
+reader does not know or care what an endpoint is, so no rendered page copy
+may name one, even inside a build-honesty note. Fixed:
+
+- The evidence-checklist counts note and both Energy coverage paragraphs
+  used to cite `GET /scientific/networks/...`, `GET
+  /scientific/species-entries/{ref}/thermo` and `GET
+  /scientific/network-solves/{ref}?include=...` inline. Rewritten to state
+  the scientific fact only (no thermochemistry deposited for the
+  participant species; the solve's own electronic-only energies exist for
+  all 7 states and barriers for 4 of 21 channels) — the endpoint paths
+  themselves stay in this document instead.
+- The Reactions section's build note (`GET
+  /scientific/reactions/search?network_ref=...` returning `422
+  missing_reaction_search_filter`) and the Review section's `include=`
+  explanation were reviewer-facing methodology, not something a real page
+  would ever tell a reader — removed from the page entirely; both findings
+  live only here now (see "Another gap found while building the Reactions
+  table" below, and the Review section of the page itself just states the
+  count is the network's own record with nothing further to sum).
+- The diagram's layout note and the channel-key note referenced "PR 3",
+  "plan §5", "plan §1/§7" and `CalculationDependencyGraph` directly in page
+  copy — trimmed to plain descriptions of what the mock does and why,
+  since a PR-numbered plan reference in rendered copy is exactly the kind
+  of thing PR 3 could inherit if left there. The `<style>` block's own
+  comments (never rendered) keep the PR/plan-section pointers — those are
+  for the next builder, not a page reader.
+- The composition-hash column came out of the visible states table
+  entirely. It is a real join key (channels reach a state only by hash)
+  and genuinely useful for debugging, so it was not deleted: each state
+  row now carries a `data-composition-hash` attribute (automation/test
+  hook), and a collapsed "Composition hashes (7)" disclosure — built from
+  the same `RefsDisclosure` ref-item/copy-button idiom the identity
+  header's own References box uses — lists State → hash with a copy
+  button, directly under the table. The table's job is naming chemistry;
+  the hash is one click away for whoever needs it.
+
 ## What was fetched
 
 - `GET /scientific/networks/net_o6bt63kjeyvhvxx26w6kdi433a?include=states,channels,kinetics`
