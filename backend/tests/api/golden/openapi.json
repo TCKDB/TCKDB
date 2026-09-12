@@ -31588,8 +31588,19 @@
         "type": "object"
       },
       "RecordReviewBadge": {
-        "description": "Single record's direct review state — no chain traversal (D7).",
+        "description": "Single record's direct review state — no chain traversal (D7).\n\n``note`` is the curator's stated reason, and it is **public**. A status\non its own tells a reader that somebody formed a view without saying\nwhat it was: a record reading ``under_review`` with no reason is a\nwarning a reader cannot act on. The note is what makes the status\nusable, so it is projected alongside it rather than held back.\n\nConsequence for whoever writes one: a review note is reader-facing\nprose, not an internal remark. Say what was checked, what was found,\nand what a consumer of this record should do differently. Do not put\nanything in it you would not publish.",
         "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "reviewed_at": {
             "anyOf": [
               {

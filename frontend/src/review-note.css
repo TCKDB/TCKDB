@@ -1,0 +1,25 @@
+/* `components/ReviewNote.tsx` -- the curator's stated reason for a
+ * record's review status. This is substantive, reader-facing scientific
+ * prose (up to a few thousand characters), not a throwaway caption, so it
+ * deliberately does NOT reuse `.note` (design-system.css): that primitive
+ * is muted and note-sized on purpose for short auxiliary lines, and
+ * de-emphasizing a genuine finding ("bond-fission asymptotes are ~27.4
+ * kJ/mol low against the ATcT") to caption weight would bury the one
+ * thing this component exists to surface. Body-weight ink color and a
+ * prose measure instead -- same register as `.record-placeholder p:last-
+ * child` (index.css), the other long-form-reading paragraph in this app.
+ *
+ * Owns its own stylesheet, imported once from the component itself, the
+ * same "a component owns its own CSS" convention `EvidenceChecklist` /
+ * `RefsDisclosure` / `EnergyDisplay` already follow (see the header
+ * comment on `components/Disclosure.tsx` for the double-import bug this
+ * avoids).
+ */
+.review-note-text {
+    max-width: var(--measure-prose);
+    margin: 0;
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    letter-spacing: var(--type-body-tracking);
+    white-space: pre-wrap;
+}

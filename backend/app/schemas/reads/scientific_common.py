@@ -150,11 +150,24 @@ class ReviewStatusSummary(BaseModel):
 
 
 class RecordReviewBadge(BaseModel):
-    """Single record's direct review state — no chain traversal (D7)."""
+    """Single record's direct review state — no chain traversal (D7).
+
+    ``note`` is the curator's stated reason, and it is **public**. A status
+    on its own tells a reader that somebody formed a view without saying
+    what it was: a record reading ``under_review`` with no reason is a
+    warning a reader cannot act on. The note is what makes the status
+    usable, so it is projected alongside it rather than held back.
+
+    Consequence for whoever writes one: a review note is reader-facing
+    prose, not an internal remark. Say what was checked, what was found,
+    and what a consumer of this record should do differently. Do not put
+    anything in it you would not publish.
+    """
 
     status: RecordReviewStatus
     reviewed_at: datetime | None = None
     reviewer_kind: Literal["human", "automated", "system"] | None = None
+    note: str | None = None
 
 
 # ---------------------------------------------------------------------------
