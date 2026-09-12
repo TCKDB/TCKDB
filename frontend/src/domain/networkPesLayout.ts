@@ -271,11 +271,51 @@ export interface NetworkPesLayout {
  * is nothing to plot, and the caller (`NetworkDiagram.tsx`) renders an
  * explicit "no energies deposited" sentence rather than an empty canvas.
  */
+/**
+ * Which rule decides a state's horizontal position.
+ *
+ * `connectivity` is the default and the one the published PES for this
+ * system uses: root at the most-connected state, branches radiating out,
+ * so every connector stays short. `energy` reproduces the ascending-energy
+ * ordering this surface shipped with before, which reads as a left-to-right
+ * energy ladder but forces long diagonals across the plot (measured on the
+ * live hydrazine network: 9 proper connector crossings, against 1 for
+ * `connectivity`).
+ *
+ * Both are offered because the choice is a readability judgement the owner
+ * wanted a second opinion on, not a correctness one. NEITHER changes a
+ * single energy: y position, saddle heights and which channels are drawn
+ * are identical under both.
+ */
+export type NetworkPesLayoutMode = "connectivity" | "energy"
+
+export const NETWORK_PES_LAYOUT_MODES: readonly NetworkPesLayoutMode[] = ["connectivity", "energy"]
+
+/** Ascending-energy slot assignment: the pre-connectivity behaviour. */
+function assignEnergyRankLayout(
+    hashes: readonly string[],
+    energyByHash: Map<string, number>,
+    tieBreak: (hash: string) => number,
+): { slotByHash: Map<string, number>; components: NetworkPesComponent[]; isolatedStateHashes: string[] } {
+    const ordered = [...hashes].sort((a, b) => {
+        const diff = energyByHash.get(a)! - energyByHash.get(b)!
+        if (diff !== 0) return diff
+        return tieBreak(a) - tieBreak(b)
+    })
+    const slotByHash = new Map<string, number>()
+    ordered.forEach((hash, index) => slotByHash.set(hash, index))
+    // No connectivity was consulted, so there is no root and no component
+    // structure to report, and no state is "isolated" in this mode -- every
+    // state is positioned by the same rule.
+    return { slotByHash, components: [], isolatedStateHashes: [] }
+}
+
 export function computeNetworkPesLayout(
     states: readonly NetworkState[],
     stateEnergies: readonly NetworkStateEnergy[],
     channels: readonly NetworkChannel[],
     channelBarriers: readonly NetworkChannelBarrier[],
+    mode: NetworkPesLayoutMode = "connectivity",
 ): NetworkPesLayout | null {
     const stateByHash = new Map(states.map((state) => [state.composition_hash, state]))
 
@@ -368,9 +408,9 @@ export function computeNetworkPesLayout(
         adjacency.get(b)!.add(a)
     }
 
-    const { slotByHash, components, isolatedStateHashes } = assignConnectivityLayout(
-        resolvedInServedOrder, adjacency, accepted, energyByHash, tieBreak,
-    )
+    const { slotByHash, components, isolatedStateHashes } = mode === "energy"
+        ? assignEnergyRankLayout(resolvedInServedOrder, energyByHash, tieBreak)
+        : assignConnectivityLayout(resolvedInServedOrder, adjacency, accepted, energyByHash, tieBreak)
 
     // ---- size the plot from the CAPTIONS, not the level bars (unchanged
     // rationale from the ascending-energy layout this replaces) ----
