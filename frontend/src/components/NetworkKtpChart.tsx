@@ -9,7 +9,9 @@ import {
     ARRHENIUS_CHART_MARGIN,
     ARRHENIUS_CHART_WIDTH,
     arrheniusLog10AxisTitle,
+    arrheniusPointX,
     arrheniusUnitLabel,
+    type ArrheniusXAxisMode,
 } from "../domain/arrheniusChartLayout"
 import { FAMILY_NAME } from "../domain/arrheniusUnits"
 import { domainWithPadding, formatTicks, linearScale } from "../domain/chartScale"
@@ -23,6 +25,7 @@ import {
     groupKtpFitsByChannel,
     ktpLineSegments,
     ktpPlottedPoints,
+    ktpXDomain,
     modelKindLabel,
     modelKindStrokeColor,
     modelKindStrokeWidth,
@@ -93,6 +96,22 @@ import { Disclosure } from "./Disclosure"
  * factor from `arrheniusUnits.ts` (`convertKtpPlottedPoints`), which is
  * NOT a re-evaluation -- see `domain/networkKtpChartLayout.ts`'s own
  * header comment.
+ *
+ * X-AXIS (owner: "why can't I change temp to 1/temp" -- the Arrhenius chart
+ * already has this control, this one didn't). `KtpXAxisSelect` below is the
+ * third control of this kind on this chart (after unit selection and family
+ * panels): one chart-wide `<select>` (`NetworkKtpChartReady`'s own
+ * `xAxisMode` state), governing every family panel's x-axis at once, exactly
+ * like `ArrheniusChart.tsx`'s own single `xAxisMode` control. Point
+ * projection reuses `arrheniusChartLayout.ts`'s `arrheniusPointX` verbatim
+ * (never re-derives `1000/T`); the domain reuses the SAME module's
+ * monotonicity argument via this file's own `ktpXDomain`
+ * (`domain/networkKtpChartLayout.ts`) -- see that function's comment for why
+ * no separate "reverse the axis" branch is needed. The k(T) TABLE behind
+ * each channel's `Disclosure` is unaffected by this control, exactly
+ * matching `ArrheniusChart.tsx`'s own k(T) table: both always tabulate T in
+ * kelvin regardless of which x-axis mode the plot above is currently
+ * showing.
  */
 export function NetworkKtpChart({ networkRef, network, channels, states }: {
     networkRef: string
@@ -185,8 +204,16 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
     // below.
     const [selectedChannelKeys, setSelectedChannelKeys] = useState<string[]>(() => (groups[0] ? [groups[0].channelKey] : []))
     const [selectedUnitsByFamily, setSelectedUnitsByFamily] = useState<Record<string, string>>({})
+    // ONE control for the whole chart (mirrors `ArrheniusChart.tsx`'s own
+    // single top-level `xAxisMode` -- see that component's header comment):
+    // which axis a reader wants is a reading-convention choice, not a
+    // per-channel or per-family fact, so this state lives here, above
+    // `familyPanels`, and is read (never re-derived) by every family panel
+    // below rather than each panel owning its own copy.
+    const [xAxisMode, setXAxisMode] = useState<ArrheniusXAxisMode>("temperature")
     const pressureSelectId = useId()
-    const xDomain = useMemo(() => domainWithPadding(grid.temperaturesK), [grid.temperaturesK])
+    const xAxisSelectId = useId()
+    const xDomain = useMemo(() => ktpXDomain(grid.temperaturesK, xAxisMode), [grid.temperaturesK, xAxisMode])
 
     if (groups.length === 0) {
         return <p className="empty-projection">No k(T,P) fits are deposited on this network.</p>
@@ -207,6 +234,7 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
     return (
         <div className="network-ktp-section">
             <div className="arrhenius-chart-controls">
+                <KtpXAxisSelect id={xAxisSelectId} xAxisMode={xAxisMode} onSelectXAxisMode={setXAxisMode} />
                 <label className="arrhenius-chart-control" htmlFor={pressureSelectId}>
                     <span className="arrhenius-chart-control-label">Pressure</span>
                     <select
@@ -251,6 +279,7 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
                         panel={panel}
                         pressureBar={selectedPressureBar}
                         xDomain={xDomain}
+                        xAxisMode={xAxisMode}
                         colorIndexByChannelKey={colorIndexByChannelKey}
                         selectedUnits={selectedUnitsByFamily[panel.key] ?? panel.defaultUnits}
                         onSelectUnits={(units) => setSelectedUnitsByFamily((prev) => ({ ...prev, [panel.key]: units }))}
@@ -270,10 +299,11 @@ interface ChannelSeriesEntry {
     fits: { fit: NetworkKtpFit; points: KtpPlottedPoint[] }[]
 }
 
-function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelKey, selectedUnits, onSelectUnits }: {
+function KtpFamilyPanelChart({ panel, pressureBar, xDomain, xAxisMode, colorIndexByChannelKey, selectedUnits, onSelectUnits }: {
     panel: KtpFamilyPanel
     pressureBar: number
     xDomain: [number, number]
+    xAxisMode: ArrheniusXAxisMode
     colorIndexByChannelKey: Map<string, number>
     selectedUnits: string | undefined
     onSelectUnits: (units: string) => void
@@ -313,8 +343,19 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
 
     const channelLabelsText = panel.groups.map((entry) => entry.label).join(", ")
     const modelKindsText = modelKindsPresent.map(modelKindLabel).join(" and ")
+    // Mirrors `ArrheniusChart.tsx`'s own `axisDescription` -- the
+    // `aria-label` is this panel's accessible substitute for seeing the
+    // axis drawn, so it must name whichever axis is actually current, not
+    // always "temperature in kelvin". No "draws as a straight line" claim
+    // here (unlike the Arrhenius chart's own inverse-mode wording): a k(T,P)
+    // fit can be Chebyshev or PLOG, neither of which reduces to a single
+    // Arrhenius term in general, so that claim would not be true of every
+    // line this panel can draw.
+    const axisDescription = xAxisMode === "temperature"
+        ? "temperature in kelvin"
+        : "1000 divided by temperature in inverse kelvin, high temperature at the left"
     const ariaLabel = `k(T,P) evaluated at ${scientificText(pressureBar)} bar for ${channelLabelsText}: `
-        + `${modelKindsText}, ${arrheniusLog10AxisTitle(displayUnits ?? null)} versus temperature in kelvin`
+        + `${modelKindsText}, ${arrheniusLog10AxisTitle(displayUnits ?? null)} versus ${axisDescription}`
 
     return (
         <div className="arrhenius-chart-panel-wrap" data-family-key={panel.key}>
@@ -410,7 +451,7 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
                                         {ktpLineSegments(points).map((segment, segmentIndex) => (
                                             <polyline
                                                 key={segmentIndex}
-                                                points={segment.points.map((point) => `${xScale(point.temperatureK)},${yScale(point.log10k)}`).join(" ")}
+                                                points={segment.points.map((point) => `${xScale(arrheniusPointX(point, xAxisMode))},${yScale(point.log10k)}`).join(" ")}
                                                 fill="none"
                                                 stroke={stroke}
                                                 strokeWidth={strokeWidth}
@@ -424,7 +465,7 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
                         ))}
                     </svg>
                     <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--x" style={{ marginLeft: left, width: plotWidth }}>
-                        Temperature (K)
+                        {xAxisMode === "temperature" ? "Temperature (K)" : "1000 / T (K⁻¹)"}
                     </p>
                 </div>
             </div>
@@ -433,6 +474,43 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
                 <KtpChannelTable key={group.channelKey} group={group} pressureBar={pressureBar} seriesData={fits} axisUnits={displayUnits ?? null} />
             ))}
         </div>
+    )
+}
+
+/**
+ * The chart-wide X-axis (temperature vs 1000/T) control -- one instance,
+ * rendered once in `NetworkKtpChartReady`'s own controls row alongside
+ * Pressure, governing every family panel at once (invariant 7: this is a
+ * reading-convention choice, not a per-panel fact, exactly the reasoning
+ * `arrheniusChartLayout.ts`'s own `ArrheniusXAxisMode` doc comment gives).
+ *
+ * Deliberately NOT imported from `ArrheniusChart.tsx`: that component's own
+ * `ArrheniusXAxisSelect` is module-private (this file must not reach into a
+ * page-scoped component module for a bit of markup), so this is a small,
+ * separate duplicate -- same sanctioned pattern `arrheniusChartLayout.ts`'s
+ * own `A_UNIT_LABELS` comment documents ("otherwise duplicate one function
+ * and note it"). The OPTION WORDING is kept byte-identical to that
+ * component's own ("Temperature (K)" / "1000 / T (K⁻¹)") so the Arrhenius
+ * and k(T,P) pages read as one consistent reading convention, not two.
+ */
+function KtpXAxisSelect({ id, xAxisMode, onSelectXAxisMode }: {
+    id: string
+    xAxisMode: ArrheniusXAxisMode
+    onSelectXAxisMode: (mode: ArrheniusXAxisMode) => void
+}) {
+    return (
+        <label className="arrhenius-chart-control" htmlFor={id}>
+            <span className="arrhenius-chart-control-label">X-axis</span>
+            <select
+                id={id}
+                className="arrhenius-chart-control-select"
+                value={xAxisMode}
+                onChange={(event) => onSelectXAxisMode(event.target.value as ArrheniusXAxisMode)}
+            >
+                <option value="temperature">Temperature (K)</option>
+                <option value="inverse_temperature">1000 / T (K⁻¹)</option>
+            </select>
+        </label>
     )
 }
 

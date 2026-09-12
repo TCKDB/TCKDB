@@ -1,6 +1,7 @@
 import type { NetworkChannel, NetworkState } from "../api/networkEntryApi"
 import type { NetworkKtpEvaluatedPoint, NetworkKtpFit } from "../api/networkKineticsEvalApi"
-import { evenTicks } from "./chartScale"
+import { type ArrheniusXAxisMode, arrheniusPointX } from "./arrheniusChartLayout"
+import { domainWithPadding, evenTicks } from "./chartScale"
 import { seriesColor } from "./thermoCpChartLayout"
 import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitFamily, familyUnits } from "./arrheniusUnits"
 
@@ -88,6 +89,39 @@ export function buildKtpRequestGrid(
         temperaturesK: evenTicks([temperatureMinK, temperatureMaxK], KTP_TEMPERATURE_POINT_COUNT),
         pressuresBar: logSpaced(pressureMinBar, pressureMaxBar, KTP_PRESSURE_POINT_COUNT),
     }
+}
+
+/**
+ * x-domain for the k(T,P) chart in the given axis mode -- the k(T,P)
+ * counterpart of `arrheniusChartLayout.ts`'s own `panelXDomain`, reusing
+ * that module's `arrheniusPointX` verbatim for the per-value transform
+ * (never re-derived here: `KtpPlottedPoint` and `ArrheniusPoint` both carry
+ * a bare `temperatureK` field, confirmed directly against `ktpPlottedPoints`
+ * below rather than assumed, so the same function applies unchanged).
+ *
+ * Built from the request GRID's own sampled temperatures
+ * (`buildKtpRequestGrid`), not a union of per-series fitted ranges the way
+ * `panelXDomain` is: every fit on this chart is evaluated at the SAME
+ * shared grid (invariant 1 -- one batch request, one shared T range), so
+ * there is exactly one range to derive a domain from, never a per-panel or
+ * per-series one. Padded via `domainWithPadding`, matching this chart's
+ * existing (pre-this-change) `domainWithPadding(grid.temperaturesK)` call
+ * for the temperature-mode domain -- unlike `panelXDomain`, which is
+ * deliberately unpadded (a fitted range's own edge is a real validity
+ * boundary there); the k(T,P) grid has no such boundary to respect, so this
+ * chart has always padded it and continues to.
+ *
+ * No separate "reverse the axis" branch is needed under
+ * `inverse_temperature`: 1000/T is monotonic DEcreasing, so the SMALLEST
+ * transformed value already comes from the network's HIGHEST sampled
+ * temperature, and `domainWithPadding` taking the plain min/max of the
+ * transformed array places it at `domain[0]` -- the low-pixel end
+ * `linearScale` always uses -- automatically. That is what puts high
+ * temperature on the left; see `arrheniusChartLayout.ts`'s own
+ * `panelXDomain` comment for the fuller derivation.
+ */
+export function ktpXDomain(temperaturesK: readonly number[], mode: ArrheniusXAxisMode): [number, number] {
+    return domainWithPadding(temperaturesK.map((temperatureK) => arrheniusPointX({ temperatureK }, mode)))
 }
 
 // ---------------------------------------------------------------------------

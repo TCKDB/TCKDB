@@ -11,6 +11,7 @@ import {
     groupKtpFitsByChannel,
     ktpLineSegments,
     ktpPlottedPoints,
+    ktpXDomain,
     KTP_PRESSURE_POINT_COUNT,
     KTP_TEMPERATURE_POINT_COUNT,
     modelKindColor,
@@ -420,5 +421,54 @@ describe("modelKindStrokeColor / modelKindStrokeWidth -- MUTATION TARGET: model 
 
     it("chebyshev is drawn heavier than plog -- a SECOND, redundant encoding of model kind alongside the tint", () => {
         expect(modelKindStrokeWidth("chebyshev")).toBeGreaterThan(modelKindStrokeWidth("plog"))
+    })
+})
+
+describe("ktpXDomain -- the k(T,P) chart's own 1000/T axis domain (owner: 'why can't I change temp to 1/temp')", () => {
+    it("temperature mode: pads around the grid's own [min, max] -- unchanged from before this PR", () => {
+        const [lo, hi] = ktpXDomain([300, 3000], "temperature")
+        // span = 2700, pad = 2700 * 0.12 = 324 (domainWithPadding's own default paddingFraction)
+        expect(lo).toBeCloseTo(-24, 9)
+        expect(hi).toBeCloseTo(3324, 9)
+    })
+
+    // MUTATION TARGET (required): x mapping stays linear in T while the
+    // mode says inverse. Pinned against hand-computed 1000/300 and
+    // 1000/3000 -- the SAME values `arrheniusChartLayout.test.ts` pins
+    // `arrheniusPointX` against, since this function must reuse that exact
+    // transform rather than re-deriving its own.
+    it("inverse_temperature mode: built from 1000/T, not from T -- pinned against hand-computed values", () => {
+        const [lo, hi] = ktpXDomain([300, 3000], "inverse_temperature")
+        const invMin = 1000 / 3000 // 0.3333...
+        const invMax = 1000 / 300 // 3.3333...
+        const pad = (invMax - invMin) * 0.12
+        expect(lo).toBeCloseTo(invMin - pad, 9)
+        expect(hi).toBeCloseTo(invMax + pad, 9)
+    })
+
+    it("inverse_temperature mode is genuinely a different domain from temperature mode", () => {
+        const [tLo, tHi] = ktpXDomain([300, 3000], "temperature")
+        const [invLo, invHi] = ktpXDomain([300, 3000], "inverse_temperature")
+        expect(invLo).not.toBeCloseTo(tLo, 0)
+        expect(invHi).not.toBeCloseTo(tHi, 0)
+    })
+
+    // MUTATION TARGET (required): axis direction not reversed under
+    // inverse mode. `domain[0]` (the low-pixel end `linearScale` always
+    // uses) must come from the HIGHEST sampled temperature (3000 K here),
+    // not the lowest -- that is what puts high T on the left. A version
+    // that built `[1000/minK, 1000/maxK]` (re-ordered to LOOK like the
+    // temperature-mode domain's own [lo, hi] shape, but from the wrong
+    // ends) would fail this: its domain[0] would be 1000/300, closer to
+    // the LOW-temperature end, not the high one.
+    it("the domain's low end comes from the HIGHEST sampled temperature -- the axis reverses", () => {
+        const [lo] = ktpXDomain([300, 3000], "inverse_temperature")
+        expect(Math.abs(lo - 1000 / 3000)).toBeLessThan(Math.abs(lo - 1000 / 300))
+    })
+
+    it("a multi-point grid keeps the same reversed direction, not just a two-point edge case", () => {
+        const [lo, hi] = ktpXDomain([300, 900, 1800, 3000], "inverse_temperature")
+        expect(lo).toBeLessThan(hi)
+        expect(Math.abs(lo - 1000 / 3000)).toBeLessThan(Math.abs(hi - 1000 / 3000))
     })
 })

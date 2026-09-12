@@ -616,6 +616,151 @@ describe("NetworkEntryPage -- k(T,P) chart (PR 4)", () => {
     })
 })
 
+// ---------------------------------------------------------------------------
+// k(T,P) x-axis mode (owner: "And why can't I change temp to 1/temp" -- the
+// Arrhenius chart already has this control, this chart did not). Mirrors
+// `ArrheniusChart.test.tsx`'s own "the x-axis mode control" describe block,
+// same fixture-independent assertions: default mode, switching re-projects
+// and reverses, switching back restores, and the axis title follows the
+// mode. `networkDetailFixture()`'s own solve range (300 K .. 2000 K) is the
+// grid `buildKtpRequestGrid` samples, so the plotted line's own first/last
+// points are exactly that range's endpoints (`evenTicks` samples inclusive
+// of both ends) -- pinned against directly, not assumed.
+// ---------------------------------------------------------------------------
+
+describe("NetworkEntryPage -- k(T,P) chart x-axis mode (temperature vs 1000/T)", () => {
+    it("defaults to Temperature (K) -- today's view, unchanged", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+
+        const select = screen.getByRole("combobox", { name: "X-axis" }) as HTMLSelectElement
+        expect(select.value).toBe("temperature")
+        const title = container.querySelector(".arrhenius-chart-axis-title--x")
+        expect(title?.textContent).toBe("Temperature (K)")
+        const svg = screen.getByRole("img", { name: /k\(T,P\) evaluated/ })
+        expect(svg.getAttribute("aria-label")).toMatch(/versus temperature in kelvin/)
+    })
+
+    // MUTATION TARGET (required): x mapping stays linear in T while the
+    // mode says inverse -- pinned against hand-computed 1000/300 and
+    // 1000/2000, the fixture's own T range endpoints. Also covers the
+    // required "axis direction not reversed" target: the 2000 K point (last
+    // in temperature order) must land at a SMALLER pixel x than the 300 K
+    // point once the axis reverses.
+    it("switching to 1000/T re-projects every plotted point and reverses the axis, high temperature at the left", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+
+        const line = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
+        const pointsBefore = line.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
+        const [firstXBefore] = pointsBefore[0] // 300 K
+        const [lastXBefore] = pointsBefore[pointsBefore.length - 1] // 2000 K
+        expect(firstXBefore).toBeLessThan(lastXBefore) // today's view: low T on the left
+
+        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
+
+        const title = container.querySelector(".arrhenius-chart-axis-title--x")
+        expect(title?.textContent).toBe("1000 / T (K⁻¹)")
+        const svg = screen.getByRole("img", { name: /k\(T,P\) evaluated/ })
+        expect(svg.getAttribute("aria-label")).toMatch(/1000 divided by temperature/)
+        expect(svg.getAttribute("aria-label")).toMatch(/high temperature at the left/)
+
+        const lineAfter = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
+        const pointsAfter = lineAfter.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
+        const [firstXAfter] = pointsAfter[0] // still 300 K, now plotted at 1000/300
+        const [lastXAfter] = pointsAfter[pointsAfter.length - 1] // still 2000 K, now plotted at 1000/2000
+
+        // The two x pixel positions actually changed -- proves the mapping
+        // is not still plain T (the required "x mapping stays linear"
+        // mutation target: a regression that keeps plotting raw T while
+        // merely relabeling the axis would leave these two values
+        // unchanged from `pointsBefore`).
+        expect(firstXAfter).not.toBeCloseTo(firstXBefore, 0)
+        expect(lastXAfter).not.toBeCloseTo(lastXBefore, 0)
+        // And the axis genuinely reversed: 2000 K (1000/2000, the SMALLER
+        // transformed value) is now on the left.
+        expect(lastXAfter).toBeLessThan(firstXAfter)
+    })
+
+    it("switching back to Temperature (K) restores the un-reversed axis", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+
+        const select = screen.getByRole("combobox", { name: "X-axis" })
+        fireEvent.change(select, { target: { value: "inverse_temperature" } })
+        fireEvent.change(select, { target: { value: "temperature" } })
+
+        const title = container.querySelector(".arrhenius-chart-axis-title--x")
+        expect(title?.textContent).toBe("Temperature (K)")
+        const line = container.querySelector('[data-testid="ktp-line-nk_cheb1"] polyline:not([stroke-dasharray])')!
+        const points = line.getAttribute("points")!.split(" ").map((pair) => pair.split(",").map(Number))
+        const [firstX] = points[0]
+        const [lastX] = points[points.length - 1]
+        expect(firstX).toBeLessThan(lastX) // 300 K back on the left
+    })
+
+    it("is ONE chart-wide control, not one per family panel", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        // The channel fieldset only renders once the batch evaluate fetch
+        // resolves -- wait for the default channel's own line before
+        // selecting more (same ordering the stacked-family describe block
+        // below this one already relies on).
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+
+        // Select the two extra channels so both unit families (per_s and
+        // cm3_mol_s) end up with at least one panel each.
+        selectChannel(container, "channel_2")
+        selectChannel(container, "channel_3")
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+        await waitFor(() => expect(container.querySelectorAll('.arrhenius-chart-panel-wrap').length).toBeGreaterThan(1))
+
+        expect(screen.getAllByRole("combobox", { name: "X-axis" })).toHaveLength(1)
+
+        // The single control still governs every panel: switching it moves
+        // every panel's own axis title, not just one.
+        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
+        const titles = container.querySelectorAll(".arrhenius-chart-axis-title--x")
+        expect(titles.length).toBeGreaterThan(1)
+        titles.forEach((title) => expect(title.textContent).toBe("1000 / T (K⁻¹)"))
+    })
+
+    // Invariant 8: the k(T) table behind the Disclosure must never disagree
+    // with the chart about what is plotted. `ArrheniusChart.tsx`'s own k(T)
+    // table always tabulates T in kelvin regardless of its x-axis mode --
+    // this table does the same, so switching the chart's axis must not
+    // change the table's own T column.
+    it("the k(T) table's T column stays in kelvin under 1000/T mode, matching the Arrhenius chart's own table", async () => {
+        handleEverything()
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_cheb1"]').length).toBeGreaterThan(0))
+
+        // A closed `<details>` still renders its children into the DOM
+        // (only visibility is affected) -- `container.querySelector` reads
+        // them directly, same as `ArrheniusChart.test.tsx`'s own table
+        // assertions, no need to open the disclosure first.
+        const firstRowBefore = container.querySelector(".kinetics-k-table tbody tr td[data-label='T (K)']")?.textContent
+
+        fireEvent.change(screen.getByRole("combobox", { name: "X-axis" }), { target: { value: "inverse_temperature" } })
+        const firstRowAfter = container.querySelector(".kinetics-k-table tbody tr td[data-label='T (K)']")?.textContent
+
+        expect(firstRowBefore).toBe("300.00")
+        expect(firstRowAfter).toBe(firstRowBefore)
+    })
+})
+
 describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track built for it", () => {
     it("is a direct child of .arrhenius-chart-panel, not a sibling before it", async () => {
         // `.arrhenius-chart-axis-title--y` is placed with `grid-column: 1`,
