@@ -184,11 +184,11 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         expect(await screen.findByText("NN <=> [H][H] + N=N")).toBeVisible()
     })
 
-    it("renders the network diagram section (PR 3) and the k(T,P) section (PR 4)", async () => {
+    it("renders the potential-energy surface section and the k(T,P) section", async () => {
         handleEverything()
         page()
         await screen.findByRole("heading", { name: "hydrazine" })
-        expect(screen.getByRole("heading", { name: "Network diagram" })).toBeVisible()
+        expect(screen.getByRole("heading", { name: "Potential-energy surface" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "k(T,P)" })).toBeVisible()
     })
 
@@ -283,17 +283,30 @@ describe("NetworkEntryPage -- channel_key never renders as a bare label", () => 
     })
 })
 
-describe("NetworkEntryPage -- network diagram (PR 3)", () => {
-    it("renders one node link per state and one edge link per channel, matching evidence_summary", async () => {
-        handleEverything()
+describe("NetworkEntryPage -- potential-energy surface", () => {
+    it("renders one level per state with a deposited energy, and one saddle point for the channel with a deposited barrier", async () => {
+        handleEverything({
+            stateEnergies: [
+                { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+                { state_composition_hash: "hash_bim", energy_kj_mol: 50, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            ],
+            channelBarriers: [
+                { channel_key: "channel_1", reaction_entry_ref: "rxe_test1", transition_state_entry_ref: "tse_test1", forward_barrier_kj_mol: 20, reverse_barrier_kj_mol: 70, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            ],
+        })
         const { container } = page()
         await screen.findByRole("heading", { name: "hydrazine" })
-        expect(container.querySelectorAll(".net-node-link")).toHaveLength(2)
-        expect(container.querySelectorAll(".net-edge-link")).toHaveLength(1)
+        expect(container.querySelectorAll(".net-pes-level-link")).toHaveLength(2)
+        expect(container.querySelectorAll(".net-pes-saddle-link")).toHaveLength(1)
     })
 
-    it("renders every visible node label from composition.state_label, never the composition_hash", async () => {
-        handleEverything()
+    it("renders every visible level label from composition.state_label, never the composition_hash", async () => {
+        handleEverything({
+            stateEnergies: [
+                { state_composition_hash: "hash_well", energy_kj_mol: 0, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+                { state_composition_hash: "hash_bim", energy_kj_mol: 50, energy_zero_convention: "lowest_state", correction_convention: "electronic_only" },
+            ],
+        })
         const { container } = page()
         await screen.findByRole("heading", { name: "hydrazine" })
         const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)

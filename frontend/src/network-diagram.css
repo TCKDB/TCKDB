@@ -1,20 +1,20 @@
 /*
- * `NetworkDiagram.tsx` -- PR 3 of
- * `docs/plans/pressure-dependent-network-surface.md`. Adopted (renamed,
- * not redesigned) from the reviewed PR 0 mock's own mock-local `<style>`
- * block, `docs/plans/mocks/network-entry.html` -- that file's own header
- * comment says these `.net-*` rules are "scoped under class names chosen
- * so the eventual real component can adopt them with a rename, not a
- * redesign," and this is that rename. Every colour is `var(--token)`
- * (`theme.css.test.ts` enforces this against every stylesheet in `src/`,
- * this one included).
+ * `NetworkDiagram.tsx` -- the network entry page's potential-energy
+ * surface (PES) and its always-rendered accessible table equivalents.
+ * Replaces the earlier force-directed web (states as nodes, channels as
+ * edges, no energy axis) -- see `domain/networkPesLayout.ts`'s own header
+ * comment for the full reasoning behind the switch and this component's
+ * own header comment for the scope decision on what carried over.
+ * Every colour is `var(--token)` (`theme.css.test.ts` enforces this
+ * against every stylesheet in `src/`, this one included).
  *
  * FIXED-WIDTH SVG, same pattern as `arrhenius-chart.css`'s own
  * `.arrhenius-chart-svg` (see that file's header comment for the
  * accessibility-floor defect this pattern exists to avoid): the
  * component sets `width`/`height` as real SVG attributes, never scaled
- * by CSS, and `.network-diagram` gives the fixed-size SVG somewhere to
- * overflow into horizontally instead.
+ * by CSS -- `networkPesLayout.ts`'s own `computeNetworkPesLayout` grows
+ * that width with the number of plotted states, so `.network-diagram`
+ * gives it somewhere to overflow into horizontally instead of cramming.
  */
 
 .network-diagram {
@@ -24,43 +24,67 @@
 
 .network-diagram-svg {
     display: block;
-    width: 1000px;
-    min-width: 1000px;
-    max-width: 1000px;
     height: auto;
 }
 
-/* ---- Nodes: kind is a SHAPE, never inferred from label text (plan §2.2/invariant 6) ---- */
-.net-node-shape {
-    stroke-width: 2.5;
+/* ---- Y axis ---- */
+.net-pes-gridline {
+    stroke: var(--line-2);
+    stroke-width: 1;
 }
-.net-node-well {
-    fill: var(--accent-50);
+.net-pes-axis-line {
+    stroke: var(--line);
+    stroke-width: 1.25;
+}
+.net-pes-tick-label {
+    fill: var(--muted);
+    font: var(--type-data-font);
+    text-anchor: end;
+    dominant-baseline: middle;
+}
+.net-pes-axis-title {
+    margin: .3rem 0 0;
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+}
+.net-pes-axis-title--x {
+    margin-top: .1rem;
+}
+
+/* ---- State levels: kind is a LINE STYLE, never inferred from label text
+   (same "shape/colour is never inferred from text" rule the old node
+   diagram followed, invariant 6/3) ---- */
+.net-pes-level {
+    stroke-width: 4;
+    stroke-linecap: round;
+}
+.net-pes-level-well {
     stroke: var(--accent);
 }
-.net-node-bimolecular {
-    fill: var(--surface);
+.net-pes-level-bimolecular {
     stroke: var(--muted);
-    stroke-width: 2.25;
 }
-.net-node-link:hover .net-node-well,
-.net-node-link:focus-visible .net-node-well {
+.net-pes-level-link:hover .net-pes-level-well,
+.net-pes-level-link:focus-visible .net-pes-level-well {
     stroke: var(--accent-700);
 }
-.net-node-link:hover .net-node-bimolecular,
-.net-node-link:focus-visible .net-node-bimolecular {
-    stroke: var(--accent);
+.net-pes-level-link:hover .net-pes-level-bimolecular,
+.net-pes-level-link:focus-visible .net-pes-level-bimolecular {
+    stroke: var(--ink-2);
 }
-.net-node-link:focus-visible {
+.net-pes-level-link:focus-visible {
     outline: 3px solid var(--accent-300);
     outline-offset: 3px;
 }
 
-/* Label carries a surface-coloured halo (paint-order trick) so an edge
-   passing near a node's label never renders as a line drawn straight
-   through the letters. `composition.state_label` only -- never
-   `channel_key` (invariant 1) and never `states[].label` (invariant 2). */
-.net-node-label {
+/* Both text runs on a level carry a surface-coloured halo (paint-order
+   trick) so a connector line passing near a label never draws straight
+   through the letters. `composition.state_label`/the computed energy
+   value only -- never `channel_key` (invariant 4) and never
+   `states[].label` (invariant 3). */
+.net-pes-level-label,
+.net-pes-peak-label {
     font: var(--type-data-font);
     letter-spacing: var(--type-data-tracking);
     fill: var(--ink);
@@ -69,46 +93,60 @@
     stroke-width: 4px;
     stroke-linejoin: round;
 }
+.net-pes-level-value {
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+    fill: var(--muted);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
 
-/* ---- Edges: colour = channel.kind, dash = has_kinetics (two independent
-   encodings, invariant 6) ---- */
-.net-edge {
-    /* Overridden by every `.net-edge-*` kind class below (same
+/* ---- Saddle points: colour = channel.kind, dash = has_kinetics (two
+   independent encodings carried over from the old edge encoding,
+   documented in `NetworkDiagram.tsx`'s own scope-decision comment) ---- */
+.net-pes-connector {
+    /* Overridden by every `.net-pes-connector-*` kind class below (same
        specificity, later in the cascade) -- this default only shows on
        the legend's own "no kinetics fit deposited" dash sample, which
-       carries `.net-edge` alone with no kind class. */
+       carries `.net-pes-connector` alone with no kind class. */
     stroke: var(--muted);
-    stroke-width: 1.6;
-    opacity: 0.68;
+    stroke-width: 1.8;
+    opacity: 0.75;
     fill: none;
+    stroke-linejoin: round;
 }
-.net-edge-isomerization {
+.net-pes-connector-isomerization {
     stroke: var(--chart-series-1);
-    stroke-width: 3;
+    stroke-width: 2.75;
     opacity: 0.95;
 }
-.net-edge-association {
+.net-pes-connector-association {
     stroke: var(--chart-series-3);
 }
-.net-edge-exchange {
+.net-pes-connector-exchange {
     stroke: var(--chart-series-2);
 }
 /* Any channel kind other than the three enum values measured against the
-   live archive -- a defensive fourth colour so a future kind still reads
-   as ONE consistent category rather than silently falling back to the
-   plain `.net-edge` grey (which is reserved for the legend's own
-   "no kinetics fit" dash swatch). */
-.net-edge-other {
+   live archive -- a defensive fourth colour, same convention as the old
+   edge diagram's own `.net-edge-other`. */
+.net-pes-connector-other {
     stroke: var(--chart-series-4);
 }
-.net-edge-link:hover .net-edge,
-.net-edge-link:focus-visible .net-edge {
+.net-pes-saddle-link:hover .net-pes-connector,
+.net-pes-saddle-link:focus-visible .net-pes-connector {
     opacity: 1;
-    stroke-width: 3;
+    stroke-width: 3.25;
 }
-.net-edge-link:focus-visible {
+.net-pes-saddle-link:focus-visible {
     outline: 2px solid var(--accent-300);
     outline-offset: 1px;
+}
+.net-pes-peak-marker {
+    fill: var(--surface);
+    stroke: var(--ink-2);
+    stroke-width: 1.5;
 }
 
 /* ---- Legend ---- */
@@ -123,9 +161,9 @@
     height: 2px;
 }
 /* Legend swatches use `background-color`, not `stroke` -- these are plain
-   `<span>`s, not SVG shapes, so the `.net-edge-*` classes above (which
-   set `stroke`, an SVG-only property) do nothing here. Same colour per
-   kind, a different CSS property to reach it. */
+   `<span>`s, not SVG shapes, so the `.net-pes-connector-*` classes above
+   (which set `stroke`, an SVG-only property) do nothing here. Same colour
+   per kind, a different CSS property to reach it. */
 .net-legend-line-isomerization {
     background: var(--chart-series-1);
 }
@@ -139,10 +177,17 @@
     background: var(--chart-series-4);
 }
 
-/* ---- Degrade-to-table banner (plan §2.2's explicit fallback -- never a
-   silently blank diagram) ---- */
-.net-diagram-degraded {
-    margin: var(--s-4) 0 0;
+/* ---- Honest-absence notes: a barrier that WAS deposited but could not be
+   placed (unmatched channel reference, missing endpoint energy, or a
+   forward/reverse disagreement past tolerance -- `networkPesLayout.ts`'s
+   own header comment). Reuses the app's plain `.note` text styling, one
+   per line. ---- */
+.net-pes-excluded-notes {
+    margin: .6rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: .3rem;
 }
 
 /* ---- Accessible-table participant lists ---- */

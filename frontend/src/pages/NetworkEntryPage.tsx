@@ -158,14 +158,19 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                 </section>
 
                 <section className="ledger-section" aria-labelledby="diagram-heading">
-                    <p className="t-kicker section-kicker">States as nodes, channels as edges</p>
-                    <SectionHeading id="diagram-heading">Network diagram</SectionHeading>
+                    <p className="t-kicker section-kicker">States as energy levels, deposited barriers as saddle points</p>
+                    <SectionHeading id="diagram-heading">Potential-energy surface</SectionHeading>
                     <p className="t-body section-intro">
-                        {`${record.evidence_summary.state_count} state${record.evidence_summary.state_count === 1 ? "" : "s"}, ${record.evidence_summary.channel_count} channel${record.evidence_summary.channel_count === 1 ? "" : "s"}. No energy axis — see `}
+                        {`${record.evidence_summary.state_count} state${record.evidence_summary.state_count === 1 ? "" : "s"}, ${record.evidence_summary.channel_count} channel${record.evidence_summary.channel_count === 1 ? "" : "s"}. Energies here are electronic-only, referenced to the lowest state — see `}
                         <a href="#energy-coverage">Energy coverage</a>
-                        {" above for why. This is topology, not a potential-energy surface."}
+                        {" above for what that means, and why it is not a thermal free-energy surface."}
                     </p>
-                    <NetworkDiagram states={record.states} channels={record.channels} />
+                    <NetworkDiagram
+                        states={record.states}
+                        channels={record.channels}
+                        stateEnergies={record.stateEnergies}
+                        channelBarriers={record.channelBarriers}
+                    />
                 </section>
 
                 <section className="ledger-section" aria-labelledby="ktp-heading">
