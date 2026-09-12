@@ -508,7 +508,7 @@ export function computeNetworkPesLayout(
         const rightCap = index < distinctLevelX.length - 1 ? (distinctLevelX[index + 1] - x) / 2 : Infinity
         return { leftCap, rightCap }
     }
-    function connectorLegX(stateHash: string, stateX: number, peakX: number): number {
+    function connectorLegX(stateX: number, peakX: number): number {
         // A saddle whose peak sits directly above/below this state (a
         // coincidental tie -- e.g. a hub and one of its own children
         // landing on the identical slot) has no real "outward" side to
@@ -521,9 +521,23 @@ export function computeNetworkPesLayout(
         // small, roughly one-character graze for avoiding that crossing.
         if (Math.abs(peakX - stateX) < NETWORK_PES_TS_BAR_HALF_WIDTH) return stateX
         const direction = Math.sign(peakX - stateX)
-        const preferred = captionWidthByHash.get(stateHash)! / 2 + NETWORK_PES_CAPTION_PAD
         const { leftCap, rightCap } = legClearanceCap(stateX)
-        const clearance = Math.max(NETWORK_PES_LEVEL_HALF_WIDTH, Math.min(preferred, direction > 0 ? rightCap : leftCap))
+        // Attach at the level bar's own outward END, the way the published
+        // PES for this system draws it: a path leaves the end of a level,
+        // not a point in the air beside it.
+        //
+        // This used to offset by half the CAPTION width instead, to stop the
+        // line crossing the caption. A caption is far wider than its bar
+        // ("[H][H] + [N-]=[NH2+]" is about 156px against the bar's 68), so
+        // that offset put the leg 19-51px OUTSIDE the bar on six of eight
+        // legs on the live hydrazine network, and the owner reported the
+        // states as "floating on the graph" -- they were connected, but the
+        // line never reached them. The caption no longer needs clearing:
+        // each one carries its own opaque backing rect
+        // (`.net-pes-caption-backing`), so a line passing behind it stays
+        // legible. Capped by the neighbour clearance so a very close
+        // neighbour still wins over the bar edge.
+        const clearance = Math.min(NETWORK_PES_LEVEL_HALF_WIDTH, direction > 0 ? rightCap : leftCap)
         return Math.round((stateX + direction * clearance) * 100) / 100
     }
 
@@ -546,8 +560,8 @@ export function computeNetworkPesLayout(
             sourceY,
             sinkX,
             sinkY,
-            sourceLegX: connectorLegX(channel.source_state_composition_hash, sourceX, peakX),
-            sinkLegX: connectorLegX(channel.sink_state_composition_hash, sinkX, peakX),
+            sourceLegX: connectorLegX(sourceX, peakX),
+            sinkLegX: connectorLegX(sinkX, peakX),
             peakX,
             peakY: Math.round(yScale(heightKjMol) * 100) / 100,
         }

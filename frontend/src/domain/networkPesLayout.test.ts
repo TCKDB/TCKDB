@@ -8,6 +8,7 @@ import {
     NETWORK_PES_TS_BAR_HALF_WIDTH,
     type NetworkPesLayout,
     pesLevelCaptionWidth,
+    NETWORK_PES_LEVEL_HALF_WIDTH,
 } from "./networkPesLayout"
 
 // ---------------------------------------------------------------------------
@@ -614,5 +615,63 @@ describe("computeNetworkPesLayout — layout mode changes arrangement, never ene
         // being true the default should be revisited, not the test.
         const { conn, ener } = both()
         expect(findConnectorCrossings(ener).length).toBeGreaterThan(findConnectorCrossings(conn).length)
+    })
+})
+
+describe("computeNetworkPesLayout — a connector leg lands on its own level bar", () => {
+    // The owner reported states "floating on the graph": they were connected,
+    // but the connector never reached the bar. The leg was offset by half the
+    // CAPTION width to avoid drawing through the caption, and a caption is
+    // far wider than its bar, so six of eight legs on the live hydrazine
+    // network landed 19-51px OUTSIDE the level they belonged to. Captions
+    // carry their own opaque backing now, so the leg attaches to the bar.
+    //
+    // This is the assertion that would have caught it on the day it shipped.
+    function legsOffTheirBar(layout: NetworkPesLayout): string[] {
+        const xByHash = new Map(layout.levels.map((l) => [l.compositionHash, l.x]))
+        const off: string[] = []
+        for (const s of layout.saddles) {
+            for (const [hash, legX, side] of [
+                [s.sourceHash, s.sourceLegX, "source"] as const,
+                [s.sinkHash, s.sinkLegX, "sink"] as const,
+            ]) {
+                const centre = xByHash.get(hash)
+                if (centre === undefined) continue
+                if (Math.abs(legX - centre) > NETWORK_PES_LEVEL_HALF_WIDTH + 0.01) {
+                    off.push(`${s.channelKey ?? "unkeyed"}:${side} leg ${legX} vs bar [${centre - NETWORK_PES_LEVEL_HALF_WIDTH}, ${centre + NETWORK_PES_LEVEL_HALF_WIDTH}]`)
+                }
+            }
+        }
+        return off
+    }
+
+    it("holds on the real hydrazine tree", () => {
+        const layout = computeNetworkPesLayout(
+            HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS)!
+        expect(layout.saddles.length).toBeGreaterThan(0)
+        expect(legsOffTheirBar(layout)).toEqual([])
+    })
+
+    it("holds under the energy layout too, where states sit in a different order", () => {
+        const layout = computeNetworkPesLayout(
+            HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS, "energy")!
+        expect(layout.saddles.length).toBeGreaterThan(0)
+        expect(legsOffTheirBar(layout)).toEqual([])
+    })
+
+    it("holds with a very long caption, the case that caused the defect", () => {
+        // "[H][H] + [N-]=[NH2+]" is ~156px wide against a 68px bar; the old
+        // caption-derived offset put this leg 51px outside its own level.
+        const states = [
+            state("h1", "well", "NN"),
+            state("h2", "bimolecular", "[H][H] + [N-]=[NH2+]"),
+            state("h3", "bimolecular", "N=N (E) + [H][H]"),
+        ]
+        const energies = [energy("h1", 0), energy("h2", 233.3), energy("h3", 123.7)]
+        const channels = [channel("channel_a", "h2", "h1"), channel("channel_b", "h3", "h1")]
+        const barriers = [barrier("channel_a", 113.9, 347.2), barrier("channel_b", 226.9, 350.6)]
+        const layout = computeNetworkPesLayout(states, energies, channels, barriers)!
+        expect(layout.saddles.length).toBe(2)
+        expect(legsOffTheirBar(layout)).toEqual([])
     })
 })
