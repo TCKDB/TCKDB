@@ -664,34 +664,71 @@ def test_ecs_search_by_software(client, db_session):
     deferred/422 before the correction-scheme-provenance v1 widening;
     v2 moved it from ``software_id`` to a release, joined through
     ``software_release``)."""
-    release = make_software_release(db_session, name="orca", version=None)
-    ecs = make_energy_correction_scheme(db_session, software_release=release)
+    orca_release = make_software_release(db_session, name="orca", version=None)
+    gaussian_release = make_software_release(
+        db_session, name="gaussian", version=None
+    )
+    ecs_orca = make_energy_correction_scheme(
+        db_session, name="ecs_orca_scheme", software_release=orca_release
+    )
+    ecs_gaussian = make_energy_correction_scheme(
+        db_session, name="ecs_gaussian_scheme", software_release=gaussian_release
+    )
     body = client.get(_ecs_search_url(software="orca")).json()
     refs = {
         r["energy_correction_scheme"]["energy_correction_scheme_ref"]
         for r in body["records"]
     }
-    assert ecs.public_ref in refs
+    assert ecs_orca.public_ref in refs
+    assert ecs_gaussian.public_ref not in refs
 
 
-def test_ecs_search_by_software_version_still_deferred(client, db_session):
-    """ECS only carries a bare software identity (no release), matching
-    FrequencyScaleFactor's own grain -- ``software_version`` stays
-    rejected rather than silently ignored."""
-    resp = client.get(_ecs_search_url(software_version="16"))
-    assert resp.status_code == 422
-    assert "unsupported_filter" in resp.text
+def test_ecs_search_by_software_version(client, db_session):
+    """ECS now stores ``software_release_id``, so ``software_version`` is
+    implemented against the joined ``software_release`` -- it must match
+    versioned releases and must not return version-less ones."""
+    versioned = make_software_release(db_session, name="orca", version="16")
+    versionless = make_software_release(db_session, name="orca", version=None)
+    ecs_versioned = make_energy_correction_scheme(
+        db_session, name="ecs_versioned", software_release=versioned
+    )
+    ecs_versionless = make_energy_correction_scheme(
+        db_session, name="ecs_versionless", software_release=versionless
+    )
+
+    body = client.get(_ecs_search_url(software_version="16")).json()
+    refs = {
+        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
+        for r in body["records"]
+    }
+    assert ecs_versioned.public_ref in refs
+    assert ecs_versionless.public_ref not in refs
 
 
-def test_ecs_detail_serves_software_and_workflow_tool_release(client, db_session):
-    release = make_software_release(db_session, name="gaussian", version=None)
+def test_ecs_detail_serves_software_and_workflow_tool_release(
+    client, db_session, allow_internal_ids
+):
+    release = make_software_release(db_session, name="gaussian", version="16")
     wtr = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
     ecs = make_energy_correction_scheme(
         db_session, software_release=release, workflow_tool_release=wtr
     )
-    body = client.get(_ecs_detail_url(ecs.public_ref)).json()
+    body = client.get(
+        _ecs_detail_url(ecs.public_ref, include="internal_ids")
+    ).json()
 
-    assert body["record"]["software_release"]["software"] == "gaussian"
+    sw_release = body["record"]["software_release"]
+    assert sw_release["software"] == "gaussian"
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_id"] != 0
+    assert sw_release["software_release_ref"] == release.public_ref
+    assert sw_release["software_release_ref"] != ""
+    assert sw_release["version"] == "16"
+    # The ref must resolve to a real record, not merely be non-empty.
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
     assert body["record"]["workflow_tool_release"]["workflow_tool"] == "arc"
     assert body["record"]["evidence_summary"]["has_software"] is True
 
