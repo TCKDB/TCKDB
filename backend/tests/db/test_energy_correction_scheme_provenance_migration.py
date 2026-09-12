@@ -256,12 +256,112 @@ def test_release_grain_preflight_check_aborts_on_software_only_collision(
         command.upgrade(config, "head")
 
 
+def _track(created: dict[str, list[int]], table: str, row_id: int) -> int:
+    """Record ``row_id`` under ``table`` so the caller can delete it."""
+    created.setdefault(table, []).append(row_id)
+    return row_id
+
+
+def _distinct_value_for(connection, column: str, baseline, created):
+    """A value for ``column`` that differs from ``baseline``, creating the
+    parent row first for the three foreign-key columns.
+
+    Every parent row created here is recorded in ``created`` (a
+    ``{table: [ids]}`` mapping) so the caller can delete it. This suite
+    asserts that a test commits nothing into the shared database, so a
+    lookup row left behind fails the run rather than merely littering.
+
+    Kept narrow on purpose -- this exists to vary one identity column at
+    a time, not to build a general fixture factory.
+    """
+    suffix = uuid4().hex[:8]
+    if column == "kind":
+        return "atom_hf"
+    if column == "name":
+        return f"legit_difference_scheme_{suffix}"
+    if column == "version":
+        return "v2"
+    if column == "units":
+        return "kcal_mol"
+    if column == "level_of_theory_id":
+        return _track(created, "level_of_theory", connection.scalar(
+            text(
+                "INSERT INTO level_of_theory (method, lot_hash) "
+                "VALUES ('preflight-legit', :h) RETURNING id"
+            ),
+            {"h": f"preflightlegit{suffix}"},
+        ))
+    if column == "source_literature_id":
+        return _track(created, "literature", connection.scalar(
+            text(
+                "INSERT INTO literature (kind, title) "
+                "VALUES ('article', :t) RETURNING id"
+            ),
+            {"t": f"Preflight Legit Difference {suffix}"},
+        ))
+    if column == "workflow_tool_release_id":
+        tool_id = _track(
+            created,
+            "workflow_tool",
+            connection.scalar(
+                text("INSERT INTO workflow_tool (name) VALUES (:n) RETURNING id"),
+                {"n": f"PreflightLegitTool{suffix}"},
+            ),
+        )
+        return _track(created, "workflow_tool_release", connection.scalar(
+            text(
+                "INSERT INTO workflow_tool_release (workflow_tool_id, version) "
+                "VALUES (:t, '1.0') RETURNING id"
+            ),
+            {"t": tool_id},
+        ))
+    raise AssertionError(f"no distinct value defined for column {column!r}")
+
+
+@pytest.mark.parametrize(
+    "differing_column",
+    [
+        "kind",
+        "name",
+        "version",
+        # "units" is deliberately absent, and its absence is a result
+        # rather than an omission: at the parent revision ``units`` is
+        # NOT in the identity index, so two rows differing only by units
+        # cannot be inserted there at all -- the seed fails with a
+        # UniqueViolation on the narrow index. That is precisely the
+        # defect this revision fixes (plan §3.3). The units axis is
+        # covered instead by
+        # tests/services/test_energy_correction_resolution_provenance.py
+        # (``test_two_schemes_same_identity_different_units_are_distinct_rows``
+        # and ``test_same_correction_in_a_second_unit_creates_a_second_row
+        # _not_a_conflict``) and, for the down path, by
+        # ``test_release_grain_downgrade_after_units_only_distinction
+        # _fails_loudly`` below.
+        "level_of_theory_id",
+        "source_literature_id",
+        "workflow_tool_release_id",
+    ],
+)
 def test_release_grain_preflight_check_does_not_fire_for_a_legitimate_difference(
-    db_engine, monkeypatch
+    db_engine, monkeypatch, differing_column
 ):
-    """The same shape, differing by ``kind`` instead of ``software_id``,
-    must upgrade cleanly -- the check is scoped to the one column this
-    revision actually drops, not to every pair of rows sharing a name."""
+    """The same shape, differing by one of the seven columns the widened
+    identity still checks instead of by ``software_id``, must upgrade
+    cleanly -- the check is scoped to the one column this revision
+    actually drops, not to every pair of rows sharing a name.
+
+    Parametrized over **all seven** columns in ``_COLLISION_QUERY``'s
+    ``GROUP BY``. The single-column (``kind``-only) version of this test
+    could not see a ``GROUP BY`` that had lost any of the other six:
+    dropping one makes the check *over*-refuse, which is the safe
+    direction but produces a legible-sounding error about a collision
+    that is not one, and blocks an upgrade that should proceed. Raised in
+    review of #458.
+
+    *Mutation*: delete any column from ``_COLLISION_QUERY``'s ``GROUP
+    BY`` -- the case named after that column must then fail with the
+    revision's ``RuntimeError``.
+    """
     db_name = db_engine.url.database
     db_engine.dispose()
     _set_db_env(monkeypatch, db_name)
@@ -269,22 +369,40 @@ def test_release_grain_preflight_check_does_not_fire_for_a_legitimate_difference
 
     engine = create_engine(db_engine.url.render_as_string(hide_password=False))
     inserted_scheme_ids: list[int] = []
+    created: dict[str, list[int]] = {}
     try:
         command.downgrade(config, _MIGRATION_RELEASE_GRAIN.parent)
 
         with engine.begin() as connection:
+            # Baseline the two rows agree on; ``differing_column`` is
+            # then overridden to a distinct value on the second row.
+            base: dict[str, object] = {
+                "kind": "atom_energy",
+                "name": "legit_difference_scheme",
+                "version": None,
+                "units": "hartree",
+                "level_of_theory_id": None,
+                "source_literature_id": None,
+                "workflow_tool_release_id": None,
+            }
+            row_a = dict(base)
+            row_b = dict(base)
+            row_b[differing_column] = _distinct_value_for(
+                connection, differing_column, base[differing_column], created
+            )
+
+            columns = ", ".join(base)
+            binds_a = ", ".join(f":a_{c}" for c in base)
+            binds_b = ", ".join(f":b_{c}" for c in base)
+            params = {f"a_{c}": v for c, v in row_a.items()}
+            params.update({f"b_{c}": v for c, v in row_b.items()})
             inserted_scheme_ids = list(
                 connection.scalars(
-                    text("""
-                        INSERT INTO energy_correction_scheme
-                            (kind, name, version, units, note)
-                        VALUES
-                            ('atom_energy', 'legit_difference_scheme', NULL,
-                             'hartree', 'row a'),
-                            ('atom_hf', 'legit_difference_scheme', NULL,
-                             'hartree', 'row b')
-                        RETURNING id
-                    """)
+                    text(
+                        f"INSERT INTO energy_correction_scheme ({columns}) "
+                        f"VALUES ({binds_a}), ({binds_b}) RETURNING id"
+                    ),
+                    params,
                 )
             )
 
@@ -310,6 +428,20 @@ def test_release_grain_preflight_check_does_not_fire_for_a_legitimate_difference
                     ),
                     {"ids": inserted_scheme_ids},
                 )
+            # Parents last, and releases before their tools. The schemes
+            # referencing them are already gone above.
+            for table in (
+                "workflow_tool_release",
+                "workflow_tool",
+                "literature",
+                "level_of_theory",
+            ):
+                ids = created.get(table)
+                if ids:
+                    connection.execute(
+                        text(f"DELETE FROM {table} WHERE id = ANY(:ids)"),
+                        {"ids": ids},
+                    )
         engine.dispose()
         command.upgrade(config, "head")
 
@@ -326,6 +458,28 @@ def test_release_grain_upgrade_preserves_refs_params_and_applied_rows(
     *Mutation*: add any backfill at all to ``upgrade()`` -- the
     ``software_release_id IS NULL`` assertion below must then fail. This
     is the criterion that pins ruling 9 (no backfill) into the suite.
+
+    Two things this test needs in order to mean that, both of which it
+    lacked when first written (found in review of #458):
+
+    1. It must **downgrade first**. ``db_engine`` migrates the test DB to
+       head, and this revision *is* head, so an ``upgrade()`` to it
+       without a preceding ``downgrade()`` is a no-op and every assertion
+       below is checked against a table the migration never touched. The
+       blanket-backfill mutation above was applied and this test stayed
+       green; only the round-trip test (which does downgrade) went red.
+
+    2. The fixture must be **backfillable**. The realistic regression is
+       not a blanket ``UPDATE`` -- it is someone restoring
+       ``b6d80e36dcec``'s ``_backfill_software_and_workflow_tool_release``,
+       which derives from ``calculation`` rows at the scheme's own level
+       of theory (``GROUP BY c.lot_id HAVING count(DISTINCT
+       sr.software_id) = 1``). A scheme with no ``level_of_theory_id``
+       and no calculations is invisible to that derivation, so it would
+       stay ``NULL`` and this test would pass while ruling 9 was being
+       violated. The fixture below therefore carries a level of theory
+       and one ``calculation`` at it with exactly one distinct software
+       release -- precisely the shape the v1 derivation *would* fill in.
     """
     db_name = db_engine.url.database
     db_engine.dispose()
@@ -335,17 +489,64 @@ def test_release_grain_upgrade_preserves_refs_params_and_applied_rows(
     engine = create_engine(db_engine.url.render_as_string(hide_password=False))
     scheme_ids: list[int] = []
     species_ids: list[int] = []
+    lot_ids: list[int] = []
+    calculation_ids: list[int] = []
+    software_ids: list[int] = []
+    software_release_ids: list[int] = []
     try:
+        # Back the DB down to the schema this revision inherits, so the
+        # upgrade below actually runs. Without this the DB is already at
+        # this revision and Alembic no-ops -- see the docstring.
+        command.downgrade(config, _MIGRATION_RELEASE_GRAIN.parent)
+
         with engine.begin() as connection:
+            # The shape b6d80e36dcec's derivation would have filled in:
+            # a level of theory with calculations at it resolving to
+            # exactly one software. If any backfill returns, this row is
+            # what it reaches, and the NULL assertion below goes red.
+            lot_suffix = uuid4().hex[:8]
+            lot_ids = list(
+                connection.scalars(
+                    text("""
+                        INSERT INTO level_of_theory (method, lot_hash)
+                        VALUES ('ecs-release-grain-method', :lot_hash)
+                        RETURNING id
+                    """),
+                    {"lot_hash": f"ecsrelgrain{lot_suffix}"},
+                )
+            )
+            software_ids = list(
+                connection.scalars(
+                    text("""
+                        INSERT INTO software (name)
+                        VALUES (:name)
+                        RETURNING id
+                    """),
+                    {"name": f"ReleaseGrain-Backfillable-{lot_suffix}"},
+                )
+            )
+            software_release_ids = list(
+                connection.scalars(
+                    text("""
+                        INSERT INTO software_release (software_id, version)
+                        VALUES (:sid, '16')
+                        RETURNING id
+                    """),
+                    {"sid": software_ids[0]},
+                )
+            )
             scheme_ids = list(
                 connection.scalars(
                     text("""
                         INSERT INTO energy_correction_scheme
-                            (kind, name, version, units, note)
+                            (kind, name, version, units, note,
+                             level_of_theory_id)
                         VALUES ('atom_energy', 'applied_row_survives_scheme',
-                                NULL, 'hartree', 'has params and a dependent row')
+                                NULL, 'hartree', 'has params and a dependent row',
+                                :lot_id)
                         RETURNING id
-                    """)
+                    """),
+                    {"lot_id": lot_ids[0]},
                 )
             )
             scheme_id = scheme_ids[0]
@@ -390,6 +591,27 @@ def test_release_grain_upgrade_preserves_refs_params_and_applied_rows(
                 ),
                 {"sid": species_ids[0]},
             )
+            # ``calculation`` requires exactly one owner
+            # (``ck_calculation_one_owner``), so it is created here,
+            # after the species entry exists, rather than beside the
+            # level of theory above.
+            calculation_ids = list(
+                connection.scalars(
+                    text("""
+                        INSERT INTO calculation
+                            (type, lot_id, software_release_id,
+                             species_entry_id)
+                        VALUES ('sp', :lot_id, :srel_id, :entry_id)
+                        RETURNING id
+                    """),
+                    {
+                        "lot_id": lot_ids[0],
+                        "srel_id": software_release_ids[0],
+                        "entry_id": species_entry_id,
+                    },
+                )
+            )
+
             applied_id = connection.scalar(
                 text("""
                     INSERT INTO applied_energy_correction
@@ -453,6 +675,15 @@ def test_release_grain_upgrade_preserves_refs_params_and_applied_rows(
                     ),
                     {"ids": scheme_ids},
                 )
+            # FK order: calculation owns a species_entry and points at
+            # the level of theory and software release, so it goes first;
+            # level_of_theory last, once both the scheme and the
+            # calculation that reference it are gone.
+            if calculation_ids:
+                connection.execute(
+                    text("DELETE FROM calculation WHERE id = ANY(:ids)"),
+                    {"ids": calculation_ids},
+                )
             if species_ids:
                 connection.execute(
                     text("DELETE FROM species_entry WHERE species_id = ANY(:ids)"),
@@ -461,6 +692,21 @@ def test_release_grain_upgrade_preserves_refs_params_and_applied_rows(
                 connection.execute(
                     text("DELETE FROM species WHERE id = ANY(:ids)"),
                     {"ids": species_ids},
+                )
+            if software_release_ids:
+                connection.execute(
+                    text("DELETE FROM software_release WHERE id = ANY(:ids)"),
+                    {"ids": software_release_ids},
+                )
+            if software_ids:
+                connection.execute(
+                    text("DELETE FROM software WHERE id = ANY(:ids)"),
+                    {"ids": software_ids},
+                )
+            if lot_ids:
+                connection.execute(
+                    text("DELETE FROM level_of_theory WHERE id = ANY(:ids)"),
+                    {"ids": lot_ids},
                 )
         engine.dispose()
         command.upgrade(config, "head")
@@ -626,6 +872,39 @@ def test_release_grain_downgrade_after_units_only_distinction_fails_loudly(
                 {"ids": inserted_ids},
             )
             assert count == 2
+
+            # `count == 2` alone does not show the downgrade rolled back:
+            # a failed downgrade never deletes rows, so that assertion
+            # holds whether the schema reverted or was left half-changed.
+            # Assert the schema itself is still the post-upgrade one
+            # (raised in review of #458).
+            columns = set(
+                connection.scalars(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'energy_correction_scheme'"
+                    )
+                )
+            )
+            assert "software_release_id" in columns
+            assert "software_id" not in columns
+
+            indexed = list(
+                connection.scalars(
+                    text("""
+                        SELECT a.attname
+                        FROM pg_index i
+                        JOIN pg_class c ON c.oid = i.indexrelid
+                        JOIN pg_attribute a
+                          ON a.attrelid = i.indrelid
+                         AND a.attnum = ANY(i.indkey)
+                        WHERE c.relname = 'uq_energy_correction_scheme_identity'
+                    """)
+                )
+            )
+            assert "units" in indexed
+            assert "software_release_id" in indexed
+            assert "software_id" not in indexed
     finally:
         if inserted_ids:
             with engine.begin() as connection:

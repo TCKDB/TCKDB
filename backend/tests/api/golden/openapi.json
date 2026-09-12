@@ -307,7 +307,7 @@
             "title": "Energy Correction Scheme Ref",
             "type": "string"
           },
-          "software_ref": {
+          "software_release_ref": {
             "anyOf": [
               {
                 "type": "string"
@@ -316,7 +316,7 @@
                 "type": "null"
               }
             ],
-            "title": "Software Ref"
+            "title": "Software Release Ref"
           },
           "source_literature_ref": {
             "anyOf": [

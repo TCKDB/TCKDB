@@ -467,9 +467,22 @@ HAVING count(*) > 1;
 
 Any row returned means two schemes were distinguished *only* by the
 program column this revision drops. The revision must abort with a
-message naming those schemes' public refs and saying that their program
-attributions must be re-recorded as releases (via §5's route) before the
-upgrade can proceed — never merge them, never pick one. Measured on the
+message naming those schemes' public refs — never merge them, never pick
+one.
+
+**Correction (review of #458):** an earlier draft of this section, and
+the revision's first error message, told the operator to re-record the
+program attributions as releases via §5's admin route before re-running.
+That instruction cannot be carried out. When the check fires, the
+database is still at `b6d80e36dcec`: `software_release_id` does not
+exist, and every colliding row already has `software_id` set, so the
+route returns `409 …_software_already_set` against the deployed code and
+fails on a missing column against the new code. The achievable remedies
+are to make the rows distinct on a column the new identity still checks
+(most naturally `version` or `name`), or to delete the redundant scheme
+and repoint its `applied_energy_correction` rows — a curation decision,
+which is the honest reason the migration refuses to make it. The error
+message now says this. Measured on the
 deployed database 2026-09-13: **0 rows**, so this deployment upgrades
 cleanly; the check exists for every other database, which this plan
 cannot see and does not assume anything about.

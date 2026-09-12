@@ -770,7 +770,14 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
 
     energy_correction_scheme_ref: str
     source_literature_ref: str | None = None
-    software_ref: str | None = None
+    #: Renamed from ``software_ref`` when ``energy_correction_scheme``
+    #: moved from ``software_id`` to ``software_release_id``
+    #: (c24ce2d9c198). The value this field carries changed referent at
+    #: the same moment -- it is now a ``software_release`` public ref
+    #: (``srel_...``), not a ``software`` one (``soft_...``). Keeping the
+    #: old name would have left an admin client silently resolving the
+    #: ref against the wrong table; renaming makes the break visible.
+    software_release_ref: str | None = None
     workflow_tool_release_ref: str | None = None
 
 
@@ -875,7 +882,7 @@ def attach_energy_correction_scheme_provenance(
             if scheme.source_literature_id is not None
             else None
         ),
-        software_ref=(
+        software_release_ref=(
             scheme.software_release.public_ref
             if scheme.software_release_id is not None
             else None

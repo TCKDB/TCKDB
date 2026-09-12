@@ -102,12 +102,19 @@ def test_attach_software_to_uncited_software_less_scheme(
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["energy_correction_scheme_ref"] == scheme.public_ref
-    assert body["software_ref"] is not None
     assert body["source_literature_ref"] is None
 
     db_session.refresh(scheme)
     assert scheme.software_release_id is not None
     assert scheme.software_release.software.name == "Gaussian"
+
+    # Follow the ref to a real record rather than asserting it is merely
+    # non-empty. This field used to carry a ``software`` ref and now
+    # carries a ``software_release`` one (c24ce2d9c198); a non-emptiness
+    # check could not tell those apart, which is how the change went
+    # unnoticed until review of #458.
+    assert body["software_release_ref"] == scheme.software_release.public_ref
+    assert body["software_release_ref"].startswith("srel_")
 
 
 def test_attach_literature_via_manual_citation(
