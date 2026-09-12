@@ -3,11 +3,10 @@ import { domainWithPadding, linearScale } from "./chartScale"
 
 /**
  * Client-side layout for `NetworkDiagram.tsx`'s potential-energy surface
- * (PES), replacing the earlier force-directed web (`networkDiagramLayout.ts`,
- * deleted alongside this file). States become horizontal level bars at
- * their own deposited relative energy; a channel becomes a saddle point
- * ONLY when it carries a deposited barrier -- see the invariant below,
- * which is the one rule this whole module exists to enforce.
+ * (PES). States become horizontal level bars at their own deposited
+ * relative energy; a channel becomes a saddle point ONLY when it carries a
+ * deposited barrier -- see the invariant below, which is the one rule this
+ * whole module exists to enforce.
  *
  * INVARIANT (owner's brief, "never draw a barrier that was not deposited"):
  * a channel with no `NetworkChannelBarrier` row produces no saddle-point
@@ -25,31 +24,73 @@ import { domainWithPadding, linearScale } from "./chartScale"
  * when it fails, rather than rendering a number that isn't trustworthy
  * either way it's computed. See `NetworkPesExclusion` below.
  *
- * X ORDERING: states are placed left-to-right in ascending energy order.
- * This is a deliberate, honest choice among several arbitrary ones (the
- * plan's own brief leaves it open) -- x carries no numeric meaning of its
- * own (there is no deposited "reaction coordinate"), so `NetworkDiagram.tsx`
- * labels the axis accordingly. Ascending energy was picked over "served
- * array order" (which is an accident of the API response, not a reading
- * aid) and over "shortest-path/topological" orderings (no defensible single
- * path exists on a NETWORK -- 21 channels among 7 states is not a linear
- * mechanism) because it produces the one visual property every reader
- * immediately understands without a legend: walking left to right always
- * walks uphill, then a reader's eye finds a channel's own two wells by
- * their y-height, not by hunting for a specific x slot.
+ * X ORDERING -- rewritten from "ascending energy" to "connectivity",
+ * reading a published PES rather than a rank list (owner: "hard to read
+ * with lines overlapping etc", matched against
+ * `raghunath_n2h4_pes_fig7.1.png`, the group's own literature figure for
+ * this exact chemical system):
  *
- * WIDTH: NOT the fixed `NETWORK_DIAGRAM_WIDTH`/`HEIGHT` constants the old
- * force layout used. A force-directed graph on a fixed canvas degrades
- * because too many NODES crowd a fixed area; a PES built from level bars
- * degrades the same way only if too many bars are forced into the same
- * fixed width, so this module grows `width` with the number of PLOTTED
- * levels (`NETWORK_PES_LEVEL_GAP` per level) instead of capping level
- * count and falling back to a table-only banner. `NetworkDiagram.tsx` still
- * wraps the SVG in `overflow-x: auto` (invariant 6 -- fixed-pixel SVG,
- * never percentage-scaled), so a wide network simply scrolls; nothing
- * about the SADDLE side of the diagram needs a similar growth allowance,
- * because invariant 1 above already caps the connector count at however
- * many barriers are actually deposited, never at the full channel count.
+ *   1. Build a graph whose nodes are PLOTTED states (a deposited energy)
+ *      and whose edges are ACCEPTED saddles (a deposited, placeable,
+ *      internally-consistent barrier -- exactly the ones that get drawn).
+ *      A state with zero such edges cannot be positioned by connectivity
+ *      at all; see "UNCONNECTED STATES" below.
+ *   2. Within each connected component, root at the state with the most
+ *      edges (ties: lower energy, then served order) and walk outward.
+ *      Each leaf claims the next integer "slot"; an internal node's slot
+ *      is the average of its children's -- the standard compact-tree
+ *      placement, and the one that provably draws ZERO crossing
+ *      connectors for an actual tree, because every subtree owns a
+ *      contiguous, non-overlapping slot range. A hub with several leaf
+ *      children therefore has its own children spread out on both sides
+ *      of it (its slot is their average), reproducing the reference
+ *      figure's "radiates outward from a bottom-centre well" shape without
+ *      hand-picking a centre.
+ *   3. A component whose accepted-saddle edge count exceeds `nodes - 1` has
+ *      a cycle and is not a tree. It still renders -- `usedSpanningTree`
+ *      on `NetworkPesComponent` records that position was computed from a
+ *      spanning tree of the component (same root/walk rule above, only
+ *      tree edges consulted for x), and the non-spanning edge(s) are drawn
+ *      from the resulting positions like any other saddle. They may cross;
+ *      that is the documented, honest fallback for a graph shape this
+ *      layout was not designed to avoid crossings for, not a crash and not
+ *      a silently dropped channel. No live TCKDB network is known to hit
+ *      this branch as of this PR (the hydrazine archive's accepted-barrier
+ *      graph is a tree), so it is exercised only by a synthetic fixture.
+ *   4. Components are laid out left to right, largest first (ties: lowest
+ *      served index of any member), each occupying its own contiguous slot
+ *      range with a one-slot gap from the next.
+ *
+ * UNCONNECTED STATES -- a plotted state that is the endpoint of zero
+ * accepted saddles (on the live hydrazine archive: "2 [NH2]" and "[H] +
+ * [NH]N", both deposited, neither on the path of any deposited barrier)
+ * cannot be given a position by the algorithm above -- there is no edge to
+ * walk. They are not dropped (that would silently understate the
+ * archive) and no edge is invented for them (that would violate invariant
+ * 1's spirit one level up: never draw a connection that was not
+ * deposited). Instead they are placed as their own group, ascending by
+ * energy (the same honest, arbitrary-but-legible tie-break the whole
+ * surface used before this rewrite, kept for the one case where no
+ * connectivity signal exists at all), one extra slot-gap to the right of
+ * every connected component, with a dashed divider and a stated count so a
+ * reader never mistakes "no connector drawn" for "no barrier exists" --
+ * `NetworkDiagram.tsx` states exactly that via `isolatedStateHashes`.
+ *
+ * SADDLES ARE LEVEL BARS, NOT POINTS: `NetworkDiagram.tsx` draws each
+ * saddle as a short horizontal bar at `peakY`, `NETWORK_PES_TS_BAR_HALF_WIDTH`
+ * either side of `peakX`, with its own energy caption above it -- the
+ * reference figure's convention ("TS4 / 113.5") minus a name, because
+ * nothing in this API gives a transition state a depositor-facing label
+ * that is not `channel_key` (invariant 4 forbids rendering that). The two
+ * connector legs run from each endpoint state to the NEAR edge of that bar
+ * (whichever edge is on that state's own side), producing the classic
+ * peak/valley trapezoid instead of a single vertex.
+ *
+ * WIDTH: grows with the number of PLOTTED levels and their captions
+ * (`NETWORK_PES_LEVEL_GAP` per slot), never the fixed old force-diagram
+ * canvas. `NetworkDiagram.tsx` wraps the SVG in `overflow-x: auto`
+ * (invariant 6 -- fixed-pixel SVG, never percentage-scaled), so a wide
+ * network simply scrolls.
  */
 
 // ---------------------------------------------------------------------------
@@ -62,14 +103,21 @@ export const NETWORK_PES_MARGIN = { top: 40, right: 40, bottom: 72, left: 72 } a
  *  network without growing) -- same "fixed-pixel SVG" convention as
  *  `ARRHENIUS_CHART_WIDTH`/the old `NETWORK_DIAGRAM_WIDTH`. */
 export const NETWORK_PES_BASE_WIDTH = 760
-/** Minimum horizontal gap between two adjacent level-bar centres --
- *  `width` grows past `NETWORK_PES_BASE_WIDTH` (never shrinks below it)
- *  once `(n - 1) * NETWORK_PES_LEVEL_GAP` would no longer fit, so labels
- *  never get crammed regardless of how many states carry a deposited
- *  energy. */
+/** Pixel width of one x "slot" -- the unit a tree walk counts leaves in
+ *  (`assignConnectivityLayout` below) before conversion to pixels. Also the
+ *  historical minimum gap between two adjacent level captions, kept as the
+ *  floor so a sparse layout never looks cramped. */
 export const NETWORK_PES_LEVEL_GAP = 130
 /** Half-width of one level bar, in pixels either side of its centre x. */
 export const NETWORK_PES_LEVEL_HALF_WIDTH = 34
+/** Half-width of one saddle's TS bar -- narrower than a state's own level
+ *  bar (`NETWORK_PES_LEVEL_HALF_WIDTH`) so the two read as different kinds
+ *  of mark at a glance, matching the reference figure's thinner TS bars. */
+export const NETWORK_PES_TS_BAR_HALF_WIDTH = 24
+/** Slot-space gap left between one connectivity component and the next
+ *  (and again before the unconnected-states group), so components read as
+ *  visually distinct groups rather than one continuous line of states. */
+export const NETWORK_PES_COMPONENT_GAP_SLOTS = 1
 
 /** Advance width of one character at `--type-data-font` (13px monospace),
  *  which is what the level and energy captions render in. Used to size the
@@ -101,6 +149,17 @@ const Y_DOMAIN_PADDING_FRACTION = 0.14
  */
 export const NETWORK_PES_BARRIER_TOLERANCE_KJ_MOL = 0.05
 
+/** Two level captions whose bounding boxes would come within this many
+ *  pixels of each other on the y axis are close enough to be considered
+ *  the "same row" for horizontal-collision purposes -- a level's own
+ *  caption spans roughly 12px above to 20px below its bar plus text
+ *  height, so two levels much further apart than this in y never collide
+ *  regardless of x (their captions simply sit at different heights on the
+ *  canvas), and only a genuine near-vertical stack needs nudging apart. */
+const NETWORK_PES_LEVEL_VERTICAL_BAND_PX = 40
+const NETWORK_PES_LEVEL_NUDGE_STEP_PX = 26
+const NETWORK_PES_LEVEL_DECLUTTER_MAX_ATTEMPTS = 20
+
 // ---------------------------------------------------------------------------
 // Shapes
 // ---------------------------------------------------------------------------
@@ -114,6 +173,11 @@ export interface NetworkPesLevel {
     energyKjMol: number
     x: number
     y: number
+    /** True when this state is the endpoint of zero accepted saddles --
+     *  drawn in the separate unconnected-states group, never given a
+     *  connectivity-derived position (there is no edge to derive one
+     *  from). See the module header's "UNCONNECTED STATES" section. */
+    isUnconnected: boolean
 }
 
 export interface NetworkPesSaddle {
@@ -134,6 +198,8 @@ export interface NetworkPesSaddle {
     sourceY: number
     sinkX: number
     sinkY: number
+    /** Centre of the TS bar. The bar itself spans
+     *  `peakX ± NETWORK_PES_TS_BAR_HALF_WIDTH` at `peakY`. */
     peakX: number
     peakY: number
 }
@@ -147,6 +213,19 @@ export interface NetworkPesExclusion {
     sourceLabel: string | null
     sinkLabel: string | null
     reason: string
+}
+
+/** One connected component of the accepted-saddle graph -- every state in
+ *  `hashes` was reachable from `rootHash` by walking only accepted
+ *  saddles. `isTree` is `edges === hashes.length - 1`; when it is `false`
+ *  (a cycle), `usedSpanningTree` is `true` and x was derived from a
+ *  spanning tree of the component rather than the full graph -- see the
+ *  module header's point 3. */
+export interface NetworkPesComponent {
+    rootHash: string
+    hashes: string[]
+    isTree: boolean
+    usedSpanningTree: boolean
 }
 
 export interface NetworkPesLayout {
@@ -163,6 +242,14 @@ export interface NetworkPesLayout {
      *  the page can state "X of Y states" rather than silently drawing a
      *  smaller surface with no explanation. */
     missingEnergyStateCount: number
+    /** Connected components of the accepted-saddle graph, largest first.
+     *  Empty when every plotted state is unconnected. */
+    components: NetworkPesComponent[]
+    /** Composition hashes of states plotted but reachable by zero accepted
+     *  saddles -- same hashes as the levels with `isUnconnected: true`,
+     *  exposed at the layout level so the page can state the count without
+     *  re-filtering `levels`. */
+    isolatedStateHashes: string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -194,52 +281,19 @@ export function computeNetworkPesLayout(
         }
     }
 
-    // Served `states[]` order first (stable tie-break basis), THEN
-    // re-sorted ascending by energy for the actual x placement below.
+    // Served `states[]` order first -- the one deterministic tie-break
+    // basis every ordering decision below (root choice, child order,
+    // unconnected-group order, component order) falls back to.
     const resolvedInServedOrder = states.map((state) => state.composition_hash).filter((hash) => energyByHash.has(hash))
     if (resolvedInServedOrder.length === 0) return null
 
     const servedIndex = new Map(resolvedInServedOrder.map((hash, index) => [hash, index]))
-    const orderedHashes = [...resolvedInServedOrder].sort((a, b) => {
-        const diff = energyByHash.get(a)! - energyByHash.get(b)!
-        if (diff !== 0) return diff
-        return servedIndex.get(a)! - servedIndex.get(b)!
-    })
-
-    const n = orderedHashes.length
-
-    // Size the plot from the CAPTIONS, not the level bars. Captions are
-    // centred under their level, so a level needs half its caption of room
-    // on each side; the outermost two need that room inside the viewBox, and
-    // every adjacent pair needs a full caption's width between them. The
-    // fixed 130px gap and 40px right margin this replaced were both smaller
-    // than a real label ("[H][H] + [N-]=[NH2+]" is ~156px), which clipped the
-    // rightmost caption and overlapped the interior ones.
-    const captionWidths = orderedHashes.map((hash) =>
-        pesLevelCaptionWidth(stateByHash.get(hash)?.composition.state_label || "unresolved state", energyByHash.get(hash) ?? 0))
-    const widestCaption = captionWidths.length > 0 ? Math.max(...captionWidths) : 0
-    const edgeCaptionHalf = Math.ceil(
-        Math.max(captionWidths[0] ?? 0, captionWidths[captionWidths.length - 1] ?? 0) / 2,
-    )
-
-    const marginLeft = Math.max(NETWORK_PES_MARGIN.left, edgeCaptionHalf + NETWORK_PES_CAPTION_PAD)
-    const marginRight = Math.max(NETWORK_PES_MARGIN.right, edgeCaptionHalf + NETWORK_PES_CAPTION_PAD)
-    const levelGap = Math.max(NETWORK_PES_LEVEL_GAP, Math.ceil(widestCaption) + NETWORK_PES_CAPTION_PAD)
-
-    const innerWidthNeeded = (n - 1) * levelGap
-    const width = Math.max(NETWORK_PES_BASE_WIDTH, marginLeft + marginRight + innerWidthNeeded)
-    const usableInnerWidth = width - marginLeft - marginRight
-
-    const xByHash = new Map<string, number>()
-    orderedHashes.forEach((hash, index) => {
-        const x = n === 1
-            ? marginLeft + usableInnerWidth / 2
-            : marginLeft + (usableInnerWidth * index) / (n - 1)
-        xByHash.set(hash, x)
-    })
+    const tieBreak = (hash: string): number => servedIndex.get(hash) ?? Number.MAX_SAFE_INTEGER
 
     // ---- candidate saddles: join each barrier to its channel, then check
-    // the two things that can make a deposited barrier unplaceable ----
+    // the two things that can make a deposited barrier unplaceable. Moved
+    // ahead of x placement (unlike the old ascending-energy layout) because
+    // x now needs the ACCEPTED saddles as graph edges. ----
     const channelByKey = new Map(
         channels.filter((channel): channel is NetworkChannel & { channel_key: string } => channel.channel_key != null)
             .map((channel) => [channel.channel_key, channel]),
@@ -290,8 +344,48 @@ export function computeNetworkPesLayout(
         accepted.push({ barrier, channel, heightKjMol: forwardHeight })
     }
 
+    // ---- connectivity graph over PLOTTED states, edges = accepted
+    // saddles only (invariant 1 propagates here: a channel with no
+    // placeable barrier contributes no edge, so it cannot pull two states
+    // together on the surface either) ----
+    const adjacency = new Map<string, Set<string>>()
+    for (const hash of resolvedInServedOrder) adjacency.set(hash, new Set())
+    for (const { channel } of accepted) {
+        const a = channel.source_state_composition_hash
+        const b = channel.sink_state_composition_hash
+        if (!adjacency.has(a) || !adjacency.has(b)) continue
+        adjacency.get(a)!.add(b)
+        adjacency.get(b)!.add(a)
+    }
+
+    const { slotByHash, components, isolatedStateHashes } = assignConnectivityLayout(
+        resolvedInServedOrder, adjacency, accepted, energyByHash, tieBreak,
+    )
+
+    // ---- size the plot from the CAPTIONS, not the level bars (unchanged
+    // rationale from the ascending-energy layout this replaces) ----
+    const captionWidthByHash = new Map(resolvedInServedOrder.map((hash) =>
+        [hash, pesLevelCaptionWidth(stateByHash.get(hash)?.composition.state_label || "unresolved state", energyByHash.get(hash) ?? 0)]))
+    const widestCaption = Math.max(0, ...captionWidthByHash.values())
+    const levelGap = Math.max(NETWORK_PES_LEVEL_GAP, Math.ceil(widestCaption) + NETWORK_PES_CAPTION_PAD)
+
+    const slotValues = [...slotByHash.values()]
+    const minSlot = Math.min(...slotValues)
+    // Only the LEFT margin is derived analytically, from whichever level(s)
+    // sit at the smallest slot -- it anchors `pixelXForSlot`'s own origin.
+    // The right-hand edge is instead settled by the viewBox-safety clamp
+    // below (after decluttering, which can move a caption further right
+    // than this initial slot placement would suggest), which is the more
+    // robust source of truth for "how wide does this actually need to be".
+    const edgeHalf = (extremeSlot: number): number => Math.max(
+        0, ...resolvedInServedOrder.filter((hash) => slotByHash.get(hash) === extremeSlot).map((hash) => captionWidthByHash.get(hash)! / 2),
+    )
+    const marginLeft = Math.max(NETWORK_PES_MARGIN.left, edgeHalf(minSlot) + NETWORK_PES_CAPTION_PAD)
+
+    const pixelXForSlot = (slot: number): number => marginLeft + (slot - minSlot) * levelGap
+
     // ---- y scale, over every PLOTTED value (levels AND accepted saddles) ----
-    const levelEnergies = orderedHashes.map((hash) => energyByHash.get(hash)!)
+    const levelEnergies = resolvedInServedOrder.map((hash) => energyByHash.get(hash)!)
     const saddleHeights = accepted.map((entry) => entry.heightKjMol)
     const yDomain = domainWithPadding([...levelEnergies, ...saddleHeights], Y_DOMAIN_PADDING_FRACTION)
     const plotTop = NETWORK_PES_MARGIN.top
@@ -300,7 +394,8 @@ export function computeNetworkPesLayout(
     // the bottom pixel, domain's high end to the top pixel.
     const yScale = linearScale(yDomain, [plotBottom, plotTop])
 
-    const levels: NetworkPesLevel[] = orderedHashes.map((hash) => {
+    const isolatedSet = new Set(isolatedStateHashes)
+    const levels: NetworkPesLevel[] = resolvedInServedOrder.map((hash) => {
         const state = stateByHash.get(hash)!
         const energyKjMol = energyByHash.get(hash)!
         return {
@@ -308,10 +403,44 @@ export function computeNetworkPesLayout(
             label: state.composition.state_label || "unnamed state",
             isWell: state.kind === "well",
             energyKjMol,
-            x: Math.round(xByHash.get(hash)! * 100) / 100,
+            x: pixelXForSlot(slotByHash.get(hash)!),
             y: Math.round(yScale(energyKjMol) * 100) / 100,
+            isUnconnected: isolatedSet.has(hash),
         }
     })
+
+    // Two states whose connectivity-derived x lands within one slot of each
+    // other (a straight chain: a hub's only child, that child's only child,
+    // and so on) can legitimately share an x -- that is the desired
+    // "vertical stack" reading (see the module header, point 2, and the
+    // hydrazine tree's own [NH-][NH3+]/N=N(E)+H2 pair). It is only a
+    // collision when their CAPTIONS would actually overlap on screen,
+    // which needs both a close x AND a close y -- two states stacked at
+    // very different energies never collide regardless of x.
+    declutterLevelX(levels, captionWidthByHash)
+
+    // Final viewBox-safety clamp: shift everything right if decluttering
+    // pushed a caption's left edge past 0, then size width to the actual
+    // rightmost caption edge rather than trusting the pre-declutter
+    // estimate. Robust to any layout shape (tree, fallback, or a future
+    // one), unlike computing margins analytically up front.
+    let minEdge = Infinity
+    let maxEdge = -Infinity
+    for (const level of levels) {
+        const half = captionWidthByHash.get(level.compositionHash)! / 2
+        minEdge = Math.min(minEdge, level.x - half)
+        maxEdge = Math.max(maxEdge, level.x + half)
+    }
+    const shift = minEdge < NETWORK_PES_CAPTION_PAD ? NETWORK_PES_CAPTION_PAD - minEdge : 0
+    if (shift > 0) {
+        for (const level of levels) level.x = Math.round((level.x + shift) * 100) / 100
+        maxEdge += shift
+    } else {
+        for (const level of levels) level.x = Math.round(level.x * 100) / 100
+    }
+    const width = Math.max(NETWORK_PES_BASE_WIDTH, Math.ceil(maxEdge + NETWORK_PES_CAPTION_PAD))
+
+    const xByHash = new Map(levels.map((level) => [level.compositionHash, level.x]))
     const yByHash = new Map(levels.map((level) => [level.compositionHash, level.y]))
 
     const saddles: NetworkPesSaddle[] = accepted.map(({ barrier, channel, heightKjMol }) => {
@@ -348,6 +477,210 @@ export function computeNetworkPesLayout(
         saddles,
         excludedSaddles,
         missingEnergyStateCount: states.length - levels.length,
+        components,
+        isolatedStateHashes,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Connectivity-driven x placement -- the module's own centrepiece; see the
+// header comment's "X ORDERING" section for the full rationale.
+// ---------------------------------------------------------------------------
+
+function assignConnectivityLayout(
+    resolvedInServedOrder: string[],
+    adjacency: Map<string, Set<string>>,
+    accepted: { channel: NetworkChannel }[],
+    energyByHash: Map<string, number>,
+    tieBreak: (hash: string) => number,
+): { slotByHash: Map<string, number>; components: NetworkPesComponent[]; isolatedStateHashes: string[] } {
+    const isolatedStateHashes = resolvedInServedOrder.filter((hash) => (adjacency.get(hash)?.size ?? 0) === 0)
+
+    // Connected components among nodes with at least one accepted-saddle
+    // edge (a plain BFS/union over `adjacency`).
+    const visitedGlobal = new Set<string>()
+    const rawComponents: string[][] = []
+    for (const hash of resolvedInServedOrder) {
+        if (visitedGlobal.has(hash) || (adjacency.get(hash)?.size ?? 0) === 0) continue
+        const members: string[] = []
+        const queue = [hash]
+        visitedGlobal.add(hash)
+        while (queue.length > 0) {
+            const current = queue.shift()!
+            members.push(current)
+            for (const neighbor of adjacency.get(current)!) {
+                if (!visitedGlobal.has(neighbor)) {
+                    visitedGlobal.add(neighbor)
+                    queue.push(neighbor)
+                }
+            }
+        }
+        rawComponents.push(members)
+    }
+
+    // Largest component first (the hydrazine archive's one hub tree), ties
+    // by the lowest served index among its own members -- deterministic,
+    // never dependent on `Map`/`Set` iteration order.
+    rawComponents.sort((a, b) => {
+        if (b.length !== a.length) return b.length - a.length
+        return Math.min(...a.map(tieBreak)) - Math.min(...b.map(tieBreak))
+    })
+
+    const edgeCountWithin = (members: string[]): number => {
+        const memberSet = new Set(members)
+        let count = 0
+        for (const { channel } of accepted) {
+            if (memberSet.has(channel.source_state_composition_hash) && memberSet.has(channel.sink_state_composition_hash)) count += 1
+        }
+        return count
+    }
+
+    const slotByHash = new Map<string, number>()
+    const components: NetworkPesComponent[] = []
+    let cursor = 0
+    for (const members of rawComponents) {
+        const edgeCount = edgeCountWithin(members)
+        const isTree = edgeCount === members.length - 1
+        const { positions, rootHash } = layoutComponentAsTree(members, adjacency, energyByHash, tieBreak)
+        const localValues = [...positions.values()]
+        const localMin = Math.min(...localValues)
+        const localMax = Math.max(...localValues)
+        for (const [hash, value] of positions) slotByHash.set(hash, cursor + (value - localMin))
+        components.push({ rootHash, hashes: members, isTree, usedSpanningTree: !isTree })
+        cursor += (localMax - localMin) + NETWORK_PES_COMPONENT_GAP_SLOTS
+    }
+
+    // Unconnected states: no edge exists to derive a position from, so
+    // fall back to the one signal every state has regardless of
+    // connectivity -- ascending energy, the same rule the whole surface
+    // used before this rewrite -- one extra gap past the last component.
+    if (isolatedStateHashes.length > 0 && components.length > 0) cursor += NETWORK_PES_COMPONENT_GAP_SLOTS
+    const isolatedSorted = [...isolatedStateHashes].sort((a, b) => {
+        const diff = energyByHash.get(a)! - energyByHash.get(b)!
+        if (diff !== 0) return diff
+        return tieBreak(a) - tieBreak(b)
+    })
+    isolatedSorted.forEach((hash, index) => slotByHash.set(hash, cursor + index))
+
+    return { slotByHash, components, isolatedStateHashes }
+}
+
+/**
+ * Root the component at its highest-degree member (owner's suggested
+ * approach) and walk outward, giving each leaf the next integer slot and
+ * each internal node the average of its children's slots. Provably
+ * crossing-free for an actual tree: every node's subtree occupies a
+ * contiguous slot range disjoint from every sibling subtree's, by
+ * construction, regardless of traversal order.
+ *
+ * Only edges within THIS component's spanning tree are walked (a node's
+ * neighbour is skipped once visited) -- a component with a cycle
+ * (`edgeCount > members.length - 1` at the call site) still gets a full,
+ * valid set of positions this way; the non-tree edge(s) are simply never
+ * walked for position, which is exactly the documented fallback (module
+ * header, point 3).
+ */
+function layoutComponentAsTree(
+    members: string[],
+    adjacency: Map<string, Set<string>>,
+    energyByHash: Map<string, number>,
+    tieBreak: (hash: string) => number,
+): { positions: Map<string, number>; rootHash: string } {
+    let root = members[0]
+    for (const hash of members) {
+        const degree = adjacency.get(hash)?.size ?? 0
+        const rootDegree = adjacency.get(root)?.size ?? 0
+        if (degree > rootDegree) { root = hash; continue }
+        if (degree === rootDegree) {
+            const energy = energyByHash.get(hash)!
+            const rootEnergy = energyByHash.get(root)!
+            if (energy < rootEnergy || (energy === rootEnergy && tieBreak(hash) < tieBreak(root))) root = hash
+        }
+    }
+
+    const positions = new Map<string, number>()
+    const visited = new Set<string>([root])
+    let leafCounter = 0
+
+    function assign(hash: string): number {
+        const children = [...(adjacency.get(hash) ?? [])]
+            .filter((neighbor) => !visited.has(neighbor))
+            .sort((a, b) => tieBreak(a) - tieBreak(b))
+        for (const child of children) visited.add(child)
+        if (children.length === 0) {
+            const slot = leafCounter
+            leafCounter += 1
+            positions.set(hash, slot)
+            return slot
+        }
+        const childSlots = children.map(assign)
+        const slot = childSlots.reduce((sum, value) => sum + value, 0) / childSlots.length
+        positions.set(hash, slot)
+        return slot
+    }
+    assign(root)
+    return { positions, rootHash: root }
+}
+
+// ---------------------------------------------------------------------------
+// Level-caption decluttering -- generalises the saddle-peak decluttering
+// below to level captions, which (unlike the old ascending-energy layout)
+// can now legitimately share an x when they form a vertical chain; see the
+// call site's own comment.
+// ---------------------------------------------------------------------------
+
+/**
+ * Nudges a level's x to resolve a genuine caption collision (close in BOTH x
+ * and y -- see `collides` below), same idea as `declutterPeakX`, but capped
+ * so a nudge can never cross the MIDPOINT to the nearest state at a
+ * genuinely different natural (pre-nudge) x. That cap is what keeps this
+ * crossing-safe: the connectivity layout's own non-crossing guarantee (see
+ * the module header) rests on x PRESERVING slot order, and an uncapped
+ * nudge can invade a neighbouring slot's territory and reintroduce a
+ * crossing it was never meant to fix (found exactly this way on the live
+ * hydrazine archive's own shape while building this module -- a sibling
+ * nudged toward a collision with an unrelated state ended up sandwiched
+ * between two OTHER states it had no edge to, crossing both their
+ * connectors). A boundary state (nothing further out on one side) has no
+ * cap on that side, which is also why pushing a same-slot chain further
+ * AWAY from the rest of the tree always eventually succeeds: there is
+ * nowhere on that side left to invade.
+ */
+function declutterLevelX(levels: NetworkPesLevel[], captionWidthByHash: Map<string, number>): void {
+    // "Natural" = each level's pre-nudge x, i.e. its value on entry here --
+    // captured up front since the loop below mutates `level.x` in place.
+    const naturalXByHash = new Map(levels.map((level) => [level.compositionHash, level.x]))
+    const distinctNaturalX = [...new Set(naturalXByHash.values())].sort((a, b) => a - b)
+
+    function capFor(naturalX: number): { leftCap: number; rightCap: number } {
+        const index = distinctNaturalX.indexOf(naturalX)
+        const leftCap = index > 0 ? (naturalX - distinctNaturalX[index - 1]) / 2 : Infinity
+        const rightCap = index < distinctNaturalX.length - 1 ? (distinctNaturalX[index + 1] - naturalX) / 2 : Infinity
+        return { leftCap, rightCap }
+    }
+
+    const placed: { x: number; y: number; half: number }[] = []
+    // Deterministic order: by x first (so the visually-leftmost items settle
+    // first), then by composition hash to break exact ties.
+    const ordered = [...levels].sort((a, b) => (a.x - b.x) || a.compositionHash.localeCompare(b.compositionHash))
+    for (const level of ordered) {
+        const half = captionWidthByHash.get(level.compositionHash)! / 2
+        const naturalX = naturalXByHash.get(level.compositionHash)!
+        const { leftCap, rightCap } = capFor(naturalX)
+        let x = naturalX
+        let attempt = 0
+        const collides = (candidateX: number): boolean => placed.some((p) =>
+            Math.abs(candidateX - p.x) < half + p.half + NETWORK_PES_CAPTION_PAD
+            && Math.abs(level.y - p.y) < NETWORK_PES_LEVEL_VERTICAL_BAND_PX)
+        while (collides(x) && attempt < NETWORK_PES_LEVEL_DECLUTTER_MAX_ATTEMPTS) {
+            attempt += 1
+            const direction = attempt % 2 === 1 ? 1 : -1
+            const magnitude = Math.ceil(attempt / 2) * NETWORK_PES_LEVEL_NUDGE_STEP_PX
+            const cap = direction > 0 ? rightCap : leftCap
+            x = naturalX + direction * Math.min(magnitude, cap)
+        }
+        level.x = x
+        placed.push({ x, y: level.y, half })
     }
 }
 
@@ -369,19 +702,12 @@ function peaksCollide(ax: number, ay: number, bx: number, by: number): boolean {
  * i.e. never the height, which is the one number this whole surface exists
  * to show and must stay exactly correct regardless of decluttering.
  *
- * Found on the live hydrazine archive, not invented: `channel_3` (347.2
- * kJ/mol, states 0 and 4 apart in ascending-energy order) and `channel_11`
- * (350.6 kJ/mol, states 1 and 3 apart) land on the EXACT SAME `peakX` --
- * `(i0+i4)/2 == (i1+i3)/2 == i2`'s own x, because `NETWORK_PES_LEVEL_GAP`
- * spaces every level equally. Two different transition states then draw
- * one on top of the other, one marker and label completely hiding the
- * other -- caught only by rendering the real payload and looking at the
- * screenshot, not by any hand-built fixture small enough to eyeball.
- *
- * `x` was already documented as carrying no physical meaning of its own
- * (this module's header comment) -- nudging it here, deterministically, in
- * served-barrier order, is a pure rendering convenience, never a claim
- * about the chemistry the way moving `peakY` would be.
+ * Kept as a defensive pass even under the connectivity layout (which
+ * mostly avoids the coincidence that motivated this originally -- two
+ * states equidistant from a common hub landing two different saddles on
+ * the same midpoint): a hub with several symmetric branches can still
+ * produce two peaks whose x AND y are both close, and heights are real
+ * chemistry that must never move to fix it.
  */
 function declutterPeakX(saddles: NetworkPesSaddle[]): void {
     const placed: { x: number; y: number }[] = []

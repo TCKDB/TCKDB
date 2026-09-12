@@ -143,10 +143,22 @@
     outline: 2px solid var(--accent-300);
     outline-offset: 1px;
 }
-.net-pes-peak-marker {
-    fill: var(--surface);
-    stroke: var(--ink-2);
-    stroke-width: 1.5;
+/* The TS bar itself -- a short horizontal level, same visual family as a
+   state's own `.net-pes-level`, coloured by `channel.kind` (same
+   `net-pes-connector-*` classes as the sloped legs either side of it) so a
+   saddle reads as one connected mark rather than three separate pieces. */
+.net-pes-ts-bar {
+    stroke-width: 3.25;
+    stroke-linecap: round;
+}
+
+/* Dashed vertical rule separating the connectivity-laid-out state group(s)
+   from the unconnected-states group (module header, "UNCONNECTED
+   STATES") -- decorative only, never carries text of its own. */
+.net-pes-group-divider {
+    stroke: var(--line-2);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
 }
 
 /* ---- Legend ---- */

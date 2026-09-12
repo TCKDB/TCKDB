@@ -226,6 +226,100 @@ describe("NetworkDiagram -- legend counts are computed live, not hardcoded", () 
     })
 })
 
+describe("NetworkDiagram -- a saddle is drawn as a level bar (TS bar), not a point", () => {
+    it("renders one .net-pes-ts-bar line per saddle, scoped to the PES svg (not a legend icon)", () => {
+        // The legend renders its own small <svg> icons first (a
+        // `container.querySelector("svg")` trap this file's own mutation
+        // table has already hit once) -- scoped to `.net-pes-svg` so this
+        // can never silently match a 22x10 swatch instead.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bars = container.querySelectorAll(".net-pes-svg .net-pes-ts-bar")
+        const saddleLinks = container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")
+        expect(saddleLinks.length).toBeGreaterThan(0)
+        expect(bars).toHaveLength(saddleLinks.length)
+    })
+
+    it("the bar has two distinct x endpoints -- real width, not a collapsed point", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bar = container.querySelector(".net-pes-svg .net-pes-ts-bar")!
+        expect(bar.getAttribute("x1")).not.toBe(bar.getAttribute("x2"))
+        expect(bar.getAttribute("y1")).toBe(bar.getAttribute("y2"))
+    })
+
+    it("carries channel_1 only as a data attribute on the bar, never as its text", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bar = container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="channel_1"]')
+        expect(bar).not.toBeNull()
+        expect(bar!.textContent ?? "").not.toMatch(/channel_\d/)
+    })
+})
+
+describe("NetworkDiagram -- energy caption sits above a level's bar, species label below it", () => {
+    it("for the NN level, the value (energy) text has a smaller SVG y than the label (species) text", () => {
+        // Smaller y is HIGHER on an SVG canvas (y grows downward) -- the
+        // reference figure draws the energy above the dash and the species
+        // name below it, the reverse of this component's own layout before
+        // this PR.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const level = container.querySelector('.net-pes-svg .net-pes-level-link[href="#state-row-hash_n1"]')!
+        const value = level.querySelector(".net-pes-level-value")!
+        const label = level.querySelector(".net-pes-level-label")!
+        expect(label.textContent).toBe("NN")
+        expect(Number(value.getAttribute("y"))).toBeLessThan(Number(label.getAttribute("y")))
+    })
+})
+
+describe("NetworkDiagram -- a state on no deposited barrier is drawn as its own group, with a divider and a stated count", () => {
+    // hash_n3 (deposited energy 380.9) is the endpoint of channel_2, which
+    // carries NO barrier in HYDRAZINE_BARRIERS -- so unlike hash_n6 (no
+    // deposited energy at all, omitted from the surface entirely), hash_n3
+    // IS plotted but reaches no other plotted state by any accepted
+    // saddle, i.e. exactly the "unconnected" case.
+    it("marks hash_n3's level data-unconnected and draws the dashed group divider", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const unconnectedLevel = container.querySelector('.net-pes-level-link[data-unconnected="true"]')
+        expect(unconnectedLevel).not.toBeNull()
+        expect(unconnectedLevel!.getAttribute("href")).toBe("#state-row-hash_n3")
+        expect(container.querySelector('[data-testid="net-pes-group-divider"]')).not.toBeNull()
+        expect(screen.getByText(/1 of 3 plotted states is not connected by any deposited barrier/)).toBeVisible()
+    })
+
+    it("draws no divider and states no such sentence when every plotted state is connected", () => {
+        // A different fixture: two states joined by the ONE accepted
+        // barrier -- nothing left unconnected.
+        const states = [state("a", "well", "A"), state("b", "well", "B")]
+        const channels = [channel("ch_ab", "isomerization", "a", "b")]
+        const energies = [energy("a", 0), energy("b", 80)]
+        const barriers = [barrier("ch_ab", 120, 40)]
+        const { container } = renderDiagram(states, channels, energies, barriers)
+        expect(container.querySelector('[data-testid="net-pes-group-divider"]')).toBeNull()
+        expect(container.querySelector('[data-unconnected="true"]')).toBeNull()
+        expect(screen.queryByText(/not connected by any deposited barrier/)).not.toBeInTheDocument()
+    })
+})
+
+describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spanning-tree fallback", () => {
+    it("shows the cycle-fallback sentence for a 3-state, 3-barrier triangle", () => {
+        const states = [state("a", "well", "A"), state("b", "well", "B"), state("c", "well", "C")]
+        const channels = [
+            channel("ch_ab", "isomerization", "a", "b"),
+            channel("ch_bc", "isomerization", "b", "c"),
+            channel("ch_ca", "isomerization", "c", "a"),
+        ]
+        const energies = [energy("a", 0), energy("b", 50), energy("c", 100)]
+        // Each pair internally consistent -- ch_ab: 0+80==50+30;
+        // ch_bc: 50+60==100+10; ch_ca: 100+130==0+230.
+        const barriers = [barrier("ch_ab", 80, 30), barrier("ch_bc", 60, 10), barrier("ch_ca", 130, 230)]
+        renderDiagram(states, channels, energies, barriers)
+        expect(screen.getByText(/deposited-barrier connectivity contains a cycle/)).toBeVisible()
+    })
+
+    it("says nothing about a cycle for the hydrazine tree, which has none", () => {
+        renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        expect(screen.queryByText(/contains a cycle/)).not.toBeInTheDocument()
+    })
+})
+
 /**
  * MUTATION TABLE (`NetworkDiagram.test.tsx`)
  *

@@ -5,8 +5,67 @@ import {
     NETWORK_PES_BASE_WIDTH,
     NETWORK_PES_LEVEL_GAP,
     NETWORK_PES_MARGIN,
+    NETWORK_PES_TS_BAR_HALF_WIDTH,
+    type NetworkPesLayout,
     pesLevelCaptionWidth,
 } from "./networkPesLayout"
+
+// ---------------------------------------------------------------------------
+// A REAL geometric segment-intersection check (not a proxy) for the
+// "no connector crosses another" tests below. Standard orientation
+// (cross-product sign) test: a PROPER interior crossing requires each
+// segment's two endpoints to fall on strictly OPPOSITE sides of the other
+// segment's line. A pair that only TOUCHES -- shares an endpoint, as every
+// saddle sharing a hub state does -- yields a zero cross product at that
+// shared point, which fails the STRICT opposite-sign check and is
+// correctly reported as "not crossing".
+type Point = { x: number; y: number }
+const CROSS_EPS = 1e-9
+function crossProduct(origin: Point, a: Point, b: Point): number {
+    return (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x)
+}
+function segmentsProperlyCross(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+    const d1 = crossProduct(p3, p4, p1)
+    const d2 = crossProduct(p3, p4, p2)
+    const d3 = crossProduct(p1, p2, p3)
+    const d4 = crossProduct(p1, p2, p4)
+    const strictlyOpposite = (x: number, y: number) => (x > CROSS_EPS && y < -CROSS_EPS) || (x < -CROSS_EPS && y > CROSS_EPS)
+    return strictlyOpposite(d1, d2) && strictlyOpposite(d3, d4)
+}
+/** The exact three segments `NetworkDiagram.tsx` draws for one saddle: state
+ *  to the near bar edge, across the bar, bar's far edge to the other state
+ *  -- mirrors that component's own geometry so this check tests what is
+ *  actually rendered, not a simplified stand-in. */
+function saddleConnectorSegments(saddle: NetworkPesLayout["saddles"][number]): [Point, Point][] {
+    const barLeftX = saddle.peakX - NETWORK_PES_TS_BAR_HALF_WIDTH
+    const barRightX = saddle.peakX + NETWORK_PES_TS_BAR_HALF_WIDTH
+    const sourceEdgeX = saddle.sourceX <= saddle.sinkX ? barLeftX : barRightX
+    const sinkEdgeX = saddle.sourceX <= saddle.sinkX ? barRightX : barLeftX
+    return [
+        [{ x: saddle.sourceX, y: saddle.sourceY }, { x: sourceEdgeX, y: saddle.peakY }],
+        [{ x: sourceEdgeX, y: saddle.peakY }, { x: sinkEdgeX, y: saddle.peakY }],
+        [{ x: sinkEdgeX, y: saddle.peakY }, { x: saddle.sinkX, y: saddle.sinkY }],
+    ]
+}
+/** Every pair of connector segments belonging to two DIFFERENT saddles that
+ *  properly cross, described as `"<channelKey> x <channelKey>"`. Segments
+ *  within the SAME saddle are never compared (a saddle's own three
+ *  segments share endpoints by construction and are not a "crossing" in
+ *  the readability sense this whole PR is about). */
+function findConnectorCrossings(layout: NetworkPesLayout): string[] {
+    const withKey = layout.saddles.flatMap((saddle) =>
+        saddleConnectorSegments(saddle).map((segment) => ({ segment, key: saddle.channelKey ?? "unkeyed" })))
+    const crossings: string[] = []
+    for (let i = 0; i < withKey.length; i++) {
+        for (let j = i + 1; j < withKey.length; j++) {
+            if (withKey[i].key === withKey[j].key) continue
+            const [a1, a2] = withKey[i].segment
+            const [b1, b2] = withKey[j].segment
+            if (segmentsProperlyCross(a1, a2, b1, b2)) crossings.push(`${withKey[i].key} x ${withKey[j].key}`)
+        }
+    }
+    return crossings
+}
 
 // See `NetworkPesLayout.test — mutation table` at the bottom of this file
 // for the mutation each behavioural test below was checked against.
@@ -68,7 +127,12 @@ describe("computeNetworkPesLayout -- absence", () => {
     })
 })
 
-describe("computeNetworkPesLayout -- x ordering is ascending energy, not served order", () => {
+describe("computeNetworkPesLayout -- with zero connectivity, x falls back to ascending energy, not served order", () => {
+    // No channels at all -- every state is unconnected, so there is no
+    // barrier graph to derive x from. This is the one case the module
+    // still orders by energy (module header, "UNCONNECTED STATES"); it is
+    // NOT how a connected tree is ordered any more -- see the
+    // "connectivity-driven x placement" describe block below for that.
     it("places the lowest-energy state first even when it is served last", () => {
         const states = [state("high", "well", "high"), state("low", "well", "low"), state("mid", "well", "mid")]
         const energies = [energy("high", 300), energy("low", 0), energy("mid", 150)]
@@ -281,6 +345,126 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
         expect(twelve).toBeGreaterThan(NETWORK_PES_BASE_WIDTH)
         expect(thirteen - twelve).toBe(NETWORK_PES_LEVEL_GAP)
         expect(NETWORK_PES_MARGIN.left).toBeGreaterThan(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Connectivity-driven x placement -- the readability rewrite this PR is
+// about. `HYDRAZINE_TREE_*` below is the owner's own verified archive
+// shape (module header's ASCII diagram): NN (hub, degree 3) with two
+// direct leaves (N=N(Z)+H2, [H][H]+[N-]=[NH2+]) and one two-deep chain
+// ([NH-][NH3+] then N=N(E)+H2), plus two states ("2 [NH2]",
+// "[H] + [NH]N") that carry a deposited energy but sit on no deposited
+// barrier at all.
+// ---------------------------------------------------------------------------
+
+const HYDRAZINE_TREE_STATES: NetworkState[] = [
+    state("NN", "well", "NN"),
+    state("s1", "well", "[NH-][NH3+]"),
+    state("s2", "bimolecular", "N=N (Z) + [H][H]"),
+    state("s3", "bimolecular", "[H][H] + [N-]=[NH2+]"),
+    state("s4", "bimolecular", "N=N (E) + [H][H]"),
+    state("s5", "bimolecular", "2 [NH2]"),
+    state("s6", "bimolecular", "[H] + [NH]N"),
+]
+const HYDRAZINE_TREE_ENERGIES: NetworkStateEnergy[] = [
+    energy("NN", 0.0), energy("s1", 180.1), energy("s2", 146.7), energy("s3", 233.3),
+    energy("s4", 123.7), energy("s5", 281.8), energy("s6", 380.9),
+]
+const HYDRAZINE_TREE_CHANNELS: NetworkChannel[] = [
+    channel("channel_1", "s1", "NN"),
+    channel("channel_3", "s3", "NN"),
+    channel("channel_11", "s4", "s1"),
+    channel("channel_2", "s2", "NN"),
+]
+const HYDRAZINE_TREE_BARRIERS: NetworkChannelBarrier[] = [
+    barrier("channel_1", 274.7 - 180.1, 274.7 - 0.0),
+    barrier("channel_3", 347.2 - 233.3, 347.2 - 0.0),
+    barrier("channel_11", 350.6 - 123.7, 350.6 - 180.1),
+    barrier("channel_2", 414.4 - 146.7, 414.4 - 0.0),
+]
+
+describe("computeNetworkPesLayout -- connectivity layout roots at the most-connected state", () => {
+    it("NN (degree 3: channel_1, channel_2, channel_3) is the component root, not a leaf", () => {
+        const layout = computeNetworkPesLayout(HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS)!
+        expect(layout.components).toHaveLength(1)
+        expect(layout.components[0].rootHash).toBe("NN")
+        expect(layout.components[0].isTree).toBe(true)
+        expect(layout.components[0].usedSpanningTree).toBe(false)
+        // The root's own x sits strictly between its two flanking leaves
+        // (s3 and s4/s1's chain) -- "radiates outward", never at an edge.
+        const xByHash = new Map(layout.levels.map((level) => [level.compositionHash, level.x]))
+        expect(xByHash.get("NN")!).toBeGreaterThan(xByHash.get("s4")!)
+        expect(xByHash.get("NN")!).toBeLessThanOrEqual(xByHash.get("s3")!)
+    })
+})
+
+describe("computeNetworkPesLayout -- connectivity layout draws the hydrazine tree without a single connector crossing another", () => {
+    it("no two DIFFERENT saddles' connector segments properly intersect", () => {
+        const layout = computeNetworkPesLayout(HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS)!
+        expect(layout.saddles.length).toBeGreaterThan(1)
+        expect(findConnectorCrossings(layout)).toEqual([])
+    })
+})
+
+describe("computeNetworkPesLayout -- a state on no deposited barrier is grouped separately, never wired to an invented edge", () => {
+    it("lists both barrier-less states in isolatedStateHashes and draws no saddle touching either", () => {
+        const layout = computeNetworkPesLayout(HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS)!
+        expect(new Set(layout.isolatedStateHashes)).toEqual(new Set(["s5", "s6"]))
+        for (const saddle of layout.saddles) {
+            expect(["s5", "s6"]).not.toContain(saddle.sourceHash)
+            expect(["s5", "s6"]).not.toContain(saddle.sinkHash)
+        }
+        const isolatedLevels = layout.levels.filter((level) => level.isUnconnected)
+        expect(new Set(isolatedLevels.map((level) => level.compositionHash))).toEqual(new Set(["s5", "s6"]))
+    })
+})
+
+describe("computeNetworkPesLayout -- a component with a cycle falls back to a spanning tree and still renders every barrier", () => {
+    it("marks the component isTree: false, usedSpanningTree: true, and keeps all 3 saddles (none dropped)", () => {
+        // A triangle -- 3 states, 3 accepted barriers among them (edges ==
+        // nodes, not nodes - 1) -- is the simplest connected non-tree
+        // shape. This is a SYNTHETIC fixture: no live TCKDB network is
+        // known to have a cyclic accepted-barrier graph as of this PR (see
+        // the module header) -- this test exists so the fallback path is
+        // exercised at all, not left as a theoretical claim in a comment.
+        const states = [state("a", "well", "A"), state("b", "well", "B"), state("c", "well", "C")]
+        const energies = [energy("a", 0), energy("b", 50), energy("c", 100)]
+        const channels = [channel("ch_ab", "a", "b"), channel("ch_bc", "b", "c"), channel("ch_ca", "c", "a")]
+        // Each forward/reverse pair chosen so source_energy + forward ==
+        // sink_energy + reverse EXACTLY (the consistency check this module
+        // enforces elsewhere) -- ch_ab: 0+80==50+30; ch_bc: 50+60==100+10;
+        // ch_ca: 100+130==0+230.
+        const barriers = [barrier("ch_ab", 80, 30), barrier("ch_bc", 60, 10), barrier("ch_ca", 130, 230)]
+        const layout = computeNetworkPesLayout(states, energies, channels, barriers)!
+        expect(layout.components).toHaveLength(1)
+        expect(layout.components[0].isTree).toBe(false)
+        expect(layout.components[0].usedSpanningTree).toBe(true)
+        expect(layout.saddles).toHaveLength(3)
+        expect(layout.isolatedStateHashes).toHaveLength(0)
+    })
+})
+
+describe("computeNetworkPesLayout -- level captions never collide in 2D, even when the tree stacks two states at the same x", () => {
+    it("every pair of levels is separated on x, on y, or on both, by at least its combined half-caption width", () => {
+        const layout = computeNetworkPesLayout(HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS)!
+        // A level's own caption ink spans roughly 12px above its bar to
+        // 20px below it, plus glyph height either side -- about 46px of
+        // vertical extent. Two levels closer together than that on y need
+        // real x separation; further apart than that, they never visually
+        // collide regardless of x (this is what lets a straight chain like
+        // s1/N=N(E)+H2 legitimately share an x -- see the module header).
+        const VERTICAL_COLLISION_BAND = 46
+        for (let i = 0; i < layout.levels.length; i++) {
+            for (let j = i + 1; j < layout.levels.length; j++) {
+                const a = layout.levels[i]
+                const b = layout.levels[j]
+                const needed = pesLevelCaptionWidth(a.label, a.energyKjMol) / 2 + pesLevelCaptionWidth(b.label, b.energyKjMol) / 2
+                const xSeparated = Math.abs(a.x - b.x) >= needed
+                const ySeparated = Math.abs(a.y - b.y) >= VERTICAL_COLLISION_BAND
+                expect(xSeparated || ySeparated).toBe(true)
+            }
+        }
     })
 })
 

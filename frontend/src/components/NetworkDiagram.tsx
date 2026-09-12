@@ -7,6 +7,7 @@ import {
     computeNetworkPesLayout,
     NETWORK_PES_LEVEL_HALF_WIDTH,
     NETWORK_PES_MARGIN,
+    NETWORK_PES_TS_BAR_HALF_WIDTH,
     type NetworkPesLayout,
 } from "../domain/networkPesLayout"
 import { niceTicks } from "../domain/thermoCpChartLayout"
@@ -16,10 +17,24 @@ import { Disclosure } from "./Disclosure"
  * Replaces the earlier force-directed web (states as nodes, channels as
  * edges, no energy axis) with a potential-energy surface: states become
  * horizontal level bars at their own deposited relative energy, and a
- * channel becomes a saddle point ONLY when it carries a deposited barrier
- * (`domain/networkPesLayout.ts`'s own header comment has the full
- * reasoning, including why x is "ascending energy", never a real reaction
- * coordinate).
+ * channel becomes a saddle point -- ALSO drawn as a short horizontal bar,
+ * matching the reference figure's TS convention -- ONLY when it carries a
+ * deposited barrier (`domain/networkPesLayout.ts`'s own header comment has
+ * the full reasoning, including why x is connectivity-derived, never a
+ * real reaction coordinate).
+ *
+ * READABILITY REWRITE (owner: "hard to read with lines overlapping etc",
+ * checked against the group's own published PES for this exact chemical
+ * system, `raghunath_n2h4_pes_fig7.1.png`, a design reference only and
+ * never copied into this repo): x used to be ascending energy rank, which
+ * put unrelated states next to each other and routed a connector between a
+ * low and a high state straight through every level in between. x is now
+ * derived from which states a deposited barrier actually connects
+ * (`networkPesLayout.ts`'s `computeNetworkPesLayout`), so a connector never
+ * has to travel further than its own two endpoints and their shared TS
+ * bar -- see that module's header for the full tree-walk rationale, the
+ * non-tree fallback, and how a state connected to nothing is handled
+ * (never invented a connector for; grouped and captioned instead).
  *
  * SCOPE DECISION (owner's brief asked for this, explicitly, not just the
  * code): channel `kind` (isomerization/association/exchange) and
@@ -151,6 +166,25 @@ function NetworkPesSection({ layout, states, channels, barrierTotal }: {
                         + `${layout.missingEnergyStateCount === 1 ? "has" : "have"} no deposited energy and ${layout.missingEnergyStateCount === 1 ? "is" : "are"} omitted from this surface; see the states table below.`}
                 </p>
             )}
+            {layout.isolatedStateHashes.length > 0 && (
+                // A plotted state that is the endpoint of zero accepted
+                // saddles -- there is no deposited barrier to position it
+                // by, so it is never given a connectivity-derived x
+                // (module header, "UNCONNECTED STATES"). Shown as its own
+                // group (see `NetworkPesSvg`'s divider) rather than
+                // silently absent.
+                <p className="t-body" style={{ margin: ".3rem 0 0" }}>
+                    {`${layout.isolatedStateHashes.length} of ${layout.levels.length} plotted state${layout.levels.length === 1 ? "" : "s"} `
+                        + `${layout.isolatedStateHashes.length === 1 ? "is" : "are"} not connected by any deposited barrier to another plotted state and `
+                        + `${layout.isolatedStateHashes.length === 1 ? "is" : "are"} shown as a separate group, right of the dashed divider.`}
+                </p>
+            )}
+            {layout.components.some((component) => component.usedSpanningTree) && (
+                <p className="t-body" style={{ margin: ".3rem 0 0" }}>
+                    {"This network's deposited-barrier connectivity contains a cycle in at least one group of states; "
+                        + "layout falls back to a spanning tree for position there, so a connector may cross another."}
+                </p>
+            )}
             <NetworkPesSvg layout={layout} channels={channels} totalStates={states.length} totalChannels={channels.length} />
             {layout.excludedSaddles.length > 0 && (
                 // A barrier row that WAS deposited but could not be placed
@@ -214,6 +248,17 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
         + `${layout.saddles.length} of ${totalChannels} channels shown as a saddle point, `
         + `relative energy in kilojoules per mole, electronic-only, referenced to the lowest state`
 
+    // A dashed vertical divider between the connectivity-laid-out group(s)
+    // and the unconnected-states group, only drawn when both actually
+    // exist (module header, "UNCONNECTED STATES") -- placed at the
+    // midpoint of the gap between them, never touching either group's own
+    // bar or caption.
+    const connectedLevels = layout.levels.filter((level) => !level.isUnconnected)
+    const unconnectedLevels = layout.levels.filter((level) => level.isUnconnected)
+    const dividerX = connectedLevels.length > 0 && unconnectedLevels.length > 0
+        ? (Math.max(...connectedLevels.map((level) => level.x)) + Math.min(...unconnectedLevels.map((level) => level.x))) / 2
+        : null
+
     return (
         <div className="network-diagram">
             <svg
@@ -232,11 +277,33 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                         </g>
                     ))}
                     <line x1={plotLeft} x2={plotLeft} y1={layout.plotTop} y2={layout.plotBottom} className="net-pes-axis-line" />
+                    {dividerX != null && (
+                        <line
+                            x1={dividerX}
+                            x2={dividerX}
+                            y1={layout.plotTop}
+                            y2={layout.plotBottom}
+                            className="net-pes-group-divider"
+                            data-testid="net-pes-group-divider"
+                        />
+                    )}
                 </g>
 
                 <g aria-hidden="true">
                     {layout.saddles.map((saddle, index) => {
                         const rowIndex = channelIndexByKey.get(saddle.channelKey) ?? index
+                        // Saddles are drawn as a short horizontal BAR (like
+                        // a state level), not a point -- the reference
+                        // figure's own TS convention. The two connector
+                        // LEGS run from each endpoint state to whichever
+                        // bar edge sits on that endpoint's own side, so the
+                        // shape reads as the classic peak/valley trapezoid
+                        // rather than converging on the bar's centre.
+                        const barLeftX = saddle.peakX - NETWORK_PES_TS_BAR_HALF_WIDTH
+                        const barRightX = saddle.peakX + NETWORK_PES_TS_BAR_HALF_WIDTH
+                        const sourceEdgeX = saddle.sourceX <= saddle.sinkX ? barLeftX : barRightX
+                        const sinkEdgeX = saddle.sourceX <= saddle.sinkX ? barRightX : barLeftX
+                        const dash = saddle.hasKinetics ? undefined : "4 3"
                         return (
                             <a
                                 key={saddle.channelKey ?? `${saddle.sourceHash}-${saddle.sinkHash}-${index}`}
@@ -249,19 +316,35 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                                     + `${saddle.hasKinetics ? "" : ", no kinetics fit deposited"}`}
                             >
                                 <polyline
-                                    points={`${saddle.sourceX},${saddle.sourceY} ${saddle.peakX},${saddle.peakY} ${saddle.sinkX},${saddle.sinkY}`}
+                                    points={`${saddle.sourceX},${saddle.sourceY} ${sourceEdgeX},${saddle.peakY}`}
                                     // `channel_key` lives in exactly two
                                     // places: this `data-*` hook and the
                                     // channel table row (invariant 4).
                                     data-channel-key={saddle.channelKey ?? undefined}
                                     className={`net-pes-connector ${pesConnectorKindClass(saddle.kind)}`}
-                                    strokeDasharray={saddle.hasKinetics ? undefined : "4 3"}
+                                    strokeDasharray={dash}
                                 />
-                                <circle cx={saddle.peakX} cy={saddle.peakY} r={4} className="net-pes-peak-marker" />
+                                <line
+                                    x1={barLeftX}
+                                    x2={barRightX}
+                                    y1={saddle.peakY}
+                                    y2={saddle.peakY}
+                                    data-channel-key={saddle.channelKey ?? undefined}
+                                    className={`net-pes-ts-bar ${pesConnectorKindClass(saddle.kind)}`}
+                                    strokeDasharray={dash}
+                                />
+                                <polyline
+                                    points={`${sinkEdgeX},${saddle.peakY} ${saddle.sinkX},${saddle.sinkY}`}
+                                    data-channel-key={saddle.channelKey ?? undefined}
+                                    className={`net-pes-connector ${pesConnectorKindClass(saddle.kind)}`}
+                                    strokeDasharray={dash}
+                                />
                                 {/* A NUMBER, never `channel_key` -- the one
                                     piece of text this whole surface exists
                                     to show (owner: "it's best to show a PES
-                                    with TS energies"). */}
+                                    with TS energies"), drawn ABOVE the bar
+                                    (reference figure convention, module
+                                    header point 2). */}
                                 <text x={saddle.peakX} y={saddle.peakY - 10} textAnchor="middle" className="net-pes-peak-label">
                                     {saddle.heightKjMol.toFixed(1)}
                                 </text>
@@ -276,7 +359,9 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                             key={level.compositionHash}
                             href={`#${stateRowId(level.compositionHash)}`}
                             className="net-pes-level-link"
-                            aria-label={`State ${level.label}, relative energy ${level.energyKjMol.toFixed(1)} kilojoules per mole, ${level.isWell ? "well" : "bimolecular"}`}
+                            data-unconnected={level.isUnconnected ? "true" : undefined}
+                            aria-label={`State ${level.label}, relative energy ${level.energyKjMol.toFixed(1)} kilojoules per mole, ${level.isWell ? "well" : "bimolecular"}`
+                                + `${level.isUnconnected ? ", not connected by any deposited barrier to another plotted state" : ""}`}
                         >
                             <line
                                 x1={level.x - NETWORK_PES_LEVEL_HALF_WIDTH}
@@ -285,16 +370,20 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                                 y2={level.y}
                                 className={`net-pes-level ${level.isWell ? "net-pes-level-well" : "net-pes-level-bimolecular"}`}
                             />
-                            {/* The ONLY safe level label --
+                            {/* Energy caption ABOVE the bar, species label
+                                BELOW it -- the reference figure's own
+                                convention (module header point 5), the
+                                reverse of this component's earlier layout.
+                                The ONLY safe level label --
                                 `composition.state_label`, already baked
                                 into `level.label` by
                                 `computeNetworkPesLayout`. Never
                                 `states[].label`, never the raw hash
                                 (invariant 3). */}
-                            <text x={level.x} y={level.y - 12} textAnchor="middle" className="net-pes-level-label">{level.label}</text>
-                            <text x={level.x} y={level.y + 20} textAnchor="middle" className="net-pes-level-value">
+                            <text x={level.x} y={level.y - 12} textAnchor="middle" className="net-pes-level-value">
                                 {`${level.energyKjMol.toFixed(1)} kJ/mol`}
                             </text>
+                            <text x={level.x} y={level.y + 20} textAnchor="middle" className="net-pes-level-label">{level.label}</text>
                         </a>
                     ))}
                 </g>
@@ -303,7 +392,8 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                 Relative energy (kJ/mol) — electronic-only, referenced to the lowest state. Not a free-energy surface.
             </p>
             <p className="net-pes-axis-title net-pes-axis-title--x">
-                States, left to right in increasing relative energy — this axis is not a reaction coordinate.
+                Horizontal position reflects each state's deposited-barrier connectivity, radiating out from the
+                most-connected state — this axis is not a reaction coordinate and carries no energy meaning.
             </p>
         </div>
     )
