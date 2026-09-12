@@ -344,7 +344,7 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
                             className={`network-ktp-line-swatch ${modelKindStrokeWidth(kind) >= 2 ? "network-ktp-line-swatch--thick" : "network-ktp-line-swatch--thin"}`}
                             aria-hidden="true"
                         />
-                        <span>{`${modelKindLabel(kind)} (a channel's own colour tinted lighter for PLOG, heavier line for Chebyshev)`}</span>
+                        <span>{modelKindLabel(kind)}</span>
                     </li>
                 ))}
                 {anyOutOfRange && (
@@ -354,6 +354,15 @@ function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelK
                     </li>
                 )}
             </ul>
+            {modelKindsPresent.length > 1 && (
+                // Said once, under the legend, rather than repeated verbatim in
+                // every model-kind row -- which is how it first shipped and
+                // read as though each row carried different information.
+                <p className="t-body network-ktp-encoding-note">
+                    Each channel keeps one colour; within it the heavier line is Chebyshev and the lighter
+                    tint is PLOG.
+                </p>
+            )}
 
             <div className="arrhenius-chart-panel">
                 {/* Inside the grid, not before it -- see `ArrheniusChart.tsx`'s
