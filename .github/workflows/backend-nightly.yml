@@ -62,7 +62,18 @@ jobs:
           --health-retries 10
 
       minio:
-        image: minio/minio:latest
+        # quay.io, pinned by digest. `minio/minio:latest` on Docker Hub
+        # became unpullable on 2026-09-12 ("pull access denied ...
+        # repository does not exist or may require 'docker login'"),
+        # which failed "Initialize containers" on every backend gate
+        # before checkout, so every backend pull request went red at once
+        # with no test output. quay.io is MinIO's own registry and serves
+        # the identical image (same manifest digest).
+        #
+        # Pinned by digest, not by `latest`: an unpinned upstream tag is
+        # what turned someone else's publishing change into this repo's
+        # outage. A digest cannot move under us.
+        image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
         command: server /data --address ":9000"
         env:
           MINIO_ROOT_USER: tckdb
