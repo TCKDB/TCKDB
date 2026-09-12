@@ -136,7 +136,7 @@ def build_energy_correction_scheme_record(
         applied_usage_count=applied_n,
         has_applied_usage=applied_n > 0,
         has_literature_source=ecs.source_literature_id is not None,
-        has_software=ecs.software_id is not None,
+        has_software=ecs.software_release_id is not None,
     )
     available = AvailableEnergyCorrectionSchemeSections(
         has_corrections=total_terms > 0,
@@ -145,7 +145,16 @@ def build_energy_correction_scheme_record(
     )
 
     lot_summary = _build_lot_summary(session, ecs.level_of_theory_id)
-    sw_summary = _build_software_release_summary(session, ecs.software_id)
+    # ECS now stores software_release_id (not software_id -- correction-
+    # scheme-provenance plan v2 §3), but _build_software_release_summary's
+    # PR-2-owned fabrication still takes a bare software id (see its own
+    # docstring). Route through the resolved release's software_id so
+    # that fabrication is left untouched here; a real release-grain
+    # summary is PR 2's job.
+    ecs_software_id = (
+        ecs.software_release.software_id if ecs.software_release is not None else None
+    )
+    sw_summary = _build_software_release_summary(session, ecs_software_id)
     wf_summary = _build_workflow_release_summary(
         session, ecs.workflow_tool_release_id
     )

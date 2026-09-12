@@ -39,7 +39,10 @@ from app.services.local_key_resolution import resolve_declared_key
 from app.services.provenance_warnings import (
     collect_energy_correction_scheme_provenance_warnings,
 )
-from app.services.software_resolution import resolve_software
+from app.services.software_resolution import (
+    resolve_software,
+    resolve_software_release_ref,
+)
 
 #: An applied correction names a source the enclosing upload never declared.
 #:
@@ -135,17 +138,22 @@ def resolve_or_create_scheme(
     """Resolve or create an energy correction scheme.
 
     Dedup key: the full DB identity tuple ``(kind, name,
-    level_of_theory_id, version, source_literature_id, software_id,
-    workflow_tool_release_id)`` — matches
-    ``uq_energy_correction_scheme_identity``. A supplied citation or
-    software identity that differs from an existing same-``(kind, name,
-    lot, version)`` row is never dropped: it is scientifically distinct
-    identity, so it resolves to (or creates) a *different* row rather
-    than silently overwriting or ignoring what the depositor sent. Two
-    rows that agree on every field including these three still collapse
-    into one, exactly as before this widening — that residual ambiguity
-    (same kind/LOT/software, both uncited) is real and is reported, not
-    resolved, via ``warnings_out``.
+    level_of_theory_id, version, units, source_literature_id,
+    software_release_id, workflow_tool_release_id)`` — matches
+    ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
+    plan v2 §3-§4). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    optionally version/revision/build): a depositor who names only the
+    program resolves to the version-less release row for it (§3.2 --
+    "program known, build not stated" is a first-class, complete value,
+    not a degraded one), and reusing that same program name reuses that
+    same row. A supplied citation, software release, or unit that differs
+    from an existing same-``(kind, name, lot, version)`` row is never
+    dropped: it is scientifically distinct identity, so it resolves to
+    (or creates) a *different* row rather than silently overwriting or
+    ignoring what the depositor sent. Two rows that agree on every field
+    including these still collapse into one, exactly as before this
+    widening — that residual ambiguity (same kind/LOT/release/units, both
+    uncited) is real and is reported, not resolved, via ``warnings_out``.
 
     :param session: Active SQLAlchemy session.
     :param ref: Upload-facing scheme reference.
@@ -173,10 +181,10 @@ def resolve_or_create_scheme(
     )
     lit_id = literature.id if literature else None
 
-    software_id = None
+    software_release_id = None
     if ref.software is not None:
-        sw = resolve_software(session, ref.software.name)
-        software_id = sw.id
+        release = resolve_software_release_ref(session, ref.software)
+        software_release_id = release.id
 
     wtr_id = None
     if ref.workflow_tool_release is not None:
@@ -192,8 +200,9 @@ def resolve_or_create_scheme(
             EnergyCorrectionScheme.name == ref.name,
             _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
             _match(EnergyCorrectionScheme.version, ref.version),
+            _match(EnergyCorrectionScheme.units, ref.units),
             _match(EnergyCorrectionScheme.source_literature_id, lit_id),
-            _match(EnergyCorrectionScheme.software_id, software_id),
+            _match(EnergyCorrectionScheme.software_release_id, software_release_id),
             _match(EnergyCorrectionScheme.workflow_tool_release_id, wtr_id),
         )
     )
@@ -206,7 +215,7 @@ def resolve_or_create_scheme(
             name=ref.name,
             level_of_theory_id=lot_id,
             source_literature_id=lit_id,
-            software_id=software_id,
+            software_release_id=software_release_id,
             workflow_tool_release_id=wtr_id,
             version=ref.version,
             units=ref.units,

@@ -673,17 +673,20 @@ def collect_energy_correction_scheme_provenance_warnings(
     1. **No citation.** Every new scheme without ``source_literature_id``
        is flagged — the owner's ruling (§0.3) is that a citation is
        "strongly advised", never required.
-    2. **No software, for the three kinds where it is load-bearing.**
-       ``atom_hf``/``atom_thermal``/``soc`` are physical/reference
-       constants the software axis does not apply to (§1.6) and are
-       never judged here.
+    2. **No software release, for the three kinds where it is
+       load-bearing.** ``atom_hf``/``atom_thermal``/``soc`` are
+       physical/reference constants the software axis does not apply to
+       (§1.6) and are never judged here. A program with no build stated
+       (a version-less release) does *not* trigger this warning — only a
+       fully absent ``software_release_id`` does.
     3. **An ambiguous uncited sibling.** When this new scheme is *also*
        uncited, and another row already shares its ``(kind,
-       level_of_theory_id, software_id, workflow_tool_release_id)`` and
-       is *also* uncited, the two are indistinguishable by every axis
-       this plan added (§2.4) — flagged by name, not resolved, because
-       the archive genuinely does not know whether they are the same
-       correction deposited twice or two different sets of numbers.
+       level_of_theory_id, software_release_id,
+       workflow_tool_release_id)`` and is *also* uncited, the two are
+       indistinguishable by every axis this plan added (§2.4) — flagged
+       by name, not resolved, because the archive genuinely does not know
+       whether they are the same correction deposited twice or two
+       different sets of numbers.
 
     :param session: Active SQLAlchemy session.
     :param scheme: The scheme row just created (already flushed, so
@@ -697,7 +700,7 @@ def collect_energy_correction_scheme_provenance_warnings(
 
     if (
         scheme.kind in _SOFTWARE_SCOPED_SCHEME_KINDS
-        and scheme.software_id is None
+        and scheme.software_release_id is None
     ):
         warnings.append(_energy_correction_scheme_software_warning(scheme.kind))
 
@@ -714,9 +717,10 @@ def collect_energy_correction_scheme_provenance_warnings(
                     else EnergyCorrectionScheme.level_of_theory_id.is_(None)
                 ),
                 (
-                    EnergyCorrectionScheme.software_id == scheme.software_id
-                    if scheme.software_id is not None
-                    else EnergyCorrectionScheme.software_id.is_(None)
+                    EnergyCorrectionScheme.software_release_id
+                    == scheme.software_release_id
+                    if scheme.software_release_id is not None
+                    else EnergyCorrectionScheme.software_release_id.is_(None)
                 ),
                 (
                     EnergyCorrectionScheme.workflow_tool_release_id
@@ -759,13 +763,15 @@ def _energy_correction_scheme_software_warning(
         field=field,
         code=W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE,
         message=(
-            f"No software was supplied for this {kind.value} scheme. "
-            "Unlike a literature citation, this archive's own "
-            "calculations already know which program produced these "
-            "numbers -- atom-energy and bond-additivity corrections are "
-            "software-dependent, so an unattributed scheme cannot be "
-            "distinguished from a different program's values at the "
-            "same level of theory."
+            f"No software release was supplied for this {kind.value} "
+            "scheme. Atom-energy and bond-additivity corrections are the "
+            "output of a program's own build-level numerics, so a scheme "
+            "with no program recorded at all cannot be distinguished from "
+            "a different program's values at the same level of theory. "
+            "(A program with no build stated -- e.g. just 'Gaussian', no "
+            "version -- is a complete, honest deposit and does not "
+            "trigger this warning; only a fully absent software release "
+            "does.)"
         ),
     )
 

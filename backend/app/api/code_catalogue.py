@@ -1016,7 +1016,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "The admin attach-provenance route "
                 "(PATCH /admin/energy-correction-schemes/{ref}/provenance) "
-                "fills a null source_literature_id/software_id/"
+                "fills a null source_literature_id/software_release_id/"
                 "workflow_tool_release_id on an existing scheme row. If the "
                 "resulting tuple collides with another scheme's full "
                 "identity under uq_energy_correction_scheme_identity, the "

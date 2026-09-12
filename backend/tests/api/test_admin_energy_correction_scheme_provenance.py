@@ -24,7 +24,7 @@ from tests.services.scientific_read._factories import (
     make_energy_correction_scheme,
     make_literature,
     make_lot,
-    make_software,
+    make_software_release,
 )
 
 
@@ -92,7 +92,7 @@ def test_attach_software_to_uncited_software_less_scheme(
     """The exact shape of the two live rows: no citation, no software."""
     lot = make_lot(db_session)
     scheme = make_energy_correction_scheme(db_session, lot=lot)
-    assert scheme.software_id is None
+    assert scheme.software_release_id is None
     login_as(_api_admin_user)
 
     resp = client.patch(
@@ -106,8 +106,8 @@ def test_attach_software_to_uncited_software_less_scheme(
     assert body["source_literature_ref"] is None
 
     db_session.refresh(scheme)
-    assert scheme.software_id is not None
-    assert scheme.software.name == "Gaussian"
+    assert scheme.software_release_id is not None
+    assert scheme.software_release.software.name == "Gaussian"
 
 
 def test_attach_literature_via_manual_citation(
@@ -151,7 +151,7 @@ def test_attach_both_software_and_literature_in_one_call(
 
     assert resp.status_code == 200, resp.text
     db_session.refresh(scheme)
-    assert scheme.software_id is not None
+    assert scheme.software_release_id is not None
     assert scheme.source_literature_id is not None
 
 
@@ -159,8 +159,10 @@ def test_attach_provenance_refuses_to_overwrite_existing_software(
     client, db_session, login_as, _api_admin_user
 ):
     """Append-only per field: a non-null column is never overwritten."""
-    gaussian = make_software(db_session, name="Gaussian")
-    scheme = make_energy_correction_scheme(db_session, software=gaussian)
+    gaussian_release = make_software_release(db_session, name="Gaussian", version=None)
+    scheme = make_energy_correction_scheme(
+        db_session, software_release=gaussian_release
+    )
     login_as(_api_admin_user)
 
     resp = client.patch(
@@ -170,7 +172,7 @@ def test_attach_provenance_refuses_to_overwrite_existing_software(
     assert resp.status_code == 409, resp.text
 
     db_session.refresh(scheme)
-    assert scheme.software.name == "Gaussian"
+    assert scheme.software_release.software.name == "Gaussian"
 
 
 def test_attach_provenance_refuses_to_overwrite_existing_literature(
@@ -210,7 +212,7 @@ def test_attach_provenance_fills_one_field_leaves_other_null(
     assert resp.status_code == 200, resp.text
 
     db_session.refresh(scheme)
-    assert scheme.software_id is not None
+    assert scheme.software_release_id is not None
     assert scheme.source_literature_id is None
 
     # A second call can still fill the citation -- it was never touched.

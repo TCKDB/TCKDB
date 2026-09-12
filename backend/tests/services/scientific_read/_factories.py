@@ -2028,13 +2028,22 @@ def make_energy_correction_scheme(
     kind: EnergyCorrectionSchemeKind = EnergyCorrectionSchemeKind.bac_petersson,
     lot: LevelOfTheory | None = None,
     source_literature: Literature | None = None,
-    software: Software | None = None,
+    software_release: SoftwareRelease | None = None,
     workflow_tool_release: WorkflowToolRelease | None = None,
     version: str | None = None,
     units: EnergyUnit | None = EnergyUnit.hartree,
     note: str | None = None,
 ) -> EnergyCorrectionScheme:
-    """Create an EnergyCorrectionScheme row."""
+    """Create an EnergyCorrectionScheme row.
+
+    ``software_release`` (not ``software``) since correction-scheme-
+    provenance plan v2: the column is ``software_release_id``, keyed on
+    the release the same way every other provenance-bearing table in
+    this schema is (plan §2.2/§3). Build one with
+    ``make_software_release`` (e.g. ``make_software_release(session,
+    name="gaussian", version=None)`` for the version-less "program
+    known, build not stated" row).
+    """
     ecs = EnergyCorrectionScheme(
         kind=kind,
         name=name,
@@ -2042,7 +2051,9 @@ def make_energy_correction_scheme(
         source_literature_id=(
             source_literature.id if source_literature is not None else None
         ),
-        software_id=software.id if software is not None else None,
+        software_release_id=(
+            software_release.id if software_release is not None else None
+        ),
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release is not None else None
         ),

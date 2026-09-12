@@ -27,7 +27,7 @@ from tckdb_schemas.enums import (
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
     LevelOfTheoryRef,
-    SoftwareRef,
+    SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
@@ -42,20 +42,28 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     """Upload-facing reference to a correction scheme.
 
     If a matching scheme already exists — by the full identity tuple
-    ``(kind, name, level_of_theory, version, source_literature, software,
-    workflow_tool_release)`` — it is reused. Otherwise a new scheme is
-    created. A citation or software identity that differs from an
-    existing same-``(kind, name, level_of_theory, version)`` scheme is
-    never dropped: it makes this a scientifically distinct scheme (a
-    different citation, or a different program's numbers), so it
-    resolves to a different row rather than silently overwriting or
-    discarding what was supplied.
+    ``(kind, name, level_of_theory, version, units, source_literature,
+    software_release, workflow_tool_release)`` — it is reused. Otherwise a
+    new scheme is created. A citation, software release, or unit that
+    differs from an existing same-``(kind, name, level_of_theory,
+    version)`` scheme is never dropped: it makes this a scientifically
+    distinct scheme (a different citation, a different program build's
+    numbers, or a different unit convention), so it resolves to a
+    different row rather than silently overwriting or discarding what was
+    supplied.
 
-    :param software: The program that computed this scheme's parameters
-        (e.g. Gaussian). Mirrors ``FreqScaleFactorRef.software`` exactly
-        — name only, no version. Load-bearing for ``atom_energy``,
+    :param software: The program *release* that computed this scheme's
+        parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or
+        bond-additivity parameter set is the output of a program's own
+        build-level numerics (integration grid, SCF thresholds, a named
+        basis set's internal definition), which change between releases
+        of the same program -- so the correction is release-specific, not
+        merely program-specific. Only ``name`` is required; a depositor
+        who knows only the program (no version/revision/build) resolves
+        to the version-less release row for it, a complete and honest
+        deposit, not a degraded one. Load-bearing for ``atom_energy``,
         ``bac_petersson`` and ``bac_melius`` (the three kinds whose
-        values a specific program computes at a specific level of
+        values a specific program build computes at a specific level of
         theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,
         which are physical/reference constants. Strongly advised for the
         three software-scoped kinds, never required.
@@ -69,7 +77,7 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     name: str = Field(min_length=1)
     level_of_theory: LevelOfTheoryRef | None = None
     source_literature: LiteratureUploadRequest | None = None
-    software: SoftwareRef | None = None
+    software: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     version: str | None = None
     units: EnergyUnit | None = None
