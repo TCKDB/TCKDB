@@ -226,6 +226,156 @@ describe("NetworkDiagram -- legend counts are computed live, not hardcoded", () 
     })
 })
 
+describe("NetworkDiagram -- a saddle is drawn as a level bar (TS bar), not a point", () => {
+    it("renders one .net-pes-ts-bar line per saddle, scoped to the PES svg (not a legend icon)", () => {
+        // The legend renders its own small <svg> icons first (a
+        // `container.querySelector("svg")` trap this file's own mutation
+        // table has already hit once) -- scoped to `.net-pes-svg` so this
+        // can never silently match a 22x10 swatch instead.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bars = container.querySelectorAll(".net-pes-svg .net-pes-ts-bar")
+        const saddleLinks = container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")
+        expect(saddleLinks.length).toBeGreaterThan(0)
+        expect(bars).toHaveLength(saddleLinks.length)
+    })
+
+    it("the bar has two distinct x endpoints -- real width, not a collapsed point", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bar = container.querySelector(".net-pes-svg .net-pes-ts-bar")!
+        expect(bar.getAttribute("x1")).not.toBe(bar.getAttribute("x2"))
+        expect(bar.getAttribute("y1")).toBe(bar.getAttribute("y2"))
+    })
+
+    it("carries channel_1 only as a data attribute on the bar, never as its text", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const bar = container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="channel_1"]')
+        expect(bar).not.toBeNull()
+        expect(bar!.textContent ?? "").not.toMatch(/channel_\d/)
+    })
+
+    it("a connector leg's state-side endpoint is offset from that state's own centre, not launched from it", () => {
+        // Regression coverage for a defect found only by screenshotting the
+        // live hydrazine archive: a leg launched from a state's exact
+        // centre (the same anchor its own caption sits on) cuts through
+        // the caption's digits when that state has another connector
+        // departing the same point. `NetworkDiagram.tsx` launches from
+        // `saddle.sourceLegX`/`sinkLegX` instead. A HUB fixture (never a
+        // 2-node pair, which this module deliberately leaves unoffset --
+        // see `connectorLegX`'s own "no real outward side" comment) so the
+        // peak is genuinely off to one side of the hub, not tied to it.
+        const hubStates = [
+            state("hub", "well", "hub"),
+            state("left", "well", "left"),
+            state("right", "well", "right"),
+        ]
+        const hubChannels = [
+            channel("ch_left", "isomerization", "left", "hub"),
+            channel("ch_right", "isomerization", "hub", "right"),
+        ]
+        const hubEnergies = [energy("hub", 0), energy("left", 50), energy("right", 100)]
+        // Consistent forward/reverse pairs (source_energy + forward ==
+        // sink_energy + reverse): ch_left 50+80==0+130; ch_right 0+160==100+60.
+        const hubBarriers = [barrier("ch_left", 80, 130), barrier("ch_right", 160, 60)]
+        const { container } = renderDiagram(hubStates, hubChannels, hubEnergies, hubBarriers)
+        const hubLevel = container.querySelector('.net-pes-level-link[href="#state-row-hub"] .net-pes-level')!
+        const hubCentreX = Number(hubLevel.getAttribute("x1")) + 34 // NETWORK_PES_LEVEL_HALF_WIDTH
+        const hubY = hubLevel.getAttribute("y1")
+        const polyline = container.querySelector('.net-pes-svg polyline[data-channel-key="ch_right"]')!
+        const legPoint = polyline.getAttribute("points")!.split(" ")[0]
+        expect(legPoint).not.toBe(`${hubCentreX},${hubY}`)
+    })
+})
+
+describe("NetworkDiagram -- each level caption sits on its own opaque backing", () => {
+    it("draws two .net-pes-caption-backing rects per plotted level (energy and label)", () => {
+        // Regression coverage for a SEPARATE defect found the same way: a
+        // y-axis gridline landing close to a caption's own y (by
+        // coincidence of that state's energy) stayed visible through the
+        // gaps BETWEEN glyphs even with the existing per-glyph stroke halo.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const backings = container.querySelectorAll(".net-pes-svg .net-pes-caption-backing")
+        const levels = container.querySelectorAll(".net-pes-svg .net-pes-level-link")
+        expect(levels.length).toBeGreaterThan(0)
+        expect(backings).toHaveLength(levels.length * 2)
+    })
+
+    it("sizes a backing rect to its OWN caption string, not a shared fixed width", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const rects = Array.from(container.querySelectorAll('.net-pes-level-link[href="#state-row-hash_n1"] .net-pes-caption-backing'))
+        expect(rects).toHaveLength(2)
+        const widths = rects.map((rect) => Number(rect.getAttribute("width")))
+        // "NN" (label) is far shorter than "0.0 kJ/mol" (energy value) --
+        // a shared/fixed-width backing would make these equal.
+        expect(widths[0]).not.toBe(widths[1])
+    })
+})
+
+describe("NetworkDiagram -- energy caption sits above a level's bar, species label below it", () => {
+    it("for the NN level, the value (energy) text has a smaller SVG y than the label (species) text", () => {
+        // Smaller y is HIGHER on an SVG canvas (y grows downward) -- the
+        // reference figure draws the energy above the dash and the species
+        // name below it, the reverse of this component's own layout before
+        // this PR.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const level = container.querySelector('.net-pes-svg .net-pes-level-link[href="#state-row-hash_n1"]')!
+        const value = level.querySelector(".net-pes-level-value")!
+        const label = level.querySelector(".net-pes-level-label")!
+        expect(label.textContent).toBe("NN")
+        expect(Number(value.getAttribute("y"))).toBeLessThan(Number(label.getAttribute("y")))
+    })
+})
+
+describe("NetworkDiagram -- a state on no deposited barrier is drawn as its own group, with a divider and a stated count", () => {
+    // hash_n3 (deposited energy 380.9) is the endpoint of channel_2, which
+    // carries NO barrier in HYDRAZINE_BARRIERS -- so unlike hash_n6 (no
+    // deposited energy at all, omitted from the surface entirely), hash_n3
+    // IS plotted but reaches no other plotted state by any accepted
+    // saddle, i.e. exactly the "unconnected" case.
+    it("marks hash_n3's level data-unconnected and draws the dashed group divider", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const unconnectedLevel = container.querySelector('.net-pes-level-link[data-unconnected="true"]')
+        expect(unconnectedLevel).not.toBeNull()
+        expect(unconnectedLevel!.getAttribute("href")).toBe("#state-row-hash_n3")
+        expect(container.querySelector('[data-testid="net-pes-group-divider"]')).not.toBeNull()
+        expect(screen.getByText(/1 of 3 plotted states is not connected by any deposited barrier/)).toBeVisible()
+    })
+
+    it("draws no divider and states no such sentence when every plotted state is connected", () => {
+        // A different fixture: two states joined by the ONE accepted
+        // barrier -- nothing left unconnected.
+        const states = [state("a", "well", "A"), state("b", "well", "B")]
+        const channels = [channel("ch_ab", "isomerization", "a", "b")]
+        const energies = [energy("a", 0), energy("b", 80)]
+        const barriers = [barrier("ch_ab", 120, 40)]
+        const { container } = renderDiagram(states, channels, energies, barriers)
+        expect(container.querySelector('[data-testid="net-pes-group-divider"]')).toBeNull()
+        expect(container.querySelector('[data-unconnected="true"]')).toBeNull()
+        expect(screen.queryByText(/not connected by any deposited barrier/)).not.toBeInTheDocument()
+    })
+})
+
+describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spanning-tree fallback", () => {
+    it("shows the cycle-fallback sentence for a 3-state, 3-barrier triangle", () => {
+        const states = [state("a", "well", "A"), state("b", "well", "B"), state("c", "well", "C")]
+        const channels = [
+            channel("ch_ab", "isomerization", "a", "b"),
+            channel("ch_bc", "isomerization", "b", "c"),
+            channel("ch_ca", "isomerization", "c", "a"),
+        ]
+        const energies = [energy("a", 0), energy("b", 50), energy("c", 100)]
+        // Each pair internally consistent -- ch_ab: 0+80==50+30;
+        // ch_bc: 50+60==100+10; ch_ca: 100+130==0+230.
+        const barriers = [barrier("ch_ab", 80, 30), barrier("ch_bc", 60, 10), barrier("ch_ca", 130, 230)]
+        renderDiagram(states, channels, energies, barriers)
+        expect(screen.getByText(/deposited-barrier connectivity contains a cycle/)).toBeVisible()
+    })
+
+    it("says nothing about a cycle for the hydrazine tree, which has none", () => {
+        renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        expect(screen.queryByText(/contains a cycle/)).not.toBeInTheDocument()
+    })
+})
+
 /**
  * MUTATION TABLE (`NetworkDiagram.test.tsx`)
  *
@@ -238,6 +388,13 @@ describe("NetworkDiagram -- legend counts are computed live, not hardcoded", () 
  * | 5 | "renders each plotted state's state_label as SVG text, never the composition_hash" | Changed `level.label` to `level.compositionHash` in the level `<text>` | RED -- `svgTexts` no longer contained "NN"/"[NH-][NH3+]"; contained "hash_n1" instead, failing the negative assertion |
  * | 6 | "does not draw a level for hash_n6" | Removed the `resolvedInServedOrder` filter in `networkPesLayout.ts` (placed every state regardless of a deposited energy) | RED -- `levelLabels` contained "2 [NH2]" |
  * | 7 | "still renders both tables when no state carries a deposited energy at all" | Wrapped `<NetworkStatesTable .../>`/`<NetworkChannelsTable .../>` in `{layout && (...)}` in `NetworkDiagram.tsx` (regressing invariant 5) | RED -- `screen.getByRole("table", ...)` threw, element not found |
+ * | 8 | "renders one .net-pes-ts-bar line per saddle ..." / "the bar has two distinct x endpoints ..." / "carries channel_1 only as a data attribute on the bar ..." | Removed the `<line className="net-pes-ts-bar" ...>` element from the saddle's `<a>` | RED -- all 3 tests failed together (0 bars found; `bar` was `null`) |
+ * | 9 | "for the NN level, the value (energy) text has a smaller SVG y than the label (species) text" | Swapped the two level `<text>` elements' `y` values back (`y-12`/`y+20` reversed) | RED -- `369.94` was not less than `337.94` |
+ * | 10 | "marks hash_n3's level data-unconnected and draws the dashed group divider" | Changed `{dividerX != null && (...)}` to `{false && dividerX != null && (...)}` | RED -- `querySelector('[data-testid="net-pes-group-divider"]')` was null |
+ * | 11 | "draws no divider ... when every plotted state is connected" | Changed the same condition to `{(dividerX != null \|\| true) && (...)}` (always render) | RED -- the divider `<line>` was found where none should exist |
+ * | 12 | "shows the cycle-fallback sentence for a 3-state, 3-barrier triangle" | Changed `{layout.components.some(...) && (...)}` to `{false && layout.components.some(...) && (...)}` | RED -- `screen.getByText(/deposited-barrier connectivity contains a cycle/)` threw, element not found |
+ * | 13 | "a connector leg's state-side endpoint is offset from that state's own centre, not launched from it" | Changed `saddle.sourceLegX` back to `saddle.sourceX` in the source-side `<polyline>` | RED -- the leg's first point equalled the hub's own bar centre, `not.toBe` failed |
+ * | 14 | "draws two .net-pes-caption-backing rects per plotted level ..." / "sizes a backing rect to its OWN caption string ..." | Removed the label's own `<rect className="net-pes-caption-backing" ...>` element (kept the energy one) | RED -- both tests failed together (3 backings instead of 6; 1 rect instead of 2 for NN) |
  *
  * Each mutation was landed as a single edit, the named test confirmed red
  * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted
