@@ -733,6 +733,46 @@ def test_ecs_detail_serves_software_and_workflow_tool_release(
     assert body["record"]["evidence_summary"]["has_software"] is True
 
 
+def test_ecs_detail_versionless_release_reports_program_and_null_version(
+    client, db_session, allow_internal_ids
+):
+    """Plan §10 PR 2's third red-first criterion, and §3.2's load-bearing
+    shape: a depositor who knows the program but not the build resolves
+    to the version-less release row, and that is a *complete* deposit,
+    not a degraded one.
+
+    So the detail response must carry the program name and a real,
+    resolvable ref, with ``version`` exactly ``None`` -- never a filler
+    string, never the whole object dropped to ``null`` as if no software
+    had been recorded at all.
+
+    *Mutation*: ``version=row.version or "unknown"`` in
+    ``_build_software_release_summary`` -- the ``version is None``
+    assertion must then fail. Without this test that mutation survives
+    the whole suite (found in review of the read-layer branch).
+    """
+    release = make_software_release(db_session, name="molpro", version=None)
+    ecs = make_energy_correction_scheme(db_session, software_release=release)
+
+    body = client.get(
+        _ecs_detail_url(ecs.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "molpro"
+    assert sw_release["version"] is None
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_ref"] == release.public_ref
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    # Program known is software recorded, even with no build stated.
+    assert body["record"]["evidence_summary"]["has_software"] is True
+
+
 def test_ecs_detail_has_software_false_when_absent(client, db_session):
     ecs = make_energy_correction_scheme(db_session)
     body = client.get(_ecs_detail_url(ecs.public_ref)).json()
