@@ -221,3 +221,40 @@
     display: grid;
     gap: 0.3rem;
 }
+
+/* Layout-mode chooser. Both modes render identical energies; only the
+   horizontal arrangement differs, which is why the control sits above the
+   plot rather than inside the legend that describes the encoding. */
+.net-pes-layout-fieldset {
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
+    padding: .5rem .9rem .7rem;
+    margin: 0 0 1rem;
+}
+
+.net-pes-layout-fieldset legend {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+    padding: 0 .3rem;
+}
+
+.net-pes-layout-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.4rem;
+}
+
+.net-pes-layout-option {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font: var(--type-body-font);
+}
+
+.net-pes-layout-note {
+    margin: .5rem 0 0;
+    color: var(--muted);
+}

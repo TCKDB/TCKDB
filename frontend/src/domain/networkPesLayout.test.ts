@@ -574,3 +574,45 @@ describe("computeNetworkPesLayout — captions fit the plot they are drawn in", 
         }
     })
 })
+
+describe("computeNetworkPesLayout — layout mode changes arrangement, never energies", () => {
+    // Both modes are offered so the owner can compare readability. The
+    // guarantee that makes that safe to offer is that NOTHING scientific
+    // differs between them: same levels at the same energies, same saddle
+    // points at the same heights, same channels drawn.
+    function both() {
+        const conn = computeNetworkPesLayout(
+            HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS, "connectivity")!
+        const ener = computeNetworkPesLayout(
+            HYDRAZINE_TREE_STATES, HYDRAZINE_TREE_ENERGIES, HYDRAZINE_TREE_CHANNELS, HYDRAZINE_TREE_BARRIERS, "energy")!
+        return { conn, ener }
+    }
+
+    it("every state keeps its exact energy under both modes", () => {
+        const { conn, ener } = both()
+        const e = (l: NetworkPesLayout) => Object.fromEntries(l.levels.map((v) => [v.compositionHash, v.energyKjMol]))
+        expect(Object.keys(e(conn)).length).toBeGreaterThan(0)
+        expect(e(ener)).toEqual(e(conn))
+    })
+
+    it("every saddle keeps its exact height, and the same saddles are drawn", () => {
+        const { conn, ener } = both()
+        const h = (l: NetworkPesLayout) => Object.fromEntries(l.saddles.map((s) => [s.channelKey ?? "", s.heightKjMol]))
+        expect(Object.keys(h(conn)).length).toBeGreaterThan(0)
+        expect(h(ener)).toEqual(h(conn))
+    })
+
+    it("energy mode really does order states left to right by energy", () => {
+        const { ener } = both()
+        const byX = [...ener.levels].sort((a, b) => a.x - b.x).map((l) => l.energyKjMol)
+        expect(byX.length).toBeGreaterThan(2)
+        for (let i = 1; i < byX.length; i++) expect(byX[i]).toBeGreaterThanOrEqual(byX[i - 1])
+    })
+
+    it("the two modes actually differ — energy mode crosses more than connectivity", () => {
+        // The whole reason connectivity is the default. If this ever stops
+        // being true the default should be revisited, not the test.
+        const { conn, ener } = both()
+        expect(findConnectorCrossings(ener).length).toBeGreaterThan(findConnectorCrossings(conn).length)
+    })
+})

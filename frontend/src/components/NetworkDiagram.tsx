@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import "../network-diagram.css"
 import "../thermo-cp-chart.css"
@@ -10,6 +11,7 @@ import {
     NETWORK_PES_MARGIN,
     NETWORK_PES_TS_BAR_HALF_WIDTH,
     type NetworkPesLayout,
+    type NetworkPesLayoutMode,
 } from "../domain/networkPesLayout"
 import { niceTicks } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
@@ -69,10 +71,44 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
     channelBarriers: NetworkChannelBarrier[] | null
 }) {
     const barriers = channelBarriers ?? []
-    const layout = computeNetworkPesLayout(states, stateEnergies ?? [], channels, barriers)
+    // Layout choice is a readability judgement, not a correctness one:
+    // both modes place every level at the same energy and draw the same
+    // saddle points at the same heights. Offered side by side while the
+    // owner gathers a second opinion on which reads better.
+    const [layoutMode, setLayoutMode] = useState<NetworkPesLayoutMode>("connectivity")
+    const layout = computeNetworkPesLayout(states, stateEnergies ?? [], channels, barriers, layoutMode)
 
     return (
         <>
+            {layout && (
+                <fieldset className="net-pes-layout-fieldset">
+                    <legend>Layout</legend>
+                    <div className="net-pes-layout-options">
+                        <label className="net-pes-layout-option">
+                            <input
+                                type="radio"
+                                name="net-pes-layout"
+                                checked={layoutMode === "connectivity"}
+                                onChange={() => setLayoutMode("connectivity")}
+                            />
+                            <span>By connectivity — paths radiate from the most-connected state</span>
+                        </label>
+                        <label className="net-pes-layout-option">
+                            <input
+                                type="radio"
+                                name="net-pes-layout"
+                                checked={layoutMode === "energy"}
+                                onChange={() => setLayoutMode("energy")}
+                            />
+                            <span>By energy — states ordered left to right, lowest first</span>
+                        </label>
+                    </div>
+                    <p className="t-body net-pes-layout-note">
+                        Both show the same energies and the same saddle points. Only the horizontal
+                        arrangement differs.
+                    </p>
+                </fieldset>
+            )}
             {layout
                 ? <NetworkPesSection layout={layout} states={states} channels={channels} barrierTotal={barriers.length} />
                 : (

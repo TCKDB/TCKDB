@@ -221,6 +221,13 @@ const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
         ".theme-toggle-option", // "Light" / "Dark" / "System"
         ".identifier-search-mode-option", // "Species" / "Reactions" (IdentifierSearch.tsx's SearchModeToggle)
     ],
+    "network-diagram.css": [
+        // `<legend>Layout</legend>` (NetworkDiagram.tsx) -- the literal word
+        // "Layout" on the PES layout-mode chooser. No unit, symbol or
+        // formula. The chemistry labels render inside the SVG and inside
+        // `.net-pes-layout-option`, neither of which this selector reaches.
+        ".net-pes-layout-fieldset legend",
+    ],
     "network-ktp-chart.css": [
         // `<legend>{`Channels (${selectedGroups.length} of ${groups.length} shown)`}</legend>`
         // (NetworkKtpChart.tsx) -- a count sentence around the literal word
