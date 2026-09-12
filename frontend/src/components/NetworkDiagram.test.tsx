@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import "../design-system.css"
 import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateEnergy } from "../api/networkEntryApi"
@@ -376,6 +376,163 @@ describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spann
     })
 })
 
+// A fixture with TWO accepted barriers (unlike HYDRAZINE_*, which has only
+// one) -- needed to prove hiding ONE channel leaves the OTHER's saddle,
+// and every level, completely unaffected (invariant 2). Same hub shape as
+// the "connector leg's state-side endpoint" fixture above, reused here for
+// its own already-verified forward/reverse consistency.
+const TWO_SADDLE_STATES: NetworkState[] = [
+    state("hub", "well", "hub"),
+    state("left", "well", "left"),
+    state("right", "well", "right"),
+]
+const TWO_SADDLE_CHANNELS: NetworkChannel[] = [
+    channel("ch_left", "isomerization", "left", "hub"),
+    channel("ch_right", "isomerization", "hub", "right"),
+]
+const TWO_SADDLE_ENERGIES: NetworkStateEnergy[] = [energy("hub", 0), energy("left", 50), energy("right", 100)]
+// ch_left: 50+80==0+130; ch_right: 0+160==100+60.
+const TWO_SADDLE_BARRIERS: NetworkChannelBarrier[] = [barrier("ch_left", 80, 130), barrier("ch_right", 160, 60)]
+
+function levelBarAttrs(container: HTMLElement, hash: string): { x1: string | null; x2: string | null; y1: string | null } {
+    const bar = container.querySelector(`.net-pes-level-link[href="#state-row-${hash}"] .net-pes-level`)!
+    return { x1: bar.getAttribute("x1"), x2: bar.getAttribute("x2"), y1: bar.getAttribute("y1") }
+}
+
+describe("NetworkDiagram -- per-channel show/hide (invariant 1: offers exactly the channels with an accepted barrier)", () => {
+    it("renders one checkbox per ACCEPTED saddle, not one per channel on the network", () => {
+        // HYDRAZINE_CHANNELS has 3 channels; only channel_1 carries a
+        // deposited barrier (HYDRAZINE_BARRIERS).
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        expect(container.querySelectorAll(".net-pes-channel-option")).toHaveLength(1)
+        expect(container.querySelector('.net-pes-channel-option[data-channel-key="channel_1"]')).not.toBeNull()
+    })
+
+    it("renders no channel fieldset at all when no channel carries an accepted barrier", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS, HYDRAZINE_ENERGIES, [])
+        expect(container.querySelector(".net-pes-channel-fieldset")).toBeNull()
+    })
+})
+
+describe("NetworkDiagram -- per-channel show/hide labels by chemistry, never by channel_key (invariant 1)", () => {
+    it("labels each checkbox 'source to sink (kind)', with channel_key only in data-channel-key", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        const options = Array.from(container.querySelectorAll(".net-pes-channel-option"))
+        const texts = options.map((el) => el.textContent)
+        expect(texts).toContain("left to hub (isomerization)")
+        expect(texts).toContain("hub to right (isomerization)")
+        for (const text of texts) {
+            expect(text).not.toMatch(/ch_left|ch_right/)
+        }
+        expect(container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"]')).not.toBeNull()
+        expect(container.querySelector('.net-pes-channel-option[data-channel-key="ch_right"]')).not.toBeNull()
+    })
+})
+
+describe("NetworkDiagram -- per-channel show/hide is a view filter only (invariant 2)", () => {
+    it("hiding one channel removes only its own saddle, leaving every level position and the other saddle's height unchanged", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        const before = {
+            hub: levelBarAttrs(container, "hub"),
+            left: levelBarAttrs(container, "left"),
+            right: levelBarAttrs(container, "right"),
+            rightBar: container.querySelector('.net-pes-ts-bar[data-channel-key="ch_right"]')!,
+        }
+        const rightBarBefore = {
+            x1: before.rightBar.getAttribute("x1"),
+            x2: before.rightBar.getAttribute("x2"),
+            y1: before.rightBar.getAttribute("y1"),
+        }
+        expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(2)
+
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        fireEvent.click(checkbox)
+
+        // ch_left's own saddle is gone; ch_right's remains.
+        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        const saddleLinksAfter = container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")
+        expect(saddleLinksAfter).toHaveLength(1)
+
+        // Every level -- including "left", the very state ch_left touches
+        // -- keeps its exact pre-hide x and y (invariant 2: never a relayout).
+        expect(levelBarAttrs(container, "hub")).toEqual(before.hub)
+        expect(levelBarAttrs(container, "left")).toEqual(before.left)
+        expect(levelBarAttrs(container, "right")).toEqual(before.right)
+
+        // ch_right's own saddle keeps its exact height (y1) and x position.
+        const rightBarAfter = container.querySelector('.net-pes-ts-bar[data-channel-key="ch_right"]')!
+        expect(rightBarAfter.getAttribute("x1")).toBe(rightBarBefore.x1)
+        expect(rightBarAfter.getAttribute("x2")).toBe(rightBarBefore.x2)
+        expect(rightBarAfter.getAttribute("y1")).toBe(rightBarBefore.y1)
+    })
+})
+
+describe("NetworkDiagram -- the 'N of M shown' count always matches what is actually rendered", () => {
+    it("legend and rendered saddle-link count agree, both before and after hiding a channel", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        expect(screen.getByText("Saddle points (2 of 2 shown)")).toBeVisible()
+        expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(2)
+
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        fireEvent.click(checkbox)
+
+        const legend = screen.getByText("Saddle points (1 of 2 shown)")
+        expect(legend).toBeVisible()
+        expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(1)
+    })
+})
+
+describe("NetworkDiagram -- hiding a channel never shrinks the accessible tables (invariant 3)", () => {
+    it("the channel table still lists all 3 channels after the only drawable one is hidden", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="channel_1"] input')!
+        fireEvent.click(checkbox)
+        expect(container.querySelectorAll('.net-pes-svg .net-pes-saddle-link')).toHaveLength(0)
+        const channelTable = screen.getByRole("table", { name: "Channels in this network" })
+        expect(channelTable.querySelectorAll("tbody tr")).toHaveLength(3)
+        expect(screen.getByRole("table", { name: "States in this network" }).querySelectorAll("tbody tr")).toHaveLength(4)
+    })
+})
+
+describe("NetworkDiagram -- a filtered view says so, and how many of how many are shown (invariant 5)", () => {
+    it("states nothing about filtering while every channel is visible", () => {
+        renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        expect(screen.queryByText(/This view is filtered/)).not.toBeInTheDocument()
+    })
+
+    it("states the filtered count once a channel is hidden", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        fireEvent.click(checkbox)
+        expect(screen.getByText(/This view is filtered: 1 of 2 drawable saddle points is shown/)).toBeVisible()
+    })
+})
+
+describe("NetworkDiagram -- per-channel show/hide works in BOTH layout modes, not just 'energy'", () => {
+    it("renders the same channel fieldset under the 'energy' layout radio", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        fireEvent.click(screen.getByLabelText(/By energy/))
+        expect(container.querySelectorAll(".net-pes-channel-option")).toHaveLength(2)
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        fireEvent.click(checkbox)
+        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(1)
+    })
+
+    it("a hidden channel stays hidden across a layout-mode switch, without re-clicking its checkbox", () => {
+        const { container } = renderDiagram(TWO_SADDLE_STATES, TWO_SADDLE_CHANNELS, TWO_SADDLE_ENERGIES, TWO_SADDLE_BARRIERS)
+        const checkbox = container.querySelector('.net-pes-channel-option[data-channel-key="ch_left"] input')!
+        fireEvent.click(checkbox)
+        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+
+        fireEvent.click(screen.getByLabelText(/By energy/))
+
+        expect(container.querySelector('.net-pes-svg .net-pes-ts-bar[data-channel-key="ch_left"]')).toBeNull()
+        expect(container.querySelectorAll(".net-pes-svg .net-pes-saddle-link")).toHaveLength(1)
+        expect((checkbox as HTMLInputElement).checked).toBe(false)
+    })
+})
+
 /**
  * MUTATION TABLE (`NetworkDiagram.test.tsx`)
  *
@@ -400,4 +557,25 @@ describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spann
  * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted
  * and confirmed via `git diff --stat` showing no changes and
  * `sha256sum -c` against a pre-mutation checksum of the touched file.
+ */
+
+/**
+ * MUTATION TABLE (channel show/hide, `network-pes-channel-visibility`)
+ *
+ * | # | Test | Mutation landed | Result |
+ * |---|------|------------------|--------|
+ * | 1 | "hiding one channel removes only its own saddle, leaving every level position and the other saddle's height unchanged" | In `NetworkDiagram.tsx`, changed the level `<line>`'s `x1` to `level.x - NETWORK_PES_LEVEL_HALF_WIDTH + (hiddenChannelKeys.size > 0 ? 5 : 0)` -- a relayout keyed off "something is hidden" | RED -- `levelBarAttrs(container, "hub")` no longer equalled its pre-hide value (`x1` shifted `103` -> `108`) |
+ * | 2 | "legend and rendered saddle-link count agree, both before and after hiding a channel" | In `NetworkPesChannelFieldset`, changed `shownCount` from the hidden-aware filter to a bare `saddles.length` | RED -- `screen.getByText("Saddle points (1 of 2 shown)")` was not found after hiding one channel (legend still said "2 of 2") |
+ * | 3 | "renders one checkbox per ACCEPTED saddle, not one per channel on the network" | Changed `saddles={layout.saddles}` to `saddles={layout.saddles.concat(layout.saddles)}` at the `NetworkPesChannelFieldset` call site | RED -- `.net-pes-channel-option` count was 2, not 1 |
+ * | 4 | "renders no channel fieldset at all when no channel carries an accepted barrier" | Changed `{layout && layout.saddles.length > 0 && (...)}` to `{layout && (...)}` | RED -- `.net-pes-channel-fieldset` was found (rendered with "0 of 0 shown") where none should exist |
+ * | 5 | "labels each checkbox 'source to sink (kind)', with channel_key only in data-channel-key" | Changed the checkbox label text from `` `${saddle.sourceLabel} to ${saddle.sinkLabel} (${saddle.kind})` `` to `` `${saddle.channelKey}` `` | RED -- rendered texts were `["ch_left", "ch_right"]`, not the chemistry labels |
+ * | 6 | "the channel table still lists all 3 channels after the only drawable one is hidden" | In `NetworkChannelsTable`, filtered its own `channels` prop to `channels.filter((c) => c.channel_key !== "channel_1")` before rendering rows -- simulating a table that shrinks along with the diagram | RED -- `channelTable.querySelectorAll("tbody tr")` had length 2, not 3 |
+ * | 7 | "states nothing about filtering while every channel is visible" | Changed the filtered-note guard `{shownSaddleCount < layout.saddles.length && (...)}` to `{true && (...)}` | RED -- `screen.queryByText(/This view is filtered/)` found the note even with nothing hidden |
+ * | 8 | "renders the same channel fieldset under the 'energy' layout radio" | Changed the fieldset's render guard to `{layout && layout.saddles.length > 0 && layoutMode === "connectivity" && (...)}` -- gating the control to one layout mode, the exact regression the brief warned against | RED -- `.net-pes-channel-option` count was 0 after switching to "By energy" |
+ * | 9 | "a hidden channel stays hidden across a layout-mode switch, without re-clicking its checkbox" | In the "By energy" radio's `onChange`, added `setHiddenChannelKeys(new Set())` alongside `setLayoutMode("energy")` -- resetting the filter on every mode switch | RED -- `ch_left`'s `.net-pes-ts-bar` reappeared after switching to "By energy" even though it was hidden first |
+ *
+ * Each mutation was landed as a single edit, the named test confirmed red
+ * (`npx vitest run src/components/NetworkDiagram.test.tsx -t "<test name>"`),
+ * then reverted and confirmed via `sha256sum -c` against a pre-mutation
+ * checksum of `NetworkDiagram.tsx` taken before mutation #1.
  */
