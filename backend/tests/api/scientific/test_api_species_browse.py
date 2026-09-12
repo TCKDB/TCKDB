@@ -343,6 +343,11 @@ def test_record_envelope_matches_search_shape(client, db_session):
         "status",
         "reviewed_at",
         "reviewer_kind",
+        # The curator's stated reason, public alongside the status it
+        # explains (`RecordReviewBadge`). An exact key-set match is the
+        # point of this test, so a new field belongs here rather than
+        # being excluded to keep the assertion passing.
+        "note",
     }
     # thermo/statmech/transport/conformers summaries are permanently
     # illegal on browse (species.py::_BROWSE_LEGAL_INCLUDE_TOKENS), so
