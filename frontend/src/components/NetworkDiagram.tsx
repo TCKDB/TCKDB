@@ -78,6 +78,24 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
     const [layoutMode, setLayoutMode] = useState<NetworkPesLayoutMode>("connectivity")
     const layout = computeNetworkPesLayout(states, stateEnergies ?? [], channels, barriers, layoutMode)
 
+    // Per-channel show/hide -- a VIEW filter only (invariant 2 of the
+    // channel-visibility brief): keyed by `channel_key`, never by index or
+    // position, so it survives a layout-mode switch untouched even though
+    // every saddle's x/y is recomputed for the new mode. Empty by default
+    // -- every drawable saddle starts visible. Lives at THIS level (not
+    // inside `NetworkPesSvg`) because both the control (rendered as a
+    // sibling of the layout fieldset, per the brief) and the SVG need it.
+    const [hiddenChannelKeys, setHiddenChannelKeys] = useState<Set<string>>(() => new Set())
+
+    function toggleChannelVisibility(channelKey: string) {
+        setHiddenChannelKeys((previous) => {
+            const next = new Set(previous)
+            if (next.has(channelKey)) next.delete(channelKey)
+            else next.add(channelKey)
+            return next
+        })
+    }
+
     return (
         <>
             {layout && (
@@ -109,8 +127,33 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
                     </p>
                 </fieldset>
             )}
+            {/* Channel show/hide -- deliberately available in BOTH layout
+                modes (owner asked for it against the crossing-heavy energy
+                mode specifically, but a per-path toggle helps in either,
+                and a control that appears/disappears with the mode radio
+                above it would be more surprising than useful). Offers
+                EXACTLY `layout.saddles` -- the channels that actually got a
+                deposited barrier and a drawn saddle point (invariant 1 of
+                the channel-visibility brief) -- never the full channel
+                list, which stays in `NetworkChannelsTable` below
+                regardless of what is hidden here (invariant 3). */}
+            {layout && layout.saddles.length > 0 && (
+                <NetworkPesChannelFieldset
+                    saddles={layout.saddles}
+                    hiddenChannelKeys={hiddenChannelKeys}
+                    onToggle={toggleChannelVisibility}
+                />
+            )}
             {layout
-                ? <NetworkPesSection layout={layout} states={states} channels={channels} barrierTotal={barriers.length} />
+                ? (
+                    <NetworkPesSection
+                        layout={layout}
+                        states={states}
+                        channels={channels}
+                        barrierTotal={barriers.length}
+                        hiddenChannelKeys={hiddenChannelKeys}
+                    />
+                )
                 : (
                     <p className="empty-projection">
                         No state energies are deposited for this network's own solve, so no potential-energy surface
@@ -120,6 +163,54 @@ export function NetworkDiagram({ states, channels, stateEnergies, channelBarrier
             <NetworkStatesTable states={states} />
             <NetworkChannelsTable channels={channels} states={states} />
         </>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Channel show/hide -- same shape as `NetworkKtpChart.tsx`'s own channel
+// multi-select fieldset (a `<fieldset>` with a count-sentence `<legend>`
+// and a flex-wrapped list of checkboxes), sibling-styled with the layout
+// fieldset above rather than a competing design. Every label is chemistry
+// (`sourceLabel to sinkLabel (kind)`, already built from
+// `composition.state_label` by `networkPesLayout.ts`) -- `channelKey`
+// appears only in `data-channel-key` and as the React `key` (invariant 1).
+// ---------------------------------------------------------------------------
+
+function NetworkPesChannelFieldset({ saddles, hiddenChannelKeys, onToggle }: {
+    saddles: NetworkPesLayout["saddles"]
+    hiddenChannelKeys: Set<string>
+    onToggle: (channelKey: string) => void
+}) {
+    const shownCount = saddles.filter((saddle) => saddle.channelKey == null || !hiddenChannelKeys.has(saddle.channelKey)).length
+    return (
+        <fieldset className="net-pes-channel-fieldset">
+            <legend>{`Saddle points (${shownCount} of ${saddles.length} shown)`}</legend>
+            <div className="net-pes-channel-options">
+                {saddles.map((saddle, index) => {
+                    const checked = saddle.channelKey == null || !hiddenChannelKeys.has(saddle.channelKey)
+                    return (
+                        <label
+                            className="net-pes-channel-option"
+                            key={saddle.channelKey ?? `${saddle.sourceHash}-${saddle.sinkHash}-${index}`}
+                            data-channel-key={saddle.channelKey ?? undefined}
+                        >
+                            <input
+                                type="checkbox"
+                                checked={checked}
+                                // A saddle with no `channelKey` (never seen on served data --
+                                // a barrier row's own `channel_key` is required -- but the
+                                // type allows it) cannot be addressed by this Set, so its
+                                // checkbox is inert and stays permanently checked/visible
+                                // rather than silently doing nothing on click.
+                                disabled={saddle.channelKey == null}
+                                onChange={() => { if (saddle.channelKey != null) onToggle(saddle.channelKey) }}
+                            />
+                            {`${saddle.sourceLabel} to ${saddle.sinkLabel} (${saddle.kind})`}
+                        </label>
+                    )
+                })}
+            </div>
+        </fieldset>
     )
 }
 
@@ -179,12 +270,14 @@ function NetworkPesLegend({ layout }: { layout: NetworkPesLayout }) {
 // PES section -- legend, SVG, honest-absence notes
 // ---------------------------------------------------------------------------
 
-function NetworkPesSection({ layout, states, channels, barrierTotal }: {
+function NetworkPesSection({ layout, states, channels, barrierTotal, hiddenChannelKeys }: {
     layout: NetworkPesLayout
     states: NetworkState[]
     channels: NetworkChannel[]
     barrierTotal: number
+    hiddenChannelKeys: Set<string>
 }) {
+    const shownSaddleCount = layout.saddles.filter((saddle) => saddle.channelKey == null || !hiddenChannelKeys.has(saddle.channelKey)).length
     return (
         <>
             <NetworkPesLegend layout={layout} />
@@ -222,7 +315,25 @@ function NetworkPesSection({ layout, states, channels, barrierTotal }: {
                         + "layout falls back to a spanning tree for position there, so a connector may cross another."}
                 </p>
             )}
-            <NetworkPesSvg layout={layout} channels={channels} totalStates={states.length} totalChannels={channels.length} />
+            {shownSaddleCount < layout.saddles.length && (
+                // Invariant 5 of the channel-visibility brief: a filtered
+                // view must say so, and how many of how many are actually
+                // shown, so it is never mistaken for the whole picture.
+                // Only rendered once at least one channel is hidden --
+                // matching every other note on this page, which states an
+                // absence only when one actually exists.
+                <p className="t-body net-pes-filtered-note" style={{ margin: ".3rem 0 0" }}>
+                    {`This view is filtered: ${shownSaddleCount} of ${layout.saddles.length} drawable saddle point${layout.saddles.length === 1 ? "" : "s"} `
+                        + `${shownSaddleCount === 1 ? "is" : "are"} shown. Use the checkboxes above to change which.`}
+                </p>
+            )}
+            <NetworkPesSvg
+                layout={layout}
+                channels={channels}
+                totalStates={states.length}
+                totalChannels={channels.length}
+                hiddenChannelKeys={hiddenChannelKeys}
+            />
             {layout.excludedSaddles.length > 0 && (
                 // A barrier row that WAS deposited but could not be placed
                 // (an unmatched channel reference, a missing endpoint
@@ -263,11 +374,12 @@ function channelRowId(channelKey: string | null, index: number): string {
     return `channel-row-${channelKey ?? `unkeyed-${index}`}`
 }
 
-function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
+function NetworkPesSvg({ layout, channels, totalStates, totalChannels, hiddenChannelKeys }: {
     layout: NetworkPesLayout
     channels: NetworkChannel[]
     totalStates: number
     totalChannels: number
+    hiddenChannelKeys: Set<string>
 }) {
     // Every saddle carries a real `channelKey` (it is built from a
     // `NetworkChannelBarrier` row, whose own `channel_key` field is
@@ -281,9 +393,24 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
     const plotLeft = NETWORK_PES_MARGIN.left
     const plotRight = layout.width - NETWORK_PES_MARGIN.right
 
+    // Invariant 2 of the channel-visibility brief: hiding is a VIEW filter,
+    // never a relayout -- this is the ONLY place a hidden channel changes
+    // anything. `layout.saddles` itself, and every level's x/y, are left
+    // completely untouched; a hidden saddle's own height and position are
+    // still sitting in `layout.saddles` unchanged, simply not iterated
+    // into a rendered element below.
+    const visibleSaddles = layout.saddles.filter((saddle) => saddle.channelKey == null || !hiddenChannelKeys.has(saddle.channelKey))
+
+    // The SVG's own aria-label describes what is ACTUALLY rendered, not
+    // the full drawable set, so a screen-reader user sees the same
+    // filtered/unfiltered state a sighted reader sees from the "N of M
+    // shown" legend and the filtered-view note above.
     const ariaLabel = `Potential-energy surface: ${layout.levels.length} of ${totalStates} states plotted, `
-        + `${layout.saddles.length} of ${totalChannels} channels shown as a saddle point, `
-        + `relative energy in kilojoules per mole, electronic-only, referenced to the lowest state`
+        + `${visibleSaddles.length} of ${totalChannels} channels shown as a saddle point`
+        + (visibleSaddles.length !== layout.saddles.length
+            ? ` (${layout.saddles.length - visibleSaddles.length} more carry a deposited barrier but are hidden by the channel filter)`
+            : "")
+        + `, relative energy in kilojoules per mole, electronic-only, referenced to the lowest state`
 
     // A dashed vertical divider between the connectivity-laid-out group(s)
     // and the unconnected-states group, only drawn when both actually
@@ -327,7 +454,16 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                 </g>
 
                 <g aria-hidden="true">
-                    {layout.saddles.map((saddle, index) => {
+                    {visibleSaddles.map((saddle) => {
+                        // `index` used to come from the `.map` position over
+                        // ALL saddles; now that this iterates the FILTERED
+                        // list, the row-anchor index must still be the
+                        // original position in `layout.saddles` (the one
+                        // `channelIndexByKey`'s fallback and every other
+                        // saddle keyed off), not this array's own position
+                        // -- otherwise hiding an earlier channel would shift
+                        // a later one's `#channel-row-N` anchor.
+                        const index = layout.saddles.indexOf(saddle)
                         const rowIndex = channelIndexByKey.get(saddle.channelKey) ?? index
                         // Saddles are drawn as a short horizontal BAR (like
                         // a state level), not a point -- the reference

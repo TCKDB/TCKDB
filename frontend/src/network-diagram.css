@@ -258,3 +258,67 @@
     margin: .5rem 0 0;
     color: var(--muted);
 }
+
+/* Channel show/hide chooser -- same shape/idiom as
+   `network-ktp-chart.css`'s own `.network-ktp-channel-fieldset` (chip-style
+   checkboxes in a flex-wrapped list under a count-sentence legend). Kept as
+   its own rules rather than importing that file's classes, matching this
+   file's own "one component, one stylesheet" convention (see this file's
+   header comment) -- a component's styling should not depend on another
+   component's stylesheet having loaded first. Styled as a SIBLING of
+   `.net-pes-layout-fieldset` immediately above, not a competing design. */
+.net-pes-channel-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin: 0 0 1rem;
+    padding: .5rem .9rem .7rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
+}
+
+.net-pes-channel-fieldset legend {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+    padding: 0 .3rem;
+}
+
+.net-pes-channel-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem .75rem;
+}
+
+.net-pes-channel-option {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    font: var(--type-data-font);
+    color: var(--ink-2);
+    cursor: pointer;
+}
+
+.net-pes-channel-option:has(input:checked) {
+    border-color: var(--accent-300);
+    background: var(--accent-50);
+    color: var(--ink);
+}
+
+.net-pes-channel-option input {
+    margin: 0;
+}
+
+/* Invariant 5 (channel-visibility brief): a filtered view states itself,
+   using the same plain-note styling every other honest-absence sentence on
+   this page uses -- no bespoke class needed, but named here for the one
+   spot it needs a touch more emphasis than a bare `.t-body` note. */
+.net-pes-filtered-note {
+    color: var(--muted);
+}
