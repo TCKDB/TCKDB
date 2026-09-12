@@ -1,1029 +1,1000 @@
 # Correction-scheme provenance — implementation plan
 
-Status: draft v1. Base: `main` at `a21cb67e`. This plan extends
-`docs/plans/methods-surface.md` (`plan-methods-surface-v2`) — its three
-slices are built and deployed on `main` today: `MethodsIndexPage.tsx`,
-`LevelOfTheoryPage.tsx`, `CorrectionSchemePage.tsx`,
-`FrequencyScaleFactorPage.tsx`, routed at `/methods`, `/methods/:lotRef`,
-`/methods/schemes/:ecsRef`, `/methods/frequency-scale-factors/:fsfRef`.
-Governing decision records: `docs/decisions/0003-energy-correction-two-layer-architecture.md`
-(reference layer vs. applied layer) and `docs/literature_policy.md`
-(DOI/ISBN normalization, nested-only literature upload). Follows
-`methods-surface.md`'s document shape: measured facts, a crux decision,
-numbered slices with acceptance criteria, an owner's-rulings section.
+Status: **v2, reopened 2026-09-12; owner rulings applied 2026-09-13.**
+Base: `main` at `c2633156` (main has since moved to `9ded15ec`; nothing
+on this surface changed). Deployed Pi DB is at Alembic revision
+`b6d80e36dcec` (measured: `SELECT * FROM alembic_version`).
 
-**This plan grew twice while in progress.** It started as a literature-
-discriminator question and picked up a second, larger defect along the
-way: `energy_correction_scheme` has no software dimension at all, while
-its sibling `frequency_scale_factor` does. Both are folded in below —
-§0 records all three rulings verbatim, §1 measures both gaps together
-(they turn out to share one root cause and, mostly, one fix), and the
-schema/migration section proposes widening the identity on both axes in
-one revision rather than two, because reviewing "the unique index on
-this table changes" twice, a week apart, is worse than reviewing it once
-correctly.
+v1 of this plan shipped in three merges — #436 (the plan), #439 (schema
+`b6d80e36dcec`, resolver, warnings, admin attach-provenance route), #440
+(frontend: software-titled expandable boxes). The owner reopened it
+because the surface is still wrong, and the residual defect is in the
+schema, not the page: the column v1 added keys on a **program**, and the
+fact he names keys on a **program release**.
+
+Governing records: `docs/decisions/0003-energy-correction-two-layer-architecture.md`
+(reference layer vs. applied layer), `docs/literature_policy.md`, and the
+house rule **`feedback_tckdb_is_sovereign`** — TCKDB decides its own
+contracts; ARC and every other producer conform to TCKDB, never the
+reverse. That rule shapes this document's structure: §2–§8 argue the
+model from chemistry and from TCKDB's own code, and every fact about what
+one particular toolchain happens to do, or about what this one deployment
+happens to hold, is quarantined in §9 where it cannot be mistaken for a
+design input.
+
+Document shape follows `docs/plans/pressure-dependent-network-surface.md`:
+measured facts with `file:line` anchors, a crux decision, PR slicing with
+red-first criteria per PR, an explicit open-questions section.
 
 ## 0. The owner's rulings, quoted verbatim
 
-1. The question that opened this plan: what happens when two depositors
-   provide different atom-energy or bond-additivity corrections for the
-   same level of theory, software and version.
+### 0.1 The rulings that opened and reopened this plan
+
+1. The question that opened it: what happens when two depositors provide
+   different atom-energy or bond-additivity corrections for the same
+   level of theory, software and version.
 2. The literature discriminator: **use `source_literature_id`** — "a
    citation like Petersson 1998 is a real, citable identity rather than
    a depositor string."
-3. Optionality, the load-bearing constraint on the literature side:
-   **"i think a lit source is not required but strongly advised."** Not
-   `NOT NULL`. The plan must work when it is absent, make the absence
-   visible, and make citing one the obvious default action.
-4. The software gap, raised after §2's crux was already being answered:
-   **"going back to AEC/BAC, they will differ per software combined
-   with LoT so to have AEC and BAC on the LoT page but not indicating
-   which software is problematic."** Framed explicitly as a scientific
-   defect, not a display defect.
-5. The display ruling that follows from (4), verbatim: **"should be
-   more like also expandable boxes for AEC and BAC but their names are
-   the software or something."** Each correction scheme becomes its own
-   collapsible box on the level-of-theory page, and software — not the
-   depositor's free-text `name` — is what titles the box.
+3. Optionality: **"i think a lit source is not required but strongly
+   advised."** Not `NOT NULL`. The plan must work when it is absent, make
+   the absence visible, and make citing one the obvious default action.
+4. The software gap: **"going back to AEC/BAC, they will differ per
+   software combined with LoT so to have AEC and BAC on the LoT page but
+   not indicating which software is problematic."** Framed as a
+   scientific defect, not a display defect.
+5. The display ruling that follows from (4): **"should be more like also
+   expandable boxes for AEC and BAC but their names are the software or
+   something."**
+6. Reopening it, 2026-09-12: **"I still think the methods is a problem
+   with how BAC and AEC are displayed since they are LoT and Software +
+   Software Version defined."** The word v1 missed is **Version**.
+7. And: **"and what's the correction scheme provenance?"** — asked of the
+   two rows the archive actually holds.
 
-## 1. Measured facts
+### 0.2 The rulings that closed this plan's open questions, 2026-09-13
 
-All against the live archive (`https://tckdb.homecalvin.com`, anonymous,
-2026-09-09) and the code at the base commit above.
+8. **Sovereignty, and it governs the rest**: *"those are those specific
+   softwares, again TCKDB is not beholden to them if you get what I
+   mean… Yes most likely they came from Gaussian in my Pi but it's not a
+   rule TCKDB as a repo should follow. Only for the Pi DB atm."*
+9. **The inferred program attribution is withheld**: *"I think NULL as we
+   cannot assume Gaussian."*
+10. **The tool releases behind the live rows are unknown, and that is
+    final**: *"I dont know which ARC or ARKANE version was run to be
+    honest."*
+11. **Literature stays the discriminator**: *"I think literature should be
+    discriminator… i cannot think why not right now."*
+12. **`frequency_scale_factor` gets the same treatment** — a sibling
+    revision of the same shape.
+13. **`units` joins the identity index.**
+14. **Provenance is corrected in place**, on the existing row.
+15. **The trust rubric is extended**, with a reservation that becomes its
+    own open question: *"I think yes for trust rubric but i dont like we
+    do v1 when there is no released product version right."*
 
-### 1.1 What is deposited today
+## 1. What v1 shipped, and what it left wrong
 
-| Table | Rows | With `source_literature_id` |
+| v1 slice | Landed as | State today |
 |---|---|---|
-| `literature` | **0** | n/a — nothing exists to cite |
-| `energy_correction_scheme` | 2 | 0 |
-| `frequency_scale_factor` | 12 | 0 |
+| A — schema + migration + resolver | #439, revision `b6d80e36dcec` | deployed; added `software_id`, `workflow_tool_release_id`, widened `uq_energy_correction_scheme_identity` |
+| B — upload warnings | #439 (`provenance_warnings.py:656-736`) | deployed |
+| C — admin attach-provenance route | #439 (`admin.py:790-864`) | deployed |
+| D — frontend software-titled boxes | #440 (`LevelOfTheoryPage.tsx:257-323`, `CorrectionSchemePage.tsx`) | deployed |
+| v1 §3 "no backfill, on either axis" | **reversed before merge** | `b6d80e36dcec:211-310` derives `software_id` from calculation data |
 
-The two `energy_correction_scheme` rows, re-verified live via
-`GET /energy-correction-schemes/search?has_corrections=true`:
+Three things to carry forward:
 
-| `energy_correction_scheme_ref` | `kind` | `name` | `version` | `level_of_theory_ref` | `has_literature_source` |
-|---|---|---|---|---|---|
-| `ecs_q5potmkzrmm6ynh2behv5kbfdu` | `atom_energy` | `atom_energy` | `null` | `lot_rrmbqrod3suvzkez2ta76hj76u` (b3lyp/def2tzvp) | `false` |
-| `ecs_5dzse4an2emubgyxge2dpj4ae4` | `bac_petersson` | `bac_petersson` | `null` | `lot_rrmbqrod3suvzkez2ta76hj76u` (b3lyp/def2tzvp) | `false` |
+- **v1 chose `software_id` over `software_release_id` deliberately** (v1
+  §3, "Deliberately not `software_release_id`"), on the ground that
+  `FrequencyScaleFactor` uses the coarse grain and a new sibling should
+  not introduce a third precision level. Ruling 6 answers that: version is
+  part of the identity. Symmetry with a sibling was the wrong
+  tie-breaker — it made the new column consistent rather than adequate,
+  and ruling 12 now fixes the sibling instead (§6).
+- **v1's "no backfill" decision was reversed at build time**, and the
+  reversal is live data. Ruling 9 reverses it back. §4 removes the
+  derived value rather than converting it.
+- **v1's §4.3 admin route is the write path this plan needs** (ruling
+  14). It exists; §5 changes its grain, not its existence.
 
-`name` is identical to `kind` on both rows and `version` is blank on
-both — today's only two rows are distinguishable *only* by `kind`, and
-(§1.6) neither carries a software identity either, so nothing on either
-row would survive as a distinguishing label once `name` is correctly
-taken off public pages.
+## 2. Measured facts — TCKDB's own schema and code
 
-The atom-energy scheme's 8 element values are bit-for-bit identical to
-RMG's `input/quantum_corrections/data.py` `atom_energies` table for
-`b3lyp2023/def2tzvp` (re-confirmed: H = `-0.5010929786112002` in both).
-This is a finding from reading two independent sources side by side, not
-a citation either source recorded — see §7 for why that distinction
-matters to what this plan is allowed to write into the database, and why
-it now applies to a software claim as well as a literature one.
+These are facts about this repository and its contracts. They are design
+inputs. Facts about particular producers and about this deployment's data
+are in §9 and are not.
 
-`frequency_scale_factor`, re-verified live via
-`GET /frequency-scale-factors/search?used_by_statmech=true`: 12 rows, 0
-with `has_literature_source: true`. 10 of the 12 share `(level_of_theory
-= b3lyp/def2tzvp, software = Gaussian, scale_kind = fundamental, value =
-0.999)` and are distinguished *only* by `workflow_tool_release_id` — 10
-distinct `wfr_…` refs, all reporting the same `version: "1.1.0"` string
-(so "differ only by ARC release" means ten distinct `workflow_tool_release`
-rows, not ten distinct version strings). All ten carry the same free-text
-`note`: `"http://cccbdb.nist.gov/vibscalejust.asp"` — an informal citation
-already present as prose, on every one of the rows that lacks a
-structured one. The other 2 rows (wb97xd/def2tzvp → 0.986, CCSD(T)-F12 →
-0.998) have no `note` and no workflow-tool-release provenance at all.
-All 12 rows *do* carry a `software` (bare `Software`, not a release —
-§1.6 below).
+Code at `c2633156`; live schema read read-only from the Pi 2026-09-12/13.
 
-### 1.2 The DB constraint, and a documented inconsistency that already argues for widening it
+### 2.1 The identity index has a program axis, no version axis, and no units axis
 
-`energy_correction_scheme.__table_args__`
-(`backend/app/db/models/energy_correction.py:97-106`):
+`backend/app/db/models/energy_correction.py:116-128`:
 
 ```python
 Index(
-    "uq_energy_correction_scheme_kind_name_lot_version",
+    "uq_energy_correction_scheme_identity",
     "kind", "name", "level_of_theory_id", "version",
+    "source_literature_id", "software_id", "workflow_tool_release_id",
     unique=True, postgresql_nulls_not_distinct=True,
 )
 ```
 
-Created in the baseline migration
-(`backend/alembic/versions/d861dfd60891_create_intial_schema.py:307`,
-dropped at `:1837`) via `Base.metadata.create_all()` — this table holds
-real, live data on the deployed Pi, so it is an **already-deployed
-table** under the migration rules: any index change is a **new
-revision**, never an edit to `d861dfd60891`.
+`software_id` → `software.id` (`energy_correction.py:74-78`) — the
+program row. There is no `software_release_id` column (confirmed against
+the live table: 13 columns, no release). `units` is a column
+(`energy_correction.py:93-96`, `EnergyUnit` = `hartree` | `kj_mol` |
+`kcal_mol`, `common.py:1155-1158`) and is not in the index.
 
-`FrequencyScaleFactor`'s own unique index is already wider —
-`(level_of_theory_id, software_id, scale_kind, value,
-source_literature_id, workflow_tool_release_id)`, also
-`nulls_not_distinct` (`energy_correction.py:259-270`) — and its class
-docstring states the design intent plainly: *"two rows can legitimately
-have the same (LOT, software, scale_kind) with different values if they
-come from different sources."* `energy_correction_scheme` was never
-given the equivalent fields, on either axis.
+`FrequencyScaleFactor` has the identical program-grain limitation —
+`software_id`, no release (`energy_correction.py:247-252`, index at
+`:286-292`).
 
-**The public-ref layer already assumes the wider literature identity and
-says so.** `app/services/public_refs.py:382-404`,
-`_canonical_energy_correction_scheme`, verbatim:
+### 2.2 Every other provenance-bearing table in this schema keys on a release
 
-> "The database uniqueness constraint and `resolve_or_create_scheme`
-> both dedup on `(kind, name, level_of_theory_id, version)`;
-> `source_literature_id` and `units` are not part of that key but a
-> different value of either still means a scientifically distinct
-> scheme (different citation, different unit convention). Two rows that
-> the resolver treats as distinct must therefore get distinct refs —
-> otherwise the `ix_energy_correction_scheme_public_ref` unique index
-> trips on insert."
+`software_release` (`software_id`, `version`, `revision`, `build`,
+`release_date`, `public_ref`) is referenced by `calculation`, `thermo`,
+`statmech`, `kinetics`, `transport`, `network`, `network_solve`,
+`molecular_property_observation` and `execution_environment_manifest`.
+`energy_correction_scheme` and `frequency_scale_factor` are the **only**
+two tables in the schema that reference `software` directly instead.
+This is measured from the live `\d software_release` / `\d software`
+referencing lists, not inferred.
 
-This docstring is describing a state that **cannot currently occur**:
-the resolver (§1.3) never creates a second row with the same
-`(kind, name, lot, version)` and a different `source_literature_id` — it
-finds and reuses the first one, literature included. The public-ref
-hash was built anticipating a widened identity that the unique index and
-the resolver were never updated to match. That gap — not a hypothetical
-— is direct, code-level evidence for the literature half of this plan's
-index change (§3). No equivalent docstring exists yet for software,
-because no software column exists yet to write one about — §1.6 is the
-new-in-this-revision half of the same argument.
+### 2.3 The read layer fabricates a release because the tables cannot supply one
 
-### 1.3 What the resolver actually does today
+`energy_correction_schemes.py:429-450` returns a `SoftwareReleaseSummary`
+with `software_release_id=0, software_release_ref=""`. Served live on a
+real record:
 
-`resolve_or_create_scheme`
-(`backend/app/services/energy_correction_resolution.py:123-181`):
-
-1. Looks up an existing scheme by `(kind, name, level_of_theory_id,
-   version)` — **`source_literature_id` is not part of the lookup**, and
-   there is currently no software field to look up at all.
-2. If found, **reuses the row.** `ref.source_literature` is never even
-   read on this branch — a depositor who supplies a citation for a
-   scheme whose identity already exists gets it **silently discarded**,
-   no error, no warning, nothing persisted. This is a real, present-day
-   gap: today, there is no way to add a citation to an existing scheme
-   by uploading one, even when a depositor tries. The same silent-drop
-   shape will apply to a supplied software identity the moment one is
-   added (§3), unless the lookup is widened to match, which §3 makes a
-   companion requirement, not an afterthought.
-3. If not found, resolves `ref.source_literature` via
-   `resolve_or_create_literature` and creates a new row.
-4. Either way, calls `_merge_scheme_params`
-   (`energy_correction_resolution.py:227-300`), which is the part of
-   this system that already answers half of the owner's original
-   question: for each parameter key, a new value within
-   `1e-10` absolute tolerance of the existing one is a silent no-op; a
-   **conflicting** value raises `ValueError` — surfaced as a 422, per
-   the module's own comment, "rather than silently overwriting or
-   ignoring the new value."
-
-So: **"same kind+name+lot+version, different numbers" is already
-rejected today** — not by the unique index (which never even sees a
-duplicate insert attempt, because step 1 finds the row first), but by
-this application-level value-conflict check. `test_repeated_upload_
-reuses_scheme_row` and `test_note_does_not_affect_scheme_identity`
-(`backend/tests/workflows/test_computed_species_upload.py:2729-2851`)
-pin exactly this dedup key and confirm `note` (and, by the same lookup
-logic, `source_literature_id`) is first-write-wins, never merged.
-
-**"Different `name` or `version`, both uncited" is not rejected at
-all** — two rows coexist with nothing but free-text `name`/`version` to
-tell them apart, and `name` is exactly the field the owner has ruled off
-public pages. Per §0.4, that is only half the story: a fraction of what
-today looks like an unresolvable collision is not a collision at all —
-it is two different programs' outputs for the same method and basis,
-which the schema currently has no way to say. §2 answers both.
-
-### 1.4 Literature: works when embedded in a new row, has no update path, and has no standalone deposit route anywhere
-
-`EnergyCorrectionSchemeRef.source_literature: LiteratureUploadRequest |
-None` already exists
-(`schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py:44`)
-and is wired to `resolve_or_create_literature`
-(`energy_correction_resolution.py:36,165-167`) — this mechanism is not
-broken, and it is tested for the sibling FSF path
-(`backend/tests/workflows/test_statmech_upload.py:598-661`, asserting
-`fsf.source_literature_id is not None` and the resolved title). It has
-just never been exercised for a scheme, because §1.3 step 2 means it
-only fires the first time a given `(kind, name, lot, version)` is
-created — which already happened, uncited, for both live rows.
-
-There is **no standalone way to deposit literature at all** — confirmed
-by reading every literature-touching route in the app, not inferred:
-
-- `backend/app/api/routes/literature.py` (legacy, auth-gated): `GET`
-  list, `GET /{id}` — no `POST`.
-- `backend/app/api/routes/scientific/literature.py` (public read
-  surface): `GET /{ref}` detail, `GET /{ref}/records` (inverse lookup)
-  — no list/search endpoint at all, and no `POST`.
-- `backend/app/api/routes/uploads.py`: no `/uploads/literature` route.
-  `tckdb_schemas.literature`'s own module docstring says so by design:
-  *"There is no standalone `/uploads/literature` route — that is a
-  backend concern."* Literature is created only as a nested fragment,
-  resolved inline, inside whichever request embeds a
-  `LiteratureUploadRequest` (thermo, kinetics, conformer, network,
-  transport, transition-state, computed-reaction, and — since §1.4
-  above — energy-correction uploads).
-- There is also **no update route for an existing
-  `energy_correction_scheme` row.**
-  `backend/app/api/routes/energy_corrections.py` is `list`/`get` only
-  for schemes, FSFs, and applied corrections — no `PATCH`/`PUT`
-  anywhere. An `EnergyCorrectionSchemeUpdate` Pydantic schema already
-  exists at the entity layer
-  (`backend/app/schemas/entities/energy_correction.py:136-143`,
-  carrying `source_literature_id: int | None` among other fields) but is
-  **unrouted** — nothing calls it. This is a smaller gap to close than
-  "build an update path from scratch" (§4.3).
-
-**Net answer to "does the literature subsystem work":** creation works,
-narrowly, the first time a scheme identity is deposited. There is no way
-— today, on any surface — to attach a citation to a scheme that already
-exists uncited. That gates §7's answer for the two live rows.
-
-### 1.5 The read side already computes the right thing; the frontend already fetches it and never shows it
-
-`backend/app/services/scientific_read/energy_correction_schemes.py`
-already reports `has_literature_source` (evidence summary) and
-`has_literature` (available-sections) correctly, and resolves a full
-`LiteratureSummary` under `include=literature` — verified live: every
-record above correctly reports `"has_literature_source": false`,
-`"literature": null`. The methods-surface frontend's typed API client
-(`frontend/src/api/methodsApi.ts:38-39,99,105,111,139,148,163`) already
-parses this field on both the scheme and FSF response types, and
-`useCorrectionScheme`/`useLevelOfTheory`/the FSF equivalent already
-request `include=…,literature` (`methodsApi.ts:331,344`).
-
-**None of the three shipped pages render it.** Read in full:
-`frontend/src/pages/CorrectionSchemePage.tsx`,
-`frontend/src/pages/FrequencyScaleFactorPage.tsx`, and the correction-
-scheme section of `frontend/src/pages/LevelOfTheoryPage.tsx` — zero
-references to `literature` or `has_literature_source` in any of the
-three. The data is fetched and silently dropped on the client, the
-mirror image of §1.3's server-side silent drop.
-
-**`CorrectionSchemePage.tsx` also renders `scheme.name` — depositor free
-text — as its `<h1>` and its breadcrumb label**
-(`CorrectionSchemePage.tsx:56,66`). This is a live violation of the
-house rule against depositor-typed labels on public pages, independent
-of this plan's own scope, and it is exactly the field the owner's
-literature ruling and software ruling both replace as a discriminator.
-`LevelOfTheoryPage.tsx`'s own correction-scheme section already does
-better — `SCHEME_KIND_LABELS[scheme_kind] ?? scheme.name`
-(`LevelOfTheoryPage.tsx:228`) prefers a kind-derived, machine-controlled
-label and only falls back to `name` when no mapping exists — but that
-same section already loops one block per scheme
-(`LevelOfTheoryPage.tsx:225-251`, keyed on `energy_correction_scheme_
-ref`, not collapsed), so it is structurally ready for two schemes of the
-same kind. §6 replaces this section's rendering entirely per §0.5.
-
-### 1.6 The software gap: measured, not inferred
-
-Read `backend/app/db/models/energy_correction.py` in full for both
-classes side by side. `FrequencyScaleFactor` (lines 200-270):
-
-```python
-level_of_theory_id: Mapped[int] = mapped_column(..., nullable=False)
-# Software dimension: same LOT in Gaussian vs QChem can yield different factors
-software_id: Mapped[Optional[int]] = mapped_column(
-    BigInteger, ForeignKey("software.id", ...), nullable=True,
-)
-...
-workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(...)
+```json
+"software_release": { "software_release_ref": "", "software": "Gaussian", "version": null }
 ```
 
-Its unique index: `(level_of_theory_id, software_id, scale_kind, value,
-source_literature_id, workflow_tool_release_id)`, `nulls_not_distinct`.
+Two more sites do the same — `frequency_scale_factors.py:313-317` and
+`statmech.py:720-721` (`# placeholder; FSF doesn't reference a release`).
+`SoftwareReleaseSummary` declares both fields non-optional
+(`schemas/reads/scientific_common.py:312-318`), so the read contract
+wants a release and three call sites manufacture one. The frontend
+consumes the object and deliberately refuses to link the ref
+(`methodsApi.ts:112-122`, `LevelOfTheoryPage.tsx:222-225`) because it is
+measured empty. This is the read layer reporting a missing column as an
+empty value rather than as an absence.
 
-`EnergyCorrectionScheme` (lines 44-106): `id`, `kind`, `name`,
-`level_of_theory_id` (nullable), `source_literature_id` (nullable),
-`version`, `units`, `note`. **No `software_id`, no `software_release_id`,
-no `workflow_tool_release_id` — no software-shaped column of any kind.**
-Confirmed by grep, not just by reading the class: `grep -n software
-backend/app/db/models/energy_correction.py` matches only inside the FSF
-class. The read side matches — `grep -n software
-backend/app/schemas/reads/scientific_energy_correction_scheme.py
-backend/app/services/scientific_read/energy_correction_schemes.py`
-returns nothing at all. Every layer — model, read schema, read service,
-public-ref hash, frontend type — is silent on software for
-`energy_correction_scheme`, and only for that table; every other
-provenance-bearing table this plan touches (`FrequencyScaleFactor`,
-`Calculation`) already carries one.
+### 2.4 The coarse grain already blocks a filter this API advertises
 
-**The upload-schema precedent for exactly this fix already exists, on
-the FSF side.** `FreqScaleFactorRef`
-(`schemas/python/tckdb-schemas/tckdb_schemas/fragments/refs.py:378-431`):
+`GET /scientific/energy-correction-schemes/search?software_version=16`
+returns `422 unsupported_filter`, live. The filter is declared on the
+route (`routes/scientific/corrections.py:102`) and then explicitly
+deferred (`energy_correction_schemes_search.py:67-75`: *"`software_version`
+stays deferred because ECS only carries the bare software identity (no
+release)"*). `software=Gaussian` works.
 
-```python
-class FreqScaleFactorRef(SchemaBase):
-    level_of_theory: LevelOfTheoryRef
-    scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental
-    value: float = Field(gt=0)
-    software: SoftwareRef | None = None
-    source_literature: "LiteratureUploadRequest | None" = None
-    workflow_tool_release: WorkflowToolReleaseRef | None = None
-    note: str | None = None
-```
+### 2.5 The resolver is value-comparing and unit-blind, and its remedy is unreachable
 
-with its own docstring already stating the identity tuple
-`(level_of_theory, software, scale_kind, value, source_literature,
-workflow_tool_release)` and the exact resolution policy §3 needs to
-copy: *"If a workflow tool's curated data file is the proximate source,
-pass `workflow_tool_release` and put any descriptive file/source
-reference in `note`."* `EnergyCorrectionSchemeRef` has no equivalent
-`software` or `workflow_tool_release` field today — this is the upload-
-side twin of the model-side gap just above, and the fix is to add the
-same two fields in the same shape, not to invent a new pattern.
-
-**Scope check: which scheme kinds does this even apply to.** The
-shipped frontend already drew this line for a different reason and drew
-it correctly. `LevelOfTheoryPage.tsx:210`:
-
-```ts
-// atom_hf/atom_thermal/soc are element-only, never LOT-scoped
-const LOT_SCOPED_SCHEME_KINDS = ["atom_energy", "bac_petersson", "bac_melius"] as const
-```
-
-`atom_hf` (atomic enthalpy of formation), `atom_thermal` (thermal
-contribution), and `soc` (spin-orbit coupling) are, per DR-0003 and the
-RMG reference file (`methods-surface.md` §2.5.4), physical/reference
-constants — CODATA- or NIST-style values, not outputs of a specific
-program run. `atom_energy`, `bac_petersson`, and `bac_melius` are the
-three kinds whose numeric values are literally *computed by* a specific
-program at a specific level of theory — the owner's "AEC/BAC... differ
-per software" is about exactly these three, and only these three. The
-software column, its warning treatment (§4), and its display treatment
-(§6) all apply to this same three-kind set the frontend already named,
-not to all eight `EnergyCorrectionSchemeKind` values. A software-less
-`atom_hf`/`atom_thermal`/`soc` scheme is not a gap at all — it is the
-correct, honest shape for a scheme kind the software axis does not
-apply to (`NOT_APPLICABLE`, in `provenance_warnings.py`'s own vocabulary
-— see §4).
-
-**Origin of the two live rows — checked, not assumed.** The owner asked
-whether software is recoverable from the ingestion path. Searched every
-`.py` file under `backend/scripts/` (both `arc_ingestion/` and
-`pdep_ingestion/`) for `atom_energy`, `bac_petersson`,
-`EnergyCorrectionSchemeRef`, and the note text `"Per-species AEC
-computed by Arkane"` that the live rows actually carry: **zero matches
-outside models, schemas, and tests.** `arc_ingestion/extractor.py` and
-`builder.py` handle exactly one energy-correction-adjacent thing today —
-detecting and attaching `energy_correction_note` when Arkane's log
-reports **missing** atom energy corrections
-(`extractor.py:276-294`) — they contain no code path that builds an
-`EnergyCorrectionSchemeRef` payload with parameters, software, or
-literature at all. **The two live scheme rows were not created by any
-ingestion script currently in this repository.** They were deposited by
-some other, uncommitted process. Software identity is not recoverable
-from the codebase. What is available, same evidentiary weight as the
-literature correspondence in §1.1 and treated the same way in §7:
-
-- RMG's own dict key for the matching table is a `repr()` string that
-  names the software directly — `"LevelOfTheory(method='b3lyp2023',
-  basis='def2tzvp',software='gaussian')"` (`methods-surface.md` §2.3,
-  §2.7). The bit-for-bit numeric match is to a key that says
-  `software='gaussian'`.
-- Every calculation this archive has ever recorded at
-  `lot_rrmbqrod3suvzkez2ta76hj76u` (b3lyp/def2tzvp) — all 416 of them —
-  runs Gaussian 16 and nothing else (`methods-surface.md` §2.1's
-  cross-checked table: `× Molpro = 0`, `× ORCA = 0` at this LOT). If
-  these two schemes were in fact produced by an Arkane run over this
-  archive's own species, the run that produced them touched only
-  Gaussian.
-
-Both facts point the same direction and neither is a recorded fact on
-the scheme row itself. §7 treats this exactly like the literature
-correspondence: real, worth stating as context, not a license to write
-`software_id` onto a deployed row via migration.
-
-## 2. The crux: what distinguishes two schemes of the same kind and level of theory
-
-**Decision: three layers, in order of how much they can actually
-resolve. Software first — because for the three kinds where it applies,
-it is frequently the entire explanation and not a "collision" at all.
-Literature second, for what software leaves unresolved. Stated absence
-last, and nothing invented beyond that — no curation "selected"/
-"preferred" flag is added to `energy_correction_scheme`.**
-
-### 2.1 Software resolves most apparent collisions, because it usually isn't one
-
-The owner's own framing (§0.4) is the correct first cut: "two schemes on
-one level of theory may not be a disagreement at all — they may be one
-for Gaussian and one for ORCA." Once `software_id` exists (§3), the
-identity `(kind, name, level_of_theory_id, version, source_literature_id,
-software_id, workflow_tool_release_id)` means two `atom_energy` schemes
-at the same LOT with different `software_id` are not a collision at
-all — they are two different, individually correct, coexisting facts,
-exactly the way `FrequencyScaleFactor` already treats "same LOT,
-different software" today. This is new information the schema did not
-have before this plan, and it is why the crux got smaller, not just
-better-labeled, once §0.4 landed.
-
-### 2.2 What's left once software agrees (or is absent on both sides) is the literature question already answered
-
-For same-kind, same-LOT, same-software (or both-software-unknown)
-schemes, software cannot discriminate and the question reduces to the
-one this plan opened with. **A curation/selection overlay
-(conformer-style) is rejected**, for the same reason regardless of which
-axis raised it: `energy_correction_scheme` is DR-0003's *reference
-layer* — it dedupes on scientific identity the way `species`/
-`level_of_theory` do, not the way a per-entry result accumulates. The
-house rule this repo already enforces
-(`feedback_identity_vs_result_tables`: "Identity tables dedupe, result
-tables are append-only; no preferred/selected semantics in DB") applies
-directly: a "which scheme is the real one" flag on an identity/reference
-table would invent exactly the semantics that rule forbids.
-`applied_energy_correction` already carries an explicit `scheme_id` FK
-per row (DR-0003) — no consumer of a correction ever needs "the" scheme
-for a LOT, only the specific one a specific deposit cited. The ambiguity
-that's left is a *browsing* problem (a human reading the LOT page),
-never a *correctness* problem.
-
-**Refusing the ambiguity at upload** is rejected as a hard block, for
-the reason §0.3 makes load-bearing for literature specifically: making a
-second uncited scheme upload fail outright is a de facto `NOT NULL` on
-`source_literature_id` in the one case it would bind hardest,
-contradicting "not required." Software gets a different answer on this
-point — see §2.3.
-
-**The public ref is the honest discriminator, and it already is one.**
-Every `energy_correction_scheme` row already has a stable, content-
-derived `ecs_…` ref. It is opaque, which is a real cost — but "opaque
-and honest" is strictly better than "readable and fabricated," and this
-repo's rule against asserting from absence rules out manufacturing a
-friendlier label from nothing. §6 pairs it with the scheme's real
-`created_at` timestamp and, once one exists, its real citation — never a
-synthesized label.
-
-### 2.3 Software is not "copy the literature answer" — it is more load-bearing, and here is the concrete reason why
-
-The owner asked for this explicitly, not a restatement of §0.3. Three
-concrete asymmetries, none of them hypothetical:
-
-1. **Unknowability is a legitimate, permanent state for literature; it
-   is not for software, going forward.** A computed correction scheme
-   frequently has no paper to cite — that is exactly why
-   `provenance_warnings.py`'s existing branching logic treats computed
-   origins differently from literature-sourced ones (§4). But the
-   program that computed an AEC/BAC scheme's numbers is *always* known
-   to whatever pipeline produced them — Arkane/ARC always knows what it
-   ran. §1.6 already found the concrete case: this archive's own
-   ingestion tooling (`arc_ingestion/`) doesn't currently forward that
-   information into the scheme payload at all, which is a real,
-   nameable gap in the *pipeline*, not an inherent gap in the *world*
-   the way an uncited historical paper can be. §5 names closing it as
-   its own slice.
-2. **It is what the display now keys on.** §0.5 makes the software
-   identity the literal title of the box a reader sees — not a footnote,
-   not a disclosure one click deep. An absent citation degrades a box's
-   completeness; an absent software identity degrades the box's own
-   name (§6 specifies exactly how that degradation is written so it
-   still reads as an absence, never as an identity).
-3. **It is symmetric with `FrequencyScaleFactor` today, and asymmetric
-   with it if left out.** `FrequencyScaleFactor` already treats software
-   as identity-bearing (§1.6). Leaving `energy_correction_scheme`
-   without it is not a neutral omission — it is the one correction
-   table in this archive that cannot say the thing its sibling table
-   already says routinely.
-
-None of this changes the DB-level answer from §0.3's playbook: nullable,
-non-blocking, matching the fact that the two live rows and any future
-backfilled/legacy deposit genuinely may not have it. What changes is the
-warning's framing (§4) and, concretely, the display consequence (§6) —
-software gets the *stronger of two treatments this repo already has for
-optional-but-important data*, not a new third mechanism.
-
-### 2.4 Two schemes, same kind, same LOT, same software, both uncited
-
-Named because it is the one case left un-discriminated by every axis
-this plan adds. §2.2's answer stands: state the absence — this specific
-sentence, on both entries: "This scheme and `ecs_<other ref>` share a
-kind, level of theory, and recorded software, and neither carries a
-citation, so the archive cannot say whether they are the same correction
-deposited twice or two genuinely different sets of numbers." One honest
-sentence, not a resolved answer, because the archive does not have one.
-
-## 3. Schema and migration: one widened identity, both axes together
-
-**New columns on `energy_correction_scheme`**, mirroring
-`FrequencyScaleFactor` exactly:
+`resolve_or_create_scheme` (`energy_correction_resolution.py:128-228`)
+looks a scheme up by the full index tuple, then calls
+`_merge_scheme_params` (`:264`), which for every parameter key already
+present calls `_assert_param_value_compatible`
+(`energy_correction_resolution.py:239-262`):
 
 ```python
-software_id: Mapped[Optional[int]] = mapped_column(
-    BigInteger,
-    ForeignKey("software.id", deferrable=True, initially="IMMEDIATE"),
-    nullable=True,
-)
-workflow_tool_release_id: Mapped[Optional[int]] = mapped_column(
-    BigInteger,
-    ForeignKey(
-        "workflow_tool_release.id",
-        deferrable=True, initially="IMMEDIATE",
-        name="fk_energy_correction_scheme_workflow_tool_release_id",
-    ),
-    nullable=True,
+if abs(existing_value - supplied_value) <= _PARAM_VALUE_ABS_TOL:   # 1e-10
+    return
+raise ValueError(
+    f"Conflicting {table_name} value for key='{key}': "
+    f"existing={existing_value!r}, supplied={supplied_value!r}. "
+    "Use a distinct energy_correction_scheme identity if these parameters "
+    "represent a different correction library."
 )
 ```
 
-Both nullable at the DB level — this must stay true to represent the two
-live rows honestly (§1.6, §7) and any future legacy import, and matches
-the fact that `FrequencyScaleFactor.software_id` is *also* nullable
-despite carrying the identical "differs per software" comment (§1.6): the
-codebase's own precedent for this exact scientific situation is
-nullable-plus-identity-bearing, not `NOT NULL`.
+Two consequences, both load-bearing below:
 
-**Deliberately not `software_release_id`.** `Calculation` uses
-`software_release_id` (version-precise); `FrequencyScaleFactor` uses the
-coarser `software_id` (bare `Software`, no version — the correction-
-reads spec doc already documents this as FSF's shape: "FSF only carries
-`software_id`, not a release — version is null"). This plan mirrors FSF,
-per the owner's own comparison, rather than introducing a third
-precision level. Flagged in §8 as an open question — the coarser grain
-means "Gaussian 16" and "Gaussian 09" AEC schemes would be
-indistinguishable by software alone, the same coarseness FSF already
-lives with — but changing that is a decision about FSF's own grain
-first, and picking a different grain for its new sibling would be an
-inconsistency this plan should not introduce unilaterally.
+- **It is unit-blind.** `units` is on the scheme row, never consulted
+  here. A depositor who sends the same correction expressed in another
+  energy unit resolves to the same row (units are not in the identity)
+  and is then told their numbers conflict — e.g. a per-bond value of
+  `-0.42 kcal_mol` against a stored `-0.00066932 hartree`. The message is
+  wrong (it is not a different library) *and* its remedy is unreachable:
+  the depositor cannot "use a distinct identity", because the thing that
+  differs is not part of one.
+- **It is far tighter than the physics.** `1e-10` absolute is below the
+  level at which the same nominal method/basis differs between builds of
+  one program, so any two genuinely different-build parameter sets that
+  land on one identity are rejected rather than stored.
 
-**New unique index, replacing the current one:**
+### 2.6 A write path for provenance already exists
+
+`PATCH /admin/energy-correction-schemes/{ref}/provenance`
+(`backend/app/api/routes/admin.py:790-864`), `require_admin`-gated,
+accepting `source_literature` / `software` / `workflow_tool_release`,
+resolving each through the same services the upload path uses, with
+catalogue codes (`code_catalogue.py:1025-1040`) and ten tests
+(`tests/api/test_admin_energy_correction_scheme_provenance.py`). Each
+field is fill-only: a non-null column returns `409 …_already_set`
+(`admin.py:768-787`, `:829-847`). It takes `SoftwareRef` — name only
+(`fragments/refs.py:362-375`) — so it cannot express a release.
+
+### 2.7 The archive already knows how to say "TCKDB worked this out, nobody deposited it"
+
+Two precedents, both with the reasoning written into the model:
+
+- `AtomMapSource` (`common.py:256-268`): `declared` | `inferred`, and
+  *"The column carrying this token has no default. Defaulting to
+  `declared` would manufacture human attribution for a row nobody wrote
+  by hand."*
+- `CalculationInputGeometrySource` (`common.py:568-589`): `deposited` |
+  `extracted_from_artifact`, *"This value is what lets a reader tell 'the
+  depositor said so' from 'TCKDB worked it out afterwards' without
+  re-deriving it themselves."*
+
+Ruling 9 means this plan writes no inferred value at all, so it needs no
+such column (§3.5) — but the rule stands for anything that ever does.
+
+### 2.8 Literature has no standalone deposit route, by design
+
+`backend/app/api/routes/literature.py` (legacy, auth-gated) is `GET` list
+and `GET /{id}`; `routes/scientific/literature.py` is `GET /{ref}` and
+`GET /{ref}/records`; `routes/uploads.py` has no `/uploads/literature`.
+`tckdb_schemas.literature`'s module docstring says so deliberately:
+*"There is no standalone `/uploads/literature` route — that is a backend
+concern."* Literature is created only as a nested `LiteratureUploadRequest`
+inside a request that embeds one — which the admin route of §2.6 does.
+`LiteratureKind` includes `dataset` and `webpage` (`common.py:839-846`),
+and `docs/literature_policy.md:46-47` allows manual `kind` + `title`
+submission with no DOI or ISBN.
+
+## 3. The crux: key on a release, put units in the identity, record nothing TCKDB was not told
+
+**Decision, in four parts:**
+
+1. Replace `energy_correction_scheme.software_id` with
+   `software_release_id`, nullable.
+2. Add `units` to the unique identity index.
+3. Write no inferred provenance: the revision carries **no backfill**,
+   and dropping `software_id` removes the one inferred value now live.
+4. Consequently, add **no** `software_attribution` column.
+
+### 3.1 Why a correction can be release-specific — argued from the chemistry, not from any producer
+
+An atom-energy set is a table of absolute single-atom electronic
+energies at a given method and basis. Those values are the output of a
+program's own numerics: its default integration grid, its SCF
+convergence thresholds, its internal definition of a named basis set,
+and its choice among the variants a functional name admits. All of these
+are build-level decisions, and programs change them between releases.
+The same is true of a fitted bond-additivity set, which is a regression
+against reference energies computed the same way. So two parameter sets
+carrying the same method, basis and program name can be two different
+libraries, and the thing that separates them is the build.
+
+A published correction table may instead be program-independent in
+practice — quoted and reused across programs, with the paper carrying the
+identity. That is not a second kind of column; it is a depositor who
+records a citation and no release.
+
+The three kinds this applies to are already named identically in three
+places in the codebase — `provenance_warnings.py:92`
+(`_SOFTWARE_SCOPED_SCHEME_KINDS`), `b6d80e36dcec:145-149`,
+`LevelOfTheoryPage.tsx:255` — as `atom_energy`, `bac_petersson`,
+`bac_melius`. `atom_hf` / `atom_thermal` / `soc` are physical reference
+constants; no program computed them, so no program or release applies.
+
+Two supporting arguments from TCKDB's own contracts, neither of which
+depends on any external toolchain:
+
+- **Internal consistency.** Every other provenance-bearing table keys on
+  a release (§2.2). These two tables are the exceptions, and the
+  exception is what forces three read sites to fabricate a release object
+  (§2.3) and one advertised filter to 422 (§2.4).
+- **The resolver's own tolerance.** At `1e-10` (§2.5), TCKDB already
+  treats build-level numerical differences as a conflict. Without a
+  release axis the only way a depositor can record two builds' sets is to
+  differentiate them by hand in `name` or `version` — the depositor
+  free-text fields this archive has ruled off public pages (#440,
+  `correctionSchemeFormat.ts`). The schema currently forces the practice
+  the display rules forbid.
+
+### 3.2 One column, and a null that means one thing
+
+`software_release` already stores releases with no version: the unique
+key is `(software_id, version, revision, build)` with
+`NULLS NOT DISTINCT`, and `resolve_software_release`
+(`backend/app/services/software_resolution.py:49-103`) resolves
+`{name: "X"}` with no version to exactly one such row, forever. So
+"program known, build not stated" is a first-class value of
+`software_release_id`, not a sentinel — distinct from a versioned release
+and distinct from `NULL`.
+
+| `software_release_id` | Meaning | For which kinds |
+|---|---|---|
+| a release with a version | that build produced these parameters | the three software-scoped kinds |
+| a release with `version IS NULL` | that program produced them; the build is not stated | the three software-scoped kinds |
+| `NULL` | no program attribution is recorded | the three software-scoped kinds |
+| `NULL` | not applicable — this kind has no program | `atom_hf`, `atom_thermal`, `soc` |
+
+The last two rows are the "one null, two meanings" hazard, and the model
+already resolves it **without another column**: `kind` is `NOT NULL`, so
+applicability is a total function of a column that is always present.
+Every layer that needs the distinction already computes it from `kind`
+alone — `provenance_warnings.py:698-702`, `b6d80e36dcec:145-149`,
+`LevelOfTheoryPage.tsx:255`. Nothing reads the null and guesses.
+
+**Rejected: a kind-conditional CHECK** (`software_release_id IS NULL` for
+the three constant kinds). It forbids a depositor from recording a
+constants table taken from one program's own documentation — a real thing
+to want to record — and it makes a null illegible to anyone who does not
+already know the rule.
+
+**Rejected: keep `software_id` and add `software_release_id` beside it.**
+Two columns can disagree, which Postgres cannot prevent without a trigger
+or a composite FK onto a new unique index on `software_release (id,
+software_id)` — real machinery to defend an invariant that one column
+makes unfalsifiable. It also doubles the null vocabulary inside a
+`NULLS NOT DISTINCT` unique index. The program is one join away
+(`software_release.software_id`), which is how every other table already
+gets it (§2.2).
+
+### 3.3 `units` belongs in the identity (ruling 13)
+
+The reasoning is in the resolver, not in taste. §2.5: a deposit of the
+same correction in a different energy unit resolves onto the existing row
+and dies with an error that misdescribes the situation and names a remedy
+the schema does not offer. With `units` in the identity, that deposit is
+what it actually is — a second row, same library, different unit
+convention — and each depositor's own digits are preserved exactly as
+sent.
+
+**Rejected: convert on ingest to a canonical unit.** It would destroy the
+source precision a depositor sent (these tables are routinely quoted to
+full double precision), and it would make TCKDB re-derive a number a
+depositor stated, which is the opposite of recording what it was told.
+
+`public_refs.py`'s `_canonical_energy_correction_scheme` docstring
+already calls `units` identity-relevant ("a different unit convention…
+means a scientifically distinct scheme"). This makes that true rather
+than aspirational, and closes the gap between the public-ref hash and the
+constraint.
+
+**Adding a column to a unique index can only split rows, never merge
+them**, so this half of the change is safe for existing data by
+construction. The replacement half (`software_id` → `software_release_id`)
+is the direction that can merge, and §4 handles it explicitly.
+
+### 3.4 Nothing is inferred (rulings 9 and 10)
+
+TCKDB records what a depositor states. Where no one stated a program, the
+column is `NULL` and the page says so. Where nobody knows which tool
+release produced a row, that is the final answer until someone attests
+otherwise — not a placeholder, not a TODO, not a most-likely value
+carried with a caveat.
+
+This has a concrete consequence for the live data and it is deliberate:
+the inferred `software_id` currently on both live rows is **removed** by
+this revision, because dropping the column drops the claim. See §9.3 for
+what that looks like on the deployed pages.
+
+### 3.5 Therefore no `software_attribution` column
+
+v1's revision of this plan proposed a `deposited` |
+`derived_from_archive` label in the shape of §2.7's two precedents. It
+was justified entirely by the need to mark an inferred value. With ruling
+9, no inferred value is ever written, so every row would carry the same
+single reachable value, and a column with one reachable value states
+nothing. It is also no longer needed to unblock the admin route: with the
+inferred value gone, both live rows are `NULL` on program attribution, so
+the existing fill-only guard (§2.6) has nothing to refuse.
+
+**Dropped — and the rule it encoded is recorded here instead:** if any
+future path (a backfill, an extractor, an LLM precheck) ever writes a
+program attribution TCKDB inferred rather than received, it must carry a
+source label at that time, and `AtomMapSource` /
+`CalculationInputGeometrySource` are the template to copy. That is a rule
+for whoever proposes such a path, not a column to carry now against a
+path nobody is proposing.
+
+### 3.6 What stays out of the identity
+
+Nothing further is added. The index becomes `(kind, name,
+level_of_theory_id, version, units, source_literature_id,
+software_release_id, workflow_tool_release_id)`, still
+`NULLS NOT DISTINCT`. Two schemes identical on all eight remain one row —
+the residual ambiguity v1 identified (same kind, same level of theory,
+neither cited, neither attributed) is still stated rather than
+manufactured into two indistinguishable rows, and the warning that states
+it (`provenance_warnings.py:704-734`) is unchanged.
+
+## 4. Migration shape — one revision, no data step
+
+`energy_correction_scheme` is an already-deployed table (real rows, and
+dependent `applied_energy_correction` rows), so: **a new revision**,
+`down_revision` = the head resolved at implementation time (deployed head
+measured 2026-09-13 is `b6d80e36dcec`), both `upgrade()` and
+`downgrade()` implemented, never an edit to `d861dfd60891` or to
+`b6d80e36dcec`.
+
+**`upgrade()`, in order:**
+
+1. **Pre-flight collision check** (see below) — raise a legible error
+   rather than let a later `CREATE UNIQUE INDEX` fail with a raw unique
+   violation.
+2. `op.add_column` `software_release_id` — `BigInteger`, nullable, FK
+   `software_release.id`, `deferrable=True, initially="IMMEDIATE"`, with
+   an **explicit constraint name**: the convention-derived name for this
+   table/column pair exceeds PostgreSQL's 63-byte identifier limit, the
+   same reason `b6d80e36dcec:173` names the workflow-tool FK by hand.
+3. `op.drop_index("uq_energy_correction_scheme_identity", …,
+   postgresql_nulls_not_distinct=True)`.
+4. `op.create_index("uq_energy_correction_scheme_identity", …,
+   ["kind","name","level_of_theory_id","version","units",
+   "source_literature_id","software_release_id","workflow_tool_release_id"],
+   unique=True, postgresql_nulls_not_distinct=True)` — same name, `units`
+   added, `software_id` replaced by `software_release_id`.
+5. `op.drop_column("energy_correction_scheme", "software_id")`.
+
+**There is no step 6.** No backfill, no data migration, no derivation
+(ruling 9). The revision only makes it *possible* to record a release; it
+records none. This is the whole of the difference from v1's revision, and
+it is why this one is easier to review: the only data it touches is the
+data it deletes by dropping a column.
+
+**What dropping `software_id` deletes, stated plainly.** Any value that
+column holds — including the values `b6d80e36dcec:242-261` derived — goes
+with it. That is the intended effect of ruling 9 and not a side effect:
+the claim was never deposited, so removing the column is how TCKDB stops
+making it. §9.3 records what that changes on the deployed pages.
+
+**Collision analysis.** Under `NULLS NOT DISTINCT`, two rows collide when
+every indexed column is equal, nulls included.
+
+- Adding `units` can only **split** rows. A wider unique key is strictly
+  more specific; no pair that was distinct can become identical.
+- Replacing `software_id` with an all-`NULL` `software_release_id` can
+  **merge**: two rows whose only difference was their program would
+  become identical. That is the one real hazard in this revision, and
+  with no backfill it is not hypothetical — the new column is null on
+  every row at index-creation time.
+- The pre-flight check is therefore mandatory, and it is the whole of
+  step 1:
 
 ```sql
-CREATE UNIQUE INDEX uq_energy_correction_scheme_identity
-    ON energy_correction_scheme
-    (kind, name, level_of_theory_id, version,
-     source_literature_id, software_id, workflow_tool_release_id)
-    NULLS NOT DISTINCT;
+SELECT kind, name, level_of_theory_id, version, units,
+       source_literature_id, workflow_tool_release_id, count(*)
+FROM energy_correction_scheme
+GROUP BY 1,2,3,4,5,6,7
+HAVING count(*) > 1;
 ```
 
-**What it newly permits:**
+Any row returned means two schemes were distinguished *only* by the
+program column this revision drops. The revision must abort with a
+message naming those schemes' public refs and saying that their program
+attributions must be re-recorded as releases (via §5's route) before the
+upgrade can proceed — never merge them, never pick one. Measured on the
+deployed database 2026-09-13: **0 rows**, so this deployment upgrades
+cleanly; the check exists for every other database, which this plan
+cannot see and does not assume anything about.
 
-- Two schemes with the same `(kind, name, lot, version)` and different,
-  non-null `source_literature_id` — the citation case §0.2 asked for.
-- Two schemes with the same `(kind, name, lot, version)` and different,
-  non-null `software_id` — the software case §0.4 asked for, and per
-  §2.1 the one that most often means "not actually a collision."
-- Any combination of the above — a Gaussian-16, Petersson-1998-cited
-  scheme coexisting with an ORCA, uncited one, both legitimately
-  distinct.
+**`downgrade()`:** drop the new index; re-add `software_id` (nullable,
+left `NULL` — the down path restores the *column*, never a value, because
+re-deriving one is exactly what ruling 9 forbids); re-create the index
+with `software_id` and without `units`; drop `software_release_id`.
+Losses, stated: every recorded release and every recorded unit
+distinction. A downgrade attempted after two schemes have been
+distinguished only by release, or only by units, fails on a genuine
+unique violation — correct, and loud, rather than silently merging two
+libraries.
 
-**What it still rejects, exactly per `nulls_not_distinct` semantics:**
-two schemes with the same `(kind, name, lot, version)` where
-`source_literature_id`, `software_id`, **and** `workflow_tool_release_id`
-are all `NULL` on both — nulls are treated as equal under this
-constraint, so two fully-uncited, fully-software-less schemes of
-otherwise-identical identity still collapse into one row via §1.3's
-resolver lookup, exactly as today. This is §2.4's residual case,
-answered by stating the absence, not by manufacturing a second row
-nothing distinguishes.
+**Regen steps.** ORM change → regenerate `backend/schema.dbml`
+(`/generate-dbml`). Read-schema and filter changes →
+`UPDATE_OPENAPI_GOLDEN=1 pytest tests/api/test_openapi_snapshot.py`.
+`software_version` leaving `_DEFERRED_FILTER_FIELDS` changes an error
+response the catalogue tests cover (`test_api_code_catalogue.py`).
+`EnergyCorrectionSchemeRef.software` becoming a `SoftwareReleaseRef` is a
+wire-contract change to `schemas/python/tckdb-schemas` → version bump per
+`feedback_tckdb_client_version_bump`, plus `clients/python`'s typed
+fields.
 
-**What is deliberately not folded into this same index:** `units`.
-`public_refs.py`'s docstring (§1.2) also names `units` as
-identity-relevant ("a different unit convention... means a scientifically
-distinct scheme") — a real, separate inconsistency between the public-ref
-hash and the DB constraint, but a third question this plan was not asked
-to answer. Flagged in §8, not built here.
+## 5. Recording provenance: the write paths
 
-**Migration mechanics — `energy_correction_scheme` is an already-deployed
-table** (real rows on the live Pi DB), so per the migration rules this is
-a **new Alembic revision**, `down_revision` = current head
-(`eb9793f23de6` as of this plan's base commit — resolve the actual head
-at implementation time rather than hard-coding it), never an edit to
-`d861dfd60891`. One revision, not two — the literature and software
-columns are additive changes to the same table's identity, landing in the
-same review is more coherent than splitting them, and both share the
-identical migration-mechanics discussion below.
+### 5.1 Upload
 
-```python
-def upgrade() -> None:
-    op.add_column(
-        "energy_correction_scheme",
-        sa.Column(
-            "software_id", sa.BigInteger(),
-            sa.ForeignKey("software.id", deferrable=True, initially="IMMEDIATE"),
-            nullable=True,
-        ),
-    )
-    op.add_column(
-        "energy_correction_scheme",
-        sa.Column(
-            "workflow_tool_release_id", sa.BigInteger(),
-            sa.ForeignKey(
-                "workflow_tool_release.id", deferrable=True, initially="IMMEDIATE",
-                name="fk_energy_correction_scheme_workflow_tool_release_id",
-            ),
-            nullable=True,
-        ),
-    )
-    op.drop_index(
-        "uq_energy_correction_scheme_kind_name_lot_version",
-        table_name="energy_correction_scheme",
-        postgresql_nulls_not_distinct=True,
-    )
-    op.create_index(
-        "uq_energy_correction_scheme_identity",
-        "energy_correction_scheme",
-        [
-            "kind", "name", "level_of_theory_id", "version",
-            "source_literature_id", "software_id", "workflow_tool_release_id",
-        ],
-        unique=True,
-        postgresql_nulls_not_distinct=True,
-    )
+`EnergyCorrectionSchemeRef.software`
+(`schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py:72`)
+becomes a `SoftwareReleaseRef` (`fragments/refs.py:75-91` — `name`,
+`version`, `revision`, `build`, and the existing composite-version
+normalizer that already handles a banner-shaped `version` string).
+`resolve_or_create_scheme` resolves it with
+`resolve_software_release_ref` and adds `software_release_id` **and**
+`units` to its `_match` chain (`energy_correction_resolution.py:186-198`),
+so the resolver's lookup matches the index exactly. Without that, the
+widened index sits unused and every upload keeps collapsing onto the
+first row — the failure mode v1 named and avoided, still live here.
 
+A depositor who knows only the program sends `{name: "X"}` with no
+version, which resolves to the one version-less release row for that
+program (§3.2). That is a complete, honest deposit, not a degraded one.
 
-def downgrade() -> None:
-    op.drop_index(
-        "uq_energy_correction_scheme_identity",
-        table_name="energy_correction_scheme",
-        postgresql_nulls_not_distinct=True,
-    )
-    op.create_index(
-        "uq_energy_correction_scheme_kind_name_lot_version",
-        "energy_correction_scheme",
-        ["kind", "name", "level_of_theory_id", "version"],
-        unique=True,
-        postgresql_nulls_not_distinct=True,
-    )
-    op.drop_column("energy_correction_scheme", "workflow_tool_release_id")
-    op.drop_column("energy_correction_scheme", "software_id")
+The literature warning is unchanged (advised, never required, ruling 3,
+`provenance_warnings.py:695-696`). The software warning's message
+(`:702`) should be reworded for the release grain, since "no program" and
+"no build" are now different absences and only the first is worth
+warning about.
+
+### 5.2 Correcting an existing row (ruling 14)
+
+`PATCH /admin/energy-correction-schemes/{ref}/provenance` (§2.6) is the
+path. Two changes:
+
+- `software: SoftwareRef` → `SoftwareReleaseRef`, resolved with
+  `resolve_software_release_ref`.
+- Nothing else. The fill-only guard **stays as it is**: with no inferred
+  value ever written (§3.4), a non-null program attribution can only have
+  come from a depositor, and refusing to overwrite it is exactly right.
+  v1's proposed "deposited supersedes derived" relaxation is dropped
+  along with the column that would have justified it.
+
+**A re-deposit is not an adequate alternative**, and this is measured, not
+argued: a corrected upload creates a *different* scheme row under the
+widened identity (that is what the identity is for), leaving every
+existing `applied_energy_correction` row pointing at the uncorrected
+original. Nothing on this deployment is frozen by the accepted-science
+triggers today (§9.1), so re-pointing them is mechanically possible, but
+no route does it and building one is strictly more work than using the
+route that already exists.
+
+### 5.3 Literature stays the discriminator, and what that means when there is no paper (ruling 11)
+
+Ruling 11 keeps `source_literature_id` as the discriminator between two
+otherwise-identical parameter sets. Honouring it needs one thing said
+plainly, because the obvious reading of it produces a false attribution:
+
+**Cite what published these numbers, never what named the method.** A
+scheme kind may be named after a published method while its stored
+parameters are somebody's later refit at a different level of theory. The
+paper that named the method is a real citation and would attach cleanly —
+and it would be a false statement about where these values came from.
+§9.2 records a live instance of exactly this trap.
+
+**When the parameters have no paper**, the mechanism that honours ruling
+11 is a `dataset`-kind literature row: `LiteratureKind.dataset`
+(`common.py:839-846`) with a manual `kind` + `title` submission, which
+`docs/literature_policy.md:46-47` allows with no DOI or ISBN — naming the
+data file, repository and release the values were copied from. That is a
+real, citable identity in the sense ruling 2 asked for, it discriminates
+between two refits of the same method, and it does not require anyone to
+pretend a paper published numbers it did not. There is no standalone
+literature deposit route (§2.8) and none is needed: the admin route of
+§5.2 embeds a `LiteratureUploadRequest`.
+
+This is a policy statement, not new machinery — nothing in §4 changes for
+it. It belongs here because "literature is the discriminator" is
+unimplementable for a large class of real correction sets without it.
+
+## 6. `frequency_scale_factor` — the sibling revision (ruling 12)
+
+Same defect, same shape, separate revision, sequenced after the scheme
+one so each is reviewable on its own.
+
+- Replace `frequency_scale_factor.software_id` with
+  `software_release_id` (`energy_correction.py:247-252`).
+- Rebuild `uq_frequency_scale_factor_identity` (`:286-292`) as
+  `(level_of_theory_id, software_release_id, scale_kind, value,
+  source_literature_id, workflow_tool_release_id)`, still
+  `NULLS NOT DISTINCT`. **No `units` member** — a scale factor is
+  dimensionless, so §3.3's argument does not transfer.
+- Same pre-flight collision check, adapted:
+  `GROUP BY level_of_theory_id, scale_kind, value, source_literature_id,
+  workflow_tool_release_id HAVING count(*) > 1`. Measured on the deployed
+  database 2026-09-13: **0 rows**.
+- No backfill, for the same reason (ruling 9).
+- Delete the two remaining fabricated release summaries
+  (`frequency_scale_factors.py:313-317`, `statmech.py:720-721`) in favour
+  of the real join. After this revision, no site in the codebase
+  synthesizes a `SoftwareReleaseSummary`.
+- The same `software_version` filter deferral exists on the FSF search
+  surface and is lifted the same way.
+
+Until this lands, the ECS/FSF asymmetry is real and temporary; this plan
+does not claim otherwise anywhere.
+
+## 7. Trust rubric (ruling 15)
+
+The rubrics live in `backend/app/services/trust/rubrics.py` as
+`EvidenceRubric(name=…, version=…, record_type=…, checks=(…))` —
+`COMPUTED_THERMO_V1` at `:1919`, `COMPUTED_STATMECH_V1` nearby, each
+check an `EvidenceCheckSpec(name, kind, explain, runner)` with
+`EvidenceCheckKind` ∈ `required` | `optional` | `warning`
+(`trust/models.py:73-83`).
+
+Add, as `optional` checks (they describe completeness; their absence must
+never block a label — ruling 3's "advised, not required" applies to the
+rubric exactly as it applies to the upload):
+
+- `correction_scheme_software_release_present` — for each
+  `applied_energy_correction` whose scheme is one of the three
+  software-scoped kinds, the scheme carries a `software_release_id`.
+  `not_applicable` when the record cites no scheme, or cites only
+  constant-kind schemes.
+- `correction_scheme_literature_present` — the cited scheme carries a
+  `source_literature_id`. `not_applicable` on the same condition.
+
+The existing `_check_frequency_scale_factor_present_if_applicable`
+(`rubrics.py:998-1008`) is the pattern to copy for the applicability
+branch, including its habit of returning `not_applicable` rather than
+passing vacuously.
+
+Scope note: these check whether the *cited scheme* documents itself, a
+different axis from the existing checks, which ask whether a correction
+was applied at all. Both are worth having; neither substitutes.
+
+The owner's reservation about the `_v1` naming is **not** resolved here —
+it is §11's new open question, and nothing in this section depends on its
+answer, because `EvidenceRubric` already carries `name` and `version` as
+separate fields and only renders them joined (`models.py:281-284`,
+`qualified_name` → `computed_thermo@v1`).
+
+## 8. Display
+
+Owner rulings already honoured by #440 and unchanged: expandable boxes
+named by the software, literature advised not required, no
+depositor-typed labels on public pages. What this plan changes:
+
+- **Titles gain the build for free.** `softwareLabel`
+  (`frontend/src/domain/provenanceFormat.ts:16-24`) already renders
+  `{name} {version}` with a stutter guard, so a box retitles itself the
+  moment the release is real. No new formatting code.
+- **The ref becomes linkable.** `software_release_ref` stops being `""`
+  (§2.3), so the two deliberate refusals to link it
+  (`LevelOfTheoryPage.tsx:222-225`, `methodsApi.ts:112-122`) become real
+  links, and those comments are deleted rather than left describing a
+  fixed defect.
+- **"Software not recorded" becomes the honest state of the live rows.**
+  The muted-pill treatment #440 already ships
+  (`LevelOfTheoryPage.tsx:284`) is what both boxes will show after §4
+  lands, because the inferred program name is removed (§3.4, §9.3). A
+  version-less release renders the program name alone; no separate
+  "version not recorded" text is needed, and inventing one would make an
+  honest partial deposit look deficient.
+- **No derived-provenance disclosure.** v1's revision of this plan
+  proposed a sentence inside each box explaining that a program
+  attribution was TCKDB's inference. With ruling 9 there is no inference
+  to disclose, so the sentence is dropped and `evidence_summary`'s
+  `has_software` (`energy_correction_schemes.py:139`) stays the simple
+  presence flag it already is.
+
+## 9. The live archive today — data, not design input
+
+Everything in this section is a measurement of one deployment (the Pi,
+`https://tckdb.homecalvin.com`) and of one producer's data files. Per
+`feedback_tckdb_is_sovereign` it is recorded so the rulings can be
+audited and the data can be fixed — **not** as justification for any
+shape in §3–§7. Nothing above depends on it.
+
+### 9.1 The two rows
+
+```
+ id |           public_ref           |     kind      |     name      | lot_id | source_literature_id | software_id | workflow_tool_release_id | version |  units   |                       note
+  1 | ecs_q5potmkzrmm6ynh2behv5kbfdu | atom_energy   | atom_energy   |      4 |               (null) |           1 |                   (null) |  (null) | hartree  | Per-species AEC computed by Arkane.
+  2 | ecs_5dzse4an2emubgyxge2dpj4ae4 | bac_petersson | bac_petersson |      4 |               (null) |           1 |                   (null) |  (null) | kcal_mol | Per-species BAC computed by Arkane (bac_type=p).
 ```
 
-The `downgrade()` path is only valid if no row created under the wider
-index would collide under the narrower one — true today (both live rows
-share `kind`/`name`/`lot`/`version` distinctness already, so no new
-collision is introduced by dropping the extra columns), but a future
-downgrade after real distinguished-only-by-software-or-citation
-duplicates exist could fail on a genuine constraint violation. That is
-the correct, honest behavior for a downgrade that would re-introduce
-ambiguity the wider index was built to resolve — it should fail loudly,
-not silently merge rows.
+`level_of_theory.id = 4` is `b3lyp/def2tzvp`
+(`lot_rrmbqrod3suvzkez2ta76hj76u`); `software.id = 1` is `Gaussian`.
+Scheme 1 has 8 atom params, scheme 2 has 45 bond params, neither has
+component params. Each is cited by **82** `applied_energy_correction`
+rows (164 total, every one `record_review.status = not_reviewed`, so
+nothing here is frozen by the accepted-science triggers). `literature`
+holds **0 rows** archive-wide. Note the two rows already differ in
+`units` — `hartree` vs `kcal_mol` — which is why §3.3's index change is
+inert for them and must be tested against a constructed fixture instead.
 
-**Backfill decision:** none, on either axis. No data migration sets
-`source_literature_id` or `software_id` on the two existing rows. §7
-gives the full reasoning; §1.6 already showed the software evidence is
-exactly as circumstantial as the literature evidence, and this plan
-treats them identically for that reason.
+### 9.2 Where these numbers came from, and the citation trap
 
-**Companion service change (same PR as the migration, not a separate
-one):** `resolve_or_create_scheme`'s lookup (§1.3 step 1) must add
-`source_literature_id`, `software_id`, and `workflow_tool_release_id` to
-its `WHERE` clause, matching the new index — otherwise the widened index
-sits unused and the resolver keeps collapsing every upload into the
-first row regardless of what the new payload fields say. Same one-line-
-per-field shape the lookup already uses for its `is None` vs.
-exact-match branching on `level_of_theory_id` and `version`.
+Both parameter sets are bit-for-bit copies of one producer's curated
+tables, verified against a local checkout of
+`RMG-database/input/quantum_corrections/data.py`:
 
-**Companion upload-schema change:** add `software: SoftwareRef | None`
-and `workflow_tool_release: WorkflowToolReleaseRef | None` to
-`EnergyCorrectionSchemeRef`
-(`schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py`),
-identical in shape and resolution policy to `FreqScaleFactorRef`'s
-existing fields (§1.6) — resolved the same way
-`resolve_software`/`resolve_workflow_tool_release_ref` already resolve
-them for FSF and calculation uploads (`energy_correction_resolution.py`
-already imports both from `software_resolution` and
-`calculation_resolution` for other purposes — reuse, don't reimplement).
-Per `tckdb_schemas`' package-version convention
-(`feedback_tckdb_client_version_bump`), this bumps
-`schemas/python/tckdb-schemas`'s version.
+- Scheme 1's 8 atom energies == `atom_energies["LevelOfTheory(method='b3lyp2023',basis='def2tzvp',software='gaussian')"]`
+  (`data.py:106-115`; H `-0.5010929786112002` through Br
+  `-2574.144347409212`, all eight identical).
+- Scheme 2's 45 bond corrections == `pbac["LevelOfTheory(method='b3lyp2023',basis='def2tzvp',software='gaussian')"]`
+  (`data.py:1168-1215`; e.g. `C-H -0.23472079981166077`,
+  `N=N 4.064303078434774`, all 45 identical with identical keys).
 
-## 4. How "strongly advised" is expressed, on both axes
+**The citation trap §5.3 warns about is live here.** Scheme 2's kind is
+`bac_petersson`, and Petersson 1998 (`DOI 10.1063/1.477794`) is a real,
+citable paper — but in that same producer's file it is cited only against
+a `cbsqb3` key whose values are two-decimal published table entries
+(`data.py:1006-1030`, e.g. `"C-H": -0.11`), while the values this archive
+holds are sixteen-significant-digit refits at a different level of
+theory. Citing Petersson 1998 for scheme 2 would attach a real paper to
+numbers it never published. The same file also shows a single correction
+set can be a mosaic of sources (`data.py:1014-1030`: one paper for some
+bonds, another for others, and `"H-H": 1.1,  # Unknown source`), so "one
+scheme, one citation" is not always expressible at all.
 
-Reusing what already exists, per the brief's own instruction — this
-archive already has a non-blocking, structured warning vocabulary for
-exactly this shape of "should have, didn't" gap:
-`backend/app/services/provenance_warnings.py`'s `UploadWarning` +
-`W_MISSING_*_PROVENANCE` codes, already wired into thermo, transport,
-kinetics, and statmech uploads (`collect_thermo_provenance_warnings` and
-its siblings), returned in the upload response's `warnings: list[
-UploadWarning]` — never rejecting the request. `energy_correction_upload`
-is not yet a caller of this module. It should become one, for both the
-literature gap and the software gap.
+That producer's own key for these tables names a program and no build.
+**This is a fact about that producer's file, not a constraint on TCKDB**
+— it is why the honest recorded value for these two rows would be a
+version-less release, and it is not a reason for TCKDB to model
+corrections at program grain.
 
-**Literature — three warning moments, unchanged from this plan's first
-draft:**
+### 9.3 What the rulings do to these rows, and to the deployed pages
 
-1. **On creating a genuinely new scheme with no `source_literature`.**
-   Reuse the existing `W_MISSING_LITERATURE_PROVENANCE` code with a
-   scheme-scoped `field` path (`applied_energy_corrections[i].scheme.
-   source_literature`).
-2. **On creating a new scheme whose `(kind, level_of_theory_id,
-   software_id, workflow_tool_release_id)` already has an existing
-   scheme with `source_literature_id IS NULL`** — new code
-   `W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE`, naming the
-   existing scheme's ref. Note this condition is now scoped past
-   software: two schemes that differ by software are not ambiguous
-   (§2.1), so this warning only fires when software (and workflow-tool
-   release) also match or are both absent — the case §2.4 actually
-   names.
-3. **On a reuse where `ref.source_literature` was supplied but silently
-   discarded** (§1.3 step 2) — code
-   `W_ENERGY_CORRECTION_SCHEME_LITERATURE_NOT_ATTACHED`, pointing at
-   §4.3's admin path as the remedy.
+- `software_id = 1` (Gaussian) is **removed** when §4 drops the column.
+  It was derived by `b6d80e36dcec:242-261` from this deployment's own
+  calculation records, never deposited (ruling 9).
+- `software_release_id` is `NULL` on both rows after the migration, and
+  stays `NULL` until someone attests to a program.
+- `workflow_tool_release_id` stays `NULL`. Ruling 10 settles it: nobody
+  knows which ARC or Arkane release produced these rows. This plan
+  records no placeholder and schedules no investigation.
+- `source_literature_id` stays `NULL`. §5.3 describes the mechanism if
+  and when someone deposits one.
+- **On `/methods/lot_rrmbqrod3suvzkez2ta76hj76u`, both correction boxes
+  will read "software not recorded"** where they today read "Gaussian".
+  That is a visible regression in apparent completeness and a correction
+  in accuracy, chosen deliberately by ruling 9. It should not be softened
+  on the page, and nobody should re-add the inference later without
+  re-opening ruling 9.
 
-**Software — one new warning moment, scoped to the three kinds §1.6
-identified:**
+### 9.4 Why the derived value was wrong, not merely unproven
 
-4. **On creating a new `atom_energy`/`bac_petersson`/`bac_melius`
-   scheme with no `software` supplied.** New code
-   `W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE`. Message text carries
-   the weight §2.3 argued for, rather than a severity field (`UploadWarning`
-   has no severity field — `field`/`code`/`message` only, and adding one
-   is out of scope here): *"No software was supplied for this
-   atom_energy/bac_petersson/bac_melius scheme. Unlike a literature
-   citation, this archive's own calculations already know which program
-   produced these numbers — atom-energy and bond-additivity corrections
-   are software-dependent, so an unattributed scheme cannot be
-   distinguished from a different program's values at the same level of
-   theory."* Never fires for `atom_hf`/`atom_thermal`/`soc` — those kinds
-   are `NOT_APPLICABLE` on this axis, using the exact sentinel
-   `provenance_warnings.py` already defines for "this record type has no
-   such anchor, so do not judge it" (`_NotApplicable`, `NOT_APPLICABLE`,
-   `provenance_warnings.py:150-170`) — reused, not reinvented.
-5. **On creating a new scheme whose `(kind, level_of_theory_id)` already
-   has an existing scheme with `software_id IS NULL`** (an ambiguity
-   §2.1 cannot resolve because neither side states a program) — folds
-   into the same `W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_
-   LITERATURE` warning from item 2 above when literature is also absent
-   on both, since by that point the two facts (no citation, no software)
-   are stating the same underlying problem — one warning, not two,
-   naming both missing dimensions in its message.
+Recorded because it is the evidence behind ruling 9 and because the same
+derivation will look tempting again.
 
-**Read surface:** already computes `has_literature_source` /
-`has_literature` correctly (§1.5) — the fix there is entirely frontend.
-The equivalent `has_software`/software summary field is new (§3 adds the
-column, the read service needs the equivalent one-line addition
-`has_software=ecs.software_id is not None` plus a `software` summary
-under `include=` — small, mechanical, same shape as the existing
-`literature` inclusion).
+`b6d80e36dcec:242-261` sets `software_id` from the single distinct
+software across the `calculation` rows at the scheme's level of theory.
+Measured per level of theory on this deployment:
 
-**Review/trust layer:** not extended in this plan on either axis.
-§1.6's/methods-surface's rubric checks a different axis (was a
-scheme/FSF *applied*, not whether it *cites* or *attributes* anything).
-Flagged in §8 for the owner to weigh, not decided here.
+| lot_id | method/basis | calculations | distinct software | distinct software_release | distinct workflow_tool_release |
+|---|---|---|---|---|---|
+| 1 | wb97xd/def2tzvp | 62 | 1 | 1 | 0 |
+| 2 | MRCI+Davidson/aug-cc-pV(T+d)Z | 31 | 1 | 1 | 0 |
+| 3 | CCSD(T)-F12/cc-pVTZ-F12 | 39 | 1 | 1 | 0 |
+| 4 | **b3lyp/def2tzvp** | **416** | **1** | **1 (Gaussian 16 C.02)** | **10** |
 
-### 4.3 Closing the "no way to add a citation after the fact" gap
+- A release-grain derivation was equally available and equally unanimous
+  — all 416 calculations at `lot 4`, and all 82 applied rows per scheme
+  traced through `source_calculation_id`, resolve to one release.
+- It would nonetheless have been **false**. The derivation answers "which
+  program ran the calculations recorded at this level of theory" — which
+  program *consumed* the correction. A scheme's software is meant to say
+  which program *computed* the parameters, and §9.2 shows these were
+  computed elsewhere, by someone else, with a build nobody here recorded.
+  The coarse answer was right only by being coarse.
+- `workflow_tool_release_id` is null because the same unanimity rule
+  abstained (10 distinct releases at `lot 4`). That abstention concealed
+  a second category error: a calculation's workflow-tool release is the
+  orchestrator that ran the job, while a scheme's is meant to be the tool
+  release whose curated data file was the source
+  (`energy_correction.py:79-81`). Deriving one from the other asserts the
+  wrong thing even when unanimous.
 
-Small, scoped, admin-only, and now covers both axes rather than
-literature alone. `EnergyCorrectionSchemeUpdate` already exists
-(`backend/app/schemas/entities/energy_correction.py:136-143`) but is
-unrouted. Do not route it as-is — as written it can rewrite `kind`,
-`name`, `level_of_theory_id`, `version`, and `units` on a deployed
-reference row, which is a far bigger surface than "attach missing
-provenance" and reopens the exact ambiguity this plan is trying to close
-(an admin silently renaming a scheme's identity out from under every
-`applied_energy_correction` that cites it). Instead:
+### 9.5 Frequency scale factors on this deployment
 
-- New admin route, same pattern as `backend/app/api/routes/admin.py`'s
-  existing `require_admin`-gated endpoints:
-  `PATCH /admin/energy-correction-schemes/{ref}/provenance`.
-- Accepts `source_literature` (a `LiteratureUploadRequest`-shaped body,
-  or an `existing_literature_ref` per the `existing_*_id` upload
-  convention — check which is the smaller diff at implementation time)
-  and/or `software`/`workflow_tool_release` refs, each resolved via the
-  same resolution services the upload path already uses.
-- **Refuses to overwrite any field that is already non-null** — per-
-  field, not all-or-nothing: an admin can fill `software_id` on a row
-  that already has a citation, or vice versa, but can never silently
-  swap or overwrite a value someone already recorded. This keeps the
-  endpoint append-only in spirit on both axes: it can fill a gap, it
-  cannot manufacture a correction to something already stated.
-- Response includes the scheme's own public ref and the resolved
-  literature's/software's, so the action is auditable from the response
-  alone.
+12 rows, 0 with a literature source. 10 of the 12 share
+`(b3lyp/def2tzvp, Gaussian, fundamental, 0.999)` and differ only by
+`workflow_tool_release_id` — which is already in the FSF identity index,
+so they are legitimately distinct rows today. All ten carry the same
+free-text `note`: `http://cccbdb.nist.gov/vibscalejust.asp` — an informal
+citation sitting in prose on every row that lacks a structured one, and a
+candidate for §5.3's `dataset`/`webpage` literature mechanism whenever
+someone decides to deposit it. The other two (wb97xd/def2tzvp → 0.986,
+ORCA CCSD(T)-F12 → 0.998) carry no note and no tool provenance.
 
-This is genuinely small on the literature side — the resolution
-machinery, `require_admin`, and the `Update` schema's field all already
-exist. The software side needs the same small addition once §3's
-columns and resolvers land.
+## 10. Slicing into PRs
 
-### 4.4 The ingestion-tooling gap (§1.6) is its own slice
+Each PR states red-first criteria and, where a test could pass
+vacuously, the mutation that must break it.
 
-Once §3's schema and upload-schema changes exist, `backend/scripts/
-arc_ingestion/builder.py`/`extractor.py` still won't populate them —
-today they build no `EnergyCorrectionSchemeRef` payload at all (§1.6).
-Making the schema capable of recording software/literature and having
-the one committed ingestion pipeline that produces these rows keep not
-supplying them would just move the gap one layer down. Scoped as a
-follow-up slice, not blocking this plan's schema/API/frontend work,
-because it depends on knowing what `arc_ingestion` actually has
-available from an ARC run (an `output.yml`'s own software/version
-fields, most likely — `extractor.py` already parses ARC output for
-other purposes) rather than on anything this plan itself decides.
+**PR 1 — schema, migration, resolver, upload schema (one revision).** §4
+plus §5.1. These cannot split: an index the resolver does not match is
+inert, and an upload schema that cannot carry a release cannot populate
+one.
 
-## 5. Whether the literature subsystem works
+Red first:
+- The pre-flight check aborts the upgrade, with both offending public
+  refs in the message, on a fixture holding two schemes that differ only
+  by `software_id`; and does not fire on a fixture where they differ by
+  anything else. *Mutation:* delete the check — the first fixture must
+  then fail with a raw `IntegrityError` from `CREATE UNIQUE INDEX`, which
+  is the failure the check exists to replace.
+- After upgrade on a fixture in the live rows' shape, both rows keep
+  their `public_ref`, parameters and dependent applied rows, and
+  `software_release_id IS NULL`. *Mutation:* add any backfill at all —
+  the NULL assertion must fail. **This is the criterion that pins ruling
+  9 into the test suite**, and it replaces v1's backfill tests rather
+  than joining them.
+- Two schemes identical but for `units` (`hartree` vs `kcal_mol`) insert
+  as two rows under the new index and are rejected under the old one.
+  *Mutation:* drop `units` from the index — the two-row assertion must
+  fail with `IntegrityError`.
+- Two schemes identical but for `software_release_id` (a versioned
+  release vs. the version-less release of the same program) insert as two
+  rows. *Mutation:* drop the column from the index.
+- A deposit of the same parameters in a second unit now resolves to a
+  second row instead of raising from
+  `_assert_param_value_compatible` — assert on the *absence* of the
+  conflict error and on two rows existing, not merely on a 2xx.
+- Two schemes identical on all eight indexed columns still collapse to
+  one row through the resolver (unchanged behaviour;
+  `test_energy_correction_resolution_provenance.py:135`).
+- An upload supplying `{name, version, revision}` creates a row whose
+  `software_release_id` resolves to that exact release; an upload
+  supplying `{name}` alone resolves to the version-less release row for
+  that program, and a second such upload reuses it rather than creating a
+  second one.
+- Upgrade → downgrade → upgrade round trip: columns the narrow schema
+  still has are byte-identical, refs unchanged, and `software_id` comes
+  back `NULL` rather than re-derived.
+- `backend/tests/db/test_energy_correction_scheme_backfill.py` is
+  **deleted**, not ported: it tests a derivation this plan removes.
+  Deleting it is part of the PR, and the migration test
+  (`test_energy_correction_scheme_provenance_migration.py`) is extended
+  to cover the new revision.
 
-Definitive: partially. Creation works when embedded in a **new**
-scheme/FSF/etc. row (tested, e.g. `test_statmech_upload.py`); no
-standalone deposit route exists anywhere (by design, confirmed via 3
-separate route files); no `PATCH`/update route for scheme or literature
-exists at all, so a literature citation can never be attached to an
-**existing** scheme — this is the load-bearing gap that gates the
-"backfill via re-upload" idea and motivates §4.3's admin route. Also
-flag: `CorrectionSchemePage.tsx` / `LevelOfTheoryPage.tsx` /
-`FrequencyScaleFactorPage.tsx` never render literature client-side
-despite the API already serving it — the read half is silently
-incomplete too (§1.5, closed by §6).
+Deploy: back up first (`backend/docs/deployment/migrations.md`), apply,
+then re-read both rows and confirm the program attribution is gone.
 
-## 6. Frontend — expandable, software-titled boxes (§0.5)
+**PR 2 — read layer.** Replace `_build_software_release_summary`'s
+fabrication (`energy_correction_schemes.py:429-450`) with the real
+`software_release` join; lift `software_version` out of
+`_DEFERRED_FILTER_FIELDS` (`energy_correction_schemes_search.py:72-75`)
+and implement it.
 
-`LevelOfTheoryPage.tsx`'s `CorrectionSchemesSection` currently renders
-each scheme as a plain, always-open `<div className="correction-scheme-
-block">` (§1.5). Per §0.5, replace this with the app's one canonical
-disclosure primitive — `frontend/src/components/Disclosure.tsx` — one
-`<Disclosure>` per scheme, matching the shape `EvidenceChecklist` and
-every other card on this codebase's record pages already use.
+Red first:
+- For a fixture scheme carrying a versioned release, the detail response
+  returns a **non-empty ref that resolves**, and a `version` equal to the
+  joined release's. *Mutation:* restore the `software_release_id=0,
+  software_release_ref=""` literal — a test asserting non-emptiness alone
+  would still pass, so the assertion must follow the ref to a real
+  record.
+- `search?software_version=16` returns matching schemes and no longer
+  `422`s; a scheme on a version-less release reports `version: null` and
+  is **not** returned by that filter.
+- `search?software=<name>` still returns schemes whose release belongs to
+  that program, via the release→software join.
+- For a scheme with `software_release_id IS NULL`, `software_release` is
+  `null` — never a synthesized object with an empty ref.
+- OpenAPI golden regenerated; the `unsupported_filter` catalogue entry
+  for this endpoint updated.
 
-**Titling — the rule from `540febb4` ("Fix misleading evidence-card
-summaries") applies directly and is the reason this section is specific
-about it.** That commit's own finding: a collapsed card's summary text
-must be a true fact about *that* card's own content, never a constant
-that happens to look like one (measured live: the fixed pre-fix fallback
-showed "6 rows" on a card with 4 real records, and two structurally
-opposite conformer groups both collapsed to the identical "3 rows").
-The same discipline applies to a scheme box's title and its collapsed
-summary:
+**PR 3 — admin route grain.** §5.2: `SoftwareRef` → `SoftwareReleaseRef`.
+The guard is unchanged, and that is worth a test of its own.
 
-- **Title (the `<summary>` heading), in priority order:**
-  1. `{kind label} — {software}` when software is recorded — e.g.
-     "Atom energies — Gaussian 16" if/when release-level granularity
-     exists, or "Atom energies — Gaussian" at today's `software_id`-only
-     grain (§3's open question). This is the case §0.5 asked for by
-     name.
-  2. `{kind label} — software not recorded` when software is absent.
-     **This is the fallback §8's open question named — it must read as
-     an absence, never as an identity.** Concretely: never fall back to
-     `scheme.name` (that reintroduces exactly the depositor-free-text
-     label the owner has twice now ruled off this page — once directly
-     for literature/name, once implicitly by making software the
-     namer); never render a blank or an em-dash where "software not
-     recorded" would go, matching this archive's house rule that an
-     absence is always stated, never implied.
-- **Collapsed summary (the `Disclosure`'s `count`/roll-up, visible
-  without opening the box):** a real, computed fact about this specific
-  scheme's parameters — e.g. "8 elements" for an atom-energy scheme, "45
-  bonds" for a Petersson BAC scheme — using the same
-  `atom_param_count`/`bond_param_count` fields `evidence_summary` already
-  returns (§1.5's read-schema audit found these already present and
-  already correct, just unrendered). Never the row count of some other,
-  unrelated list, and never a bare "correction scheme" placeholder — the
-  exact defect `540febb4` fixed elsewhere on this codebase, now avoided
-  here before it ships rather than fixed after an independent review
-  finds it again.
-- **Citation, inside the opened box:** the real formatted citation when
-  `literature` is present (author/year/title, the pattern
-  `LiteratureSummary` already carries elsewhere); "No literature source
-  is recorded for this scheme" when absent and no ambiguous sibling
-  exists; the two-sentence sibling-ambiguity statement from §2.4 when
-  one does.
+Red first:
+- PATCH with `{name, version, revision}` onto a scheme with
+  `software_release_id IS NULL` sets exactly that release and returns its
+  real ref.
+- The same PATCH against a scheme that already carries one returns `409
+  …_software_already_set` and leaves the value untouched. *Mutation:*
+  remove the guard — this test must fail.
+- A PATCH that would make the row collide with another under the widened
+  identity returns 409 and writes nothing (`admin.py:849-858`, re-pinned
+  at the new grain and with `units` now in the tuple).
+- Literature and workflow-tool-release paths unchanged; the ten existing
+  tests pass or are ported deliberately, not deleted.
 
-Same treatment, same component, for `CorrectionSchemePage.tsx`'s own
-standalone view (§1.5's `<h1>`/breadcrumb fix folds in here — replace
-`scheme.name` with the same `{kind label} — {software}` /
-`{kind label} — software not recorded` title used on the LOT page, so
-the two views can never diverge in how a scheme is named) and for
-`FrequencyScaleFactorPage.tsx` (citation-or-absence block only — FSF
-already has its software column and its own existing display; the
-CCCBDB `note` URL continues to render as a note, not promoted into the
-citation slot — conflating the two is exactly the free-text-as-citation
-move §2 rejects).
+**PR 4 — frontend.** §8.
 
-## 7. The two existing rows — no fabricated backfill, on either axis
+Red first:
+- A fixture scheme on release `{name: "X", version: "16", revision:
+  "C.02"}` renders a box title containing the version and a
+  `software_release_ref` that renders as a link. *Mutation:* revert to a
+  software-only object — the title assertion must fail on the missing
+  version.
+- A fixture with `software_release: null` renders the muted "software not
+  recorded" pill, never a blank, an em-dash, or `scheme.name`.
+- A fixture on a version-less release renders the program name alone and
+  no "version not recorded" text.
+- Collapsed summaries still show real parameter counts from
+  `evidence_summary`, preserving #440's guard against constant-looking
+  summaries.
 
-**Decision: `source_literature_id` and `software_id` both stay `NULL` on
-both rows. No data migration touches them.**
+**PR 5 — trust rubric.** §7. Red first: a thermo record citing a
+software-scoped scheme with no release reports the new `optional` check
+as missing; one citing a scheme with a release reports it satisfied; one
+citing only `atom_hf`/`atom_thermal`/`soc` schemes, and one citing no
+scheme at all, both report `not_applicable`. *Mutation:* return a pass
+instead of `not_applicable` for the no-scheme case — the
+vacuous-pass test must fail. Neither check may change any label a record
+can reach (assert a `well_supported` record stays `well_supported` with
+both checks missing).
 
-The bit-for-bit match to RMG's `atom_energies` table, and the RMG key's
-own `software='gaussian'` naming, and this archive's 100%-Gaussian-16
-calculation history at this level of theory (§1.6) are all findings this
-plan's own investigation made by reading independent sources side by
-side — none of them is a fact either depositor (nor whatever produced
-these two rows, which §1.6 confirmed is not any ingestion script
-currently in this repository) ever recorded in TCKDB. Writing either
-`source_literature_id` or `software_id` onto these rows via migration
-would assert a provenance link the archive itself never received —
-exactly the house rule this repo already states plainly: **never assert
-from absence.** The absence here is not "we forgot to write down which
-paper this came from" or "we forgot to record which program ran this,"
-it is "nobody deposited that fact," and those are different claims even
-when, as here, the surrounding evidence makes the true answer fairly
-guessable.
+**PR 6 — the `frequency_scale_factor` sibling revision.** §6. Same
+red-first shape as PR 1, minus the units criteria, plus: the 10 live rows
+that differ only by workflow-tool release remain 10 distinct rows across
+the upgrade, and no site in the codebase synthesizes a
+`SoftwareReleaseSummary` afterwards (assert by grep in a test, the way
+this repo already pins other absence rules).
 
-What *is* available and does not require inventing anything:
+**Not a PR: recording the real provenance of the live rows.** Ruling 10
+says nobody knows it. There is nothing to schedule. If someone later
+attests to a program, a build or a data-file citation, §5.2's route
+records it in one call and no code changes are needed.
 
-- **Leave both rows exactly as deposited.** `has_literature_source:
-  false` and (once §3 lands) `has_software: false` are the correct,
-  honest signals, once the frontend actually renders them (§6).
-- **The RMG correspondence and the single-software calculation history
-  belong in this plan and in the paper's provenance discussion, not in
-  the database.** They are documentation about the archive, not facts
-  the archive asserts about itself. `methods-surface.md` §2.5.2 already
-  states the RMG half this way — this plan does not change that, and
-  extends the same treatment to the software half.
-- **The real fix is a real deposit, by whoever can actually attest to
-  it** — the person or team that ran Arkane and can confirm both the
-  citation and the program — through §4.3's admin path once it exists,
-  or a corrected future upload once §4.4's ingestion-tooling gap is
-  closed. Until then, the honest state is "not recorded," stated as such
-  (§2, §6), not silently patched over.
+## 11. Open questions
 
-## 8. Open questions for the owner
+### 11.1 New: rubric versioning names a product version that does not exist
 
-- **`units` in the identity.** §3 named this as a real, adjacent
-  inconsistency in `public_refs.py`'s own docstring, deliberately left
-  out of this migration because it wasn't a question this plan was asked
-  to answer. If the owner wants it folded in, it is the same shape of
-  change and can ride the same revision — needs an explicit yes.
-- **`software_id` vs. `software_release_id` grain.** §3 mirrors FSF's
-  coarser `software_id` (name only, no version) deliberately, to avoid
-  introducing a third precision level unilaterally. If the owner wants
-  release-level precision (Gaussian 16 vs. Gaussian 09 as distinct AEC
-  sources — plausible, since program-version defaults can genuinely
-  change BAC-relevant behavior), the cleaner fix is upgrading
-  `FrequencyScaleFactor` and `EnergyCorrectionScheme` together in a
-  follow-up, not giving the new sibling a different grain than the one
-  it's explicitly modeled on.
-- **Trust-rubric extension (§4).** Whether `computed_thermo_v1` /
-  `computed_statmech_v1` should gain `O`-kind checks for
-  scheme/FSF-own-citation and scheme-own-software completeness. Not
-  proposed as required here; flagged so it isn't rediscovered cold.
-- **Frequency scale factors are a sibling slice for the frontend/admin
-  work, not folded into this plan's migration.** FSF's unique index
-  already includes `source_literature_id` and `software_id` (§1.2,
-  §1.6) — the DB-level half of this plan's fix is already done for FSF
-  on both axes. What FSF is missing is exactly §6's frontend rendering
-  gap and an equivalent to §4.3's admin attach-provenance route
-  (`FrequencyScaleFactorUpdate` exists at
-  `backend/app/schemas/entities/energy_correction.py:173-179`, same
-  unrouted-schema shape as the scheme side). Recommend a short follow-up
-  plan scoped to FSF's admin/frontend gap alone rather than doubling
-  this one's size.
-- **Should `_merge_scheme_params`'s value-conflict error (§1.3) become a
-  coded, catchable error** in the same family as
-  `W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED`, rather than a bare
-  `ValueError`? Out of scope here (it already does the right thing —
-  reject rather than silently pick a value) but its error shape is
-  inconsistent with the rest of this module's coded-error convention.
-  Noted, not fixed, to avoid scope creep into unrelated error-handling
-  cleanup.
-- **§4.4's ingestion-tooling fix** depends on what `arc_ingestion`
-  actually has available from an ARC run's `output.yml` — needs a look
-  at the extractor's existing parsing before it can be scoped
-  precisely; flagged as a real gap, not sized here.
+Ruling 15, verbatim: *"I think yes for trust rubric but i dont like we do
+v1 when there is no released product version right."*
 
-## 9. Slice acceptance criteria
+The rubrics are declared as `EvidenceRubric(name="computed_thermo",
+version=1, …)` (`trust/rubrics.py:1919`) and rendered as
+`computed_thermo@v1` by `qualified_name` (`trust/models.py:281-284`);
+the constants are spelled `COMPUTED_THERMO_V1` / `COMPUTED_STATMECH_V1`.
+So the `v1` a reader sees is a *rubric* version, structurally independent
+of any TCKDB release — but nothing on the page or in the API says that,
+and TCKDB has no released product version for it to be confused with yet.
 
-**Slice A — schema + migration + resolver (§3).** New Alembic revision
-passes `alembic upgrade head` on a fresh DB and on the existing dev DB
-rebuild path; both live rows still resolve, unchanged, after upgrade
-(`source_literature_id` and `software_id` both `NULL` on both, still 2
-rows, still findable by their existing refs — the migration must not
-force new refs onto rows that didn't change identity). A constructed
-fixture — two schemes, same `(kind, name, lot, version)`, one
-`source_literature_id = NULL` one non-null — inserts cleanly under the
-new index and is rejected under the old one (mutation check: revert the
-index, watch the test that expects two rows fail with an
-`IntegrityError`). The same for two schemes differing only by
-`software_id`. Two schemes both fully `NULL` on all three new/adjusted
-dimensions under otherwise-identical identity still collapse to one row
-via the resolver (mutation: widen the resolver's lookup to ignore any
-one of the three fields, watch a test asserting exactly one row fail).
+*The fact that settles it:* whether a reader of a public trust report is
+meant to be able to tell "rubric revision 1" from "TCKDB version 1". If
+yes, the fix is in how the pair is spelled and labelled wherever it
+surfaces (a rendering and naming change, no schema impact, since `name`
+and `version` are already separate fields). If the distinction does not
+need to survive contact with a reader, the current spelling is fine and
+the discomfort is cosmetic.
 
-**Slice B — warnings (§4).** A LOT-scoped-kind scheme upload with no
-`source_literature` and no `software` returns both
-`W_MISSING_LITERATURE_PROVENANCE` and
-`W_MISSING_ENERGY_CORRECTION_SCHEME_SOFTWARE`; an `atom_hf`/
-`atom_thermal`/`soc` scheme upload with no `software` returns neither
-software warning (mutation: remove the kind guard, watch a test
-asserting silence on these three kinds fail). A second same-kind-
-same-LOT-same-software uncited scheme upload returns
-`W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE`; the identical
-upload with a *different* software does not (mutation: drop the
-software match from the ambiguity check, watch a test asserting silence
-on differing-software siblings fail). A reuse where `source_literature`
-or `software` was supplied but the identity already existed returns the
-"not attached" warning and the existing row's fields are confirmed
-unchanged.
+Deliberately not answered here: it is a question about how TCKDB versions
+its own published artifacts, which is larger than this plan and should
+not be settled as a side effect of a correction-scheme migration.
 
-**Slice C — admin attach-provenance route (§4.3).** `PATCH
-/admin/energy-correction-schemes/{ref}/provenance` on a scheme missing
-`software_id` sets it without touching an already-present
-`source_literature_id`, and vice versa; the identical call attempting to
-overwrite an already-non-null field on either axis returns a
-conflict/4xx and leaves the existing value untouched (mutation: drop the
-per-field guard, watch a test asserting the original value survives a
-second call with a different one fail). Route is `require_admin`-gated.
+### 11.2 Closed, for the record
 
-**Slice D — frontend (§6).** `/methods/schemes/ecs_q5potmkzrmm6ynh2behv5kbfdu`
-no longer shows `scheme.name` as its heading; shows "Atom energies —
-software not recorded" as the title and "No literature source is
-recorded for this scheme" in the body. A constructed fixture with two
-same-kind, same-LOT schemes on `/methods/:lotRef` — one Gaussian, one
-ORCA — renders as two separately-titled, separately-collapsible boxes,
-neither flagged as ambiguous (mutation: remove the software distinction
-from the ambiguity check, watch a test asserting no ambiguity sentence
-appears fail). A fixture with two same-kind, same-LOT, same-software,
-both-uncited schemes renders the §2.4 sibling-ambiguity sentence on both,
-naming each other's ref. Every box's collapsed summary shows a real
-parameter count, never a placeholder (mutation: hard-code a fixed string
-in place of the count, watch the `540febb4`-style mutation guard —
-written the same way that commit's own guard was — fail).
+| Question | Ruling |
+|---|---|
+| Show the derived attribution, or withhold it? | Withhold — NULL (ruling 9); §3.4, §9.3 |
+| What are the two rows' real provenance values? | Unknown, final (ruling 10); §9.3 |
+| Is literature still the discriminator for a library with no paper? | Yes (ruling 11); mechanism in §5.3 |
+| Does `frequency_scale_factor` get the same treatment? | Yes (ruling 12); §6 |
+| `units` in the identity index? | Yes (ruling 13); §3.3 |
+| Correct in place, or re-deposit? | In place (ruling 14); §5.2 |
+| Extend the trust rubric? | Yes (ruling 15); §7, reservation → §11.1 |
+| Should derived provenance be labelled as derived? | Moot — none is written (ruling 9); §3.5 keeps the rule for whoever needs it later |
+
+## 12. Verification log
+
+Read-only `psql` on the Pi (`docker exec -i tckdbv2-db-1 psql -U tckdb -d
+tckdb`), 2026-09-12 and 2026-09-13: `alembic_version`; full row dump of
+`energy_correction_scheme`; `\d` on `energy_correction_scheme`,
+`frequency_scale_factor`, `software`, `software_release`,
+`workflow_tool_release`, `applied_energy_correction`; `software`,
+`software_release`, `workflow_tool_release` and `level_of_theory` row
+dumps; per-`lot_id` counts of distinct `software_id` /
+`software_release_id` / `workflow_tool_release_id` over `calculation`;
+per-scheme counts of the same over `applied_energy_correction` joined
+through `source_calculation_id`; parameter-row counts and the full 8-atom
+and 45-bond dumps; `literature` count (0); `frequency_scale_factor` row
+dump; `record_review` status counts; and both pre-flight collision
+queries from §4 and §6 (0 rows each).
+
+Live API, anonymous:
+`GET /scientific/energy-correction-schemes/ecs_q5potmkzrmm6ynh2behv5kbfdu?include=literature`
+(confirms `software_release_ref: ""`);
+`…/search?software_version=16` (confirms `422 unsupported_filter`);
+`…/search?software=Gaussian` (2 records).
+
+Code read at `c2633156`: `backend/app/db/models/energy_correction.py`;
+`backend/app/db/models/common.py` (`AtomMapSource`,
+`CalculationInputGeometrySource`, `EnergyUnit`, `LiteratureKind`);
+`backend/alembic/versions/b6d80e36dcec_…py`;
+`backend/app/services/energy_correction_resolution.py`;
+`backend/app/services/software_resolution.py`;
+`backend/app/services/provenance_warnings.py`;
+`backend/app/services/trust/rubrics.py` and `trust/models.py`;
+`backend/app/services/scientific_read/energy_correction_schemes.py`,
+`…_search.py`, `…/frequency_scale_factors.py`, `…/statmech.py`;
+`backend/app/api/routes/admin.py`, `…/scientific/corrections.py`,
+`…/literature.py`, `…/scientific/literature.py`,
+`backend/app/api/code_catalogue.py`;
+`schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py` and
+`…/fragments/refs.py`; `frontend/src/pages/LevelOfTheoryPage.tsx`,
+`…/CorrectionSchemePage.tsx`, `frontend/src/domain/provenanceFormat.ts`,
+`frontend/src/api/methodsApi.ts`; and the four existing test modules
+named in §10.
+
+External, read-only, and quarantined to §9 by
+`feedback_tckdb_is_sovereign`: a local checkout of
+`RMG-database/input/quantum_corrections/data.py`.
