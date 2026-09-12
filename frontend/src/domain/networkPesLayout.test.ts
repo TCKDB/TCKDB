@@ -5,6 +5,7 @@ import {
     NETWORK_PES_BASE_WIDTH,
     NETWORK_PES_LEVEL_GAP,
     NETWORK_PES_MARGIN,
+    pesLevelCaptionWidth,
 } from "./networkPesLayout"
 
 // See `NetworkPesLayout.test — mutation table` at the bottom of this file
@@ -263,14 +264,23 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
         expect(layout.width).toBe(NETWORK_PES_BASE_WIDTH)
     })
 
-    it("grows past the base width once enough levels need more room, by the documented formula", () => {
-        const n = 12
-        const states = Array.from({ length: n }, (_unused, i) => state(`h${i}`, "well", `s${i}`))
-        const energies = states.map((s, i) => energy(s.composition_hash, i * 10))
-        const layout = computeNetworkPesLayout(states, energies, [], [])!
-        const expectedWidth = NETWORK_PES_MARGIN.left + NETWORK_PES_MARGIN.right + (n - 1) * NETWORK_PES_LEVEL_GAP
-        expect(layout.width).toBe(expectedWidth)
-        expect(layout.width).toBeGreaterThan(NETWORK_PES_BASE_WIDTH)
+    it("grows by exactly one level gap per added level, once past the base width", () => {
+        // Asserts the PROPERTY rather than restating the width formula. The
+        // formula itself now derives the side margins from the outermost
+        // captions, so a test that recomputed it would only be checking the
+        // implementation against a copy of itself. Both fixtures here use
+        // equal-length captions, so the margins are identical between them
+        // and the whole difference is the one added gap.
+        function widthFor(n: number): number {
+            const states = Array.from({ length: n }, (_unused, i) => state(`h${i}`, "well", `s${i}`))
+            const energies = states.map((st, i) => energy(st.composition_hash, 100 + i * 10))
+            return computeNetworkPesLayout(states, energies, [], [])!.width
+        }
+        const twelve = widthFor(12)
+        const thirteen = widthFor(13)
+        expect(twelve).toBeGreaterThan(NETWORK_PES_BASE_WIDTH)
+        expect(thirteen - twelve).toBe(NETWORK_PES_LEVEL_GAP)
+        expect(NETWORK_PES_MARGIN.left).toBeGreaterThan(0)
     })
 })
 
@@ -293,3 +303,46 @@ describe("computeNetworkPesLayout -- width grows with plotted level count, stayi
  * `sha256sum -c networkPesLayout.ts.sha256` confirmed the restored file is
  * byte-identical to the committed one.
  */
+
+describe("computeNetworkPesLayout — captions fit the plot they are drawn in", () => {
+    // The level BAR is 68px wide; the caption under it can be twice that
+    // ("[H][H] + [N-]=[NH2+]" is ~156px at 13px monospace). Sizing the plot
+    // from the bar rather than the caption is what clipped the rightmost
+    // caption at the viewBox edge and overlapped the interior ones on the
+    // live hydrazine network.
+    const LONG = "[H][H] + [N-]=[NH2+]"
+
+    // ENOUGH levels that the per-level gap actually binds. With only a few
+    // levels the width sits on its base floor and the spacing is generous,
+    // so a too-small gap does not overlap anything and a test built on such
+    // a fixture passes with the fix reverted -- which is what the first
+    // draft of the overlap test below did.
+    function longLabelLayout() {
+        const states = Array.from({ length: 8 }, (_unused, i) =>
+            state(`h${i}`, i === 0 ? "well" : "bimolecular", i % 2 === 0 ? LONG : `N=N (E) + [H][H] ${i}`))
+        const energies = states.map((st, i) => energy(st.composition_hash, i * 54.4))
+        return computeNetworkPesLayout(states, energies, [], [])
+    }
+
+    it("keeps the outermost captions inside the viewBox", () => {
+        const layout = longLabelLayout()!
+        expect(layout.levels.length).toBeGreaterThan(0)
+        for (const level of layout.levels) {
+            const half = pesLevelCaptionWidth(level.label, level.energyKjMol) / 2
+            expect(level.x - half).toBeGreaterThanOrEqual(0)
+            expect(level.x + half).toBeLessThanOrEqual(layout.width)
+        }
+    })
+
+    it("leaves adjacent captions room not to overlap", () => {
+        const layout = longLabelLayout()!
+        const byX = [...layout.levels].sort((a, b) => a.x - b.x)
+        expect(byX.length).toBeGreaterThan(1)
+        for (let i = 1; i < byX.length; i++) {
+            const gap = byX[i].x - byX[i - 1].x
+            const needed = pesLevelCaptionWidth(byX[i - 1].label, byX[i - 1].energyKjMol) / 2
+                + pesLevelCaptionWidth(byX[i].label, byX[i].energyKjMol) / 2
+            expect(gap).toBeGreaterThanOrEqual(needed)
+        }
+    })
+})

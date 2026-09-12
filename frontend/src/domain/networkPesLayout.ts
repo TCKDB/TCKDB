@@ -70,6 +70,27 @@ export const NETWORK_PES_BASE_WIDTH = 760
 export const NETWORK_PES_LEVEL_GAP = 130
 /** Half-width of one level bar, in pixels either side of its centre x. */
 export const NETWORK_PES_LEVEL_HALF_WIDTH = 34
+
+/** Advance width of one character at `--type-data-font` (13px monospace),
+ *  which is what the level and energy captions render in. Used to size the
+ *  plot from the CAPTIONS rather than from the level bars: a level bar is
+ *  68px wide, but "[H][H] + [N-]=[NH2+]" under it is over twice that, and
+ *  sizing to the bar is what made the rightmost caption overflow the
+ *  viewBox and the interior captions collide. SVG cannot measure text
+ *  without layout, and monospace is the one face where a character count
+ *  IS the width, which is why these captions are monospace to begin with. */
+export const NETWORK_PES_CAPTION_CHAR_WIDTH = 7.8
+
+/** Breathing room between two adjacent captions, and between the outermost
+ *  caption and the viewBox edge. */
+export const NETWORK_PES_CAPTION_PAD = 14
+
+/** Widest string rendered beneath a level: its own label, or its energy
+ *  caption, whichever is longer. */
+export function pesLevelCaptionWidth(label: string, energyKjMol: number): number {
+    const energyCaption = `${energyKjMol.toFixed(1)} kJ/mol`
+    return Math.max(label.length, energyCaption.length) * NETWORK_PES_CAPTION_CHAR_WIDTH
+}
 const Y_DOMAIN_PADDING_FRACTION = 0.14
 /**
  * Owner's brief: "I verified for all four that source_energy +
@@ -186,15 +207,34 @@ export function computeNetworkPesLayout(
     })
 
     const n = orderedHashes.length
-    const innerWidthNeeded = (n - 1) * NETWORK_PES_LEVEL_GAP
-    const width = Math.max(NETWORK_PES_BASE_WIDTH, NETWORK_PES_MARGIN.left + NETWORK_PES_MARGIN.right + innerWidthNeeded)
-    const usableInnerWidth = width - NETWORK_PES_MARGIN.left - NETWORK_PES_MARGIN.right
+
+    // Size the plot from the CAPTIONS, not the level bars. Captions are
+    // centred under their level, so a level needs half its caption of room
+    // on each side; the outermost two need that room inside the viewBox, and
+    // every adjacent pair needs a full caption's width between them. The
+    // fixed 130px gap and 40px right margin this replaced were both smaller
+    // than a real label ("[H][H] + [N-]=[NH2+]" is ~156px), which clipped the
+    // rightmost caption and overlapped the interior ones.
+    const captionWidths = orderedHashes.map((hash) =>
+        pesLevelCaptionWidth(stateByHash.get(hash)?.composition.state_label || "unresolved state", energyByHash.get(hash) ?? 0))
+    const widestCaption = captionWidths.length > 0 ? Math.max(...captionWidths) : 0
+    const edgeCaptionHalf = Math.ceil(
+        Math.max(captionWidths[0] ?? 0, captionWidths[captionWidths.length - 1] ?? 0) / 2,
+    )
+
+    const marginLeft = Math.max(NETWORK_PES_MARGIN.left, edgeCaptionHalf + NETWORK_PES_CAPTION_PAD)
+    const marginRight = Math.max(NETWORK_PES_MARGIN.right, edgeCaptionHalf + NETWORK_PES_CAPTION_PAD)
+    const levelGap = Math.max(NETWORK_PES_LEVEL_GAP, Math.ceil(widestCaption) + NETWORK_PES_CAPTION_PAD)
+
+    const innerWidthNeeded = (n - 1) * levelGap
+    const width = Math.max(NETWORK_PES_BASE_WIDTH, marginLeft + marginRight + innerWidthNeeded)
+    const usableInnerWidth = width - marginLeft - marginRight
 
     const xByHash = new Map<string, number>()
     orderedHashes.forEach((hash, index) => {
         const x = n === 1
-            ? NETWORK_PES_MARGIN.left + usableInnerWidth / 2
-            : NETWORK_PES_MARGIN.left + (usableInnerWidth * index) / (n - 1)
+            ? marginLeft + usableInnerWidth / 2
+            : marginLeft + (usableInnerWidth * index) / (n - 1)
         xByHash.set(hash, x)
     })
 
