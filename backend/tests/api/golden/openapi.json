@@ -263,7 +263,7 @@
       },
       "AdminEnergyCorrectionSchemeProvenanceRequest": {
         "additionalProperties": false,
-        "description": "Provenance to attach to an existing, already-deposited scheme.\n\nEvery field is optional and independent: an admin may fill only the\ncitation, only the software, only the workflow-tool release, or any\ncombination -- whichever the row is missing. Supplying a field whose\nslot on the row is already non-null is refused (409), never\nsilently ignored or overwritten.",
+        "description": "Provenance to attach to an existing, already-deposited scheme.\n\nEvery field is optional and independent: an admin may fill only the\ncitation, only the software, only the workflow-tool release, or any\ncombination -- whichever the row is missing. Supplying a field whose\nslot on the row is already non-null is refused (409), never\nsilently ignored or overwritten.\n\n``software`` stays ``SoftwareRef`` (name only) here -- the underlying\ncolumn is ``software_release_id`` as of the correction-scheme-\nprovenance plan v2 (PR 1), so this now fills the version-less release\nrow for the named program (\"program known, build not stated\" is a\ncomplete, honest value, see the plan's §3.2). Widening this field to\naccept a full release (version/revision/build), the way\n``EnergyCorrectionSchemeRef.software`` already does on the upload\npath, is PR 3's job, not this one's.",
         "properties": {
           "software": {
             "anyOf": [
@@ -307,7 +307,7 @@
             "title": "Energy Correction Scheme Ref",
             "type": "string"
           },
-          "software_ref": {
+          "software_release_ref": {
             "anyOf": [
               {
                 "type": "string"
@@ -316,7 +316,7 @@
                 "type": "null"
               }
             ],
-            "title": "Software Ref"
+            "title": "Software Release Ref"
           },
           "source_literature_ref": {
             "anyOf": [
@@ -14574,7 +14574,7 @@
       },
       "EnergyCorrectionSchemeRef": {
         "additionalProperties": false,
-        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, version, source_literature, software,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software identity that differs from an\nexisting same-``(kind, name, level_of_theory, version)`` scheme is\nnever dropped: it makes this a scientifically distinct scheme (a\ndifferent citation, or a different program's numbers), so it\nresolves to a different row rather than silently overwriting or\ndiscarding what was supplied.\n\n:param software: The program that computed this scheme's parameters\n    (e.g. Gaussian). Mirrors ``FreqScaleFactorRef.software`` exactly\n    — name only, no version. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
+        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, version, units, source_literature,\nsoftware_release, workflow_tool_release)`` — it is reused. Otherwise a\nnew scheme is created. A citation, software release, or unit that\ndiffers from an existing same-``(kind, name, level_of_theory,\nversion)`` scheme is never dropped: it makes this a scientifically\ndistinct scheme (a different citation, a different program build's\nnumbers, or a different unit convention), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
         "properties": {
           "atom_params": {
             "items": {
@@ -14629,7 +14629,7 @@
           "software": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SoftwareRef"
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
               },
               {
                 "type": "null"
@@ -51351,7 +51351,7 @@
     },
     "/api/v1/admin/energy-correction-schemes/{ref}/provenance": {
       "patch": {
-        "description": "Fill missing citation/software provenance on a scheme (admin only).\n\nPath handle accepts an integer ``energy_correction_scheme.id`` or a\npublic ref of the form ``ecs_...``; unknown handles 404. Each of\n``source_literature``/``software``/``workflow_tool_release`` is\nrefused with 409 if the corresponding column is already non-null on\nthe row (per-field, not all-or-nothing -- one call can fill the\ncitation on a scheme that already has software recorded, or vice\nversa). Resolution reuses the exact same services the upload path\nuses (``resolve_or_create_literature``, ``resolve_software``,\n``resolve_workflow_tool_release_ref``), so a citation/software that\nalready exists elsewhere in the archive is reused, not duplicated.\n\nMutating these fields on an already-inserted row does not regenerate\nits public ref -- refs are content-derived only at INSERT time\n(``PublicRefMixin``), and keeping the ref stable across a\nprovenance-fill matters more than the ref perfectly reflecting the\nrow's current content. If the resulting (kind, name, lot, version,\nliterature, software, workflow_tool_release) tuple collides with\nanother existing scheme row, the write is refused with 409 rather\nthan silently merging two rows' identities.",
+        "description": "Fill missing citation/software provenance on a scheme (admin only).\n\nPath handle accepts an integer ``energy_correction_scheme.id`` or a\npublic ref of the form ``ecs_...``; unknown handles 404. Each of\n``source_literature``/``software``/``workflow_tool_release`` is\nrefused with 409 if the corresponding column is already non-null on\nthe row (per-field, not all-or-nothing -- one call can fill the\ncitation on a scheme that already has software recorded, or vice\nversa). Resolution reuses the exact same services the upload path\nuses (``resolve_or_create_literature``, ``resolve_software_release``,\n``resolve_workflow_tool_release_ref``), so a citation/software\nrelease that already exists elsewhere in the archive is reused, not\nduplicated.\n\nMutating these fields on an already-inserted row does not regenerate\nits public ref -- refs are content-derived only at INSERT time\n(``PublicRefMixin``), and keeping the ref stable across a\nprovenance-fill matters more than the ref perfectly reflecting the\nrow's current content. If the resulting (kind, name, lot, version,\nunits, literature, software_release, workflow_tool_release) tuple\ncollides with another existing scheme row, the write is refused with\n409 rather than silently merging two rows' identities.",
         "operationId": "attach_energy_correction_scheme_provenance_api_v1_admin_energy_correction_schemes__ref__provenance_patch",
         "parameters": [
           {

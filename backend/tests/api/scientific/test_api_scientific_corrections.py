@@ -20,6 +20,7 @@ from tests.services.scientific_read._factories import (
     make_literature,
     make_lot,
     make_software,
+    make_software_release,
     make_species,
     make_species_entry,
     make_statmech,
@@ -659,10 +660,12 @@ def test_ecs_search_by_literature_ref(client, db_session):
 
 
 def test_ecs_search_by_software(client, db_session):
-    """The ``software`` filter is now backed by ``software_id`` (was
-    deferred/422 before the correction-scheme-provenance widening)."""
-    sw = make_software(db_session, name="orca")
-    ecs = make_energy_correction_scheme(db_session, software=sw)
+    """The ``software`` filter is backed by ``software_release_id`` (was
+    deferred/422 before the correction-scheme-provenance v1 widening;
+    v2 moved it from ``software_id`` to a release, joined through
+    ``software_release``)."""
+    release = make_software_release(db_session, name="orca", version=None)
+    ecs = make_energy_correction_scheme(db_session, software_release=release)
     body = client.get(_ecs_search_url(software="orca")).json()
     refs = {
         r["energy_correction_scheme"]["energy_correction_scheme_ref"]
@@ -681,10 +684,10 @@ def test_ecs_search_by_software_version_still_deferred(client, db_session):
 
 
 def test_ecs_detail_serves_software_and_workflow_tool_release(client, db_session):
-    sw = make_software(db_session, name="gaussian")
+    release = make_software_release(db_session, name="gaussian", version=None)
     wtr = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
     ecs = make_energy_correction_scheme(
-        db_session, software=sw, workflow_tool_release=wtr
+        db_session, software_release=release, workflow_tool_release=wtr
     )
     body = client.get(_ecs_detail_url(ecs.public_ref)).json()
 

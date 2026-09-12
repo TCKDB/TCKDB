@@ -381,20 +381,20 @@ def _canonical_frequency_scale_factor(obj: Any) -> str:
 
 def _canonical_energy_correction_scheme(obj: Any) -> str:
     """EnergyCorrectionScheme identity must include every field the
-    resolver/database treats as part of the row's identity, plus the
-    fields the schema considers metadata of a distinct scheme version.
+    resolver/database treats as part of the row's identity.
 
     The database uniqueness constraint (``uq_energy_correction_scheme_
     identity``) and ``resolve_or_create_scheme`` both dedup on
-    ``(kind, name, level_of_theory_id, version, source_literature_id,
-    software_id, workflow_tool_release_id)`` as of the
-    correction-scheme-provenance plan — ``source_literature_id``,
-    ``software_id`` and ``workflow_tool_release_id`` are part of that
-    key (added to close a real bug: a differing citation or software
-    identity used to collapse into the first row and get silently
-    dropped). ``units`` is not part of the DB key but a different value
-    still means a scientifically distinct scheme (a different unit
-    convention). Two rows that the resolver treats as distinct must
+    ``(kind, name, level_of_theory_id, version, units,
+    source_literature_id, software_release_id,
+    workflow_tool_release_id)`` as of the correction-scheme-provenance
+    plan v2 — every one of those fields is part of the DB key
+    (``units`` and ``software_release_id`` joined it in v2; the latter
+    replaced the coarser ``software_id`` — a program-release now
+    distinguishes a scheme the way a bare program used to, and a unit
+    convention now distinguishes one the way it always should have,
+    per ``resolve_or_create_scheme``'s previously-unit-blind value
+    comparison). Two rows that the resolver treats as distinct must
     therefore get distinct refs — otherwise the
     ``ix_energy_correction_scheme_public_ref`` unique index trips on
     insert.
@@ -404,7 +404,7 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
         f"name={(obj.name or '').strip().lower()};"
         f"level_of_theory_id={obj.level_of_theory_id};"
         f"source_literature_id={obj.source_literature_id};"
-        f"software_id={obj.software_id};"
+        f"software_release_id={obj.software_release_id};"
         f"workflow_tool_release_id={obj.workflow_tool_release_id};"
         f"version={(obj.version or '').strip().lower()};"
         f"units={getattr(obj.units, 'value', obj.units)}"

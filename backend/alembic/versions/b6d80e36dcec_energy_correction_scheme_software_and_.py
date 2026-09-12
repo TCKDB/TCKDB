@@ -217,11 +217,23 @@ def _backfill_software_and_workflow_tool_release(bind) -> None:
     is scoped to rows whose target column ``IS NULL``, so re-running this
     against an already-backfilled (or already admin-provenanced, or
     already re-uploaded-with-software) row touches nothing. Called from
-    :func:`upgrade`; also called directly, with a plain connection, by
-    ``tests/db/test_energy_correction_scheme_backfill.py`` so the
-    unambiguous/ambiguous/already-set/idempotent cases are each provable
-    against a constructed fixture rather than only against the two real
-    rows this repository cannot put in a test.
+    :func:`upgrade`; it *was* also called directly, with a plain
+    connection, by ``tests/db/test_energy_correction_scheme_backfill.py``
+    so the unambiguous/ambiguous/already-set/idempotent cases were each
+    provable against a constructed fixture rather than only against the
+    two real rows this repository cannot put in a test.
+
+    **Superseded by c24ce2d9c198** (comment-only edit; nothing executable
+    here changed, and this revision still describes exactly what ran).
+    That revision replaces ``software_id`` with ``software_release_id``
+    and deliberately performs **no backfill on that axis at all**: the
+    derivation below answers "which program ran the calculations recorded
+    at this level of theory", which is a different question from "which
+    program computed this scheme's own parameters", and for the two live
+    rows the answer it produced was wrong rather than merely unproven.
+    ``test_energy_correction_scheme_backfill.py`` was deleted with that
+    revision rather than ported, because it tested a derivation that no
+    longer runs. Do not restore either.
 
     :param bind: A SQLAlchemy ``Connection`` (``op.get_bind()`` inside a
         migration, or a plain connection in a test).

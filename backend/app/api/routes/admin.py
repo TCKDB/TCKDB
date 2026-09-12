@@ -58,7 +58,7 @@ from app.services.machine_review import (
 from app.services.scientific_read.handles import (
     resolve_energy_correction_scheme_handle,
 )
-from app.services.software_resolution import resolve_software
+from app.services.software_resolution import resolve_software_release
 
 router = APIRouter()
 
@@ -743,6 +743,15 @@ class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
     combination -- whichever the row is missing. Supplying a field whose
     slot on the row is already non-null is refused (409), never
     silently ignored or overwritten.
+
+    ``software`` stays ``SoftwareRef`` (name only) here -- the underlying
+    column is ``software_release_id`` as of the correction-scheme-
+    provenance plan v2 (PR 1), so this now fills the version-less release
+    row for the named program ("program known, build not stated" is a
+    complete, honest value, see the plan's §3.2). Widening this field to
+    accept a full release (version/revision/build), the way
+    ``EnergyCorrectionSchemeRef.software`` already does on the upload
+    path, is PR 3's job, not this one's.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -761,7 +770,14 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
 
     energy_correction_scheme_ref: str
     source_literature_ref: str | None = None
-    software_ref: str | None = None
+    #: Renamed from ``software_ref`` when ``energy_correction_scheme``
+    #: moved from ``software_id`` to ``software_release_id``
+    #: (c24ce2d9c198). The value this field carries changed referent at
+    #: the same moment -- it is now a ``software_release`` public ref
+    #: (``srel_...``), not a ``software`` one (``soft_...``). Keeping the
+    #: old name would have left an admin client silently resolving the
+    #: ref against the wrong table; renaming makes the break visible.
+    software_release_ref: str | None = None
     workflow_tool_release_ref: str | None = None
 
 
@@ -806,18 +822,19 @@ def attach_energy_correction_scheme_provenance(
     the row (per-field, not all-or-nothing -- one call can fill the
     citation on a scheme that already has software recorded, or vice
     versa). Resolution reuses the exact same services the upload path
-    uses (``resolve_or_create_literature``, ``resolve_software``,
-    ``resolve_workflow_tool_release_ref``), so a citation/software that
-    already exists elsewhere in the archive is reused, not duplicated.
+    uses (``resolve_or_create_literature``, ``resolve_software_release``,
+    ``resolve_workflow_tool_release_ref``), so a citation/software
+    release that already exists elsewhere in the archive is reused, not
+    duplicated.
 
     Mutating these fields on an already-inserted row does not regenerate
     its public ref -- refs are content-derived only at INSERT time
     (``PublicRefMixin``), and keeping the ref stable across a
     provenance-fill matters more than the ref perfectly reflecting the
     row's current content. If the resulting (kind, name, lot, version,
-    literature, software, workflow_tool_release) tuple collides with
-    another existing scheme row, the write is refused with 409 rather
-    than silently merging two rows' identities.
+    units, literature, software_release, workflow_tool_release) tuple
+    collides with another existing scheme row, the write is refused with
+    409 rather than silently merging two rows' identities.
     """
     scheme_id = resolve_energy_correction_scheme_handle(session, ref)
     scheme = session.get(EnergyCorrectionScheme, scheme_id)
@@ -833,10 +850,12 @@ def attach_energy_correction_scheme_provenance(
         scheme.source_literature_id = literature.id
 
     if request.software is not None:
-        if scheme.software_id is not None:
+        if scheme.software_release_id is not None:
             raise _already_set_conflict("software")
-        sw = resolve_software(session, request.software.name)
-        scheme.software_id = sw.id
+        # SoftwareRef carries a bare name; resolve it to the version-less
+        # release row for that program (see the request model's docstring).
+        release = resolve_software_release(session, name=request.software.name)
+        scheme.software_release_id = release.id
 
     if request.workflow_tool_release is not None:
         if scheme.workflow_tool_release_id is not None:
@@ -863,8 +882,10 @@ def attach_energy_correction_scheme_provenance(
             if scheme.source_literature_id is not None
             else None
         ),
-        software_ref=(
-            scheme.software.public_ref if scheme.software_id is not None else None
+        software_release_ref=(
+            scheme.software_release.public_ref
+            if scheme.software_release_id is not None
+            else None
         ),
         workflow_tool_release_ref=(
             scheme.workflow_tool_release.public_ref

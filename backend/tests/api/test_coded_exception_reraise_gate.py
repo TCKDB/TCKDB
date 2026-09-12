@@ -214,9 +214,10 @@ JUDGED_SITES: dict[str, str] = {
     "backend/app/api/routes/admin.py::attach_energy_correction_scheme_provenance": (
         "The energy-correction-scheme provenance-attach route "
         "(correction-scheme-provenance plan §4.3) mutates an existing "
-        "scheme's source_literature_id/software_id/workflow_tool_release_id "
-        "in place and flushes; the only way that flush's IntegrityError can "
-        "fire is uq_energy_correction_scheme_identity -- the widened tuple "
+        "scheme's source_literature_id/software_release_id/"
+        "workflow_tool_release_id in place and flushes; the only way that "
+        "flush's IntegrityError can fire is "
+        "uq_energy_correction_scheme_identity -- the widened tuple "
         "this call would produce already belongs to another row. The caught "
         "IntegrityError carries a raw psycopg constraint name and SQLSTATE, "
         "neither meaningful to a caller; the handler replaces it with "

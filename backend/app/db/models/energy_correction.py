@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from app.db.models.level_of_theory import LevelOfTheory
     from app.db.models.literature import Literature
     from app.db.models.reaction import ReactionEntry
-    from app.db.models.software import Software
+    from app.db.models.software import Software, SoftwareRelease
     from app.db.models.species import ConformerObservation, SpeciesEntry
     from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
@@ -68,12 +68,23 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
-    # Software dimension: the same LOT run in Gaussian vs ORCA can yield
-    # different atom-energy/BAC parameters (mirrors FrequencyScaleFactor's
-    # identical comment and column below).
-    software_id: Mapped[Optional[int]] = mapped_column(
+    # Software-release dimension: an atom-energy/BAC parameter set is the
+    # output of a program's own build-level numerics (integration grid,
+    # SCF thresholds, basis-set definition) -- these change between
+    # releases of the same program, so the correction is release-specific,
+    # not merely program-specific (correction-scheme-provenance plan v2
+    # §3.1). Keyed on ``software_release`` like every other
+    # provenance-bearing table in this schema (plan §2.2); unlike
+    # ``FrequencyScaleFactor.software_id`` below, which stays at the
+    # coarser program grain pending its own sibling revision (plan §6).
+    software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("software.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "software_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_software_release_id",
+        ),
         nullable=True,
     )
     # Set when the scheme was sourced from a workflow tool's data file (e.g.
@@ -99,7 +110,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     # Relationships
     level_of_theory: Mapped[Optional["LevelOfTheory"]] = relationship()
     source_literature: Mapped[Optional["Literature"]] = relationship()
-    software: Mapped[Optional["Software"]] = relationship()
+    software_release: Mapped[Optional["SoftwareRelease"]] = relationship()
     workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship()
 
     atom_params: Mapped[list["EnergyCorrectionSchemeAtomParam"]] = relationship(
@@ -122,8 +133,9 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "name",
             "level_of_theory_id",
             "version",
+            "units",
             "source_literature_id",
-            "software_id",
+            "software_release_id",
             "workflow_tool_release_id",
             unique=True,
             postgresql_nulls_not_distinct=True,
