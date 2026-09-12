@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import "../design-system.css"
-import type { NetworkChannel, NetworkState } from "../api/networkEntryApi"
+import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateEnergy } from "../api/networkEntryApi"
 import { NetworkDiagram } from "./NetworkDiagram"
 
 afterEach(() => cleanup())
@@ -39,6 +39,33 @@ function channel(key: string, kind: string, source: string, sink: string, hasKin
     }
 }
 
+function energy(hash: string, energyKjMol: number): NetworkStateEnergy {
+    return {
+        state_composition_hash: hash,
+        energy_kj_mol: energyKjMol,
+        energy_zero_convention: "lowest_state",
+        correction_convention: "electronic_only",
+    }
+}
+
+function barrier(channelKey: string, forward: number, reverse: number): NetworkChannelBarrier {
+    return {
+        channel_key: channelKey,
+        reaction_entry_ref: `rxe_${channelKey}`,
+        transition_state_entry_ref: `tse_${channelKey}`,
+        forward_barrier_kj_mol: forward,
+        reverse_barrier_kj_mol: reverse,
+        energy_zero_convention: "lowest_state",
+        correction_convention: "electronic_only",
+    }
+}
+
+// A network shaped like the live hydrazine archive: 4 states, 3 channels,
+// but only ONE channel (channel_1) carries a deposited barrier -- the
+// other two (channel_2, channel_5) must produce no saddle point at all
+// (invariant 1). hash_n6 deliberately carries no deposited energy, so it
+// must be OMITTED from the surface (never guessed), counted in the
+// "no deposited energy" note.
 const HYDRAZINE_STATES: NetworkState[] = [
     state("hash_n1", "well", "NN", [{ ref: "spe_nn", smiles: "NN" }]),
     state("hash_n2", "well", "[NH-][NH3+]", [{ ref: "spe_zw", smiles: "[NH-][NH3+]" }]),
@@ -52,36 +79,67 @@ const HYDRAZINE_CHANNELS: NetworkChannel[] = [
     channel("channel_5", "association", "hash_n6", "hash_n1", false),
 ]
 
-function renderDiagram(states: NetworkState[], channels: NetworkChannel[]) {
+// source (hash_n2) = 180.1, sink (hash_n1) = 0.0, forward = 94.6 ->
+// TS height = 180.1 + 94.6 = 274.7 (matches the brief's own verified
+// figure for this exact channel). reverse chosen to agree: 274.7 - 0 = 274.7.
+const HYDRAZINE_ENERGIES: NetworkStateEnergy[] = [
+    energy("hash_n1", 0.0),
+    energy("hash_n2", 180.1),
+    energy("hash_n3", 380.9),
+    // hash_n6: no deposited energy, deliberately.
+]
+
+const HYDRAZINE_BARRIERS: NetworkChannelBarrier[] = [
+    barrier("channel_1", 94.6, 274.7),
+]
+
+function renderDiagram(
+    states: NetworkState[],
+    channels: NetworkChannel[],
+    stateEnergies: NetworkStateEnergy[] | null = HYDRAZINE_ENERGIES,
+    channelBarriers: NetworkChannelBarrier[] | null = HYDRAZINE_BARRIERS,
+) {
     return render(
         <MemoryRouter>
-            <NetworkDiagram states={states} channels={channels} />
+            <NetworkDiagram states={states} channels={channels} stateEnergies={stateEnergies} channelBarriers={channelBarriers} />
         </MemoryRouter>,
     )
 }
 
-describe("NetworkDiagram -- node/edge counts match the served data", () => {
-    it("renders exactly one node link per state and one edge link per channel", () => {
+describe("NetworkDiagram -- invariant 1: a saddle point is drawn only for a channel with a deposited barrier", () => {
+    it("draws exactly one saddle point (channel_1) though three channels exist", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        expect(container.querySelectorAll(".net-node-link")).toHaveLength(HYDRAZINE_STATES.length)
-        expect(container.querySelectorAll(".net-edge-link")).toHaveLength(HYDRAZINE_CHANNELS.length)
+        // Scoped to `.net-pes-saddle-link`, not `querySelector("svg")` --
+        // the legend renders its own small illustrative <svg> icons first,
+        // so "the first svg" would silently scope this to a 22x10 icon.
+        const saddleLinks = container.querySelectorAll(".net-pes-saddle-link")
+        expect(saddleLinks.length).toBeGreaterThan(0)
+        expect(saddleLinks).toHaveLength(1)
+    })
+
+    it("draws no saddle point at all when NO channel carries a deposited barrier", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS, HYDRAZINE_ENERGIES, [])
+        expect(container.querySelectorAll(".net-pes-saddle-link")).toHaveLength(0)
+    })
+
+    it("states the true deposited-barrier count in prose, live from the data", () => {
+        renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        expect(screen.getByText(/1 of 3 channels carries a deposited barrier/)).toBeVisible()
+    })
+})
+
+describe("NetworkDiagram -- saddle height is source_energy + forward_barrier_kj_mol, rendered on the peak", () => {
+    it("shows 274.7, never the bare forward barrier (94.6) or the reverse-derived figure alone", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const peakLabel = container.querySelector(".net-pes-peak-label")
+        expect(peakLabel).not.toBeNull()
+        expect(peakLabel!.textContent).toBe("274.7")
     })
 })
 
 describe("NetworkDiagram -- channel_key never reaches a reader, by any route", () => {
     it("appears in no user-facing text on the SVG: not a <text>, not an aria-label, not a title", () => {
-        // The first version of this test checked `<text>` only, and passed
-        // while every edge carried aria-label="Channel channel_1, ...". An
-        // aria-label IS user-facing -- it is a screen reader user's primary
-        // label for the edge -- so checking the element type rather than the
-        // rule let the depositor string through to exactly the readers least
-        // able to work around it. Check every route a label can take.
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        // Scoped to the whole container, NOT to `querySelector("svg")`: the
-        // legend renders swatch <svg>s before the diagram, so grabbing "the
-        // first svg" silently scopes this to a 16x16 icon and the loop
-        // iterates nothing. That is how the first draft of this test passed
-        // against the very leak it was written to catch.
         const labelled = Array.from(container.querySelectorAll("[aria-label], [title]"))
         expect(labelled.length).toBeGreaterThan(0)
         for (const el of labelled) {
@@ -91,13 +149,14 @@ describe("NetworkDiagram -- channel_key never reaches a reader, by any route", (
         for (const el of Array.from(container.querySelectorAll("title, desc"))) {
             expect(el.textContent ?? "").not.toMatch(/channel_\d/)
         }
+        for (const el of Array.from(container.querySelectorAll("svg text"))) {
+            expect(el.textContent ?? "").not.toMatch(/channel_\d/)
+        }
     })
 
-    it("still describes each edge by its chemistry, so the aria-label is not merely emptied", () => {
-        // Guards the obvious wrong fix: deleting the aria-label passes the
-        // assertion above and leaves the edge unlabelled.
+    it("still describes the drawn saddle point by its chemistry, so the aria-label is not merely emptied", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const labels = Array.from(container.querySelectorAll("svg a.net-edge-link"))
+        const labels = Array.from(container.querySelectorAll("svg a.net-pes-saddle-link"))
             .map((el) => el.getAttribute("aria-label") ?? "")
         expect(labels.length).toBeGreaterThan(0)
         for (const label of labels) {
@@ -108,98 +167,80 @@ describe("NetworkDiagram -- channel_key never reaches a reader, by any route", (
 
     it("channel_1 appears as a data-channel-key attribute and in the table, never inside <text>", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const svgTexts = Array.from(container.querySelectorAll("svg text"))
-        for (const text of svgTexts) {
-            expect(text.textContent).not.toMatch(/channel_\d/)
-        }
-        const line = container.querySelector('line[data-channel-key="channel_1"]')
+        const line = container.querySelector('polyline[data-channel-key="channel_1"]')
         expect(line).not.toBeNull()
-        const cell = container.querySelector('td[data-label="Channel"] code.data')
         expect(Array.from(container.querySelectorAll('td[data-label="Channel"] code.data')).some((el) => el.textContent === "channel_1")).toBe(true)
-        expect(cell).not.toBeNull()
     })
 })
 
-describe("NetworkDiagram -- every visible node label is composition.state_label", () => {
-    it("renders each state's state_label as SVG text, never the composition_hash", () => {
+describe("NetworkDiagram -- every visible level label is composition.state_label", () => {
+    it("renders each plotted state's state_label as SVG text, never the composition_hash", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
         const svgTexts = Array.from(container.querySelectorAll("svg text")).map((t) => t.textContent)
         expect(svgTexts).toContain("NN")
-        expect(svgTexts).toContain("2 [NH2]")
-        // The raw hash legitimately appears in a `data-composition-hash`
-        // attribute (a programmatic join key, never rendered as text) --
-        // check rendered TEXT, not the serialised markup.
+        expect(svgTexts).toContain("[NH-][NH3+]")
         expect(container.textContent ?? "").not.toContain("hash_n1")
     })
 })
 
-describe("NetworkDiagram -- node shape encodes kind, never inferred from label text", () => {
-    it("a well state renders a <circle>, a bimolecular state renders a <polygon>", () => {
+describe("NetworkDiagram -- a state with no deposited energy is omitted, never guessed", () => {
+    it("does not draw a level for hash_n6, and states the omission count", () => {
         const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        // Scoped to the actual diagram SVG: the legend also carries one
-        // small illustrative `.net-node-well`/`.net-node-bimolecular` icon
-        // each, which is not one of this fixture's real nodes.
-        const svg = container.querySelector(".network-diagram-svg")!
-        expect(svg.querySelectorAll(".net-node-well")).toHaveLength(2)
-        expect(svg.querySelectorAll(".net-node-bimolecular")).toHaveLength(2)
-        expect(svg.querySelector("circle.net-node-well")).not.toBeNull()
-        expect(svg.querySelector("polygon.net-node-bimolecular")).not.toBeNull()
+        const levelLabels = Array.from(container.querySelectorAll(".net-pes-level-label")).map((el) => el.textContent)
+        expect(levelLabels).not.toContain("2 [NH2]")
+        expect(screen.getByText(/1 of 4 states has no deposited energy/)).toBeVisible()
     })
 })
 
-describe("NetworkDiagram -- edge dash encodes has_kinetics", () => {
-    it("a channel without kinetics renders a dashed line, channels with kinetics render solid", () => {
-        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        const dashed = container.querySelector('line[data-channel-key="channel_5"]')
-        const solid = container.querySelector('line[data-channel-key="channel_1"]')
-        expect(dashed).toHaveAttribute("stroke-dasharray", "4 3")
-        expect(solid).not.toHaveAttribute("stroke-dasharray")
-    })
-})
-
-describe("NetworkDiagram -- the accessible table always renders, regardless of SVG state", () => {
-    it("renders both state and channel tables alongside the SVG under threshold", () => {
+describe("NetworkDiagram -- the accessible tables always render, regardless of surface state", () => {
+    it("renders both state and channel tables alongside the surface", () => {
         renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
         expect(screen.getByRole("table", { name: "States in this network" })).toBeInTheDocument()
         expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
+        expect(screen.getAllByRole("row", { name: /./ }).length).toBeGreaterThan(HYDRAZINE_STATES.length)
     })
 
-    it("renders both tables even when the diagram degrades to table-only (25 states, past the threshold)", () => {
-        const manyStates = Array.from({ length: 25 }, (_unused, i) => state(`hash_${i}`, i % 2 === 0 ? "well" : "bimolecular", `state ${i}`))
-        const manyChannels = Array.from({ length: 24 }, (_unused, i) => channel(`channel_${i}`, "association", `hash_${i}`, `hash_${i + 1}`))
-        const { container } = renderDiagram(manyStates, manyChannels)
-        expect(container.querySelector(".network-diagram-svg")).toBeNull()
+    it("still renders both tables when no state carries a deposited energy at all", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS, [], [])
+        expect(container.querySelector(".net-pes-svg")).toBeNull()
         expect(screen.getByRole("table", { name: "States in this network" })).toBeInTheDocument()
         expect(screen.getByRole("table", { name: "Channels in this network" })).toBeInTheDocument()
-        expect(screen.getAllByRole("row").length).toBeGreaterThan(25)
-    })
-
-    it("shows the explicit degrade banner text, never a silently blank diagram", () => {
-        const manyStates = Array.from({ length: 25 }, (_unused, i) => state(`hash_${i}`, "well", `state ${i}`))
-        renderDiagram(manyStates, [])
-        expect(screen.getByText(/would not stay legible/)).toBeVisible()
-    })
-
-    it("under the threshold, no degrade banner is shown", () => {
-        renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        expect(screen.queryByText(/would not stay legible/)).not.toBeInTheDocument()
+        expect(screen.getByText(/No state energies are deposited/)).toBeVisible()
     })
 })
 
 describe("NetworkDiagram -- legend counts are computed live, not hardcoded", () => {
     it("states the true well/bimolecular/kind counts for this fixture", () => {
         renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
-        expect(screen.getByText(/Well \(2 states here\)/)).toBeVisible()
-        expect(screen.getByText(/Bimolecular \(2 states here/)).toBeVisible()
-        expect(screen.getByText(/isomerization \(1 channel here\)/)).toBeVisible()
-        expect(screen.getByText(/association \(2 channels here\)/)).toBeVisible()
-        expect(screen.getByText(/no kinetics fit deposited \(1 of 3 channels here\)/)).toBeVisible()
+        expect(screen.getByText(/Well level \(2 of 3 plotted states\)/)).toBeVisible()
+        expect(screen.getByText(/Bimolecular level \(1 of 3 plotted states\)/)).toBeVisible()
+        expect(screen.getByText(/isomerization \(1 saddle point shown\)/)).toBeVisible()
     })
 
     it("a different fixture produces a different sentence, proving the count is not fixed", () => {
         const oneWell = [state("hash_only", "well", "only state")]
-        renderDiagram(oneWell, [])
-        expect(screen.getByText(/Well \(1 state here\)/)).toBeVisible()
-        expect(screen.queryByText(/Well \(2 states here\)/)).not.toBeInTheDocument()
+        const { container } = renderDiagram(oneWell, [], [energy("hash_only", 0)], [])
+        expect(screen.getByText(/Well level \(1 of 1 plotted states\)/)).toBeVisible()
+        expect(screen.queryByText(/Well level \(2 of/)).not.toBeInTheDocument()
+        expect(container.querySelectorAll(".net-pes-level-link")).toHaveLength(1)
     })
 })
+
+/**
+ * MUTATION TABLE (`NetworkDiagram.test.tsx`)
+ *
+ * | # | Test | Mutation landed | Result |
+ * |---|------|------------------|--------|
+ * | 1 | "draws exactly one saddle point (channel_1) though three channels exist" | In `NetworkDiagram.tsx`, changed `layout.saddles.map(...)` to `channels.map((c) => ({ ...saddleFromChannelIgnoringBarrier }))`-shaped stand-in: concretely, replaced `layout.saddles` with `layout.saddles.concat(layout.saddles)` (doubling) as a cheap one-line stand-in for "draws a saddle for a channel with no barrier" | RED -- `saddleLinks` had length 2, `toHaveLength(1)` failed |
+ * | 2 | "draws no saddle point at all when NO channel carries a deposited barrier" | Passed `HYDRAZINE_BARRIERS` instead of `[]` as the 4th arg in this one test (simulating the component ignoring an empty barrier list) | RED -- `toHaveLength(0)` failed, length was 1 |
+ * | 3 | "shows 274.7, never the bare forward barrier" | In `NetworkDiagram.tsx`, changed `{saddle.heightKjMol.toFixed(1)}` to `{(94.6).toFixed(1)}` (hardcoding the bare forward barrier value) | RED -- expected "274.7", got "94.6" |
+ * | 4 | "channel_1 appears as a data-channel-key attribute" | Removed `data-channel-key={saddle.channelKey ?? undefined}` from the `<polyline>` | RED -- `querySelector('polyline[data-channel-key="channel_1"]')` was null |
+ * | 5 | "renders each plotted state's state_label as SVG text, never the composition_hash" | Changed `level.label` to `level.compositionHash` in the level `<text>` | RED -- `svgTexts` no longer contained "NN"/"[NH-][NH3+]"; contained "hash_n1" instead, failing the negative assertion |
+ * | 6 | "does not draw a level for hash_n6" | Removed the `resolvedInServedOrder` filter in `networkPesLayout.ts` (placed every state regardless of a deposited energy) | RED -- `levelLabels` contained "2 [NH2]" |
+ * | 7 | "still renders both tables when no state carries a deposited energy at all" | Wrapped `<NetworkStatesTable .../>`/`<NetworkChannelsTable .../>` in `{layout && (...)}` in `NetworkDiagram.tsx` (regressing invariant 5) | RED -- `screen.getByRole("table", ...)` threw, element not found |
+ *
+ * Each mutation was landed as a single edit, the named test confirmed red
+ * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted
+ * and confirmed via `git diff --stat` showing no changes and
+ * `sha256sum -c` against a pre-mutation checksum of the touched file.
+ */
