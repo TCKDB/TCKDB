@@ -252,6 +252,62 @@ describe("NetworkDiagram -- a saddle is drawn as a level bar (TS bar), not a poi
         expect(bar).not.toBeNull()
         expect(bar!.textContent ?? "").not.toMatch(/channel_\d/)
     })
+
+    it("a connector leg's state-side endpoint is offset from that state's own centre, not launched from it", () => {
+        // Regression coverage for a defect found only by screenshotting the
+        // live hydrazine archive: a leg launched from a state's exact
+        // centre (the same anchor its own caption sits on) cuts through
+        // the caption's digits when that state has another connector
+        // departing the same point. `NetworkDiagram.tsx` launches from
+        // `saddle.sourceLegX`/`sinkLegX` instead. A HUB fixture (never a
+        // 2-node pair, which this module deliberately leaves unoffset --
+        // see `connectorLegX`'s own "no real outward side" comment) so the
+        // peak is genuinely off to one side of the hub, not tied to it.
+        const hubStates = [
+            state("hub", "well", "hub"),
+            state("left", "well", "left"),
+            state("right", "well", "right"),
+        ]
+        const hubChannels = [
+            channel("ch_left", "isomerization", "left", "hub"),
+            channel("ch_right", "isomerization", "hub", "right"),
+        ]
+        const hubEnergies = [energy("hub", 0), energy("left", 50), energy("right", 100)]
+        // Consistent forward/reverse pairs (source_energy + forward ==
+        // sink_energy + reverse): ch_left 50+80==0+130; ch_right 0+160==100+60.
+        const hubBarriers = [barrier("ch_left", 80, 130), barrier("ch_right", 160, 60)]
+        const { container } = renderDiagram(hubStates, hubChannels, hubEnergies, hubBarriers)
+        const hubLevel = container.querySelector('.net-pes-level-link[href="#state-row-hub"] .net-pes-level')!
+        const hubCentreX = Number(hubLevel.getAttribute("x1")) + 34 // NETWORK_PES_LEVEL_HALF_WIDTH
+        const hubY = hubLevel.getAttribute("y1")
+        const polyline = container.querySelector('.net-pes-svg polyline[data-channel-key="ch_right"]')!
+        const legPoint = polyline.getAttribute("points")!.split(" ")[0]
+        expect(legPoint).not.toBe(`${hubCentreX},${hubY}`)
+    })
+})
+
+describe("NetworkDiagram -- each level caption sits on its own opaque backing", () => {
+    it("draws two .net-pes-caption-backing rects per plotted level (energy and label)", () => {
+        // Regression coverage for a SEPARATE defect found the same way: a
+        // y-axis gridline landing close to a caption's own y (by
+        // coincidence of that state's energy) stayed visible through the
+        // gaps BETWEEN glyphs even with the existing per-glyph stroke halo.
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const backings = container.querySelectorAll(".net-pes-svg .net-pes-caption-backing")
+        const levels = container.querySelectorAll(".net-pes-svg .net-pes-level-link")
+        expect(levels.length).toBeGreaterThan(0)
+        expect(backings).toHaveLength(levels.length * 2)
+    })
+
+    it("sizes a backing rect to its OWN caption string, not a shared fixed width", () => {
+        const { container } = renderDiagram(HYDRAZINE_STATES, HYDRAZINE_CHANNELS)
+        const rects = Array.from(container.querySelectorAll('.net-pes-level-link[href="#state-row-hash_n1"] .net-pes-caption-backing'))
+        expect(rects).toHaveLength(2)
+        const widths = rects.map((rect) => Number(rect.getAttribute("width")))
+        // "NN" (label) is far shorter than "0.0 kJ/mol" (energy value) --
+        // a shared/fixed-width backing would make these equal.
+        expect(widths[0]).not.toBe(widths[1])
+    })
 })
 
 describe("NetworkDiagram -- energy caption sits above a level's bar, species label below it", () => {
@@ -337,6 +393,8 @@ describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spann
  * | 10 | "marks hash_n3's level data-unconnected and draws the dashed group divider" | Changed `{dividerX != null && (...)}` to `{false && dividerX != null && (...)}` | RED -- `querySelector('[data-testid="net-pes-group-divider"]')` was null |
  * | 11 | "draws no divider ... when every plotted state is connected" | Changed the same condition to `{(dividerX != null \|\| true) && (...)}` (always render) | RED -- the divider `<line>` was found where none should exist |
  * | 12 | "shows the cycle-fallback sentence for a 3-state, 3-barrier triangle" | Changed `{layout.components.some(...) && (...)}` to `{false && layout.components.some(...) && (...)}` | RED -- `screen.getByText(/deposited-barrier connectivity contains a cycle/)` threw, element not found |
+ * | 13 | "a connector leg's state-side endpoint is offset from that state's own centre, not launched from it" | Changed `saddle.sourceLegX` back to `saddle.sourceX` in the source-side `<polyline>` | RED -- the leg's first point equalled the hub's own bar centre, `not.toBe` failed |
+ * | 14 | "draws two .net-pes-caption-backing rects per plotted level ..." / "sizes a backing rect to its OWN caption string ..." | Removed the label's own `<rect className="net-pes-caption-backing" ...>` element (kept the energy one) | RED -- both tests failed together (3 backings instead of 6; 1 rect instead of 2 for NN) |
  *
  * Each mutation was landed as a single edit, the named test confirmed red
  * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted

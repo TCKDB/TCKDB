@@ -408,6 +408,40 @@ describe("computeNetworkPesLayout -- connectivity layout draws the hydrazine tre
         expect(layout.saddles.length).toBeGreaterThan(1)
         expect(findConnectorCrossings(layout)).toEqual([])
     })
+
+    it("a connector leg's own clearance never overtakes the very state its peak walks toward", () => {
+        // hub has TWO children: leaf "a" (a FRACTIONAL slot away from its
+        // own peak, not a tie, so the near-vertical guard above does not
+        // apply) and "b", which itself has a further child "c" -- so hub's
+        // own slot (the average of a's and b's) sits only a QUARTER of a
+        // level-gap from a, leaving very little room there regardless of
+        // how wide a's own caption is. "a"'s caption is deliberately the
+        // widest on the surface so it also sets the overall level gap --
+        // proving the cap is still needed even though a wider gap alone
+        // does not fix a FRACTIONAL-slot squeeze like this one: without the
+        // cap, "a"'s own leg is pushed straight past hub's own x, which no
+        // inter-saddle crossing check happens to catch on this small a
+        // fixture (nothing else occupies that stretch), but is a clear
+        // geometric absurdity on its own -- a leg overtaking the very
+        // state its connector is walking toward.
+        const wideLabel = "a very long caption that sets the level gap itself"
+        const states = [
+            state("hub", "well", "hub"),
+            state("a", "well", wideLabel),
+            state("b", "well", "b"),
+            state("c", "well", "c"),
+        ]
+        const energies = [energy("hub", 0), energy("a", 50), energy("b", 100), energy("c", 150)]
+        const channels = [channel("ch_a", "a", "hub"), channel("ch_b", "hub", "b"), channel("ch_c", "b", "c")]
+        // ch_a: 50+80==0+130. ch_b: 0+160==100+60. ch_c: 100+90==150+40.
+        const barriers = [barrier("ch_a", 80, 130), barrier("ch_b", 160, 60), barrier("ch_c", 90, 40)]
+        const layout = computeNetworkPesLayout(states, energies, channels, barriers)!
+        expect(layout.saddles).toHaveLength(3)
+        expect(findConnectorCrossings(layout)).toEqual([])
+        const hubX = layout.levels.find((level) => level.compositionHash === "hub")!.x
+        const saddleA = layout.saddles.find((saddle) => saddle.channelKey === "ch_a")!
+        expect(saddleA.sourceLegX).toBeLessThan(hubX)
+    })
 })
 
 describe("computeNetworkPesLayout -- a state on no deposited barrier is grouped separately, never wired to an invented edge", () => {
@@ -488,6 +522,8 @@ describe("computeNetworkPesLayout -- level captions never collide in 2D, even wh
  * | 10 | "lists both barrier-less states in isolatedStateHashes ..." | Changed `const isolatedStateHashes = resolvedInServedOrder.filter(...)` to `const isolatedStateHashes: string[] = []` | RED (and 6 other tests besides -- the isolated-fallback ordering, the captions-fit tests, and the 2D collision test all also depend on this list) |
  * | 11 | "marks the component isTree: false, usedSpanningTree: true ..." | Changed `const isTree = edgeCount === members.length - 1` to `const isTree = true` | RED -- `layout.components[0].isTree` was `true`, `toBe(false)` failed |
  * | 12 | "every pair of levels is separated on x, on y, or on both ..." | Commented out the `declutterLevelX(levels, captionWidthByHash)` call | RED -- two levels landed within both the x and y collision bands |
+ * | 13 | "no two DIFFERENT saddles' connector segments properly intersect" (again) | In `connectorLegX`, changed `const direction = Math.sign(peakX - stateX)` to `Math.sign(peakX - stateX) \|\| 1` (restoring an arbitrary +1 for an exact tie, the state THIS PR's own fix removed) | RED -- reproduced `["channel_3 x channel_2"]`, the exact crossing found by screenshotting the live archive after the caption-clearance offset was first added |
+ * | 14 | "a connector leg's own clearance never overtakes the very state its peak walks toward" | In `connectorLegX`, changed `Math.min(preferred, direction > 0 ? rightCap : leftCap)` to just `preferred` (dropping the neighbour cap) | RED -- `saddleA.sourceLegX` (418) was not less than `hubX` (411): the leg overtook the very state its own connector points at |
  *
  * Each mutation was landed as a single one-line edit, the named test
  * confirmed red (`npx vitest run src/domain/networkPesLayout.test.ts`),
