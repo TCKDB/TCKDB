@@ -332,6 +332,11 @@ describe("NetworkDiagram -- a cyclic accepted-barrier graph states its own spann
  * | 5 | "renders each plotted state's state_label as SVG text, never the composition_hash" | Changed `level.label` to `level.compositionHash` in the level `<text>` | RED -- `svgTexts` no longer contained "NN"/"[NH-][NH3+]"; contained "hash_n1" instead, failing the negative assertion |
  * | 6 | "does not draw a level for hash_n6" | Removed the `resolvedInServedOrder` filter in `networkPesLayout.ts` (placed every state regardless of a deposited energy) | RED -- `levelLabels` contained "2 [NH2]" |
  * | 7 | "still renders both tables when no state carries a deposited energy at all" | Wrapped `<NetworkStatesTable .../>`/`<NetworkChannelsTable .../>` in `{layout && (...)}` in `NetworkDiagram.tsx` (regressing invariant 5) | RED -- `screen.getByRole("table", ...)` threw, element not found |
+ * | 8 | "renders one .net-pes-ts-bar line per saddle ..." / "the bar has two distinct x endpoints ..." / "carries channel_1 only as a data attribute on the bar ..." | Removed the `<line className="net-pes-ts-bar" ...>` element from the saddle's `<a>` | RED -- all 3 tests failed together (0 bars found; `bar` was `null`) |
+ * | 9 | "for the NN level, the value (energy) text has a smaller SVG y than the label (species) text" | Swapped the two level `<text>` elements' `y` values back (`y-12`/`y+20` reversed) | RED -- `369.94` was not less than `337.94` |
+ * | 10 | "marks hash_n3's level data-unconnected and draws the dashed group divider" | Changed `{dividerX != null && (...)}` to `{false && dividerX != null && (...)}` | RED -- `querySelector('[data-testid="net-pes-group-divider"]')` was null |
+ * | 11 | "draws no divider ... when every plotted state is connected" | Changed the same condition to `{(dividerX != null \|\| true) && (...)}` (always render) | RED -- the divider `<line>` was found where none should exist |
+ * | 12 | "shows the cycle-fallback sentence for a 3-state, 3-barrier triangle" | Changed `{layout.components.some(...) && (...)}` to `{false && layout.components.some(...) && (...)}` | RED -- `screen.getByText(/deposited-barrier connectivity contains a cycle/)` threw, element not found |
  *
  * Each mutation was landed as a single edit, the named test confirmed red
  * (`npx vitest run src/components/NetworkDiagram.test.tsx`), then reverted
