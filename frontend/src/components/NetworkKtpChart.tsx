@@ -11,16 +11,23 @@ import {
     arrheniusLog10AxisTitle,
     arrheniusUnitLabel,
 } from "../domain/arrheniusChartLayout"
+import { FAMILY_NAME } from "../domain/arrheniusUnits"
 import { domainWithPadding, formatTicks, linearScale } from "../domain/chartScale"
 import { log10Text, scientificText } from "../domain/kineticsTable"
 import {
     buildKtpRequestGrid,
+    channelColorIndex,
+    channelSeriesColor,
+    convertKtpPlottedPoints,
+    groupKtpChannelsByUnitFamily,
     groupKtpFitsByChannel,
     ktpLineSegments,
     ktpPlottedPoints,
-    modelKindColor,
     modelKindLabel,
+    modelKindStrokeColor,
+    modelKindStrokeWidth,
     type KtpChannelGroup,
+    type KtpFamilyPanel,
     type KtpPlottedPoint,
     type KtpRequestGrid,
 } from "../domain/networkKtpChartLayout"
@@ -28,9 +35,10 @@ import { niceTicks } from "../domain/thermoCpChartLayout"
 import { Disclosure } from "./Disclosure"
 
 /**
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§3.4/§5):
- * the network entry page's k(T,P) chart. Fires exactly ONE request per
- * mount -- `POST /scientific/networks/{ref}/kinetics/evaluate`
+ * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§3.4/§5),
+ * extended by the stacked-panel/unit-control follow-up: the network entry
+ * page's k(T,P) chart. Fires exactly ONE request per mount -- `POST
+ * /scientific/networks/{ref}/kinetics/evaluate`
  * (`api/networkKineticsEvalApi.ts`) -- covering every stored fit on the
  * network at one shared `(temperature_k, pressure_bar)` grid, never one
  * request per channel or per fit (invariant 1).
@@ -39,14 +47,52 @@ import { Disclosure } from "./Disclosure"
  * live archive** (21 channels, 42 fits: a Chebyshev AND a PLOG
  * parameterization of the SAME channel, not an edge case). This
  * component never picks, prefers, averages, or collapses them --
- * `groupKtpFitsByChannel` keeps every fit a channel has, and every panel
- * below renders all of them, colour-coded by model kind (a FIXED colour
- * per model kind across the whole page, not per panel, so "this colour
- * always means Chebyshev" holds everywhere).
+ * `groupKtpFitsByChannel` keeps every fit a channel has.
+ *
+ * SHAPE (owner's report: "shouldn't they all stack on one graph not
+ * create multiple for each clicked? Also why is there no control for
+ * changing the y axis to other units like we do with Arrhenius?"). Both
+ * were fair, but "stack on one graph" is only TRUE within one unit
+ * FAMILY: on this network `per_s` (isomerization, unimolecular) and
+ * `cm3_mol_s` (association/exchange, bimolecular) are different physical
+ * DIMENSIONS and cannot share a y-axis without silently comparing two
+ * incomparable quantities. `groupKtpChannelsByUnitFamily`
+ * (`domain/networkKtpChartLayout.ts`) is the one place that split is
+ * decided -- this component renders exactly one panel per family it
+ * returns (at most two here), overlaying every SELECTED channel that
+ * belongs to that family on one shared axis, with its own per-panel unit
+ * `<select>` when the family has more than one interchangeable unit
+ * (`per_s`'s family has exactly one member -- a unimolecular rate
+ * coefficient has no concentration unit to convert to -- so that panel
+ * gets no control at all, not a disabled one; see
+ * `KtpFamilyUnitSelect` below).
+ *
+ * SERIES ENCODING -- the genuinely hard part once channels overlay:
+ * N channels x 2 model kinds (Chebyshev, PLOG, both always shown) is up
+ * to 2N lines on one axes, and dash is already spoken for (`ktpLineSegments`
+ * -- in_range vs extrapolated, per point). Chosen: COLOUR is channel
+ * identity (`channelSeriesColor`, a stable per-channel hue that does not
+ * shift when a different channel is toggled), and model kind is a tint of
+ * that SAME hue (`modelKindStrokeColor` -- PLOG mixed 45% toward white,
+ * Chebyshev untouched) PLUS a stroke-width difference
+ * (`modelKindStrokeWidth` -- 2.25px vs 1.25px), so the two are still
+ * tell-apart-able even where the tint alone is hard to perceive (a
+ * colour-vision deficiency, a greyscale printout). REJECTED: colour-by-
+ * channel with model kind as opacity alone -- opacity interacts badly
+ * with the dashed (out-of-range) segments already on the chart: a thin,
+ * already-faded PLOG dash all but disappears against a busy multi-channel
+ * panel, where a fully-opaque tinted stroke does not. Also rejected:
+ * colour by MODEL KIND (the old, pre-overlay scheme) -- with several
+ * channels overlaid, two channels of the same model kind would render
+ * identically and be indistinguishable from one another, which is a worse
+ * failure than the one this redesign set out to fix.
  *
  * Renders only served `points[]` -- `k`, `in_range` -- and never
- * evaluates Chebyshev or PLOG itself (invariant 2); see
- * `domain/networkKtpChartLayout.ts`'s own header comment.
+ * evaluates Chebyshev or PLOG itself (invariant 2); a per-panel unit
+ * conversion multiplies an already-served `k` by a fixed dimensional
+ * factor from `arrheniusUnits.ts` (`convertKtpPlottedPoints`), which is
+ * NOT a re-evaluation -- see `domain/networkKtpChartLayout.ts`'s own
+ * header comment.
  */
 export function NetworkKtpChart({ networkRef, network, channels, states }: {
     networkRef: string
@@ -126,9 +172,19 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
     grid: KtpRequestGrid
 }) {
     const groups = useMemo(() => groupKtpFitsByChannel(fits, channels, states), [fits, channels, states])
+    const colorIndexByChannelKey = useMemo(() => channelColorIndex(groups), [groups])
     const pressureOptions = grid.pressuresBar
     const [selectedPressureBar, setSelectedPressureBar] = useState(() => pressureOptions[Math.floor(pressureOptions.length / 2)] ?? pressureOptions[0])
+    // Only the FIRST channel is selected by default -- the "sensible
+    // default" the owner asked for (overlaying every selected channel's
+    // every fit means N channels is already 2N lines before any unit
+    // conversion is even in play; opening on all 21 channels at once would
+    // be exactly the "42 lines" problem the panel-per-family redesign does
+    // NOT solve by itself, since it only bounds the PANEL count, not the
+    // line count within one). A reader opts into more via the checkboxes
+    // below.
     const [selectedChannelKeys, setSelectedChannelKeys] = useState<string[]>(() => (groups[0] ? [groups[0].channelKey] : []))
+    const [selectedUnitsByFamily, setSelectedUnitsByFamily] = useState<Record<string, string>>({})
     const pressureSelectId = useId()
     const xDomain = useMemo(() => domainWithPadding(grid.temperaturesK), [grid.temperaturesK])
 
@@ -141,6 +197,12 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
     }
 
     const selectedGroups = groups.filter((group) => selectedChannelKeys.includes(group.channelKey))
+    // Not `useMemo` -- this runs after the `groups.length === 0` early
+    // return above, and a hook may never be called conditionally
+    // (`react-hooks/rules-of-hooks`). Grouping a handful of already-
+    // filtered channel groups by unit family is cheap enough that a plain
+    // per-render call costs nothing worth memoising anyway.
+    const familyPanels = groupKtpChannelsByUnitFamily(selectedGroups)
 
     return (
         <div className="network-ktp-section">
@@ -170,6 +232,11 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
                                 checked={selectedChannelKeys.includes(group.channelKey)}
                                 onChange={() => toggleChannel(group.channelKey)}
                             />
+                            <span
+                                className="network-ktp-channel-swatch"
+                                style={{ background: channelSeriesColor(colorIndexByChannelKey.get(group.channelKey) ?? 0) }}
+                                aria-hidden="true"
+                            />
                             {`${group.label} (${group.channelKind})`}
                         </label>
                     ))}
@@ -178,23 +245,54 @@ function NetworkKtpChartReady({ fits, channels, states, grid }: {
 
             {selectedGroups.length === 0
                 ? <p className="empty-projection">Select a channel above to see its evaluated rate coefficient.</p>
-                : selectedGroups.map((group) => (
-                    <KtpChannelPanel key={group.channelKey} group={group} pressureBar={selectedPressureBar} xDomain={xDomain} />
+                : familyPanels.map((panel) => (
+                    <KtpFamilyPanelChart
+                        key={panel.key}
+                        panel={panel}
+                        pressureBar={selectedPressureBar}
+                        xDomain={xDomain}
+                        colorIndexByChannelKey={colorIndexByChannelKey}
+                        selectedUnits={selectedUnitsByFamily[panel.key] ?? panel.defaultUnits}
+                        onSelectUnits={(units) => setSelectedUnitsByFamily((prev) => ({ ...prev, [panel.key]: units }))}
+                    />
                 ))}
         </div>
     )
 }
 
 // ---------------------------------------------------------------------------
-// One channel's panel -- every one of its fits, never collapsed to one
+// One unit-family panel -- every SELECTED channel that belongs to it,
+// overlaid; every one of each channel's fits, never collapsed.
 // ---------------------------------------------------------------------------
 
-function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGroup; pressureBar: number; xDomain: [number, number] }) {
-    const seriesData = useMemo(
-        () => group.series.map((fit) => ({ fit, points: ktpPlottedPoints(fit.points, pressureBar) })),
-        [group.series, pressureBar],
-    )
-    const allLog10k = seriesData.flatMap(({ points }) => points.map((point) => point.log10k))
+interface ChannelSeriesEntry {
+    group: KtpChannelGroup
+    fits: { fit: NetworkKtpFit; points: KtpPlottedPoint[] }[]
+}
+
+function KtpFamilyPanelChart({ panel, pressureBar, xDomain, colorIndexByChannelKey, selectedUnits, onSelectUnits }: {
+    panel: KtpFamilyPanel
+    pressureBar: number
+    xDomain: [number, number]
+    colorIndexByChannelKey: Map<string, number>
+    selectedUnits: string | undefined
+    onSelectUnits: (units: string) => void
+}) {
+    const displayUnits = selectedUnits ?? panel.defaultUnits
+    const hasUnitChoice = panel.availableUnits.length > 1
+
+    const channelSeriesData: ChannelSeriesEntry[] = useMemo(() => panel.groups.map((group) => ({
+        group,
+        fits: group.series.map((fit) => {
+            const rawPoints = ktpPlottedPoints(fit.points, pressureBar)
+            const points = displayUnits && displayUnits !== fit.k_units
+                ? convertKtpPlottedPoints(rawPoints, fit.k_units, displayUnits)
+                : rawPoints
+            return { fit, points }
+        }),
+    })), [panel.groups, pressureBar, displayUnits])
+
+    const allLog10k = channelSeriesData.flatMap(({ fits }) => fits.flatMap(({ points }) => points.map((point) => point.log10k)))
     const yDomain = domainWithPadding(allLog10k)
     const { top, right, bottom, left } = ARRHENIUS_CHART_MARGIN
     const plotWidth = ARRHENIUS_CHART_WIDTH - left - right
@@ -206,22 +304,47 @@ function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGro
     const xTickLabels = formatTicks(xTicks)
     const yTickLabels = formatTicks(yTicks)
 
-    const kUnits = [...new Set(group.series.map((fit) => fit.k_units))]
-    const axisUnits = kUnits.length === 1 ? kUnits[0] : null
-    const anyOutOfRange = seriesData.some(({ points }) => points.some((point) => !point.inRange))
+    const anyOutOfRange = channelSeriesData.some(({ fits }) => fits.some(({ points }) => points.some((point) => !point.inRange)))
+    const modelKindsPresent = [...new Set(channelSeriesData.flatMap(({ fits }) => fits.map(({ fit }) => fit.model_kind)))]
 
-    const modelKindsText = group.series.map((fit) => modelKindLabel(fit.model_kind)).join(" and ")
-    const ariaLabel = `k(T,P) evaluated at ${scientificText(pressureBar)} bar for channel ${group.label}: `
-        + `${modelKindsText}, log10 k versus temperature in kelvin`
+    const familyHeading = panel.orderFamily != null
+        ? `${FAMILY_NAME[panel.orderFamily].replace(/^./, (c) => c.toUpperCase())} channels`
+        : "Channels with unrecognised units"
+
+    const channelLabelsText = panel.groups.map((entry) => entry.label).join(", ")
+    const modelKindsText = modelKindsPresent.map(modelKindLabel).join(" and ")
+    const ariaLabel = `k(T,P) evaluated at ${scientificText(pressureBar)} bar for ${channelLabelsText}: `
+        + `${modelKindsText}, ${arrheniusLog10AxisTitle(displayUnits ?? null)} versus temperature in kelvin`
 
     return (
-        <div className="arrhenius-chart-panel-wrap" data-channel-key={group.channelKey}>
-            <p className="network-ktp-panel-heading">{`${group.label} (${group.channelKind})`}</p>
+        <div className="arrhenius-chart-panel-wrap" data-family-key={panel.key}>
+            <div className="network-ktp-panel-header">
+                <p className="network-ktp-panel-heading">{familyHeading}</p>
+                {hasUnitChoice && (
+                    <KtpFamilyUnitSelect panel={panel} selectedUnits={displayUnits} onSelectUnits={onSelectUnits} />
+                )}
+            </div>
+
+            <ul className="arrhenius-chart-legend" aria-label="Channels plotted in this panel">
+                {panel.groups.map((entry) => (
+                    <li className="arrhenius-chart-legend-item" key={entry.channelKey} data-channel-key={entry.channelKey}>
+                        <span
+                            className="arrhenius-chart-swatch"
+                            style={{ background: channelSeriesColor(colorIndexByChannelKey.get(entry.channelKey) ?? 0) }}
+                            aria-hidden="true"
+                        />
+                        <code className="data">{`${entry.label} (${entry.channelKind})`}</code>
+                    </li>
+                ))}
+            </ul>
             <ul className="arrhenius-chart-legend" aria-label="Model kind and validity-range encoding">
-                {group.series.map((fit) => (
-                    <li className="arrhenius-chart-legend-item" key={fit.network_kinetics_ref}>
-                        <span className="arrhenius-chart-swatch" style={{ background: modelKindColor(fit.model_kind) }} aria-hidden="true" />
-                        <code className="data">{modelKindLabel(fit.model_kind)}</code>
+                {modelKindsPresent.map((kind) => (
+                    <li className="arrhenius-chart-legend-item" key={kind}>
+                        <span
+                            className={`network-ktp-line-swatch ${modelKindStrokeWidth(kind) >= 2 ? "network-ktp-line-swatch--thick" : "network-ktp-line-swatch--thin"}`}
+                            aria-hidden="true"
+                        />
+                        <span>{`${modelKindLabel(kind)} (a channel's own colour tinted lighter for PLOG, heavier line for Chebyshev)`}</span>
                     </li>
                 ))}
                 {anyOutOfRange && (
@@ -231,14 +354,11 @@ function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGro
                     </li>
                 )}
             </ul>
+
             <div className="arrhenius-chart-panel">
-                {/* Inside the grid, not before it. `--y` is placed with
-                    `grid-column: 1`, so as a SIBLING of the panel it fell
-                    into normal flow -- rendering the rotated title as a
-                    vertical run of characters floating above the plot
-                    instead of beside the axis. `ArrheniusChart.tsx` has it
-                    as a direct child of the panel for exactly this reason. */}
-                <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(axisUnits)}</p>
+                {/* Inside the grid, not before it -- see `ArrheniusChart.tsx`'s
+                    own comment on this same structural requirement. */}
+                <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--y">{arrheniusLog10AxisTitle(displayUnits ?? null)}</p>
                 <div className="arrhenius-chart-scroll">
                     <svg
                         width={ARRHENIUS_CHART_WIDTH}
@@ -266,25 +386,32 @@ function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGro
                         ))}
                         <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} className="arrhenius-chart-axis-line" />
                         <line x1={left} x2={left} y1={top} y2={top + plotHeight} className="arrhenius-chart-axis-line" />
-                        {seriesData.map(({ fit, points }) => (
-                            <g
-                                key={fit.network_kinetics_ref}
-                                data-testid={`ktp-line-${fit.network_kinetics_ref}`}
-                                data-model-kind={fit.model_kind}
-                                data-channel-key={group.channelKey}
-                            >
-                                {ktpLineSegments(points).map((segment, segmentIndex) => (
-                                    <polyline
-                                        key={segmentIndex}
-                                        points={segment.points.map((point) => `${xScale(point.temperatureK)},${yScale(point.log10k)}`).join(" ")}
-                                        fill="none"
-                                        stroke={modelKindColor(fit.model_kind)}
-                                        strokeWidth={1.75}
-                                        strokeDasharray={segment.solid ? undefined : "4 3"}
-                                        data-in-range={segment.solid}
-                                    />
-                                ))}
-                            </g>
+                        {channelSeriesData.map(({ group, fits }) => (
+                            fits.map(({ fit, points }) => {
+                                const baseColor = channelSeriesColor(colorIndexByChannelKey.get(group.channelKey) ?? 0)
+                                const stroke = modelKindStrokeColor(baseColor, fit.model_kind)
+                                const strokeWidth = modelKindStrokeWidth(fit.model_kind)
+                                return (
+                                    <g
+                                        key={fit.network_kinetics_ref}
+                                        data-testid={`ktp-line-${fit.network_kinetics_ref}`}
+                                        data-model-kind={fit.model_kind}
+                                        data-channel-key={group.channelKey}
+                                    >
+                                        {ktpLineSegments(points).map((segment, segmentIndex) => (
+                                            <polyline
+                                                key={segmentIndex}
+                                                points={segment.points.map((point) => `${xScale(point.temperatureK)},${yScale(point.log10k)}`).join(" ")}
+                                                fill="none"
+                                                stroke={stroke}
+                                                strokeWidth={strokeWidth}
+                                                strokeDasharray={segment.solid ? undefined : "4 3"}
+                                                data-in-range={segment.solid}
+                                            />
+                                        ))}
+                                    </g>
+                                )
+                            })
                         ))}
                     </svg>
                     <p className="arrhenius-chart-axis-title arrhenius-chart-axis-title--x" style={{ marginLeft: left, width: plotWidth }}>
@@ -292,13 +419,54 @@ function KtpChannelPanel({ group, pressureBar, xDomain }: { group: KtpChannelGro
                     </p>
                 </div>
             </div>
-            <KtpChannelTable group={group} pressureBar={pressureBar} seriesData={seriesData} axisUnits={axisUnits} />
+
+            {channelSeriesData.map(({ group, fits }) => (
+                <KtpChannelTable key={group.channelKey} group={group} pressureBar={pressureBar} seriesData={fits} axisUnits={displayUnits ?? null} />
+            ))}
         </div>
     )
 }
 
+/**
+ * The per-panel unit control -- rendered ONLY when `panel.availableUnits`
+ * has more than one member (`KtpFamilyPanelChart`'s own `hasUnitChoice`
+ * gate above). Unlike `ArrheniusChart.tsx`'s own `ArrheniusYAxisSelect`,
+ * a single-option panel here gets NO control at all rather than a
+ * disabled one -- per this PR's own brief: `per_s` (order-1, isomerization
+ * on this network) has exactly one member in its family
+ * (`familyUnits(1) === ["per_s"]`, confirmed directly against
+ * `arrheniusUnits.ts` rather than assumed), so there is nothing to offer a
+ * reader a choice between, and a control with nothing behind it reads as
+ * broken rather than simply absent.
+ */
+function KtpFamilyUnitSelect({ panel, selectedUnits, onSelectUnits }: {
+    panel: KtpFamilyPanel
+    selectedUnits: string | undefined
+    onSelectUnits: (units: string) => void
+}) {
+    const selectId = useId()
+    const displayUnits = selectedUnits ?? panel.defaultUnits
+    return (
+        <label className="arrhenius-chart-control" htmlFor={selectId}>
+            <span className="arrhenius-chart-control-label">Y-axis</span>
+            <select
+                id={selectId}
+                className="arrhenius-chart-control-select"
+                aria-label={panel.orderFamily != null ? `Y-axis (${FAMILY_NAME[panel.orderFamily]})` : "Y-axis"}
+                value={displayUnits ?? panel.availableUnits[0] ?? ""}
+                onChange={(event) => onSelectUnits(event.target.value)}
+            >
+                {panel.availableUnits.map((units) => (
+                    <option key={units} value={units}>{arrheniusUnitLabel(units)}</option>
+                ))}
+            </select>
+        </label>
+    )
+}
+
 // ---------------------------------------------------------------------------
-// Table-behind-Disclosure -- the same selected-pressure data the panel plots
+// Table-behind-Disclosure -- the same selected-pressure, selected-unit data
+// the panel plots (invariant 8: table and chart must never disagree).
 // ---------------------------------------------------------------------------
 
 function KtpChannelTable({ group, pressureBar, seriesData, axisUnits }: {

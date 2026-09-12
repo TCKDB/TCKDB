@@ -2,17 +2,36 @@ import type { NetworkChannel, NetworkState } from "../api/networkEntryApi"
 import type { NetworkKtpEvaluatedPoint, NetworkKtpFit } from "../api/networkKineticsEvalApi"
 import { evenTicks } from "./chartScale"
 import { seriesColor } from "./thermoCpChartLayout"
+import { type ArrheniusUnitFamily, arrheniusUnitConversionFactor, arrheniusUnitFamily, familyUnits } from "./arrheniusUnits"
 
 /**
- * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§2.4/§5):
- * layout/shaping helpers for the k(T,P) chart. This module does NOT
- * evaluate Chebyshev or PLOG -- it only builds the request grid this
+ * PR 4 of `docs/plans/pressure-dependent-network-surface.md` (§2.4/§5),
+ * extended by the stacked-panel/unit-control follow-up (owner: "shouldn't
+ * they all stack on one graph... why is there no control for changing the
+ * y axis"): layout/shaping helpers for the k(T,P) chart. This module does
+ * NOT evaluate Chebyshev or PLOG -- it only builds the request grid this
  * page sends to `POST /scientific/networks/{ref}/kinetics/evaluate`
  * (`api/networkKineticsEvalApi.ts`) and shapes the ALREADY-EVALUATED
  * `points[]` that endpoint returns for plotting (grouping by channel,
- * filtering to one pressure, splitting into solid/dashed run segments).
- * Never a polynomial, never a log-interpolation -- see this repo's own
- * invariant 2 ("no Chebyshev or PLOG math in the frontend, ever").
+ * grouping channels by unit FAMILY, converting an already-served `k` between
+ * sibling units, filtering to one pressure, splitting into solid/dashed run
+ * segments). Never a polynomial, never a log-interpolation -- see this
+ * repo's own invariant 2 ("no Chebyshev or PLOG math in the frontend,
+ * ever").
+ *
+ * Two grouping levels, not one: `groupKtpFitsByChannel` (channel identity,
+ * chemistry label, unchanged from PR 4) and, layered on top of it,
+ * `groupKtpChannelsByUnitFamily` (which of those channels can share a
+ * y-axis at all). `per_s` (unimolecular) and `cm3_mol_s` (bimolecular) are
+ * different PHYSICAL DIMENSIONS -- overlaying them on one axis would not
+ * merely look odd, it would silently compare two incomparable quantities.
+ * "Stack every selected channel on one graph" is therefore only ever true
+ * WITHIN a family; `NetworkKtpChart.tsx` renders one panel per family
+ * `groupKtpChannelsByUnitFamily` returns (at most two on the live hydrazine
+ * network), each overlaying every selected channel that belongs to it.
+ * Unit conversion within a family reuses `arrheniusUnits.ts` verbatim (the
+ * SAME cm<->m<->molecule factors the Arrhenius chart already uses) --
+ * this file never derives its own factor.
  */
 
 // ---------------------------------------------------------------------------
@@ -143,9 +162,13 @@ export function groupKtpFitsByChannel(
 }
 
 // ---------------------------------------------------------------------------
-// Model-kind display -- fixed colour per model kind, GLOBALLY (not per
-// panel/index), so "blue is always Chebyshev" holds across every channel
-// on the page, not just within one panel.
+// Model-kind labelling. Overlaying channels on one panel (below) means
+// COLOUR is now spent on channel identity, not model kind -- `modelKindColor`
+// stays as a fixed, kind-only hue used ONLY for the one shared "how to read
+// this" legend swatch (never for an actual plotted line any more); the real
+// per-line encoding is `channelSeriesColor` (hue = channel) tinted by
+// `modelKindStrokeColor` and widened/thinned by `modelKindStrokeWidth` (both
+// below), which is what a `<polyline>` actually renders.
 // ---------------------------------------------------------------------------
 
 const MODEL_KIND_ORDER = ["chebyshev", "plog", "tabulated"]
@@ -160,9 +183,207 @@ export function modelKindLabel(modelKind: string): string {
     return MODEL_KIND_LABELS[modelKind] ?? modelKind.replaceAll("_", " ")
 }
 
+/** Kind-only fixed hue -- legend illustration only, see header comment
+ *  above. Never assigned to a `<polyline>`'s own `stroke` on the overlaid
+ *  chart (that is `channelSeriesColor` + `modelKindStrokeColor`). */
 export function modelKindColor(modelKind: string): string {
     const index = MODEL_KIND_ORDER.indexOf(modelKind)
     return seriesColor(index >= 0 ? index : MODEL_KIND_ORDER.length)
+}
+
+// ---------------------------------------------------------------------------
+// Overlaid-channel series encoding -- colour is CHANNEL identity, model kind
+// is a tint + stroke-width pair layered on that same hue. Chosen over the
+// brief's other option (colour by channel, model kind as weight/opacity
+// alone) because opacity alone reads poorly once dashed (out-of-range)
+// segments are layered on top -- a thin, already-faded PLOG dash becomes
+// very hard to see against a busy multi-channel panel. Tinting the hue
+// toward white keeps every model-kind variant fully opaque (so a dashed
+// segment stays exactly as visible as a solid one of the same kind) while
+// still reading as "the same colour family, a lighter member of it" next to
+// its Chebyshev sibling -- and the redundant stroke-width difference (2.25px
+// vs 1.25px) means the two are still tell-apart-able even for a reader who
+// cannot perceive the tint difference at all (colour-vision deficiency, a
+// black-and-white printout, ...). Dash is UNTOUCHED by any of this -- it
+// still, and only, means in_range vs extrapolated, per segment (invariant 4).
+// ---------------------------------------------------------------------------
+
+/** Stable per-channel hue, indexed by a channel's position in the FULL
+ *  (unfiltered) channel-group list -- so a channel's colour never changes
+ *  when a DIFFERENT channel is toggled on or off elsewhere in the fieldset
+ *  (the same "fixed, not per-panel-index" principle the old per-model-kind
+ *  colour followed, now applied to channel identity instead). Cycles
+ *  through `seriesColor`'s 8 tokens; a selection carrying more than 8
+ *  channels at once reuses hues -- an intentional trade against the
+ *  alternative (an unbounded, eventually indistinguishable palette), and
+ *  exactly why a sensible caller keeps the default selection small (see
+ *  `NetworkKtpChart.tsx`'s own initial-selection comment). */
+export function channelColorIndex(allGroups: readonly KtpChannelGroup[]): Map<string, number> {
+    return new Map(allGroups.map((group, index) => [group.channelKey, index]))
+}
+
+export function channelSeriesColor(index: number): string {
+    return seriesColor(index)
+}
+
+/** Percentage of white mixed into a channel's own hue, per model kind --
+ *  `0` (Chebyshev) leaves the hue untouched; `plog`'s 45% keeps it a
+ *  visibly lighter, still fully-opaque member of the same hue family (see
+ *  header comment above for why opacity was rejected). An unrecognised
+ *  future model kind gets a middling tint rather than either extreme, so it
+ *  neither silently impersonates Chebyshev's exact hue nor vanishes. */
+const MODEL_KIND_TINT_PERCENT: Record<string, number> = {
+    chebyshev: 0,
+    plog: 45,
+    tabulated: 22,
+}
+
+/** `baseColor` (a `channelSeriesColor` result, or any CSS colour) tinted
+ *  toward white by this model kind's own fixed percentage. `color-mix()` is
+ *  evaluated by the browser at paint time -- this function only builds the
+ *  string, it never resolves `baseColor`'s own `var(--chart-series-N)`
+ *  itself, so the SAME conversion works unchanged across the light/dark
+ *  theme swap that token already handles. */
+export function modelKindStrokeColor(baseColor: string, modelKind: string): string {
+    const tint = MODEL_KIND_TINT_PERCENT[modelKind] ?? 30
+    if (tint <= 0) return baseColor
+    return `color-mix(in srgb, ${baseColor}, white ${tint}%)`
+}
+
+/** Stroke width, px -- Chebyshev drawn heavier than PLOG so the two stay
+ *  tell-apart-able even where the tint above is hard to perceive (see
+ *  header comment). Not itself a dash/opacity change, so it never competes
+ *  with the in_range dash encoding (invariant 4) or the tint encoding. */
+const MODEL_KIND_STROKE_WIDTH: Record<string, number> = {
+    chebyshev: 2.25,
+    plog: 1.25,
+    tabulated: 1.75,
+}
+
+export function modelKindStrokeWidth(modelKind: string): number {
+    return MODEL_KIND_STROKE_WIDTH[modelKind] ?? 1.75
+}
+
+// ---------------------------------------------------------------------------
+// One panel per UNIT FAMILY -- the scientific constraint this PR's brief
+// leads with: `per_s` (s^-1) and `cm3_mol_s` (cm^3 mol^-1 s^-1) are
+// different DIMENSIONS and can never share a y-axis, so "all selected
+// channels on one graph" is only true WITHIN one family. Mirrors
+// `arrheniusChartLayout.ts`'s own `buildArrheniusChartData` almost exactly
+// (group-by-family, modal-unit default, `availableUnits`/`defaultUnits` on
+// the panel) -- the one structural difference is the grouping key: Arrhenius
+// groups one entry per RECORD (one deposited `A_units` each), this groups
+// one entry per (channel, FIT) pair, since a single channel can legitimately
+// carry fits in more than one units token in principle (never observed on
+// the live archive, where a channel's Chebyshev and PLOG fits always agree,
+// but nothing in the served schema guarantees it) -- so a channel whose own
+// fits happen to disagree on family is still split correctly, one fit
+// staying in each of two panels, rather than this file assuming agreement
+// and mis-filing the whole channel by its first fit's units alone.
+// ---------------------------------------------------------------------------
+
+export interface KtpFamilyPanel {
+    /** `"family:<n>"` for a recognised order family, `"unit:<token>"` for a
+     *  raw `k_units` token outside any known family -- mirrors
+     *  `arrheniusChartLayout.ts`'s own panel-key scheme (`k_units` is never
+     *  unrecorded on the served schema, unlike Arrhenius's `A_units`, so
+     *  there is no `unrecorded` branch here). */
+    key: string
+    orderFamily: ArrheniusUnitFamily | null
+    /** Every unit belonging to `orderFamily`, canonical order -- empty ONLY
+     *  when `orderFamily` is `null` (an unrecognised `k_units` token). For a
+     *  single-member family (`per_s`, order 1: a unimolecular rate has no
+     *  concentration unit to convert to) this is `["per_s"]`, length ONE,
+     *  mirroring `arrheniusChartLayout.ts`'s own `ArrheniusPanel.availableUnits`
+     *  verbatim. `NetworkKtpChart.tsx` renders no unit control at all when
+     *  `.length <= 1` -- per this PR's brief, a single-option panel gets no
+     *  control, not a disabled one (unlike the Arrhenius chart's own
+     *  always-shown-disabled convention) -- but that gate lives in the
+     *  COMPONENT, not as an extra blanking rule in this field itself. */
+    availableUnits: readonly string[]
+    /** The modal (most-common) `k_units` among this panel's own fits,
+     *  tie-broken by first occurrence -- same rule as
+     *  `arrheniusChartLayout.ts`'s `modalDepositedUnit`. Always defined in
+     *  practice (every fit carries a non-null `k_units`), typed optional
+     *  only to mirror `ArrheniusPanel.defaultUnits`'s own shape. */
+    defaultUnits: string | undefined
+    /** Every SELECTED channel with at least one fit in this family, each
+     *  scoped to ONLY the fits that actually belong here (see header
+     *  comment) -- order follows `groups`' own order, never re-sorted. */
+    groups: KtpChannelGroup[]
+}
+
+/** Tie-break identical to `arrheniusChartLayout.ts`'s own `modalDepositedUnit`:
+ *  most-common value wins; a count tie goes to whichever value's FIRST
+ *  occurrence comes earliest in `units`' own order. */
+function modalUnits(units: readonly string[]): string {
+    const counts = new Map<string, number>()
+    const firstIndex = new Map<string, number>()
+    units.forEach((unit, index) => {
+        counts.set(unit, (counts.get(unit) ?? 0) + 1)
+        if (!firstIndex.has(unit)) firstIndex.set(unit, index)
+    })
+    let best = units[0]
+    let bestCount = -1
+    let bestFirstIndex = Infinity
+    for (const [unit, count] of counts) {
+        const first = firstIndex.get(unit)!
+        if (count > bestCount || (count === bestCount && first < bestFirstIndex)) {
+            best = unit
+            bestCount = count
+            bestFirstIndex = first
+        }
+    }
+    return best
+}
+
+/**
+ * Splits `groups` (already filtered to the CALLER's current channel
+ * selection) into per-unit-family panels. A channel whose fits all share one
+ * family (the norm) appears in exactly one output panel, carrying every one
+ * of its fits (invariant: never collapse a channel's two fits, and never
+ * drop one silently just because grouping happens at the fit level here).
+ */
+export function groupKtpChannelsByUnitFamily(groups: readonly KtpChannelGroup[]): KtpFamilyPanel[] {
+    interface Entry {
+        group: KtpChannelGroup
+        fit: NetworkKtpFit
+    }
+    const entriesByKey = new Map<string, Entry[]>()
+    const familyByKey = new Map<string, ArrheniusUnitFamily | null>()
+    const keyOrder: string[] = []
+
+    for (const group of groups) {
+        for (const fit of group.series) {
+            const family = arrheniusUnitFamily(fit.k_units)
+            const key = family != null ? `family:${family}` : `unit:${fit.k_units}`
+            if (!entriesByKey.has(key)) {
+                entriesByKey.set(key, [])
+                familyByKey.set(key, family)
+                keyOrder.push(key)
+            }
+            entriesByKey.get(key)!.push({ group, fit })
+        }
+    }
+
+    return keyOrder.map((key) => {
+        const entries = entriesByKey.get(key)!
+        const orderFamily = familyByKey.get(key)!
+        const availableUnits = orderFamily != null ? familyUnits(orderFamily) : []
+        const defaultUnits = availableUnits.length > 0 ? modalUnits(entries.map((entry) => entry.fit.k_units)) : entries[0]?.fit.k_units
+
+        const seriesByChannelKey = new Map<string, NetworkKtpFit[]>()
+        for (const { group, fit } of entries) {
+            const list = seriesByChannelKey.get(group.channelKey) ?? []
+            list.push(fit)
+            seriesByChannelKey.set(group.channelKey, list)
+        }
+        const panelGroups = groups
+            .filter((group) => seriesByChannelKey.has(group.channelKey))
+            .map((group) => ({ ...group, series: seriesByChannelKey.get(group.channelKey)! }))
+
+        return { key, orderFamily, availableUnits, defaultUnits, groups: panelGroups }
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +421,35 @@ export function ktpPlottedPoints(points: readonly NetworkKtpEvaluatedPoint[], pr
         .filter((point) => pressureMatches(point.pressure_bar, pressureBar) && point.k > 0)
         .map((point) => ({ temperatureK: point.temperature_k, k: point.k, log10k: Math.log10(point.k), inRange: point.in_range }))
         .sort((a, b) => a.temperatureK - b.temperatureK)
+}
+
+/**
+ * `points` (already `ktpPlottedPoints`-filtered to one pressure, in
+ * `fromUnits`) re-expressed in `toUnits` -- unit CONVERSION of an
+ * already-served value, via `arrheniusUnits.ts`'s own
+ * `arrheniusUnitConversionFactor`, never a re-evaluation of the fit
+ * (invariant 3 stays satisfied: no Chebyshev/PLOG math anywhere in this
+ * module, this function only multiplies an already-computed `k` by ONE
+ * fixed dimensional factor, computed once, not per point). Identical in
+ * shape and behaviour to `arrheniusChartLayout.ts`'s own
+ * `convertArrheniusSeriesUnits`: a `null` or `1` factor (identical units,
+ * OR a refused cross-family/unrecognised pair -- `arrheniusUnitConversionFactor`
+ * does not distinguish the two in its return type, and this function must
+ * not guess which one it was) returns `points` UNCHANGED rather than
+ * dropping them, and a converted `k` that is not strictly positive is
+ * skipped rather than plotted as an `-Infinity` `log10k` that would poison
+ * the whole panel's y-domain.
+ */
+export function convertKtpPlottedPoints(points: readonly KtpPlottedPoint[], fromUnits: string, toUnits: string): KtpPlottedPoint[] {
+    const factor = arrheniusUnitConversionFactor(fromUnits, toUnits)
+    if (factor == null || factor === 1) return [...points]
+    const converted: KtpPlottedPoint[] = []
+    for (const point of points) {
+        const k = point.k * factor
+        if (!(k > 0)) continue
+        converted.push({ ...point, k, log10k: Math.log10(k) })
+    }
+    return converted
 }
 
 export interface KtpLineSegment {

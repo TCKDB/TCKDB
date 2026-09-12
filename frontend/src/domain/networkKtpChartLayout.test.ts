@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest"
 import type { NetworkChannel, NetworkState } from "../api/networkEntryApi"
 import type { NetworkKtpEvaluatedPoint, NetworkKtpFit } from "../api/networkKineticsEvalApi"
+import { familyUnits } from "./arrheniusUnits"
 import {
     buildKtpRequestGrid,
+    channelColorIndex,
+    channelSeriesColor,
+    convertKtpPlottedPoints,
+    groupKtpChannelsByUnitFamily,
     groupKtpFitsByChannel,
     ktpLineSegments,
     ktpPlottedPoints,
@@ -10,6 +15,9 @@ import {
     KTP_TEMPERATURE_POINT_COUNT,
     modelKindColor,
     modelKindLabel,
+    modelKindStrokeColor,
+    modelKindStrokeWidth,
+    type KtpChannelGroup,
 } from "./networkKtpChartLayout"
 
 function state(hash: string, kind: string, label: string): NetworkState {
@@ -224,5 +232,193 @@ describe("ktpLineSegments", () => {
 
     it("an empty point list produces no segments", () => {
         expect(ktpLineSegments([])).toHaveLength(0)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// familyUnits(1) -- what this file's brief asked to be CONFIRMED, not
+// assumed: does the unimolecular family offer any interchangeable sibling
+// unit to convert `per_s` to?
+// ---------------------------------------------------------------------------
+
+describe("familyUnits(1) -- the per_s (isomerization) family", () => {
+    it("has exactly one member, per_s itself -- no sibling unit exists to convert to", () => {
+        // Confirmed directly against arrheniusUnits.ts rather than assumed:
+        // a unimolecular rate coefficient is s^-1 by definition, so there is
+        // nothing else in its family. `NetworkKtpChart.tsx`'s own
+        // `KtpFamilyUnitSelect` is gated on `availableUnits.length > 1` and
+        // renders NO control at all for a panel like this one, rather than
+        // a disabled control with an empty menu.
+        expect(familyUnits(1)).toEqual(["per_s"])
+    })
+
+    it("cm3_mol_s's family (order 2) DOES offer more than one member", () => {
+        expect(familyUnits(2).length).toBeGreaterThan(1)
+        expect(familyUnits(2)).toContain("cm3_mol_s")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// groupKtpChannelsByUnitFamily -- MUTATION TARGET: two different unit
+// families must never land in the same panel; a channel's two fits must
+// never be collapsed to one, even once channels are grouped a SECOND time
+// (by family, on top of by-channel).
+// ---------------------------------------------------------------------------
+
+function channelGroup(channelKey: string, label: string, channelKind: string, series: NetworkKtpFit[]): KtpChannelGroup {
+    return { channelKey, label, channelKind, series }
+}
+
+describe("groupKtpChannelsByUnitFamily", () => {
+    it("places a per_s channel and a cm3_mol_s channel in DIFFERENT panels -- different physical dimensions", () => {
+        const groups = [
+            channelGroup("channel_iso", "NN to [NH2] + [NH2]", "isomerization", [
+                fit({ network_kinetics_ref: "nk_iso_cheb", channel_key: "channel_iso", k_units: "per_s" }),
+            ]),
+            channelGroup("channel_assoc", "[NH2] + [NH2] to NN", "association", [
+                fit({ network_kinetics_ref: "nk_assoc_cheb", channel_key: "channel_assoc", k_units: "cm3_mol_s" }),
+            ]),
+        ]
+        const panels = groupKtpChannelsByUnitFamily(groups)
+        expect(panels).toHaveLength(2)
+        expect(panels[0].orderFamily).toBe(1)
+        expect(panels[0].groups.map((g) => g.channelKey)).toEqual(["channel_iso"])
+        expect(panels[1].orderFamily).toBe(2)
+        expect(panels[1].groups.map((g) => g.channelKey)).toEqual(["channel_assoc"])
+        // The scientific constraint itself, spelled out: no panel may hold
+        // BOTH a channel_iso fit and a channel_assoc fit at once.
+        const channelKeysPerPanel = panels.map((p) => new Set(p.groups.map((g) => g.channelKey)))
+        expect(channelKeysPerPanel[0].has("channel_assoc")).toBe(false)
+        expect(channelKeysPerPanel[1].has("channel_iso")).toBe(false)
+    })
+
+    it("keeps two channels of the SAME family together in one panel, overlaid", () => {
+        const groups = [
+            channelGroup("channel_a", "A to B", "association", [fit({ network_kinetics_ref: "nk_a", channel_key: "channel_a", k_units: "cm3_mol_s" })]),
+            channelGroup("channel_b", "B to C", "exchange", [fit({ network_kinetics_ref: "nk_b", channel_key: "channel_b", k_units: "cm3_mol_s" })]),
+        ]
+        const panels = groupKtpChannelsByUnitFamily(groups)
+        expect(panels).toHaveLength(1)
+        expect(panels[0].groups.map((g) => g.channelKey)).toEqual(["channel_a", "channel_b"])
+    })
+
+    it("never collapses a channel's two fits (Chebyshev + PLOG) even after regrouping by family", () => {
+        const groups = [
+            channelGroup("channel_a", "A to B", "association", [
+                fit({ network_kinetics_ref: "nk_cheb", channel_key: "channel_a", model_kind: "chebyshev", k_units: "cm3_mol_s" }),
+                fit({ network_kinetics_ref: "nk_plog", channel_key: "channel_a", model_kind: "plog", k_units: "cm3_mol_s" }),
+            ]),
+        ]
+        const panels = groupKtpChannelsByUnitFamily(groups)
+        expect(panels).toHaveLength(1)
+        expect(panels[0].groups).toHaveLength(1)
+        expect(panels[0].groups[0].series.map((s) => s.network_kinetics_ref).sort()).toEqual(["nk_cheb", "nk_plog"])
+    })
+
+    it("a single-member family (per_s) reports availableUnits with exactly one entry -- the panel HAS a family, just nothing to convert within it", () => {
+        // `availableUnits` mirrors `familyUnits(orderFamily)` verbatim, same
+        // as `arrheniusChartLayout.ts`'s own `ArrheniusPanel` -- it is the
+        // COMPONENT's `hasUnitChoice = availableUnits.length > 1` gate
+        // (`NetworkKtpChart.tsx`) that decides whether a control renders at
+        // all, not this function silently blanking a single-member family.
+        const groups = [channelGroup("channel_iso", "NN to [NH2] + [NH2]", "isomerization", [fit({ k_units: "per_s", channel_key: "channel_iso" })])]
+        const panels = groupKtpChannelsByUnitFamily(groups)
+        expect(panels[0].availableUnits).toEqual(["per_s"])
+        expect(panels[0].defaultUnits).toBe("per_s")
+    })
+
+    it("a multi-member family (cm3_mol_s) reports every interchangeable unit, defaulting to the modal one", () => {
+        const groups = [
+            channelGroup("channel_a", "A to B", "association", [fit({ network_kinetics_ref: "nk_a1", channel_key: "channel_a", k_units: "cm3_mol_s" })]),
+            channelGroup("channel_b", "B to C", "exchange", [fit({ network_kinetics_ref: "nk_b1", channel_key: "channel_b", k_units: "m3_mol_s" })]),
+            channelGroup("channel_c", "C to D", "association", [fit({ network_kinetics_ref: "nk_c1", channel_key: "channel_c", k_units: "cm3_mol_s" })]),
+        ]
+        const panels = groupKtpChannelsByUnitFamily(groups)
+        expect(panels).toHaveLength(1)
+        expect(panels[0].availableUnits).toEqual(["cm3_mol_s", "m3_mol_s", "cm3_molecule_s"])
+        // cm3_mol_s deposited twice (channel_a, channel_c), m3_mol_s once -- modal wins.
+        expect(panels[0].defaultUnits).toBe("cm3_mol_s")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// convertKtpPlottedPoints -- unit conversion of an ALREADY-SERVED k, never a
+// re-evaluation (invariant 3). MUTATION TARGET: this is what makes
+// "changing the selected unit converts the plotted VALUES" true at all.
+// ---------------------------------------------------------------------------
+
+describe("convertKtpPlottedPoints", () => {
+    const points = [
+        { temperatureK: 300, k: 1e13, log10k: 13, inRange: true },
+        { temperatureK: 400, k: 2e13, log10k: Math.log10(2e13), inRange: false },
+    ]
+
+    it("identical units: returns an equal-valued copy, not the same reference", () => {
+        const converted = convertKtpPlottedPoints(points, "cm3_mol_s", "cm3_mol_s")
+        expect(converted).toEqual(points)
+        expect(converted).not.toBe(points)
+    })
+
+    it("cm3_mol_s -> m3_mol_s scales k by 1e-6 (1 m^3 = 1e6 cm^3) and recomputes log10k from the SAME converted k", () => {
+        const converted = convertKtpPlottedPoints(points, "cm3_mol_s", "m3_mol_s")
+        expect(converted[0].k).toBeCloseTo(1e13 * 1e-6)
+        expect(converted[0].log10k).toBeCloseTo(Math.log10(converted[0].k))
+        expect(converted[1].k).toBeCloseTo(2e13 * 1e-6)
+    })
+
+    it("carries in_range through the conversion untouched -- unit conversion never touches range status", () => {
+        const converted = convertKtpPlottedPoints(points, "cm3_mol_s", "m3_mol_s")
+        expect(converted[0].inRange).toBe(true)
+        expect(converted[1].inRange).toBe(false)
+    })
+
+    it("a cross-family pair (per_s to cm3_mol_s) is refused -- returns points UNCHANGED, never guessed at", () => {
+        const converted = convertKtpPlottedPoints(points, "per_s", "cm3_mol_s")
+        expect(converted).toEqual(points)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Series encoding -- channel identity (colour) and model kind (tint +
+// stroke width), kept independent of each other and of the dash encoding.
+// ---------------------------------------------------------------------------
+
+describe("channelColorIndex / channelSeriesColor", () => {
+    it("assigns each channel a stable index by its position in the given (unfiltered) list", () => {
+        const groups = [
+            channelGroup("channel_a", "A", "association", []),
+            channelGroup("channel_b", "B", "exchange", []),
+            channelGroup("channel_c", "C", "isomerization", []),
+        ]
+        const index = channelColorIndex(groups)
+        expect(index.get("channel_a")).toBe(0)
+        expect(index.get("channel_b")).toBe(1)
+        expect(index.get("channel_c")).toBe(2)
+    })
+
+    it("gives different channels different colours (within the 8-colour cycle)", () => {
+        expect(channelSeriesColor(0)).not.toBe(channelSeriesColor(1))
+    })
+})
+
+describe("modelKindStrokeColor / modelKindStrokeWidth -- MUTATION TARGET: model kind must stay distinguishable within one channel's own colour", () => {
+    it("chebyshev leaves the base colour untouched (0% tint)", () => {
+        expect(modelKindStrokeColor("var(--chart-series-1)", "chebyshev")).toBe("var(--chart-series-1)")
+    })
+
+    it("plog tints the SAME base colour toward white -- a different string, same underlying hue", () => {
+        const base = "var(--chart-series-1)"
+        const plogStroke = modelKindStrokeColor(base, "plog")
+        expect(plogStroke).not.toBe(base)
+        expect(plogStroke).toContain(base)
+    })
+
+    it("for one channel's base colour, chebyshev and plog resolve to different stroke strings -- the same distinctness the old model-kind-only colouring gave, preserved under the new channel-colour scheme", () => {
+        const base = channelSeriesColor(0)
+        expect(modelKindStrokeColor(base, "chebyshev")).not.toBe(modelKindStrokeColor(base, "plog"))
+    })
+
+    it("chebyshev is drawn heavier than plog -- a SECOND, redundant encoding of model kind alongside the tint", () => {
+        expect(modelKindStrokeWidth("chebyshev")).toBeGreaterThan(modelKindStrokeWidth("plog"))
     })
 })

@@ -640,3 +640,213 @@ describe("NetworkEntryPage — the k(T,P) y-axis title sits in the grid track bu
         expect(title.parentElement!.classList.contains("arrhenius-chart-panel")).toBe(true)
     })
 })
+
+// ---------------------------------------------------------------------------
+// k(T,P) stacked-panel / unit-control follow-up (owner: "shouldn't they all
+// stack on one graph... why is there no control for changing the y axis").
+// A network with THREE channels across the two families actually observed
+// on the live archive: `channel_1` isomerization/`per_s`, `channel_2`
+// association/`cm3_mol_s`, `channel_3` exchange/`cm3_mol_s` -- exercises
+// both "same family stacks" and "different families never mix" at once.
+// ---------------------------------------------------------------------------
+
+function stackedFamilyNetworkFixture() {
+    return networkDetailFixture({
+        channels: [
+            {
+                channel_key: "channel_1", kind: "isomerization", mechanism: "elementary",
+                source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true, microreactions: [],
+            },
+            {
+                channel_key: "channel_2", kind: "association", mechanism: "elementary",
+                source_state_composition_hash: "hash_well", sink_state_composition_hash: "hash_bim", has_kinetics: true, microreactions: [],
+            },
+            {
+                channel_key: "channel_3", kind: "exchange", mechanism: "elementary",
+                source_state_composition_hash: "hash_bim", sink_state_composition_hash: "hash_well", has_kinetics: true, microreactions: [],
+            },
+        ],
+    })
+}
+
+function stackedFamilyKtpFits(temperaturesK: number[], pressuresBar: number[]) {
+    const gridPoints = (kAtOneKelvinOneBar: number) => temperaturesK.flatMap((t) => pressuresBar.map((p) => ktpPoint(t, p, kAtOneKelvinOneBar * t)))
+    return [
+        ktpFitFixture({
+            network_kinetics_ref: "nk_iso_cheb", channel_key: "channel_1", channel_kind: "isomerization",
+            model_kind: "chebyshev", k_units: "per_s", points: gridPoints(2),
+        }),
+        ktpFitFixture({
+            network_kinetics_ref: "nk_iso_plog", channel_key: "channel_1", channel_kind: "isomerization",
+            model_kind: "plog", k_units: "per_s", points: gridPoints(3),
+        }),
+        ktpFitFixture({
+            network_kinetics_ref: "nk_assoc_cheb", channel_key: "channel_2", channel_kind: "association",
+            model_kind: "chebyshev", k_units: "cm3_mol_s", points: gridPoints(5e12),
+        }),
+        ktpFitFixture({
+            network_kinetics_ref: "nk_assoc_plog", channel_key: "channel_2", channel_kind: "association",
+            model_kind: "plog", k_units: "cm3_mol_s", points: gridPoints(7e12),
+        }),
+        ktpFitFixture({
+            network_kinetics_ref: "nk_exch_cheb", channel_key: "channel_3", channel_kind: "exchange",
+            model_kind: "chebyshev", k_units: "cm3_mol_s", points: gridPoints(11e12),
+        }),
+        ktpFitFixture({
+            network_kinetics_ref: "nk_exch_plog", channel_key: "channel_3", channel_kind: "exchange",
+            model_kind: "plog", k_units: "cm3_mol_s", points: gridPoints(13e12),
+        }),
+    ]
+}
+
+/** Selects (checks) a channel's own checkbox in the multi-select fieldset --
+ *  every checkbox's `<label>` carries `data-channel-key`, unchanged from PR
+ *  4. */
+function selectChannel(container: HTMLElement, channelKey: string) {
+    const checkbox = container.querySelector(`.network-ktp-channel-option[data-channel-key="${channelKey}"] input`) as HTMLInputElement
+    fireEvent.click(checkbox)
+}
+
+describe("NetworkEntryPage -- k(T,P) chart stacks selected channels by unit family, never mixing families", () => {
+    it("MUTATION TARGET: a per_s channel and a cm3_mol_s channel never share one panel -- two panels, not one", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        // Only channel_1 selected by default -- one panel.
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+        expect(container.querySelectorAll(".arrhenius-chart-panel-wrap")).toHaveLength(1)
+
+        selectChannel(container, "channel_2")
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_assoc_cheb"]').length).toBeGreaterThan(0))
+
+        const wraps = Array.from(container.querySelectorAll(".arrhenius-chart-panel-wrap"))
+        expect(wraps).toHaveLength(2)
+        // Every wrap holds exactly one of the two families' channel(s) --
+        // never both `channel_1` and `channel_2` inside the SAME wrap. A
+        // mutation that merges the two into one shared panel (the exact
+        // defect this PR's brief warns against) makes this assertion fail:
+        // one wrap would then carry both data-testids at once.
+        for (const wrap of wraps) {
+            const hasIso = wrap.querySelector('[data-testid="ktp-line-nk_iso_cheb"]') !== null
+            const hasAssoc = wrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]') !== null
+            expect(hasIso && hasAssoc).toBe(false)
+        }
+    })
+
+    it("overlays TWO channels of the SAME family on one shared panel, both distinguishable by colour", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+
+        selectChannel(container, "channel_2")
+        selectChannel(container, "channel_3")
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_exch_cheb"]').length).toBeGreaterThan(0))
+
+        // channel_2 and channel_3 are BOTH cm3_mol_s (association/exchange)
+        // -- exactly one shared wrap holds both, not two separate ones.
+        const wraps = Array.from(container.querySelectorAll(".arrhenius-chart-panel-wrap"))
+        expect(wraps).toHaveLength(2) // channel_1's own per_s panel, plus the shared cm3_mol_s panel
+        const sharedWrap = wraps.find((wrap) => wrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]') && wrap.querySelector('[data-testid="ktp-line-nk_exch_cheb"]'))
+        expect(sharedWrap).not.toBeUndefined()
+
+        // Distinguishable: channel_2's Chebyshev line and channel_3's
+        // Chebyshev line share a model kind (so tint/width are IDENTICAL
+        // between them) but must still carry different `stroke` colours --
+        // that difference is entirely channel-identity colour, proving
+        // colour actually varies per channel and not just per model kind.
+        const assocLine = sharedWrap!.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')
+        const exchLine = sharedWrap!.querySelector('[data-testid="ktp-line-nk_exch_cheb"] polyline')
+        expect(assocLine).not.toBeNull()
+        expect(exchLine).not.toBeNull()
+        expect(assocLine!.getAttribute("stroke")).not.toBe(exchLine!.getAttribute("stroke"))
+    })
+
+    it("familyUnits(per_s) has no interchangeable sibling -- that panel renders NO Y-axis control", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+        // Only channel_1 (per_s) selected -- no Y-axis control anywhere on
+        // the page yet (per_s's own family has exactly one member).
+        expect(screen.queryByLabelText(/Y-axis/)).toBeNull()
+    })
+
+    it("MUTATION TARGET: selecting a different unit converts the PLOTTED VALUES and the axis title together, never one without the other", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+
+        selectChannel(container, "channel_2")
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_assoc_cheb"]').length).toBeGreaterThan(0))
+
+        // cm3_mol_s's own family (bimolecular) is the one with a real
+        // choice: cm3_mol_s / m3_mol_s / cm3_molecule_s.
+        const unitSelect = screen.getByLabelText("Y-axis (bimolecular)") as HTMLSelectElement
+        const assocWrap = container.querySelector('[data-testid="ktp-line-nk_assoc_cheb"]')!.closest(".arrhenius-chart-panel-wrap")!
+        const axisTitleBefore = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
+        const lineBefore = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
+        expect(axisTitleBefore).toBe("log₁₀ [k / cm³ mol⁻¹ s⁻¹]")
+
+        fireEvent.change(unitSelect, { target: { value: "m3_mol_s" } })
+
+        const axisTitleAfter = assocWrap.querySelector(".arrhenius-chart-axis-title--y")!.textContent
+        const lineAfter = assocWrap.querySelector('[data-testid="ktp-line-nk_assoc_cheb"] polyline')!.getAttribute("points")
+        // The axis title names the NEW unit -- a mutation that converts the
+        // plotted values but leaves the title reading the old unit (the
+        // exact defect the Arrhenius chart's own owner caught once already)
+        // fails this line.
+        expect(axisTitleAfter).toBe("log₁₀ [k / m³ mol⁻¹ s⁻¹]")
+        expect(axisTitleAfter).not.toBe(axisTitleBefore)
+        // The plotted line itself actually moved (m3_mol_s = cm3_mol_s *
+        // 1e-6, six full log10 decades down the y-axis) -- a mutation that
+        // relabels the axis WITHOUT touching the drawn points fails this
+        // line instead.
+        expect(lineAfter).not.toBe(lineBefore)
+
+        // The table behind the Disclosure must agree with the chart
+        // (invariant 8) -- its caption and the k(T) values it prints both
+        // follow the SAME unit selection, not a stale one.
+        const caption = assocWrap.querySelector(".kinetics-k-table caption")
+        expect(caption).not.toBeNull()
+        expect(caption!.textContent ?? "").toContain("m³ mol⁻¹ s⁻¹")
+        expect(caption!.textContent ?? "").not.toContain("cm³ mol⁻¹ s⁻¹")
+    })
+
+    it("does not collapse a channel's two fits even when overlaid with another channel -- both Chebyshev AND PLOG still render for every selected channel", async () => {
+        handleNetworkDetail(stackedFamilyNetworkFixture())
+        handleSolveDetail("nsolve_test1")
+        handleThermo({ spe_well: 0, spe_h2: 0 })
+        handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
+        handleKtpEvaluate(stackedFamilyKtpFits)
+        const { container } = page()
+        await screen.findByRole("heading", { name: "k(T,P)" })
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_iso_cheb"]').length).toBeGreaterThan(0))
+
+        selectChannel(container, "channel_2")
+        selectChannel(container, "channel_3")
+        await waitFor(() => expect(container.querySelectorAll('[data-testid="ktp-line-nk_exch_plog"]').length).toBeGreaterThan(0))
+
+        // Every one of the six served fits still renders its own line group.
+        for (const ref of ["nk_iso_cheb", "nk_iso_plog", "nk_assoc_cheb", "nk_assoc_plog", "nk_exch_cheb", "nk_exch_plog"]) {
+            expect(container.querySelectorAll(`[data-testid="ktp-line-${ref}"]`).length).toBeGreaterThan(0)
+        }
+    })
+})
