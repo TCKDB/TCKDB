@@ -32,19 +32,22 @@ function segmentsProperlyCross(p1: Point, p2: Point, p3: Point, p4: Point): bool
     const strictlyOpposite = (x: number, y: number) => (x > CROSS_EPS && y < -CROSS_EPS) || (x < -CROSS_EPS && y > CROSS_EPS)
     return strictlyOpposite(d1, d2) && strictlyOpposite(d3, d4)
 }
-/** The exact three segments `NetworkDiagram.tsx` draws for one saddle: state
- *  to the near bar edge, across the bar, bar's far edge to the other state
- *  -- mirrors that component's own geometry so this check tests what is
- *  actually rendered, not a simplified stand-in. */
+/** The exact three segments `NetworkDiagram.tsx` draws for one saddle:
+ *  `sourceLegX`/`sinkLegX` (`networkPesLayout.ts`'s own `connectorLegX` --
+ *  capped so a wide caption's clearance can never invade a neighbouring
+ *  state's own territory) to the near TS bar edge, across the TS bar, TS
+ *  bar's far edge to the other state's leg point -- mirrors that
+ *  component's own geometry so this check tests what is actually rendered,
+ *  not a simplified stand-in. */
 function saddleConnectorSegments(saddle: NetworkPesLayout["saddles"][number]): [Point, Point][] {
     const barLeftX = saddle.peakX - NETWORK_PES_TS_BAR_HALF_WIDTH
     const barRightX = saddle.peakX + NETWORK_PES_TS_BAR_HALF_WIDTH
     const sourceEdgeX = saddle.sourceX <= saddle.sinkX ? barLeftX : barRightX
     const sinkEdgeX = saddle.sourceX <= saddle.sinkX ? barRightX : barLeftX
     return [
-        [{ x: saddle.sourceX, y: saddle.sourceY }, { x: sourceEdgeX, y: saddle.peakY }],
+        [{ x: saddle.sourceLegX, y: saddle.sourceY }, { x: sourceEdgeX, y: saddle.peakY }],
         [{ x: sourceEdgeX, y: saddle.peakY }, { x: sinkEdgeX, y: saddle.peakY }],
-        [{ x: sinkEdgeX, y: saddle.peakY }, { x: saddle.sinkX, y: saddle.sinkY }],
+        [{ x: sinkEdgeX, y: saddle.peakY }, { x: saddle.sinkLegX, y: saddle.sinkY }],
     ]
 }
 /** Every pair of connector segments belonging to two DIFFERENT saddles that

@@ -5,6 +5,7 @@ import type { NetworkChannel, NetworkChannelBarrier, NetworkState, NetworkStateE
 import { formatTicks, linearScale } from "../domain/chartScale"
 import {
     computeNetworkPesLayout,
+    NETWORK_PES_CAPTION_CHAR_WIDTH,
     NETWORK_PES_LEVEL_HALF_WIDTH,
     NETWORK_PES_MARGIN,
     NETWORK_PES_TS_BAR_HALF_WIDTH,
@@ -303,6 +304,18 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                         const barRightX = saddle.peakX + NETWORK_PES_TS_BAR_HALF_WIDTH
                         const sourceEdgeX = saddle.sourceX <= saddle.sinkX ? barLeftX : barRightX
                         const sinkEdgeX = saddle.sourceX <= saddle.sinkX ? barRightX : barLeftX
+                        // The STATE end of each leg launches from
+                        // `sourceLegX`/`sinkLegX` (`networkPesLayout.ts`'s
+                        // own `connectorLegX`), not `sourceX`/`sinkX` --
+                        // a state's caption sits centred on its bar, and a
+                        // chain state (a straight run like [NH-][NH3+]
+                        // between two other accepted saddles) has one leg
+                        // arriving and another departing from that same
+                        // centre point; two lines converging there cut
+                        // straight through the caption's digits even with
+                        // the halo (found by screenshotting the live
+                        // hydrazine archive and looking, not by inspection
+                        // -- "180.1 kJ/mol" read as "180?1¢kJ/mol").
                         const dash = saddle.hasKinetics ? undefined : "4 3"
                         return (
                             <a
@@ -316,7 +329,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                                     + `${saddle.hasKinetics ? "" : ", no kinetics fit deposited"}`}
                             >
                                 <polyline
-                                    points={`${saddle.sourceX},${saddle.sourceY} ${sourceEdgeX},${saddle.peakY}`}
+                                    points={`${saddle.sourceLegX},${saddle.sourceY} ${sourceEdgeX},${saddle.peakY}`}
                                     // `channel_key` lives in exactly two
                                     // places: this `data-*` hook and the
                                     // channel table row (invariant 4).
@@ -334,7 +347,7 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                                     strokeDasharray={dash}
                                 />
                                 <polyline
-                                    points={`${sinkEdgeX},${saddle.peakY} ${saddle.sinkX},${saddle.sinkY}`}
+                                    points={`${sinkEdgeX},${saddle.peakY} ${saddle.sinkLegX},${saddle.sinkY}`}
                                     data-channel-key={saddle.channelKey ?? undefined}
                                     className={`net-pes-connector ${pesConnectorKindClass(saddle.kind)}`}
                                     strokeDasharray={dash}
@@ -354,38 +367,75 @@ function NetworkPesSvg({ layout, channels, totalStates, totalChannels }: {
                 </g>
 
                 <g>
-                    {layout.levels.map((level) => (
-                        <a
-                            key={level.compositionHash}
-                            href={`#${stateRowId(level.compositionHash)}`}
-                            className="net-pes-level-link"
-                            data-unconnected={level.isUnconnected ? "true" : undefined}
-                            aria-label={`State ${level.label}, relative energy ${level.energyKjMol.toFixed(1)} kilojoules per mole, ${level.isWell ? "well" : "bimolecular"}`
-                                + `${level.isUnconnected ? ", not connected by any deposited barrier to another plotted state" : ""}`}
-                        >
-                            <line
-                                x1={level.x - NETWORK_PES_LEVEL_HALF_WIDTH}
-                                x2={level.x + NETWORK_PES_LEVEL_HALF_WIDTH}
-                                y1={level.y}
-                                y2={level.y}
-                                className={`net-pes-level ${level.isWell ? "net-pes-level-well" : "net-pes-level-bimolecular"}`}
-                            />
-                            {/* Energy caption ABOVE the bar, species label
-                                BELOW it -- the reference figure's own
-                                convention (module header point 5), the
-                                reverse of this component's earlier layout.
-                                The ONLY safe level label --
-                                `composition.state_label`, already baked
-                                into `level.label` by
-                                `computeNetworkPesLayout`. Never
-                                `states[].label`, never the raw hash
-                                (invariant 3). */}
-                            <text x={level.x} y={level.y - 12} textAnchor="middle" className="net-pes-level-value">
-                                {`${level.energyKjMol.toFixed(1)} kJ/mol`}
-                            </text>
-                            <text x={level.x} y={level.y + 20} textAnchor="middle" className="net-pes-level-label">{level.label}</text>
-                        </a>
-                    ))}
+                    {layout.levels.map((level) => {
+                        const energyCaption = `${level.energyKjMol.toFixed(1)} kJ/mol`
+                        // A caption's own opaque backing -- wide enough for
+                        // ITS string specifically (energy and label are
+                        // usually different lengths), drawn before the
+                        // `<text>` so it sits behind it but in front of
+                        // everything else in this SVG, gridlines included.
+                        // The per-glyph stroke halo below (`paint-order:
+                        // stroke` in the stylesheet) is not enough on its
+                        // own: it protects each GLYPH's own outline but
+                        // not the gaps between glyphs, and a y-axis
+                        // gridline landing close to a caption's own y (a
+                        // coincidence of that state's specific energy, not
+                        // of the x layout) drew straight through those
+                        // gaps on the live hydrazine archive -- found by
+                        // screenshotting it and looking, not by
+                        // inspection.
+                        const energyHalf = (energyCaption.length * NETWORK_PES_CAPTION_CHAR_WIDTH) / 2
+                        const labelHalf = (level.label.length * NETWORK_PES_CAPTION_CHAR_WIDTH) / 2
+                        return (
+                            <a
+                                key={level.compositionHash}
+                                href={`#${stateRowId(level.compositionHash)}`}
+                                className="net-pes-level-link"
+                                data-unconnected={level.isUnconnected ? "true" : undefined}
+                                aria-label={`State ${level.label}, relative energy ${level.energyKjMol.toFixed(1)} kilojoules per mole, ${level.isWell ? "well" : "bimolecular"}`
+                                    + `${level.isUnconnected ? ", not connected by any deposited barrier to another plotted state" : ""}`}
+                            >
+                                <line
+                                    x1={level.x - NETWORK_PES_LEVEL_HALF_WIDTH}
+                                    x2={level.x + NETWORK_PES_LEVEL_HALF_WIDTH}
+                                    y1={level.y}
+                                    y2={level.y}
+                                    className={`net-pes-level ${level.isWell ? "net-pes-level-well" : "net-pes-level-bimolecular"}`}
+                                />
+                                <rect
+                                    aria-hidden="true"
+                                    x={level.x - energyHalf - 2}
+                                    y={level.y - 23}
+                                    width={energyHalf * 2 + 4}
+                                    height={14}
+                                    className="net-pes-caption-backing"
+                                />
+                                <rect
+                                    aria-hidden="true"
+                                    x={level.x - labelHalf - 2}
+                                    y={level.y + 10}
+                                    width={labelHalf * 2 + 4}
+                                    height={14}
+                                    className="net-pes-caption-backing"
+                                />
+                                {/* Energy caption ABOVE the bar, species
+                                    label BELOW it -- the reference
+                                    figure's own convention (module header
+                                    point 5), the reverse of this
+                                    component's earlier layout. The ONLY
+                                    safe level label --
+                                    `composition.state_label`, already
+                                    baked into `level.label` by
+                                    `computeNetworkPesLayout`. Never
+                                    `states[].label`, never the raw hash
+                                    (invariant 3). */}
+                                <text x={level.x} y={level.y - 12} textAnchor="middle" className="net-pes-level-value">
+                                    {energyCaption}
+                                </text>
+                                <text x={level.x} y={level.y + 20} textAnchor="middle" className="net-pes-level-label">{level.label}</text>
+                            </a>
+                        )
+                    })}
                 </g>
             </svg>
             <p className="net-pes-axis-title net-pes-axis-title--y">

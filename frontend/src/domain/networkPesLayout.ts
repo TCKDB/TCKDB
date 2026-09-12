@@ -198,6 +198,16 @@ export interface NetworkPesSaddle {
     sourceY: number
     sinkX: number
     sinkY: number
+    /** Where this saddle's connector leg actually touches the source/sink
+     *  state on the x axis -- `sourceX`/`sinkX` offset toward the peak, far
+     *  enough to clear that state's own caption where there is room, but
+     *  never past the midpoint to the nearest OTHER state, so a wide
+     *  caption's own clearance can never push a leg into a neighbouring
+     *  state's connector (see `computeConnectorLegX`'s own comment: this
+     *  is what a fixed clearance, tried first, got wrong). `sourceY`/
+     *  `sinkY` still apply -- a state's bar is horizontal, no y offset. */
+    sourceLegX: number
+    sinkLegX: number
     /** Centre of the TS bar. The bar itself spans
      *  `peakX ± NETWORK_PES_TS_BAR_HALF_WIDTH` at `peakY`. */
     peakX: number
@@ -443,11 +453,46 @@ export function computeNetworkPesLayout(
     const xByHash = new Map(levels.map((level) => [level.compositionHash, level.x]))
     const yByHash = new Map(levels.map((level) => [level.compositionHash, level.y]))
 
+    // Where a connector leg touches its endpoint state -- offset toward
+    // the peak, far enough to clear that state's own caption where there
+    // is room, but CAPPED at the midpoint to the nearest OTHER state's own
+    // final x, so a wide caption can never push a leg past a neighbouring
+    // state's own territory. Same shape as `declutterLevelX`'s own cap,
+    // over the LEVELS' final (post-declutter) positions rather than their
+    // pre-declutter natural ones -- what matters here is not colliding
+    // with what actually rendered.
+    const distinctLevelX = [...new Set(xByHash.values())].sort((a, b) => a - b)
+    function legClearanceCap(x: number): { leftCap: number; rightCap: number } {
+        const index = distinctLevelX.indexOf(x)
+        const leftCap = index > 0 ? (x - distinctLevelX[index - 1]) / 2 : Infinity
+        const rightCap = index < distinctLevelX.length - 1 ? (distinctLevelX[index + 1] - x) / 2 : Infinity
+        return { leftCap, rightCap }
+    }
+    function connectorLegX(stateHash: string, stateX: number, peakX: number): number {
+        // A saddle whose peak sits directly above/below this state (a
+        // coincidental tie -- e.g. a hub and one of its own children
+        // landing on the identical slot) has no real "outward" side to
+        // offset toward; pushing it sideways anyway is what sent one leg
+        // sweeping wide enough to cross a DIFFERENT saddle's own leg
+        // instead of just clearing this state's caption (found by running
+        // the geometric crossing check against the live hydrazine tree, not
+        // by inspection). A near-vertical connector's own sweep through the
+        // caption band is narrow regardless -- leaving it unoffset trades a
+        // small, roughly one-character graze for avoiding that crossing.
+        if (Math.abs(peakX - stateX) < NETWORK_PES_TS_BAR_HALF_WIDTH) return stateX
+        const direction = Math.sign(peakX - stateX)
+        const preferred = captionWidthByHash.get(stateHash)! / 2 + NETWORK_PES_CAPTION_PAD
+        const { leftCap, rightCap } = legClearanceCap(stateX)
+        const clearance = Math.max(NETWORK_PES_LEVEL_HALF_WIDTH, Math.min(preferred, direction > 0 ? rightCap : leftCap))
+        return Math.round((stateX + direction * clearance) * 100) / 100
+    }
+
     const saddles: NetworkPesSaddle[] = accepted.map(({ barrier, channel, heightKjMol }) => {
         const sourceX = xByHash.get(channel.source_state_composition_hash)!
         const sinkX = xByHash.get(channel.sink_state_composition_hash)!
         const sourceY = yByHash.get(channel.source_state_composition_hash)!
         const sinkY = yByHash.get(channel.sink_state_composition_hash)!
+        const peakX = Math.round(((sourceX + sinkX) / 2) * 100) / 100
         return {
             channelKey: barrier.channel_key,
             kind: channel.kind,
@@ -461,7 +506,9 @@ export function computeNetworkPesLayout(
             sourceY,
             sinkX,
             sinkY,
-            peakX: Math.round(((sourceX + sinkX) / 2) * 100) / 100,
+            sourceLegX: connectorLegX(channel.source_state_composition_hash, sourceX, peakX),
+            sinkLegX: connectorLegX(channel.sink_state_composition_hash, sinkX, peakX),
+            peakX,
             peakY: Math.round(yScale(heightKjMol) * 100) / 100,
         }
     })

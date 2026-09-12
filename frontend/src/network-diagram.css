@@ -102,6 +102,17 @@
     stroke-width: 4px;
     stroke-linejoin: round;
 }
+/* A level caption's own opaque backing, drawn behind its `<text>` --
+   the per-glyph stroke halo above protects each glyph's own outline but
+   not the GAPS between glyphs, and a y-axis gridline landing close to a
+   caption's own y (purely a coincidence of that state's own energy, not
+   of anything in the x layout) drew straight through those gaps on the
+   live hydrazine archive. This rect blocks anything behind it -- a
+   gridline, a connector leg -- across the caption's full width, not just
+   under each letter. */
+.net-pes-caption-backing {
+    fill: var(--surface);
+}
 
 /* ---- Saddle points: colour = channel.kind, dash = has_kinetics (two
    independent encodings carried over from the old edge encoding,
