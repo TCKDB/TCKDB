@@ -48,7 +48,18 @@ export const productLevelsSchema = z.object({
 
 export type ProductLevelsWire = z.infer<typeof productLevelsSchema>
 
-export const recordReviewSchema = z.object({ status: z.string() }).passthrough()
+/**
+ * `note` is the curator's stated reason for the status -- public,
+ * reader-facing prose (`backend/app/schemas/reads/scientific_common.py`'s
+ * `RecordReviewBadge.note`), not gated on `status`: a note on an
+ * `approved` record is as meaningful as one under review. `null`/absent
+ * means no reason was recorded and must render as nothing, never an
+ * empty box (see `components/ReviewNote.tsx`).
+ */
+export const recordReviewSchema = z.object({
+    status: z.string(),
+    note: z.string().nullable().optional(),
+}).passthrough()
 
 export const geometrySummarySchema = z.object({
     geometry_ref: z.string(),

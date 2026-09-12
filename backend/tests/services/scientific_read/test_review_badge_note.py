@@ -16,6 +16,8 @@ from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.services.scientific_read.common import fetch_review_badges
 
+from ._factories import make_species, make_species_entry, make_thermo_scalar, set_review
+
 NOTE = (
     "Barriers are sound; bond-fission asymptotes are systematically low. "
     "N2H4 -> 2 NH2 is 27.4 kJ/mol below the Active Thermochemical Tables value."
@@ -67,11 +69,18 @@ def test_a_record_with_no_review_row_has_no_note(db_session):
 def test_a_review_row_without_a_note_projects_none_not_empty_string(db_session):
     # An absent reason must read as absent, never as a blank reason -- the
     # same absence-vs-zero rule the rest of this surface follows.
+    #
+    # Status is ``under_review`` (not ``approved``) deliberately: an
+    # ``approved`` row makes ``tckdb_guard_record_review`` lock the
+    # underlying scientific record via ``tckdb_lock_scientific_record``,
+    # which requires that record to actually exist. This test is about the
+    # note, not the approval path, so it uses the same fake-record-id shape
+    # as the parametrized test above.
     db_session.add(
         RecordReview(
             record_type=SubmissionRecordType.thermo,
             record_id=7171,
-            status=RecordReviewStatus.approved,
+            status=RecordReviewStatus.under_review,
             note=None,
         )
     )
@@ -81,3 +90,33 @@ def test_a_review_row_without_a_note_projects_none_not_empty_string(db_session):
         db_session, record_type=SubmissionRecordType.thermo, record_ids=[7171]
     )
     assert badges[7171].note is None
+
+
+def test_note_is_not_gated_on_approved_status(db_session):
+    """A note on an ``approved`` record is as meaningful as one under review.
+
+    Uses a real thermo record (rather than a fake id) because approving a
+    review row locks the underlying scientific record via
+    ``tckdb_lock_scientific_record``, which requires it to exist.
+    """
+    species = make_species(db_session)
+    entry = make_species_entry(db_session, species)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+        status=RecordReviewStatus.approved,
+        note=NOTE,
+    )
+
+    badges = fetch_review_badges(
+        db_session, record_type=SubmissionRecordType.thermo, record_ids=[thermo.id]
+    )
+
+    assert badges[thermo.id].status is RecordReviewStatus.approved
+    assert badges[thermo.id].note == NOTE, (
+        "the note must reach the reader on an approved record too -- it is "
+        "not gated on review status"
+    )

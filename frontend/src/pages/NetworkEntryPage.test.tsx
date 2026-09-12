@@ -2,6 +2,7 @@ import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import "../design-system.css"
 import NetworkEntryPage from "./NetworkEntryPage"
@@ -164,8 +165,17 @@ function handleKtpEvaluate(buildFits: (temperaturesK: number[], pressuresBar: nu
 }
 
 /** Every fetch this page's default fixture needs, wired at once. */
-function handleEverything(overrides: { stateEnergies?: object[]; channelBarriers?: object[]; thermoCounts?: Record<string, number> } = {}) {
-    handleNetworkDetail(networkDetailFixture())
+function handleEverything(overrides: {
+    stateEnergies?: object[]
+    channelBarriers?: object[]
+    thermoCounts?: Record<string, number>
+    /** Passed straight through to `networkDetailFixture`'s own `overrides`
+     *  -- e.g. `{ network: { review: { status: "under_review", note: "…" } } }`
+     *  to exercise the review-note wiring against the network's own review
+     *  record. */
+    record?: Record<string, unknown>
+} = {}) {
+    handleNetworkDetail(networkDetailFixture(overrides.record))
     handleSolveDetail("nsolve_test1", overrides.stateEnergies ?? [], overrides.channelBarriers ?? [])
     handleThermo(overrides.thermoCounts ?? { spe_well: 0, spe_h2: 0 })
     handleReactionEntry("rxe_test1", "NN <=> [H][H] + N=N")
@@ -200,6 +210,77 @@ describe("NetworkEntryPage -- identity, evidence, reactions, review", () => {
         expect(text).not.toMatch(/GET \/scientific/)
         expect(text).not.toMatch(/include=/)
         expect(text).not.toMatch(/https?:\/\//)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Review note -- the curator's stated reason for a status (`RecordReview.note`).
+// The live archive's one real note is on a `network_solve` record (a
+// hydrazine network, `under_review`): barriers are sound, bond-fission
+// asymptotes are ~27.4 kJ/mol low against the ATcT. See `components/
+// ReviewNote.tsx`.
+// ---------------------------------------------------------------------------
+
+const NETWORK_REVIEW_NOTE = "The overall network topology and rate ordering are consistent with prior mechanisms."
+const SOLVE_REVIEW_NOTE =
+    "Barriers are sound; bond-fission asymptotes are systematically low. " +
+    "N2H4 -> 2 NH2 is 27.4 kJ/mol below the Active Thermochemical Tables value."
+
+function networkWithReview(review: { status: string; note?: string | null }) {
+    return {
+        network_ref: NETWORK_REF, name: "hydrazine", description: "A dual-form pressure-dependent network deposit.",
+        solve_temperature_min_k: 300, solve_temperature_max_k: 2000, solve_pressure_min_bar: 0.01, solve_pressure_max_bar: 100,
+        review,
+    }
+}
+
+function solvesWithReview(review: { status: string; note?: string | null }) {
+    return [{
+        network_solve_ref: "nsolve_test1", kind: "computed", me_method: "modified strong collision", interpolation_model: "chebyshev",
+        tmin_k: 300, tmax_k: 2000, pmin_bar: 0.01, pmax_bar: 100, review,
+    }]
+}
+
+describe("NetworkEntryPage -- review note", () => {
+    // MUTATION TABLE (required, brief item 3): a record with no note must
+    // render an empty container nowhere -- there must be no review-note
+    // disclosure at all when neither the network's nor the solve's review
+    // carries one. The default fixture's reviews are both `{ status:
+    // "not_reviewed" }`, with no `note` key at all.
+    it("renders no review-note disclosure when neither review carries a note", async () => {
+        handleEverything()
+        page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        expect(screen.queryByText("Network review note", { exact: false })).toBeNull()
+        expect(screen.queryByText("Network solve review note", { exact: false })).toBeNull()
+    })
+
+    // MUTATION TABLE (required, brief item 2): if the page rendered the
+    // review status pill but dropped the note, this goes red.
+    it("shows the solve's review note -- the real one on the live archive -- once its disclosure is opened", async () => {
+        const user = userEvent.setup()
+        handleEverything({ record: { solves: solvesWithReview({ status: "under_review", note: SOLVE_REVIEW_NOTE }) } })
+        page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        const summary = await screen.findByText("Network solve review note", { exact: false })
+        expect(screen.queryByText(SOLVE_REVIEW_NOTE)).not.toBeVisible()
+        await user.click(summary)
+        expect(screen.getByText(SOLVE_REVIEW_NOTE)).toBeVisible()
+    })
+
+    it("shows the network's own review note independently of the solve's", async () => {
+        const user = userEvent.setup()
+        handleEverything({ record: { network: networkWithReview({ status: "approved", note: NETWORK_REVIEW_NOTE } ) } })
+        page()
+        await screen.findByRole("heading", { name: "hydrazine" })
+        // Present regardless of status -- this fixture's network review is
+        // `approved`, not `under_review`, pinning the "not gated on status"
+        // invariant on the page itself, not just the component in isolation.
+        const summary = await screen.findByText("Network review note", { exact: false })
+        await user.click(summary)
+        expect(screen.getByText(NETWORK_REVIEW_NOTE)).toBeVisible()
+        // The solve's own review still carries no note in this fixture.
+        expect(screen.queryByText("Network solve review note", { exact: false })).toBeNull()
     })
 })
 

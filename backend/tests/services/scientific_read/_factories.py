@@ -289,6 +289,7 @@ def set_review(
     record_id: int,
     status: RecordReviewStatus,
     reviewed_by: int | None = None,
+    note: str | None = None,
 ) -> RecordReview:
     """Set a polymorphic RecordReview row for a record.
 
@@ -304,6 +305,7 @@ def set_review(
         status=status,
         reviewed_at=datetime.now(timezone.utc),
         reviewed_by=reviewed_by,
+        note=note,
     )
     session.add(review)
     session.flush()

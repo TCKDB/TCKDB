@@ -17,6 +17,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { ReviewNote } from "../components/ReviewNote"
 import { computeSpeciesEnergyCoverage } from "../domain/networkEnergyCoverage"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
@@ -204,6 +205,13 @@ function EntryDetail({ record }: { record: NetworkFullRecord }) {
                         ]}
                         note="This count reflects the network's own review record only. States, channels and kinetics fits carry no independent review status of their own today, so there is nothing further to add."
                     />
+                    {/* The curator's stated reason for a status, when one was
+                        recorded -- for the network's own review AND, separately,
+                        its solve's (a distinct record, `network_solve`, with its
+                        own review row). Renders nothing when absent (`ReviewNote`'s
+                        own contract); not gated on either record's status. */}
+                    <ReviewNote note={network.review.note} label="Network review note" />
+                    {solve && <ReviewNote note={solve.review.note} label="Network solve review note" />}
                 </section>
             </PageShell>
         </section>
