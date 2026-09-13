@@ -91,7 +91,7 @@ distinguished only by release fails on a genuine unique violation --
 correct and loud, rather than silently re-merging two distinct factors.
 
 Revision ID: e3a7c1f9b2d4
-Revises: c24ce2d9c198
+Revises: a7d4e2b9c351
 Create Date: 2026-09-13 12:00:00.000000
 
 """
@@ -104,7 +104,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "e3a7c1f9b2d4"
-down_revision: Union[str, None] = "c24ce2d9c198"
+down_revision: Union[str, None] = "a7d4e2b9c351"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
