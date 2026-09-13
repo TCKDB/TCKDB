@@ -985,9 +985,9 @@ def test_frequency_scale_factor_resolution_on_statmech(db_conn) -> None:
         assert fsf.value == 0.988
         assert fsf.level_of_theory is not None
         assert fsf.level_of_theory.method.lower() == "wb97xd"
-        # software dimension is resolved through the SoftwareRef
-        assert fsf.software is not None
-        assert fsf.software.name == "Gaussian"
+        # software dimension is resolved through the SoftwareReleaseRef
+        assert fsf.software_release is not None
+        assert fsf.software_release.software.name == "Gaussian"
 
 
 # ---------------------------------------------------------------------------

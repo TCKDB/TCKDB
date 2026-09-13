@@ -41,10 +41,7 @@ from app.services.local_key_resolution import resolve_declared_key
 from app.services.provenance_warnings import (
     collect_energy_correction_scheme_provenance_warnings,
 )
-from app.services.software_resolution import (
-    resolve_software,
-    resolve_software_release_ref,
-)
+from app.services.software_resolution import resolve_software_release_ref
 
 #: An applied correction names a source the enclosing upload never declared.
 #:
@@ -439,11 +436,16 @@ def resolve_or_create_freq_scale_factor_ref(
 ) -> FrequencyScaleFactor:
     """Resolve or create a frequency scale factor from the unified FSF ref.
 
-    Dedup key: the full DB identity tuple
-    ``(level_of_theory, software, scale_kind, value, source_literature,
-    workflow_tool_release)``. ``note`` is descriptive and never used for
-    matching — when the identity collides with an existing row, the row
-    is reused and the incoming ``note`` is ignored.
+    Dedup key: the full DB identity tuple ``(level_of_theory,
+    software_release, scale_kind, value, source_literature,
+    workflow_tool_release)`` — matches
+    ``uq_frequency_scale_factor_identity`` (correction-scheme-provenance
+    plan v2 §6). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    optionally version/revision/build): a depositor who names only the
+    program resolves to the version-less release row for it, mirroring
+    ``resolve_or_create_scheme``. ``note`` is descriptive and never used
+    for matching — when the identity collides with an existing row, the
+    row is reused and the incoming ``note`` is ignored.
 
     :param session: Active SQLAlchemy session.
     :param ref: Unified upload-facing frequency scale factor reference.
@@ -452,10 +454,10 @@ def resolve_or_create_freq_scale_factor_ref(
     """
     lot = resolve_level_of_theory_ref(session, ref.level_of_theory)
 
-    software_id = None
+    software_release_id = None
     if ref.software is not None:
-        sw = resolve_software(session, ref.software.name)
-        software_id = sw.id
+        release = resolve_software_release_ref(session, ref.software)
+        software_release_id = release.id
 
     literature = (
         resolve_or_create_literature(session, ref.source_literature)
@@ -472,7 +474,7 @@ def resolve_or_create_freq_scale_factor_ref(
     return _resolve_or_create_fsf_row(
         session,
         level_of_theory_id=lot.id,
-        software_id=software_id,
+        software_release_id=software_release_id,
         scale_kind=ref.scale_kind,
         value=ref.value,
         source_literature_id=lit_id,
@@ -486,7 +488,7 @@ def _resolve_or_create_fsf_row(
     session: Session,
     *,
     level_of_theory_id: int,
-    software_id: int | None,
+    software_release_id: int | None,
     scale_kind,
     value: float,
     source_literature_id: int | None,
@@ -506,7 +508,7 @@ def _resolve_or_create_fsf_row(
     existing = session.scalar(
         select(FrequencyScaleFactor).where(
             FrequencyScaleFactor.level_of_theory_id == level_of_theory_id,
-            _match(FrequencyScaleFactor.software_id, software_id),
+            _match(FrequencyScaleFactor.software_release_id, software_release_id),
             FrequencyScaleFactor.scale_kind == scale_kind,
             FrequencyScaleFactor.value == value,
             _match(FrequencyScaleFactor.source_literature_id, source_literature_id),
@@ -520,7 +522,7 @@ def _resolve_or_create_fsf_row(
         with session.begin_nested():
             fsf = FrequencyScaleFactor(
                 level_of_theory_id=level_of_theory_id,
-                software_id=software_id,
+                software_release_id=software_release_id,
                 scale_kind=scale_kind,
                 value=value,
                 source_literature_id=source_literature_id,
@@ -534,7 +536,7 @@ def _resolve_or_create_fsf_row(
         fsf = session.scalar(
             select(FrequencyScaleFactor).where(
                 FrequencyScaleFactor.level_of_theory_id == level_of_theory_id,
-                _match(FrequencyScaleFactor.software_id, software_id),
+                _match(FrequencyScaleFactor.software_release_id, software_release_id),
                 FrequencyScaleFactor.scale_kind == scale_kind,
                 FrequencyScaleFactor.value == value,
                 _match(FrequencyScaleFactor.source_literature_id, source_literature_id),

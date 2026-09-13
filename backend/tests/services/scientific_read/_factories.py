@@ -1985,7 +1985,7 @@ def make_frequency_scale_factor(
     session: Session,
     *,
     lot: LevelOfTheory | None = None,
-    software: Software | None = None,
+    software_release: SoftwareRelease | None = None,
     scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental,
     value: float | None = None,
     source_literature: Literature | None = None,
@@ -1994,16 +1994,25 @@ def make_frequency_scale_factor(
 ) -> FrequencyScaleFactor:
     """Create a FrequencyScaleFactor row.
 
-    The natural-identity uniqueness index covers (lot, software,
+    The natural-identity uniqueness index covers (lot, software_release,
     scale_kind, value, source_literature, workflow_tool_release); the
     factory bumps ``value`` per call by default so successive calls
     with identical other-keys still insert successfully.
+
+    ``software_release`` (not ``software``) since correction-scheme-
+    provenance plan v2 §6: the column is ``software_release_id``, keyed
+    on the release the same way ``EnergyCorrectionScheme`` is (and the
+    same way ``make_energy_correction_scheme`` below takes
+    ``software_release``, not ``software``). Build one with
+    ``make_software_release``.
     """
     if lot is None:
         lot = make_lot(session)
     fsf = FrequencyScaleFactor(
         level_of_theory_id=lot.id,
-        software_id=software.id if software is not None else None,
+        software_release_id=(
+            software_release.id if software_release is not None else None
+        ),
         scale_kind=scale_kind,
         value=value if value is not None else _next_fsf_value(),
         source_literature_id=(

@@ -432,11 +432,11 @@ def _build_software_release_summary(
     plan v2 §3) -- a real FK to ``software_release``. Build the summary
     from an actual release→software join; never fabricate one.
 
-    Unlike ``FrequencyScaleFactor`` (still ``software_id``-only; its
-    release-grain migration is a separate, later PR), ECS has release
-    granularity today, so this is a distinct helper from
-    ``app.services.scientific_read.frequency_scale_factors``'s
-    same-named function and must not be merged with it.
+    ``FrequencyScaleFactor`` gained the same release grain in its own
+    sibling revision (correction-scheme-provenance plan v2 §6), and
+    ``app.services.scientific_read.frequency_scale_factors`` has a
+    same-named function of the same shape -- kept as a distinct helper
+    rather than merged, since the two surfaces share no base module.
     """
     if software_release_id is None:
         return None

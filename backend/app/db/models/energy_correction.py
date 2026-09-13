@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from app.db.models.level_of_theory import LevelOfTheory
     from app.db.models.literature import Literature
     from app.db.models.reaction import ReactionEntry
-    from app.db.models.software import Software, SoftwareRelease
+    from app.db.models.software import SoftwareRelease
     from app.db.models.species import ConformerObservation, SpeciesEntry
     from app.db.models.transition_state import TransitionStateEntry
     from app.db.models.workflow import WorkflowToolRelease
@@ -74,9 +74,9 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     # releases of the same program, so the correction is release-specific,
     # not merely program-specific (correction-scheme-provenance plan v2
     # §3.1). Keyed on ``software_release`` like every other
-    # provenance-bearing table in this schema (plan §2.2); unlike
-    # ``FrequencyScaleFactor.software_id`` below, which stays at the
-    # coarser program grain pending its own sibling revision (plan §6).
+    # provenance-bearing table in this schema (plan §2.2), including
+    # ``FrequencyScaleFactor.software_release_id`` below since its own
+    # sibling revision (plan §6).
     software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -263,10 +263,23 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
         ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
         nullable=False,
     )
-    # Software dimension: same LOT in Gaussian vs QChem can yield different factors
-    software_id: Mapped[Optional[int]] = mapped_column(
+    # Software-release dimension: a harmonic frequency scale factor is fit
+    # against a program's own build-level vibrational frequencies (same
+    # LOT in Gaussian 16 vs Gaussian 09 vs QChem can legitimately need a
+    # different factor), so the factor is release-specific, not merely
+    # program-specific (correction-scheme-provenance plan v2 §6, mirroring
+    # §3.1's argument for EnergyCorrectionScheme.software_release_id
+    # above). Keyed on ``software_release`` like every other
+    # provenance-bearing table in this schema, including
+    # ``EnergyCorrectionScheme`` as of plan v2.
+    software_release_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
-        ForeignKey("software.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "software_release.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_frequency_scale_factor_software_release_id",
+        ),
         nullable=True,
     )
     scale_kind: Mapped[FrequencyScaleKind] = mapped_column(
@@ -296,7 +309,7 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
 
     # Relationships
     level_of_theory: Mapped["LevelOfTheory"] = relationship()
-    software: Mapped[Optional["Software"]] = relationship()
+    software_release: Mapped[Optional["SoftwareRelease"]] = relationship()
     source_literature: Mapped[Optional["Literature"]] = relationship()
     workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship()
 
@@ -305,7 +318,7 @@ class FrequencyScaleFactor(Base, TimestampMixin, CreatedByMixin, PublicRefMixin)
         Index(
             "uq_frequency_scale_factor_identity",
             "level_of_theory_id",
-            "software_id",
+            "software_release_id",
             "scale_kind",
             "value",
             "source_literature_id",

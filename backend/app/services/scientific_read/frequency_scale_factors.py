@@ -23,7 +23,7 @@ from app.db.models.energy_correction import (
     FrequencyScaleFactor,
 )
 from app.db.models.literature import Literature
-from app.db.models.software import Software
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import Statmech
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
@@ -120,7 +120,7 @@ def build_frequency_scale_factor_record(
     evidence = FrequencyScaleFactorEvidenceSummary(
         has_literature_source=fsf.source_literature_id is not None,
         has_workflow_tool_source=fsf.workflow_tool_release_id is not None,
-        has_software_dimension=fsf.software_id is not None,
+        has_software_dimension=fsf.software_release_id is not None,
         statmech_usage_count=statmech_count,
         has_statmech_usage=statmech_count > 0,
     )
@@ -130,7 +130,7 @@ def build_frequency_scale_factor_record(
     )
 
     lot_summary = _build_lot_summary(session, fsf.level_of_theory_id)
-    sw_summary = _build_software_release_summary(session, fsf.software_id)
+    sw_summary = _build_software_release_summary(session, fsf.software_release_id)
     wf_summary = _build_workflow_release_summary(
         session, fsf.workflow_tool_release_id
     )
@@ -297,24 +297,37 @@ def _build_lot_summary(
 
 
 def _build_software_release_summary(
-    session: Session, software_id: int | None
+    session: Session, software_release_id: int | None
 ) -> SoftwareReleaseSummary | None:
-    """FSF row stores ``software_id`` (the software vendor), not a release.
+    """FSF stores ``software_release_id`` (correction-scheme-provenance
+    plan v2 §6) -- a real FK to ``software_release``. Build the summary
+    from an actual release->software join; never fabricate one.
 
-    There's no release granularity on this row, so the summary shows the
-    vendor name without a version. We synthesize a SoftwareReleaseSummary
-    shape for symmetry with the rest of the surface.
+    Same shape as
+    ``app.services.scientific_read.energy_correction_schemes``'s
+    same-named function, kept as a distinct helper because the two
+    surfaces have no shared base module and duplicating six lines here is
+    cheaper than introducing one for it.
     """
-    if software_id is None:
+    if software_release_id is None:
         return None
-    sw = session.get(Software, software_id)
-    if sw is None:
+    row = session.execute(
+        select(
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            SoftwareRelease.version,
+            Software.name,
+        )
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(SoftwareRelease.id == software_release_id)
+    ).one_or_none()
+    if row is None:
         return None
     return SoftwareReleaseSummary(
-        software_release_id=0,
-        software_release_ref="",
-        software=sw.name,
-        version=None,
+        software_release_id=row.id,
+        software_release_ref=row.public_ref,
+        software=row.name,
+        version=row.version,
     )
 
 

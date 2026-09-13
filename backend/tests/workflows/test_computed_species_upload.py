@@ -1687,8 +1687,8 @@ def test_computed_species_statmech_block_persists_with_fsf(db_conn) -> None:
         assert fsf is not None
         assert fsf.value == 0.977
         assert fsf.scale_kind.value == "fundamental"
-        assert fsf.software is not None
-        assert fsf.software.name == "Gaussian"
+        assert fsf.software_release is not None
+        assert fsf.software_release.software.name == "Gaussian"
 
         # Source calculation link by local key.
         links = session.scalars(

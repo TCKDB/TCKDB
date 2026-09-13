@@ -955,15 +955,16 @@ class TestCanonicalizerInvariants:
 
         lot = _make_lot(db_session, method="m062x_fsf", basis="def2tzvp")
         sw = _make_software(db_session, name="Gaussian-fsfa")
+        rel = _make_software_release(db_session, software=sw)
         a = FrequencyScaleFactor(
             level_of_theory_id=lot.id,
-            software_id=sw.id,
+            software_release_id=rel.id,
             scale_kind=FrequencyScaleKind.zpe,
             value=0.97,
         )
         b = FrequencyScaleFactor(
             level_of_theory_id=lot.id,
-            software_id=sw.id,
+            software_release_id=rel.id,
             scale_kind=FrequencyScaleKind.zpe,
             value=0.98,
         )
@@ -977,16 +978,45 @@ class TestCanonicalizerInvariants:
 
         lot = _make_lot(db_session, method="m062x_fsfk", basis="def2tzvp")
         sw = _make_software(db_session, name="Gaussian-fsfk")
+        rel = _make_software_release(db_session, software=sw)
         a = FrequencyScaleFactor(
             level_of_theory_id=lot.id,
-            software_id=sw.id,
+            software_release_id=rel.id,
             scale_kind=FrequencyScaleKind.zpe,
             value=0.97,
         )
         b = FrequencyScaleFactor(
             level_of_theory_id=lot.id,
-            software_id=sw.id,
+            software_release_id=rel.id,
             scale_kind=FrequencyScaleKind.fundamental,
+            value=0.97,
+        )
+        assert generate_ref_for(a) != generate_ref_for(b)
+
+    def test_frequency_scale_factor_refs_differ_when_software_release_differs(
+        self, db_session
+    ):
+        """``software_release_id`` replaced ``software_id`` in the identity
+        tuple (correction-scheme-provenance plan v2 §6) -- two factors
+        identical on every other axis but the release must still get
+        distinct refs."""
+        from app.db.models.common import FrequencyScaleKind
+        from app.db.models.energy_correction import FrequencyScaleFactor
+
+        lot = _make_lot(db_session, method="m062x_fsfr", basis="def2tzvp")
+        sw = _make_software(db_session, name="Gaussian-fsfr")
+        rel_a = _make_software_release(db_session, software=sw, version="16")
+        rel_b = _make_software_release(db_session, software=sw, version="09")
+        a = FrequencyScaleFactor(
+            level_of_theory_id=lot.id,
+            software_release_id=rel_a.id,
+            scale_kind=FrequencyScaleKind.zpe,
+            value=0.97,
+        )
+        b = FrequencyScaleFactor(
+            level_of_theory_id=lot.id,
+            software_release_id=rel_b.id,
+            scale_kind=FrequencyScaleKind.zpe,
             value=0.97,
         )
         assert generate_ref_for(a) != generate_ref_for(b)

@@ -17,7 +17,7 @@ from app.api.error_contract import reject_unsupported_filters
 from app.db.models.energy_correction import FrequencyScaleFactor
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
-from app.db.models.software import Software
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import Statmech
 from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
@@ -62,6 +62,11 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 
 # Legacy grouping name for declared filters without a backing column.
 # The service rejects these before querying; none is treated as a no-op.
+# ``software_version`` moved out of this group once
+# ``frequency_scale_factor`` gained a release-grain column
+# (``software_release_id``, correction-scheme-provenance plan v2 §6) and
+# this module joined through it, mirroring
+# ``energy_correction_schemes_search.py``'s identical move for ECS.
 _DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("model_kind",)
 
 
@@ -85,7 +90,6 @@ def search_frequency_scale_factors(
     reject_unsupported_filters(
         {
             "model_kind": request.model_kind,
-            "software_version": request.software_version,
         },
         endpoint="/scientific/frequency-scale-factors/search",
     )
@@ -131,10 +135,19 @@ def search_frequency_scale_factors(
             stmt = stmt.where(LevelOfTheory.method == request.method)
         if request.basis is not None:
             stmt = stmt.where(LevelOfTheory.basis == request.basis)
-    if request.software is not None:
+    if request.software is not None or request.software_version is not None:
+        # FSF stores software_release_id (correction-scheme-provenance
+        # plan v2 §6), so both the program-name filter and the
+        # release-grain version filter join through software_release/
+        # software -- mirroring energy_correction_schemes_search.py.
         stmt = stmt.join(
-            Software, Software.id == FrequencyScaleFactor.software_id
-        ).where(Software.name == request.software)
+            SoftwareRelease,
+            SoftwareRelease.id == FrequencyScaleFactor.software_release_id,
+        ).join(Software, Software.id == SoftwareRelease.software_id)
+        if request.software is not None:
+            stmt = stmt.where(Software.name == request.software)
+        if request.software_version is not None:
+            stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.used_by_statmech is not None:
         ex = exists().where(
             Statmech.frequency_scale_factor_id == FrequencyScaleFactor.id
@@ -261,7 +274,6 @@ def _request_filter_echo(
         "include_rejected",
         "include_deprecated",
         "min_review_status",
-        "software_version",
     ):
         value = getattr(request, name)
         if value is None:

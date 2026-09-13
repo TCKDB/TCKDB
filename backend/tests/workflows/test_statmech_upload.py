@@ -630,8 +630,8 @@ def test_unified_fsf_ref_supports_full_identity(db_conn, monkeypatch) -> None:
         assert fsf.scale_kind.value == "fundamental"
         assert fsf.level_of_theory is not None
         assert fsf.level_of_theory.method.lower() == "wb97x-d"
-        assert fsf.software is not None
-        assert fsf.software.name == "Gaussian"
+        assert fsf.software_release is not None
+        assert fsf.software_release.software.name == "Gaussian"
         assert fsf.source_literature_id is not None
         assert fsf.source_literature.title == "Scale factors for harmonic frequencies"
         assert fsf.workflow_tool_release_id is not None
@@ -703,7 +703,7 @@ def test_note_does_not_affect_identity_first_writer_wins(db_conn) -> None:
             select(FrequencyScaleFactor).where(
                 FrequencyScaleFactor.value == 0.988,
                 FrequencyScaleFactor.level_of_theory_id == fsf.level_of_theory_id,
-                FrequencyScaleFactor.software_id == fsf.software_id,
+                FrequencyScaleFactor.software_release_id == fsf.software_release_id,
                 FrequencyScaleFactor.scale_kind == fsf.scale_kind,
                 FrequencyScaleFactor.source_literature_id.is_(None),
                 FrequencyScaleFactor.workflow_tool_release_id.is_(None),
