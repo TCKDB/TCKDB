@@ -11,7 +11,12 @@ import { bySummaryText } from "./test/disclosureQueries"
 const speciesRef = "spc_abcde234567abcde234567abcd"
 const speciesRefTwo = "spc_bcdef234567bcdef234567abcde"
 const entryRef = "spe_cdefg234567cdefg234567abcd"
-const server = setupServer()
+// `App` now mounts `AuthProvider`, which probes `GET /auth/me` on every
+// render regardless of which route is under test -- an unmocked 401
+// default keeps every test in this file signed-out (the ordinary case
+// for these public-archive tests) without each one having to know that
+// probe exists.
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
 function overviewSpecies(ref = speciesRef) {
     return {

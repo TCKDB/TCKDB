@@ -30,7 +30,11 @@ const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
 const groupOneRef = "cg_one"
 const groupTwoRef = "cg_two"
 const lot = { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" }
-const server = setupServer()
+// `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
+// route -- see `App.test.tsx`'s identical handler for why this default
+// (signed-out) has to be here for every test in this file that renders
+// `<App />`.
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
 type HandlerOptions = {
     empty?: boolean

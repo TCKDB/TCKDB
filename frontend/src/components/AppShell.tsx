@@ -1,5 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { ThemeToggle } from "./ThemeToggle"
+import { AuthStatus } from "./AuthStatus"
+import "../auth.css"
 
 const links = [
     ["Species", "/species"],
@@ -19,6 +21,7 @@ export function AppShell() {
                     {links.map(([label, path]) => <NavLink key={path} to={path}>{label}</NavLink>)}
                 </nav>
                 <ThemeToggle />
+                <AuthStatus />
             </div>
         </header>
         <main id="main-content"><Outlet /></main>
