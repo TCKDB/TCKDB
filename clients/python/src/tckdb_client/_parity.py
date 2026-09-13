@@ -825,6 +825,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
             "GET",
             "/api/v1/admin/submissions/{submission_id}/machine-review-inspection",
         ),
+        ("GET", "/api/v1/admin/users"),
         ("PATCH", "/api/v1/admin/users/{user_id}/role"),
     )
 ) + tuple(

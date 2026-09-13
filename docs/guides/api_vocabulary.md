@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 179 | `backend/app/api/code_catalogue.py` |
-| **total** | **466** | |
+| Refusal codes a caller can receive | 180 | `backend/app/api/code_catalogue.py` |
+| **total** | **467** | |
 
 ## How a record is named
 
@@ -662,7 +662,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_statmech_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (23 codes)
+### HTTP 409 (24 codes)
 
 | Code | Names |
 | --- | --- |
@@ -677,6 +677,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `energy_correction_scheme_workflow_tool_release_already_set` | a thing |
 | `energy_transfer_scope_columns_disagree` | a relationship — read `context` |
 | `idempotency_conflict` | a relationship — read `context` |
+| `last_admin_demotion` | a thing |
 | `manifest_already_frozen` | a thing |
 | `network_solve_reported_requires_literature` | a thing |
 | `reference_conflict` | a relationship — read `context` |

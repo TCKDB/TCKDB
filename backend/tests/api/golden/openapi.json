@@ -536,6 +536,65 @@
         "title": "AdminSubmissionMachineReviewInspectionResponse",
         "type": "object"
       },
+      "AdminUserResponse": {
+        "additionalProperties": false,
+        "description": "One account, as an admin managing roles needs to see it.\n\nDeliberately omits ``email`` and ``orcid``. Role management needs to\nknow *who* someone is, not how to reach them, and this would\notherwise be the only route in the archive that serves contact\ndetails for every account at once. A bulk personal-data surface is\nworth not having when nothing needs it.\n\n``full_name`` and ``affiliation`` stay: an admin deciding whether to\nmake someone a curator is deciding about a person, and a username\nalone frequently cannot tell two people apart.\n\n``id`` is a raw row id, which the read layer otherwise sweeps out of\nresponses (DR-0028). It is correct here and not an exception being\nsmuggled in: this is an explicitly admin-only schema, and the route\nthat acts on the result -- ``PATCH /admin/users/{user_id}/role`` --\nis keyed on exactly this id. Withholding it would leave that route\nuncallable, which is the state this endpoint exists to end.",
+        "properties": {
+          "affiliation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affiliation"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AppUserRole"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "full_name",
+          "affiliation",
+          "role",
+          "is_active",
+          "created_at"
+        ],
+        "title": "AdminUserResponse",
+        "type": "object"
+      },
       "AnalyticsRequestEcho": {
         "description": "Echo of the parsed request, plus the resolved read profile.",
         "properties": {
@@ -28602,6 +28661,37 @@
         "title": "PaginatedResponse[AdminCuratorTaskResponse]",
         "type": "object"
       },
+      "PaginatedResponse_AdminUserResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[AdminUserResponse]",
+        "type": "object"
+      },
       "PaginatedResponse_AppliedEnergyCorrectionRead_": {
         "properties": {
           "items": {
@@ -52572,8 +52662,146 @@
         ]
       }
     },
+    "/api/v1/admin/users": {
+      "get": {
+        "description": "List accounts and their roles (admin only).\n\nThis exists because ``PATCH /admin/users/{user_id}/role`` is keyed on\na numeric user id and nothing in the API told an admin what those ids\nwere. The role-change route has shipped since v1 and has been\ncallable only by someone willing to read ids out of the database by\nhand -- which means role management was, in practice, a DB operation\nwearing an HTTP interface.\n\nOrdering is by ``username``, which carries a uniqueness constraint\nand is therefore a total order -- no tie-break needed, and no\nunstable page boundaries. It is also the thing an admin is scanning\nfor. ``role`` narrows; everything else the caller filters client-side\noff the returned fields.",
+        "operationId": "list_users_api_v1_admin_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AppUserRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_AdminUserResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/role": {
       "patch": {
+        "description": "Change one account's role (admin only).\n\nRefuses, with 409 ``last_admin_demotion``, to take ``admin`` from the\narchive's only active admin. Nothing in the API can grant the role\nback once nobody holds it, so that single request is unrecoverable\nin-app: repair means running ``scripts/bootstrap_admin.py`` against\nthe database, which needs shell access to the host.\n\nThe broader rule \"an admin may never demote *themselves*\" was\nconsidered and rejected. It would make this refusal unreachable:\nauthentication requires ``is_active`` and this route requires\n``admin``, so the caller is always an active admin, and therefore any\ndemotion of *someone else* leaves at least one admin standing by\nconstruction. Shipping both would mean publishing a code no request\ncan produce. Self-demotion while other admins exist is also\nrecoverable -- another admin can restore the role -- so it is the\nreversible half of the pair and is allowed.",
         "operationId": "change_user_role_api_v1_admin_users__user_id__role_patch",
         "parameters": [
           {

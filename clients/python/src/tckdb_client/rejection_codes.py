@@ -139,6 +139,7 @@ class RejectionCode(str, Enum):
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
     KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
+    LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
@@ -422,6 +423,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
+        RejectionCode.LAST_ADMIN_DEMOTION,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
         RejectionCode.REFERENCE_CONFLICT,
@@ -505,6 +507,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
