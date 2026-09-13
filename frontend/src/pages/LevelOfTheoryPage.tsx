@@ -1,3 +1,4 @@
+import { useId, useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
@@ -209,30 +210,47 @@ function SoftwareSection({ breakdown, available }: {
  * module's doc comment for why the old `SCHEME_KIND_LABELS[kind] ??
  * scheme.name` fallback here is gone.
  *
- * Each DEPOSITED scheme is now its own collapsible box (owner ruling,
- * verbatim: "should be more like also expandable boxes for AEC and BAC
- * but their names are the software or something") -- built on the shared
- * `Disclosure` primitive, titled `{scheme_kind label} {software}`, NEVER
- * the depositor's own free-text `energy_correction_scheme.name` (both
- * live rows carry `name === scheme_kind` verbatim, so a `name` fallback
- * here would silently repeat the kind back in the depositor's own
- * spelling the moment a future scheme deposits a real custom name -- see
+ * Schemes are grouped by `scheme_kind` (correction-scheme-provenance plan
+ * v2 §8, PR 4). A kind with exactly one deposited scheme renders exactly
+ * as before -- one collapsible box, titled `{scheme_kind label}
+ * {software}` -- via `CorrectionSchemeBox` below, unchanged in appearance.
+ * A kind with MORE than one scheme (now buildable: `units`/`version` are
+ * gone from the identity, so a software release or a citation are the
+ * only axes left to distinguish two schemes of the same kind at this
+ * level of theory, correction-scheme-provenance plan v2 §3/§8) renders
+ * that same single box plus one small control above it
+ * (`CorrectionSchemeSelect`) that swaps which scheme's box is shown --
+ * never two boxes of the same kind side by side. This is the shape the
+ * owner asked for, verbatim: "I would think you can change the software &
+ * version and it will change the AEC and BAC instead or something."
+ *
+ * Titling never reads `energy_correction_scheme.name` (both live rows
+ * carry `name === scheme_kind` verbatim, so a `name` fallback here would
+ * silently repeat the kind back in the depositor's own spelling the
+ * moment a future scheme deposits a real custom name -- see
  * `correctionSchemeFormat.ts` for why this app never titles a public page
  * from `name` at all). Software comes from `scheme.software_release`
- * (#439, deployed) via the shared `softwareLabel` formatter -- never a
- * link, `software_release_ref` is measured empty on every live row (see
- * `CorrectionSchemePage.tsx`'s own comment on the same field for why).
+ * (#439, deployed; release-grained since correction-scheme-provenance v2
+ * §4) via the shared `softwareLabel` formatter, which already prints the
+ * version the moment the release carries one -- no separate "gains a
+ * version" formatting code needed here. `software_release_ref` is a real
+ * release ref today (`FrequencyScaleFactor`'s own sibling revision, #464,
+ * gave its release the identical grain) but is rendered as copyable text,
+ * never a link: `GET /api/v1/software-releases/{id}` sits behind
+ * `require_auth_for_legacy_reads` (`router.py`), so a link here would 401
+ * for exactly the anonymous reader this page serves.
  *
- * **A scheme with no recorded software** (reachable: the backfill leaves
- * `software_id` null wherever a level of theory resolves to more than one
- * program) falls back to the text "software not recorded", styled through
- * `.value-pill--muted` rather than the plain `.value-pill` a real name
- * gets -- the same present/absent pill-tone split
- * `EvidenceChecklist.tsx`'s own `RowValue` already uses. Chosen over
- * falling back to `name` (ruled off public pages entirely) and over
- * falling back to silence (an unlabelled box reads as a bug, not an
- * absence) -- the muted pill reads as "checked, not found" rather than as
- * a second real identity sitting beside the real one.
+ * **A scheme with no recorded software** falls back to the text "software
+ * not recorded", styled through `.value-pill--muted` rather than the
+ * plain `.value-pill` a real name gets -- the same present/absent
+ * pill-tone split `EvidenceChecklist.tsx`'s own `RowValue` already uses.
+ * Chosen over falling back to `name` (ruled off public pages entirely)
+ * and over falling back to silence (an unlabelled box reads as a bug, not
+ * an absence) -- the muted pill reads as "checked, not found" rather than
+ * as a second real identity sitting beside the real one. A release
+ * recorded WITHOUT a version renders the program name alone -- no
+ * separate "version not recorded" text; inventing one would make an
+ * honest partial deposit look deficient.
  *
  * **Collapsed by default, per the same owner ask that shaped
  * `EvidenceChecklist.tsx`** ("Evidence blocks should be expandable
@@ -254,9 +272,25 @@ function SoftwareSection({ breakdown, available }: {
 // scheme_ref` this archive actually recorded, never guessed at from here.
 const LOT_SCOPED_SCHEME_KINDS = ["atom_energy", "bac_petersson", "bac_melius"] as const
 
+// Groups preserve first-occurrence order of each kind -- the same order
+// the flat `rows.map` used to render in -- rather than sorting kinds
+// alphabetically or by count, so an archive that always deposits AEC
+// before BAC keeps reading that way.
+function groupSchemesByKind(rows: EnergyCorrectionSchemeRecord[]): [string, EnergyCorrectionSchemeRecord[]][] {
+    const groups = new Map<string, EnergyCorrectionSchemeRecord[]>()
+    for (const row of rows) {
+        const kind = row.energy_correction_scheme.scheme_kind
+        const group = groups.get(kind)
+        if (group) group.push(row)
+        else groups.set(kind, [row])
+    }
+    return [...groups.entries()]
+}
+
 function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorrectionSchemeRecord[] | null; available: boolean }) {
     const rows = schemes ?? []
     const depositedKinds = new Set(rows.map((row) => row.energy_correction_scheme.scheme_kind))
+    const hasSchemes = available && rows.length > 0
     return (
         <section className="ledger-section" aria-labelledby="lot-schemes-heading">
             <SectionHeading
@@ -266,49 +300,26 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
             >
                 Correction schemes
             </SectionHeading>
-            {available && rows.length > 0 ? (
-                rows.map((scheme) => {
-                    const ref = scheme.energy_correction_scheme.energy_correction_scheme_ref
-                    const software = softwareLabel(scheme.software_release)
-                    return (
-                        <Disclosure
-                            key={ref}
-                            id={`scheme-${ref}`}
-                            className="correction-scheme-block"
-                            defaultOpen={false}
-                            summary={(
-                                <>
-                                    <span className="t-heading-2">{schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}</span>
-                                    {software
-                                        ? <span className="value-pill">{software}</span>
-                                        : <span className="value-pill value-pill--muted">software not recorded</span>}
-                                    <span className="correction-scheme-summary-rollup">{schemeParameterRollup(scheme.evidence_summary)}</span>
-                                </>
-                            )}
-                        >
-                            <dl className="kv-list">
-                                <div>
-                                    <dt>Scheme ref</dt>
-                                    <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
-                                </div>
-                                {scheme.energy_correction_scheme.note && (
-                                    <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
-                                )}
-                                <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
-                            </dl>
-                            <CorrectionSchemeTable
-                                corrections={scheme.corrections ?? []}
-                                units={scheme.energy_correction_scheme.units}
-                            />
-                            <p className="note">
-                                The full recipe and its application list live on this scheme's own page —{" "}
-                                <Link to={correctionSchemePath(ref)}>
-                                    open {ref}
-                                </Link>.
-                            </p>
-                        </Disclosure>
-                    )
-                })
+            {hasSchemes && (
+                // The legibility fix correction-scheme-provenance v2 §8 asks
+                // for: "Observed software" above and a correction scheme's
+                // own software answer two different questions -- which
+                // program ran this level of theory's calculations, versus
+                // which program computed one scheme's own parameter values
+                // -- and nothing on the page said so before this sentence.
+                // True regardless of whether a given scheme's release is
+                // recorded, and regardless of whether it matches the
+                // observed software above or not; it states the
+                // distinction, not an absence.
+                <p className="note">
+                    Observed software above names what ran the calculations recorded at this level of theory; a
+                    correction scheme's software names who computed its own parameter values, not who applies them.
+                </p>
+            )}
+            {hasSchemes ? (
+                groupSchemesByKind(rows).map(([kind, group]) => (
+                    <CorrectionSchemeKindGroup key={kind} schemes={group} />
+                ))
             ) : (
                 <div className="correction-scheme-absence-list">
                     {LOT_SCOPED_SCHEME_KINDS.filter((kind) => !depositedKinds.has(kind)).map((kind) => (
@@ -319,6 +330,135 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                 </div>
             )}
         </section>
+    )
+}
+
+/**
+ * One kind's worth of deposited schemes. Exactly one scheme: renders
+ * `CorrectionSchemeBox` alone, no control -- must degrade to the
+ * pre-selector appearance byte-for-byte. More than one: renders the same
+ * single box for whichever scheme is currently selected, plus
+ * `CorrectionSchemeSelect` above it. The select is a SIBLING of the
+ * `Disclosure`, never nested inside its `<summary>` -- a `<select>`
+ * inside a `<details><summary>` would toggle the box open/closed on the
+ * same click that opens the dropdown, before an option can even be
+ * chosen.
+ */
+function CorrectionSchemeKindGroup({ schemes }: { schemes: EnergyCorrectionSchemeRecord[] }) {
+    const [selectedRef, setSelectedRef] = useState(
+        schemes[0].energy_correction_scheme.energy_correction_scheme_ref,
+    )
+    const selected = schemes.find(
+        (scheme) => scheme.energy_correction_scheme.energy_correction_scheme_ref === selectedRef,
+    ) ?? schemes[0]
+    return (
+        <div className="correction-scheme-kind-group">
+            {schemes.length > 1 && (
+                <CorrectionSchemeSelect schemes={schemes} selectedRef={selected.energy_correction_scheme.energy_correction_scheme_ref} onSelect={setSelectedRef} />
+            )}
+            <CorrectionSchemeBox key={selected.energy_correction_scheme.energy_correction_scheme_ref} scheme={selected} />
+        </div>
+    )
+}
+
+/**
+ * What actually distinguishes two schemes of the same kind at this level
+ * of theory, post `units`/`version` removal (§3/§8 of the plan): a
+ * software release, or -- where two schemes share the same release label
+ * (including both being "software not recorded") -- the citation. Falls
+ * back to the scheme's own ref only when neither release nor citation
+ * separates them, so the option list is never two identical strings.
+ */
+function correctionSchemeSelectorLabel(scheme: EnergyCorrectionSchemeRecord, siblings: EnergyCorrectionSchemeRecord[]): string {
+    const releaseLabel = softwareLabel(scheme.software_release) ?? "software not recorded"
+    const sharesReleaseLabel = siblings.filter(
+        (sibling) => (softwareLabel(sibling.software_release) ?? "software not recorded") === releaseLabel,
+    ).length > 1
+    if (!sharesReleaseLabel) return releaseLabel
+    const citation = scheme.literature?.title ?? scheme.literature?.literature_ref
+    return citation
+        ? `${releaseLabel} · ${citation}`
+        : `${releaseLabel} · ${scheme.energy_correction_scheme.energy_correction_scheme_ref}`
+}
+
+function CorrectionSchemeSelect({ schemes, selectedRef, onSelect }: {
+    schemes: EnergyCorrectionSchemeRecord[]
+    selectedRef: string
+    onSelect: (ref: string) => void
+}) {
+    const selectId = useId()
+    return (
+        <label className="correction-scheme-select" htmlFor={selectId}>
+            <span className="correction-scheme-select-label">Software</span>
+            <select
+                id={selectId}
+                className="correction-scheme-select-input"
+                value={selectedRef}
+                onChange={(event) => onSelect(event.target.value)}
+            >
+                {schemes.map((scheme) => {
+                    const ref = scheme.energy_correction_scheme.energy_correction_scheme_ref
+                    return <option key={ref} value={ref}>{correctionSchemeSelectorLabel(scheme, schemes)}</option>
+                })}
+            </select>
+        </label>
+    )
+}
+
+function CorrectionSchemeBox({ scheme }: { scheme: EnergyCorrectionSchemeRecord }) {
+    const ref = scheme.energy_correction_scheme.energy_correction_scheme_ref
+    const software = softwareLabel(scheme.software_release)
+    const releaseRef = scheme.software_release?.software_release_ref
+    return (
+        <Disclosure
+            id={`scheme-${ref}`}
+            className="correction-scheme-block"
+            defaultOpen={false}
+            summary={(
+                <>
+                    <span className="t-heading-2">{schemeKindLabel(scheme.energy_correction_scheme.scheme_kind)}</span>
+                    {software
+                        ? <span className="value-pill">{software}</span>
+                        : <span className="value-pill value-pill--muted">software not recorded</span>}
+                    <span className="correction-scheme-summary-rollup">{schemeParameterRollup(scheme.evidence_summary)}</span>
+                </>
+            )}
+        >
+            <dl className="kv-list">
+                <div>
+                    <dt>Scheme ref</dt>
+                    <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
+                </div>
+                {/* Real once a release resolves (correction-scheme-provenance
+                    v2 §4) -- but never a link, see this section's own
+                    doc comment above. Copyable text only, same as
+                    `CalculationDetailPage.tsx`'s own `RefsDisclosure`
+                    refs -- visually distinct from the `Link` above it. */}
+                {releaseRef && (
+                    <div>
+                        <dt>Software release ref</dt>
+                        <dd className="record-identity-fact-copyable">
+                            <code className="data">{releaseRef}</code>
+                            <CopyButton value={releaseRef} label="Software release ref" srLabel="value" />
+                        </dd>
+                    </div>
+                )}
+                {scheme.energy_correction_scheme.note && (
+                    <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
+                )}
+                <div><dt>Applied to</dt><dd>{scheme.evidence_summary.applied_usage_count} entries</dd></div>
+            </dl>
+            <CorrectionSchemeTable
+                corrections={scheme.corrections ?? []}
+                units={scheme.energy_correction_scheme.units}
+            />
+            <p className="note">
+                The full recipe and its application list live on this scheme's own page —{" "}
+                <Link to={correctionSchemePath(ref)}>
+                    open {ref}
+                </Link>.
+            </p>
+        </Disclosure>
     )
 }
 

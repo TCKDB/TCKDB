@@ -154,9 +154,7 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
      * `energy_correction_scheme`; this page fetches both (always present
      * on the record, not include-gated) and now renders them as their own
      * rows. Software renders through `softwareLabel` -- text only, never
-     * a link built from `software_release_ref` (measured empty on every
-     * live row; see this page's own comment on the field for why a link
-     * there would be broken).
+     * a link built from `software_release_ref` (empty on this live row).
      */
     it("renders deposited software and workflow-tool release as their own rows", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
@@ -166,10 +164,36 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         await screen.findByRole("heading", { level: 1 })
         const softwareDt = screen.getByText("Software")
         expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian")
-        // Never a link -- `software_release_ref` is measured empty live.
+        // Never a link -- `software_release_ref` is empty on this row.
         expect(screen.queryByRole("link", { name: /Gaussian/ })).not.toBeInTheDocument()
         const toolDt = screen.getByText("Workflow-tool release")
         expect(toolDt.nextElementSibling).toHaveTextContent("ARC 1.1.0")
+    })
+
+    /**
+     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): since
+     * #459, `software_release_ref` is a real release ref, not measured
+     * empty -- but `GET /api/v1/software-releases/{id}` sits behind
+     * `require_auth_for_legacy_reads` and 401s anonymously, so this page
+     * NEVER turns it into a link. It still earns its own row, as
+     * copyable text.
+     */
+    it("renders a real software_release_ref as its own copyable row, never a link", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const refDt = screen.getByText("Software release ref")
+        expect(refDt.nextElementSibling).toHaveTextContent("swr_g16")
+        expect(screen.queryByRole("link", { name: /swr_g16/ })).not.toBeInTheDocument()
+    })
+
+    it("renders no 'Software release ref' row when the release ref is empty", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        expect(screen.queryByText("Software release ref")).not.toBeInTheDocument()
     })
 
     /**

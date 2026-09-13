@@ -113,17 +113,27 @@ const ecsAvailableSectionsSchema = z.object({
 export const energyCorrectionSchemeRecordSchema = z.object({
     energy_correction_scheme: ecsCoreSchema,
     level_of_theory: lotSummarySchema.nullable().optional(),
-    // Added by #439 (deployed): backfilled from each scheme's own level of
-    // theory (both live rows: Gaussian). `software_release_ref` is
-    // measured live as `""` -- the row stores `software_id` (a vendor),
-    // not a release id, so the backend synthesizes this summary shape
-    // with no real release to link (see
-    // `backend/app/services/scientific_read/energy_correction_schemes.py`
-    // `_build_software_release_summary`, which mirrors
-    // `FrequencyScaleFactor`'s identical limitation). Real backend
-    // behaviour, not a serialisation artefact -- never build a link from
-    // this ref; render through `softwareLabel` (name/version only) like
-    // every other `software_release` consumer in this app already does.
+    // Added by #439 (deployed). Release-grained since correction-scheme-
+    // provenance plan v2 §4/#459: the scheme row stores a real
+    // `software_release_id` FK, and `_build_software_release_summary`
+    // (`backend/app/services/scientific_read/energy_correction_schemes.py`)
+    // joins an actual release, so `software_release_ref` is no longer
+    // measured empty the way it was pre-#459 -- that was a real backend
+    // limitation at the time (the row stored `software_id`, a vendor, not
+    // a release id), not a stale claim left uncorrected here.
+    // `FrequencyScaleFactor` had the identical vendor-only limitation and
+    // gained the same release grain in its own sibling revision (#464) --
+    // see `frequencyScaleFactorRecordSchema` below, which shares this same
+    // `softwareReleaseSchema`. Even with a real ref here, this app still
+    // never builds a link from it: PR 4
+    // (correction-scheme-provenance plan v2 §8) measured `GET /api/v1/
+    // software-releases/{id}` as sitting behind
+    // `require_auth_for_legacy_reads`, 401ing anonymously while every
+    // scientific read on this surface returns 200 -- a link would break
+    // for exactly the anonymous reader these pages serve. Render through
+    // `softwareLabel` (name/version only) like every other
+    // `software_release` consumer in this app, and the ref itself, where
+    // shown, as copyable text rather than a link.
     software_release: softwareReleaseSchema.nullable().optional(),
     // Stayed null on both live rows -- 10 of 416 calculations recorded a
     // workflow-tool release and no single one could be derived

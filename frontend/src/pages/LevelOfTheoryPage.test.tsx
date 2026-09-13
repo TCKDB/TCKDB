@@ -289,4 +289,142 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         expect(links.length).toBeGreaterThan(0)
         expect(links[0]).toHaveAttribute("href", "/methods/schemes/ecs_atom")
     })
+
+    /**
+     * PR 4 of `docs/plans/correction-scheme-provenance.md` (§8): the owner's
+     * fresh objection to #440's shape once two schemes of one kind became
+     * buildable ("I dont know how i feel about the expanding tables when we
+     * may get multiple softwares for AEC. I would think you can change the
+     * software & version and it will change the AEC and BAC instead or
+     * something."). Two `atom_energy` schemes on different software
+     * releases must render as ONE section with a control, not two boxes of
+     * the same kind side by side -- and picking the second option must
+     * swap which scheme's parameter table is shown. The lone `bac_petersson`
+     * scheme in the same fixture must stay control-free (RED-FIRST
+     * CRITERION 2), proving the control appears only where there is an
+     * actual choice.
+     *
+     * MUTATION: render every scheme in a kind as its own always-visible
+     * box (drop the grouping) -- the "exactly one 'Atom-energy correction'
+     * heading" assertion fails because there would be two.
+     */
+    it("groups two schemes of the same kind into one section with a software control that swaps the rendered parameter table", async () => {
+        const base = baseRecord()
+        const gaussianScheme = {
+            ...base.correction_schemes[0],
+            software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" },
+        }
+        const orcaScheme = {
+            ...base.correction_schemes[0],
+            energy_correction_scheme: { ...base.correction_schemes[0].energy_correction_scheme, energy_correction_scheme_ref: "ecs_atom_orca" },
+            software_release: { software_release_ref: "swr_orca6", software: "ORCA", version: "6" },
+            evidence_summary: { ...base.correction_schemes[0].evidence_summary, atom_param_count: 3, applied_usage_count: 12 },
+            corrections: atomCorrections().slice(0, 3),
+        }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [gaussianScheme, orcaScheme, base.correction_schemes[1]],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+
+        // Exactly ONE "Atom-energy correction" box, not two.
+        expect(screen.getAllByText("Atom-energy correction")).toHaveLength(1)
+
+        // The atom_energy kind gets a control; the single-scheme
+        // bac_petersson kind does not (RED-FIRST CRITERION 2).
+        const combos = screen.getAllByRole("combobox")
+        expect(combos).toHaveLength(1)
+        const select = combos[0] as HTMLSelectElement
+        expect(within(select).getByRole("option", { name: /Gaussian 16/ })).toBeInTheDocument()
+        expect(within(select).getByRole("option", { name: /ORCA 6/ })).toBeInTheDocument()
+
+        // Gaussian is selected first (fixture order) -- its version shows
+        // in the title pill (`.value-pill`, distinct from the SAME text
+        // appearing in the control's own `<option>`), and opening the box
+        // shows its own 8-row table.
+        expect(screen.getByText("Gaussian 16", { selector: ".value-pill" })).toBeVisible()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 8)
+
+        // Switching the control swaps the box's own content -- title pill
+        // AND parameter table both flip to ORCA's, never both shown at once.
+        await user.selectOptions(select, "ecs_atom_orca")
+        expect(screen.queryByText("Gaussian 16", { selector: ".value-pill" })).not.toBeInTheDocument()
+        expect(screen.getByText("ORCA 6", { selector: ".value-pill" })).toBeVisible()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        expect(within(screen.getByRole("table", { name: "Element correction parameters" })).getAllByRole("row")).toHaveLength(1 + 3)
+    })
+
+    /**
+     * RED-FIRST CRITERION 3. `softwareLabel` already renders `{name}
+     * {version}` (no new formatting code needed here) -- this pins that a
+     * versioned release's version actually reaches the box title.
+     * MUTATION: revert `software_release` to `{ software: "Gaussian" }`
+     * (drop `version`) -- the "16" assertion fails.
+     */
+    it("shows a versioned release's version in the correction-scheme box title", async () => {
+        const base = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [
+                { ...base.correction_schemes[0], software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" } },
+                base.correction_schemes[1],
+            ],
+        })))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getByText("Gaussian 16")).toBeVisible()
+    })
+
+    /**
+     * RED-FIRST CRITERION 5. A release with NO version renders the program
+     * name alone -- never a separate "version not recorded" string, which
+     * would make an honest partial deposit look deficient.
+     */
+    it("renders a version-less release as the program name alone, with no 'version not recorded' text", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getAllByText("Gaussian").length).toBeGreaterThan(0)
+        expect(screen.queryByText(/version not recorded/i)).not.toBeInTheDocument()
+    })
+
+    /**
+     * RED-FIRST CRITERION 7 -- the legibility fix (§8). Must be true
+     * regardless of whether a scheme's release is recorded, phrased as a
+     * distinction between two questions, never as an absence.
+     */
+    it("states the distinction between observed software and a correction scheme's own software", async () => {
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord()))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getByText(
+            "Observed software above names what ran the calculations recorded at this level of theory; "
+            + "a correction scheme's software names who computed its own parameter values, not who applies them.",
+        )).toBeVisible()
+        expect(screen.queryByText(/we don't know|not sure|unknown provenance/i)).not.toBeInTheDocument()
+    })
+
+    /**
+     * A real `software_release_ref` (post-#459) renders as copyable text,
+     * never a link -- `GET /api/v1/software-releases/{id}` 401s
+     * anonymously (`require_auth_for_legacy_reads`), so linking it would
+     * break for the very reader this page serves.
+     */
+    it("renders a real software_release_ref as copyable text, never a link", async () => {
+        const base = baseRecord()
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [
+                { ...base.correction_schemes[0], software_release: { software_release_ref: "swr_g16", software: "Gaussian", version: "16" } },
+                base.correction_schemes[1],
+            ],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        const refValue = screen.getByText("swr_g16")
+        expect(refValue).toBeVisible()
+        expect(refValue.closest("a")).toBeNull()
+    })
 })
