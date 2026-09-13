@@ -218,6 +218,16 @@
 
 .api-key-create .auth-field { flex: 1 1 16rem; gap: .35rem; }
 
+/* `.auth-submit` carries `align-self: flex-start`, which is right for the
+   sign-in form -- there the form is a COLUMN and the button follows the
+   fields, so flex-start stops it stretching the full width of the card.
+   This form is a ROW, and a child's `align-self` beats the container's
+   `align-items: flex-end`. The button was therefore pinned to the top of
+   the line: level with the "Label" caption, floating above the input it
+   submits rather than sitting beside it. `auto` defers to the container
+   again. */
+.api-key-create .auth-submit { align-self: auto; }
+
 .api-key-revoke {
     border: 1px solid var(--line);
     border-radius: .35rem;
