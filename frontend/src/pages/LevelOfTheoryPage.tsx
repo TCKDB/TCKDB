@@ -219,9 +219,23 @@ function SoftwareSection({ breakdown, available }: {
  * spelling the moment a future scheme deposits a real custom name -- see
  * `correctionSchemeFormat.ts` for why this app never titles a public page
  * from `name` at all). Software comes from `scheme.software_release`
- * (#439, deployed) via the shared `softwareLabel` formatter -- never a
- * link, `software_release_ref` is measured empty on every live row (see
- * `CorrectionSchemePage.tsx`'s own comment on the same field for why).
+ * (correction-scheme-provenance plan, PRs 1-2, deployed) via the shared
+ * `softwareLabel` formatter, which now titles the box with a real build
+ * ("Gaussian 16") the moment one is recorded, with no new formatting
+ * code -- `softwareLabel` already had the stutter guard this needed.
+ * `software_release_ref` is a real, resolvable public reference now (the
+ * read layer joins the actual `software_release` row instead of
+ * fabricating one -- see PR 2), and the open box below shows it as its
+ * own copyable "Software release ref" row when present. It still does
+ * NOT render as an in-app `<Link>`: this frontend has no route for a
+ * software-release detail page (`methodsLinks.ts`'s own doc comment
+ * lists the exact three ref kinds that got one, and this is not among
+ * them), and the one backend endpoint that resolves a release by id
+ * (`GET /software-releases/{id}`) is the legacy entity surface gated by
+ * `require_auth_for_legacy_reads`, which requires a credential on the
+ * hosted deployment -- so a `<Link>` here would 401 for the anonymous
+ * reader this page is for. Building that page is real, in-scope future
+ * work, not this PR's.
  *
  * **A scheme with no recorded software** (reachable: the backfill leaves
  * `software_id` null wherever a level of theory resolves to more than one
@@ -262,7 +276,7 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
             <SectionHeading
                 id="lot-schemes-heading"
                 kicker="Deposited evidence"
-                intro="Energy-correction schemes deposited against this level of theory, rendered as their real per-element or per-bond parameter tables."
+                intro="Energy-correction schemes deposited against this level of theory, rendered as their real per-element or per-bond parameter tables. Software here names who computed each scheme's own parameters, not who ran the calculations recorded above."
             >
                 Correction schemes
             </SectionHeading>
@@ -291,6 +305,15 @@ function CorrectionSchemesSection({ schemes, available }: { schemes: EnergyCorre
                                     <dt>Scheme ref</dt>
                                     <dd><Link to={correctionSchemePath(ref)}><code className="data">{ref}</code></Link></dd>
                                 </div>
+                                {scheme.software_release?.software_release_ref && (
+                                    <div>
+                                        <dt>Software release ref</dt>
+                                        <dd className="record-identity-fact-copyable">
+                                            <code className="data">{scheme.software_release.software_release_ref}</code>
+                                            <CopyButton value={scheme.software_release.software_release_ref} label="Software release ref" srLabel="value" />
+                                        </dd>
+                                    </div>
+                                )}
                                 {scheme.energy_correction_scheme.note && (
                                     <div><dt>Note</dt><dd>{scheme.energy_correction_scheme.note}</dd></div>
                                 )}

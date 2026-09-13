@@ -130,26 +130,43 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         backfill deliberately left it absent rather than
                                         guess -- but this page states each absence
                                         plainly, without narrating a cause it cannot
-                                        verify from the API response alone. Still not a
-                                        link, but the reason has changed and the old one
-                                        is no longer true: `software_release_ref` used to
-                                        be measured empty on every live row, because the
-                                        scheme stored a vendor rather than a release row
-                                        to point at. Since the read layer joins a real
-                                        `software_release` that ref resolves, so linking
-                                        it is now possible and is PR 4's decision, not an
-                                        impossibility. Until then `softwareLabel` renders
-                                        name/version only, exactly like every other
-                                        software_release consumer in this app.
-                                        `FrequencyScaleFactor` does still have the old
-                                        limitation (its release-grain revision is PR 6).
-                                        Note both live rows carry no release at all
-                                        today, so this renders "not recorded" either
-                                        way. */}
+                                        verify from the API response alone.
+                                        `software_release_ref` is a real, resolvable
+                                        public reference now (PR 2: the read layer joins
+                                        the actual `software_release` row instead of
+                                        fabricating one), shown below as its own copyable
+                                        "Software release ref" row whenever the release
+                                        is present. It still does not render as an in-app
+                                        `<Link>`: this frontend has no software-release
+                                        detail route (`methodsLinks.ts` names the exact
+                                        three ref kinds that got one, and this is not
+                                        among them), and the backend endpoint that
+                                        resolves a release by id (`GET
+                                        /software-releases/{id}`) is the legacy entity
+                                        surface gated by `require_auth_for_legacy_reads`,
+                                        which requires a credential on the hosted
+                                        deployment -- a `<Link>` here would 401 for the
+                                        anonymous reader this page is for. `softwareLabel`
+                                        still renders name/version only for the title
+                                        text, exactly like every other software_release
+                                        consumer in this app. `FrequencyScaleFactor` does
+                                        still have the old software-only limitation (its
+                                        release-grain revision is PR 6). Note both live
+                                        rows carry no release at all today, so this
+                                        renders "not recorded" either way. */}
                                     <div>
                                         <dt>Software</dt>
                                         <dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd>
                                     </div>
+                                    {record.software_release?.software_release_ref && (
+                                        <div>
+                                            <dt>Software release ref</dt>
+                                            <dd className="record-identity-fact-copyable">
+                                                <code className="data">{record.software_release.software_release_ref}</code>
+                                                <CopyButton value={record.software_release.software_release_ref} label="Software release ref" srLabel="value" />
+                                            </dd>
+                                        </div>
+                                    )}
                                     <div>
                                         <dt>Workflow-tool release</dt>
                                         <dd>{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</dd>

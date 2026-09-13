@@ -215,6 +215,105 @@ describe("LevelOfTheoryPage: the real per-LOT record page", () => {
         const badge = screen.getByText("software not recorded")
         expect(badge).toBeVisible()
         expect(badge).toHaveClass("value-pill--muted")
+        // Never a blank pill, never an em dash, and never the depositor's
+        // own free-text `energy_correction_scheme.name` ("atom_energy" on
+        // this fixture) standing in for the absence.
+        expect(badge.textContent).not.toBe("")
+        expect(badge.textContent).not.toMatch(/[—–-]/)
+        expect(screen.queryByText("atom_energy")).not.toBeInTheDocument()
+    })
+
+    /**
+     * PR 4 (`docs/plans/correction-scheme-provenance.md` §8/§10). The read
+     * layer (PR 2, #459) now joins a real `software_release` row instead of
+     * fabricating `{software_release_id: 0, software_release_ref: ""}`, so
+     * a box titles itself with the release's own build for free --
+     * `softwareLabel`'s stutter guard (`provenanceFormat.ts`) is unchanged,
+     * no new formatting code was written for this.
+     *
+     * MUTATION: revert `software_release` to a software-only object with no
+     * `version`/`software_release_ref` -- the "Gaussian 16" assertion fails
+     * (falls back to "Gaussian" alone) and the ref row disappears entirely.
+     *
+     * The ref itself renders as a real, copyable public reference where the
+     * old fabricated `""` used to make that impossible -- NOT as an in-app
+     * `<Link>`. This frontend has no software-release detail route
+     * (`domain/methodsLinks.ts` names the exact three ref kinds that have
+     * one; a software release is not among them), and the one backend route
+     * that resolves a release by id, `GET /software-releases/{id}`, is the
+     * legacy entity surface gated by `require_auth_for_legacy_reads` --
+     * which requires a credential on the hosted deployment, so a `<Link>`
+     * here would 401 for the anonymous reader this page serves. Building
+     * that page is real follow-up work, not something this fixture can
+     * pretend already exists.
+     */
+    it("titles the box with the release's own version, and shows a real, copyable software-release ref", async () => {
+        const versionedRelease = { software_release_ref: "srel_gaussian16c02", software: "Gaussian", version: "16", revision: "C.02" }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [
+                { ...baseRecord().correction_schemes[0], software_release: versionedRelease },
+                baseRecord().correction_schemes[1],
+            ],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        // The box's own pill carries the release's build, not just the
+        // program name -- "Gaussian 16", never the stutter "Gaussian
+        // Gaussian 16".
+        expect(screen.getByText("Gaussian 16")).toBeVisible()
+        expect(screen.queryByText("Gaussian Gaussian 16")).not.toBeInTheDocument()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        expect(screen.getByText("srel_gaussian16c02")).toBeVisible()
+        expect(screen.queryByRole("link", { name: "srel_gaussian16c02" })).not.toBeInTheDocument()
+    })
+
+    /**
+     * §8: "a version-less release renders the program name alone; no
+     * separate 'version not recorded' text is needed, and inventing one
+     * would make an honest partial deposit look deficient." A release with
+     * a real, non-empty ref but no `version` is a complete deposit ("program
+     * known, build not stated"), not a degraded one.
+     */
+    it("renders a version-less software release as the program name alone, never inventing 'version not recorded'", async () => {
+        const bareRelease = { software_release_ref: "srel_gaussian_bare", software: "Gaussian", version: null }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [
+                { ...baseRecord().correction_schemes[0], software_release: bareRelease },
+                baseRecord().correction_schemes[1],
+            ],
+        })))))
+        const user = userEvent.setup()
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        expect(screen.getAllByText("Gaussian").length).toBeGreaterThan(0)
+        expect(screen.queryByText(/version not recorded/i)).not.toBeInTheDocument()
+        await user.click(screen.getByText("Atom-energy correction").closest("summary") as HTMLElement)
+        expect(screen.getByText("srel_gaussian_bare")).toBeVisible()
+    })
+
+    /**
+     * The open design question this build's own §13 raised: "Observed
+     * software: Gaussian 16, 416 calculations" sits a few centimetres above
+     * correction boxes that can read "software not recorded" -- both true,
+     * for different questions, with nothing on the page saying so. This
+     * clarifying line must hold for EVERY scheme, including one that DOES
+     * carry a release (asserted here with the versioned fixture, not just
+     * the absent case), and must not read as an apology for either state.
+     */
+    it("explains that a correction scheme's software answers a different question than the software observed above, for every scheme", async () => {
+        const versionedRelease = { software_release_ref: "srel_gaussian16c02", software: "Gaussian", version: "16" }
+        server.use(http.get("/api/v1/scientific/level-of-theories/lot_b3lyp", () => HttpResponse.json(mockResponse(baseRecord({
+            correction_schemes: [
+                { ...baseRecord().correction_schemes[0], software_release: versionedRelease },
+                baseRecord().correction_schemes[1],
+            ],
+        })))))
+        page()
+        await screen.findByRole("heading", { name: "b3lyp/def2tzvp", level: 1 })
+        const clarifier = screen.getByText(/who computed each scheme's own parameters/i)
+        expect(clarifier).toBeVisible()
+        expect(clarifier.textContent).not.toMatch(/not recorded|missing|deficient|unknown|don't know|do not know/i)
     })
 
     /**

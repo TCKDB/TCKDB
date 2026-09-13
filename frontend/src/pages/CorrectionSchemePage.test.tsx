@@ -150,13 +150,13 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
     })
 
     /**
-     * #439 (deployed) added `software_id`/`workflow_tool_release_id` to
-     * `energy_correction_scheme`; this page fetches both (always present
-     * on the record, not include-gated) and now renders them as their own
-     * rows. Software renders through `softwareLabel` -- text only, never
-     * a link built from `software_release_ref` (measured empty on every
-     * live row; see this page's own comment on the field for why a link
-     * there would be broken).
+     * `energy_correction_scheme` carries `software_id`/`workflow_tool_
+     * release_id`; this page fetches both (always present on the record,
+     * not include-gated) and renders them as their own rows. Software
+     * renders through `softwareLabel` -- text only. `software_release_ref`
+     * is `""` on this fixture (the live archive's own shape today, per
+     * §9.1 of the plan), so no ref row renders at all here -- see the
+     * dedicated test below for a fixture that HAS a real ref.
      */
     it("renders deposited software and workflow-tool release as their own rows", async () => {
         server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
@@ -166,10 +166,58 @@ describe("CorrectionSchemePage: the standalone scheme page", () => {
         await screen.findByRole("heading", { level: 1 })
         const softwareDt = screen.getByText("Software")
         expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian")
-        // Never a link -- `software_release_ref` is measured empty live.
-        expect(screen.queryByRole("link", { name: /Gaussian/ })).not.toBeInTheDocument()
+        expect(screen.queryByText("Software release ref")).not.toBeInTheDocument()
         const toolDt = screen.getByText("Workflow-tool release")
         expect(toolDt.nextElementSibling).toHaveTextContent("ARC 1.1.0")
+    })
+
+    /**
+     * PR 4 (`docs/plans/correction-scheme-provenance.md` §8/§10). The read
+     * layer (PR 2, #459) now joins a real `software_release` row, so a
+     * non-empty `software_release_ref` is possible. It renders here as its
+     * own copyable "Software release ref" row -- real and resolvable where
+     * the old fabricated `""` made that impossible -- but NOT as an in-app
+     * `<Link>`: this frontend has no software-release detail route
+     * (`domain/methodsLinks.ts` names the three ref kinds that have one;
+     * this is not among them), and the backend route that resolves a
+     * release by id, `GET /software-releases/{id}`, is the legacy entity
+     * surface gated by `require_auth_for_legacy_reads` -- which requires a
+     * credential on the hosted deployment, so a `<Link>` here would 401
+     * for the anonymous reader this page is for.
+     *
+     * MUTATION: revert `software_release` to `{software_release_ref: "",
+     * ...}` -- the ref-row assertion fails, since the row does not render
+     * at all for an empty ref (see the test above).
+     */
+    it("shows a real, non-empty software-release ref as its own copyable row, not a link", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            software_release: { software_release_ref: "srel_gaussian16c02", software: "Gaussian", version: "16" },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const softwareDt = screen.getByText("Software")
+        expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian 16")
+        const refDt = screen.getByText("Software release ref")
+        expect(refDt.nextElementSibling).toHaveTextContent("srel_gaussian16c02")
+        expect(screen.queryByRole("link", { name: /srel_gaussian16c02/ })).not.toBeInTheDocument()
+    })
+
+    /**
+     * §8: a version-less release ("program known, build not stated") is a
+     * complete deposit, not a degraded one -- the program name alone,
+     * never an invented "version not recorded" string.
+     */
+    it("renders a version-less software release as the program name alone", async () => {
+        server.use(http.get("/api/v1/scientific/energy-correction-schemes/ecs_bac", () => HttpResponse.json(mockResponse({
+            software_release: { software_release_ref: "srel_gaussian_bare", software: "Gaussian", version: null },
+        }))))
+        page()
+        await screen.findByRole("heading", { level: 1 })
+        const softwareDt = screen.getByText("Software")
+        expect(softwareDt.nextElementSibling).toHaveTextContent("Gaussian")
+        expect(screen.queryByText(/version not recorded/i)).not.toBeInTheDocument()
+        const refDt = screen.getByText("Software release ref")
+        expect(refDt.nextElementSibling).toHaveTextContent("srel_gaussian_bare")
     })
 
     /**

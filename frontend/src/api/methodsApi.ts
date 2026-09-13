@@ -108,17 +108,25 @@ const ecsAvailableSectionsSchema = z.object({
 export const energyCorrectionSchemeRecordSchema = z.object({
     energy_correction_scheme: ecsCoreSchema,
     level_of_theory: lotSummarySchema.nullable().optional(),
-    // Added by #439 (deployed): backfilled from each scheme's own level of
-    // theory (both live rows: Gaussian). `software_release_ref` is
-    // measured live as `""` -- the row stores `software_id` (a vendor),
-    // not a release id, so the backend synthesizes this summary shape
-    // with no real release to link (see
+    // `energy_correction_scheme` stores `software_release_id` -- a real FK
+    // to `software_release` -- since the correction-scheme-provenance
+    // plan's PR 1 (#458). The read layer (PR 2, #459) joins that row
+    // instead of fabricating one: `software_release` is `null` when no
+    // release is recorded, and `software_release_ref`/`version` are the
+    // real joined values otherwise (see
     // `backend/app/services/scientific_read/energy_correction_schemes.py`
-    // `_build_software_release_summary`, which mirrors
-    // `FrequencyScaleFactor`'s identical limitation). Real backend
-    // behaviour, not a serialisation artefact -- never build a link from
-    // this ref; render through `softwareLabel` (name/version only) like
-    // every other `software_release` consumer in this app already does.
+    // `_build_software_release_summary`). `FrequencyScaleFactor` still has
+    // the old software-only shape; its release-grain revision is a later,
+    // separate PR (PR 6) and must not be conflated with this one.
+    // Rendered through `softwareLabel` (name/version) like every other
+    // `software_release` consumer in this app; the ref itself is shown as
+    // a plain, copyable value (`LevelOfTheoryPage.tsx`, `CorrectionSchemePage.tsx`)
+    // rather than an in-app `<Link>` -- this frontend has no
+    // software-release detail route (`methodsLinks.ts` names the three ref
+    // kinds that got one; this is not among them), and the backend route
+    // that resolves a release by id is the legacy entity surface gated by
+    // `require_auth_for_legacy_reads`, which requires a credential on the
+    // hosted deployment.
     software_release: softwareReleaseSchema.nullable().optional(),
     // Stayed null on both live rows -- 10 of 416 calculations recorded a
     // workflow-tool release and no single one could be derived
