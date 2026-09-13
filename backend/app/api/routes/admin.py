@@ -32,7 +32,7 @@ from app.db.models.common import (
 from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
-from app.schemas.fragments.refs import SoftwareRef, WorkflowToolReleaseRef
+from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
     append_observation,
@@ -58,7 +58,7 @@ from app.services.machine_review import (
 from app.services.scientific_read.handles import (
     resolve_energy_correction_scheme_handle,
 )
-from app.services.software_resolution import resolve_software_release
+from app.services.software_resolution import resolve_software_release_ref
 
 router = APIRouter()
 
@@ -744,20 +744,22 @@ class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
     slot on the row is already non-null is refused (409), never
     silently ignored or overwritten.
 
-    ``software`` stays ``SoftwareRef`` (name only) here -- the underlying
-    column is ``software_release_id`` as of the correction-scheme-
-    provenance plan v2 (PR 1), so this now fills the version-less release
-    row for the named program ("program known, build not stated" is a
-    complete, honest value, see the plan's §3.2). Widening this field to
-    accept a full release (version/revision/build), the way
-    ``EnergyCorrectionSchemeRef.software`` already does on the upload
-    path, is PR 3's job, not this one's.
+    ``software`` is ``SoftwareReleaseRef`` -- the same release-grained
+    reference ``EnergyCorrectionSchemeRef.software`` already accepts on
+    the upload path (correction-scheme-provenance plan §5.2, PR 3). An
+    admin can now correct a row at the same grain the column has carried
+    since PR 1 (``software_release_id``): "Gaussian 16, Revision C.02",
+    not merely "Gaussian". ``SoftwareReleaseRef`` is a superset of the
+    old name-only ``SoftwareRef`` -- ``{"software": {"name": "Gaussian"}}``
+    still resolves to the version-less release row for that program
+    (§3.2); that is a complete, honest value on its own, not a degraded
+    one.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     source_literature: LiteratureUploadRequest | None = None
-    software: SoftwareRef | None = None
+    software: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
 
 
@@ -822,7 +824,7 @@ def attach_energy_correction_scheme_provenance(
     the row (per-field, not all-or-nothing -- one call can fill the
     citation on a scheme that already has software recorded, or vice
     versa). Resolution reuses the exact same services the upload path
-    uses (``resolve_or_create_literature``, ``resolve_software_release``,
+    uses (``resolve_or_create_literature``, ``resolve_software_release_ref``,
     ``resolve_workflow_tool_release_ref``), so a citation/software
     release that already exists elsewhere in the archive is reused, not
     duplicated.
@@ -852,9 +854,11 @@ def attach_energy_correction_scheme_provenance(
     if request.software is not None:
         if scheme.software_release_id is not None:
             raise _already_set_conflict("software")
-        # SoftwareRef carries a bare name; resolve it to the version-less
-        # release row for that program (see the request model's docstring).
-        release = resolve_software_release(session, name=request.software.name)
+        # SoftwareReleaseRef resolves at whatever grain the admin supplied;
+        # a bare name (no version/revision/build) resolves to the
+        # version-less release row for that program (see the request
+        # model's docstring).
+        release = resolve_software_release_ref(session, request.software)
         scheme.software_release_id = release.id
 
     if request.workflow_tool_release is not None:
