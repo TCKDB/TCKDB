@@ -25,6 +25,7 @@ from tests.services.scientific_read._factories import (
     make_literature,
     make_lot,
     make_software_release,
+    make_workflow_tool_release,
 )
 
 
@@ -263,6 +264,7 @@ def test_attach_software_release_sets_exact_release(
                 "name": "Gaussian",
                 "version": "16",
                 "revision": "C.02",
+                "build": "EM64L",
             }
         },
     )
@@ -277,6 +279,11 @@ def test_attach_software_release_sets_exact_release(
     # path: the exact release, not the version-less one, was set.
     assert scheme.software_release.version == "16"
     assert scheme.software_release.revision == "C.02"
+    # `build` is forwarded by resolve_software_release_ref too, and was
+    # unpinned until review of #461: setting `build=None` in that helper
+    # left all 13 tests green. Five fields are forwarded; assert the ones
+    # an admin can actually set.
+    assert scheme.software_release.build == "EM64L"
 
     assert body["software_release_ref"] == scheme.software_release.public_ref
 
@@ -366,3 +373,131 @@ def test_attach_software_release_collision_writes_nothing(
     # pytest fixture's outer savepoint -- which also discards this test's
     # own fixtures -- so this test does not attempt any further ORM use of
     # ``db_session`` afterward; the outer fixture teardown closes it.
+
+
+def test_composite_version_is_normalised_and_the_admin_is_told(
+    client, db_session, login_as, _api_admin_user
+):
+    """Widening ``software`` to ``SoftwareReleaseRef`` brought
+    ``normalize_composite_version`` onto this route -- a validator
+    ``SoftwareRef`` never had, which *rewrites* what the admin sent.
+
+    Splitting "Gaussian 16, Revision C.02" into ``version``/``revision``
+    is the right thing to do. Doing it silently on the route whose whole
+    purpose is *correcting* provenance is not: an admin who cannot see
+    that their input was reshaped cannot tell whether it was reshaped
+    correctly. The upload path has surfaced this since it gained the
+    validator; this route now gives the same answer to the same input.
+
+    *Mutation*: stop populating ``warnings`` in the response -- the
+    warning assertions must fail while the split assertions still pass,
+    which is precisely the silent-rewrite state this pins against.
+    """
+    scheme = make_energy_correction_scheme(db_session)
+    login_as(_api_admin_user)
+
+    resp = client.patch(
+        _url(scheme.public_ref),
+        json={
+            "software": {
+                "name": "Gaussian",
+                "version": "Gaussian 16, Revision C.02",
+            }
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+
+    db_session.refresh(scheme)
+    assert scheme.software_release.version == "16"
+    assert scheme.software_release.revision == "C.02"
+
+    warnings = resp.json()["warnings"]
+    assert len(warnings) == 1
+    assert warnings[0]["code"] == "software_release_version_is_composite"
+    assert warnings[0]["field"] == "software.version"
+
+
+def test_name_not_matching_version_is_recorded_verbatim_and_flagged(
+    client, db_session, login_as, _api_admin_user
+):
+    """The worse half of the same validator: a ``name``/``version`` pair
+    naming two different programs.
+
+    Nothing is rewritten here -- the validator refuses to choose between
+    them, which is correct, because guessing would manufacture a release
+    that never ran. But that leaves a self-contradictory release row
+    stored, and without the warning the admin has no signal at all that
+    they recorded ORCA's version against Gaussian's name.
+    """
+    scheme = make_energy_correction_scheme(db_session)
+    login_as(_api_admin_user)
+
+    resp = client.patch(
+        _url(scheme.public_ref),
+        json={"software": {"name": "Gaussian", "version": "ORCA 6.0.0"}},
+    )
+
+    assert resp.status_code == 200, resp.text
+
+    db_session.refresh(scheme)
+    # Left exactly as declared -- never silently "corrected" to ORCA.
+    assert scheme.software_release.software.name == "Gaussian"
+    assert scheme.software_release.version == "ORCA 6.0.0"
+
+    warnings = resp.json()["warnings"]
+    assert len(warnings) == 1
+    assert warnings[0]["code"] == "software_release_name_looks_wrong"
+
+
+def test_clean_input_carries_no_warnings(
+    client, db_session, login_as, _api_admin_user
+):
+    """A warnings list that is never empty is decoration.
+
+    *Mutation*: return a constant warning -- this must fail.
+    """
+    scheme = make_energy_correction_scheme(db_session)
+    login_as(_api_admin_user)
+
+    resp = client.patch(
+        _url(scheme.public_ref),
+        json={"software": {"name": "Gaussian", "version": "16"}},
+    )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["warnings"] == []
+
+
+def test_attach_provenance_refuses_to_overwrite_existing_workflow_tool_release(
+    client, db_session, login_as, _api_admin_user
+):
+    """The third fill-only guard, which had no test at all.
+
+    Review of #461 removed this guard and all 13 tests stayed green:
+    ``energy_correction_scheme_workflow_tool_release_already_set`` was
+    registered in the code catalogue and pinned nowhere. The plan claims
+    all three guards are unchanged; two of the three could prove it.
+    Pre-existing gap, closed here because this PR is what makes the
+    claim.
+
+    *Mutation*: remove the ``workflow_tool_release_id is not None`` guard
+    in ``admin.py`` -- this must fail.
+    """
+    arc_110 = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
+    scheme = make_energy_correction_scheme(
+        db_session, workflow_tool_release=arc_110
+    )
+    login_as(_api_admin_user)
+
+    resp = client.patch(
+        _url(scheme.public_ref),
+        json={"workflow_tool_release": {"name": "arc", "version": "9.9.9"}},
+    )
+
+    assert resp.status_code == 409, resp.text
+    assert "workflow_tool_release_already_set" in resp.json()["detail"]
+
+    db_session.refresh(scheme)
+    assert scheme.workflow_tool_release_id == arc_110.id
+    assert scheme.workflow_tool_release.version == "1.1.0"

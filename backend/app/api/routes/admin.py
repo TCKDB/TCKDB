@@ -33,6 +33,7 @@ from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
 from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
     append_observation,
@@ -781,6 +782,25 @@ class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
     #: ref against the wrong table; renaming makes the break visible.
     software_release_ref: str | None = None
     workflow_tool_release_ref: str | None = None
+    #: Warnings raised while normalising the supplied refs, in the same
+    #: shape and from the same source the upload path uses.
+    #:
+    #: Widening ``software`` to ``SoftwareReleaseRef`` (PR 3) brought
+    #: ``normalize_composite_version`` onto this route, a validator
+    #: ``SoftwareRef`` never had. It *rewrites* what the admin sent: a
+    #: ``version`` of "Gaussian 16, Revision C.02" is split into
+    #: ``version="16"``/``revision="C.02"``, and a ``name``/``version``
+    #: pair naming two different programs is left alone but flagged.
+    #: Both are exactly the right behaviours and neither may happen
+    #: silently on a route whose entire purpose is *correcting*
+    #: provenance -- an admin who cannot see that their input was
+    #: reshaped cannot tell whether it was reshaped correctly.
+    #:
+    #: The upload path has surfaced these since it gained the validator
+    #: (``uploads.py``, via ``collect_software_release_version_warnings``).
+    #: This route now gives the same answer to the same input rather than
+    #: a quieter one. Raised in review of #461.
+    warnings: list[UploadWarning] = []
 
 
 _ALREADY_SET_CODES: dict[str, str] = {
@@ -879,7 +899,14 @@ def attach_energy_correction_scheme_provenance(
             ),
         ) from exc
 
+    warnings: list[UploadWarning] = []
+    if request.software is not None:
+        software_warning = request.software.version_warning("software.")
+        if software_warning is not None:
+            warnings.append(software_warning)
+
     return AdminEnergyCorrectionSchemeProvenanceResponse(
+        warnings=warnings,
         energy_correction_scheme_ref=scheme.public_ref,
         source_literature_ref=(
             scheme.source_literature.public_ref

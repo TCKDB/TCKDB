@@ -329,6 +329,14 @@
             ],
             "title": "Source Literature Ref"
           },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UploadWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
           "workflow_tool_release_ref": {
             "anyOf": [
               {

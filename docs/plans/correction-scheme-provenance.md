@@ -1015,18 +1015,18 @@ External, read-only, and quarantined to §9 by
 ## 13. Build log
 
 What actually shipped, measured after each deploy. Kept separate from §12
-rather than folded into it: §12 records what was observed while the plan
-was being written, and two of its observations are now deliberately
-false. Editing them out would destroy the evidence that the plan was
-answering a real state of the world.
+rather than folded into it: §9 and §12 record what was observed while the
+plan was being written, and three of those observations are now
+deliberately false. Editing them out would destroy the evidence that the
+plan was answering a real state of the world.
 
 ### Superseded by this build
 
-| §12 observation | Still true? |
+| §9/§12 observation | Still true? |
 |---|---|
 | `software_release_ref: ""` on the detail response | **No** — now `software_release: null`. PR 2 replaced the fabrication; see below. |
 | `…/search?software_version=16` → `422 unsupported_filter` | **No** — now `200`. PR 2 implemented it. |
-| Both live rows attribute `Gaussian` | **No** — now NULL, and the page reads "software not recorded". PR 1, ruling 9. |
+| Both live rows attribute `Gaussian` (§9.1) | **No** — now NULL, and the page reads "software not recorded". PR 1, ruling 9. |
 | Pre-flight collision queries return 0 rows | Yes — re-confirmed at upgrade time on the deployed database. |
 
 ### PR 1 — `#458`, merged, deployed `df45eb20`
@@ -1082,11 +1082,39 @@ and needed nothing: the route is registered in the parity list by method
 and path only (both unchanged), the vocabulary doc regenerates to no
 change, and the client does not implement this admin route.
 
+**Review found one thing the PR claimed and did not have.** "Widening
+`software` changes nothing else" was false: `SoftwareReleaseRef` carries
+a `normalize_composite_version` validator that `SoftwareRef` never had,
+so the validator now runs on admin input and *rewrites* it. A `version`
+of `"Gaussian 16, Revision C.02"` is split into
+`version="16"`/`revision="C.02"`; a `name`/`version` pair naming two
+different programs is left verbatim (correctly — guessing would
+manufacture a release that never ran) but flagged. The upload path has
+surfaced both as warnings since it gained the validator; this route
+surfaced neither, and its response model had no field to carry one.
+
+That is a superset claim that holds for name-only input and fails for
+exactly the input this PR exists to enable. Silence is the wrong
+behaviour on the route whose purpose is *correcting* provenance: an
+admin who cannot see that their input was reshaped cannot tell whether
+it was reshaped correctly. The response now carries `warnings`, from the
+same source and in the same shape the upload path uses.
+
+Review also found two guards this plan asserted were intact but nothing
+pinned: `build` was forwarded by the resolver and unasserted (setting it
+to `None` left every test green), and the **workflow-tool-release**
+fill-only guard had no test at all — removing it broke nothing. §10's
+PR 3 criterion and §5.2 both make claims about all three guards; two of
+the three could prove it. Both now pinned.
+
 ### Out-of-plan work this build made necessary
 
 `#460` — the test suite now refuses a run whose `tckdb_schemas` resolves
-outside the checkout under test. Building PR 1 cost three CI cycles and
-six phantom test failures to a `PYTHONPATH` entry that did not exist:
+outside the checkout under test. Building PR 1 lost a full CI cycle and
+six phantom test failures to a `PYTHONPATH` entry that did not exist
+(an earlier draft of this line said "three CI cycles"; one cycle failed
+on the stale golden, and the golden was regenerated twice without
+effect — the inflated figure was itself an unchecked claim):
 Python skips a non-existent path silently, so the editable install won
 and both the OpenAPI generator *and* its golden read another checkout's
 schema — agreeing with each other and disagreeing with the branch. CI
