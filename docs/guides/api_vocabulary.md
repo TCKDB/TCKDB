@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
-| Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
+| Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
 | Refusal codes a caller can receive | 179 | `backend/app/api/code_catalogue.py` |
-| **total** | **464** | |
+| **total** | **466** | |
 
 ## How a record is named
 
@@ -242,6 +242,8 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `calculation_type_present` | `computed_calculation` | required | 1 | Calculation.type must be set. |
 | `charge_present` | `computed_transition_state` | required | 1 | transition_state_entry.charge must be set. |
 | `chem_reaction_present` | `computed_transition_state` | optional | 1 | Parent reaction_entry should resolve to a chem_reaction. |
+| `correction_scheme_literature_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme should cite the literature its parameters come from. |
+| `correction_scheme_software_release_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme (atom_energy, bac_petersson, bac_melius) should declare which software release computed its parameters. |
 | `dipole_present` | `computed_transport` | optional | 1 | Dipole evidence should be populated when this representation is present. |
 | `dipole_source_present_if_dipole_present` | `computed_transport` | optional | 1 | Computed dipole transport evidence should link a dipole source calculation. |
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |

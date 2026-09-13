@@ -46,10 +46,14 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationQuality,
     CalculationType,
+    EnergyCorrectionApplicationRole,
+    EnergyCorrectionSchemeKind,
+    EnergyUnit,
     FrequencyScaleKind,
     KineticsCalculationRole,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    LiteratureKind,
     MoleculeKind,
     ParameterSource,
     ReactionRole,
@@ -65,10 +69,15 @@ from app.db.models.common import (
     TransportCalculationRole,
     ValidationStatus,
 )
-from app.db.models.energy_correction import FrequencyScaleFactor
+from app.db.models.energy_correction import (
+    AppliedEnergyCorrection,
+    EnergyCorrectionScheme,
+    FrequencyScaleFactor,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.literature import Literature
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -91,6 +100,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.db.models.transport import Transport, TransportSourceCalculation
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.services.record_review import set_record_review_status
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
@@ -610,6 +620,54 @@ def _make_frequency_scale_factor(db_session: Session) -> FrequencyScaleFactor:
     db_session.add(fsf)
     db_session.flush()
     return fsf
+
+
+def _make_energy_correction_scheme(
+    db_session: Session,
+    *,
+    kind: EnergyCorrectionSchemeKind = EnergyCorrectionSchemeKind.bac_petersson,
+    software_release: SoftwareRelease | None = None,
+    source_literature_id: int | None = None,
+) -> EnergyCorrectionScheme:
+    scheme = EnergyCorrectionScheme(
+        kind=kind,
+        name=f"trust-eval-ecs-{next(_INCHI_COUNTER)}",
+        software_release_id=(
+            software_release.id if software_release is not None else None
+        ),
+        source_literature_id=source_literature_id,
+        units=EnergyUnit.hartree,
+    )
+    db_session.add(scheme)
+    db_session.flush()
+    return scheme
+
+
+def _make_applied_energy_correction_for_species_entry(
+    db_session: Session,
+    *,
+    species_entry: SpeciesEntry,
+    scheme: EnergyCorrectionScheme,
+    application_role: EnergyCorrectionApplicationRole = (
+        EnergyCorrectionApplicationRole.aec_total
+    ),
+) -> AppliedEnergyCorrection:
+    """Attach ``scheme`` to ``species_entry`` via an applied-correction row.
+
+    ``applied_energy_correction`` targets a species entry, not a specific
+    thermo row (correction-scheme-provenance plan v2 §7): any thermo record
+    for that species entry is considered to "cite" the scheme.
+    """
+    aec = AppliedEnergyCorrection(
+        target_species_entry_id=species_entry.id,
+        scheme_id=scheme.id,
+        application_role=application_role,
+        value=0.001,
+        value_unit=EnergyUnit.hartree,
+    )
+    db_session.add(aec)
+    db_session.flush()
+    return aec
 
 
 def _make_statmech(
@@ -2023,6 +2081,181 @@ class TestComputedThermoEvaluator:
         assert result.rubric == "computed_thermo"
         assert result.evidence_completeness >= 0.0
         assert result.is_certified is False
+
+
+class TestCorrectionSchemeTrustChecks:
+    """PR 5, correction-scheme-provenance plan v2 §7.
+
+    A different axis from every check above: those ask whether an energy
+    correction was *applied* to the record at all; these ask whether the
+    *cited scheme itself* documents which software release computed its
+    parameters and which literature it comes from. Both are worth having;
+    neither substitutes for the other.
+
+    ``applied_energy_correction`` targets a species entry
+    (``target_species_entry_id``), not a specific thermo row, so a scheme
+    is attached to the fixture via
+    ``_make_applied_energy_correction_for_species_entry(thermo.species_entry, ...)``.
+    """
+
+    def test_software_scoped_scheme_without_release_reports_missing(
+        self, db_session
+    ):
+        thermo = _make_thermo(db_session, scalar=True)
+        scheme = _make_energy_correction_scheme(
+            db_session, kind=EnergyCorrectionSchemeKind.bac_petersson
+        )
+        _make_applied_energy_correction_for_species_entry(
+            db_session, species_entry=thermo.species_entry, scheme=scheme
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.missing
+        )
+
+    def test_software_scoped_scheme_with_release_reports_passed(self, db_session):
+        release = _make_software_release(db_session)
+        thermo = _make_thermo(db_session, scalar=True)
+        scheme = _make_energy_correction_scheme(
+            db_session,
+            kind=EnergyCorrectionSchemeKind.atom_energy,
+            software_release=release,
+        )
+        _make_applied_energy_correction_for_species_entry(
+            db_session, species_entry=thermo.species_entry, scheme=scheme
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.passed
+        )
+
+    @pytest.mark.parametrize(
+        "kind",
+        [
+            EnergyCorrectionSchemeKind.atom_hf,
+            EnergyCorrectionSchemeKind.atom_thermal,
+            EnergyCorrectionSchemeKind.soc,
+        ],
+    )
+    def test_constant_kind_scheme_reports_not_applicable(self, db_session, kind):
+        """atom_hf/atom_thermal/soc are physical/reference constants, not a
+        program's output -- the software axis does not apply to them, and
+        neither does the literature axis (same applicability condition)."""
+        thermo = _make_thermo(db_session, scalar=True)
+        scheme = _make_energy_correction_scheme(db_session, kind=kind)
+        _make_applied_energy_correction_for_species_entry(
+            db_session, species_entry=thermo.species_entry, scheme=scheme
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.not_applicable
+        )
+        assert (
+            result.checks["correction_scheme_literature_present"]
+            is EvidenceOutcome.not_applicable
+        )
+
+    def test_no_scheme_cited_reports_not_applicable(self, db_session):
+        """A record with no applied energy correction at all has nothing
+        to check -- not_applicable, never a vacuous pass."""
+        thermo = _make_thermo(db_session, scalar=True)
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.not_applicable
+        )
+        assert (
+            result.checks["correction_scheme_literature_present"]
+            is EvidenceOutcome.not_applicable
+        )
+
+    def test_scheme_with_literature_reports_literature_passed(self, db_session):
+        literature = Literature(kind=LiteratureKind.article, title="Petersson 1998")
+        db_session.add(literature)
+        db_session.flush()
+        thermo = _make_thermo(db_session, scalar=True)
+        scheme = _make_energy_correction_scheme(
+            db_session,
+            kind=EnergyCorrectionSchemeKind.bac_petersson,
+            source_literature_id=literature.id,
+        )
+        _make_applied_energy_correction_for_species_entry(
+            db_session, species_entry=thermo.species_entry, scheme=scheme
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert (
+            result.checks["correction_scheme_literature_present"]
+            is EvidenceOutcome.passed
+        )
+        # Software release was never set on this scheme -- the two checks
+        # are independent axes and must not leak into one another.
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.missing
+        )
+
+    def test_new_checks_never_gate_well_supported_label(self, db_session):
+        """Optional checks are informational: their absence must never
+        block a well_supported label (ruling 3's "advised, not required"
+        applies to the rubric exactly as it applies to the upload).
+
+        Measured on this rubric: a maximally-provisioned computed_thermo
+        fixture tops out at evidence_completeness == 0.95 (19/20) even
+        before these two checks exist -- one "missing" unit is already
+        structurally unavoidable
+        (``frequency_scale_factor_present_if_applicable`` is always
+        "missing" once a frequency source is linked, since the schema has
+        no scale-factor relationship on thermo yet). Every "optional"
+        check ever added to this rubric contributes to the completeness
+        *ratio* even when it does not gate reaching well_supported via
+        ``all_required_passed`` -- that is true of the 20 optional checks
+        that already existed before this PR, not something new introduced
+        here. What must never happen, and is asserted here, is this
+        record's label moving because the *new* checks do not apply to
+        it: a thermo record that cites no correction scheme at all.
+        """
+        thermo = _make_thermo(db_session, scalar=True, uncertainty=True)
+        workflow_tool = WorkflowTool(name="trust-eval-well-supported-tool")
+        db_session.add(workflow_tool)
+        db_session.flush()
+        workflow_tool_release = WorkflowToolRelease(
+            workflow_tool_id=workflow_tool.id, version="1.0"
+        )
+        db_session.add(workflow_tool_release)
+        db_session.flush()
+        thermo.workflow_tool_release_id = workflow_tool_release.id
+        db_session.flush()
+        opt_calc = _make_minimal_opt_calc(db_session)
+        sp_calc = _make_minimal_opt_calc(db_session)
+        freq_calc = _make_minimal_opt_calc(db_session)
+        _link_thermo_source(
+            db_session, thermo=thermo, calculation=opt_calc, role=ThermoCalculationRole.opt
+        )
+        _link_thermo_source(
+            db_session, thermo=thermo, calculation=sp_calc, role=ThermoCalculationRole.sp
+        )
+        _link_thermo_source(
+            db_session, thermo=thermo, calculation=freq_calc, role=ThermoCalculationRole.freq
+        )
+
+        result = evaluate_computed_thermo(db_session, thermo.id)
+        assert result.label is EvidenceBadge.well_supported
+        assert (
+            result.checks["correction_scheme_software_release_present"]
+            is EvidenceOutcome.not_applicable
+        )
+        assert (
+            result.checks["correction_scheme_literature_present"]
+            is EvidenceOutcome.not_applicable
+        )
 
 
 # ---------------------------------------------------------------------------
