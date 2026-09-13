@@ -652,15 +652,39 @@ Owner rulings already honoured by #440 and unchanged: expandable boxes
 named by the software, literature advised not required, no
 depositor-typed labels on public pages. What this plan changes:
 
+- **One section per `scheme_kind`, with a control when a kind has more
+  than one scheme (new in PR 4).** Reopened by a fresh owner objection to
+  #440's shape once two schemes of one kind became buildable: "I dont
+  know how i feel about the expanding tables when we may get multiple
+  softwares for AEC. I would think you can change the software & version
+  and it will change the AEC and BAC instead or something." §3/§4
+  removing `units`/`version` from the identity is what makes this
+  buildable at all -- a software release (and, where releases collide,
+  the citation) is now the only axis left to distinguish two schemes of
+  one kind, so it is also the only axis the control needs to offer. A
+  kind with exactly one deposited scheme renders exactly as #440 shipped
+  it, no control at all; a kind with more renders ONE box (never two
+  side by side) plus a small select above it that swaps which scheme's
+  box is shown. Implemented as `CorrectionSchemeKindGroup` /
+  `CorrectionSchemeSelect` in `LevelOfTheoryPage.tsx`.
 - **Titles gain the build for free.** `softwareLabel`
   (`frontend/src/domain/provenanceFormat.ts:16-24`) already renders
   `{name} {version}` with a stutter guard, so a box retitles itself the
   moment the release is real. No new formatting code.
-- **The ref becomes linkable.** `software_release_ref` stops being `""`
-  (§2.3), so the two deliberate refusals to link it
-  (`LevelOfTheoryPage.tsx:222-225`, `methodsApi.ts:112-122`) become real
-  links, and those comments are deleted rather than left describing a
-  fixed defect.
+- **The ref does NOT become linkable (correction, PR 4).** This section
+  originally planned that `software_release_ref` no longer being `""`
+  (§2.3) would turn the two deliberate refusals to link it
+  (`LevelOfTheoryPage.tsx:222-225`, `methodsApi.ts:112-122`) into real
+  links. PR 4 measured that against the live deployment and found the
+  premise wrong: `GET /api/v1/software-releases/{id}` -- the only route
+  that resolves a release by id -- sits behind
+  `require_auth_for_legacy_reads` and 401s anonymously, while every
+  scientific read on these pages returns 200. A link would break for
+  exactly the anonymous reader these pages serve. The ref stays rendered
+  as copyable text, visually distinct from a real link (the same shape
+  `CalculationDetailPage.tsx`'s own `RefsDisclosure` refs already use),
+  and the two comments above are updated to state this as the standing
+  decision rather than deleted.
 - **"Software not recorded" becomes the honest state of the live rows.**
   The muted-pill treatment #440 already ships
   (`LevelOfTheoryPage.tsx:284`) is what both boxes will show after §4
@@ -1242,17 +1266,18 @@ specifies for a record citing no scheme.
 
 ### Still open
 
-PR 4 (frontend, §8). PR 5 shipped as #463, which also closed §11.1; PR 6
-as #464.
+Nothing. PR 4 (frontend, §8) landed on branch `ecs-frontend-selector`,
+closing the last item — see below for how. PR 5 shipped as #463, which
+also closed §11.1; PR 6 as #464.
 
-**The display problem §8 has to answer, restated against what is now
-deployed.** The level-of-theory page shows **"Observed software: Gaussian
-16, 416 calculations"** a few centimetres above two correction boxes
-reading **"Gaussian"**. Both are correct and they answer different
-questions: Gaussian 16 ran the 416 calculations recorded at this level of
-theory, while the correction boxes name whoever computed each scheme's
-own parameter values. That is the whole argument of §3.1 and §9.4, and a
-reader has no way to see it from the page.
+**The display problem §8 had to answer, and how PR 4 answered it.** The
+level-of-theory page shows **"Observed software: Gaussian 16, 416
+calculations"** a few centimetres above a correction box reading
+**"Gaussian"**. Both are correct and they answer different questions:
+Gaussian 16 ran the 416 calculations recorded at this level of theory,
+while the correction box names whoever computed that scheme's own
+parameter values. That is the whole argument of §3.1 and §9.4, and the
+page gave a reader no way to see it.
 
 The owner's attestation on 2026-09-13 sharpened this rather than settling
 it. The parameters were first attested as Gaussian 09, then corrected to
@@ -1261,9 +1286,16 @@ version-less Gaussian once the source was identified: RMG-database
 `b3lyp2023/def2tzvp`, whose eight atom energies match the deployed row
 digit-for-digit and which names a program 131 times and a version
 nowhere. So the page can now show two different Gaussians for one level
-of theory, which is right and reads as a contradiction.
+of theory, which is right and reads as a contradiction unless the reader
+is told why.
 
-§8 needs roughly one sentence saying the software named on a correction
-is whoever computed its parameters, not whoever ran the calculations
-above. The risk in wording it is that it reads as an apology for missing
-data rather than a real distinction.
+PR 4 added one sentence above the correction-schemes list, true for every
+scheme on the page regardless of whether its release is recorded or
+matches the observed software above: "Observed software above names what
+ran the calculations recorded at this level of theory; a correction
+scheme's software names who computed its own parameter values, not who
+applies them." It also grouped schemes by `scheme_kind` with a
+software-picking control for a kind that has more than one (§8's new
+bullet on that), which the "two different Gaussians" case above did not
+by itself require but the owner's separate objection to #440's shape
+did.

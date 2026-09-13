@@ -60,6 +60,73 @@
     margin-top: var(--s-4);
 }
 
+/* One kind's worth of deposited schemes (`CorrectionSchemeKindGroup`,
+   LevelOfTheoryPage.tsx, correction-scheme-provenance plan v2 §8) -- the
+   select control (when there is more than one scheme to choose between)
+   plus the single box it governs. */
+.correction-scheme-kind-group {
+    margin: var(--s-4) 0;
+}
+
+.correction-scheme-kind-group:first-child {
+    margin-top: 0;
+}
+
+.correction-scheme-kind-group .correction-scheme-block {
+    margin-top: var(--s-2);
+}
+
+/* The scheme-picking control itself -- same rounded-chip shape as
+   `arrhenius-chart.css`'s own `.arrhenius-chart-control` (label + native
+   `<select>` inside one bordered pill), duplicated locally rather than
+   imported: that file is `ArrheniusChart.tsx`'s own component
+   stylesheet, not something this record page is an instance of (the same
+   "small, separate duplicate" pattern `NetworkKtpChart.tsx`'s own
+   `KtpXAxisSelect` comment documents for the identical reason). The label
+   deliberately does NOT use `--type-label-transform` the way the chart
+   control's label does: this file's own header comment already commits
+   to declaring no `text-transform` anywhere in it (case-sensitive atom
+   symbols and bond keys sit in the table cells one section below), and a
+   scoped exception here would need the same review this file was written
+   to avoid needing. */
+.correction-scheme-select {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    padding: .3rem .55rem .3rem .75rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+}
+
+.correction-scheme-select:hover {
+    border-color: var(--accent-300);
+}
+
+.correction-scheme-select-label {
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.correction-scheme-select-input {
+    border: none;
+    margin: 0;
+    padding: .05rem 0;
+    background: transparent;
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.correction-scheme-select-input:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 2px;
+    border-radius: .2rem;
+}
+
 .fsf-group {
     display: grid;
     gap: var(--s-2);
