@@ -59,6 +59,27 @@ async function throwForFailedResponse(response: Response): Promise<never> {
         if (body && typeof body === "object") {
             if ("code" in body && typeof body.code === "string") code = body.code
             if ("detail" in body && typeof body.detail === "string") detail = body.detail
+            // FastAPI's request-validation errors put a LIST here, one entry
+            // per rejected field ({loc, msg, type}), not a string. Without
+            // this branch the most common registration failure -- a password
+            // under 8 characters -- fell through to `response.statusText`,
+            // which HTTP/2 leaves empty, so the user was told
+            // "Request failed (422)" and never which field was wrong.
+            else if ("detail" in body && Array.isArray(body.detail)) {
+                const parts = body.detail
+                    .map((entry) => {
+                        if (!entry || typeof entry !== "object") return null
+                        const msg = "msg" in entry && typeof entry.msg === "string" ? entry.msg : null
+                        if (msg === null) return null
+                        const loc = "loc" in entry && Array.isArray(entry.loc) ? entry.loc : []
+                        // Drop the leading "body"/"query" segment: it names the
+                        // request part, not anything the user filled in.
+                        const field = loc.filter((segment: unknown) => typeof segment === "string" && segment !== "body" && segment !== "query").pop()
+                        return typeof field === "string" ? `${field}: ${msg}` : msg
+                    })
+                    .filter((part): part is string => part !== null)
+                if (parts.length > 0) detail = parts.join("; ")
+            }
         }
     } catch {
         // Non-JSON error body; keep the status text.

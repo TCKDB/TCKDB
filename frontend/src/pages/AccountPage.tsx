@@ -78,6 +78,19 @@ export default function AccountPage() {
     // reader. `state: "from"` lets `LoginPage` send them straight back
     // here once they do sign in.
     if (state.status === "loading") return null
+    if (state.status === "unreachable") {
+        // Deliberately not a redirect. The session may well be live; the
+        // archive just did not answer. Sending this visitor to the login
+        // form would tell them they are signed out, which nobody has said.
+        return (
+            <section className="account-page">
+                <h1>Account</h1>
+                <p role="alert">
+                    Could not reach the archive, so your sign-in state is unknown. Reload once it is back.
+                </p>
+            </section>
+        )
+    }
     if (state.status === "signed-out") return <Navigate to="/login" replace state={{ from: "/account" }} />
 
     const user = state.user

@@ -37,6 +37,30 @@ describe("AuthProvider seeding", () => {
         expect(await screen.findByRole("link", { name: "Sign in" })).toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     })
+
+    it("a 500 does NOT claim the visitor is signed out", async () => {
+        /**
+         * A 401 is the server stating a fact: this visitor has no session.
+         * A 500, a 502 or a dropped connection states nothing, and the two
+         * must not render the same.
+         *
+         * `fetchMe` already separates them (401 returns null, anything else
+         * throws). The provider used to catch every rejection and set
+         * `signed-out`, discarding that. The cost is concrete: during an API
+         * restart a signed-in curator reloads, is told "Sign in", and is
+         * bounced off /account while their cookie is still valid. They then
+         * retype a password to replace a session they never lost.
+         *
+         * Found in review of #467, where leaving the state `loading` forever
+         * on rejection passed all 58 tests.
+         */
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.json({ detail: "boom" }, { status: 500 })))
+        renderStatus()
+
+        // Nothing is asserted about the session, either way.
+        await expect(screen.findByRole("link", { name: "Sign in" }, { timeout: 300 })).rejects.toThrow()
+        expect(screen.queryByRole("link", { name: "Calvin Pieters" })).not.toBeInTheDocument()
+    })
 })
 
 describe("logout", () => {

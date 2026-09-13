@@ -18,6 +18,17 @@ export type AuthState =
     | { status: "loading" }
     | { status: "signed-out" }
     | { status: "signed-in"; user: MeResponse }
+    //: The probe could not reach the archive, so whether this visitor has a
+    //: session is unknown. Distinct from `signed-out`, which is a fact the
+    //: server stated by answering 401.
+    //:
+    //: Collapsing the two was the original shape and it is wrong in a way
+    //: that costs the user their session: during an API restart the probe
+    //: gets a 502, a signed-in curator is told "Sign in", and `/account`
+    //: bounces them to the login form while their cookie is still valid.
+    //: `fetchMe` already separates 401 from a transport failure; this member
+    //: is what lets the UI keep that distinction instead of discarding it.
+    | { status: "unreachable" }
 
 export type AuthContextValue = {
     state: AuthState

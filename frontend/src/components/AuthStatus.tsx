@@ -18,6 +18,10 @@ export function AuthStatus() {
     const { state, logout } = useAuth()
 
     if (state.status === "loading") return null
+    // Render nothing rather than "Sign in": offering a sign-in link asserts
+    // the visitor is signed out, and on a transport failure that is not
+    // known. Silence is the only honest option in the header.
+    if (state.status === "unreachable") return null
 
     if (state.status === "signed-out") {
         return <Link className="auth-status-link" to="/login">Sign in</Link>

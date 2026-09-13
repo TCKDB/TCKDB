@@ -31,7 +31,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             })
             .catch(() => {
                 if (cancelled) return
-                setState({ status: "signed-out" })
+                // Not `signed-out`: fetchMe returns null for a 401 and only
+                // throws when it could not get an answer at all. Reporting
+                // "you are signed out" on a transport failure logs a user out
+                // of a session the server still considers live.
+                setState({ status: "unreachable" })
             })
         return () => { cancelled = true }
     }, [])

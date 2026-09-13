@@ -140,3 +140,77 @@ describe("API keys", () => {
         await expect(revokeApiKey(7)).resolves.toBeUndefined()
     })
 })
+
+describe("every authenticated call sends the session cookie", () => {
+    /**
+     * `credentials: "include"` is what carries the session cookie. Omitting
+     * it fails silently and totally: the request succeeds as an anonymous
+     * one, so `fetchMe` reports nobody is signed in and every returning
+     * visitor is anonymous after a reload.
+     *
+     * Only `login` and `logout` were pinned. Review of #467 landed the
+     * omission on `fetchMe`, `listApiKeys` and `revokeApiKey` and all 58
+     * tests still passed. This table covers the whole surface so the next
+     * call added is covered too.
+     */
+    const calls: Array<[string, () => Promise<unknown>, () => void]> = [
+        ["fetchMe", () => fetchMe(), () => server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)))],
+        ["listApiKeys", () => listApiKeys(), () => server.use(http.get("/api/v1/auth/api-keys", () => HttpResponse.json([])))],
+        [
+            "createApiKey",
+            () => createApiKey({ label: "probe" }),
+            () =>
+                server.use(
+                    http.post("/api/v1/auth/api-keys", () =>
+                        HttpResponse.json(
+                            { id: 1, label: "probe", created_at: "2026-01-01T00:00:00Z", last_used_at: null, revoked_at: null, key: "tck_probe" },
+                            { status: 201 },
+                        ),
+                    ),
+                ),
+        ],
+        ["revokeApiKey", () => revokeApiKey(1), () => server.use(http.delete("/api/v1/auth/api-keys/1", () => new HttpResponse(null, { status: 204 })))],
+    ]
+
+    it.each(calls)("%s sends credentials: include", async (_name, call, install) => {
+        let seen: RequestCredentials | undefined
+        server.events.on("request:start", ({ request }) => {
+            seen = request.credentials
+        })
+        install()
+        await call()
+        expect(seen).toBe("include")
+    })
+})
+
+describe("a request-validation failure names the field", () => {
+    /**
+     * FastAPI returns 422 with `detail` as a LIST of {loc, msg, type}, not a
+     * string. The client only accepted a string detail, so it fell through to
+     * `response.statusText` -- empty over HTTP/2 -- and a password under 8
+     * characters was reported as "Request failed (422)".
+     *
+     * That is the most common registration failure, and it collapsed to
+     * exactly the generic message this client exists to avoid. Found in
+     * review of #467.
+     */
+    it("turns a list-shaped detail into a message naming the field", async () => {
+        server.use(
+            http.post("/api/v1/auth/register", () =>
+                HttpResponse.json(
+                    { detail: [{ loc: ["body", "password"], msg: "String should have at least 8 characters", type: "string_too_short" }] },
+                    { status: 422 },
+                ),
+            ),
+        )
+
+        const error = await register({ username: "x", password: "short" }).catch((caught: unknown) => caught)
+
+        expect(error).toBeInstanceOf(AuthApiError)
+        const message = (error as AuthApiError).message
+        expect(message).toContain("password")
+        expect(message).toContain("at least 8 characters")
+        // The bug being pinned: never the bare status.
+        expect(message).not.toContain("422")
+    })
+})
