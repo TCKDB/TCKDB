@@ -7,7 +7,11 @@ import App from "../App"
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
 const entryRef = "spe_bcbdjwkip75yoziblpntwzblzu"
 const excitedEntryRef = "spe_abcdefghijklmnopqrstuvwxyz"
-const server = setupServer()
+// `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
+// route -- see `App.test.tsx`'s identical handler for why this default
+// (signed-out) has to be here for every test in this file that renders
+// `<App />`.
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
 function speciesPayload(entries = [groundEntry(), excitedEntry()]) {
     return {

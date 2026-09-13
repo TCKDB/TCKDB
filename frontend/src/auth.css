@@ -1,0 +1,284 @@
+/*
+ * Auth surface: the header sign-in/account affordance (`AuthStatus.tsx`),
+ * the login/register page (`LoginPage.tsx`), and the account/API-key page
+ * (`AccountPage.tsx`). All colour through `var(--token)` per `theme.css`'s
+ * own rule -- see `theme.css.test.ts`.
+ *
+ * Deliberately does NOT reuse `.browse-filter-field`/`.identifier-search`:
+ * those are named for what they are (a catalogue filter, an identifier
+ * search box), and borrowing their classes here would make a future
+ * change to either page's own fields silently reshape this one. `.kv-list`
+ * and `.data-table` (`design-system.css`) ARE reused below, unmodified --
+ * both are genuine cross-page primitives already used the same way on
+ * every record page.
+ */
+
+/* ---------------------------------------------------------------------
+ * Header affordance (`AuthStatus.tsx`, rendered in `AppShell.tsx` next to
+ * `ThemeToggle`).
+ * ------------------------------------------------------------------- */
+.auth-status-link {
+    color: var(--ink-2);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+}
+
+.auth-status-link:hover { color: var(--accent); }
+
+.auth-status {
+    display: flex;
+    align-items: center;
+    gap: .7rem;
+}
+
+.auth-status-signout {
+    border: 0;
+    padding: 0;
+    background: none;
+    color: var(--muted);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: .15em;
+    cursor: pointer;
+}
+
+.auth-status-signout:hover { color: var(--accent); text-decoration-color: currentColor; }
+
+/* ---------------------------------------------------------------------
+ * Login / register page.
+ * ------------------------------------------------------------------- */
+.auth-page {
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+}
+
+.auth-page h1 {
+    margin: 0 0 .5rem;
+    color: var(--ink);
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
+}
+
+.auth-page-intro {
+    margin: 0 0 1.75rem;
+    max-width: var(--measure-prose);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    letter-spacing: var(--type-body-tracking);
+}
+
+/* Sign in / Create account switch -- same pill-radiogroup recipe as
+   `.theme-toggle` and `.identifier-search-mode`: a sunken track, one
+   raised active pill, no third idiom for a two-way choice. */
+.auth-mode-toggle {
+    display: inline-flex;
+    gap: .2rem;
+    margin: 0 0 1.75rem;
+    padding: .2rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface-sunken);
+}
+
+.auth-mode-option {
+    border: 0;
+    border-radius: .35rem;
+    padding: .45rem 1.15rem;
+    background: none;
+    color: var(--muted-2);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    cursor: pointer;
+}
+
+.auth-mode-option:hover { color: var(--accent-700); }
+
+.auth-mode-option[data-active="true"] {
+    background: var(--surface);
+    color: var(--accent-700);
+    box-shadow: 0 1px 3px var(--shadow-color);
+}
+
+.auth-mode-option:focus-visible { outline: 2px solid var(--accent-300); outline-offset: 2px; }
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+}
+
+.auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+/* Deliberately no `text-transform` here -- a username or an email address
+   is the reader's own data, not UI chrome (the same distinction
+   `.browse-filter-field input` draws for a typed value versus a
+   `<select>`'s fixed vocabulary), so the label above it stays sentence
+   case rather than the small-caps treatment `.kv-list dt` uses. */
+.auth-field label {
+    color: var(--ink-2);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+}
+
+.auth-field input {
+    padding: .6rem .75rem;
+    border: 1px solid var(--control-border);
+    border-radius: .4rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+}
+
+.auth-field input:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 1px;
+}
+
+.auth-field-hint {
+    margin: 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.auth-submit {
+    align-self: flex-start;
+    border: 0;
+    border-radius: .4rem;
+    padding: .7rem 1.5rem;
+    background: var(--accent);
+    color: var(--surface);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.auth-submit:hover:not(:disabled) { background: var(--accent-700); }
+.auth-submit:disabled { opacity: .7; cursor: wait; }
+
+/* No dedicated "error" token exists in `theme.css` (only `--warning`,
+   used elsewhere for the clipboard-denied state) -- reused here rather
+   than inventing a second severity colour the theme has never needed
+   before. */
+.auth-error {
+    margin: 0;
+    padding: .75rem 1rem;
+    border: 1px solid var(--warning);
+    border-radius: .4rem;
+    background: var(--surface-sunken);
+    color: var(--warning);
+    font: var(--type-note-font);
+}
+
+/* ---------------------------------------------------------------------
+ * Account page.
+ * ------------------------------------------------------------------- */
+.account-page {
+    max-width: 48rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+}
+
+.account-page h1 {
+    margin: 0 0 1.5rem;
+    color: var(--ink);
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
+}
+
+.account-page h2 {
+    margin: 2.5rem 0 1rem;
+    color: var(--ink);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
+}
+
+.account-page-intro {
+    margin: 0 0 .5rem;
+    max-width: var(--measure-prose);
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    letter-spacing: var(--type-body-tracking);
+}
+
+.api-key-create {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: .8rem;
+    margin: 0 0 1.5rem;
+}
+
+.api-key-create .auth-field { flex: 1 1 16rem; gap: .35rem; }
+
+.api-key-revoke {
+    border: 1px solid var(--line);
+    border-radius: .35rem;
+    padding: .25rem .6rem;
+    background: var(--surface);
+    color: var(--muted-2);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+}
+
+.api-key-revoke:hover:not(:disabled) { border-color: var(--warning); color: var(--warning); }
+.api-key-revoke:disabled { opacity: .6; cursor: wait; }
+
+/* The one-time plaintext-key reveal. `.card--selected` (accent-tinted)
+   would be a plausible reuse, but that class already means "this is the
+   currently-selected item among peers" elsewhere (`ConformerSelector`) --
+   a DIFFERENT meaning from "look at this now, it will not come back",
+   so this gets its own accent treatment rather than borrowing a class
+   whose meaning would drift under a second, unrelated use. */
+.api-key-reveal {
+    margin: 0 0 1.5rem;
+    padding: var(--s-4);
+    border: 1px solid var(--accent-300);
+    border-radius: .5rem;
+    background: var(--accent-50);
+}
+
+.api-key-reveal p {
+    margin: 0 0 .75rem;
+    color: var(--ink-2);
+    font: var(--type-body-font);
+    letter-spacing: var(--type-body-tracking);
+}
+
+.api-key-reveal-value {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .6rem .75rem;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    background: var(--surface);
+}
+
+.api-key-reveal-value code {
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font: var(--type-data-font);
+}
+
+/* Shown when a sign-out cleared local state but never reached the server.
+   Notice-toned rather than error-toned: nothing the visitor did failed, and
+   the session expires on its own; they just should not believe the sign-out
+   completed. */
+.auth-notice {
+    margin: 0 0 var(--s-4);
+    padding: var(--s-3);
+    border: 1px solid var(--notice-border);
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font: var(--type-body-font);
+}

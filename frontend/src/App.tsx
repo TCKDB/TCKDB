@@ -2,10 +2,12 @@ import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, useParams } from "react-router-dom"
 import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
 import { AppShell } from "./components/AppShell"
+import { AuthProvider } from "./components/AuthProvider"
 import { LoadingPage } from "./components/LoadingPage"
 import { BROWSE_KIND_PATHS } from "./api/browseApi"
 import { isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "./domain/speciesEntrySections"
 
+const AccountPage = lazy(() => import("./pages/AccountPage"))
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const BrowsePage = lazy(() => import("./pages/BrowsePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
@@ -15,6 +17,7 @@ const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
 const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
+const LoginPage = lazy(() => import("./pages/LoginPage"))
 const MethodsIndexPage = lazy(() => import("./pages/MethodsIndexPage"))
 const NetworkEntryPage = lazy(() => import("./pages/NetworkEntryPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
@@ -26,6 +29,7 @@ const TransitionStateEntryPage = lazy(() => import("./pages/TransitionStateEntry
 
 function App() {
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Suspense fallback={<LoadingPage />}>
         <Routes>
@@ -139,6 +143,18 @@ function App() {
             <Route path="/methods/schemes/:ecsRef" element={<CorrectionSchemePage />} />
             <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
             <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
+            {/* Both render inside the same `AppShell` every public page
+                does -- signing in/managing keys is an ordinary part of
+                this site, not a separate admin shell the way
+                `/admin/machine-review-inspection` below is. `LoginPage`
+                gates nothing itself (it just redirects away once
+                `useAuth()` reports signed-in); `AccountPage` is the one
+                page in this PR that DOES require a session, and redirects
+                to `/login` on its own when there isn't one -- see its own
+                component for why that is not "gating an existing page"
+                (it is a brand-new one). */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/account" element={<AccountPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route
@@ -148,6 +164,7 @@ function App() {
         </Routes>
       </Suspense>
     </BrowserRouter>
+    </AuthProvider>
   )
 }
 
