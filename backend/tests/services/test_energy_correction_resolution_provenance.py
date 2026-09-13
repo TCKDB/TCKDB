@@ -10,9 +10,11 @@ lookup must match.
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.models.common import EnergyUnit
 from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.schemas.workflows.energy_correction_upload import EnergyCorrectionSchemeRef
 from app.services.energy_correction_resolution import resolve_or_create_scheme
@@ -30,7 +32,6 @@ def _aec_ref(**overrides) -> EnergyCorrectionSchemeRef:
         "kind": "atom_energy",
         "name": "AEC provenance test",
         "level_of_theory": dict(_LOT),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -207,15 +208,24 @@ def test_reuse_of_an_existing_row_emits_no_repeat_warning(db_conn) -> None:
 
 def test_ambiguous_uncited_sibling_warning_names_the_other_ref(db_conn) -> None:
     """Two schemes, same kind/lot/software, both uncited: the archive
-    cannot tell them apart, and says so by name (plan §2.4)."""
+    cannot tell them apart, and says so by name (plan §2.4).
+
+    The two siblings differ by ``name``. They differed by ``version``
+    until ``a7d4e2b9c351`` dropped that column, and the replacement is
+    the more realistic case anyway: two differently-named deposits of
+    what may be the same library at one level of theory, with no
+    citation to settle it, is exactly the ambiguity this warning exists
+    to report.
+    """
     with Session(db_conn) as session, session.begin():
         first = resolve_or_create_scheme(
-            session, _aec_ref(version="1.0", software={"name": "Gaussian"})
+            session,
+            _aec_ref(name="AEC as shipped", software={"name": "Gaussian"}),
         )
         warnings: list = []
         resolve_or_create_scheme(
             session,
-            _aec_ref(version="2.0", software={"name": "Gaussian"}),
+            _aec_ref(name="AEC refit", software={"name": "Gaussian"}),
             warnings_out=warnings,
         )
 
@@ -251,33 +261,23 @@ def test_differing_software_siblings_are_not_flagged_ambiguous(db_conn) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_two_schemes_same_identity_different_units_are_distinct_rows(
-    db_conn,
-) -> None:
-    """``units`` joins the identity index (plan v2 §3.3, ruling 13): a
-    scheme identical on every other axis but ``units`` is a second row,
-    not a collision."""
-    with Session(db_conn) as session, session.begin():
-        hartree = resolve_or_create_scheme(session, _aec_ref(units="hartree"))
-        kcal_mol = resolve_or_create_scheme(session, _aec_ref(units="kcal_mol"))
+def test_same_library_in_a_second_unit_is_one_row_not_two(db_conn) -> None:
+    """``units`` is NOT an identity axis (a7d4e2b9c351), reversing plan
+    v2 §3.3.
 
-        assert hartree.id != kcal_mol.id
+    An energy correction is always an energy. Hartree and kcal/mol are
+    one library written two ways, so re-depositing it in the second unit
+    resolves onto the *same* row -- and the parameter comparison converts
+    before comparing, which is what makes that safe.
 
-        # Re-supplying the same units reuses the same row.
-        again = resolve_or_create_scheme(session, _aec_ref(units="hartree"))
-        assert again.id == hartree.id
+    The value below is this repository's own constants applied to the
+    hartree value (round trip delta exactly 0.0), not a textbook figure.
 
-
-def test_same_correction_in_a_second_unit_creates_a_second_row_not_a_conflict(
-    db_conn,
-) -> None:
-    """The bug ``units`` in the identity fixes (plan v2 §2.5/§3.3): before
-    this widening, a depositor re-sending the same correction in a
-    different energy unit resolved onto the existing row and
-    ``_assert_param_value_compatible`` raised, wrongly calling numerically
-    different values (because they're in different units) a conflict.
-    Now the second unit is a second row, so no conflict is ever raised,
-    and the depositor's own digits in both units are preserved exactly."""
+    *Mutation*: drop the conversion from
+    ``_assert_param_value_compatible`` -- this must then raise
+    ``ValueError``, which is the bug §3.3 worked around by splitting the
+    identity instead of fixing.
+    """
     with Session(db_conn) as session, session.begin():
         first = resolve_or_create_scheme(
             session,
@@ -286,25 +286,79 @@ def test_same_correction_in_a_second_unit_creates_a_second_row_not_a_conflict(
                 atom_params=[{"element": "H", "value": -0.5010929786112002}],
             ),
         )
-        # No ValueError from _assert_param_value_compatible: this is a
-        # different row, not a merge attempt against `first`.
         second = resolve_or_create_scheme(
             session,
             _aec_ref(
                 units="kcal_mol",
-                atom_params=[{"element": "H", "value": -314.860165}],
+                atom_params=[{"element": "H", "value": -314.4405914650043}],
             ),
         )
 
-        assert second.id != first.id
+        assert second.id == first.id
 
-        count = session.scalar(
-            select(func.count()).select_from(EnergyCorrectionScheme).where(
-                EnergyCorrectionScheme.kind == "atom_energy",
-                EnergyCorrectionScheme.name == "AEC provenance test",
-            )
+        # The row keeps the unit it was deposited under. Nothing is
+        # rewritten in place: the scheme page renders this table
+        # "exactly as deposited".
+        assert first.units == EnergyUnit.hartree
+
+
+def test_values_that_disagree_after_conversion_still_conflict(db_conn) -> None:
+    """Converting before comparing must not turn the check off.
+
+    A second deposit whose values are genuinely different -- not merely
+    differently expressed -- is still refused, and the message says the
+    comparison happened in hartree so the depositor can see why two
+    numbers that look nothing alike were compared at all.
+
+    *Mutation*: return unconditionally from
+    ``_assert_param_value_compatible`` -- this must fail.
+    """
+    with Session(db_conn) as session, session.begin():
+        resolve_or_create_scheme(
+            session,
+            _aec_ref(
+                units="hartree",
+                atom_params=[{"element": "H", "value": -0.5010929786112002}],
+            ),
         )
-        assert count == 2
+        with pytest.raises(ValueError) as excinfo:
+            resolve_or_create_scheme(
+                session,
+                _aec_ref(
+                    units="kcal_mol",
+                    # Off by ~1 kcal/mol: a different number, not a
+                    # different unit.
+                    atom_params=[{"element": "H", "value": -313.4405914650043}],
+                ),
+            )
+        assert "compared in hartree" in str(excinfo.value)
+
+
+def test_unknown_units_fall_back_to_comparing_as_deposited(db_conn) -> None:
+    """When a unit is not recorded there is nothing to convert with.
+
+    Comparing raw is the honest fallback: refusing outright would reject
+    a deposit this check cannot prove wrong, and comparing a converted
+    value against a raw one would invent a conflict. The message says
+    which happened.
+    """
+    with Session(db_conn) as session, session.begin():
+        resolve_or_create_scheme(
+            session,
+            _aec_ref(
+                units=None,
+                atom_params=[{"element": "H", "value": -0.5010929786112002}],
+            ),
+        )
+        with pytest.raises(ValueError) as excinfo:
+            resolve_or_create_scheme(
+                session,
+                _aec_ref(
+                    units=None,
+                    atom_params=[{"element": "H", "value": -0.4}],
+                ),
+            )
+        assert "compared as deposited" in str(excinfo.value)
 
 
 def test_versioned_and_version_less_release_of_same_program_are_distinct_rows(

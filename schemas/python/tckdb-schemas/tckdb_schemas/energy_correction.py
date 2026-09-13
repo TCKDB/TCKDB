@@ -42,13 +42,12 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     """Upload-facing reference to a correction scheme.
 
     If a matching scheme already exists — by the full identity tuple
-    ``(kind, name, level_of_theory, version, units, source_literature,
-    software_release, workflow_tool_release)`` — it is reused. Otherwise a
-    new scheme is created. A citation, software release, or unit that
-    differs from an existing same-``(kind, name, level_of_theory,
-    version)`` scheme is never dropped: it makes this a scientifically
-    distinct scheme (a different citation, a different program build's
-    numbers, or a different unit convention), so it resolves to a
+    ``(kind, name, level_of_theory, source_literature, software_release,
+    workflow_tool_release)`` — it is reused. Otherwise a new scheme is
+    created. A citation or software release that differs from an existing
+    same-``(kind, name, level_of_theory)`` scheme is never dropped: it
+    makes this a scientifically distinct scheme (a different citation, or
+    a different program build's numbers), so it resolves to a
     different row rather than silently overwriting or discarding what was
     supplied.
 
@@ -79,7 +78,13 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     source_literature: LiteratureUploadRequest | None = None
     software: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
-    version: str | None = None
+    #: The unit ``atom_params``/``bond_params``/``component_params`` below
+    #: are expressed in. Recorded verbatim and **not** part of the
+    #: identity: an energy correction is always an energy, so hartree and
+    #: kcal/mol are one library written two ways, not two libraries.
+    #: Re-depositing the same library in another unit therefore resolves
+    #: to the same row, and the parameter values are converted before
+    #: they are compared.
     units: EnergyUnit | None = None
     note: str | None = None
 
@@ -91,7 +96,6 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.name = normalize_required_text(self.name)
-        self.version = normalize_optional_text(self.version)
         self.note = normalize_optional_text(self.note)
         return self
 

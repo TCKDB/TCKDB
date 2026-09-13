@@ -475,7 +475,6 @@ class TestEnergyCorrectionSchemeRefIdentity:
         kind,
         name="atom_energy",
         lot=None,
-        version=None,
         units=None,
         source_literature_id=None,
     ):
@@ -487,7 +486,6 @@ class TestEnergyCorrectionSchemeRefIdentity:
             name=name,
             level_of_theory_id=(lot.id if lot is not None else None),
             source_literature_id=source_literature_id,
-            version=version,
             units=units,
         )
 
@@ -505,7 +503,7 @@ class TestEnergyCorrectionSchemeRefIdentity:
         assert generate_ref_for(a) != generate_ref_for(b)
 
     def test_refs_differ_when_kind_differs(self, db_session):
-        """Two schemes with same name/version/lot but different kind must
+        """Two schemes with same name/lot but different kind must
         not share a ref — the resolver inserts both as distinct rows.
         """
         from app.db.models.common import EnergyCorrectionSchemeKind
@@ -519,7 +517,24 @@ class TestEnergyCorrectionSchemeRefIdentity:
         )
         assert generate_ref_for(a) != generate_ref_for(b)
 
-    def test_refs_differ_when_units_differ(self, db_session):
+    def test_refs_match_when_only_units_differ(self, db_session):
+        """Inverted by ``a7d4e2b9c351``, and the inversion is the point.
+
+        This asserted refs must *differ* when units differ, because
+        ``units`` was an identity column. It is not one any more: an
+        energy correction is always an energy, so hartree and kJ/mol are
+        one library written two ways, and the resolver now lands both on
+        the same row.
+
+        The canonical ref has to agree with that. A ref derivation wider
+        than the unique index hands two rows the resolver considers
+        identical two different refs; narrower, and two index-distinct
+        rows collide on ``ix_energy_correction_scheme_public_ref`` at
+        insert. Same set of columns, exactly.
+
+        *Mutation*: put ``units`` back in
+        ``_canonical_energy_correction_scheme`` -- this must then fail.
+        """
         from app.db.models.common import (
             EnergyCorrectionSchemeKind,
             EnergyUnit,
@@ -538,11 +553,11 @@ class TestEnergyCorrectionSchemeRefIdentity:
             lot=lot,
             units=EnergyUnit.kj_mol,
         )
-        assert generate_ref_for(a) != generate_ref_for(b)
+        assert generate_ref_for(a) == generate_ref_for(b)
 
     def test_refs_match_for_identical_identity(self, db_session):
-        """Sanity check: same (kind, name, lot, version, units, source_lit)
-        → same ref. This is the content-derived determinism property.
+        """Sanity check: same (kind, name, lot, source_lit, software_release,
+        workflow_tool_release) → same ref. This is the content-derived determinism property.
         """
         from app.db.models.common import EnergyCorrectionSchemeKind
 
@@ -551,13 +566,11 @@ class TestEnergyCorrectionSchemeRefIdentity:
             db_session,
             kind=EnergyCorrectionSchemeKind.atom_energy,
             lot=lot,
-            version=None,
         )
         b = self._build(
             db_session,
             kind=EnergyCorrectionSchemeKind.atom_energy,
             lot=lot,
-            version=None,
         )
         assert generate_ref_for(a) == generate_ref_for(b)
 
@@ -584,7 +597,6 @@ class TestResolveOrCreateScheme:
         ref = EnergyCorrectionSchemeRef(
             kind=EnergyCorrectionSchemeKind.atom_energy,
             name="atom_energy",
-            version=None,
             units=EnergyUnit.hartree,
             note="Per-species AEC computed by Arkane.",
         )

@@ -615,14 +615,29 @@ def test_ecs_search_by_name(client, db_session):
     assert ecs.public_ref in refs
 
 
-def test_ecs_search_by_version(client, db_session):
-    ecs = make_energy_correction_scheme(db_session, version="v2")
-    body = client.get(_ecs_search_url(version="v2")).json()
-    refs = {
-        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
-        for r in body["records"]
-    }
-    assert ecs.public_ref in refs
+def test_ecs_search_by_version_is_refused_not_ignored(client, db_session):
+    """``version`` is gone from the schema (a7d4e2b9c351), and a removed
+    filter must fail closed.
+
+    Deleting the field outright was the first attempt and was worse than
+    leaving it: FastAPI does not reject an unknown query parameter, so
+    ``?version=v2`` came back **200 with the filter silently dropped** --
+    a client filtering by version received unfiltered results and no
+    indication anything had been ignored. Measured, not assumed, while
+    building this change.
+
+    *Mutation*: remove ``version`` from the rejected-filter dict in
+    ``energy_correction_schemes_search.py`` -- this must then fail,
+    returning 200.
+    """
+    make_energy_correction_scheme(db_session, name="version_filter_probe")
+
+    resp = client.get(_ecs_search_url(version="v2"))
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "unsupported_filter"
+    assert "version" in body["context"]["filters"]
 
 
 def test_ecs_search_by_scheme_kind(client, db_session):

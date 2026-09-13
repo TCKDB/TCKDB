@@ -2331,7 +2331,6 @@ def _aec_scheme_ref(**overrides) -> dict:
         "kind": "atom_energy",
         "name": "AEC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2343,7 +2342,6 @@ def _bac_petersson_scheme_ref(**overrides) -> dict:
         "kind": "bac_petersson",
         "name": "Petersson BAC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2355,7 +2353,6 @@ def _bac_melius_scheme_ref(**overrides) -> dict:
         "kind": "bac_melius",
         "name": "Melius BAC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)

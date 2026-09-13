@@ -100,7 +100,17 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
         nullable=True,
     )
 
-    version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    #: The unit the parameter values below were **deposited** in, not a
+    #: canonical one. Values are stored verbatim (the scheme page renders
+    #: the table "exactly as deposited"), so a reader must convert using
+    #: this, and ``app.chemistry.units.convert_energy_to_hartree`` is how.
+    #:
+    #: Deliberately NOT part of the identity index (a7d4e2b9c351). An
+    #: energy correction is always an energy; hartree and kcal/mol are
+    #: one physical fact in two presentations, and keying identity on the
+    #: unit would make what a correction *is* depend on how a depositor
+    #: chose to write it down. The resolver converts before comparing
+    #: values instead.
     units: Mapped[Optional[EnergyUnit]] = mapped_column(
         SAEnum(EnergyUnit, name="energy_unit"),
         nullable=True,
@@ -132,8 +142,6 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "kind",
             "name",
             "level_of_theory_id",
-            "version",
-            "units",
             "source_literature_id",
             "software_release_id",
             "workflow_tool_release_id",

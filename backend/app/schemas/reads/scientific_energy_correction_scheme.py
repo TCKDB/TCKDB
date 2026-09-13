@@ -56,7 +56,9 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
     energy_correction_scheme_ref: str
     name: str
     scheme_kind: EnergyCorrectionSchemeKind
-    version: str | None = None
+    #: The unit the parameter table is expressed in, as deposited. Not an
+    #: identity axis (a7d4e2b9c351); a consumer converts with it rather
+    #: than treating two units as two libraries.
     units: EnergyUnit | None = None
     note: str | None = None
     created_at: datetime

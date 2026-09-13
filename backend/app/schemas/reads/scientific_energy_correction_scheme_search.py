@@ -53,7 +53,6 @@ class EnergyCorrectionSchemeSearchRequest(BaseModel):
 
     # --- scalar filters --------------------------------------------------
     name: str | None = Field(default=None, max_length=256)
-    version: str | None = Field(default=None, max_length=128)
     scheme_kind: EnergyCorrectionSchemeKind | None = None
 
     # --- provenance filters ----------------------------------------------
@@ -65,6 +64,13 @@ class EnergyCorrectionSchemeSearchRequest(BaseModel):
 
     # --- declared but fail-closed until wired to a column ----------------
     software: str | None = Field(default=None, max_length=256)
+    #: Removed from the schema by ``a7d4e2b9c351``; kept declared here
+    #: **only** so it fails closed. Dropping the field outright made
+    #: ``?version=x`` a silently ignored query parameter -- FastAPI does
+    #: not reject an unknown one, so a client filtering by version got
+    #: unfiltered results and a 200. Declared-and-rejected is the honest
+    #: shape: the caller is told the filter is gone.
+    version: str | None = Field(default=None, max_length=128)
     software_version: str | None = Field(default=None, max_length=128)
 
     # --- evidence / usage filters ----------------------------------------

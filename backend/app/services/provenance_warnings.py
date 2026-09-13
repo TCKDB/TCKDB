@@ -791,3 +791,4 @@ def _energy_correction_scheme_ambiguous_warning(
             "sets of numbers."
         ),
     )
+
