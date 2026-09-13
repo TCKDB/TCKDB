@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import html
+import re
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.db.models.common import LiteratureKind
 from app.db.models.literature import Literature
 from app.schemas.entities.literature import LiteratureCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.literature_metadata import (
     fetch_doi_metadata,
@@ -14,6 +18,131 @@ from app.services.literature_metadata import (
     normalize_doi,
     normalize_isbn,
 )
+from app.services.provenance_warnings import (
+    W_LITERATURE_TITLE_MISMATCH,
+    W_LITERATURE_YEAR_MISMATCH,
+)
+
+# ---------------------------------------------------------------------------
+# Depositor-vs-fetched-metadata mismatch
+# ---------------------------------------------------------------------------
+#
+# Which fields are compared, and why only these two
+# ---------------------------------------------------------------------------
+# ``title`` is the field that matters: it is the one piece of fetched
+# metadata a depositor is guaranteed to have an independent opinion about
+# (they read the paper), so a disagreement is strong evidence the DOI/ISBN
+# names a different work than the one actually being cited. ``year`` is a
+# cheap second check with the same property (a depositor who knows the
+# paper usually knows the year) and essentially no false-positive surface
+# once both sides are present integers.
+#
+# ``journal``/``pages`` are deliberately NOT compared. Both are
+# formatting-heavy in a way title/year are not: "J. Phys. Chem. A" vs.
+# "The Journal of Physical Chemistry A", "101-110" vs. "101-10" (Crossref
+# sometimes drops a shared prefix) are disagreements about how the same
+# fact is written, not about which paper is being cited. Warning on those
+# would mostly fire on correctly-cited papers and train depositors to
+# ignore this warning family. ``volume``/``issue``/``publisher``/``url``
+# are not compared for the same reason (formatting/URL-shape noise) and
+# because they carry less identifying signal than title/year in the first
+# place.
+#
+# ISBN gets the identical treatment as DOI. It runs through the same
+# ``_metadata_to_fields``/precedence code path below, the failure mode is
+# the same (a mistyped or wrong-edition ISBN silently attaches someone
+# else's book to this record), and singling it out for different handling
+# would be a special case with no justification -- the comparison here
+# only ever looks at the already-normalized ``metadata_fields`` dict, so
+# there is no source-specific code to write.
+
+_WHITESPACE_RE = re.compile(r"\s+")
+_TRAILING_PUNCTUATION_RE = re.compile(r"[\s.,;:!?]+$")
+
+
+def _normalize_title_for_comparison(title: str) -> str:
+    """Fold a title down to a comparison key.
+
+    Deliberately a floor, not fuzzy matching: unescape HTML entities
+    (Crossref titles carry literal ``&amp;`` etc.), casefold, collapse
+    internal whitespace, and strip trailing punctuation. This absorbs the
+    noise actually observed between a depositor's manually-typed title and
+    Crossref's/isbnlib's rendering of the same title -- it does not
+    attempt to reconcile different subtitle separators (":" vs. "-") or
+    reorder words, since either of those could just as easily be masking a
+    genuinely different work rather than a formatting difference.
+    """
+
+    unescaped = html.unescape(title)
+    collapsed = _WHITESPACE_RE.sub(" ", unescaped).strip()
+    stripped = _TRAILING_PUNCTUATION_RE.sub("", collapsed)
+    return stripped.casefold()
+
+
+def _resolve_literature_field_mismatches(
+    request: LiteratureUploadRequest,
+    metadata_fields: dict[str, object],
+    *,
+    field_prefix: str,
+) -> list[UploadWarning]:
+    """Warn where a depositor-supplied field disagrees with fetched metadata.
+
+    Never changes what is stored -- ``resolve_literature_submission``'s
+    existing ``fetched or declared`` precedence is untouched. This only
+    decides whether a disagreement between the two is worth telling the
+    depositor about.
+
+    :param field_prefix: Dot-path prefix naming *and including* this
+        literature fragment's own field, e.g. ``"literature."`` for a
+        top-level ``request.literature``, or
+        ``"species['ch4'].source_literature."`` for a nested ref. Callers
+        default to ``"literature."`` (see ``resolve_literature_submission``)
+        since that is the field name on the overwhelming majority of
+        requests that embed one.
+    """
+
+    warnings: list[UploadWarning] = []
+
+    fetched_title = metadata_fields.get("title")
+    if (
+        request.title is not None
+        and isinstance(fetched_title, str)
+        and _normalize_title_for_comparison(request.title)
+        != _normalize_title_for_comparison(fetched_title)
+    ):
+        warnings.append(
+            UploadWarning(
+                field=f"{field_prefix}title",
+                code=W_LITERATURE_TITLE_MISMATCH,
+                message=(
+                    f"Supplied literature title {request.title!r} does not "
+                    "match the title fetched from the supplied DOI/ISBN "
+                    f"({fetched_title!r}). The fetched title was kept; "
+                    "verify the identifier is correct for this citation."
+                ),
+            )
+        )
+
+    fetched_year = metadata_fields.get("year")
+    if (
+        request.year is not None
+        and isinstance(fetched_year, int)
+        and request.year != fetched_year
+    ):
+        warnings.append(
+            UploadWarning(
+                field=f"{field_prefix}year",
+                code=W_LITERATURE_YEAR_MISMATCH,
+                message=(
+                    f"Supplied literature year {request.year!r} does not "
+                    "match the year fetched from the supplied DOI/ISBN "
+                    f"({fetched_year!r}). The fetched year was kept; "
+                    "verify the identifier is correct for this citation."
+                ),
+            )
+        )
+
+    return warnings
 
 
 def _kind_from_identifiers(
@@ -62,11 +191,28 @@ def _metadata_to_fields(
 def resolve_literature_submission(
     session: Session,
     request: LiteratureUploadRequest,
+    *,
+    warnings_out: list[UploadWarning] | None = None,
+    field_prefix: str = "literature.",
 ) -> LiteratureCreate:
     """Resolve a workflow literature submission into a canonical create schema.
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing literature submission payload.
+    :param warnings_out: Optional sink for non-blocking warnings — currently
+        a depositor-supplied ``title``/``year`` that disagrees with the
+        metadata fetched from a supplied DOI/ISBN (see
+        ``_resolve_literature_field_mismatches``). The fetched value is
+        always what gets stored; this only reports the disagreement.
+        ``None`` (the default) means the caller does not want these
+        warnings surfaced -- unresolved callers do not need updating.
+    :param field_prefix: Dot-path prefix naming *and including* this
+        literature fragment's own field on the enclosing request, for
+        ``warnings_out`` entries. Defaults to ``"literature."``, the field
+        name on the overwhelming majority of requests that embed a
+        literature fragment; a caller whose field is named differently
+        (e.g. ``source_literature``) or nested (e.g. a bundle's
+        ``species['ch4'].literature``) passes its own dot-path.
     :returns: Canonical ``LiteratureCreate`` schema.
     :raises ValueError: If ISBN normalization fails or manual submission lacks required fields.
     """
@@ -86,6 +232,15 @@ def resolve_literature_submission(
         metadata_fields = _metadata_to_fields(
             fetch_isbn_metadata(normalized_isbn) or {},
             source="isbn",
+        )
+
+    if warnings_out is not None and (
+        normalized_doi is not None or normalized_isbn is not None
+    ):
+        warnings_out.extend(
+            _resolve_literature_field_mismatches(
+                request, metadata_fields, field_prefix=field_prefix
+            )
         )
 
     kind = _kind_from_identifiers(
@@ -152,6 +307,9 @@ def _select_existing_literature(
 def resolve_or_create_literature(
     session: Session,
     request: LiteratureUploadRequest,
+    *,
+    warnings_out: list[UploadWarning] | None = None,
+    field_prefix: str = "literature.",
 ) -> Literature:
     """Resolve or create a literature row from workflow submission data.
 
@@ -160,6 +318,12 @@ def resolve_or_create_literature(
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing literature submission payload.
+    :param warnings_out: Optional sink for non-blocking warnings (see
+        ``resolve_literature_submission``). Only populated on the
+        first-creation path -- adopting an already-existing row (matched
+        by DOI/ISBN) does not re-fetch metadata, so there is nothing new
+        to compare against.
+    :param field_prefix: Dot-path prefix for ``warnings_out`` entries.
     :returns: Existing or newly created ``Literature`` row.
     :raises ValueError: If identifier normalization or literature resolution fails.
     """
@@ -175,7 +339,9 @@ def resolve_or_create_literature(
     if existing is not None:
         return existing
 
-    literature_create = resolve_literature_submission(session, request)
+    literature_create = resolve_literature_submission(
+        session, request, warnings_out=warnings_out, field_prefix=field_prefix
+    )
 
     def _build() -> Literature:
         return Literature(

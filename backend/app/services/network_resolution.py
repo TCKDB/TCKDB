@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.network import Network, NetworkReaction, NetworkSpecies
 from app.schemas.entities.network import NetworkCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
@@ -16,6 +17,7 @@ def resolve_network_upload(
     *,
     species_entry_ids: list[tuple[int, object]],
     reaction_entry_ids: list[int],
+    warnings_out: list[UploadWarning] | None = None,
 ) -> NetworkCreate:
     """Resolve workflow-facing network upload data into an internal create schema.
 
@@ -23,11 +25,16 @@ def resolve_network_upload(
     :param request: Workflow-facing network upload payload.
     :param species_entry_ids: Resolved species-entry ids paired with their network roles.
     :param reaction_entry_ids: Resolved reaction-entry ids for the network.
+    :param warnings_out: Optional sink for non-blocking warnings, including
+        a depositor-supplied literature title/year that disagrees with the
+        metadata fetched from a supplied DOI/ISBN.
     :returns: Internal ``NetworkCreate`` payload with resolved foreign-key ids.
     """
 
     literature = (
-        resolve_or_create_literature(session, request.literature)
+        resolve_or_create_literature(
+            session, request.literature, warnings_out=warnings_out
+        )
         if request.literature is not None
         else None
     )

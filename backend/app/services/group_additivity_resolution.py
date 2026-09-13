@@ -19,6 +19,7 @@ from app.db.models.group_additivity import (
     GroupAdditivityScheme,
 )
 from app.db.models.thermo import Thermo
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.group_additivity_upload import (
     AppliedGroupAdditivityUploadPayload,
     GroupAdditivitySchemeRef,
@@ -33,6 +34,7 @@ def resolve_or_create_ga_scheme(
     ref: GroupAdditivitySchemeRef,
     *,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> GroupAdditivityScheme:
     """Resolve or create a group-additivity scheme.
 
@@ -82,7 +84,12 @@ def resolve_or_create_ga_scheme(
         return existing
 
     literature = (
-        resolve_or_create_literature(session, ref.source_literature)
+        resolve_or_create_literature(
+            session,
+            ref.source_literature,
+            warnings_out=warnings_out,
+            field_prefix="group_additivity.scheme.source_literature.",
+        )
         if ref.source_literature is not None
         else None
     )
@@ -107,6 +114,7 @@ def create_applied_group_additivity(
     *,
     thermo_id: int,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> AppliedGroupAdditivity:
     """Resolve the scheme and create an applied GA breakdown for a thermo row.
 
@@ -137,7 +145,7 @@ def create_applied_group_additivity(
         )
 
     scheme = resolve_or_create_ga_scheme(
-        session, payload.scheme, created_by=created_by
+        session, payload.scheme, created_by=created_by, warnings_out=warnings_out
     )
 
     applied = AppliedGroupAdditivity(

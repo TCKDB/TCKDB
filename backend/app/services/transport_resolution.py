@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.schemas.entities.transport import TransportSourceCalculationCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.transport_upload import TransportUploadPayload
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
@@ -19,6 +20,7 @@ def resolve_and_create_transport(
     species_entry_id: int,
     source_calculations: list[TransportSourceCalculationCreate] | None = None,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Transport:
     """Resolve provenance refs and create a transport record.
 
@@ -41,7 +43,9 @@ def resolve_and_create_transport(
     :returns: Newly created ``Transport`` row.
     """
     literature = (
-        resolve_or_create_literature(session, payload.literature)
+        resolve_or_create_literature(
+            session, payload.literature, warnings_out=warnings_out
+        )
         if payload.literature is not None
         else None
     )

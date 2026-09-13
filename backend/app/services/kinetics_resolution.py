@@ -9,6 +9,7 @@ from app.db.models.common import CalculationType, KineticsCalculationRole
 from app.db.models.kinetics import Kinetics
 from app.db.models.network_pdep import NetworkKinetics
 from app.schemas.entities.kinetics import KineticsCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
@@ -159,17 +160,23 @@ def resolve_kinetics_upload(
     request: KineticsUploadRequest,
     *,
     reaction_entry_id: int,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> KineticsCreate:
     """Resolve workflow-facing kinetics upload data into an internal create schema.
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing kinetics upload payload.
     :param reaction_entry_id: Resolved reaction-entry id from backend workflow logic.
+    :param warnings_out: Optional sink for non-blocking warnings, including
+        a depositor-supplied literature title/year that disagrees with the
+        metadata fetched from a supplied DOI/ISBN.
     :returns: Internal ``KineticsCreate`` payload with resolved foreign-key ids.
     """
 
     literature = (
-        resolve_or_create_literature(session, request.literature)
+        resolve_or_create_literature(
+            session, request.literature, warnings_out=warnings_out
+        )
         if request.literature is not None
         else None
     )

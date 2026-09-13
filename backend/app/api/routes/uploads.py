@@ -352,7 +352,11 @@ def upload_kinetics(
         session, created_by=current_user.id, kind=SubmissionKind.kinetics
     )
     kinetics = persist_kinetics_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings=warnings,
     )
     result = KineticsUploadResult(
         id=kinetics.id,
@@ -384,7 +388,11 @@ def upload_network(
         session, created_by=current_user.id, kind=SubmissionKind.network
     )
     network = persist_network_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings_out=warnings,
     )
     result = NetworkUploadResult(
         id=network.id, submission_id=sub.submission_id, warnings=warnings
@@ -475,7 +483,11 @@ def upload_statmech(
         session, created_by=current_user.id, kind=SubmissionKind.statmech
     )
     statmech = persist_statmech_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings_out=warnings,
     )
     warnings.extend(
         collect_frequency_scale_factor_software_mismatch_warnings(
@@ -516,7 +528,11 @@ def upload_thermo(
         session, created_by=current_user.id, kind=SubmissionKind.thermo
     )
     thermo = persist_thermo_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings_out=warnings,
     )
     result = ThermoUploadResult(
         id=thermo.id,
@@ -607,7 +623,11 @@ def upload_transport(
         session, created_by=current_user.id, kind=SubmissionKind.transport
     )
     transport = persist_transport_upload(
-        session, request, created_by=current_user.id, review_policy=sub.policy
+        session,
+        request,
+        created_by=current_user.id,
+        review_policy=sub.policy,
+        warnings_out=warnings,
     )
     result = TransportUploadResult(
         id=transport.id,

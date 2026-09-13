@@ -174,7 +174,12 @@ def resolve_or_create_scheme(
     lot_id = lot.id if lot else None
 
     literature = (
-        resolve_or_create_literature(session, ref.source_literature)
+        resolve_or_create_literature(
+            session,
+            ref.source_literature,
+            warnings_out=warnings_out,
+            field_prefix="source_literature.",
+        )
         if ref.source_literature is not None
         else None
     )
@@ -433,6 +438,7 @@ def resolve_or_create_freq_scale_factor_ref(
     ref: FreqScaleFactorRef,
     *,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> FrequencyScaleFactor:
     """Resolve or create a frequency scale factor from the unified FSF ref.
 
@@ -460,7 +466,12 @@ def resolve_or_create_freq_scale_factor_ref(
         software_release_id = release.id
 
     literature = (
-        resolve_or_create_literature(session, ref.source_literature)
+        resolve_or_create_literature(
+            session,
+            ref.source_literature,
+            warnings_out=warnings_out,
+            field_prefix="source_literature.",
+        )
         if ref.source_literature is not None
         else None
     )
@@ -598,7 +609,10 @@ def create_applied_energy_correction(
 
     if payload.frequency_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, payload.frequency_scale_factor, created_by=created_by
+            session,
+            payload.frequency_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings_out,
         )
         fsf_id = fsf.id
 

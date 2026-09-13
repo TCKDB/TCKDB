@@ -562,6 +562,7 @@ def persist_kinetics_upload(
         session,
         request,
         reaction_entry_id=reaction_entry.id,
+        warnings_out=warning_sink,
     )
     kinetics = persist_kinetics(session, kinetics_create, created_by=created_by)
 

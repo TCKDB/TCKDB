@@ -16,6 +16,7 @@ from app.db.models.common import (
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.thermo_upload import (
     ThermoSourceCalculationIn,
     ThermoUploadRequest,
@@ -291,6 +292,7 @@ def persist_thermo_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Thermo:
     """Persist a complete thermo upload workflow.
 
@@ -421,6 +423,7 @@ def persist_thermo_upload(
         session,
         request,
         species_entry_id=species_entry.id,
+        warnings_out=warnings_out,
     )
     # The upload service currently hardcodes an empty source_calculations
     # list and a null statmech_id on ThermoCreate; splice the resolved
@@ -477,6 +480,7 @@ def persist_thermo_upload(
                 target_species_entry_id=species_entry.id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                warnings_out=warnings_out,
             )
         )
 
@@ -489,6 +493,7 @@ def persist_thermo_upload(
             request.group_additivity,
             thermo_id=thermo.id,
             created_by=created_by,
+            warnings_out=warnings_out,
         )
 
     session.flush()
