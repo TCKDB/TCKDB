@@ -269,3 +269,16 @@
     color: var(--ink);
     font: var(--type-data-font);
 }
+
+/* Shown when a sign-out cleared local state but never reached the server.
+   Notice-toned rather than error-toned: nothing the visitor did failed, and
+   the session expires on its own; they just should not believe the sign-out
+   completed. */
+.auth-notice {
+    margin: 0 0 var(--s-4);
+    padding: var(--s-3);
+    border: 1px solid var(--notice-border);
+    background: var(--surface-sunken);
+    color: var(--ink);
+    font: var(--type-body-font);
+}

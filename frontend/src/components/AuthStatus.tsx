@@ -31,7 +31,16 @@ export function AuthStatus() {
     return (
         <div className="auth-status">
             <Link className="auth-status-link" to="/account">{displayName}</Link>
-            <button type="button" className="auth-status-signout" onClick={() => { void logout() }}>
+            <button type="button" className="auth-status-signout" onClick={() => {
+                    // `logout` rethrows so a caller that wants the failure can
+                    // have it. This one does not: the provider already records
+                    // it in `signOutIncomplete`, which the login page renders.
+                    // `void logout()` alone left the rejection unhandled, which
+                    // printed the server's error to the console and failed the
+                    // test run as an unhandled rejection. Raised in review of
+                    // #467.
+                    void logout().catch(() => {})
+                }}>
                 Sign out
             </button>
         </div>

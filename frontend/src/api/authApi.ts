@@ -118,6 +118,16 @@ export async function logout(): Promise<void> {
         method: "POST",
         credentials: "include",
         headers: { Accept: "application/json" },
+        // Survives the page going away. Signing out is the one request a
+        // user is most likely to fire and then immediately close the tab or
+        // navigate off, and without this the browser is free to cancel it
+        // in flight -- leaving the session row alive and the cookie set.
+        //
+        // That matters more here than elsewhere because the cookie is
+        // httpOnly: JavaScript cannot clear it, so only this response's
+        // Set-Cookie can. If the request never lands, nothing on the client
+        // can finish the job.
+        keepalive: true,
     })
     if (!response.ok) return throwForFailedResponse(response)
 }

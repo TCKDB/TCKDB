@@ -21,6 +21,7 @@ import { AuthContext, type AuthState } from "../hooks/useAuth"
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<AuthState>({ status: "loading" })
+    const [signOutIncomplete, setSignOutIncomplete] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -58,12 +59,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // reader who asked to sign out is never left looking signed in
     // because of a network hiccup on the way out.
     const logout = useCallback(async () => {
+        // Local state is cleared either way, which is what every mainstream
+        // session-cookie site does: the intent is unambiguous and leaving a
+        // name on screen after someone asked to leave is worse.
+        //
+        // But when the request did not land, the session row is still live
+        // and the cookie is still set -- and because the cookie is httpOnly,
+        // no amount of client-side clearing can revoke it. Saying nothing
+        // would tell the user they had signed out when they had not, which
+        // on a shared machine is the one lie worth avoiding. The session TTL
+        // bounds it (12 hours for an admin) but does not close it.
         try {
             await logoutRequest()
+            setSignOutIncomplete(false)
+        } catch (caught) {
+            setSignOutIncomplete(true)
+            throw caught
         } finally {
             setState({ status: "signed-out" })
         }
     }, [])
 
-    return <AuthContext.Provider value={{ state, login, register, logout }}>{children}</AuthContext.Provider>
+    return <AuthContext.Provider value={{ state, signOutIncomplete, login, register, logout }}>{children}</AuthContext.Provider>
 }

@@ -32,6 +32,12 @@ export type AuthState =
 
 export type AuthContextValue = {
     state: AuthState
+    //: True when the last sign-out did not reach the server. The local
+    //: state is cleared regardless, so the UI shows the visitor as signed
+    //: out -- but the session row is still live and the cookie still set,
+    //: and because the cookie is httpOnly nothing on the client can revoke
+    //: it. Surfaced so the claim "you are signed out" is not made falsely.
+    signOutIncomplete: boolean
     login: (username: string, password: string) => Promise<MeResponse>
     register: (input: { username: string; password: string; email?: string; full_name?: string }) => Promise<MeResponse>
     logout: () => Promise<void>

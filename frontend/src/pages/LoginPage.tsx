@@ -29,7 +29,7 @@ const MODES: { value: Mode; label: string }[] = [
  * there is nothing for a signed-in reader to do here.
  */
 export default function LoginPage() {
-    const { state, login, register } = useAuth()
+    const { state, signOutIncomplete, login, register } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
     const [mode, setMode] = useState<Mode>("sign-in")
@@ -107,6 +107,19 @@ export default function LoginPage() {
                     </button>
                 ))}
             </div>
+
+            {signOutIncomplete && (
+
+                <p role="alert" className="auth-notice">
+
+                    Signed out on this device, but the archive did not confirm it. Your session may still be
+
+                    active. Sign in and out again once the archive is reachable, especially on a shared computer.
+
+                </p>
+
+            )}
+
 
             <form className="auth-form" onSubmit={handleSubmit} noValidate>
                 {error && <p className="auth-error" role="alert">{error}</p>}
