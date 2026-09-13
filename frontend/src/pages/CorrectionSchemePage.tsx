@@ -130,14 +130,22 @@ function CorrectionSchemeDetail({ record }: { record: EnergyCorrectionSchemeReco
                                         backfill deliberately left it absent rather than
                                         guess -- but this page states each absence
                                         plainly, without narrating a cause it cannot
-                                        verify from the API response alone. Never a link:
-                                        `record.software_release.software_release_ref` is
-                                        measured empty on every live row (the scheme
-                                        stores a vendor, not a release row to point at,
-                                        same limitation `FrequencyScaleFactor` already
-                                        has) -- `softwareLabel` renders name/version only,
-                                        exactly like every other software_release
-                                        consumer in this app. */}
+                                        verify from the API response alone. Still not a
+                                        link, but the reason has changed and the old one
+                                        is no longer true: `software_release_ref` used to
+                                        be measured empty on every live row, because the
+                                        scheme stored a vendor rather than a release row
+                                        to point at. Since the read layer joins a real
+                                        `software_release` that ref resolves, so linking
+                                        it is now possible and is PR 4's decision, not an
+                                        impossibility. Until then `softwareLabel` renders
+                                        name/version only, exactly like every other
+                                        software_release consumer in this app.
+                                        `FrequencyScaleFactor` does still have the old
+                                        limitation (its release-grain revision is PR 6).
+                                        Note both live rows carry no release at all
+                                        today, so this renders "not recorded" either
+                                        way. */}
                                     <div>
                                         <dt>Software</dt>
                                         <dd>{softwareLabel(record.software_release) ?? "not recorded"}</dd>

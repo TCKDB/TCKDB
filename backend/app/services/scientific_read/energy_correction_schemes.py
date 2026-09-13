@@ -29,7 +29,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
 )
 from app.db.models.literature import Literature
-from app.db.models.software import Software
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
@@ -145,16 +145,7 @@ def build_energy_correction_scheme_record(
     )
 
     lot_summary = _build_lot_summary(session, ecs.level_of_theory_id)
-    # ECS now stores software_release_id (not software_id -- correction-
-    # scheme-provenance plan v2 §3), but _build_software_release_summary's
-    # PR-2-owned fabrication still takes a bare software id (see its own
-    # docstring). Route through the resolved release's software_id so
-    # that fabrication is left untouched here; a real release-grain
-    # summary is PR 2's job.
-    ecs_software_id = (
-        ecs.software_release.software_id if ecs.software_release is not None else None
-    )
-    sw_summary = _build_software_release_summary(session, ecs_software_id)
+    sw_summary = _build_software_release_summary(session, ecs.software_release_id)
     wf_summary = _build_workflow_release_summary(
         session, ecs.workflow_tool_release_id
     )
@@ -436,26 +427,37 @@ def _build_lot_summary(
 
 
 def _build_software_release_summary(
-    session: Session, software_id: int | None
+    session: Session, software_release_id: int | None
 ) -> SoftwareReleaseSummary | None:
-    """ECS row stores ``software_id`` (the software vendor), not a release.
+    """ECS stores ``software_release_id`` (correction-scheme-provenance
+    plan v2 §3) -- a real FK to ``software_release``. Build the summary
+    from an actual release→software join; never fabricate one.
 
-    Mirrors ``FrequencyScaleFactor``'s identical shape/limitation exactly
-    (see ``app.services.scientific_read.frequency_scale_factors``): no
-    release granularity on this row, so the summary shows the vendor
-    name without a version. Synthesizes a ``SoftwareReleaseSummary``
-    shape for symmetry with the rest of the surface.
+    Unlike ``FrequencyScaleFactor`` (still ``software_id``-only; its
+    release-grain migration is a separate, later PR), ECS has release
+    granularity today, so this is a distinct helper from
+    ``app.services.scientific_read.frequency_scale_factors``'s
+    same-named function and must not be merged with it.
     """
-    if software_id is None:
+    if software_release_id is None:
         return None
-    sw = session.get(Software, software_id)
-    if sw is None:
+    row = session.execute(
+        select(
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            SoftwareRelease.version,
+            Software.name,
+        )
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(SoftwareRelease.id == software_release_id)
+    ).one_or_none()
+    if row is None:
         return None
     return SoftwareReleaseSummary(
-        software_release_id=0,
-        software_release_ref="",
-        software=sw.name,
-        version=None,
+        software_release_id=row.id,
+        software_release_ref=row.public_ref,
+        software=row.name,
+        version=row.version,
     )
 
 

@@ -214,7 +214,8 @@ totals *and* their components for one calculation.
 | `literature_ref` | implemented |
 | `has_corrections` | implemented (OR-exists across atom/bond/component child tables) |
 | `used_by_calculation` | implemented (exists `applied_energy_correction` with `source_calculation_id is not null`) |
-| `software` / `software_version` | **unsupported** — ECS row has no software dimension; non-null input returns 422 `unsupported_filter` |
+| `software` | implemented (joins `software_release` → `software` by name) |
+| `software_version` | implemented (joins `software_release`; matches the release's `version`) |
 | `used_by_thermo` | **unsupported** — no enforceable relationship from ECS to `thermo`; non-null input returns 422 `unsupported_filter` |
 | `include_rejected` / `include_deprecated` / `min_review_status` | accepted but no-ops — ECS is non-reviewable |
 

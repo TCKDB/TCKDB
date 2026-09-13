@@ -57,6 +57,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "method",
     "basis",
     "software",
+    "software_version",
     "literature_ref",
     "has_corrections",
     "used_by_calculation",
@@ -66,17 +67,12 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 # The service rejects these before querying; none is treated as a no-op.
 # ``software`` moved out of this group once ``energy_correction_scheme``
 # gained a ``software_id`` column (correction-scheme-provenance plan v1).
-# ``software_version`` stays deferred even though the underlying column
-# is now ``software_release_id`` (plan v2 §3-4, PR 1): PR 1 only widens
-# the schema/resolver/upload path, and this filter is not implemented
-# against it yet -- that is PR 2's job (plan §10), alongside replacing
-# ``_build_software_release_summary``'s fabricated release object with a
-# real join. Lifting the deferral here without that read-side work would
-# advertise a filter this endpoint cannot yet answer correctly.
-_DEFERRED_FILTER_FIELDS: tuple[str, ...] = (
-    "software_version",
-    "used_by_thermo",
-)
+# ``software_version`` moved out too once the release-grain column
+# (``software_release_id``, plan v2 §3-4, PR 1) got a read-side join here
+# (PR 2, plan §10) -- alongside replacing ``_build_software_release_summary``'s
+# fabricated release object with a real one. ``used_by_thermo`` remains
+# deferred: it has no backing path yet.
+_DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 
 
 _DEFAULT_SORT_ECHO = "scheme_kind,name,version,id"
@@ -98,7 +94,6 @@ def search_energy_correction_schemes(
 
     reject_unsupported_filters(
         {
-            "software_version": request.software_version,
             "used_by_thermo": request.used_by_thermo,
         },
         endpoint="/scientific/energy-correction-schemes/search",
@@ -143,20 +138,18 @@ def search_energy_correction_schemes(
             stmt = stmt.where(LevelOfTheory.method == request.method)
         if request.basis is not None:
             stmt = stmt.where(LevelOfTheory.basis == request.basis)
-    if request.software is not None:
-        # ECS now stores software_release_id, so the software-name filter
-        # joins through software_release (correction-scheme-provenance
-        # plan v2 §3). The filter itself is unchanged -- still bare name,
-        # still program grain; unlocking a release-grain filter is PR 2's
-        # job (software_version stays in _DEFERRED_FILTER_FIELDS below).
-        stmt = (
-            stmt.join(
-                SoftwareRelease,
-                SoftwareRelease.id == EnergyCorrectionScheme.software_release_id,
-            )
-            .join(Software, Software.id == SoftwareRelease.software_id)
-            .where(Software.name == request.software)
-        )
+    if request.software is not None or request.software_version is not None:
+        # ECS stores software_release_id (correction-scheme-provenance plan
+        # v2 §3), so both the program-name filter and the release-grain
+        # version filter join through software_release/software.
+        stmt = stmt.join(
+            SoftwareRelease,
+            SoftwareRelease.id == EnergyCorrectionScheme.software_release_id,
+        ).join(Software, Software.id == SoftwareRelease.software_id)
+        if request.software is not None:
+            stmt = stmt.where(Software.name == request.software)
+        if request.software_version is not None:
+            stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.has_corrections is not None:
         ex = or_(
             exists().where(
