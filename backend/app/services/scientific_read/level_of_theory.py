@@ -456,7 +456,7 @@ def _build_frequency_scale_factors(session: Session, lot_id: int):
                 frequency_scale_factor_ref=fsf.public_ref,
                 frequency_scale_factor_id=fsf.id,
                 software_release=_build_software_release_summary(
-                    session, fsf.software_id
+                    session, fsf.software_release_id
                 ),
                 workflow_tool_release=_build_workflow_release_summary(
                     session, fsf.workflow_tool_release_id

@@ -15736,7 +15736,7 @@
       },
       "FreqScaleFactorRef": {
         "additionalProperties": false,
-        "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software, scale_kind, value, source_literature,\nworkflow_tool_release)`` and matches the DB unique index on\n``frequency_scale_factor``. ``note`` is descriptive only and never\nparticipates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS software the factor applies to (e.g.\n    Gaussian). Null means software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
+        "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software_release, scale_kind, value,\nsource_literature, workflow_tool_release)`` and matches the DB unique\nindex on ``frequency_scale_factor``. ``note`` is descriptive only and\nnever participates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS program *release* the factor was fit against\n    (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale\n    factor is fit against a program's own build-level vibrational\n    frequencies, which change between releases of the same program\n    (correction-scheme-provenance plan v2 §6, mirroring\n    ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the\n    factor is release-specific, not merely program-specific. Only\n    ``name`` is required; a depositor who knows only the program\n    resolves to the version-less release row for it. Null means\n    software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
         "properties": {
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
@@ -15759,7 +15759,7 @@
           "software": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SoftwareRef"
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
               },
               {
                 "type": "null"
@@ -16028,7 +16028,7 @@
           "scale_kind": {
             "$ref": "#/components/schemas/FrequencyScaleKind"
           },
-          "software_id": {
+          "software_release_id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -16037,7 +16037,7 @@
                 "type": "null"
               }
             ],
-            "title": "Software Id"
+            "title": "Software Release Id"
           },
           "source_literature_id": {
             "anyOf": [
@@ -37472,22 +37472,6 @@
         "title": "SoftwareRead",
         "type": "object"
       },
-      "SoftwareRef": {
-        "additionalProperties": false,
-        "description": "Upload-facing reference to a software package (name only, no version).\n\nUsed when the relevant identifier is the software product rather than\na specific release — for example, the software context of a frequency\nscale factor entry.",
-        "properties": {
-          "name": {
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "SoftwareRef",
-        "type": "object"
-      },
       "SoftwareReleaseRead": {
         "properties": {
           "build": {
@@ -56618,7 +56602,7 @@
           },
           {
             "in": "query",
-            "name": "software_id",
+            "name": "software_release_id",
             "required": false,
             "schema": {
               "anyOf": [
@@ -56629,7 +56613,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Software Id"
+              "title": "Software Release Id"
             }
           },
           {

@@ -19,7 +19,6 @@ from tests.services.scientific_read._factories import (
     make_frequency_scale_factor,
     make_literature,
     make_lot,
-    make_software,
     make_software_release,
     make_species,
     make_species_entry,
@@ -325,14 +324,119 @@ def test_fsf_search_by_method(client, db_session):
 
 
 def test_fsf_search_by_software(client, db_session):
-    sw = make_software(db_session, name="qchem")
-    fsf = make_frequency_scale_factor(db_session, software=sw)
+    """The ``software`` filter is backed by ``software_release_id``
+    (correction-scheme-provenance plan v2 §6 -- was ``software_id``),
+    joined through ``software_release``, mirroring ECS's
+    ``test_ecs_search_by_software`` below."""
+    release = make_software_release(db_session, name="qchem", version=None)
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
     body = client.get(_fsf_search_url(software="qchem")).json()
     refs = {
         r["frequency_scale_factor"]["frequency_scale_factor_ref"]
         for r in body["records"]
     }
     assert fsf.public_ref in refs
+
+
+def test_fsf_search_by_software_version(client, db_session):
+    """FSF now stores ``software_release_id``, so ``software_version`` is
+    implemented against the joined ``software_release`` -- it must match
+    versioned releases and must not return version-less ones (mirrors
+    ``test_ecs_search_by_software_version`` below)."""
+    versioned = make_software_release(
+        db_session, name="fsf-versioned-orca", version="6.0.1"
+    )
+    versionless = make_software_release(
+        db_session, name="fsf-versioned-orca", version=None
+    )
+    fsf_versioned = make_frequency_scale_factor(
+        db_session, software_release=versioned, value=0.9701
+    )
+    fsf_versionless = make_frequency_scale_factor(
+        db_session, software_release=versionless, value=0.9702
+    )
+
+    body = client.get(_fsf_search_url(software_version="6.0.1")).json()
+    refs = {
+        r["frequency_scale_factor"]["frequency_scale_factor_ref"]
+        for r in body["records"]
+    }
+    assert fsf_versioned.public_ref in refs
+    assert fsf_versionless.public_ref not in refs
+
+
+def test_fsf_detail_serves_software_release(client, db_session, allow_internal_ids):
+    """Plan §10 PR 6's read-layer criterion, mirroring
+    ``test_ecs_detail_serves_software_and_workflow_tool_release``: the
+    detail response's ``software_release`` is a real, resolvable
+    release, never the fabricated ``id=0, ref=""`` object.
+
+    *Mutation*: restore the ``software_release_id=0,
+    software_release_ref=""`` literal in
+    ``_build_software_release_summary`` -- these assertions must fail.
+    """
+    release = make_software_release(db_session, name="fsf-gaussian", version="16")
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
+    body = client.get(
+        _fsf_detail_url(fsf.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "fsf-gaussian"
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_id"] != 0
+    assert sw_release["software_release_ref"] == release.public_ref
+    assert sw_release["software_release_ref"] != ""
+    assert sw_release["version"] == "16"
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is True
+
+
+def test_fsf_detail_versionless_release_reports_program_and_null_version(
+    client, db_session, allow_internal_ids
+):
+    """A depositor who knows only the program resolves to the
+    version-less release row, and that is a complete deposit: the detail
+    response carries the program name and a real ref, with ``version``
+    exactly ``None`` -- never a filler string, never the whole object
+    dropped to ``null``.
+
+    *Mutation*: ``version=row.version or "unknown"`` in
+    ``_build_software_release_summary`` -- the ``version is None``
+    assertion must then fail.
+    """
+    release = make_software_release(db_session, name="fsf-molpro", version=None)
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
+
+    body = client.get(
+        _fsf_detail_url(fsf.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "fsf-molpro"
+    assert sw_release["version"] is None
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_ref"] == release.public_ref
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is True
+
+
+def test_fsf_detail_has_software_dimension_false_when_absent(client, db_session):
+    fsf = make_frequency_scale_factor(db_session)
+    body = client.get(_fsf_detail_url(fsf.public_ref)).json()
+
+    assert body["record"]["software_release"] is None
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is False
 
 
 def test_fsf_search_by_literature_ref(client, db_session):

@@ -1129,6 +1129,53 @@ fill-only guard had no test at all — removing it broke nothing. §10's
 PR 3 criterion and §5.2 both make claims about all three guards; two of
 the three could prove it. Both now pinned.
 
+### PR 6 — `frequency_scale_factor` sibling revision
+
+§6. Revision `e3a7c1f9b2d4`, same shape as `c24ce2d9c198` minus the
+`units` member (a scale factor is dimensionless, so §3.3's argument does
+not transfer). `resolve_or_create_freq_scale_factor_ref` widened to
+`resolve_software_release_ref`; `FreqScaleFactorRef.software` is now a
+`SoftwareReleaseRef`. Read layer: `frequency_scale_factors.py`'s
+`_build_software_release_summary` and `statmech.py`'s
+`_build_software_for_software_id` both replaced with real
+`software_release`→`software` joins (the latter now reuses
+`statmech.py`'s existing `_build_software_summary`, so the fabricating
+helper is deleted rather than fixed in place); `software_version` lifted
+out of the FSF search's deferred-filter set the same way PR 2 did for
+ECS. `evaluate_frequency_scale_factor_software`
+(`statmech_resolution.py`) rejoined through `software_release` since its
+own comparison previously read `FrequencyScaleFactor.software_id`
+directly. The legacy `/frequency-scale-factors` CRUD route
+(`app/api/routes/energy_corrections.py`) and its `FrequencyScaleFactorRead`
+entity schema — untouched by PR 1's ECS equivalent, but this route
+actively filters on the renamed column — were repointed at
+`software_release_id`; left as-is they would have raised `AttributeError`
+on first use with a `software_id` query param.
+
+Measured on the deployed database 2026-09-13 (plan §9.5): the pre-flight
+collision query returns 0 rows, and of the 12 live rows, 10 share
+`(level_of_theory_id, scale_kind, value, source_literature_id)` and are
+distinguished only by `workflow_tool_release_id` — already part of the
+identity before this revision and untouched by it, so those 10 remain
+10 distinct rows across the upgrade (pinned by
+`test_ten_rows_differing_only_by_workflow_tool_release_stay_distinct`).
+
+A new absence test
+(`tests/services/scientific_read/test_no_fabricated_software_release_summary.py`)
+AST-scans every `SoftwareReleaseSummary(...)` construction site in
+`app/` and asserts none passes a literal `software_release_id=0` or
+`software_release_ref=""` — the shape both fabricating helpers this PR
+removes had, and the shape a future regression would most likely repeat.
+
+`tckdb-schemas` bumped to `0.43.0` for the `SoftwareRef` → `SoftwareReleaseRef`
+wire-contract change. The typed client (`clients/python`) does not expose
+`freq_scale_factor` in its builder API at all (documented exclusion,
+`builder_api_stability.md`), so it needed no change; the frontend already
+renders `fsf.software`/`record.software_release` through a null-safe
+`softwareLabel(...) ?? "not recorded"` path with no link built from
+`software_release_ref` on this surface, so the read-layer fix (fabricated
+object → `None`) needed no frontend follow-up either.
+
 ### Out-of-plan work this build made necessary
 
 `#460` — the test suite now refuses a run whose `tckdb_schemas` resolves
@@ -1195,12 +1242,28 @@ specifies for a record citing no scheme.
 
 ### Still open
 
-PR 4 (frontend, §8) and PR 6 (`frequency_scale_factor` sibling, §6).
+PR 4 (frontend, §8). PR 5 shipped as #463, which also closed §11.1; PR 6
+as #464.
 
-One thing the deployed page now raises that §8 should answer:
-the level-of-theory page shows **"Observed software: Gaussian 16, 416
-calculations"** a few centimetres above two correction boxes reading
-**"software not recorded"**. Both statements are correct, and the
-distinction between them is the whole argument of §3.1 and §9.4 — but a
-reader has no way to know that from the page. The page is simultaneously
-right and confusing, which is a display problem, not a data one.
+**The display problem §8 has to answer, restated against what is now
+deployed.** The level-of-theory page shows **"Observed software: Gaussian
+16, 416 calculations"** a few centimetres above two correction boxes
+reading **"Gaussian"**. Both are correct and they answer different
+questions: Gaussian 16 ran the 416 calculations recorded at this level of
+theory, while the correction boxes name whoever computed each scheme's
+own parameter values. That is the whole argument of §3.1 and §9.4, and a
+reader has no way to see it from the page.
+
+The owner's attestation on 2026-09-13 sharpened this rather than settling
+it. The parameters were first attested as Gaussian 09, then corrected to
+version-less Gaussian once the source was identified: RMG-database
+`input/quantum_corrections/data.py`, block
+`b3lyp2023/def2tzvp`, whose eight atom energies match the deployed row
+digit-for-digit and which names a program 131 times and a version
+nowhere. So the page can now show two different Gaussians for one level
+of theory, which is right and reads as a contradiction.
+
+§8 needs roughly one sentence saying the software named on a correction
+is whoever computed its parameters, not whoever ran the calculations
+above. The risk in wording it is that it reads as an apology for missing
+data rather than a real distinction.
