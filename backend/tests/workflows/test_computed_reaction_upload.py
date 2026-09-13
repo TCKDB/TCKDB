@@ -3304,7 +3304,6 @@ def test_target_exclusivity_enforced_by_check_constraint(db_conn) -> None:
         scheme = EnergyCorrectionScheme(
             kind=EnergyCorrectionSchemeKind.atom_energy,
             name="exclusivity probe",
-            version="1",
         )
         session.add(scheme)
         session.flush()
