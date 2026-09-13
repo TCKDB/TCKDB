@@ -450,6 +450,48 @@ def test_name_not_matching_version_is_recorded_verbatim_and_flagged(
     assert warnings[0]["code"] == "software_release_name_looks_wrong"
 
 
+def test_attach_literature_title_mismatch_is_recorded_and_flagged(
+    client, db_session, login_as, _api_admin_user, monkeypatch
+):
+    """#248: this route resolves literature through the same
+    ``resolve_or_create_literature`` service the upload path uses, so a
+    DOI/title disagreement here gets the same treatment: the DOI's title
+    is stored (append-only provenance-fill is otherwise untouched) and a
+    warning names both values.
+    """
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Canonical Title From Crossref",
+            "issued": 2020,
+        },
+    )
+    scheme = make_energy_correction_scheme(db_session)
+    login_as(_api_admin_user)
+
+    resp = client.patch(
+        _url(scheme.public_ref),
+        json={
+            "source_literature": {
+                "doi": "10.1000/tckdb.admin.mismatch",
+                "title": "A Totally Different Paper",
+            }
+        },
+    )
+
+    assert resp.status_code == 200, resp.text
+
+    db_session.refresh(scheme)
+    assert scheme.source_literature.title == "Canonical Title From Crossref"
+
+    warnings = resp.json()["warnings"]
+    title_warnings = [w for w in warnings if w["code"] == "literature_title_mismatch"]
+    assert len(title_warnings) == 1
+    assert title_warnings[0]["field"] == "source_literature.title"
+    assert "A Totally Different Paper" in title_warnings[0]["message"]
+    assert "Canonical Title From Crossref" in title_warnings[0]["message"]
+
+
 def test_clean_input_carries_no_warnings(
     client, db_session, login_as, _api_admin_user
 ):

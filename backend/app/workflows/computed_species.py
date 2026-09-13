@@ -884,7 +884,11 @@ def _persist_thermo_block(
         default_workflow_tool_release=default_workflow_tool_release,
     )
     thermo_create = resolve_thermo_upload(
-        session, synthetic, species_entry_id=species_entry_id
+        session,
+        synthetic,
+        species_entry_id=species_entry_id,
+        warnings_out=warnings,
+        literature_field_prefix="thermo.literature.",
     )
     thermo_create = thermo_create.model_copy(
         update={"source_calculations": resolved_sources}
@@ -1024,6 +1028,7 @@ def _persist_statmech_block(
     default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
+    literature_field_prefix: str = "statmech.literature.",
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1043,7 +1048,12 @@ def _persist_statmech_block(
     s: StatmechInBundle = statmech
 
     literature = (
-        resolve_or_create_literature(session, s.literature)
+        resolve_or_create_literature(
+            session,
+            s.literature,
+            warnings_out=warnings,
+            field_prefix=literature_field_prefix,
+        )
         if s.literature is not None
         else None
     )
@@ -1066,7 +1076,10 @@ def _persist_statmech_block(
     fsf_id: int | None = None
     if s.freq_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, s.freq_scale_factor, created_by=created_by
+            session,
+            s.freq_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings,
         )
         fsf_id = fsf.id
 

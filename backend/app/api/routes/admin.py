@@ -865,10 +865,17 @@ def attach_energy_correction_scheme_provenance(
             "energy_correction_scheme", row_id=scheme_id, code="handle_not_found"
         )
 
+    warnings: list[UploadWarning] = []
+
     if request.source_literature is not None:
         if scheme.source_literature_id is not None:
             raise _already_set_conflict("literature")
-        literature = resolve_or_create_literature(session, request.source_literature)
+        literature = resolve_or_create_literature(
+            session,
+            request.source_literature,
+            warnings_out=warnings,
+            field_prefix="source_literature.",
+        )
         scheme.source_literature_id = literature.id
 
     if request.software is not None:
@@ -899,7 +906,6 @@ def attach_energy_correction_scheme_provenance(
             ),
         ) from exc
 
-    warnings: list[UploadWarning] = []
     if request.software is not None:
         software_warning = request.software.version_warning("software.")
         if software_warning is not None:

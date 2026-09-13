@@ -195,6 +195,8 @@ def persist_conformer_upload(
         if payload_calc.key is not None:
             calculations_by_key[payload_calc.key] = calc_row.id
 
+    provenance_warnings: list[UploadWarning] = []
+
     statmech_row = None
     if request.statmech is not None:
         statmech_row = resolve_or_create_statmech(
@@ -204,6 +206,7 @@ def persist_conformer_upload(
             uploaded_calculation_id=calculation.id,
             calculations_by_key=calculations_by_key,
             created_by=created_by,
+            warnings_out=provenance_warnings,
         )
 
     transport_row = None
@@ -213,6 +216,7 @@ def persist_conformer_upload(
             request.transport,
             species_entry_id=species_entry.id,
             created_by=created_by,
+            warnings_out=provenance_warnings,
         )
 
     # The name this request gives the conformer it is depositing, which
@@ -274,6 +278,7 @@ def persist_conformer_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                warnings_out=provenance_warnings,
             )
         )
 
@@ -320,6 +325,7 @@ def persist_conformer_upload(
                 session, [statmech_row.id]
             )
         )
+    energy_warnings.extend(provenance_warnings)
 
     return ConformerUploadOutcome(
         observation=observation,

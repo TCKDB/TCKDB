@@ -421,6 +421,7 @@ def persist_network_pdep_upload(
             calc_keys_to_id=calculation_key_to_calc,
             created_by=created_by,
             warnings=warning_sink,
+            literature_field_prefix=f"species[{sp_index}].statmech.literature.",
         )
         if statmech_row is not None:
             review_targets.append(
@@ -562,6 +563,9 @@ def persist_network_pdep_upload(
                 calc_keys_to_id=calculation_key_to_calc,
                 created_by=created_by,
                 warnings=warning_sink,
+                literature_field_prefix=(
+                    f"transition_states[{ts_index}].statmech.literature."
+                ),
             )
             if ts_statmech is not None:
                 review_targets.append(RecordRef(SubmissionRecordType.statmech, ts_statmech.id))
@@ -618,7 +622,9 @@ def persist_network_pdep_upload(
     # 6. Resolve network-level provenance and create network
     # ------------------------------------------------------------------
     literature = (
-        resolve_or_create_literature(session, request.literature)
+        resolve_or_create_literature(
+            session, request.literature, warnings_out=warning_sink
+        )
         if request.literature is not None
         else None
     )
@@ -818,7 +824,12 @@ def persist_network_pdep_upload(
         solve_in = request.solve
 
         solve_literature = (
-            resolve_or_create_literature(session, solve_in.literature)
+            resolve_or_create_literature(
+                session,
+                solve_in.literature,
+                warnings_out=warning_sink,
+                field_prefix="solve.literature.",
+            )
             if solve_in.literature is not None
             else None
         )

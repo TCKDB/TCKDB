@@ -14,6 +14,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.schemas.entities.thermo import ThermoCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
@@ -58,16 +59,30 @@ def resolve_thermo_upload(
     request: ThermoUploadRequest,
     *,
     species_entry_id: int,
+    warnings_out: list[UploadWarning] | None = None,
+    literature_field_prefix: str = "literature.",
 ) -> ThermoCreate:
     """Resolve workflow-facing thermo upload data into an internal create schema.
 
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing thermo upload payload.
     :param species_entry_id: Resolved species-entry id.
+    :param warnings_out: Optional sink for non-blocking warnings, including
+        a depositor-supplied literature title/year that disagrees with the
+        metadata fetched from a supplied DOI/ISBN.
+    :param literature_field_prefix: Dot-path naming ``request.literature``
+        on the enclosing request. Defaults to the field name on a
+        standalone thermo upload; a caller embedding this inside a larger
+        bundle (e.g. ``species[2].thermo.literature``) passes its own path.
     :returns: Internal ``ThermoCreate`` payload with resolved FK ids.
     """
     literature = (
-        resolve_or_create_literature(session, request.literature)
+        resolve_or_create_literature(
+            session,
+            request.literature,
+            warnings_out=warnings_out,
+            field_prefix=literature_field_prefix,
+        )
         if request.literature is not None
         else None
     )

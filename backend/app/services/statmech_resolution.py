@@ -342,6 +342,7 @@ def resolve_or_create_statmech(
     uploaded_calculation_id: int | None = None,
     calculations_by_key: Mapping[str, int] | None = None,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
 
@@ -388,7 +389,9 @@ def resolve_or_create_statmech(
     role_links: list[RoleLink] = []
 
     literature = (
-        resolve_or_create_literature(session, payload.literature)
+        resolve_or_create_literature(
+            session, payload.literature, warnings_out=warnings_out
+        )
         if payload.literature is not None
         else None
     )
@@ -404,7 +407,10 @@ def resolve_or_create_statmech(
     fsf_id = None
     if payload.freq_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, payload.freq_scale_factor, created_by=created_by
+            session,
+            payload.freq_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings_out,
         )
         fsf_id = fsf.id
 

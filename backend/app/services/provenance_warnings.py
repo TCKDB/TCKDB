@@ -68,6 +68,20 @@ W_MISSING_TS_INTERPRETATION = "missing_kinetics_transition_state_interpretation"
 W_NETWORK_WIDE_ENERGY_TRANSFER = "network_wide_energy_transfer_scope"
 W_REPORTED_NETWORK_SOLVE = "reported_network_solve"
 
+# A DOI/ISBN was supplied *and* resolved metadata, and the depositor also
+# declared a conflicting value for a field the fetched metadata authored.
+# The DOI/ISBN always wins (see resolve_literature_submission) -- these
+# warn rather than refuse, on the same reasoning as
+# ``W_SOFTWARE_RELEASE_NAME_LOOKS_WRONG``: a depositor who pasted the
+# wrong identifier needs to be told their own value was discarded, not
+# have the deposit rejected outright. Split by field (title vs. year)
+# rather than one shared code because they are independent findings a
+# reviewer may want to filter on separately, and because ``journal`` and
+# ``pages`` are deliberately *not* compared here (see
+# ``literature_resolution._resolve_literature_field_mismatches`` for why).
+W_LITERATURE_TITLE_MISMATCH = "literature_title_mismatch"
+W_LITERATURE_YEAR_MISMATCH = "literature_year_mismatch"
+
 # Energy-correction-scheme provenance gaps (correction-scheme-provenance
 # plan §4). Distinct from the request-level codes above because
 # ``EnergyCorrectionSchemeRef`` is a nested fragment with no
