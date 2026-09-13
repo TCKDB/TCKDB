@@ -1227,6 +1227,24 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "-- name the statmech belonging to this subject -- and "
                 "which owner disagreed is already in context['owner_kind']."
             )),
+    ApiCode("last_admin_demotion", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            note=(
+                "PATCH /admin/users/{user_id}/role refuses to take admin "
+                "from the archive's only active admin. No route grants the "
+                "role back once nobody holds it, so the request would be "
+                "unrecoverable through the API: repair means running "
+                "scripts/bootstrap_admin.py against the database, which "
+                "needs shell access to the host. Shape is a thing, not a "
+                "relationship -- the code names the whole situation and the "
+                "repair (promote someone else first) follows from the name, "
+                "so there is nothing for context to carry. The broader rule "
+                "'an admin may never demote themselves' was rejected "
+                "because it would make this code unreachable: auth requires "
+                "is_active and the route requires admin, so the caller is "
+                "always an active admin and any demotion of someone else "
+                "leaves one standing by construction."
+            )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),

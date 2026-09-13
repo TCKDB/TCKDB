@@ -74,6 +74,118 @@ class UserRoleResponse(BaseModel):
     role: AppUserRole
 
 
+class AdminUserResponse(BaseModel):
+    """One account, as an admin managing roles needs to see it.
+
+    Deliberately omits ``email`` and ``orcid``. Role management needs to
+    know *who* someone is, not how to reach them, and this would
+    otherwise be the only route in the archive that serves contact
+    details for every account at once. A bulk personal-data surface is
+    worth not having when nothing needs it.
+
+    ``full_name`` and ``affiliation`` stay: an admin deciding whether to
+    make someone a curator is deciding about a person, and a username
+    alone frequently cannot tell two people apart.
+
+    ``id`` is a raw row id, which the read layer otherwise sweeps out of
+    responses (DR-0028). It is correct here and not an exception being
+    smuggled in: this is an explicitly admin-only schema, and the route
+    that acts on the result -- ``PATCH /admin/users/{user_id}/role`` --
+    is keyed on exactly this id. Withholding it would leave that route
+    uncallable, which is the state this endpoint exists to end.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    username: str
+    full_name: str | None
+    affiliation: str | None
+    role: AppUserRole
+    is_active: bool
+    created_at: datetime
+
+
+@router.get("/users", response_model=PaginatedResponse[AdminUserResponse])
+def list_users(
+    role: AppUserRole | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_db),
+) -> PaginatedResponse[AdminUserResponse]:
+    """List accounts and their roles (admin only).
+
+    This exists because ``PATCH /admin/users/{user_id}/role`` is keyed on
+    a numeric user id and nothing in the API told an admin what those ids
+    were. The role-change route has shipped since v1 and has been
+    callable only by someone willing to read ids out of the database by
+    hand -- which means role management was, in practice, a DB operation
+    wearing an HTTP interface.
+
+    Ordering is by ``username``, which carries a uniqueness constraint
+    and is therefore a total order -- no tie-break needed, and no
+    unstable page boundaries. It is also the thing an admin is scanning
+    for. ``role`` narrows; everything else the caller filters client-side
+    off the returned fields.
+    """
+    filters = []
+    if role is not None:
+        filters.append(AppUser.role == role)
+
+    total = session.scalar(select(func.count()).select_from(AppUser).where(*filters))
+    users = session.scalars(
+        select(AppUser)
+        .where(*filters)
+        .order_by(AppUser.username)
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return PaginatedResponse(
+        items=[
+            AdminUserResponse(
+                id=user.id,
+                username=user.username,
+                full_name=user.full_name,
+                affiliation=user.affiliation,
+                role=user.role,
+                is_active=user.is_active,
+                created_at=user.created_at,
+            )
+            for user in users
+        ],
+        total=total or 0,
+        skip=offset,
+        limit=limit,
+    )
+
+
+_LAST_ADMIN_DEMOTION_CODE = "last_admin_demotion"
+
+
+def _locked_active_admin_ids(session: Session) -> set[int]:
+    """Every active admin's id, with those rows locked for this transaction.
+
+    The caller is a check-then-act: it counts admins and then writes. Two
+    concurrent demotions could each observe "someone else is still an
+    admin" and both commit, leaving the archive with none -- exactly the
+    state the guard exists to prevent, reachable by losing a race.
+
+    Locking every admin row serialises the pair. Ordering by ``id`` is
+    what stops two demotions of two *different* admins from deadlocking:
+    both transactions take the same locks in the same sequence, so the
+    second waits rather than both aborting.
+    """
+    return set(
+        session.scalars(
+            select(AppUser.id)
+            .where(AppUser.role == AppUserRole.admin, AppUser.is_active.is_(True))
+            .order_by(AppUser.id)
+            .with_for_update()
+        ).all()
+    )
+
+
 @router.patch("/users/{user_id}/role", response_model=UserRoleResponse)
 def change_user_role(
     user_id: int,
@@ -81,9 +193,40 @@ def change_user_role(
     _admin: AppUser = Depends(require_admin),
     session: Session = Depends(get_write_db),
 ) -> UserRoleResponse:
+    """Change one account's role (admin only).
+
+    Refuses, with 409 ``last_admin_demotion``, to take ``admin`` from the
+    archive's only active admin. Nothing in the API can grant the role
+    back once nobody holds it, so that single request is unrecoverable
+    in-app: repair means running ``scripts/bootstrap_admin.py`` against
+    the database, which needs shell access to the host.
+
+    The broader rule "an admin may never demote *themselves*" was
+    considered and rejected. It would make this refusal unreachable:
+    authentication requires ``is_active`` and this route requires
+    ``admin``, so the caller is always an active admin, and therefore any
+    demotion of *someone else* leaves at least one admin standing by
+    construction. Shipping both would mean publishing a code no request
+    can produce. Self-demotion while other admins exist is also
+    recoverable -- another admin can restore the role -- so it is the
+    reversible half of the pair and is allowed.
+    """
     user = session.get(AppUser, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    if user.role is AppUserRole.admin and request.role is not AppUserRole.admin:
+        if not _locked_active_admin_ids(session) - {user_id}:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{_LAST_ADMIN_DEMOTION_CODE}: this is the archive's only "
+                    "active admin, and no route can grant the role back once "
+                    "nobody holds it. Promote another account to admin first, "
+                    "then change this one."
+                ),
+            )
+
     user.role = request.role
     session.flush()
     return UserRoleResponse(id=user.id, username=user.username, role=user.role)
