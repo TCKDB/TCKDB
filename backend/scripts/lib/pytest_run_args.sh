@@ -70,6 +70,38 @@
 # ``-p no:randomly`` disables the plugin, which would make ``--randomly-seed``
 # an unrecognised argument, so it is detected and the seed is dropped.
 
+# ---------------------------------------------------------------------------
+# The wire-schemas package must come from THIS checkout
+# ---------------------------------------------------------------------------
+# ``tckdb_schemas`` is installed editable, and an editable install points at
+# the one checkout it was installed from. Inside a ``git worktree`` that is
+# the MAIN checkout, so a branch's own wire-schema changes are invisible to
+# its tests unless PYTHONPATH says otherwise. Nobody remembers to say so, and
+# getting it wrong is silent: Python skips a PYTHONPATH entry that does not
+# exist, so a typo degrades to "use the editable install" with no diagnostic.
+#
+# Prepending it here means every gate script gets it right without asking.
+# ``tests/conftest.py`` still checks the resolved path and refuses the run,
+# because a bare ``pytest`` invocation does not source this file.
+#
+# Opt out with TCKDB_SKIP_SCHEMAS_PATH=1 if you deliberately want to test an
+# installed copy rather than this tree's.
+if [[ "${TCKDB_SKIP_SCHEMAS_PATH:-0}" != "1" ]]; then
+    _tckdb_lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # lib -> scripts -> backend -> repo root
+    _tckdb_repo_root="$(cd "${_tckdb_lib_dir}/../../.." && pwd)"
+    _tckdb_schemas_parent="${_tckdb_repo_root}/schemas/python/tckdb-schemas"
+    if [[ -d "${_tckdb_schemas_parent}/tckdb_schemas" ]]; then
+        export PYTHONPATH="${_tckdb_schemas_parent}${PYTHONPATH:+:$PYTHONPATH}"
+    else
+        # Do not fail here -- say so and let conftest's check be the authority
+        # on whether the resolved package is acceptable.
+        echo "tckdb: no tckdb_schemas package at ${_tckdb_schemas_parent};" \
+             "leaving PYTHONPATH alone" >&2
+    fi
+    unset _tckdb_lib_dir _tckdb_repo_root _tckdb_schemas_parent
+fi
+
 tckdb_pytest_run_args() {
     TCKDB_PYTEST_ARGS=()
 
