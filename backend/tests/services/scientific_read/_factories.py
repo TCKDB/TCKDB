@@ -2030,7 +2030,6 @@ def make_energy_correction_scheme(
     source_literature: Literature | None = None,
     software_release: SoftwareRelease | None = None,
     workflow_tool_release: WorkflowToolRelease | None = None,
-    version: str | None = None,
     units: EnergyUnit | None = EnergyUnit.hartree,
     note: str | None = None,
 ) -> EnergyCorrectionScheme:
@@ -2057,8 +2056,7 @@ def make_energy_correction_scheme(
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release is not None else None
         ),
-        version=version,
-        units=units,
+                units=units,
         note=note,
     )
     session.add(ecs)

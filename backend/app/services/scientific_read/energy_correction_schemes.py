@@ -156,7 +156,6 @@ def build_energy_correction_scheme_record(
         energy_correction_scheme_ref=ecs.public_ref,
         name=ecs.name,
         scheme_kind=ecs.kind,
-        version=ecs.version,
         units=ecs.units,
         note=ecs.note,
         created_at=ecs.created_at,

@@ -43,7 +43,6 @@ def list_energy_correction_schemes(
     name: str | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     source_literature_id: int | None = Query(None),
-    version: str | None = Query(None),
 ):
     base = select(EnergyCorrectionScheme.id)
     if kind is not None:
@@ -58,8 +57,6 @@ def list_energy_correction_schemes(
         base = base.where(
             EnergyCorrectionScheme.source_literature_id == source_literature_id
         )
-    if version is not None:
-        base = base.where(EnergyCorrectionScheme.version == version)
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())

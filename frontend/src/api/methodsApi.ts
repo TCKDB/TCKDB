@@ -83,7 +83,12 @@ const ecsCoreSchema = z.object({
     energy_correction_scheme_ref: z.string(),
     name: z.string(),
     scheme_kind: z.string(),
-    version: z.string().nullable().optional(),
+    // No `version`: dropped from the schema entirely (a7d4e2b9c351). It
+    // was nullable free text, in the identity, and null on every live
+    // row -- it versioned nothing. A parameter library that gets refit
+    // is distinguished by its citation or software release, both of
+    // which are identity columns; a counter beside them told a reader
+    // nothing they could act on.
     units: z.string().nullable().optional(),
     note: z.string().nullable().optional(),
     created_at: z.string(),

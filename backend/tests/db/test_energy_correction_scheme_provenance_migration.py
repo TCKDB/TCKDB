@@ -40,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _MIGRATION = revision_under_test("b6d80e36dcec")
 _MIGRATION_RELEASE_GRAIN = revision_under_test("c24ce2d9c198")
+_MIGRATION_NARROW = revision_under_test("a7d4e2b9c351")
 
 
 def _set_db_env(monkeypatch, db_name: str) -> None:
@@ -72,9 +73,9 @@ def test_two_row_fixture_survives_downgrade_and_reupgrade(db_engine, monkeypatch
             inserted_ids = list(
                 connection.scalars(
                     text("""
-                INSERT INTO energy_correction_scheme (kind, name, version, units, note)
-                VALUES ('atom_energy', 'atom_energy', NULL, 'hartree', 'migration test row 1'),
-                       ('bac_petersson', 'bac_petersson', NULL, 'hartree', 'migration test row 2')
+                INSERT INTO energy_correction_scheme (kind, name, units, note)
+                VALUES ('atom_energy', 'atom_energy', 'hartree', 'migration test row 1'),
+                       ('bac_petersson', 'bac_petersson', 'hartree', 'migration test row 2')
                 RETURNING id
             """)
                 )
@@ -745,11 +746,11 @@ def test_release_grain_two_row_fixture_survives_downgrade_and_reupgrade(
                 connection.scalars(
                     text("""
                         INSERT INTO energy_correction_scheme
-                            (kind, name, version, units, note)
+                            (kind, name, units, note)
                         VALUES
-                            ('atom_energy', 'round_trip_kind_scheme', NULL,
+                            ('atom_energy', 'round_trip_kind_scheme',
                              'hartree', 'round trip row atom_energy'),
-                            ('atom_hf', 'round_trip_kind_scheme', NULL,
+                            ('atom_hf', 'round_trip_kind_scheme',
                              'hartree', 'round trip row atom_hf')
                         RETURNING id
                     """)
@@ -816,20 +817,34 @@ def test_release_grain_two_row_fixture_survives_downgrade_and_reupgrade(
         command.upgrade(config, "head")
 
 
-def test_release_grain_downgrade_after_units_only_distinction_fails_loudly(
-    db_engine, monkeypatch
-):
-    """The module docstring's claim, made concrete: once two schemes have
-    been distinguished only by ``units`` -- possible only under this
-    revision's widened index -- a downgrade past it cannot represent
-    them and must fail on a genuine unique violation rather than
-    silently re-merging two scientifically distinct libraries.
+# ``test_release_grain_downgrade_after_units_only_distinction_fails_loudly``
+# was here, and is deleted rather than ported.
+#
+# It asserted that downgrading ``c24ce2d9c198`` fails loudly once two
+# schemes are distinguished only by ``units``, because the narrower index
+# the downgrade restores would have had to merge them. ``a7d4e2b9c351``
+# removes ``units`` from the identity entirely, so that pair can no
+# longer exist at head to be downgraded *from*: the fixture it needed is
+# now rejected on insert by the very index this file tests.
+#
+# The concern it guarded -- an index change silently merging two rows --
+# is not dropped with it. It moved to
+# ``test_narrowing_preflight_refuses_units_only_siblings`` below, which
+# covers the same hazard in the direction that can now actually happen.
 
-    This is the reverse-direction counterpart to the pre-flight check
-    above: that check guards the *upgrade* against merging rows the old
-    schema distinguished; here, nothing needs to guard the *downgrade*,
-    because ``CREATE UNIQUE INDEX`` on the narrower key already refuses
-    the merge on its own -- correctly and loudly.
+def test_narrowing_preflight_refuses_units_only_siblings(db_engine, monkeypatch):
+    """``a7d4e2b9c351`` removes ``units`` and ``version`` from the
+    identity, and removing columns from a unique index can only *merge*.
+
+    Two schemes distinguished today only by ``units`` are one row the
+    instant the narrowed index exists. The revision refuses rather than
+    picking a winner, and names both public refs so the operator knows
+    which rows the decision is about.
+
+    *Mutation*: delete ``_refuse_narrowing_collisions`` from
+    ``upgrade()`` -- this fixture must then fail with a raw
+    ``IntegrityError`` from ``CREATE UNIQUE INDEX``, which is the
+    failure the check exists to replace with a legible one.
     """
     db_name = db_engine.url.database
     db_engine.dispose()
@@ -837,47 +852,48 @@ def test_release_grain_downgrade_after_units_only_distinction_fails_loudly(
     config = Config(str(REPO_ROOT / "alembic.ini"))
 
     engine = create_engine(db_engine.url.render_as_string(hide_password=False))
-    inserted_ids: list[int] = []
+    inserted: list[int] = []
     try:
-        # Two rows identical on every column but units -- only expressible
-        # under uq_energy_correction_scheme_identity as widened by
-        # c24ce2d9c198.
+        command.downgrade(config, _MIGRATION_NARROW.parent)
+
         with engine.begin() as connection:
-            inserted_ids = list(
+            inserted = list(
                 connection.scalars(
                     text("""
                         INSERT INTO energy_correction_scheme
-                            (kind, name, version, units, note)
+                            (kind, name, version, units)
                         VALUES
-                            ('bac_petersson', 'units_only_distinction_scheme',
-                             NULL, 'hartree', 'row hartree'),
-                            ('bac_petersson', 'units_only_distinction_scheme',
-                             NULL, 'kcal_mol', 'row kcal_mol')
+                            ('atom_energy', 'units_only_sibling', NULL, 'hartree'),
+                            ('atom_energy', 'units_only_sibling', NULL, 'kcal_mol')
                         RETURNING id
                     """)
                 )
             )
-
-        with pytest.raises(Exception, match="uq_energy_correction_scheme_identity"):
-            command.downgrade(config, _MIGRATION_RELEASE_GRAIN.parent)
-
-        # The failed downgrade's transaction rolled back: still at head,
-        # both rows and the widened index untouched.
-        with engine.connect() as connection:
-            count = connection.scalar(
-                text(
-                    "SELECT count(*) FROM energy_correction_scheme "
-                    "WHERE id = ANY(:ids)"
-                ),
-                {"ids": inserted_ids},
+            refs = list(
+                connection.scalars(
+                    text(
+                        "SELECT public_ref FROM energy_correction_scheme "
+                        "WHERE id = ANY(:ids) ORDER BY id"
+                    ),
+                    {"ids": inserted},
+                )
             )
-            assert count == 2
 
-            # `count == 2` alone does not show the downgrade rolled back:
-            # a failed downgrade never deletes rows, so that assertion
-            # holds whether the schema reverted or was left half-changed.
-            # Assert the schema itself is still the post-upgrade one
-            # (raised in review of #458).
+        with pytest.raises(Exception) as excinfo:
+            command.upgrade(config, _MIGRATION_NARROW.revision)
+
+        message = str(excinfo.value)
+        assert "a7d4e2b9c351" in message
+        # Both refs, so the operator can find the rows rather than go
+        # hunting for which pair tripped it.
+        for ref in refs:
+            assert ref in message
+        # And it must say plainly that it will not choose.
+        assert "never merge" in message
+
+        # The abort happens before any DDL, so the schema is untouched:
+        # still at the parent shape, not half-migrated.
+        with engine.connect() as connection:
             columns = set(
                 connection.scalars(
                     text(
@@ -886,10 +902,53 @@ def test_release_grain_downgrade_after_units_only_distinction_fails_loudly(
                     )
                 )
             )
-            assert "software_release_id" in columns
-            assert "software_id" not in columns
+        assert "version" in columns
+    finally:
+        with engine.begin() as connection:
+            if inserted:
+                connection.execute(
+                    text(
+                        "DELETE FROM energy_correction_scheme WHERE id = ANY(:ids)"
+                    ),
+                    {"ids": inserted},
+                )
+        engine.dispose()
+        command.upgrade(config, "head")
 
-            indexed = list(
+
+def test_narrowing_drops_version_and_keeps_units_as_a_column(
+    db_engine, monkeypatch
+):
+    """The asymmetry is the point: ``version`` is dropped entirely,
+    ``units`` survives as a column and only leaves the key.
+
+    ``units`` records what the depositor sent and the scheme page renders
+    that table verbatim, so canonicalising it away on write would break a
+    promise the page makes. ``version`` had no such job: nullable free
+    text, null on every live row, versioning nothing.
+
+    *Mutation*: drop ``units`` in the revision alongside ``version`` --
+    the ``units in columns`` assertion must fail.
+    """
+    db_name = db_engine.url.database
+    db_engine.dispose()
+    _set_db_env(monkeypatch, db_name)
+
+    engine = create_engine(db_engine.url.render_as_string(hide_password=False))
+    try:
+        with engine.connect() as connection:
+            columns = set(
+                connection.scalars(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name = 'energy_correction_scheme'"
+                    )
+                )
+            )
+            assert "version" not in columns
+            assert "units" in columns
+
+            indexed = set(
                 connection.scalars(
                     text("""
                         SELECT a.attname
@@ -902,17 +961,14 @@ def test_release_grain_downgrade_after_units_only_distinction_fails_loudly(
                     """)
                 )
             )
-            assert "units" in indexed
-            assert "software_release_id" in indexed
-            assert "software_id" not in indexed
+            assert "units" not in indexed
+            assert indexed == {
+                "kind",
+                "name",
+                "level_of_theory_id",
+                "source_literature_id",
+                "software_release_id",
+                "workflow_tool_release_id",
+            }
     finally:
-        if inserted_ids:
-            with engine.begin() as connection:
-                connection.execute(
-                    text(
-                        "DELETE FROM energy_correction_scheme WHERE id = ANY(:ids)"
-                    ),
-                    {"ids": inserted_ids},
-                )
         engine.dispose()
-        command.upgrade(config, "head")

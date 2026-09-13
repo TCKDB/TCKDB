@@ -2702,7 +2702,6 @@ def _aec_scheme_ref_rxn(**overrides) -> dict:
         "kind": "atom_energy",
         "name": "AEC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2714,7 +2713,6 @@ def _bac_petersson_scheme_ref_rxn(**overrides) -> dict:
         "kind": "bac_petersson",
         "name": "Petersson BAC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2726,7 +2724,6 @@ def _bac_melius_scheme_ref_rxn(**overrides) -> dict:
         "kind": "bac_melius",
         "name": "Melius BAC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)

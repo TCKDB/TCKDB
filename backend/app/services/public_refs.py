@@ -385,19 +385,23 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
 
     The database uniqueness constraint (``uq_energy_correction_scheme_
     identity``) and ``resolve_or_create_scheme`` both dedup on
-    ``(kind, name, level_of_theory_id, version, units,
-    source_literature_id, software_release_id,
-    workflow_tool_release_id)`` as of the correction-scheme-provenance
-    plan v2 — every one of those fields is part of the DB key
-    (``units`` and ``software_release_id`` joined it in v2; the latter
-    replaced the coarser ``software_id`` — a program-release now
-    distinguishes a scheme the way a bare program used to, and a unit
-    convention now distinguishes one the way it always should have,
-    per ``resolve_or_create_scheme``'s previously-unit-blind value
-    comparison). Two rows that the resolver treats as distinct must
-    therefore get distinct refs — otherwise the
-    ``ix_energy_correction_scheme_public_ref`` unique index trips on
-    insert.
+    ``(kind, name, level_of_theory_id, source_literature_id,
+    software_release_id, workflow_tool_release_id)`` as of
+    ``a7d4e2b9c351``. This function must list **exactly** those fields:
+    narrower than the index and two index-distinct rows collide on
+    ``ix_energy_correction_scheme_public_ref`` at insert; wider and two
+    rows the resolver considers identical would be handed different
+    refs, which the resolver never asks for but which would make this
+    function disagree with the key it exists to mirror.
+
+    ``units`` and ``version`` were both here and are both gone.
+    ``version`` no longer exists as a column at all: it was nullable
+    free text, null on every live row, and versioned nothing.
+    ``units`` still exists but is not identity — an energy correction is
+    always an energy, so hartree and kcal/mol are one library written
+    two ways. The unit-blind value comparison that once justified
+    keeping it here is fixed at its cause: the resolver converts before
+    it compares.
     """
     return (
         f"ecs:kind={getattr(obj.kind, 'value', obj.kind)};"
@@ -405,9 +409,7 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
         f"level_of_theory_id={obj.level_of_theory_id};"
         f"source_literature_id={obj.source_literature_id};"
         f"software_release_id={obj.software_release_id};"
-        f"workflow_tool_release_id={obj.workflow_tool_release_id};"
-        f"version={(obj.version or '').strip().lower()};"
-        f"units={getattr(obj.units, 'value', obj.units)}"
+        f"workflow_tool_release_id={obj.workflow_tool_release_id}"
     )
 
 

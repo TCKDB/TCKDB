@@ -15,6 +15,8 @@ from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED as _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
 )
 
+from app.chemistry.units import convert_energy_to_hartree
+from app.db.models.common import EnergyUnit
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -199,8 +201,12 @@ def resolve_or_create_scheme(
             EnergyCorrectionScheme.kind == ref.kind,
             EnergyCorrectionScheme.name == ref.name,
             _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
-            _match(EnergyCorrectionScheme.version, ref.version),
-            _match(EnergyCorrectionScheme.units, ref.units),
+            # Neither `version` (dropped) nor `units` is matched on: this
+            # chain must mirror uq_energy_correction_scheme_identity
+            # exactly (a7d4e2b9c351), or the index and the resolver
+            # disagree about what a duplicate is. A deposit in a second
+            # unit is meant to land on the existing row; the parameter
+            # comparison converts before it compares.
             _match(EnergyCorrectionScheme.source_literature_id, lit_id),
             _match(EnergyCorrectionScheme.software_release_id, software_release_id),
             _match(EnergyCorrectionScheme.workflow_tool_release_id, wtr_id),
@@ -217,7 +223,6 @@ def resolve_or_create_scheme(
             source_literature_id=lit_id,
             software_release_id=software_release_id,
             workflow_tool_release_id=wtr_id,
-            version=ref.version,
             units=ref.units,
             note=ref.note,
             created_by=created_by,
@@ -251,22 +256,66 @@ def _assert_param_value_compatible(
     key: str,
     existing_value: float,
     supplied_value: float,
+    existing_units: EnergyUnit | None = None,
+    supplied_units: EnergyUnit | None = None,
 ) -> None:
     """Raise if an existing scheme parameter conflicts with a supplied value.
 
     Energy-correction scheme parameters are reference-library values.
-    Reusing a scheme identity with a different value for the same parameter
-    key would make the scheme row scientifically ambiguous, so conflicts
-    are rejected instead of silently overwriting or ignoring the new value.
+    Reusing a scheme identity with a different value for the same
+    parameter key would make the scheme row scientifically ambiguous, so
+    conflicts are rejected instead of silently overwriting or ignoring
+    the new value.
+
+    **Both sides are converted to hartree before comparing** when their
+    units are known. Without that, this function was unit-blind: a
+    depositor re-sending the same library in kcal/mol was told its
+    numbers conflicted (``existing=-0.42, supplied=-0.00067``) when they
+    are the same physical value, and told to "use a distinct identity",
+    which was not something they could do. ``a7d4e2b9c351`` removed
+    ``units`` from the identity precisely so that deposit lands here, on
+    the existing row -- which makes converting here the thing that has to
+    work.
+
+    When either unit is unknown, or is one ``convert_energy_to_hartree``
+    has no factor for, the raw values are compared as before and the
+    error says so. That is the honest fallback: refusing to compare would
+    reject a deposit this function cannot prove is wrong, and comparing
+    converted-against-raw would invent a conflict.
     """
-    if abs(existing_value - supplied_value) <= _PARAM_VALUE_ABS_TOL:
+    existing_cmp = existing_value
+    supplied_cmp = supplied_value
+    converted = False
+
+    if existing_units is not None and supplied_units is not None:
+        existing_h = convert_energy_to_hartree(existing_value, existing_units)
+        supplied_h = convert_energy_to_hartree(supplied_value, supplied_units)
+        if existing_h is not None and supplied_h is not None:
+            existing_cmp, supplied_cmp = existing_h, supplied_h
+            converted = True
+
+    if abs(existing_cmp - supplied_cmp) <= _PARAM_VALUE_ABS_TOL:
         return
 
+    if converted:
+        detail = (
+            f"existing={existing_value!r} {existing_units.value}, "
+            f"supplied={supplied_value!r} {supplied_units.value} "
+            "(compared in hartree)"
+        )
+    else:
+        detail = (
+            f"existing={existing_value!r}, supplied={supplied_value!r} "
+            "(compared as deposited: the unit of one or both is not "
+            "recorded, so neither could be converted)"
+        )
+
     raise ValueError(
-        f"Conflicting {table_name} value for key='{key}': "
-        f"existing={existing_value!r}, supplied={supplied_value!r}. "
-        "Use a distinct energy_correction_scheme identity if these parameters "
-        "represent a different correction library."
+        f"Conflicting {table_name} value for key='{key}': {detail}. "
+        "These are the same correction library by identity, so the "
+        "values have to agree. If they represent a different library, "
+        "give it a different citation or software release -- those are "
+        "what distinguish one library from another."
     )
 
 
@@ -310,6 +359,8 @@ def _merge_scheme_params(
                     key=p.element,
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if ref.bond_params:
@@ -336,6 +387,8 @@ def _merge_scheme_params(
                     key=p.bond_key,
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if ref.component_params:
@@ -365,6 +418,8 @@ def _merge_scheme_params(
                     key=f"{p.component_kind.value}:{p.key}",
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if added:
