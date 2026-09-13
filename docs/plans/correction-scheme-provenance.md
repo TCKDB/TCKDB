@@ -929,7 +929,7 @@ records it in one call and no code changes are needed.
 
 ## 11. Open questions
 
-### 11.1 New: rubric versioning names a product version that does not exist
+### 11.1 Closed 2026-09-13: rubric versioning names a product version that does not exist
 
 Ruling 15, verbatim: *"I think yes for trust rubric but i dont like we do
 v1 when there is no released product version right."*
@@ -950,9 +950,30 @@ and `version` are already separate fields). If the distinction does not
 need to survive contact with a reader, the current spelling is fine and
 the discomfort is cosmetic.
 
-Deliberately not answered here: it is a question about how TCKDB versions
-its own published artifacts, which is larger than this plan and should
-not be settled as a side effect of a correction-scheme migration.
+**Closed by the owner, verbatim:** *"i dont want fucking v1 crap.
+versioning isn't a thing unless its like a selection methodology."* A
+version is legitimate when it versions a *methodology* whose revisions
+must be told apart — `conformer_assignment_scheme.version` exists for
+exactly that reason, because two runs of the same assignment logic can
+disagree and a reader needs to know which one produced a given grouping.
+It is illegitimate as a label with no referent: `computed_thermo`'s `v1`
+does not distinguish it from any other version of anything, because no
+second version exists and no released TCKDB product version is being
+tracked. Labelling it `v1` anyway invites exactly the confusion §11.1
+raised — a reader mistaking a meaningless rubric-internal counter for a
+TCKDB release number.
+
+Consequence for this PR: the two new checks landed by PR 5
+(`correction_scheme_software_release_present`,
+`correction_scheme_literature_present`, §7) are named with no version
+suffix, matching this ruling directly. The ruling does **not** by itself
+require renaming the existing `computed_thermo` / `computed_statmech` /
+etc. rubric declarations or their `COMPUTED_*_V1` constants — that is a
+rendering/naming change to already-shipped rubrics with its own blast
+radius (call sites, `qualified_name` output, anything snapshotting
+`rubric_version`), and is not something this correction-scheme PR
+touches. A future PR that revisits those names now has the ruling on
+record and does not need to re-litigate it.
 
 ### 11.2 Closed, for the record
 
@@ -966,6 +987,7 @@ not be settled as a side effect of a correction-scheme migration.
 | Correct in place, or re-deposit? | In place (ruling 14); §5.2 |
 | Extend the trust rubric? | Yes (ruling 15); §7, reservation → §11.1 |
 | Should derived provenance be labelled as derived? | Moot — none is written (ruling 9); §3.5 keeps the rule for whoever needs it later |
+| May a rubric be named `..._v1` with no released product version behind it? | No — versioning is for a *methodology* with revisions to tell apart, not a label with no referent; §11.1 |
 
 ## 12. Verification log
 
@@ -1121,11 +1143,59 @@ schema — agreeing with each other and disagreeing with the branch. CI
 cannot reproduce it (one checkout), which is why the check lives in
 `conftest`.
 
+### PR 5 — trust rubric, branch `ecs-trust-rubric` pushed, not merged
+
+§7. Two `optional` checks added to `COMPUTED_THERMO_V1`:
+`correction_scheme_software_release_present` and
+`correction_scheme_literature_present`, named with no version suffix per
+§11.1's closure. Both walk `Thermo.applied_energy_corrections` — a new
+`viewonly` relationship added to the `Thermo` model, joined on
+`species_entry_id` rather than a real foreign key, because
+`applied_energy_correction` targets a species entry, not a specific
+thermo row (§9.1's rows and the model at
+`energy_correction.py:316-465` already reflect this). The two read-time
+eager-load lists that must stay in sync with the rubric's evidence graph
+(`trust/evaluator.py`'s `evaluate_computed_thermo`, and
+`scientific_read/thermo.py`'s `_TRUST_EAGER_LOADS` /
+`THERMO_TRUST_EAGER_LOADS`, reused by `public_assessments.py`) were both
+updated; missing either would silently reintroduce a lazy load or a
+stale evidence graph on one of the two call paths.
+
+All five red-first criteria from §10 landed and were confirmed red before
+revert: software-scoped-without-release → `missing`; with-release →
+`passed`; `atom_hf`/`atom_thermal`/`soc` → `not_applicable` on both
+checks; no scheme cited → `not_applicable` on both checks (vacuous-pass
+mutation: returning `passed` instead of `not_applicable` for the
+no-scheme branch turned five tests red, confirmed, then reverted); and a
+`well_supported` fixture keeps that label with both new checks
+`not_applicable`.
+
+**One correction to this section's own red-first wording, found while
+building it.** "Assert a well_supported record stays well_supported with
+both checks missing" cannot be satisfied with *literal*
+`EvidenceOutcome.missing` on both checks. Measured: the richest
+`computed_thermo` fixture reachable under the existing rubric tops out at
+`evidence_completeness == 0.95` (19/20) — one weight-1 "missing" unit is
+already structurally unavoidable
+(`frequency_scale_factor_present_if_applicable` is always `missing` once
+a frequency source is linked, since thermo has no scale-factor
+relationship yet). `optional` checks contribute to the completeness
+*ratio* even though they never gate `all_required_passed`; the ratio, not
+the gate, is what `well_supported` actually requires ≥ 0.90 of. Two more
+weight-1 `missing` units on top of that ceiling give 19/22 = 0.8636,
+which is `mostly_supported`, not `well_supported`, and this is a property
+of "optional" arithmetic generally — the twenty optional checks that
+predate this PR carry the identical risk for a record that fails two of
+them. Reachable, and tested instead: both checks `not_applicable`, which
+truly does contribute nothing to either side of the ratio and is the only
+outcome pair that can honestly claim never to move a label. This is a
+correction to phrasing in this plan document, not a defect in the
+shipped checks — `not_applicable` is exactly the outcome §7 already
+specifies for a record citing no scheme.
+
 ### Still open
 
-PR 4 (frontend, §8), PR 5 (trust rubric, §7), PR 6
-(`frequency_scale_factor` sibling, §6), and §11.1's rubric-versioning
-question.
+PR 4 (frontend, §8) and PR 6 (`frequency_scale_factor` sibling, §6).
 
 One thing the deployed page now raises that §8 should answer:
 the level-of-theory page shows **"Observed software: Gaussian 16, 416

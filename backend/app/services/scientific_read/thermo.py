@@ -24,6 +24,7 @@ from app.db.models.common import (
     ThermoModelKind,
     ValidationStatus,
 )
+from app.db.models.energy_correction import AppliedEnergyCorrection
 from app.db.models.group_additivity import (
     AppliedGroupAdditivity,
     GroupAdditivityScheme,
@@ -156,6 +157,9 @@ _TRUST_EAGER_LOADS = (
     selectinload(Thermo.source_calculations)
     .selectinload(ThermoSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
+    selectinload(Thermo.applied_energy_corrections).selectinload(
+        AppliedEnergyCorrection.scheme
+    ),
 )
 
 # Public seam for consumers that must load the same evidence graph before
