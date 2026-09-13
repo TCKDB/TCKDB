@@ -1011,3 +1011,126 @@ named in §10.
 External, read-only, and quarantined to §9 by
 `feedback_tckdb_is_sovereign`: a local checkout of
 `RMG-database/input/quantum_corrections/data.py`.
+
+## 13. Build log
+
+What actually shipped, measured after each deploy. Kept separate from §12
+rather than folded into it: §9 and §12 record what was observed while the
+plan was being written, and three of those observations are now
+deliberately false. Editing them out would destroy the evidence that the
+plan was answering a real state of the world.
+
+### Superseded by this build
+
+| §9/§12 observation | Still true? |
+|---|---|
+| `software_release_ref: ""` on the detail response | **No** — now `software_release: null`. PR 2 replaced the fabrication; see below. |
+| `…/search?software_version=16` → `422 unsupported_filter` | **No** — now `200`. PR 2 implemented it. |
+| Both live rows attribute `Gaussian` (§9.1) | **No** — now NULL, and the page reads "software not recorded". PR 1, ruling 9. |
+| Pre-flight collision queries return 0 rows | Yes — re-confirmed at upgrade time on the deployed database. |
+
+### PR 1 — `#458`, merged, deployed `df45eb20`
+
+Revision `c24ce2d9c198`. Backup `tckdb-predeploy-20260913-030822.dump`.
+
+Measured on the Pi immediately after the upgrade: both rows keep their
+`public_ref`; `software_release_id IS NULL` on both; 164
+`applied_energy_correction` rows intact; exactly one of
+`software_id`/`software_release_id` present on the table. The level-of-
+theory page renders "software not recorded" on both correction boxes.
+
+**Two defects found in review and fixed before merge**, both worth
+recording because neither was visible to a green CI run:
+
+1. The test this plan calls *"the criterion that pins ruling 9 into the
+   suite"* was **vacuous**. `db_engine` migrates to head, and this
+   revision *is* head, so its `upgrade()` was a no-op — it asserted
+   against a table the migration never touched. Separately, its fixture
+   had no level of theory and no calculations, so the *realistic*
+   regression (restoring `b6d80e36dcec`'s LOT-derived derivation) would
+   have left the row NULL and passed anyway. Both fixed; verified by
+   landing the LOT-derived mutation, not merely a blanket one.
+2. The pre-flight abort named a remedy that **cannot be carried out** —
+   see the correction now inline in §4.
+
+### PR 2 — `#459`, merged, deployed `d2dfa5f7`
+
+No migration. Backup `tckdb-predeploy-20260913-035951.dump`.
+
+Live, anonymous, after deploy: the detail response returns
+`software_release: null` (not a synthesized object with an empty ref);
+`…/search?software_version=16` returns `200` and the filter is echoed;
+`…/search?used_by_thermo=true` still returns `422` naming only that
+filter, so the rejection mechanism is intact and only the intended
+filter was lifted.
+
+**Review found one gap**, now closed: §10's own red-first criterion "a
+scheme on a version-less release reports `version: null`" had no test.
+The behaviour was correct but unpinned — `version = row.version or
+"unknown"` survived the entire suite. That mutation is this plan's
+central failure mode (an honest "not stated" becoming a fabricated
+value) reappearing one layer up, in the read path.
+
+### PR 3 — admin route grain
+
+§5.2. `software` widens `SoftwareRef` → `SoftwareReleaseRef`; the
+fill-only guard is unchanged, as §5.2 requires. Name-only still resolves
+to the version-less release row.
+
+Parity matrix, API vocabulary doc and the typed client were each checked
+and needed nothing: the route is registered in the parity list by method
+and path only (both unchanged), the vocabulary doc regenerates to no
+change, and the client does not implement this admin route.
+
+**Review found one thing the PR claimed and did not have.** "Widening
+`software` changes nothing else" was false: `SoftwareReleaseRef` carries
+a `normalize_composite_version` validator that `SoftwareRef` never had,
+so the validator now runs on admin input and *rewrites* it. A `version`
+of `"Gaussian 16, Revision C.02"` is split into
+`version="16"`/`revision="C.02"`; a `name`/`version` pair naming two
+different programs is left verbatim (correctly — guessing would
+manufacture a release that never ran) but flagged. The upload path has
+surfaced both as warnings since it gained the validator; this route
+surfaced neither, and its response model had no field to carry one.
+
+That is a superset claim that holds for name-only input and fails for
+exactly the input this PR exists to enable. Silence is the wrong
+behaviour on the route whose purpose is *correcting* provenance: an
+admin who cannot see that their input was reshaped cannot tell whether
+it was reshaped correctly. The response now carries `warnings`, from the
+same source and in the same shape the upload path uses.
+
+Review also found two guards this plan asserted were intact but nothing
+pinned: `build` was forwarded by the resolver and unasserted (setting it
+to `None` left every test green), and the **workflow-tool-release**
+fill-only guard had no test at all — removing it broke nothing. §10's
+PR 3 criterion and §5.2 both make claims about all three guards; two of
+the three could prove it. Both now pinned.
+
+### Out-of-plan work this build made necessary
+
+`#460` — the test suite now refuses a run whose `tckdb_schemas` resolves
+outside the checkout under test. Building PR 1 lost a full CI cycle and
+six phantom test failures to a `PYTHONPATH` entry that did not exist
+(an earlier draft of this line said "three CI cycles"; one cycle failed
+on the stale golden, and the golden was regenerated twice without
+effect — the inflated figure was itself an unchecked claim):
+Python skips a non-existent path silently, so the editable install won
+and both the OpenAPI generator *and* its golden read another checkout's
+schema — agreeing with each other and disagreeing with the branch. CI
+cannot reproduce it (one checkout), which is why the check lives in
+`conftest`.
+
+### Still open
+
+PR 4 (frontend, §8), PR 5 (trust rubric, §7), PR 6
+(`frequency_scale_factor` sibling, §6), and §11.1's rubric-versioning
+question.
+
+One thing the deployed page now raises that §8 should answer:
+the level-of-theory page shows **"Observed software: Gaussian 16, 416
+calculations"** a few centimetres above two correction boxes reading
+**"software not recorded"**. Both statements are correct, and the
+distinction between them is the whole argument of §3.1 and §9.4 — but a
+reader has no way to know that from the page. The page is simultaneously
+right and confusing, which is a display problem, not a data one.
