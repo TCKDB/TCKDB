@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 104 |
 | raw_only | 106 |
-| not_applicable | 40 |
-| **total** | **250** |
+| not_applicable | 41 |
+| **total** | **251** |
 
 ## Typed coverage
 
@@ -322,6 +322,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | yes | — | — | — | — |
 | `GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection` | yes | — | — | — | — |
+| `GET /api/v1/admin/users` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/users/{user_id}/role` | yes | — | — | — | — |
 
 > Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
