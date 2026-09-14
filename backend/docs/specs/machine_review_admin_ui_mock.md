@@ -68,7 +68,7 @@ Everything the page renders without a future join comes from
 submission_id
 record_summaries[]            (one per record with >=1 exactly-mapped finding)
   .record_type
-  .record_ref
+  .record_public_ref
   .record_id
   .latest_summary             (MachineReviewRecordSummary)
     .status
@@ -162,7 +162,7 @@ Current columns (all from the response):
 
 ```text
 record_type
-record_ref
+record_public_ref
 record_id
 status                  (latest_summary.status — badge, see §6)
 highest_severity        (latest_summary.highest_severity)

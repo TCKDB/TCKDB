@@ -96,6 +96,47 @@ def resolve_record_public_refs(
     return resolved
 
 
+#: Enum members by their wire value. A plain lookup, because the obvious
+#: alternative -- ``SubmissionRecordType(name)`` inside ``try/except
+#: ValueError`` -- silently swallows ``CodedValidationError``, which subclasses
+#: ``ValueError``. A coded refusal raised anywhere beneath such a handler loses
+#: its ``code`` and ``context``.
+#:
+#: ``tests/api/test_coded_exception_reraise_gate`` caught exactly that shape on
+#: 2026-09-14, while this helper still lived in ``app/api/routes/admin.py``.
+#: **It would not catch it here:** that gate walks ``backend/app/api`` only, so
+#: moving the helper into the service layer moved it out of the gate's reach.
+#: The lookup below is what keeps the property, not the gate.
+_RECORD_TYPE_BY_VALUE: dict[str, SubmissionRecordType] = {
+    record_type.value: record_type for record_type in SubmissionRecordType
+}
+
+
+def resolve_record_public_refs_by_name(
+    session: Session,
+    refs: Iterable[tuple[str, int]],
+) -> dict[tuple[str, int], str]:
+    """As :func:`resolve_record_public_refs`, but keyed by the raw type *name*.
+
+    The private machine-review projection carries ``record_type`` as a plain
+    ``str`` and tolerates a value it cannot parse rather than raising
+    (``mapping``'s policy 3), so its callers have a string in hand and no
+    guarantee it names a member. An unknown name resolves to no ref, which is
+    the same answer a reader gets for any record that cannot be named.
+    """
+    typed: list[tuple[SubmissionRecordType, int]] = []
+    for name, record_id in refs:
+        record_type = _RECORD_TYPE_BY_VALUE.get(name)
+        if record_type is not None:
+            typed.append((record_type, record_id))
+    return {
+        (record_type.value, record_id): public_ref
+        for (record_type, record_id), public_ref in resolve_record_public_refs(
+            session, typed
+        ).items()
+    }
+
+
 def resolve_record_public_ref(
     session: Session,
     *,
@@ -117,4 +158,5 @@ __all__ = [
     "REF_BEARING_RECORD_TYPES",
     "resolve_record_public_ref",
     "resolve_record_public_refs",
+    "resolve_record_public_refs_by_name",
 ]

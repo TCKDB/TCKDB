@@ -208,7 +208,7 @@ function MachineReviewInspectionPage() {
                                 <thead>
                                     <tr>
                                         <th>record_type</th>
-                                        <th>record_ref</th>
+                                        <th>record_public_ref</th>
                                         <th>record_id</th>
                                         <th>status</th>
                                         <th>highest_severity</th>
@@ -221,9 +221,9 @@ function MachineReviewInspectionPage() {
                                 </thead>
                                 <tbody>
                                     {data.record_summaries.map((r, i) => (
-                                        <tr key={`${r.record_type}:${r.record_ref ?? r.record_id ?? i}`}>
+                                        <tr key={`${r.record_type}:${r.record_public_ref ?? r.record_id ?? i}`}>
                                             <td>{r.record_type}</td>
-                                            <td>{dash(r.record_ref)}</td>
+                                            <td>{dash(r.record_public_ref)}</td>
                                             <td>{dash(r.record_id)}</td>
                                             <td>
                                                 <StatusBadge status={r.latest_summary.status} />
