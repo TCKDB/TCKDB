@@ -18,10 +18,16 @@ rather than a fabricated value or a stringified id. That is the same refusal
 for the same reason -- giving that table a public ref is the prerequisite for
 naming its rows, not something a caller may work around.
 
+The mapping from record type to table is not written here -- it is
+:data:`app.services.record_models.RECORD_MODELS`, filtered. Writing it out
+again would be a second place for one entry to name the wrong table, and that
+error is silent: the query still succeeds and still returns a ref, just the
+wrong record's.
+
 Kept separate from :mod:`app.services.public_refs`, which mints refs at INSERT
 time and is deliberately keyed by ORM *class name* so it can be imported
-without pulling in every model module. This module has to import the models to
-query them, so it cannot live there without taking that property away.
+without pulling in every model module. This module has to reach the mapped
+classes to query them, so it cannot live there without taking that away.
 """
 
 from __future__ import annotations
@@ -33,53 +39,29 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import SubmissionRecordType
-from app.db.models.kinetics import Kinetics
-from app.db.models.network import Network
-from app.db.models.network_pdep import NetworkSolve
-from app.db.models.reaction import ChemReaction, ReactionEntry
-from app.db.models.species import (
-    ConformerGroup,
-    ConformerObservation,
-    Species,
-    SpeciesEntry,
-)
-from app.db.models.statmech import Statmech
-from app.db.models.thermo import Thermo
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.db.models.transport import Transport
+from app.services.record_models import RECORD_MODELS
 
-#: Record types whose table carries ``public_ref``. ``applied_energy_correction``
-#: is absent on purpose -- see the module docstring.
+#: The subset of :data:`~app.services.record_models.RECORD_MODELS` whose table
+#: carries ``public_ref``.
+#:
+#: **Derived, not retyped.** A second hand-written copy of the registry is a
+#: second place for one entry to name the wrong table, and that mistake is
+#: invisible: the lookup still succeeds and still returns a ref, just the wrong
+#: record's. Filtering on the column the mixin adds also means the
+#: ``applied_energy_correction`` exception is *measured* here rather than
+#: asserted -- give that table a ``public_ref`` and it joins this set with no
+#: edit to this file.
 _REF_BEARING_MODELS: dict[SubmissionRecordType, type[Any]] = {
-    SubmissionRecordType.species: Species,
-    SubmissionRecordType.species_entry: SpeciesEntry,
-    SubmissionRecordType.conformer_group: ConformerGroup,
-    SubmissionRecordType.conformer_observation: ConformerObservation,
-    SubmissionRecordType.reaction: ChemReaction,
-    SubmissionRecordType.reaction_entry: ReactionEntry,
-    SubmissionRecordType.transition_state: TransitionState,
-    SubmissionRecordType.transition_state_entry: TransitionStateEntry,
-    SubmissionRecordType.calculation: Calculation,
-    SubmissionRecordType.statmech: Statmech,
-    SubmissionRecordType.thermo: Thermo,
-    SubmissionRecordType.kinetics: Kinetics,
-    SubmissionRecordType.transport: Transport,
-    SubmissionRecordType.network: Network,
-    SubmissionRecordType.network_solve: NetworkSolve,
-    SubmissionRecordType.artifact: CalculationArtifact,
+    record_type: model
+    for record_type, model in RECORD_MODELS.items()
+    if hasattr(model, "public_ref")
 }
 
 #: The record types this module can name. A caller that wants to explain the
 #: ``None`` it got back tests membership here rather than hard-coding the one
 #: exception.
 REF_BEARING_RECORD_TYPES: frozenset[SubmissionRecordType] = frozenset(_REF_BEARING_MODELS)
-
-
-def has_public_ref(record_type: SubmissionRecordType) -> bool:
-    """Return whether rows of ``record_type`` can be named by a public ref."""
-    return record_type in _REF_BEARING_MODELS
 
 
 def resolve_record_public_refs(
@@ -133,7 +115,6 @@ def resolve_record_public_ref(
 
 __all__ = [
     "REF_BEARING_RECORD_TYPES",
-    "has_public_ref",
     "resolve_record_public_ref",
     "resolve_record_public_refs",
 ]

@@ -18,7 +18,6 @@ from app.db.models.common import SubmissionRecordType
 from app.db.models.network import Network
 from app.services.record_refs import (
     REF_BEARING_RECORD_TYPES,
-    has_public_ref,
     resolve_record_public_ref,
     resolve_record_public_refs,
 )
@@ -98,7 +97,7 @@ def test_applied_energy_correction_has_no_ref_and_none_is_invented(db_session):
     internal id in front of a reader (DR-0028 Req 2) while looking like a
     public handle. ``None`` is the honest answer until the table gains a ref.
     """
-    assert has_public_ref(SubmissionRecordType.applied_energy_correction) is False
+    assert SubmissionRecordType.applied_energy_correction not in REF_BEARING_RECORD_TYPES
     assert (
         resolve_record_public_ref(
             db_session,
@@ -121,9 +120,13 @@ def test_every_record_type_is_accounted_for():
     """A new ``SubmissionRecordType`` must be decided, not silently unnamed.
 
     Without this, adding a member gives it ``None`` forever and no test fails.
-    A new ref-bearing type belongs in ``_REF_BEARING_MODELS``; a new type with
-    no ``public_ref`` column belongs in the exception set below, alongside the
-    reason.
+
+    Note what this does **not** check: the key set says nothing about which
+    model each key points at, so it passes unchanged if two entries are
+    swapped. That check lives in ``test_record_models.py``, against an
+    independently written table of ``__tablename__`` values -- and it has to,
+    because a test that derives its expectation from the mapping agrees with
+    any typo in it.
     """
     no_public_ref_column = {SubmissionRecordType.applied_energy_correction}
 

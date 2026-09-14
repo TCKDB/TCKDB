@@ -689,12 +689,24 @@ explicitly out of scope for this plan.)
 
    **Decision: keep them as two fields.** The private matching key stays the
    stringified internal `record_id` exactly as `audit_adapter.py` ("Internal-id
-   addressing") and `mapping.py` document it — it is private, it is already the basis
-   of every stored `context_hash`, and re-basing it would invalidate those hashes and
-   re-review every current record for no scientific reason. The reader-facing handle
-   is a **separate, additive, resolved-at-read-time** field: `record_public_ref` on
-   the admin curator-task read, resolved from the record's own `public_ref` column by
-   `app.services.record_refs`. Nothing is stored twice, so the two cannot drift.
+   addressing") and `mapping.py` document it. The reason is `context_hash.py`, which
+   folds `record_ref` into the hashed payload: re-basing it would make every review
+   already written through that path read as stale and force a re-review, with
+   nothing about the science having changed. The id basis is also baked in two layers
+   below the caller — `orchestration.py` and `context_adapter.py` both fall back to
+   `str(record_id)` when no ref is supplied.
+
+   The reader-facing handle is a **separate, additive, resolved-at-read-time** field:
+   `record_public_ref` on the admin curator-task read, resolved from the record's own
+   `public_ref` column by `app.services.record_refs`. Nothing is stored twice, so the
+   two cannot drift.
+
+   *Scope note, measured:* `record_machine_review` has **no `record_ref` column** —
+   it stores `(record_type, record_id)`. The `(record_type, record_ref)` grouping in
+   `inspection.py` is built from submission *audit events*, not from stored review
+   rows, and `run_record_machine_review_with_producer` has exactly one caller (the
+   admin fake trigger). So "every stored review" above means the rows that path
+   writes, not the whole table.
 
    Deliberately **not** named `record_ref` on that surface: that name already means
    the matching key one class away on the same router, and one name for two meanings

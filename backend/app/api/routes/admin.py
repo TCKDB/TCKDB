@@ -465,12 +465,18 @@ class AdminCuratorTaskResponse(BaseModel):
     It is ``null`` when the record cannot be named: ``applied_energy_correction``
     has no ``public_ref`` column, and a record may have been deleted since the
     task was raised. ``null`` is the honest answer to both -- see
-    :mod:`app.services.record_refs`. Deliberately **not** spelled ``record_ref``:
-    that name is already taken one screen up by
-    :class:`AdminMachineReviewRecordInspection`, where it means the private
-    machine-review *matching key* (the stringified internal id in the audit
-    path). Two meanings under one name on one router is how a UI ends up
-    linking to a row id.
+    :mod:`app.services.record_refs`.
+
+    **On the name.** Across the API ``record_ref`` already means *the public
+    ref* -- it carries one in the frequency-scale-factor, level-of-theory,
+    literature, energy-correction-scheme and release read schemas. The outlier
+    is :class:`AdminMachineReviewRecordInspection` on this same router, where
+    ``record_ref`` holds the private machine-review *matching key* (the
+    stringified internal id). So the plain name is taken here by the one place
+    that uses it against the convention, and reusing it would put two meanings
+    under one name on one router -- which is how a UI ends up rendering a row
+    id as a link. ``record_public_ref`` cannot be read either way, and stays
+    correct whichever way that outlier is eventually reconciled.
     """
 
     model_config = ConfigDict(extra="forbid")
