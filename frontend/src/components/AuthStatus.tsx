@@ -30,6 +30,13 @@ export function AuthStatus() {
     const displayName = state.user.full_name || state.user.username
     return (
         <div className="auth-status">
+            {/* Shown only to admins. This hides a page they could otherwise
+                only find by typing the address; it is not what stops anyone
+                else using it -- every route `/admin` calls is gated on
+                `require_admin` server-side, and that is the control. */}
+            {state.user.role === "admin" && (
+                <Link className="auth-status-link" to="/admin">Admin</Link>
+            )}
             <Link className="auth-status-link" to="/account">{displayName}</Link>
             <button type="button" className="auth-status-signout" onClick={() => {
                     // `logout` rethrows so a caller that wants the failure can

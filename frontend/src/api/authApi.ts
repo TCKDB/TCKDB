@@ -51,7 +51,16 @@ function stripCodePrefix(detail: string, code: string | undefined): string {
     return detail
 }
 
-async function throwForFailedResponse(response: Response): Promise<never> {
+/**
+ * Reads the archive's error envelope and throws. Exported because it is
+ * not auth-specific: every route in the app answers a refusal with the
+ * same `{code, detail, context}` shape (`backend/app/api/error_contract.py`),
+ * including the list-shaped FastAPI 422 this function flattens. A second
+ * copy in `adminApi.ts` would be a second place for that flattening to
+ * drift. The class it throws keeps the `AuthApiError` name only because
+ * renaming a type used across six modules is not this change's business.
+ */
+export async function throwForFailedResponse(response: Response): Promise<never> {
     let detail = response.statusText || `Request failed (${response.status})`
     let code: string | undefined
     try {

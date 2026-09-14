@@ -8,6 +8,7 @@ import { BROWSE_KIND_PATHS } from "./api/browseApi"
 import { isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "./domain/speciesEntrySections"
 
 const AccountPage = lazy(() => import("./pages/AccountPage"))
+const AdminPage = lazy(() => import("./pages/AdminPage"))
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const BrowsePage = lazy(() => import("./pages/BrowsePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
@@ -155,6 +156,11 @@ function App() {
                 (it is a brand-new one). */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/account" element={<AccountPage />} />
+            {/* Role-gated inside the page, not by the router: the component
+                has to distinguish "still probing /auth/me", "signed out",
+                "archive unreachable" and "signed in without the role", and a
+                router-level guard collapses the last two into one redirect. */}
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route
