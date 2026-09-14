@@ -165,47 +165,45 @@ def test_a_connection_failure_is_a_plain_failure(
 
 
 class TestArtifactDownloadName:
-    """``<artifact_ref>_<filename>`` -- unique, and it keeps the extension.
+    """``<kind>_<ref><ext>`` -- what the file IS, which record, what format.
 
-    A bare 64-character digest is unique too, and unusable: it is the
-    fallback, never the goal.
+    MEASURED on the hosted instance 2026-09-14: 317 artifacts of kind
+    ``output_log`` are all called ``input.log``, and 246 of kind
+    ``input`` are all called ``input.gjf``. That is Gaussian's
+    convention (``g16 input.gjf`` writes ``input.log``), so the recorded
+    filename identified nothing and read as the opposite of the truth.
     """
 
-    def test_ref_and_filename_are_joined(self):
+    def test_the_kind_leads(self):
         assert cli.artifact_download_name(
-            "art_7k2p9x", "input.log", DIGEST
-        ) == "input_art_7k2p9x.log"
+            "art_7k2p9x", "input.log", DIGEST, "output_log"
+        ) == "output_log_art_7k2p9x.log"
 
-    def test_the_extension_survives_so_the_file_opens_in_the_right_thing(self):
-        # The ref goes before the suffix, not after the whole filename.
-        # `input.log_art_7k2p9x` disambiguates just as well and is no
-        # longer a `.log`.
-        for name, expected_suffix in [
-            ("input.log", ".log"),
-            ("job.out.log", ".log"),
-            ("geom.xyz", ".xyz"),
-        ]:
-            assert cli.artifact_download_name("art_a", name, DIGEST).endswith(
-                expected_suffix
-            )
+    def test_the_extension_comes_from_the_name_not_the_kind(self):
+        # `output_log` is a role; `.log` is a format.
+        assert cli.artifact_download_name(
+            "art_a", "job.out", DIGEST, "output_log"
+        ) == "output_log_art_a.out"
 
-    def test_a_name_with_no_extension_just_gets_the_ref(self):
-        assert cli.artifact_download_name("art_a", "OUTPUT", DIGEST) == "OUTPUT_art_a"
+    def test_two_artifacts_of_one_kind_still_differ(self):
+        assert cli.artifact_download_name(
+            "art_aaa", "input.log", DIGEST, "output_log"
+        ) != cli.artifact_download_name(
+            "art_bbb", "input.log", DIGEST, "output_log"
+        )
 
-    def test_the_ref_is_what_stops_two_input_logs_colliding(self):
-        first = cli.artifact_download_name("art_aaa", "input.log", DIGEST)
-        second = cli.artifact_download_name("art_bbb", "input.log", DIGEST)
-        assert first != second
+    def test_without_a_kind_the_recorded_stem_leads(self):
+        # The measurement is about THIS corpus; a deployment whose
+        # filenames do identify something keeps working.
+        assert cli.artifact_download_name(
+            "art_a", "myjob.log", DIGEST
+        ) == "myjob_art_a.log"
 
-    def test_filename_alone_when_there_is_no_ref(self):
+    def test_it_falls_back_through_kind_and_name_to_the_digest(self):
+        assert cli.artifact_download_name(None, "input.log", DIGEST, "output_log") == "output_log.log"
         assert cli.artifact_download_name(None, "input.log", DIGEST) == "input.log"
-
-    def test_the_digest_is_the_fallback_and_only_the_fallback(self):
+        assert cli.artifact_download_name("art_a", None, DIGEST) == DIGEST
         assert cli.artifact_download_name(None, None, DIGEST) == DIGEST
-        assert cli.artifact_download_name("art_7k2p9x", None, DIGEST) == DIGEST
-        assert cli.artifact_download_name(None, "   ", DIGEST) == DIGEST
-        # A name made entirely of characters that cannot survive sanitising
-        # leaves nothing to use.
         assert cli.artifact_download_name(None, "///", DIGEST) == DIGEST
 
     @pytest.mark.parametrize(
@@ -218,25 +216,21 @@ class TestArtifactDownloadName:
             "a\x00b.log",
         ],
     )
-    def test_a_server_supplied_name_cannot_escape_the_output_directory(self, hostile):
-        """The filename is stored data, so it is not trusted.
-
-        Joined naively to an output directory, any of these would write
-        somewhere the caller did not name.
-        """
-        produced = cli.artifact_download_name("art_7k2p9x", hostile, DIGEST)
-
-        assert "/" not in produced
-        assert "\\" not in produced
-        assert "\x00" not in produced
-        assert ".." not in produced
-        # And the result stays inside the directory it is joined to.
+    def test_a_stored_filename_cannot_escape_the_output_directory(self, hostile):
+        produced = cli.artifact_download_name("art_7k2p9x", hostile, DIGEST, "output_log")
+        for forbidden in ["/", "\\", "\x00", ".."]:
+            assert forbidden not in produced
         base = Path("/tmp/out")
         assert (base / produced).resolve().parent == base.resolve()
 
+    def test_a_hostile_kind_cannot_escape_either(self):
+        # The kind is a server-supplied enum today, but it reaches the
+        # name by the same route the filename does.
+        produced = cli.artifact_download_name("art_a", "input.log", DIGEST, "../../evil")
+        for forbidden in ["/", ".."]:
+            assert forbidden not in produced
+
     def test_a_leading_dot_does_not_survive(self):
-        # ``.bashrc`` written into a directory is a hidden file; the archive
-        # should not be able to make one by naming an artifact that way.
         assert not cli.artifact_download_name(None, ".bashrc", DIGEST).startswith(".")
 
 
@@ -245,7 +239,13 @@ class _NamedClient(_FakeClient):
         self.searched = kwargs
         return {
             "records": [
-                {"artifact": {"artifact_ref": "art_7k2p9x", "filename": "input.log"}}
+                {
+                    "artifact": {
+                        "artifact_ref": "art_7k2p9x",
+                        "filename": "input.log",
+                        "kind": "output_log",
+                    }
+                }
             ]
         }
 
@@ -257,7 +257,7 @@ def test_the_default_filename_comes_from_the_archive(monkeypatch, tmp_path):
 
     assert cli.main_tckdb(["download", "artifact", DIGEST]) == cli.EXIT_OK
 
-    assert (tmp_path / "input_art_7k2p9x.log").read_bytes() == PAYLOAD
+    assert (tmp_path / "output_log_art_7k2p9x.log").read_bytes() == PAYLOAD
     assert not (tmp_path / DIGEST).exists()
     assert _FakeClient.last.searched["sha256"] == DIGEST
 

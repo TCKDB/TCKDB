@@ -571,7 +571,7 @@ never takes the key itself.
 From the command line:
 
 ```bash
-tckdb download artifact <sha256>                 # ./input_art_7k2p9x.log
+tckdb download artifact <sha256>                 # ./output_log_art_7k2p9x.log
 tckdb download artifact <sha256> -o job.log      # ./job.log
 tckdb download artifact <sha256> -o ~/downloads  # ~/downloads/<derived name>
 tckdb download artifact <sha256> -o - | less     # straight to stdout
@@ -583,13 +583,17 @@ is written, so a mismatch -- a proxy or cache serving the wrong object --
 fails loudly rather than landing on disk under a name that asserts a
 digest it does not have.
 
-The default filename is `<name>_<artifact_ref><ext>` -- the archive's own
-record of what the file is called, plus its public ref. The original name
-leads so a directory of downloads sorts by what the files are; the ref
-keeps two `input.log`s from different calculations apart; the extension
-stays last so the file opens in the right thing. Deriving it costs one
-extra metadata lookup, which is skipped entirely when `--output` is
-given, and falls back to the digest if the archive has no name on record.
+The default filename is `<kind>_<artifact_ref><ext>` -- what the file is,
+which record it belongs to, and its format. Deriving it costs one extra
+metadata lookup, skipped entirely when `--output` is given, and falls
+back to the digest if the archive knows neither.
+
+The recorded filename is deliberately not used as the lead. On this
+corpus it identifies nothing and reads as the opposite of the truth: 317
+artifacts of kind `output_log` are all called `input.log`, because
+`g16 input.gjf` writes `input.log` -- Gaussian names the output after the
+job, not its role. The extension still comes from the recorded name,
+since that is the part a reader needs.
 
 The filename is stored data, so it is not trusted: only the basename
 survives, and only characters that cannot mean anything to a path.

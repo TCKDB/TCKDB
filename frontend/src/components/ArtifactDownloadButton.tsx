@@ -17,10 +17,11 @@ import { useAuth } from "../hooks/useAuth"
  * than a "sign in" prompt: the visitor may well be signed in, and
  * offering the prompt asserts they are not.
  */
-export function ArtifactDownloadButton({ sha256, artifactRef, filename }: {
+export function ArtifactDownloadButton({ sha256, artifactRef, filename, kind }: {
     sha256: string
     artifactRef?: string | null
     filename?: string | null
+    kind?: string | null
 }) {
     const { state } = useAuth()
     const [busy, setBusy] = useState(false)
@@ -37,7 +38,7 @@ export function ArtifactDownloadButton({ sha256, artifactRef, filename }: {
         setError(null)
         setBusy(true)
         try {
-            const { blob, filename: name } = await fetchArtifact({ sha256, artifactRef, filename })
+            const { blob, filename: name } = await fetchArtifact({ sha256, artifactRef, filename, kind })
             saveBlob(blob, name)
         } catch (caught) {
             setError(
