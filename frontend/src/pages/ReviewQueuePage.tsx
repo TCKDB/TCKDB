@@ -1,0 +1,417 @@
+import { useCallback, useEffect, useRef, useState } from "react"
+import { Link, Navigate } from "react-router-dom"
+import "../auth.css"
+import "../admin.css"
+import { AuthApiError } from "../api/authApi"
+import {
+    RecordReviewResponseError,
+    listRecordReviews,
+    setRecordReviewStatus,
+} from "../api/recordReviewsApi"
+import { recordRoute } from "../domain/recordRoute"
+import { useAuth } from "../hooks/useAuth"
+import {
+    ALL_STATUSES,
+    allowedTransitions,
+    statusClass,
+    statusLabel,
+    statusMeaning,
+    type RecordReview,
+    type RecordReviewStatus,
+} from "../types/recordReview"
+
+/**
+ * The review queue: every record, and whether a person has judged it.
+ *
+ * This is the **authoritative** review axis. Approving here changes what
+ * a reader is told to trust, which is exactly what the curator queue
+ * (`/admin/curator-queue`) does not do -- that one triages a machine's
+ * advisory findings and endorses nothing. Two queues, two meanings; the
+ * lede says which this is, because "review" alone does not.
+ *
+ * Unlike the curator queue, nothing has to be run to fill this one. A
+ * `record_review` row is written for every record by the review-policy
+ * write that ends every upload, starting at `not_reviewed`. The default
+ * filter is therefore the backlog: everything nobody has looked at.
+ *
+ * ## What this page cannot tell you
+ *
+ * How big the backlog is. The route answers with a bare array and no
+ * total, so a full page means "there may be more" and nothing stronger.
+ * Reporting a real count needs a breaking wire change or a second route
+ * (task #257). Saying "50 shown" and implying that is all of it would be
+ * the worse failure, so the page says explicitly when it is full.
+ */
+
+type LoadState =
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | { status: "ready"; rows: RecordReview[]; unreadable: number; full: boolean }
+
+/** The open transition form, for the one row it belongs to. */
+type Draft = { rowId: number; status: RecordReviewStatus; note: string }
+
+const PAGE_LIMIT = 50
+
+/** A stable key for a row: the review row's own id. */
+function keyOf(row: RecordReview): number {
+    return row.id
+}
+
+export default function ReviewQueuePage() {
+    const { state } = useAuth()
+    const [statusFilter, setStatusFilter] = useState<RecordReviewStatus | "all">(
+        "not_reviewed",
+    )
+    const [load, setLoad] = useState<LoadState>({ status: "loading" })
+    const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
+    const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, string>>(new Map())
+    const [draft, setDraft] = useState<Draft | null>(null)
+
+    const role = state.status === "signed-in" ? state.user.role : null
+    const canReview = role === "curator" || role === "admin"
+
+    // The filter as of *now*, for code that resumes after an await: a
+    // transition can land after the curator has changed the view, and
+    // re-reading under the filter captured when the write started would
+    // refresh a list nobody is looking at.
+    const filterRef = useRef(statusFilter)
+    useEffect(() => {
+        filterRef.current = statusFilter
+    }, [statusFilter])
+
+    const requestSeq = useRef(0)
+
+    const refresh = useCallback(async (options?: { keepRows?: boolean }) => {
+        if (!options?.keepRows) setLoad({ status: "loading" })
+        const seq = (requestSeq.current += 1)
+        const current = filterRef.current
+        try {
+            const page = await listRecordReviews({
+                ...(current === "all" ? {} : { status: current }),
+                limit: PAGE_LIMIT,
+            })
+            if (seq !== requestSeq.current) return
+            setLoad({
+                status: "ready",
+                rows: page.items,
+                unreadable: page.unreadable,
+                full: page.full,
+            })
+        } catch (caught) {
+            if (seq !== requestSeq.current) return
+            setLoad({
+                status: "error",
+                message:
+                    caught instanceof AuthApiError
+                        ? caught.message
+                        : "Could not load the review queue.",
+            })
+        }
+    }, [])
+
+    useEffect(() => {
+        if (canReview) void refresh()
+    }, [canReview, refresh, statusFilter])
+
+    if (state.status === "loading") {
+        return (
+            <section className="admin-page">
+                <h1>Review queue</h1>
+                <p role="status">Checking your account…</p>
+            </section>
+        )
+    }
+    if (state.status === "unreachable") {
+        return (
+            <section className="admin-page">
+                <h1>Review queue</h1>
+                <p className="auth-error" role="alert">
+                    The archive could not be reached, so your account could not be
+                    checked. This is not a sign that you are signed out.
+                </p>
+            </section>
+        )
+    }
+    if (state.status === "signed-out") return <Navigate to="/login" replace />
+    if (!canReview) {
+        return (
+            <section className="admin-page">
+                <h1>Review queue</h1>
+                <p className="auth-error" role="alert">
+                    This queue is for curators. Reviewing a record changes what every
+                    reader is told to trust about it.
+                </p>
+            </section>
+        )
+    }
+
+    function setRowError(rowId: number, message: string | null) {
+        setRowErrors((current) => {
+            const next = new Map(current)
+            if (message === null) next.delete(rowId)
+            else next.set(rowId, message)
+            return next
+        })
+    }
+
+    /** Open the transition form for one row, or shut it. Always starts blank. */
+    function toggleDraft(row: RecordReview) {
+        const rowId = keyOf(row)
+        const first = allowedTransitions(row.status)[0]
+        setDraft((current) =>
+            current?.rowId === rowId || first === undefined
+                ? null
+                : { rowId, status: first, note: "" },
+        )
+    }
+
+    async function submit(row: RecordReview, draftNow: Draft) {
+        const rowId = keyOf(row)
+        setBusy((current) => new Set(current).add(rowId))
+        setRowError(rowId, null)
+        try {
+            await setRecordReviewStatus({
+                recordType: row.record_type,
+                recordId: row.record_id,
+                status: draftNow.status,
+                note: draftNow.note.trim() || undefined,
+            })
+            setDraft((current) => (current?.rowId === rowId ? null : current))
+            await refresh({ keepRows: true })
+        } catch (caught) {
+            const saved = caught instanceof RecordReviewResponseError
+            setRowError(
+                rowId,
+                saved || caught instanceof AuthApiError
+                    ? caught.message
+                    : "That did not go through. Nothing was changed.",
+            )
+            if (saved) {
+                setDraft((current) => (current?.rowId === rowId ? null : current))
+            }
+            // A refusal is usually a disallowed transition or a
+            // self-approval block, both of which mean the row on screen
+            // may already disagree with the server. Re-read rather than
+            // leave a stale status under a live control.
+            await refresh({ keepRows: true })
+        } finally {
+            setBusy((current) => {
+                const next = new Set(current)
+                next.delete(rowId)
+                return next
+            })
+        }
+    }
+
+    return (
+        <section className="admin-page">
+            <h1>Review queue</h1>
+            <p className="admin-lede">
+                Every record in the archive, and whether a person has judged it. A
+                review row exists for each one from the moment it is deposited, so
+                this queue needs nothing run to fill it. Unlike the{" "}
+                <Link to="/admin/curator-queue">curator queue</Link>, which triages a
+                machine&apos;s advisory findings,{" "}
+                <strong>approving here changes what every reader is told to trust</strong>.
+            </p>
+
+            <div className="admin-filter">
+                <label htmlFor="review-filter">Showing</label>{" "}
+                <select
+                    id="review-filter"
+                    className="admin-role-select"
+                    value={statusFilter}
+                    onChange={(e) =>
+                        setStatusFilter(e.target.value as RecordReviewStatus | "all")
+                    }
+                >
+                    <option value="all">every record</option>
+                    {ALL_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                            {statusLabel(s)}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            {load.status === "loading" && <p role="status">Loading the queue…</p>}
+            {load.status === "error" && (
+                <p className="auth-error" role="alert">
+                    {load.message}
+                </p>
+            )}
+
+            {load.status === "ready" && load.unreadable > 0 && (
+                <p className="auth-error" role="alert">
+                    {load.unreadable} row{load.unreadable === 1 ? "" : "s"} on this
+                    page could not be read and {load.unreadable === 1 ? "is" : "are"}{" "}
+                    not shown. This page is likely older than the archive it is
+                    talking to.
+                </p>
+            )}
+
+            {load.status === "ready" && load.rows.length === 0 && (
+                <p role="status">
+                    {statusFilter === "not_reviewed"
+                        ? "Nothing is waiting. Every record has been looked at."
+                        : "No records match this filter."}
+                </p>
+            )}
+
+            {load.status === "ready" && load.rows.length > 0 && (
+                <>
+                    <p className="admin-count" role="status">
+                        {load.rows.length} shown
+                        {load.full
+                            ? ", a full page — there are more than this, and this page cannot say how many"
+                            : ""}
+                    </p>
+                    <div className="table-scroll">
+                        <table className="data-table" aria-label="Record reviews">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Record</th>
+                                    <th scope="col">Review state</th>
+                                    <th scope="col">Reason given</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {load.rows.map((row) => {
+                                    const rowId = keyOf(row)
+                                    const href = recordRoute(
+                                        row.record_type,
+                                        row.record_public_ref,
+                                    )
+                                    const rowBusy = busy.has(rowId)
+                                    const options = allowedTransitions(row.status)
+                                    const cls = statusClass(row.status)
+                                    return (
+                                        <tr key={rowId}>
+                                            <td>
+                                                <span className="admin-record-type">
+                                                    {row.record_type}
+                                                </span>{" "}
+                                                {href !== null ? (
+                                                    <Link to={href} className="data">
+                                                        {row.record_public_ref}
+                                                    </Link>
+                                                ) : row.record_public_ref !== null ? (
+                                                    <span className="data">
+                                                        {row.record_public_ref}
+                                                    </span>
+                                                ) : (
+                                                    <span className="admin-absent">
+                                                        cannot be named
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={cls ?? undefined}>
+                                                    {statusLabel(row.status)}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {row.note ? (
+                                                    row.note
+                                                ) : (
+                                                    <span className="admin-absent">
+                                                        none
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {options.length > 0 ? (
+                                                    <button
+                                                        type="button"
+                                                        disabled={rowBusy}
+                                                        aria-expanded={draft?.rowId === rowId}
+                                                        aria-controls={`review-form-${rowId}`}
+                                                        onClick={() => toggleDraft(row)}
+                                                    >
+                                                        Review…
+                                                    </button>
+                                                ) : (
+                                                    <span className="admin-absent">
+                                                        no transition available
+                                                    </span>
+                                                )}
+                                                {rowErrors.has(rowId) && (
+                                                    <p
+                                                        className="auth-error admin-row-error"
+                                                        role="alert"
+                                                    >
+                                                        {rowErrors.get(rowId)}
+                                                    </p>
+                                                )}
+                                                {draft?.rowId === rowId && (
+                                                    <form
+                                                        id={`review-form-${rowId}`}
+                                                        className="admin-resolve"
+                                                        onSubmit={(e) => {
+                                                            e.preventDefault()
+                                                            void submit(row, draft)
+                                                        }}
+                                                    >
+                                                        <label htmlFor={`st-${rowId}`}>
+                                                            New review state
+                                                        </label>
+                                                        <select
+                                                            id={`st-${rowId}`}
+                                                            className="admin-role-select"
+                                                            value={draft.status}
+                                                            onChange={(e) =>
+                                                                setDraft({
+                                                                    ...draft,
+                                                                    status: e.target
+                                                                        .value as RecordReviewStatus,
+                                                                })
+                                                            }
+                                                        >
+                                                            {options.map((s) => (
+                                                                <option key={s} value={s}>
+                                                                    {statusLabel(s)}
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <p className="admin-hint">
+                                                            {statusMeaning(draft.status)}
+                                                        </p>
+                                                        <label htmlFor={`note-${rowId}`}>
+                                                            Why (required)
+                                                        </label>
+                                                        <textarea
+                                                            id={`note-${rowId}`}
+                                                            value={draft.note}
+                                                            rows={2}
+                                                            onChange={(e) =>
+                                                                setDraft({
+                                                                    ...draft,
+                                                                    note: e.target.value,
+                                                                })
+                                                            }
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            disabled={
+                                                                draft.note.trim().length === 0 ||
+                                                                rowBusy
+                                                            }
+                                                        >
+                                                            Record this judgement
+                                                        </button>
+                                                    </form>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+        </section>
+    )
+}

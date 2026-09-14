@@ -30,6 +30,18 @@ export function AuthStatus() {
     const displayName = state.user.full_name || state.user.username
     return (
         <div className="auth-status">
+            {/* Shown to curators as well as admins, because the review
+                queue is theirs: `PATCH /record-reviews` is gated on
+                `require_curator_or_admin`, not `require_admin`.
+
+                Without this a curator had no way to reach the one page
+                built for them -- the only link lived inside `/admin`,
+                which they cannot open, so the address bar was the entire
+                navigation. That is the failure this link exists to fix,
+                not a security control: the server gates every write. */}
+            {(state.user.role === "curator" || state.user.role === "admin") && (
+                <Link className="auth-status-link" to="/review-queue">Review</Link>
+            )}
             {/* Shown only to admins. This hides a page they could otherwise
                 only find by typing the address; it is not what stops anyone
                 else using it -- every route `/admin` calls is gated on
