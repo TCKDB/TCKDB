@@ -1658,6 +1658,7 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                             sha256={row.sha256}
                                             artifactRef={row.artifact_ref}
                                             filename={row.filename}
+                                            kind={row.kind}
                                         />
                                     </td>
                                 </tr>

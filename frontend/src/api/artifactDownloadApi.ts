@@ -85,6 +85,7 @@ export async function fetchArtifact(input: {
     sha256: string
     artifactRef?: string | null
     filename?: string | null
+    kind?: string | null
 }): Promise<DownloadedArtifact> {
     const response = await fetch(
         `${API_BASE}/api/v1/scientific/artifacts/${input.sha256}/download`,
@@ -97,7 +98,7 @@ export async function fetchArtifact(input: {
     }
     return {
         blob: await response.blob(),
-        filename: artifactDownloadName(input.artifactRef, input.filename, input.sha256),
+        filename: artifactDownloadName(input.artifactRef, input.filename, input.sha256, input.kind),
     }
 }
 

@@ -719,57 +719,69 @@ def _validate_sha256(value: str) -> str:
 _UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
 
 
+def _sanitise_segment(value: str | None) -> str:
+    """Basename only, then only characters that cannot mean anything to a path.
+
+    Basename first: that is what discards any directory component,
+    traversal or otherwise, before anything else looks at the value.
+    Stricter than stripping separators on purpose -- it also removes the
+    leading dots that would otherwise produce a hidden file.
+    """
+    if not value:
+        return ""
+    base = PurePosixPath(value.strip()).name
+    base = PureWindowsPath(base).name
+    return _UNSAFE_NAME_CHARS.sub("_", base).strip("._")
+
+
 def artifact_download_name(
-    artifact_ref: str | None, filename: str | None, digest: str
+    artifact_ref: str | None,
+    filename: str | None,
+    digest: str,
+    kind: str | None = None,
 ) -> str:
     """The filename to save an artifact under.
 
-    ``<stem>_<artifact_ref><suffix>`` when the archive knows both --
-    ``input_art_7k2p9x.log``. Three things at once: the original name
-    leads, so a directory of downloads sorts by what the files ARE rather
-    than by an arbitrary ref; the ref keeps it unique, so two
-    calculations both depositing ``input.log`` do not collide; and the
-    extension stays last, which is what makes the file open in the right
-    thing.
+    ``<kind>_<artifact_ref><ext>`` -- ``output_log_art_7k2p9x.log``. What
+    the file IS, then which record it is, then its format.
 
-    The ref goes before the suffix rather than after the whole filename
-    for exactly that third reason: ``input.log_art_7k2p9x`` sorts and
-    disambiguates just as well and is no longer a ``.log``.
+    Why not the recorded filename
+    -----------------------------
+    Because on this corpus it identifies nothing. MEASURED on the hosted
+    instance 2026-09-14: 317 artifacts of kind ``output_log`` are all
+    called ``input.log``, and 246 of kind ``input`` are all called
+    ``input.gjf``. That is Gaussian's own convention -- ``g16 input.gjf``
+    writes ``input.log``, so the output is named after the JOB rather
+    than its role -- and ARC names every job file ``input.gjf``.
 
-    A bare 64-character digest is unique too, and unusable.
+    So the recorded filename was both non-identifying (563 files, two
+    distinct names) and actively misleading: a directory of downloads
+    whose every entry began ``input`` when most were outputs. The archive
+    still records the true filename; it just stops being what a local
+    copy is named after.
 
-    **The filename comes from the server, so it is not trusted.** A
-    stored ``filename`` of ``../../.ssh/authorized_keys`` would, joined
-    naively to an output directory, write outside it. Only the basename
-    survives, and then only characters that cannot mean anything to a
-    path: everything else collapses to ``_``. That is deliberately
-    stricter than "strip the separators" -- it also removes the leading
-    dots that would otherwise hide the file, and anything a shell would
-    read as a glob.
+    The extension comes from the recorded name, never from the kind:
+    ``output_log`` is a role and ``.log`` is a format, and the same kind
+    could arrive as ``.out``.
 
-    Falls back to the filename alone when there is no ref, and to the
-    digest when there is no usable filename either. The digest is always
-    a correct answer; it is only ever the least useful one.
+    **Nothing here is trusted.** Filename and kind both reach this
+    function as stored data, and the result is joined to an output
+    directory. Every segment is reduced to characters that cannot mean
+    anything to a path -- by replacement, never escaping.
     """
-    safe = ""
-    if filename:
-        # basename first: this is what discards any directory component,
-        # traversal or otherwise, before anything else looks at the value.
-        base = PurePosixPath(filename.strip()).name
-        base = PureWindowsPath(base).name
-        safe = _UNSAFE_NAME_CHARS.sub("_", base).strip("._")
+    safe_name = _sanitise_segment(filename)
+    safe_ref = _sanitise_segment(artifact_ref)
+    safe_kind = _sanitise_segment(kind)
 
-    if safe and artifact_ref:
-        ref = _UNSAFE_NAME_CHARS.sub("_", artifact_ref).strip("._")
-        if ref:
-            # `.suffix`/`.stem` on the already-sanitised basename: the
-            # split is cosmetic, and everything load-bearing about safety
-            # happened above.
-            as_path = PurePosixPath(safe)
-            suffix = as_path.suffix
-            stem = as_path.stem or safe
-            return f"{stem}_{ref}{suffix}"
-    return safe or digest
+    stem, _, _ = safe_name.rpartition(".") if "." in safe_name[1:] else (safe_name, "", "")
+    suffix = PurePosixPath(safe_name).suffix if "." in safe_name[1:] else ""
+
+    lead = safe_kind or stem
+    if lead and safe_ref:
+        return f"{lead}_{safe_ref}{suffix}"
+    if lead:
+        return f"{lead}{suffix}"
+    return safe_name or digest
 
 
 def _lookup_artifact_name(client: Any, digest: str) -> str:
@@ -795,7 +807,10 @@ def _lookup_artifact_name(client: Any, digest: str) -> str:
     if not isinstance(artifact, dict):
         return digest
     return artifact_download_name(
-        artifact.get("artifact_ref"), artifact.get("filename"), digest
+        artifact.get("artifact_ref"),
+        artifact.get("filename"),
+        digest,
+        artifact.get("kind"),
     )
 
 
