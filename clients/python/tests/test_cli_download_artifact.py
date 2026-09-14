@@ -160,3 +160,139 @@ def test_a_connection_failure_is_a_plain_failure(
 
     assert rc == cli.EXIT_FAILURES
     assert "connection refused" in capsys.readouterr().err
+
+
+class TestArtifactDownloadName:
+    """``<artifact_ref>_<filename>`` -- unique, and it keeps the extension.
+
+    A bare 64-character digest is unique too, and unusable: it is the
+    fallback, never the goal.
+    """
+
+    def test_ref_and_filename_are_joined(self):
+        assert cli.artifact_download_name(
+            "art_7k2p9x", "input.log", DIGEST
+        ) == "input_art_7k2p9x.log"
+
+    def test_the_extension_survives_so_the_file_opens_in_the_right_thing(self):
+        # The ref goes before the suffix, not after the whole filename.
+        # `input.log_art_7k2p9x` disambiguates just as well and is no
+        # longer a `.log`.
+        for name, expected_suffix in [
+            ("input.log", ".log"),
+            ("job.out.log", ".log"),
+            ("geom.xyz", ".xyz"),
+        ]:
+            assert cli.artifact_download_name("art_a", name, DIGEST).endswith(
+                expected_suffix
+            )
+
+    def test_a_name_with_no_extension_just_gets_the_ref(self):
+        assert cli.artifact_download_name("art_a", "OUTPUT", DIGEST) == "OUTPUT_art_a"
+
+    def test_the_ref_is_what_stops_two_input_logs_colliding(self):
+        first = cli.artifact_download_name("art_aaa", "input.log", DIGEST)
+        second = cli.artifact_download_name("art_bbb", "input.log", DIGEST)
+        assert first != second
+
+    def test_filename_alone_when_there_is_no_ref(self):
+        assert cli.artifact_download_name(None, "input.log", DIGEST) == "input.log"
+
+    def test_the_digest_is_the_fallback_and_only_the_fallback(self):
+        assert cli.artifact_download_name(None, None, DIGEST) == DIGEST
+        assert cli.artifact_download_name("art_7k2p9x", None, DIGEST) == DIGEST
+        assert cli.artifact_download_name(None, "   ", DIGEST) == DIGEST
+        # A name made entirely of characters that cannot survive sanitising
+        # leaves nothing to use.
+        assert cli.artifact_download_name(None, "///", DIGEST) == DIGEST
+
+    @pytest.mark.parametrize(
+        "hostile",
+        [
+            "../../.ssh/authorized_keys",
+            "/etc/passwd",
+            "..\\..\\windows\\system32\\config",
+            "sub/dir/input.log",
+            "a\x00b.log",
+        ],
+    )
+    def test_a_server_supplied_name_cannot_escape_the_output_directory(self, hostile):
+        """The filename is stored data, so it is not trusted.
+
+        Joined naively to an output directory, any of these would write
+        somewhere the caller did not name.
+        """
+        produced = cli.artifact_download_name("art_7k2p9x", hostile, DIGEST)
+
+        assert "/" not in produced
+        assert "\\" not in produced
+        assert "\x00" not in produced
+        assert ".." not in produced
+        # And the result stays inside the directory it is joined to.
+        base = Path("/tmp/out")
+        assert (base / produced).resolve().parent == base.resolve()
+
+    def test_a_leading_dot_does_not_survive(self):
+        # ``.bashrc`` written into a directory is a hidden file; the archive
+        # should not be able to make one by naming an artifact that way.
+        assert not cli.artifact_download_name(None, ".bashrc", DIGEST).startswith(".")
+
+
+class _NamedClient(_FakeClient):
+    def search_artifacts(self, **kwargs):
+        self.searched = kwargs
+        return {
+            "records": [
+                {"artifact": {"artifact_ref": "art_7k2p9x", "filename": "input.log"}}
+            ]
+        }
+
+
+def test_the_default_filename_comes_from_the_archive(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "TCKDBClient", _NamedClient)
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main_tckdb(["download", "artifact", DIGEST]) == cli.EXIT_OK
+
+    assert (tmp_path / "input_art_7k2p9x.log").read_bytes() == PAYLOAD
+    assert not (tmp_path / DIGEST).exists()
+    assert _FakeClient.last.searched["sha256"] == DIGEST
+
+
+def test_an_explicit_output_skips_the_lookup_entirely(monkeypatch, tmp_path):
+    """`--output` is an answer; a request to second-guess it is waste."""
+    monkeypatch.setattr(cli, "TCKDBClient", _NamedClient)
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
+    out = tmp_path / "mine.log"
+
+    assert cli.main_tckdb(
+        ["download", "artifact", DIGEST, "-o", str(out)]
+    ) == cli.EXIT_OK
+
+    assert out.read_bytes() == PAYLOAD
+    assert not hasattr(_FakeClient.last, "searched")
+
+
+def test_a_failed_name_lookup_still_downloads(monkeypatch, tmp_path):
+    """Naming a file well is not worth failing a download over."""
+    class _SearchBroken(_FakeClient):
+        def search_artifacts(self, **kwargs):
+            raise TCKDBConnectionError("search is down")
+
+    monkeypatch.setattr(cli, "TCKDBClient", _SearchBroken)
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main_tckdb(["download", "artifact", DIGEST]) == cli.EXIT_OK
+    assert (tmp_path / DIGEST).read_bytes() == PAYLOAD
+
+
+def test_a_directory_target_uses_the_derived_name_inside_it(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "TCKDBClient", _NamedClient)
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
+
+    assert cli.main_tckdb(
+        ["download", "artifact", DIGEST, "-o", str(tmp_path)]
+    ) == cli.EXIT_OK
+    assert (tmp_path / DIGEST).read_bytes() == PAYLOAD

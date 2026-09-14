@@ -16,7 +16,7 @@ import logging
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from tckdb_client.client import TCKDBClient
@@ -328,11 +328,12 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
         "-o",
         default=None,
         help=(
-            "Where to write. A directory writes <sha256> inside it; '-' "
-            "writes the bytes to stdout. Default: <sha256> in the working "
-            "directory. The archive knows the original filename, but the "
-            "download returns only bytes, so naming the file is the "
-            "caller's to do."
+            "Where to write. A directory writes the derived name inside "
+            "it; '-' writes the bytes to stdout. Default: "
+            "<artifact_ref>_<filename> as the archive records them "
+            "(art_7k2p9x_input.log) -- the ref keeps it unique, the "
+            "original name keeps the extension. Falls back to the sha256 "
+            "when the archive has no name for it."
         ),
     )
     artifact_parser.add_argument(
@@ -715,6 +716,89 @@ def _validate_sha256(value: str) -> str:
     return candidate
 
 
+_UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def artifact_download_name(
+    artifact_ref: str | None, filename: str | None, digest: str
+) -> str:
+    """The filename to save an artifact under.
+
+    ``<stem>_<artifact_ref><suffix>`` when the archive knows both --
+    ``input_art_7k2p9x.log``. Three things at once: the original name
+    leads, so a directory of downloads sorts by what the files ARE rather
+    than by an arbitrary ref; the ref keeps it unique, so two
+    calculations both depositing ``input.log`` do not collide; and the
+    extension stays last, which is what makes the file open in the right
+    thing.
+
+    The ref goes before the suffix rather than after the whole filename
+    for exactly that third reason: ``input.log_art_7k2p9x`` sorts and
+    disambiguates just as well and is no longer a ``.log``.
+
+    A bare 64-character digest is unique too, and unusable.
+
+    **The filename comes from the server, so it is not trusted.** A
+    stored ``filename`` of ``../../.ssh/authorized_keys`` would, joined
+    naively to an output directory, write outside it. Only the basename
+    survives, and then only characters that cannot mean anything to a
+    path: everything else collapses to ``_``. That is deliberately
+    stricter than "strip the separators" -- it also removes the leading
+    dots that would otherwise hide the file, and anything a shell would
+    read as a glob.
+
+    Falls back to the filename alone when there is no ref, and to the
+    digest when there is no usable filename either. The digest is always
+    a correct answer; it is only ever the least useful one.
+    """
+    safe = ""
+    if filename:
+        # basename first: this is what discards any directory component,
+        # traversal or otherwise, before anything else looks at the value.
+        base = PurePosixPath(filename.strip()).name
+        base = PureWindowsPath(base).name
+        safe = _UNSAFE_NAME_CHARS.sub("_", base).strip("._")
+
+    if safe and artifact_ref:
+        ref = _UNSAFE_NAME_CHARS.sub("_", artifact_ref).strip("._")
+        if ref:
+            # `.suffix`/`.stem` on the already-sanitised basename: the
+            # split is cosmetic, and everything load-bearing about safety
+            # happened above.
+            as_path = PurePosixPath(safe)
+            suffix = as_path.suffix
+            stem = as_path.stem or safe
+            return f"{stem}_{ref}{suffix}"
+    return safe or digest
+
+
+def _lookup_artifact_name(client: Any, digest: str) -> str:
+    """Ask the archive what this artifact is called. Digest on any doubt.
+
+    One extra GET against the metadata search, which is the public read
+    surface and cheap. Naming a download well is not worth failing a
+    download over, so every failure here -- offline, an error status, an
+    empty or unexpected body -- falls back to the digest rather than
+    propagating.
+    """
+    try:
+        found = client.search_artifacts(sha256=digest, limit=1)
+    except Exception:  # noqa: BLE001 - see the docstring: never fatal.
+        return digest
+    if not isinstance(found, dict):
+        return digest
+    records = found.get("records") or found.get("items") or []
+    if not isinstance(records, list) or not records:
+        return digest
+    first = records[0]
+    artifact = first.get("artifact") if isinstance(first, dict) else None
+    if not isinstance(artifact, dict):
+        return digest
+    return artifact_download_name(
+        artifact.get("artifact_ref"), artifact.get("filename"), digest
+    )
+
+
 def _resolve_download_target(output: str | None, digest: str) -> Path | None:
     """Where the bytes go. ``None`` means stdout.
 
@@ -745,7 +829,17 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         )
         return EXIT_FAILURES
 
-    target = _resolve_download_target(args.output, args.sha256)
+    client = TCKDBClient(
+        base_url=args.base_url, api_key=api_key, timeout=args.timeout
+    )
+
+    # Only ask the archive what the file is called when the caller has not
+    # already said. `--output` is an answer; a lookup to second-guess it
+    # would be a request made for nothing.
+    default_name = (
+        _lookup_artifact_name(client, args.sha256) if args.output is None else args.sha256
+    )
+    target = _resolve_download_target(args.output, default_name)
     if target is not None and target.exists() and not args.force:
         print(
             f"error: {target} already exists (pass --force to overwrite)",
@@ -753,9 +847,6 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         )
         return EXIT_FAILURES
 
-    client = TCKDBClient(
-        base_url=args.base_url, api_key=api_key, timeout=args.timeout
-    )
     try:
         payload = client.download_artifact(args.sha256)
     except TCKDBConnectionError as exc:
