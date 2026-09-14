@@ -31776,6 +31776,17 @@
             "title": "Record Id",
             "type": "integer"
           },
+          "record_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Public Ref"
+          },
           "record_type": {
             "$ref": "#/components/schemas/SubmissionRecordType"
           },

@@ -18,6 +18,19 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
 
     record_type: SubmissionRecordType
     record_id: int
+    #: The handle the archive is addressed by, resolved at read time.
+    #:
+    #: ``record_id`` alone names a row and nothing a reader can use: it
+    #: cannot be pasted into a URL, quoted in an issue, or looked up
+    #: through any public route. A review queue whose whole job is "go and
+    #: look at this record" is unusable without this field, which is why
+    #: it is resolved here rather than left to the client.
+    #:
+    #: ``None`` for either of the two reasons a record cannot be named:
+    #: its table has no ``public_ref`` column
+    #: (``applied_energy_correction``), or the row is gone. The same
+    #: contract ``AdminCuratorTaskResponse.record_public_ref`` carries.
+    record_public_ref: str | None = None
     status: RecordReviewStatus
     submission_id: int | None = None
     reviewed_by: int | None = None

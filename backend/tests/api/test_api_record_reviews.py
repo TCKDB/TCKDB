@@ -417,6 +417,74 @@ class TestRecordReviewApi:
         assert rows
         assert all(r["status"] == "not_reviewed" for r in rows)
 
+    def test_a_review_row_names_its_record_by_public_ref(self, client):
+        """The queue's whole job is "go and look at this record".
+
+        ``record_id`` alone cannot be pasted into a URL or looked up
+        through any public route, so a reviewer holding only that has
+        nothing to act on. This is the same gap #479 closed on the
+        machine-review inspection surface.
+        """
+        thermo_id = self._seed_thermo(client)
+        resp = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}")
+        assert resp.status_code == 200
+        body = resp.json()
+
+        ref = body["record_public_ref"]
+        assert ref, "thermo carries PublicRefMixin, so a ref must resolve"
+        # Not the row id wearing a different name -- the two are
+        # deliberately compared, because falling back to the id is exactly
+        # the defect this field exists to prevent.
+        assert ref != str(thermo_id)
+        assert body["record_id"] == thermo_id
+
+    def test_the_list_route_names_every_row_it_returns(self, client):
+        """Resolved for a whole page, not just for the single-row read.
+
+        A list that omitted the ref would send a reviewer to the detail
+        route for every row just to learn what each row is about.
+        """
+        first = self._seed_thermo(client)
+        second = self._seed_thermo(client)
+        resp = client.get(
+            "/api/v1/record-reviews",
+            params={"record_type": "thermo", "status": "not_reviewed", "limit": 50},
+        )
+        assert resp.status_code == 200
+        rows = {r["record_id"]: r for r in resp.json()}
+
+        for record_id in (first, second):
+            assert record_id in rows, "seeded row missing from the listing"
+            ref = rows[record_id]["record_public_ref"]
+            assert ref, f"row {record_id} came back unnamed"
+            assert ref != str(record_id)
+        # Two records, two distinct refs -- a mapper that resolved one ref
+        # and reused it for the page would pass every check above.
+        assert rows[first]["record_public_ref"] != rows[second]["record_public_ref"]
+
+    def test_the_ref_survives_a_curator_transition(
+        self, client, login_as, _api_curator_user
+    ):
+        """PATCH answers with the same shape the reads do.
+
+        A client that re-renders a row from the PATCH reply would lose the
+        record's name on every approval if this route were the one that
+        forgot to resolve it.
+        """
+        thermo_id = self._seed_thermo(client)
+        before = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}").json()
+
+        login_as(_api_curator_user)
+        resp = client.patch(
+            f"/api/v1/record-reviews/thermo/{thermo_id}",
+            json={"status": "approved"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "approved"
+        assert body["record_public_ref"] == before["record_public_ref"]
+        assert body["record_public_ref"]
+
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)
         # Default test user is role=user → 403.
