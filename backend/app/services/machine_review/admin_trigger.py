@@ -230,6 +230,15 @@ def run_admin_fake_machine_review(
         session,
         record_type=record_type,
         record_id=record_id,
+        # The stringified internal id, deliberately -- this is the private
+        # *matching key* the whole machine-review stack is keyed on (see
+        # ``audit_adapter``'s "Internal-id addressing" and ``mapping``'s
+        # docstring), and it is what every stored ``context_hash`` was computed
+        # over. Passing a public ref here would split one record's reviews into
+        # two grouping buckets, because the audit path would still key the same
+        # record by its id. A reader-facing handle is a separate, resolved-at-
+        # read-time field -- ``record_public_ref`` on the curator-task read, via
+        # ``app.services.record_refs``.
         record_ref=str(record_id),
         trust_fragment=fragment,
         active_prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,

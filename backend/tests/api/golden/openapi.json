@@ -121,7 +121,7 @@
       },
       "AdminCuratorTaskResponse": {
         "additionalProperties": false,
-        "description": "Admin-only view of one curator task.\n\nDistinct from any public scientific schema; carries no public\n``trust.machine_review``. ``record_id`` is an internal id, acceptable here\nbecause the surface is admin-only (spec §3).",
+        "description": "Admin-only view of one curator task.\n\nDistinct from any public scientific schema; carries no public\n``trust.machine_review``. ``record_id`` is an internal id, acceptable here\nbecause the surface is admin-only (spec §3).\n\n``record_public_ref`` is the same record's public ref, resolved at read\ntime and never stored on the task. A curator working this queue has to get\nfrom \"task #12 concerns calculation 431\" to the record itself, and 431 is\nnot something any read route answers to -- ``calc_...`` is. Without it the\nonly way across is an internal id a curator cannot use and a UI must not\nshow (DR-0028 Req 2).\n\nIt is ``null`` when the record cannot be named: ``applied_energy_correction``\nhas no ``public_ref`` column, and a record may have been deleted since the\ntask was raised. ``null`` is the honest answer to both -- see\n:mod:`app.services.record_refs`. Deliberately **not** spelled ``record_ref``:\nthat name is already taken one screen up by\n:class:`AdminMachineReviewRecordInspection`, where it means the private\nmachine-review *matching key* (the stringified internal id in the audit\npath). Two meanings under one name on one router is how a UI ends up\nlinking to a row id.",
         "properties": {
           "assigned_to": {
             "anyOf": [
@@ -160,6 +160,17 @@
           "record_id": {
             "title": "Record Id",
             "type": "integer"
+          },
+          "record_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Public Ref"
           },
           "record_type": {
             "$ref": "#/components/schemas/SubmissionRecordType"
