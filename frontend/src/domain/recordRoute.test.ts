@@ -58,6 +58,50 @@ const EXPECTED_UNLINKABLE = [
     "artifact",
 ]
 
+/**
+ * These two lists are the frontend's own record of a decision, and this
+ * suite can only check them against each other.
+ *
+ * What the checks below DO prove: no type is in both lists, and the two
+ * together come to the seventeen `SubmissionRecordType` members that
+ * existed when this was written.
+ *
+ * What they do NOT prove, and what a reader should not assume: that the
+ * backend enum still has exactly those seventeen. A new record type added
+ * on the backend appears in neither list and nothing here notices -- its
+ * rows would simply render unlinked, which is the safe direction but is a
+ * silent decision rather than a made one. Reading the enum from
+ * `backend/app/db/models/common.py` was tried and abandoned: vite refuses
+ * to load a file from outside its root, and widening `server.fs.allow` to
+ * the repo root would let the dev server (which binds 0.0.0.0) serve
+ * backend source over the network. A test is not worth that. The guard
+ * belongs on the backend side, where reading the frontend's list costs
+ * nothing -- raised as its own task.
+ *
+ * `EXPECTED_UNLINKABLE` on its own is weak by construction: `recordRoute`
+ * returns null for ANY unknown string, so those eight cases and the
+ * "some_future_type" case exercise the same branch. They are kept because
+ * naming the real types documents which ones were considered.
+ */
+const RECORD_TYPE_COUNT_WHEN_WRITTEN = 17
+
+describe("the two lists are a coherent decision", () => {
+    it("accounts for every record type that existed when this was written", () => {
+        expect(EXPECTED_LINKABLE.length + EXPECTED_UNLINKABLE.length).toBe(
+            RECORD_TYPE_COUNT_WHEN_WRITTEN,
+        )
+    })
+
+    it("claims no record type is both linkable and not", () => {
+        expect(EXPECTED_LINKABLE.filter((t) => EXPECTED_UNLINKABLE.includes(t))).toEqual([])
+    })
+
+    it("names each type once", () => {
+        const all = [...EXPECTED_LINKABLE, ...EXPECTED_UNLINKABLE]
+        expect(new Set(all).size).toBe(all.length)
+    })
+})
+
 describe("every link this module produces resolves to a real route", () => {
     it.each(EXPECTED_LINKABLE)("%s lands on a declared route", (recordType) => {
         const href = recordRoute(recordType, "ref_abc")

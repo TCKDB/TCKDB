@@ -1,6 +1,6 @@
 import { throwForFailedResponse } from "./authApi"
 import {
-    CuratorTaskPageSchema,
+    CuratorTaskEnvelopeSchema,
     CuratorTaskSchema,
     type CuratorTask,
     type CuratorTaskPage,
@@ -25,6 +25,30 @@ import {
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
 const BASE = `${API_BASE}/api/v1/admin/machine-review/curator-tasks`
 
+/**
+ * The write reached the server and was applied; the reply could not be read.
+ *
+ * This exists so the UI never tells a curator "nothing was changed" about a
+ * change that was in fact committed. The POST returned 2xx -- the database
+ * row has moved -- and only the *response body* failed to validate, which
+ * is what happens the first time the backend returns an enum member this
+ * build predates. Saying "that did not go through" there would be a lie,
+ * and the curator's natural next move (do it again) can then fail with a
+ * state conflict about work that already succeeded.
+ */
+export class CuratorTaskResponseError extends Error {
+    readonly action: string
+
+    constructor(action: string) {
+        super(
+            "The change was saved, but this page could not read the reply. " +
+                "Reload to see the task's current state.",
+        )
+        this.name = "CuratorTaskResponseError"
+        this.action = action
+    }
+}
+
 async function readJson(url: string): Promise<unknown> {
     const response = await fetch(url, {
         method: "GET",
@@ -46,6 +70,13 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
     return response.json()
 }
 
+/** Parse a write's reply, distinguishing "refused" from "applied but unreadable". */
+function parseWriteResult(payload: unknown, action: string): CuratorTask {
+    const parsed = CuratorTaskSchema.safeParse(payload)
+    if (!parsed.success) throw new CuratorTaskResponseError(action)
+    return parsed.data
+}
+
 export async function listCuratorTasks(options?: {
     workflowState?: CuratorTaskState
     limit?: number
@@ -56,7 +87,27 @@ export async function listCuratorTasks(options?: {
     if (options?.limit !== undefined) params.set("limit", String(options.limit))
     if (options?.offset !== undefined) params.set("offset", String(options.offset))
     const query = params.toString()
-    return CuratorTaskPageSchema.parse(await readJson(`${BASE}${query ? `?${query}` : ""}`))
+    const envelope = CuratorTaskEnvelopeSchema.parse(
+        await readJson(`${BASE}${query ? `?${query}` : ""}`),
+    )
+
+    // Row by row, so one task this build cannot read costs that task and
+    // not the queue. A queue that renders nothing at all is the worst
+    // possible answer to "what work is outstanding".
+    const items: CuratorTask[] = []
+    let unreadable = 0
+    for (const row of envelope.items) {
+        const parsed = CuratorTaskSchema.safeParse(row)
+        if (parsed.success) items.push(parsed.data)
+        else unreadable += 1
+    }
+    return {
+        items,
+        total: envelope.total,
+        skip: envelope.skip,
+        limit: envelope.limit,
+        unreadable,
+    }
 }
 
 /**
@@ -68,7 +119,7 @@ export async function listCuratorTasks(options?: {
  * work, which is exactly what an audit trail should not allow from a UI.
  */
 export async function startCuratorTaskReview(taskId: number): Promise<CuratorTask> {
-    return CuratorTaskSchema.parse(await postJson(`/${taskId}/start-review`, {}))
+    return parseWriteResult(await postJson(`/${taskId}/start-review`, {}), "start-review")
 }
 
 /**
@@ -83,15 +134,16 @@ export async function resolveCuratorTask(
     resolutionState: CuratorTaskState,
     resolutionNote: string,
 ): Promise<CuratorTask> {
-    return CuratorTaskSchema.parse(
+    return parseWriteResult(
         await postJson(`/${taskId}/resolve`, {
             resolution_state: resolutionState,
             resolution_note: resolutionNote,
         }),
+        "resolve",
     )
 }
 
 /** Reopen a terminal task. Clears the resolution triple; keeps the assignee. */
 export async function reopenCuratorTask(taskId: number): Promise<CuratorTask> {
-    return CuratorTaskSchema.parse(await postJson(`/${taskId}/reopen`, {}))
+    return parseWriteResult(await postJson(`/${taskId}/reopen`, {}), "reopen")
 }

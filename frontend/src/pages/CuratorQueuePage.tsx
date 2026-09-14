@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Link, Navigate } from "react-router-dom"
 import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
 import {
+    CuratorTaskResponseError,
     listCuratorTasks,
     reopenCuratorTask,
     resolveCuratorTask,
@@ -16,6 +17,7 @@ import {
     TERMINAL_STATES,
     isOpen,
     resolutionMeaning,
+    severityClass,
     stateLabel,
     type CuratorTask,
     type CuratorTaskState,
@@ -39,14 +41,32 @@ import {
  * Filtering defaults to open tasks. A curator opening this wants the work,
  * not the history; terminal states are one click away and are labelled
  * with what each of them asserts.
+ *
+ * ## Per-row state, and why none of it is per-page
+ *
+ * Everything a row owns is keyed by task id: which row's close form is
+ * open, the note typed into it, the state chosen in it, which rows have a
+ * write in flight, and which row is showing a refusal. An earlier draft
+ * held the note and the chosen state as single page-level values, and
+ * that is not a tidiness problem -- it silently attaches one record's
+ * written justification to a different record's audit trail. Open the
+ * close form on task A, type why A is fine, change your mind, open task
+ * B: the form under B came up pre-filled with A's sentence and already
+ * submittable. `resolution_note` exists precisely so the next reader
+ * learns why THIS finding stopped mattering.
+ *
+ * `busy` is a set for the same reason: as a single slot, the first write
+ * to come back re-enabled every other row's buttons, including rows still
+ * waiting on their own request.
  */
 
 type LoadState =
     | { status: "loading" }
     | { status: "error"; message: string }
-    | { status: "ready"; tasks: CuratorTask[]; total: number }
+    | { status: "ready"; tasks: CuratorTask[]; total: number; unreadable: number }
 
-type RowBusy = { taskId: number; what: "start" | "resolve" | "reopen" } | null
+/** The close form's contents, for the one row it is open under. */
+type ResolveDraft = { taskId: number; state: CuratorTaskState; note: string }
 
 const PAGE_LIMIT = 50
 
@@ -54,17 +74,30 @@ export default function CuratorQueuePage() {
     const { state } = useAuth()
     const [filter, setFilter] = useState<CuratorTaskState | "open" | "all">("open")
     const [load, setLoad] = useState<LoadState>({ status: "loading" })
-    const [busy, setBusy] = useState<RowBusy>(null)
+    const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
     const [rowError, setRowError] = useState<{ taskId: number; message: string } | null>(null)
-    const [resolving, setResolving] = useState<number | null>(null)
-    const [resolutionState, setResolutionState] =
-        useState<CuratorTaskState>("resolved_no_action")
-    const [note, setNote] = useState("")
+    const [draft, setDraft] = useState<ResolveDraft | null>(null)
 
     const isAdmin = state.status === "signed-in" && state.user.role === "admin"
 
-    const refresh = useCallback(async () => {
-        setLoad({ status: "loading" })
+    // The filter as of *now*, for code that resumes after an await. A write
+    // can land after the curator has changed the filter, and reading the
+    // filter captured by the render that started it would then re-filter
+    // the list by a view nobody is looking at any more.
+    const filterRef = useRef(filter)
+    useEffect(() => {
+        filterRef.current = filter
+    }, [filter])
+
+    // Drops a response that a newer request has already superseded, so two
+    // quick filter changes cannot leave the slower answer on screen under
+    // the faster one's heading.
+    const requestSeq = useRef(0)
+
+    const refresh = useCallback(async (options?: { keepRows?: boolean }) => {
+        if (!options?.keepRows) setLoad({ status: "loading" })
+        const seq = (requestSeq.current += 1)
+        const current = filterRef.current
         try {
             // "open" is three states and the list route filters on one, so the
             // page asks for everything and narrows here. At PAGE_LIMIT rows
@@ -72,16 +105,23 @@ export default function CuratorQueuePage() {
             // a backend filter rather than client-side slicing of a partial
             // page, which would silently hide work.
             const page = await listCuratorTasks(
-                filter === "open" || filter === "all"
+                current === "open" || current === "all"
                     ? { limit: PAGE_LIMIT }
-                    : { workflowState: filter, limit: PAGE_LIMIT },
+                    : { workflowState: current, limit: PAGE_LIMIT },
             )
+            if (seq !== requestSeq.current) return
             const tasks =
-                filter === "open"
+                current === "open"
                     ? page.items.filter((t) => isOpen(t.workflow_state))
                     : page.items
-            setLoad({ status: "ready", tasks, total: page.total })
+            setLoad({
+                status: "ready",
+                tasks,
+                total: page.total,
+                unreadable: page.unreadable,
+            })
         } catch (caught) {
+            if (seq !== requestSeq.current) return
             setLoad({
                 status: "error",
                 message:
@@ -90,11 +130,11 @@ export default function CuratorQueuePage() {
                         : "Could not load the curator queue.",
             })
         }
-    }, [filter])
+    }, [])
 
     useEffect(() => {
         if (isAdmin) void refresh()
-    }, [isAdmin, refresh])
+    }, [isAdmin, refresh, filter])
 
     if (state.status === "loading") {
         return (
@@ -127,46 +167,42 @@ export default function CuratorQueuePage() {
         )
     }
 
-    function replaceTask(updated: CuratorTask) {
-        setLoad((current) => {
-            if (current.status !== "ready") return current
-            const tasks = current.tasks.map((t) => (t.id === updated.id ? updated : t))
-            return {
-                ...current,
-                // Dropping a row that no longer matches the filter, rather than
-                // leaving it sitting there in a state the filter excludes --
-                // which reads as "my change did not take".
-                tasks:
-                    filter === "open"
-                        ? tasks.filter((t) => isOpen(t.workflow_state))
-                        : tasks,
-            }
-        })
+    /** Open the close form under one row, or shut it. Always starts blank. */
+    function toggleResolve(taskId: number) {
+        setDraft((current) =>
+            current?.taskId === taskId
+                ? null
+                : { taskId, state: "resolved_no_action", note: "" },
+        )
     }
 
-    async function run(
-        taskId: number,
-        what: "start" | "resolve" | "reopen",
-        action: () => Promise<CuratorTask>,
-    ) {
-        setBusy({ taskId, what })
+    async function run(taskId: number, action: () => Promise<unknown>) {
+        setBusy((current) => new Set(current).add(taskId))
         setRowError(null)
         try {
-            replaceTask(await action())
-            if (what === "resolve") {
-                setResolving(null)
-                setNote("")
-            }
+            await action()
+            setDraft((current) => (current?.taskId === taskId ? null : current))
+            // Re-read the list rather than patching the row from the reply.
+            // The server is the authority on whether the row still belongs
+            // in the current view, and this keeps that judgement in one
+            // place instead of duplicating the filter logic at the write
+            // site -- where it was, and where it used a stale filter.
+            await refresh({ keepRows: true })
         } catch (caught) {
             setRowError({
                 taskId,
                 message:
+                    caught instanceof CuratorTaskResponseError ||
                     caught instanceof AuthApiError
                         ? caught.message
                         : "That did not go through. Nothing was changed.",
             })
         } finally {
-            setBusy(null)
+            setBusy((current) => {
+                const next = new Set(current)
+                next.delete(taskId)
+                return next
+            })
         }
     }
 
@@ -205,6 +241,15 @@ export default function CuratorQueuePage() {
                 <p className="auth-error" role="alert">{load.message}</p>
             )}
 
+            {load.status === "ready" && load.unreadable > 0 && (
+                <p className="auth-error" role="alert">
+                    {load.unreadable} task{load.unreadable === 1 ? "" : "s"} on this
+                    page could not be read and {load.unreadable === 1 ? "is" : "are"}{" "}
+                    not shown. This page is likely older than the archive it is
+                    talking to.
+                </p>
+            )}
+
             {load.status === "ready" && load.tasks.length === 0 && (
                 <p role="status">
                     {filter === "open"
@@ -216,7 +261,17 @@ export default function CuratorQueuePage() {
             {load.status === "ready" && load.tasks.length > 0 && (
                 <>
                     <p className="admin-count" role="status">
-                        {load.tasks.length} shown of {load.total} in the queue
+                        {/* Under "open" the backend counted every task including
+                            closed ones, so "N of TOTAL" would compare a filtered
+                            count against an unfiltered one and read as though
+                            work were missing. Only the exact-state filters ask
+                            the backend to count the same thing the table shows. */}
+                        {filter === "open" || filter === "all"
+                            ? `${load.tasks.length} shown`
+                            : `${load.tasks.length} shown of ${load.total} in this state`}
+                        {load.tasks.length === PAGE_LIMIT
+                            ? `, the most this page loads at once — there may be more`
+                            : ""}
                     </p>
                     <div className="table-scroll">
                         <table className="data-table" aria-label="Curator tasks">
@@ -226,13 +281,14 @@ export default function CuratorQueuePage() {
                                     <th scope="col">Severity</th>
                                     <th scope="col">Findings</th>
                                     <th scope="col">State</th>
-                                    <th scope="col">Submission</th>
                                     <th scope="col">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {load.tasks.map((task) => {
                                     const href = recordRoute(task.record_type, task.record_public_ref)
+                                    const rowBusy = busy.has(task.id)
+                                    const severity = severityClass(task.highest_severity)
                                     return (
                                         <tr key={task.id}>
                                             <td>
@@ -250,22 +306,21 @@ export default function CuratorQueuePage() {
                                                 )}
                                             </td>
                                             <td>
-                                                <span className={`severity-${task.highest_severity}`}>
+                                                <span className={severity ?? undefined}>
                                                     {task.highest_severity}
                                                 </span>
                                             </td>
                                             <td>{task.findings_count}</td>
                                             <td>{stateLabel(task.workflow_state)}</td>
-                                            <td>{task.submission_id}</td>
                                             <td>
                                                 {isOpen(task.workflow_state) ? (
                                                     <>
                                                         {task.workflow_state !== "in_curator_review" && (
                                                             <button
                                                                 type="button"
-                                                                disabled={busy?.taskId === task.id}
+                                                                disabled={rowBusy}
                                                                 onClick={() =>
-                                                                    void run(task.id, "start", () =>
+                                                                    void run(task.id, () =>
                                                                         startCuratorTaskReview(task.id),
                                                                     )
                                                                 }
@@ -275,12 +330,10 @@ export default function CuratorQueuePage() {
                                                         )}{" "}
                                                         <button
                                                             type="button"
-                                                            disabled={busy?.taskId === task.id}
-                                                            onClick={() =>
-                                                                setResolving(
-                                                                    resolving === task.id ? null : task.id,
-                                                                )
-                                                            }
+                                                            disabled={rowBusy}
+                                                            aria-expanded={draft?.taskId === task.id}
+                                                            aria-controls={`resolve-form-${task.id}`}
+                                                            onClick={() => toggleResolve(task.id)}
                                                         >
                                                             Close…
                                                         </button>
@@ -288,9 +341,9 @@ export default function CuratorQueuePage() {
                                                 ) : (
                                                     <button
                                                         type="button"
-                                                        disabled={busy?.taskId === task.id}
+                                                        disabled={rowBusy}
                                                         onClick={() =>
-                                                            void run(task.id, "reopen", () =>
+                                                            void run(task.id, () =>
                                                                 reopenCuratorTask(task.id),
                                                             )
                                                         }
@@ -303,16 +356,17 @@ export default function CuratorQueuePage() {
                                                         {rowError.message}
                                                     </p>
                                                 )}
-                                                {resolving === task.id && (
+                                                {draft?.taskId === task.id && (
                                                     <form
+                                                        id={`resolve-form-${task.id}`}
                                                         className="admin-resolve"
                                                         onSubmit={(e) => {
                                                             e.preventDefault()
-                                                            void run(task.id, "resolve", () =>
+                                                            void run(task.id, () =>
                                                                 resolveCuratorTask(
                                                                     task.id,
-                                                                    resolutionState,
-                                                                    note,
+                                                                    draft.state,
+                                                                    draft.note,
                                                                 ),
                                                             )
                                                         }}
@@ -323,11 +377,13 @@ export default function CuratorQueuePage() {
                                                         <select
                                                             id={`res-${task.id}`}
                                                             className="admin-role-select"
-                                                            value={resolutionState}
+                                                            value={draft.state}
                                                             onChange={(e) =>
-                                                                setResolutionState(
-                                                                    e.target.value as CuratorTaskState,
-                                                                )
+                                                                setDraft({
+                                                                    ...draft,
+                                                                    state: e.target
+                                                                        .value as CuratorTaskState,
+                                                                })
                                                             }
                                                         >
                                                             {TERMINAL_STATES.map((s) => (
@@ -337,22 +393,27 @@ export default function CuratorQueuePage() {
                                                             ))}
                                                         </select>
                                                         <p className="admin-hint">
-                                                            {resolutionMeaning(resolutionState)}
+                                                            {resolutionMeaning(draft.state)}
                                                         </p>
                                                         <label htmlFor={`note-${task.id}`}>
                                                             Why (required)
                                                         </label>
                                                         <textarea
                                                             id={`note-${task.id}`}
-                                                            value={note}
+                                                            value={draft.note}
                                                             rows={2}
-                                                            onChange={(e) => setNote(e.target.value)}
+                                                            onChange={(e) =>
+                                                                setDraft({
+                                                                    ...draft,
+                                                                    note: e.target.value,
+                                                                })
+                                                            }
                                                         />
                                                         <button
                                                             type="submit"
                                                             disabled={
-                                                                note.trim().length === 0 ||
-                                                                busy?.taskId === task.id
+                                                                draft.note.trim().length === 0 ||
+                                                                rowBusy
                                                             }
                                                         >
                                                             Close task

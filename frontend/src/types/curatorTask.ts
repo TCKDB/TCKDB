@@ -12,6 +12,26 @@ import { z } from "zod"
  * human has endorsed the science) and from the deterministic evidence
  * layer. Resolving a task says "somebody dealt with this finding", never
  * "this record is good".
+ *
+ * ## How strict each field is, and why it differs
+ *
+ * Strictness here is not a style choice: it decides what happens the day
+ * the backend grows an enum member this build has never heard of. A strict
+ * `z.enum` inside `z.array(...)` fails the WHOLE page, so one unfamiliar
+ * row takes every other row down with it -- and the queue's entire job is
+ * to show a curator the work that is outstanding.
+ *
+ * - `workflow_state` stays a strict enum. The page branches on it (open
+ *   versus terminal decides which actions a row offers), so a value it
+ *   cannot classify is genuinely unusable, not merely unfamiliar.
+ * - `highest_severity` and `machine_review_status` are plain strings. The
+ *   first is displayed and the second is not displayed at all; neither
+ *   drives a decision, so an unknown token can be shown as-is rather than
+ *   discarding the row. `severityClass` handles the styling side.
+ * - `record_type` was already a plain string, for the same reason.
+ *
+ * The array is then parsed row by row (see `curatorTasksApi.ts`) so a row
+ * that fails even this is reported and skipped, not fatal to the page.
  */
 
 export const CuratorTaskStateSchema = z.enum([
@@ -43,17 +63,9 @@ export const TERMINAL_STATES: readonly CuratorTaskState[] = [
     "dismissed_machine_finding",
 ]
 
-export const CuratorTaskSeveritySchema = z.enum(["info", "warning", "critical"])
-export type CuratorTaskSeverity = z.infer<typeof CuratorTaskSeveritySchema>
-
-export const MachineReviewStatusSchema = z.enum([
-    "not_run",
-    "machine_screened_pass",
-    "machine_screened_warning",
-    "machine_screened_needs_attention",
-    "machine_review_failed",
-])
-export type MachineReviewStatus = z.infer<typeof MachineReviewStatusSchema>
+/** The severities the backend defines today (`MachineReviewSeverity`). */
+export const KNOWN_SEVERITIES = ["info", "warning", "critical"] as const
+export type KnownSeverity = (typeof KNOWN_SEVERITIES)[number]
 
 /**
  * One curator task.
@@ -73,8 +85,8 @@ export const CuratorTaskSchema = z.object({
     record_id: z.number().int(),
     finding_fingerprint: z.string(),
     workflow_state: CuratorTaskStateSchema,
-    machine_review_status: MachineReviewStatusSchema,
-    highest_severity: CuratorTaskSeveritySchema,
+    machine_review_status: z.string(),
+    highest_severity: z.string(),
     findings_count: z.number().int(),
     source_audit_event_id: z.number().int().nullable().default(null),
     assigned_to: z.number().int().nullable().default(null),
@@ -86,13 +98,27 @@ export const CuratorTaskSchema = z.object({
 })
 export type CuratorTask = z.infer<typeof CuratorTaskSchema>
 
-export const CuratorTaskPageSchema = z.object({
-    items: z.array(CuratorTaskSchema),
+/**
+ * The paginated envelope, with `items` left unparsed on purpose.
+ *
+ * Each row is validated separately by `listCuratorTasks` so that one row
+ * the frontend cannot read costs that row and not the queue.
+ */
+export const CuratorTaskEnvelopeSchema = z.object({
+    items: z.array(z.unknown()),
     total: z.number().int(),
     skip: z.number().int(),
     limit: z.number().int(),
 })
-export type CuratorTaskPage = z.infer<typeof CuratorTaskPageSchema>
+
+/** A page of tasks, plus how many rows on it could not be read. */
+export type CuratorTaskPage = {
+    items: CuratorTask[]
+    total: number
+    skip: number
+    limit: number
+    unreadable: number
+}
 
 /** Human wording for a workflow state. */
 export function stateLabel(state: CuratorTaskState): string {
@@ -105,8 +131,12 @@ export function stateLabel(state: CuratorTaskState): string {
             return "in review"
         case "resolved_no_action":
             return "closed: no action"
+        // "elsewhere" is load-bearing. This state records that a human
+        // review of the record happened somewhere else; it writes no
+        // review of its own. Without that word the label reads, in a
+        // table beside a record ref, as though this queue reviewed it.
         case "resolved_human_reviewed":
-            return "closed: reviewed"
+            return "closed: reviewed elsewhere"
         case "dismissed_machine_finding":
             return "dismissed"
     }
@@ -127,7 +157,11 @@ export function resolutionMeaning(state: CuratorTaskState): string {
         case "resolved_human_reviewed":
             return "A person reviewed the record itself. This does not record that review; it notes that it happened."
         case "dismissed_machine_finding":
-            return "The machine was wrong. The record is unaffected."
+            // Spec section 7 calls this "false positive or not actionable".
+            // "The machine was wrong" alone loses the second half, which is
+            // the commoner case: the finding was right and still not worth
+            // acting on.
+            return "The finding was a false positive, or not actionable. The record is unaffected."
         default:
             return ""
     }
@@ -135,4 +169,17 @@ export function resolutionMeaning(state: CuratorTaskState): string {
 
 export function isOpen(state: CuratorTaskState): boolean {
     return (OPEN_STATES as readonly string[]).includes(state)
+}
+
+/**
+ * The CSS class for a severity, or null when the token is unfamiliar.
+ *
+ * Returning null rather than guessing a class keeps an unknown severity
+ * visible and unstyled instead of silently painted as one of the three
+ * this build happens to know.
+ */
+export function severityClass(severity: string): string | null {
+    return (KNOWN_SEVERITIES as readonly string[]).includes(severity)
+        ? `severity-${severity}`
+        : null
 }
