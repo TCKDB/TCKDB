@@ -3,7 +3,8 @@
 These cover the producer side only — provider interface, disabled/off provider,
 the test-only fake v2 provider, the factory, config validation, and the
 strict-parse / serialization boundary. No real online/local model calls exist;
-cloud/local modes validate config and then raise ``NotImplementedError``.
+cloud mode validates config and builds the real provider; local still
+validates and raises ``NotImplementedError``.
 
 Config namespace note: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` is the
 implementation/config namespace; ``MachineReviewProviderResultV2`` is the output
@@ -226,8 +227,12 @@ def test_cloud_mode_requires_api_key_env_var_present(monkeypatch):
         build_machine_review_provider(settings)
 
 
-def test_cloud_mode_real_call_not_implemented_yet(monkeypatch):
-    """With valid cloud config, the factory raises NotImplementedError, no API call."""
+def test_cloud_mode_builds_a_real_provider(monkeypatch):
+    """Cloud mode returns the real provider (it raised NotImplementedError until 2026-09-14)."""
+    from app.services.machine_review.providers.cloud import (
+        CloudMachineReviewProvider,
+    )
+
     monkeypatch.setenv("MR_TEST_KEY", "secret-value")
     settings = Settings(
         ai_review_assistant_mode="cloud",
@@ -235,8 +240,54 @@ def test_cloud_mode_real_call_not_implemented_yet(monkeypatch):
         llm_precheck_api_key_env="MR_TEST_KEY",
     )
 
-    with pytest.raises(NotImplementedError, match="no external model call"):
-        build_machine_review_provider(settings)
+    provider = build_machine_review_provider(settings)
+
+    assert isinstance(provider, CloudMachineReviewProvider)
+    # The configured model must reach the provider: a factory that built one on
+    # a default would pass an isinstance check and review with the wrong model.
+    assert provider._model == "vendor/model"
+
+
+def test_building_the_cloud_provider_calls_nothing(monkeypatch):
+    """Construction is inert. The model is reached only when a review is asked for.
+
+    Worth pinning because the factory runs wherever a provider is resolved --
+    including at import or startup in some call paths -- and a transport that
+    dialled out on construction would turn "is cloud mode configured?" into a
+    billable request, or a startup hang behind a firewall.
+    """
+    import httpx
+
+    def explode(*_args, **_kwargs):  # pragma: no cover - must never run
+        raise AssertionError("building a provider must not make an HTTP call")
+
+    monkeypatch.setattr(httpx, "post", explode)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env="MR_TEST_KEY",
+    )
+
+    build_machine_review_provider(settings)
+
+
+def test_the_api_key_never_reaches_the_provider_repr(monkeypatch):
+    """A key in a repr reaches a traceback, and a traceback reaches a log.
+
+    The transport holds the key to send it; nothing else should be able to read
+    it back out casually.
+    """
+    monkeypatch.setenv("MR_TEST_KEY", "super-secret-value")
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env="MR_TEST_KEY",
+    )
+
+    provider = build_machine_review_provider(settings)
+
+    assert "super-secret-value" not in repr(provider)
 
 
 def test_local_mode_requires_base_url_and_model_config():
