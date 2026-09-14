@@ -554,6 +554,46 @@ Notes:
   response models in ``backend/app/schemas/reads/scientific_*.py``. Public
   ``TypedDict`` aliases describe that wire shape but do not wrap or coerce it.
 
+## Download an artifact
+
+Raw artifact bytes are served only to authenticated callers -- always, on
+every deployment. Unredacted ESS logs can carry producer-side scratch
+paths, usernames and cluster hostnames, so the gate has no opt-out
+(ADR 0004). Set your key first:
+
+```bash
+export TCKDB_API_KEY=tck_...
+```
+
+From the command line:
+
+```bash
+tckdb download artifact <sha256>                 # writes ./<sha256>
+tckdb download artifact <sha256> -o job.log      # writes ./job.log
+tckdb download artifact <sha256> -o ~/downloads  # writes ~/downloads/<sha256>
+tckdb download artifact <sha256> -o - | less     # straight to stdout
+```
+
+An existing file is never overwritten without `--force`. The bytes are
+hashed and checked against the digest you asked for **before** anything
+is written, so a mismatch -- a proxy or cache serving the wrong object --
+fails loudly rather than landing on disk under a name that asserts a
+digest it does not have.
+
+The default filename is the digest. The archive does know the original
+filename, but the download returns only bytes, so naming the file is the
+caller's to do.
+
+From Python:
+
+```python
+raw = client.download_artifact("<sha256>")
+```
+
+Exit codes: `0` written, `4` no artifact with that digest is readable by
+your credential (either it is not in the archive, or it is neither
+approved nor one of your own deposits), `1` anything else.
+
 ## Examples
 
 - [`examples/basic_usage.py`](examples/basic_usage.py)
