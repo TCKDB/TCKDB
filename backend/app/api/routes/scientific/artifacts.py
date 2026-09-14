@@ -10,6 +10,7 @@ returning content on either path.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from mimetypes import guess_type
 from urllib.parse import quote
@@ -283,6 +284,42 @@ def artifact_integrity_detail(
     )
 
 
+_UNSAFE_HEADER_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def content_disposition_for(filename: str) -> str:
+    """The complete ``Content-Disposition`` value for one stored file.
+
+    Returns the whole header rather than its pieces on purpose. An
+    earlier version returned ``(ascii_name, encoded)`` and let the route
+    assemble them, which meant a test could only check the pieces --
+    and a mutation that dropped the ``filename=`` half from the route
+    passed all eleven of them. Composition was the untested step, so
+    composition moved in here.
+
+    RFC 6266 wants both: ``filename=`` for clients that only parse the
+    original form, and ``filename*=`` carrying the real, possibly
+    non-ASCII name. Serving only the second is what made curl save every
+    artifact as ``download``.
+
+    The ASCII half is built by REPLACEMENT, never by escaping. A filename
+    is stored data that reaches this function unvalidated, and a header
+    value is a line in the response: a quote would end the parameter
+    early, and a CR or LF would split the header or inject another one.
+    Collapsing everything outside ``[A-Za-z0-9._-]`` to ``_`` makes that
+    structurally impossible rather than correctly escaped, and costs only
+    fidelity in the fallback -- the exact name still travels intact in
+    ``filename*``.
+
+    An empty result (a name that was entirely unsafe characters) falls
+    back to ``download``, because a header with ``filename=""`` is worse
+    than one naming nothing useful.
+    """
+    safe = _UNSAFE_HEADER_CHARS.sub("_", filename).strip("._") or "download"
+    encoded = quote(filename, safe="")
+    return f"attachment; filename=\"{safe}\"; filename*=UTF-8''{encoded}"
+
+
 @router.get(
     "/{sha256}/download",
     response_class=Response,
@@ -416,7 +453,7 @@ def download_approved_artifact(
         raise
 
     media_type = guess_type(artifact.filename)[0] or "application/octet-stream"
-    encoded_filename = quote(artifact.filename, safe="")
+    content_disposition = content_disposition_for(artifact.filename)
     return Response(
         content=content,
         media_type=media_type,
@@ -426,9 +463,15 @@ def download_approved_artifact(
             # one user's raw log to a later anonymous request for the same
             # URL, defeating the auth gate (ADR 0004).
             "Cache-Control": "private, no-store",
-            "Content-Disposition": (
-                f"attachment; filename*=UTF-8''{encoded_filename}"
-            ),
+            # BOTH forms, per RFC 6266. `filename*` alone was a real
+            # defect: curl's -J reads only the plain `filename=` parameter
+            # and ignores the RFC 5987 extended form entirely, so with no
+            # plain form it fell back to the URL's last segment and saved
+            # every artifact as a file literally called "download".
+            # (wget's --content-disposition does understand `filename*`,
+            # so the two clients disagreed -- which is what made it look
+            # like a curl quirk rather than a missing half of the header.)
+            "Content-Disposition": content_disposition,
             "ETag": f'"{sha256}"',
             "X-Content-SHA256": sha256,
             "X-Content-Type-Options": "nosniff",
