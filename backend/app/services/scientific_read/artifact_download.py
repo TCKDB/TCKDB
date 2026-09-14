@@ -17,98 +17,60 @@ becomes anonymous. Only the *review-status* half of the gate moved.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import CalculationArtifact
-from app.db.models.common import (
-    RecordReviewStatus,
-    SubmissionRecordType,
-)
-from app.db.models.record_review import RecordReview
-from app.services.deposit_ownership import user_owns_calculation_deposit
-
-
-def resolve_approved_artifact_by_sha256(
-    session: Session, sha256: str
-) -> CalculationArtifact | None:
-    """Return a deterministic approved artifact row for a content digest.
-
-    Artifact review visibility is inherited from the owning calculation. A
-    digest is downloadable by any authenticated caller only when at least
-    one attached calculation has an explicit ``approved`` review state.
-    Duplicate upload-event rows can point at the same content-addressed
-    object; the earliest approved row supplies the filename and expected
-    byte count.
-    """
-
-    return session.scalar(
-        select(CalculationArtifact)
-        .join(
-            RecordReview,
-            and_(
-                RecordReview.record_type == SubmissionRecordType.calculation,
-                RecordReview.record_id == CalculationArtifact.calculation_id,
-            ),
-        )
-        .where(
-            CalculationArtifact.sha256 == sha256,
-            CalculationArtifact.bytes.is_not(None),
-            RecordReview.status == RecordReviewStatus.approved,
-        )
-        .order_by(CalculationArtifact.id.asc())
-        .limit(1)
-    )
 
 
 def resolve_downloadable_artifact_by_sha256(
     session: Session, sha256: str, user: AppUser
 ) -> CalculationArtifact | None:
-    """Return an artifact row *user* may download, or ``None``.
+    """Return the artifact row for *sha256*, or ``None`` if there is none.
 
-    Approved first, so an approved digest resolves identically for every
-    caller and the common path is one query. Failing that, the caller's own
-    deposits: the earliest row for this digest whose owning calculation
-    they deposited, judged by
-    :func:`~app.services.deposit_ownership.user_owns_calculation_deposit`
-    — the same predicate the upload route authorizes with, so a file the
-    caller was allowed to attach is a file they are allowed to fetch back.
+    Authentication is the gate. Any authenticated caller may fetch any
+    stored artifact's bytes; ``user`` is accepted so callers need not
+    change and so a future per-record embargo has somewhere to live, but
+    nothing about *who* is asking narrows the result today.
 
-    Ownership is checked per candidate row rather than folded into the
-    SQL above deliberately. Expressing "is this mine" a second time, in a
-    dialect where it could quietly drift from the first, is how a store
-    ends up with two authorization rules that disagree. The loop is
-    bounded by the number of upload *events* sharing one digest, which is
-    small by construction (max 5 across the hosted instance, mean 1.4 on
-    2026-08-24) — rows are per-event, not per-user.
+    Why review status stopped gating this (decided 2026-09-14)
+    ----------------------------------------------------------
+    ADR 0004 argues that unredacted ESS logs carry producer-side scratch
+    paths, usernames and cluster hostnames, so they must not be served
+    anonymously. That argument supports **authentication** as the gate and
+    says nothing about curation. Review status answers a different
+    question -- "should you trust this science" -- and is already surfaced
+    as trust and review badges on every record. Using it to gate *access
+    to the evidence* conflated trustworthiness with confidentiality.
 
-    ``None`` means "nothing here for you" and is deliberately not
-    distinguishable by the caller from an unknown digest; the route
-    answers 404 either way.
+    The cost was measured, not theorised. On the hosted instance: 563
+    artifacts, **0 approved**, so the approved branch had never once
+    opened for anyone. Deposits came from ``arc-zeus`` (519) and
+    ``real_validation_20260729`` (44); the instance's own admin had
+    deposited none and could therefore read none of its evidence. An
+    archive whose files only their uploader can open is not doing the job
+    an archive exists for.
+
+    A 2026-08-24 change had already walked this back partway by adding an
+    owner path, and its own docstring recorded that ADR 0004's choice of
+    review status as the gate was *unargued*. This finishes that.
+
+    What did NOT change: anonymous callers still get 401 (the route's
+    ``get_current_user`` dependency, unconditional, no opt-out), the
+    stored bytes are still verified against their digest on every read,
+    and a verification failure is still recorded as a custody break.
     """
 
-    approved = resolve_approved_artifact_by_sha256(session, sha256)
-    if approved is not None:
-        return approved
-
-    candidates = session.scalars(
+    return session.scalar(
         select(CalculationArtifact)
         .where(
             CalculationArtifact.sha256 == sha256,
             CalculationArtifact.bytes.is_not(None),
         )
+        # Duplicate upload-event rows can point at one content-addressed
+        # object (563 rows, 392 digests on the hosted instance). Any of
+        # them names the same bytes; the earliest is chosen so the
+        # filename and expected byte count are deterministic.
         .order_by(CalculationArtifact.id.asc())
-    ).all()
-
-    for artifact in candidates:
-        if user_owns_calculation_deposit(session, artifact.calculation, user):
-            return artifact
-
-    return None
-
-
-__all__ = [
-    "resolve_approved_artifact_by_sha256",
-    "resolve_downloadable_artifact_by_sha256",
-]
+    )

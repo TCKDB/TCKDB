@@ -327,10 +327,7 @@ def content_disposition_for(filename: str) -> str:
         200: {"content": {"application/octet-stream": {}}},
         401: {"description": "Authentication required."},
         404: {
-            "description": (
-                "No artifact with this digest is approved, and none of the "
-                "caller's own deposits carries it."
-            )
+            "description": "No artifact with this digest is in the archive."
         },
         502: {
             "description": (
@@ -393,12 +390,13 @@ def download_approved_artifact(
 
     artifact = resolve_downloadable_artifact_by_sha256(session, sha256, user)
     if artifact is None:
-        # Deliberately indistinguishable from an unknown digest: callers cannot
-        # probe whether non-approved/private content exists. 404 and not 403,
-        # for the same reason — a 403 would confirm the digest is real. The
-        # sentence is unchanged for a stranger; what changed is that an owner
-        # no longer reaches this line.
-        raise HTTPException(status_code=404, detail="Approved artifact not found.")
+        # Now says only what it means. While review status gated access this
+        # sentence had to stay vague -- "approved artifact not found" covered
+        # both "no such digest" and "exists but not for you", deliberately,
+        # so the response was not an existence oracle. With authentication as
+        # the whole gate there is no second case left to hide, and a signed-in
+        # caller reading "not found" can take it literally.
+        raise HTTPException(status_code=404, detail="No artifact with this digest is in the archive.")
 
     try:
         content = load_artifact_bytes(
