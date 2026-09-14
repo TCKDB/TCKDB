@@ -10,12 +10,13 @@ CLI is a thin wrapper: it builds a ``client_factory`` closure capturing
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import re
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from tckdb_client.client import TCKDBClient
@@ -307,6 +308,52 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
 
     get_parser = sub.add_parser("get", help="Fetch one record by reference.")
     get_sub = get_parser.add_subparsers(dest="entity", required=True)
+
+    download_parser = sub.add_parser(
+        "download", help="Download a stored file by its content digest."
+    )
+    download_sub = download_parser.add_subparsers(dest="entity", required=True)
+
+    artifact_parser = download_sub.add_parser(
+        "artifact",
+        help="Download one artifact's raw bytes by sha256.",
+    )
+    artifact_parser.add_argument(
+        "sha256",
+        type=_validate_sha256,
+        help="The artifact's 64-character content digest.",
+    )
+    artifact_parser.add_argument(
+        "--output",
+        "-o",
+        default=None,
+        help=(
+            "Where to write. A directory writes the derived name inside "
+            "it; '-' writes the bytes to stdout. Default: "
+            "<artifact_ref>_<filename> as the archive records them "
+            "(art_7k2p9x_input.log) -- the ref keeps it unique, the "
+            "original name keeps the extension. Falls back to the sha256 "
+            "when the archive has no name for it."
+        ),
+    )
+    artifact_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite the output file if it already exists.",
+    )
+    artifact_parser.add_argument(
+        "--base-url",
+        default=DEFAULT_BASE_URL,
+        help=f"API root. Default: {DEFAULT_BASE_URL}",
+    )
+    artifact_parser.add_argument(
+        "--api-key-env",
+        default="TCKDB_API_KEY",
+        help="Environment variable holding the API key. Default: TCKDB_API_KEY.",
+    )
+    artifact_parser.add_argument(
+        "--timeout", type=float, default=30.0, help="Per-request timeout in seconds."
+    )
 
     reaction_parser = get_sub.add_parser(
         "reaction",
@@ -648,6 +695,210 @@ def render_reaction_chooser(data: dict) -> str:
     return "\n".join(lines)
 
 
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _validate_sha256(value: str) -> str:
+    """Reject anything that is not a lowercase 64-hex digest.
+
+    The route's path pattern is the same, so a malformed digest would be
+    a 422 from the server. Catching it here turns a round trip and an
+    HTTP error into an argparse message naming the argument -- and, more
+    to the point, stops a caller who pasted a *ref* (``art_...``) from
+    being told their artifact does not exist.
+    """
+    candidate = value.strip().lower()
+    if not _SHA256_RE.match(candidate):
+        raise argparse.ArgumentTypeError(
+            f"not a sha256 content digest: {value!r} "
+            "(expected 64 hexadecimal characters)"
+        )
+    return candidate
+
+
+_UNSAFE_NAME_CHARS = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def artifact_download_name(
+    artifact_ref: str | None, filename: str | None, digest: str
+) -> str:
+    """The filename to save an artifact under.
+
+    ``<stem>_<artifact_ref><suffix>`` when the archive knows both --
+    ``input_art_7k2p9x.log``. Three things at once: the original name
+    leads, so a directory of downloads sorts by what the files ARE rather
+    than by an arbitrary ref; the ref keeps it unique, so two
+    calculations both depositing ``input.log`` do not collide; and the
+    extension stays last, which is what makes the file open in the right
+    thing.
+
+    The ref goes before the suffix rather than after the whole filename
+    for exactly that third reason: ``input.log_art_7k2p9x`` sorts and
+    disambiguates just as well and is no longer a ``.log``.
+
+    A bare 64-character digest is unique too, and unusable.
+
+    **The filename comes from the server, so it is not trusted.** A
+    stored ``filename`` of ``../../.ssh/authorized_keys`` would, joined
+    naively to an output directory, write outside it. Only the basename
+    survives, and then only characters that cannot mean anything to a
+    path: everything else collapses to ``_``. That is deliberately
+    stricter than "strip the separators" -- it also removes the leading
+    dots that would otherwise hide the file, and anything a shell would
+    read as a glob.
+
+    Falls back to the filename alone when there is no ref, and to the
+    digest when there is no usable filename either. The digest is always
+    a correct answer; it is only ever the least useful one.
+    """
+    safe = ""
+    if filename:
+        # basename first: this is what discards any directory component,
+        # traversal or otherwise, before anything else looks at the value.
+        base = PurePosixPath(filename.strip()).name
+        base = PureWindowsPath(base).name
+        safe = _UNSAFE_NAME_CHARS.sub("_", base).strip("._")
+
+    if safe and artifact_ref:
+        ref = _UNSAFE_NAME_CHARS.sub("_", artifact_ref).strip("._")
+        if ref:
+            # `.suffix`/`.stem` on the already-sanitised basename: the
+            # split is cosmetic, and everything load-bearing about safety
+            # happened above.
+            as_path = PurePosixPath(safe)
+            suffix = as_path.suffix
+            stem = as_path.stem or safe
+            return f"{stem}_{ref}{suffix}"
+    return safe or digest
+
+
+def _lookup_artifact_name(client: Any, digest: str) -> str:
+    """Ask the archive what this artifact is called. Digest on any doubt.
+
+    One extra GET against the metadata search, which is the public read
+    surface and cheap. Naming a download well is not worth failing a
+    download over, so every failure here -- offline, an error status, an
+    empty or unexpected body -- falls back to the digest rather than
+    propagating.
+    """
+    try:
+        found = client.search_artifacts(sha256=digest, limit=1)
+    except Exception:  # noqa: BLE001 - see the docstring: never fatal.
+        return digest
+    if not isinstance(found, dict):
+        return digest
+    records = found.get("records") or found.get("items") or []
+    if not isinstance(records, list) or not records:
+        return digest
+    first = records[0]
+    artifact = first.get("artifact") if isinstance(first, dict) else None
+    if not isinstance(artifact, dict):
+        return digest
+    return artifact_download_name(
+        artifact.get("artifact_ref"), artifact.get("filename"), digest
+    )
+
+
+def _resolve_download_target(output: str | None, digest: str) -> Path | None:
+    """Where the bytes go. ``None`` means stdout.
+
+    A directory is a common thing to pass and a bad thing to clobber, so
+    it is treated as "put it in here" rather than as a filename.
+    """
+    if output == "-":
+        return None
+    if output is None:
+        return Path(digest)
+    target = Path(output)
+    if target.is_dir():
+        return target / digest
+    return target
+
+
+def _cmd_download_artifact(args: argparse.Namespace) -> int:
+    api_key = os.environ.get(args.api_key_env)
+    if not api_key:
+        # Raw artifact bytes are served only to authenticated callers --
+        # unconditionally, per ADR 0004, because unredacted logs can carry
+        # producer-side paths and hostnames. Saying so here beats letting
+        # the caller discover it as a 401.
+        #
+        # The message deliberately does NOT echo `--api-key-env` back.
+        # That argument is a variable NAME, but nothing stops a confused
+        # caller passing the key itself (`--api-key-env "$TCKDB_API_KEY"`),
+        # and echoing it would then print the secret to stderr, where it
+        # lands in CI logs and shell scrollback. Naming the default is
+        # just as actionable and cannot leak anything.
+        print(
+            "error: no API key found. Set TCKDB_API_KEY, or pass "
+            "--api-key-env naming the variable that holds it. "
+            "Artifact downloads require authentication.",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURES
+
+    client = TCKDBClient(
+        base_url=args.base_url, api_key=api_key, timeout=args.timeout
+    )
+
+    # Only ask the archive what the file is called when the caller has not
+    # already said. `--output` is an answer; a lookup to second-guess it
+    # would be a request made for nothing.
+    default_name = (
+        _lookup_artifact_name(client, args.sha256) if args.output is None else args.sha256
+    )
+    target = _resolve_download_target(args.output, default_name)
+    if target is not None and target.exists() and not args.force:
+        print(
+            f"error: {target} already exists (pass --force to overwrite)",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURES
+
+    try:
+        payload = client.download_artifact(args.sha256)
+    except TCKDBConnectionError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_FAILURES
+    except TCKDBHTTPError as exc:
+        if exc.status_code == 404:
+            print(
+                f"error: no artifact {args.sha256} is readable by this "
+                "credential. It is either not in the archive, or not "
+                "approved and not one of your own deposits.",
+                file=sys.stderr,
+            )
+            return EXIT_NOT_FOUND
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_FAILURES
+
+    # The store is content-addressed, so the digest asked for is a
+    # checkable claim about the bytes received -- and checking it here is
+    # not redundant with the server's own verification. The server proves
+    # the bytes match what it stored; this proves they match what was
+    # ASKED for, which also covers a proxy or cache serving the wrong
+    # object. Verified BEFORE writing, so a mismatch never lands on disk
+    # under a name asserting a digest it does not have.
+    received = hashlib.sha256(payload).hexdigest()
+    if received != args.sha256:
+        print(
+            f"error: digest mismatch -- asked for {args.sha256}, received "
+            f"bytes hashing to {received}. Nothing was written.",
+            file=sys.stderr,
+        )
+        return EXIT_FAILURES
+
+    if target is None:
+        sys.stdout.buffer.write(payload)
+        sys.stdout.buffer.flush()
+        return EXIT_OK
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(payload)
+    print(f"wrote {len(payload)} bytes to {target}", file=sys.stderr)
+    return EXIT_OK
+
+
 def _cmd_get_reaction(args: argparse.Namespace) -> int:
     include = _flatten_include_groups(args.include) if args.include else list(DEFAULT_INCLUDE)
     client = TCKDBClient(base_url=args.base_url, timeout=args.timeout)
@@ -709,6 +960,9 @@ def main_tckdb(argv: list[str] | None = None) -> int:
 
     if args.command == "get" and args.entity == "reaction":
         return _cmd_get_reaction(args)
+
+    if args.command == "download" and args.entity == "artifact":
+        return _cmd_download_artifact(args)
 
     parser.error(f"unknown command: {args.command} {getattr(args, 'entity', '')}")
     return EXIT_ARGPARSE  # pragma: no cover - parser.error() exits above.
