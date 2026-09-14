@@ -31785,6 +31785,7 @@
                 "type": "null"
               }
             ],
+            "description": "The public handle naming this record, resolved at read time. Null when the record cannot be named: its table has no public_ref column (applied_energy_correction), or the row no longer exists. Prefer this over record_id, which is an internal row id and resolves through no public route.",
             "title": "Record Public Ref"
           },
           "record_type": {

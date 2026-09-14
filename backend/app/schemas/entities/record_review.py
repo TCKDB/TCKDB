@@ -30,7 +30,21 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
     #: its table has no ``public_ref`` column
     #: (``applied_energy_correction``), or the row is gone. The same
     #: contract ``AdminCuratorTaskResponse.record_public_ref`` carries.
-    record_public_ref: str | None = None
+    #:
+    #: The ``description`` is not a duplicate of the above: these ``#:``
+    #: comments reach a reader of this file, and the description is what
+    #: reaches a reader of the published OpenAPI, who has neither this
+    #: source nor any other statement of when the field is null.
+    record_public_ref: str | None = Field(
+        default=None,
+        description=(
+            "The public handle naming this record, resolved at read time. "
+            "Null when the record cannot be named: its table has no "
+            "public_ref column (applied_energy_correction), or the row no "
+            "longer exists. Prefer this over record_id, which is an "
+            "internal row id and resolves through no public route."
+        ),
+    )
     status: RecordReviewStatus
     submission_id: int | None = None
     reviewed_by: int | None = None
