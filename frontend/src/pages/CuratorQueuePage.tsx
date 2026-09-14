@@ -63,7 +63,18 @@ import {
 type LoadState =
     | { status: "loading" }
     | { status: "error"; message: string }
-    | { status: "ready"; tasks: CuratorTask[]; total: number; unreadable: number }
+    | {
+          status: "ready"
+          tasks: CuratorTask[]
+          total: number
+          unreadable: number
+          //: How many rows the backend actually returned, readable or not.
+          //: The "there may be more" hint compares against THIS, not the
+          //: rendered count: a full page carrying two rows this build
+          //: cannot read would otherwise look like a short page and the
+          //: hint would vanish exactly when work is being hidden.
+          fetched: number
+      }
 
 /** The close form's contents, for the one row it is open under. */
 type ResolveDraft = { taskId: number; state: CuratorTaskState; note: string }
@@ -75,7 +86,10 @@ export default function CuratorQueuePage() {
     const [filter, setFilter] = useState<CuratorTaskState | "open" | "all">("open")
     const [load, setLoad] = useState<LoadState>({ status: "loading" })
     const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
-    const [rowError, setRowError] = useState<{ taskId: number; message: string } | null>(null)
+    //: Keyed by task, like everything else a row owns. As a single slot,
+    //: acting on row B silently erased the refusal still standing under
+    //: row A, and two rows could never show their own refusals at once.
+    const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, string>>(new Map())
     const [draft, setDraft] = useState<ResolveDraft | null>(null)
 
     const isAdmin = state.status === "signed-in" && state.user.role === "admin"
@@ -119,6 +133,7 @@ export default function CuratorQueuePage() {
                 tasks,
                 total: page.total,
                 unreadable: page.unreadable,
+                fetched: page.items.length + page.unreadable,
             })
         } catch (caught) {
             if (seq !== requestSeq.current) return
@@ -176,12 +191,41 @@ export default function CuratorQueuePage() {
         )
     }
 
-    async function run(taskId: number, action: () => Promise<unknown>) {
+    function setRowError(taskId: number, message: string | null) {
+        setRowErrors((current) => {
+            const next = new Map(current)
+            if (message === null) next.delete(taskId)
+            else next.set(taskId, message)
+            return next
+        })
+    }
+
+    /**
+     * Run one row's write, then re-read the list.
+     *
+     * `closesForm` says whether success means this row's close form has
+     * done its job. Only `resolve` does: clearing the draft after a
+     * `start-review` threw away a reason the curator had already typed,
+     * because they happened to press the other button first.
+     */
+    async function run(
+        taskId: number,
+        closesForm: boolean,
+        action: () => Promise<unknown>,
+    ) {
         setBusy((current) => new Set(current).add(taskId))
-        setRowError(null)
+        setRowError(taskId, null)
         try {
             await action()
-            setDraft((current) => (current?.taskId === taskId ? null : current))
+            if (closesForm) {
+                // The `current?.taskId === taskId` test is belt and braces:
+                // `closesForm` is only true for a resolve, a resolve can only
+                // be submitted from the open form, and the form only renders
+                // under the row it belongs to -- so the draft being cleared
+                // is always this row's. Written this way anyway because the
+                // guarantee lives three components away from here.
+                setDraft((current) => (current?.taskId === taskId ? null : current))
+            }
             // Re-read the list rather than patching the row from the reply.
             // The server is the authority on whether the row still belongs
             // in the current view, and this keeps that judgement in one
@@ -189,14 +233,25 @@ export default function CuratorQueuePage() {
             // site -- where it was, and where it used a stale filter.
             await refresh({ keepRows: true })
         } catch (caught) {
-            setRowError({
+            const saved = caught instanceof CuratorTaskResponseError
+            setRowError(
                 taskId,
-                message:
-                    caught instanceof CuratorTaskResponseError ||
-                    caught instanceof AuthApiError
-                        ? caught.message
-                        : "That did not go through. Nothing was changed.",
-            })
+                saved || caught instanceof AuthApiError
+                    ? caught.message
+                    : "That did not go through. Nothing was changed.",
+            )
+            // The write DID land; only its reply was unreadable. Leaving a
+            // filled-in form open beneath it invites the curator to submit
+            // the same reason again.
+            if (saved && closesForm) {
+                setDraft((current) => (current?.taskId === taskId ? null : current))
+            }
+            // Re-read on refusal too. A refusal is very often a state
+            // conflict -- another admin moved this task -- so the row on
+            // screen is exactly the row that is now wrong. Leaving it
+            // untouched showed "needs review" with a live Start button
+            // under a task that had already been dismissed.
+            await refresh({ keepRows: true })
         } finally {
             setBusy((current) => {
                 const next = new Set(current)
@@ -269,7 +324,7 @@ export default function CuratorQueuePage() {
                         {filter === "open" || filter === "all"
                             ? `${load.tasks.length} shown`
                             : `${load.tasks.length} shown of ${load.total} in this state`}
-                        {load.tasks.length === PAGE_LIMIT
+                        {load.fetched === PAGE_LIMIT
                             ? `, the most this page loads at once — there may be more`
                             : ""}
                     </p>
@@ -320,7 +375,7 @@ export default function CuratorQueuePage() {
                                                                 type="button"
                                                                 disabled={rowBusy}
                                                                 onClick={() =>
-                                                                    void run(task.id, () =>
+                                                                    void run(task.id, false, () =>
                                                                         startCuratorTaskReview(task.id),
                                                                     )
                                                                 }
@@ -343,7 +398,7 @@ export default function CuratorQueuePage() {
                                                         type="button"
                                                         disabled={rowBusy}
                                                         onClick={() =>
-                                                            void run(task.id, () =>
+                                                            void run(task.id, false, () =>
                                                                 reopenCuratorTask(task.id),
                                                             )
                                                         }
@@ -351,9 +406,9 @@ export default function CuratorQueuePage() {
                                                         Reopen
                                                     </button>
                                                 )}
-                                                {rowError?.taskId === task.id && (
+                                                {rowErrors.has(task.id) && (
                                                     <p className="auth-error admin-row-error" role="alert">
-                                                        {rowError.message}
+                                                        {rowErrors.get(task.id)}
                                                     </p>
                                                 )}
                                                 {draft?.taskId === task.id && (
@@ -362,7 +417,7 @@ export default function CuratorQueuePage() {
                                                         className="admin-resolve"
                                                         onSubmit={(e) => {
                                                             e.preventDefault()
-                                                            void run(task.id, () =>
+                                                            void run(task.id, true, () =>
                                                                 resolveCuratorTask(
                                                                     task.id,
                                                                     draft.state,

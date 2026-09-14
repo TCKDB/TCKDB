@@ -220,6 +220,9 @@ describe("what the page says it is", () => {
         const count = await screen.findByText(/shown/)
         expect(count).toHaveTextContent("1 shown")
         expect(count).not.toHaveTextContent("9")
+        // And a one-row table is not a full page, so it must not claim
+        // work might be hidden.
+        expect(screen.queryByText(/there may be more/i)).not.toBeInTheDocument()
     })
 
     it("does compare against the total when the backend counted the same thing", async () => {
@@ -243,6 +246,26 @@ describe("what the page says it is", () => {
         // Under an exact state the backend counts exactly what the table
         // shows, so "of 4" is a real statement about work not on screen.
         expect(await screen.findByText(/shown of 4 in this state/)).toBeInTheDocument()
+    })
+
+    it("still warns about a full page when some of its rows were unreadable", async () => {
+        meIs(admin)
+        const rows = Array.from({ length: 50 }, (_, i) =>
+            i < 2
+                ? task({ id: 900 + i, workflow_state: "a_state_from_the_future" })
+                : task({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json({ items: rows, total: 200, skip: 0, limit: 50 }),
+            ),
+        )
+        renderPage()
+
+        // 48 rendered of 50 fetched. Comparing the RENDERED count against the
+        // page cap would drop the hint exactly when rows are being hidden.
+        await screen.findByRole("table")
+        expect(screen.getByText(/there may be more/i)).toBeInTheDocument()
     })
 
     it("says so when a full page might be hiding more work", async () => {
@@ -612,6 +635,43 @@ describe("a view changed mid-flight is the view that wins", () => {
         expect(asked.at(-1)).toBe("untriaged")
     })
 
+    it("a superseded answer that FAILS does not replace the view that replaced it", async () => {
+        meIs(admin)
+        let call = 0
+        server.use(
+            http.get(QUEUE, async ({ request }) => {
+                call += 1
+                const state = new URL(request.url).searchParams.get("workflow_state")
+                if (call === 1) {
+                    // The abandoned "open" view answers last, and answers 500.
+                    await new Promise((r) => setTimeout(r, 200))
+                    return HttpResponse.json(
+                        { code: "internal_error", detail: "Backend is down." },
+                        { status: 500 },
+                    )
+                }
+                return HttpResponse.json({
+                    items: [task({ record_public_ref: "spc_current", workflow_state: state === null ? "untriaged" : "untriaged" })],
+                    total: 1,
+                    skip: 0,
+                    limit: 50,
+                })
+            }),
+        )
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "untriaged")
+        expect(await screen.findByText("spc_current")).toBeInTheDocument()
+
+        // The failure half of the sequence guard. Without it, a slow 500 on a
+        // view nobody is looking at replaces a good table with "Could not
+        // load the curator queue."
+        await new Promise((r) => setTimeout(r, 300))
+        expect(screen.getByText("spc_current")).toBeInTheDocument()
+        expect(screen.queryByText(/Could not load/i)).not.toBeInTheDocument()
+    })
+
     it("a slow answer does not overwrite the view that replaced it", async () => {
         meIs(admin)
         let call = 0
@@ -731,8 +791,82 @@ describe("everything a row owns stays with that row", () => {
 
         expect(await screen.findByRole("alert")).toHaveTextContent("Task is already resolved.")
         expect(screen.getAllByRole("alert")).toHaveLength(1)
-        // The refused row also has not moved.
-        expect(await rowStateFor("spc_vu7cuk4s37szxaudjpf355tqda")).toBe("needs review")
+    })
+
+    it("re-reads a refused row, because a refusal usually means it moved", async () => {
+        meIs(admin)
+        // The other admin's dismissal becomes visible only once our write
+        // has been refused -- which is exactly the ordering that produces
+        // the stale row.
+        let refused = false
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json({
+                    items: [
+                        refused
+                            ? task({ workflow_state: "dismissed_machine_finding" })
+                            : task(),
+                    ],
+                    total: 1,
+                    skip: 0,
+                    limit: 50,
+                }),
+            ),
+            http.post(`${QUEUE}/41/start-review`, () => {
+                refused = true
+                return HttpResponse.json(
+                    {
+                        code: "domain_error",
+                        detail: "Cannot start review on a resolved curator task.",
+                    },
+                    { status: 400 },
+                )
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
+
+        // An earlier version left the row reading "needs review" with a live
+        // "Start review" button under a task the server had already closed --
+        // and a test asserted that as correct. A state conflict is precisely
+        // the case where the row on screen is the row that is now wrong.
+        expect(await screen.findByRole("alert")).toHaveTextContent(/Cannot start review/)
+        await waitFor(async () =>
+            expect(await rowStateFor("spc_vu7cuk4s37szxaudjpf355tqda")).toBe("dismissed"),
+        )
+    })
+
+    it("keeps each row's own refusal, instead of one slot they overwrite", async () => {
+        meIs(admin)
+        queueIs([task(), otherTask()])
+        server.use(
+            http.post(`${QUEUE}/41/start-review`, () =>
+                HttpResponse.json(
+                    { code: "domain_error", detail: "Species task is stuck." },
+                    { status: 400 },
+                ),
+            ),
+            http.post(`${QUEUE}/42/start-review`, () =>
+                HttpResponse.json(
+                    { code: "domain_error", detail: "Calculation task is stuck." },
+                    { status: 400 },
+                ),
+            ),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
+        await screen.findByText("Species task is stuck.")
+        await user.click(rowButton("calc_7k2mq9x4ta8ndrwe5hvzcbj6y1", "Start review"))
+        await screen.findByText("Calculation task is stuck.")
+
+        // Acting on the second row must not silently erase the first row's
+        // refusal, which is still true and still unaddressed.
+        expect(screen.getByText("Species task is stuck.")).toBeInTheDocument()
     })
 
     it("clears a refusal once the same row succeeds", async () => {
@@ -811,6 +945,160 @@ describe("everything a row owns stays with that row", () => {
     })
 })
 
+describe("the buttons say what is actually happening", () => {
+    it("keeps a row disabled until the re-read lands, not merely until the write returns", async () => {
+        meIs(admin)
+        let slowReads = 0
+        server.use(
+            http.get(QUEUE, async () => {
+                slowReads += 1
+                // Only the post-write read is slow.
+                if (slowReads > 1) await new Promise((r) => setTimeout(r, 150))
+                return HttpResponse.json({ items: [task()], total: 1, skip: 0, limit: 50 })
+            }),
+            http.post(`${QUEUE}/41/start-review`, () => HttpResponse.json(task())),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
+        await user.click(rowButton(ref, "Start review"))
+
+        // Between the write returning and the list being re-read, the row on
+        // screen is stale. Re-enabling there offers a button whose label
+        // describes a state the server has already left.
+        expect(rowButton(ref, "Start review")).toBeDisabled()
+        await waitFor(() => expect(rowButton(ref, "Start review")).toBeEnabled())
+    })
+
+    it("does not blank the table while a write is being re-read", async () => {
+        meIs(admin)
+        server.use(
+            http.get(QUEUE, async () => {
+                await new Promise((r) => setTimeout(r, 80))
+                return HttpResponse.json({ items: [task()], total: 1, skip: 0, limit: 50 })
+            }),
+            http.post(`${QUEUE}/41/start-review`, () => HttpResponse.json(task())),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
+
+        // Unmounting the table to "Loading..." after every action throws away
+        // scroll position, focus, and any other row's open form.
+        expect(screen.getByRole("table")).toBeInTheDocument()
+    })
+
+    it("disables Reopen while its own write is out", async () => {
+        meIs(admin)
+        queueIs([task({ workflow_state: "resolved_no_action" })])
+        server.use(
+            http.post(`${QUEUE}/41/reopen`, async () => {
+                await new Promise((r) => setTimeout(r, 120))
+                return HttpResponse.json(task())
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+
+        const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
+        await user.click(rowButton(ref, "Reopen"))
+        expect(rowButton(ref, "Reopen")).toBeDisabled()
+    })
+
+    it("disables Close task while its own write is out", async () => {
+        meIs(admin)
+        queueIs([task()])
+        server.use(
+            http.post(`${QUEUE}/41/resolve`, async () => {
+                await new Promise((r) => setTimeout(r, 120))
+                return HttpResponse.json(task({ workflow_state: "resolved_no_action" }))
+            }),
+        )
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.type(screen.getByLabelText(/Why/), "fine as deposited")
+        await user.click(screen.getByRole("button", { name: "Close task" }))
+
+        // Without this a second click files the same reason twice.
+        expect(screen.getByRole("button", { name: "Close task" })).toBeDisabled()
+    })
+
+    it("Close… is a disclosure, and says so to a screen reader", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+
+        const user = userEvent.setup()
+        const close = await screen.findByRole("button", { name: "Close…" })
+        expect(close).toHaveAttribute("aria-expanded", "false")
+        await user.click(close)
+        expect(close).toHaveAttribute("aria-expanded", "true")
+        expect(close).toHaveAttribute("aria-controls", "resolve-form-41")
+    })
+
+    it("clicking Close… again collapses the form rather than blanking it", async () => {
+        meIs(admin)
+        queueIs([task()])
+        renderPage()
+
+        const user = userEvent.setup()
+        const close = await screen.findByRole("button", { name: "Close…" })
+        await user.click(close)
+        await user.type(screen.getByLabelText(/Why/), "some reason")
+        await user.click(close)
+
+        expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument()
+    })
+})
+
+describe("one row's action leaves the other rows alone", () => {
+    it("does not close another row's open form", async () => {
+        meIs(admin)
+        queueIs([task(), otherTask()])
+        server.use(http.post(`${QUEUE}/41/start-review`, () => HttpResponse.json(task())))
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton("calc_7k2mq9x4ta8ndrwe5hvzcbj6y1", "Close…"))
+        await user.type(screen.getByLabelText(/Why/), "the calculation converged")
+        await user.click(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Start review"))
+
+        // The species row's write must not throw away the reason typed
+        // against the calculation.
+        await waitFor(() =>
+            expect(screen.getByLabelText(/Why/)).toHaveValue("the calculation converged"),
+        )
+    })
+
+    it("does not discard a typed reason when the same row is started first", async () => {
+        meIs(admin)
+        queueIs([task()])
+        server.use(http.post(`${QUEUE}/41/start-review`, () => HttpResponse.json(task())))
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
+        await user.click(rowButton(ref, "Close…"))
+        await user.type(screen.getByLabelText(/Why/), "half-written reason")
+        await user.click(rowButton(ref, "Start review"))
+
+        // Only resolving is what the close form is for. Pressing the other
+        // button first is not a reason to lose what was typed.
+        await waitFor(() =>
+            expect(screen.getByLabelText(/Why/)).toHaveValue("half-written reason"),
+        )
+    })
+})
+
 describe("when the archive says something this build does not understand", () => {
     it("shows a row whose severity token is unfamiliar rather than dropping it", async () => {
         meIs(admin)
@@ -826,6 +1114,10 @@ describe("when the archive says something this build does not understand", () =>
         // as-is. Treating them as strict enums took the whole page down.
         await screen.findByRole("table")
         expect(bodyRows()[0][1]).toBe("blocking")
+        // Shown, but not painted as one of the three this build knows:
+        // guessing a colour would state a severity nobody asserted.
+        const painted = screen.getByText("blocking")
+        expect(painted.className).not.toMatch(/severity-/)
     })
 
     it("one unreadable row costs that row, not the queue", async () => {
@@ -848,8 +1140,12 @@ describe("when the archive says something this build does not understand", () =>
         renderPage()
 
         expect(await screen.findByText("spc_readable")).toBeInTheDocument()
-        // And it says so, rather than silently showing one row of two.
-        expect(await screen.findByRole("alert")).toHaveTextContent(/could not be read/i)
+        // And it says so, rather than silently showing one row of two --
+        // with the count, because "some rows are missing" is not actionable
+        // and "1 task" is.
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent(/could not be read/i)
+        expect(alert).toHaveTextContent("1 task")
     })
 
     it("never reports a committed write as 'nothing was changed'", async () => {
@@ -873,6 +1169,32 @@ describe("when the archive says something this build does not understand", () =>
         const alert = await screen.findByRole("alert")
         expect(alert).toHaveTextContent(/was saved/i)
         expect(alert).not.toHaveTextContent(/Nothing was changed/i)
+        expect(hits).toBe(1)
+    })
+
+    it("closes the form when a resolve was saved but its reply was unreadable", async () => {
+        meIs(admin)
+        queueIs([task()])
+        let hits = 0
+        server.use(
+            http.post(`${QUEUE}/41/resolve`, () => {
+                hits += 1
+                return HttpResponse.json({ id: 41, workflow_state: "brand_new_state" })
+            }),
+        )
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Close…" }))
+        await user.type(screen.getByLabelText(/Why/), "fine as deposited")
+        await user.click(screen.getByRole("button", { name: "Close task" }))
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(/was saved/i)
+        // The task IS closed. Leaving the filled-in form open beneath it
+        // invites filing the same reason a second time.
+        await waitFor(() =>
+            expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument(),
+        )
         expect(hits).toBe(1)
     })
 
