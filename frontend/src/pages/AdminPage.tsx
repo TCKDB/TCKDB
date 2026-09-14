@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Navigate } from "react-router-dom"
+import { Link, Navigate } from "react-router-dom"
 import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
@@ -127,6 +127,13 @@ export default function AdminPage() {
                 account&rsquo;s next request; it does not end a session already in
                 progress.
             </p>
+
+            <nav className="admin-nav" aria-label="Administration sections">
+                <Link to="/admin/curator-queue">Curator queue</Link>
+                <Link to="/admin/machine-review-inspection">
+                    Machine-review inspection
+                </Link>
+            </nav>
 
             <StorageCapacityPanel />
 
