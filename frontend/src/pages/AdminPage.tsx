@@ -4,6 +4,7 @@ import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
 import { changeUserRole, isLastAdminRefusal, listAdminUsers } from "../api/adminApi"
+import { StorageCapacityPanel } from "../components/StorageCapacityPanel"
 import { useAuth } from "../hooks/useAuth"
 import type { AdminUser } from "../types/admin"
 import { AppUserRoleSchema, type AppUserRole } from "../types/auth"
@@ -127,6 +128,9 @@ export default function AdminPage() {
                 progress.
             </p>
 
+            <StorageCapacityPanel />
+
+            <h2>Accounts</h2>
             {usersState.status === "loading" && <p>Loading accounts&hellip;</p>}
             {usersState.status === "error" && <p className="auth-error" role="alert">{usersState.message}</p>}
 

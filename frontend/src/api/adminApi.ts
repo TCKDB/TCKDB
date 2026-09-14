@@ -1,8 +1,10 @@
 import { AuthApiError, throwForFailedResponse } from "./authApi"
 import {
     AdminUserPageSchema,
+    StorageCapacityStateSchema,
     UserRoleChangeSchema,
     type AdminUserPage,
+    type StorageCapacityState,
     type UserRoleChange,
 } from "../types/admin"
 import type { AppUserRole } from "../types/auth"
@@ -60,4 +62,38 @@ export async function changeUserRole(userId: number, role: AppUserRole): Promise
 /** True when `caught` is the archive refusing to remove the last admin. */
 export function isLastAdminRefusal(caught: unknown): boolean {
     return caught instanceof AuthApiError && caught.code === LAST_ADMIN_DEMOTION
+}
+
+export async function getStorageCapacity(): Promise<StorageCapacityState> {
+    const response = await fetch(`${API_BASE}/api/v1/admin/artifact-storage/capacity`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+    })
+    if (!response.ok) return throwForFailedResponse(response)
+    return StorageCapacityStateSchema.parse(await response.json())
+}
+
+/**
+ * Declare a storage-full condition resolved.
+ *
+ * `reason` is required by the server (min length 1) and the requirement is
+ * not incidental: this is the one clearing path that rests on an
+ * operator's assertion rather than on a measurement, so the log has to
+ * record who said what. The call APPENDS -- the original refusal stays in
+ * the log as the account of what happened, and this supersedes it.
+ *
+ * If the store is in fact still full, the next refused upload appends a
+ * new refusal and `/status` degrades again. That is the system working,
+ * not a clear that was lost, and the page says so.
+ */
+export async function clearStorageCapacity(reason: string): Promise<StorageCapacityState> {
+    const response = await fetch(`${API_BASE}/api/v1/admin/artifact-storage/capacity/clear`, {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+    })
+    if (!response.ok) return throwForFailedResponse(response)
+    return StorageCapacityStateSchema.parse(await response.json())
 }

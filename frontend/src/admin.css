@@ -94,3 +94,50 @@
     color: var(--muted);
     font: var(--type-note-font);
 }
+
+/* ---------------------------------------------------------------------
+ * Artifact storage
+ * ------------------------------------------------------------------ */
+
+.admin-storage {
+    margin: 0 0 var(--s-5);
+    padding-bottom: var(--s-4);
+    border-bottom: 1px solid var(--line);
+}
+
+.admin-storage h2 {
+    margin: 0 0 var(--s-3);
+}
+
+.admin-storage-ok {
+    margin: 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.admin-storage-facts {
+    margin: var(--s-3) 0 0;
+}
+
+.admin-storage-clear {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-3);
+    margin: var(--s-4) 0 0;
+    max-width: 34rem;
+}
+
+/* The form is a COLUMN, so `.auth-submit`'s own `align-self: flex-start`
+   is right here and is left alone -- unlike `.api-key-create`, which is a
+   row and had to neutralise it. Recorded because the two look like the
+   same situation and are not. */
+.admin-storage-clear .auth-field {
+    width: 100%;
+}
+
+.admin-storage-note {
+    margin: 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
