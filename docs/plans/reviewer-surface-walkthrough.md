@@ -314,7 +314,11 @@ and they are not what #222 guessed, which was more read routes.
 
 #222 asks whether acceptance should carry a scope, framed around a reviewer's
 honest position: *"the rate constant is sound; I did not examine the
-conformers."* The walkthrough makes it sharper than that.
+conformers."*
+
+**An earlier version of this section claimed the walkthrough made that question
+sharper, and it was wrong.** It is recorded below rather than deleted, because
+the reasoning that replaced it is the useful part.
 
 Under ADR 0003 accepted science is frozen by `trg_as_*` triggers. Measured:
 each child trigger is parameterised with **one** root type and the FK reaching
@@ -337,34 +341,69 @@ a child of *kinetics*, so accepting the kinetics freezes the **link row**, not
 the calculation it points at.
 
 So accepting `kin_2uhinwoeibtynxycriehpcnkcq` freezes the Arrhenius row and
-leaves the frequency calculation it was computed from fully editable. The
-freeze groups are disjoint by construction, not by omission.
+leaves the frequency calculation it was computed from unfrozen. The freeze
+groups are disjoint by construction, not by omission.
 
-**The real question is therefore not "should acceptance cascade?" but "what
-does an accepted number mean when its inputs can still change underneath it?"**
-Three coherent answers, and they lead to different products:
+### The retracted claim
 
-- **(a) Accept the claim only.** Honest about what was judged; an accepted rate
-  constant can silently stop matching its inputs. Needs, at minimum, a way to
-  detect and surface that drift — which is close to what the reproducibility
-  assessment machinery already does.
-- **(b) Accept the claim, freeze the closure.** Freeze what the number depends
-  on without asserting anyone reviewed it. Distinguishes *frozen* from
-  *approved* — which the current model does not, and which would need a new
-  state rather than a new cascade.
-- **(c) Scoped acceptance.** The reviewer states what they examined. Most
-  faithful, most expensive, and it changes `record_review`.
+This section previously read that sentence as a hole, and asked "what does an
+accepted number mean when its inputs can still change underneath it?" That
+framing does not survive contact with the rest of the design, for two reasons
+established on 2026-09-14:
 
-This is the decision to take before any UI. A queue built against (a) and a
-queue built against (c) are different products, and #222 already says building
-against the wrong one means building twice. It also settles the 36-vs-44
-question in §2.
+1. **A record that is not accepted being mutable is not a gap — it is what
+   "not accepted" means.** The property is fully general: accepting any record
+   leaves every other record mutable. Presenting it as specific to frequencies
+   under a rate constant made a universal and intended behaviour look like a
+   defect in one place.
+
+2. **A repair that wants to reach accepted science is already refused, and
+   already has a declared route.** `tckdb_raise_if_accepted` is a schema object
+   present in every database built from the migration chain, and nothing under
+   `backend/alembic/` disables triggers during a migration. ADR 0015 and the
+   `accepted_science_repair` ledger (`e2c9a4f7b163`, first used by
+   `b8e3f1a7c250`) are the sanctioned way through.
+
+The one migration in the chain that rewrites a scientific *value* —
+`a4f7c2e9d651`, converting 46 dihedral series to ADR 0020's contract — states
+the position exactly, and anticipates the self-hosted case:
+
+> if a future or self-hosted deployment has approved one of these calculations,
+> `tckdb_raise_if_accepted` refuses the `UPDATE` and the whole transaction rolls
+> back — correctly: the premise this revision runs under does not hold there,
+> and failing loudly is the right outcome, not a gap to route around.
+
+One caveat worth recording, since it is the kind of thing a reader may check:
+that migration's "every affected row is `not_reviewed`" is a **measurement of
+this corpus, in prose** — it appears only in the docstring, and there is no
+runtime `record_review` check in the migration body. It explains why that
+revision did not need the repair ledger. It is not what protects another
+deployment; the trigger is.
+
+### What is actually left
+
+ADR 0016's original question, unchanged and narrower than the retracted
+framing: **acceptance is one flag, so a reviewer who means "the rate constant
+is sound, I did not examine the conformers" must over-claim or under-claim.**
+That is a record-keeping question about what an endorsement asserts, not a
+data-integrity one. Two answers:
+
+- **(a) Accept the claim only**, and accept that the endorsement says nothing
+  about the supporting set. What the archive has today.
+- **(b) Scoped acceptance.** The reviewer states what they examined. More
+  faithful, and it changes `record_review`.
+
+This still wants deciding before a queue with accept buttons is built, because
+it decides whether `record_review` gains a column, and it settles the 36-vs-44
+question in §2. It does **not** block the review packet recommended in §7,
+which is read-only.
 
 ---
 
 ## 7. What I would do next, in order
 
-1. **Settle §6.** It is a decision, not work, and everything else depends on it.
+1. **Settle §6.** It is a decision, not work. Note it gates a queue with
+   accept buttons, not the packet in step 4 — those can proceed in parallel.
 2. **Deposit-side gaps 1–4.** A reviewer surface over an archive that cannot
    say whether a saddle is the right saddle, what the tunnelling correction was
    applied to, or how contaminated the barrier wavefunction is will produce
