@@ -40,10 +40,23 @@ export const MachineReviewRecordSummarySchema = z.object({
 })
 export type MachineReviewRecordSummary = z.infer<typeof MachineReviewRecordSummarySchema>
 
-/** One linked record that received >=1 exactly-mapped finding. */
+/**
+ * One linked record that received >=1 exactly-mapped finding.
+ *
+ * `record_match_key` is the private key the machine-review stack grouped the
+ * finding by -- in the audit path that is the stringified internal row id, and
+ * it is shown only because this is a maintainer's debugging surface.
+ * `record_public_ref` is the identifier the archive is actually addressed by,
+ * and is `null` when the record cannot be named.
+ *
+ * The first was called `record_ref` until 2026-09-14, which is what the public
+ * read surfaces call a *public* ref -- this page was rendering a row id under
+ * that heading.
+ */
 export const AdminMachineReviewRecordInspectionSchema = z.object({
     record_type: z.string(),
-    record_ref: z.string().nullable().default(null),
+    record_match_key: z.string().nullable().default(null),
+    record_public_ref: z.string().nullable().default(null),
     record_id: z.number().int().nullable().default(null),
     latest_summary: MachineReviewRecordSummarySchema,
     all_record_reviews_count: z.number().int().nonnegative().default(0),

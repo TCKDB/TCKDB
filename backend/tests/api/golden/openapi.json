@@ -368,7 +368,7 @@
       },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
-        "description": "Admin-only machine-review projection for one linked record.",
+        "description": "Admin-only machine-review projection for one linked record.\n\nTwo different identifiers, deliberately named apart:\n\n``record_match_key`` is the private key the machine-review stack groups\nfindings by. In the audit path it is the **stringified internal row id**\n(the public ref is not available at the audit layer -- see\n``audit_adapter``'s \"Internal-id addressing\"). It is exposed here because\nthis is a debugging surface and a maintainer chasing why a finding did or\ndid not map to a record needs to see the key it was matched on. It is not\nan identifier anything else answers to.\n\n``record_public_ref`` is the handle a human follows -- the record's own\n``public_ref``, resolved at read time, ``null`` when the record cannot be\nnamed (``applied_energy_correction`` has no such column, and the row may\nhave been deleted since the review). See :mod:`app.services.record_refs`.\n\nThe field was called ``record_ref`` until 2026-09-14, which read as the\npublic ref: that is what ``record_ref`` means everywhere else in this API\n(the frequency-scale-factor, level-of-theory, literature,\nenergy-correction-scheme and release read schemas all carry one). This\nsurface was the single outlier, and the admin page rendered a row id under\na column headed ``record_ref``. Renamed rather than kept, because adding a\nreal public ref beside it would have made the collision worse, not better\n-- ``record_ref`` and ``record_public_ref`` side by side read as variants\nof one thing, with the misleading one first.",
         "properties": {
           "all_record_reviews_count": {
             "default": 0,
@@ -389,7 +389,7 @@
             ],
             "title": "Record Id"
           },
-          "record_ref": {
+          "record_match_key": {
             "anyOf": [
               {
                 "type": "string"
@@ -398,7 +398,18 @@
                 "type": "null"
               }
             ],
-            "title": "Record Ref"
+            "title": "Record Match Key"
+          },
+          "record_public_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Public Ref"
           },
           "record_type": {
             "title": "Record Type",

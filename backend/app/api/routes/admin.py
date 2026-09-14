@@ -59,6 +59,7 @@ from app.services.machine_review import (
 from app.services.record_refs import (
     resolve_record_public_ref,
     resolve_record_public_refs,
+    resolve_record_public_refs_by_name,
 )
 from app.services.scientific_read.handles import (
     resolve_energy_correction_scheme_handle,
@@ -251,12 +252,39 @@ def change_user_role(
 
 
 class AdminMachineReviewRecordInspection(BaseModel):
-    """Admin-only machine-review projection for one linked record."""
+    """Admin-only machine-review projection for one linked record.
+
+    Two different identifiers, deliberately named apart:
+
+    ``record_match_key`` is the private key the machine-review stack groups
+    findings by. In the audit path it is the **stringified internal row id**
+    (the public ref is not available at the audit layer -- see
+    ``audit_adapter``'s "Internal-id addressing"). It is exposed here because
+    this is a debugging surface and a maintainer chasing why a finding did or
+    did not map to a record needs to see the key it was matched on. It is not
+    an identifier anything else answers to.
+
+    ``record_public_ref`` is the handle a human follows -- the record's own
+    ``public_ref``, resolved at read time, ``null`` when the record cannot be
+    named (``applied_energy_correction`` has no such column, and the row may
+    have been deleted since the review). See :mod:`app.services.record_refs`.
+
+    The field was called ``record_ref`` until 2026-09-14, which read as the
+    public ref: that is what ``record_ref`` means everywhere else in this API
+    (the frequency-scale-factor, level-of-theory, literature,
+    energy-correction-scheme and release read schemas all carry one). This
+    surface was the single outlier, and the admin page rendered a row id under
+    a column headed ``record_ref``. Renamed rather than kept, because adding a
+    real public ref beside it would have made the collision worse, not better
+    -- ``record_ref`` and ``record_public_ref`` side by side read as variants
+    of one thing, with the misleading one first.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     record_type: str
-    record_ref: str | None = None
+    record_match_key: str | None = None
+    record_public_ref: str | None = None
     record_id: int | None = None
     latest_summary: MachineReviewRecordSummary
     all_record_reviews_count: int = 0
@@ -284,14 +312,27 @@ class AdminSubmissionMachineReviewInspectionResponse(BaseModel):
 
 def _to_admin_inspection_response(
     inspection: SubmissionMachineReviewInspection,
+    public_refs: dict[tuple[str, int], str],
 ) -> AdminSubmissionMachineReviewInspectionResponse:
-    """Map the private inspection result onto the admin response schema."""
+    """Map the private inspection result onto the admin response schema.
+
+    ``record.record_ref`` is the service layer's name for the matching key and
+    stays that way inside ``app.services.machine_review`` -- it is the key
+    ``context_hash`` is computed over, so it cannot be renamed without
+    restaling every stored review. The translation to the published name
+    happens here, at the boundary, and nowhere else.
+    """
     return AdminSubmissionMachineReviewInspectionResponse(
         submission_id=inspection.submission_id,
         record_summaries=tuple(
             AdminMachineReviewRecordInspection(
                 record_type=record.record_type,
-                record_ref=record.record_ref,
+                record_match_key=record.record_ref,
+                record_public_ref=(
+                    None
+                    if record.record_id is None
+                    else public_refs.get((record.record_type, record.record_id))
+                ),
                 record_id=record.record_id,
                 latest_summary=record.latest_summary,
                 all_record_reviews_count=len(record.all_record_reviews),
@@ -331,7 +372,17 @@ def inspect_submission_machine_review(
         submission_record_links=submission.record_links,
         submission_audit_events=submission.audit_events,
     )
-    return _to_admin_inspection_response(inspection)
+    # Records with no internal id cannot be looked up at all; the resolver
+    # drops a type it does not recognise. Both simply get no ref.
+    public_refs = resolve_record_public_refs_by_name(
+        session,
+        (
+            (record.record_type, record.record_id)
+            for record in inspection.record_inspections
+            if record.record_id is not None
+        ),
+    )
+    return _to_admin_inspection_response(inspection, public_refs)
 
 
 # ---------------------------------------------------------------------------

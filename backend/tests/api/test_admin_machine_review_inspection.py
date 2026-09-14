@@ -47,6 +47,7 @@ from app.services.trust.models import (
     EvidenceEvaluation,
     EvidenceOutcome,
 )
+from tests.services.scientific_read._factories import make_species
 
 _BASE = "/api/v1/admin/submissions"
 
@@ -238,8 +239,14 @@ def test_admin_submission_machine_review_inspection_maps_record_finding(
     assert len(body["record_summaries"]) == 1
     record = body["record_summaries"][0]
     assert record["record_type"] == "calculation"
-    assert record["record_ref"] == "9001"
+    # The matching key the projection grouped on: the stringified internal id
+    # in the audit path. Published under a name that says so since 2026-09-14.
+    assert record["record_match_key"] == "9001"
     assert record["record_id"] == 9001
+    # 9001 is a fabricated id with no calculation row behind it, so there is
+    # nothing to name. `null`, not the row id dressed up as a handle.
+    assert record["record_public_ref"] is None
+    assert "record_ref" not in record
     assert record["latest_summary"]["status"] == "machine_screened_warning"
     assert record["all_record_reviews_count"] == 1
     assert body["source_audit_event_ids"] == [event.id]
@@ -417,4 +424,94 @@ def test_admin_submission_machine_review_inspection_does_not_change_public_trust
         "evidence",
         "llm_precheck",
         "is_certified",
+    }
+
+
+# --------------------------------------------------------------------------- #
+# record_public_ref -- the identifier a maintainer can actually follow
+# --------------------------------------------------------------------------- #
+#
+# The two identifiers on this surface answer different questions, and until
+# 2026-09-14 only the wrong one was published -- under the name `record_ref`,
+# which everywhere else in this API means the *public* ref. The page rendered a
+# database row id beneath that heading.
+
+
+def test_inspection_resolves_the_public_ref_of_a_real_record(
+    client, db_session, login_as, _api_admin_user
+):
+    """A finding on a record that exists is named by the ref the archive uses."""
+    species = make_species(db_session)
+    submission = _new_submission(db_session, _api_admin_user)
+    link_record(
+        db_session,
+        submission=submission,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+        role="primary",
+    )
+    _record_mr_event(
+        db_session,
+        submission,
+        findings=(
+            _record_finding(
+                record_id=species.id,
+                record_type="species",
+                severity=LLMFindingSeverity.warning,
+            ),
+        ),
+    )
+    login_as(_api_admin_user)
+
+    record = client.get(_url(submission.id)).json()["record_summaries"][0]
+
+    # Equality with the row's own ref: returning some other species' ref would
+    # satisfy any shape check perfectly.
+    assert record["record_public_ref"] == species.public_ref
+    # And the match key is still the internal id -- these are two different
+    # things and the endpoint must not collapse them into one.
+    assert record["record_match_key"] == str(species.id)
+    assert record["record_public_ref"] != record["record_match_key"]
+
+
+def test_inspection_never_publishes_the_old_name(
+    client, db_session, login_as, _api_admin_user
+):
+    """`record_ref` is gone from this surface, not merely duplicated.
+
+    Leaving the old key in place alongside the new one would keep the page's
+    ambiguity alive and let a consumer carry on reading a row id as a handle.
+    """
+    species = make_species(db_session)
+    submission = _new_submission(db_session, _api_admin_user)
+    link_record(
+        db_session,
+        submission=submission,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+        role="primary",
+    )
+    _record_mr_event(
+        db_session,
+        submission,
+        findings=(
+            _record_finding(
+                record_id=species.id,
+                record_type="species",
+                severity=LLMFindingSeverity.warning,
+            ),
+        ),
+    )
+    login_as(_api_admin_user)
+
+    record = client.get(_url(submission.id)).json()["record_summaries"][0]
+
+    assert "record_ref" not in record
+    assert set(record) == {
+        "record_type",
+        "record_match_key",
+        "record_public_ref",
+        "record_id",
+        "latest_summary",
+        "all_record_reviews_count",
     }

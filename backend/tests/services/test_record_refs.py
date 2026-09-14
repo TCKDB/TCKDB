@@ -20,6 +20,7 @@ from app.services.record_refs import (
     REF_BEARING_RECORD_TYPES,
     resolve_record_public_ref,
     resolve_record_public_refs,
+    resolve_record_public_refs_by_name,
 )
 from tests.services.scientific_read._factories import make_species
 
@@ -159,3 +160,58 @@ def test_a_page_of_one_type_costs_one_query(db_session, record_count):
 
     assert len(resolved) == record_count
     assert statements == 1, f"expected one grouped SELECT, saw {statements}"
+
+
+# --------------------------------------------------------------------------- #
+# The name-keyed form, for callers holding a raw string
+# --------------------------------------------------------------------------- #
+
+
+def test_by_name_resolves_a_known_type(db_session):
+    species = make_species(db_session)
+
+    resolved = resolve_record_public_refs_by_name(
+        db_session, [("species", species.id)]
+    )
+
+    assert resolved == {("species", species.id): species.public_ref}
+
+
+def test_by_name_drops_an_unknown_type_without_raising(db_session):
+    """The projection tolerates a record type it cannot parse, so this must too.
+
+    Note *how* it must not be implemented: ``SubmissionRecordType(name)`` inside
+    ``try/except ValueError`` reads as the obvious version and is a defect --
+    ``CodedValidationError`` subclasses ``ValueError``, so such a handler
+    silently eats a coded refusal raised beneath it, costing a client the
+    ``code`` and ``context`` it is told to branch on.
+    ``tests/api/test_coded_exception_reraise_gate`` fails the build for that
+    shape and caught this exact one on 2026-09-14.
+    """
+    species = make_species(db_session)
+
+    resolved = resolve_record_public_refs_by_name(
+        db_session,
+        [("species", species.id), ("not_a_record_type", 1), ("", 2)],
+    )
+
+    # The known one still resolves -- an unknown sibling must not poison the
+    # batch, which is what an exception escaping the loop would do.
+    assert resolved == {("species", species.id): species.public_ref}
+
+
+def test_by_name_keys_results_by_the_string_it_was_given(db_session):
+    """Callers hold strings; handing back enum-keyed pairs would not match.
+
+    A resolver that returned ``{(SubmissionRecordType.species, id): ref}`` would
+    look correct and find nothing at the call site, because the caller looks up
+    by the raw ``record_type`` string it already has.
+    """
+    species = make_species(db_session)
+
+    resolved = resolve_record_public_refs_by_name(
+        db_session, [("species", species.id)]
+    )
+
+    assert list(resolved) == [("species", species.id)]
+    assert all(isinstance(name, str) for name, _ in resolved)
