@@ -7,16 +7,19 @@ read-API requirements from **what the judgement needs**, rather than from what
 happens to be queryable today, and to turn "does acceptance carry a scope?"
 into a question with a concrete answer attached.
 
-Everything below was measured on 2026-09-14 against the live Pi instance and
-the code at `90fe0aa0`. The Pi is the working playground, not a paper corpus —
+Everything below was measured on 2026-09-14 against the live Pi instance
+(alembic `e3a7c1f9b2d4`) and the code at `90fe0aa0`, then independently
+re-measured in review. The Pi is the working playground, not a paper corpus —
 these numbers describe *this deployment* and are here to make the exercise
 concrete, not to characterise the archive.
+
+Claims are measured unless marked **[inferred]**.
 
 ## Method
 
 Read-only SQL against the deployed database for the supporting set, and the
 live HTTP read API for what a reviewer can actually retrieve. Nothing was
-written. Queries are reproducible from the refs quoted throughout.
+written. Queries are reproducible from the refs in the appendix.
 
 ---
 
@@ -44,12 +47,12 @@ The claim under review:
 | n | 0.334322 |
 | Ea | 85.9891 kJ/mol |
 | range | 300–3000 K |
-| tunnelling | Eckart |
+| tunnelling | Eckart (see §3 — the word, and nothing else) |
 | uncertainty | A ×1.406 (multiplicative), n ± 0.0444, Ea ± 0.254 kJ/mol |
 
 ---
 
-## 2. The supporting set: 36 acceptances for one rate constant
+## 2. The supporting set: 36 frozen, 44 in a queue
 
 ADR 0016 predicted "a reaction with fifty supporting records needs fifty
 acceptances". Measured, for this one:
@@ -65,10 +68,23 @@ acceptances". Measured, for this one:
 | applied_energy_correction | 8 |
 | **total** | **36** |
 
-Not reviewable, but needed to *judge* the above: 3 species entries, 1 level of
-theory, 27 stored artifacts.
+The 17 calculations break down as 7 `opt`, 4 `sp`, 4 `freq`, 1 `irc`, 1 `scan`,
+all at one level of theory (`b3lyp/def2tzvp`) and one software release
+(Gaussian 16), with 27 stored artifacts.
 
-The 17 calculations break down as 7 `opt`, 4 `sp`, 4 `freq`, 1 `irc`, 1 `scan`.
+**Two numbers, and the difference matters.** 36 is the ADR 0016 set — the types
+whose acceptance *freezes* science. But `record_review` also carries rows for
+`species_entry`, `conformer_group`, `reaction_entry` and `transition_state`,
+and `PATCH /record-reviews/{record_type}/{record_id}` accepts any
+`SubmissionRecordType`. For this reaction that is 8 more rows, so **a queue
+built naively on `record_review` shows 44, not 36**. Deciding which of those
+two sets a reviewer is shown is a product decision that falls out of §6.
+
+Closure checks, so the set can be trusted: every calculation cited by
+`kinetics_source_calculation` (6 rows) and `statmech_source_calculation`
+(9 rows) is inside it; each species has exactly one species entry; and **no
+other reaction entry shares these species**, so the acceptance scope really is
+local to this reaction.
 
 **Nothing in this set has been reviewed.** Database-wide there are 1,299
 `record_review` rows and every one is `not_reviewed`, except a single
@@ -86,10 +102,10 @@ choose the shape.
 plausible for this chemistry, is Eckart the right tunnelling treatment?
 
 **What they get today — and it is a lot.** `GET
-/api/v1/scientific/reaction-entries/{ref}/kinetics` already returns, per
-record: the Arrhenius parameters, uncertainty, `temperature_coverage`,
-`supersession`, full `provenance`, a `review` block, a `review_summary`
-roll-up across the entry, and an `evidence_completeness` checklist:
+/api/v1/scientific/reaction-entries/{ref}/kinetics` returns, per record: the
+Arrhenius parameters, uncertainty, `temperature_coverage`, `supersession`, full
+`provenance`, a `review` block, an envelope-level `review_summary`, and an
+`evidence_completeness` checklist:
 
 ```
 score 7/9
@@ -112,15 +128,31 @@ frequency  b3lyp/def2tzvp
 energy     b3lyp/def2tzvp     energy_source: sp
 ```
 
-The barrier of a rate constant taken from a B3LYP single point is a
-judgement call a reviewer would want to make deliberately, and the read
-surface puts it in front of them without being asked. That is the shape the
-rest of this should follow.
+The barrier of a rate constant taken from a B3LYP single point is a judgement
+call a reviewer would want to make deliberately, and the read surface puts it
+in front of them without being asked. That is the shape the rest of this
+should follow.
 
-**The two false items in the checklist are the interesting ones.**
-`has_scf_stability` is false for a system whose reactant is a doublet radical
-— exactly where an unstable-wavefunction check matters. The checklist is
-already pointing at the right gap; nothing yet makes a reviewer look.
+**A worked check that succeeds**, to show the surface can support real
+arithmetic: the TS single point (−630.021756791 Ha) minus the reactant single
+point (−630.054478594 Ha) is 0.032722 Ha = 85.9 kJ/mol electronic; applying
+ΔZPE (0.095932 − 0.0968327 Ha) gives ≈ 83.6 kJ/mol at 0 K, against a fitted Ea
+of 85.99 kJ/mol. Consistent. A reviewer can do that from what is returned.
+
+**The tunnelling treatment is not reviewable.** `kinetics.tunneling_model`
+stores the enum `eckart` and `kinetics_tunneling_application` has **0 rows** —
+the read API's `tunneling` block is `null`. The forward and reverse barriers,
+the energy-zero convention and the frequency calculation the correction was
+built from all live in that table, and none of it was deposited. So of the
+three questions above, the third cannot be answered at all: a reviewer can see
+*that* Eckart was claimed, never *what it was applied to*.
+
+**The two false checklist items are TS-scoped, not reactant-scoped.** Both are
+computed against the TS calculations (`ts_opt_calc_id`, `ts_sp_calc_id`). Six
+`calc_geometry_validation` rows do exist for the species optimisations — all
+`is_isomorphic = true`, RMSD ≤ 1.2 × 10⁻⁴ — and none for the TS.
+`calc_scf_stability` has **0 rows database-wide**, so that item can never
+currently be true for anything.
 
 ### The transition state (1 `transition_state_entry`, plus its calculations)
 
@@ -132,25 +164,29 @@ Half of that is answerable and half is not.
 Answerable: the frequency calculation records `n_imag = 1` at
 **−719.4703 cm⁻¹**, with `imaginary_mode_tau_cm1 = 30` on basis
 `assumed_analytic_default`. One imaginary mode, comfortably large — a reviewer
-can see it is not a numerical artefact.
+can see it is not a numerical artefact. (The same tau and basis are stamped on
+all four frequency calculations in the set, including the three minima with
+`n_imag = 0`, which is worth a reviewer's raised eyebrow about what "assumed"
+covers.)
 
 **Not answerable: is that mode the reaction coordinate?** ADR 0013 decided the
 archive stores no eigenvectors and that the mode's disposition is *declared*
-instead. Measured database-wide: **0 of 124 `calc_freq_result` rows declare
-`reaction_coordinate_mode_index`, and all 26 imaginary modes have
-`imaginary_disposition` NULL.** The declaration mechanism exists and has never
-been used. The single most important question about a transition state has no
-recorded answer anywhere in this deployment.
+instead. Measured: **0 of 124 `calc_freq_result` rows declare
+`reaction_coordinate_mode_index`, and all 26 imaginary modes (of 2,049 modes)
+have `imaginary_disposition` NULL.** The declaration mechanism exists and has
+never been used. The single most important question about a transition state
+has no recorded answer anywhere in this deployment.
 
-**Also not answerable: does the IRC connect the right endpoints?** There is an
-IRC calculation (`calc_ovr6um4pxqmd7iatdkogsgtmqy`), and database-wide there
-are 17 IRC results and 1,424 IRC points. But
-**`transition_state_validation_evidence` has 0 rows**. The path was computed
-and stored; the *conclusion* — this saddle connects these reactants to these
-products — is recorded nowhere. Note that `evidence_completeness` reports
-`has_path_search_or_irc_evidence: true`, which is true about the calculation
-existing and says nothing about connectivity being established. A reviewer
-reading that checklist would reasonably believe the question was settled.
+**Nor does the IRC settle it.** There is an IRC calculation, and database-wide
+there are 17 IRC results and 1,424 IRC points. But
+**`transition_state_validation_evidence` has 0 rows**, and
+**`reaction_atom_map` has 0 rows for this TS entry**. The path was computed and
+stored; the *conclusion* — this saddle connects these reactants to these
+products — is recorded nowhere, by either mechanism. Note that
+`evidence_completeness` reports `has_path_search_or_irc_evidence: true`, which
+is true about the calculation existing and says nothing about connectivity. A
+reviewer reading that checklist would reasonably believe the question was
+settled.
 
 ### Statistical mechanics (3 rows) — and the one that is missing
 
@@ -164,17 +200,28 @@ was applied (all three: yes).
 for any: **0 of 101 statmech rows in the database attach to a
 `transition_state_entry`.** A TST rate constant is Q‡/(QA·QB) — the TS
 partition function is the quantity most directly under the number being
-reviewed, and it is not in the archive. Whatever produced these rate constants
-computed it and did not deposit it.
+reviewed, and it is not in the archive.
 
 This is the single largest finding of the walkthrough. A reviewer asked to
 accept `kin_2uhinwoeibtynxycriehpcnkcq` cannot check the term that most
 determines it.
 
-`uses_projected_frequencies` is NULL on all three rows — for a species with a
-hindered rotor, whether the rotor mode was projected out of the vibrational
-set is a real double-counting question, and "not recorded" is not the same as
-"not done".
+`uses_projected_frequencies` is NULL on all three rows, and on **65 of 101
+database-wide**. For a species with a hindered rotor, whether the rotor mode
+was projected out of the vibrational set is a real double-counting question,
+and "not recorded" is not the same as "not done".
+
+### Spin contamination — deposited, and invisible
+
+`calc_spin_diagnostic` has 40 rows database-wide, including three in this set:
+the reactant SP (⟨S²⟩ 0.7549), `[SH]` (0.754), and **the TS single point, at
+⟨S²⟩ = 0.7816 before annihilation and 0.7502 after**. Roughly 4% contamination
+on the barrier calculation of a doublet reaction is exactly the fact a reviewer
+wants in front of them.
+
+It is in the database and `evidence_completeness` has no item for it. The
+checklist is not merely missing checks that were never run — it is silent about
+a diagnostic that *was*.
 
 ### Energy corrections (8 rows)
 
@@ -182,15 +229,26 @@ Two schemes: an atom-energy correction (`aec_total`, hartree) and a bond
 additivity correction (`bac_total`, kcal/mol), applied to each species and to
 the TS.
 
-A worked reviewer check, to show the surface can support one: the `aec_total`
-for the reactant `[CH2]C(C=C)OS` and for the transition state are *identical* —
-630.0442600297998 hartree. That is not a copy-paste error; it is what an
-atom-count-based correction must do for a unimolecular TS, which is isomeric
-with its reactant. A reviewer can confirm it at a glance and move on. The BAC
-for the TS is exactly 0, which is a different kind of statement and one worth
-asking about.
+A partial reviewer check, and its limit. The `aec_total` for the reactant
+`[CH2]C(C=C)OS` and for the transition state are *identical* —
+630.0442600297998 hartree. That is not a copy-paste error: measured from
+`geometry_atom`, both are C₄H₇OS at 13 atoms, so an atom-count correction must
+give the same total, and the component rows agree (C×4, H×7, O×1, S×1). A
+reviewer can confirm the *identity* at a glance.
 
-**But none of these eight rows can be named to a reviewer.**
+They cannot confirm the *derivation*. On every component,
+`contribution_value ≠ multiplicity × parameter_value` — for carbon,
+4 × (−37.8656) against a stored +152.5445, a per-atom difference of +0.2705 Ha
+(≈ 170 kcal/mol, about the atomic heat of formation of carbon); hydrogen,
+oxygen and sulfur differ by 0.0807, 0.0923 and 0.1029 Ha. The contributions
+evidently fold in atomic heats of formation, and probably spin-orbit
+corrections, while `parameter_value` carries only the atomic energy at the
+level of theory. The totals are internally consistent; a reviewer trying to
+reproduce a component from the published parameter cannot. The BAC for the TS
+is exactly 0, with zero component rows — a different kind of statement, and one
+worth asking about.
+
+**And none of these eight rows can be named to a reviewer.**
 `applied_energy_correction` has no `public_ref` column. This was already
 recorded as the residual on ML-plan R2 and in `app/services/record_refs.py`;
 here it stops being abstract — **8 of the 36 rows in this supporting set cannot
@@ -224,28 +282,31 @@ The task was written cautiously about backend readiness. Measured:
    serves anonymously; the legacy entity reads and all review routes require
    authentication, with an explicit message pointing at the public surface.
 
-One wrinkle: the review PATCH is addressed by **internal row id**, not public
-ref. A UI that follows DR-0028 and never shows a row id still needs one to
-write. Resolvable — accept a ref and resolve server-side — but it is a
-decision, and it is the same seam #478/#479 have been working along.
+One wrinkle: the review PATCH is addressed by **internal row id**
+(`record_id: int`), not public ref. A UI that follows DR-0028 and never shows a
+row id still needs one to write. Resolvable — accept a ref and resolve
+server-side — but it is a decision, and it is the same seam #478/#479 have been
+working along.
 
 ---
 
-## 5. The read-API gap list, ranked by what it costs a reviewer
+## 5. The gap list, ranked by distance from the number under review
 
 | # | Gap | Cost |
 |---|---|---|
-| 1 | No statmech for any transition state (0/101) | The term most directly under a TST rate constant is absent |
-| 2 | Reaction-coordinate mode never declared (0/124); `imaginary_disposition` always NULL (0/26) | "Is that the right saddle?" is unanswerable from the archive |
-| 3 | `transition_state_validation_evidence` empty, despite 17 IRC results | IRC connectivity computed, conclusion not recorded — and the checklist reads as if it were |
-| 4 | `applied_energy_correction` has no `public_ref` | 8 of 36 rows in this set cannot be linked |
-| 5 | `uses_projected_frequencies` NULL | Double-counting question unanswerable for hindered-rotor species |
-| 6 | `has_scf_stability` false on a doublet radical | The check that matters most here was not run, and nothing escalates that |
+| 1 | **No statmech for any transition state** (0/101) | The term most directly under a TST rate constant is absent |
+| 2 | **No tunnelling application recorded** (`kinetics_tunneling_application` 0 rows) | The Eckart correction's barriers and energy zero are unrecorded; only the word survives |
+| 3 | **Reaction coordinate never declared** (0/124), `imaginary_disposition` always NULL (0/26), **`reaction_atom_map` and `transition_state_validation_evidence` both empty** | "Is this the right saddle?" is unanswerable by any of the three available mechanisms — while the checklist reads as if IRC settled it |
+| 4 | **Spin diagnostics deposited but unsurfaced** (40 rows; TS ⟨S²⟩ 0.7816) | The contamination fact a doublet-barrier reviewer needs is present and not shown |
+| 5 | `applied_energy_correction` has no `public_ref` | 8 of 36 rows cannot be linked |
+| 6 | Correction components do not reconcile against published parameters | The identity check works; the derivation check does not |
+| 7 | `uses_projected_frequencies` NULL (65/101) | Double-counting unanswerable for hindered-rotor species |
+| 8 | `calc_scf_stability` empty (0 rows db-wide) | A checklist item that can never currently be true |
 
-Gaps 1–3 are **deposit-side**: the data was computed and not sent, or the field
-exists and nothing fills it. No UI fixes them. They are the honest answer to
-"what does the backend need first" — and they are not what #222 guessed, which
-was more read routes.
+Gaps 1–4 are **deposit-side**: the data was computed and not sent, or the field
+exists and nothing fills it, or it was sent and nothing surfaces it. No UI
+fixes them. They are the honest answer to "what does the backend need first" —
+and they are not what #222 guessed, which was more read routes.
 
 ---
 
@@ -261,9 +322,19 @@ it, so it consults that root's acceptance and no other. Read off the live
 database:
 
 ```
-calc_freq_result          trg_as_child_*  ->  ('calculation', 'calculation_id')
-kinetics_arrhenius_entry  trg_as_child_*  ->  ('kinetics',    'kinetics_id')
+calc_freq_result          trg_as_child_05  ->  ('calculation', 'calculation_id')
+kinetics_arrhenius_entry  trg_as_child_36  ->  ('kinetics',    'kinetics_id')
 ```
+
+`tckdb_guard_accepted_child` resolves each named FK and asks
+`tckdb_record_is_accepted(TG_ARGV[0], id)` — a single `(record_type,
+record_id)` existence test against `record_review.first_approved_at`. There is
+no walk. The root guard on `calculation` likewise tests only
+`('calculation', OLD.id)`. At the application layer,
+`set_record_review_status` stamps `first_approved_at` on one row and locks that
+one ref; `accepted_science.py` has no cascade. `kinetics_source_calculation` is
+a child of *kinetics*, so accepting the kinetics freezes the **link row**, not
+the calculation it points at.
 
 So accepting `kin_2uhinwoeibtynxycriehpcnkcq` freezes the Arrhenius row and
 leaves the frequency calculation it was computed from fully editable. The
@@ -286,25 +357,31 @@ Three coherent answers, and they lead to different products:
 
 This is the decision to take before any UI. A queue built against (a) and a
 queue built against (c) are different products, and #222 already says building
-against the wrong one means building twice.
+against the wrong one means building twice. It also settles the 36-vs-44
+question in §2.
 
 ---
 
 ## 7. What I would do next, in order
 
 1. **Settle §6.** It is a decision, not work, and everything else depends on it.
-2. **Deposit-side gaps 1–3.** A reviewer surface over an archive that cannot
-   say whether a saddle is the right saddle will produce confident-looking
-   acceptances of unexamined claims — the exact failure ADR 0016's asymmetry
-   argument is about. Gap 1 (TS statmech) is the one to take first; it is
-   almost certainly an upload-path omission rather than a missing capability.
+2. **Deposit-side gaps 1–4.** A reviewer surface over an archive that cannot
+   say whether a saddle is the right saddle, what the tunnelling correction was
+   applied to, or how contaminated the barrier wavefunction is will produce
+   confident-looking acceptances of unexamined claims — the exact failure ADR
+   0016's asymmetry argument is about. Gap 1 (TS statmech) is the one to take
+   first. **[inferred]** it is likely an upload-path omission rather than a
+   missing capability, since the rate constants could not have been computed
+   without it; the database cannot distinguish "never sent" from "sent and
+   dropped", so that should be confirmed against the producer before planning
+   the fix.
 3. **Give `applied_energy_correction` a public ref.** Small, unblocks 8 of 36
    rows here, and also unblocks its supersession notices and any public
    projection of machine review. One fix, three consumers.
 4. **Only then**, the surface — and the first version should be a *list with
    evidence*, not a form. The `evidence_completeness` checklist is already the
-   right spine: show the 36 rows, show each one's score and its two or three
-   damning facts, and let the reviewer accept one at a time.
+   right spine; it needs items for tunnelling application and spin
+   contamination before it can carry a reviewer's weight.
 
 On the still-open "should this be a web app at all": the walkthrough suggests
 the first useful artefact is a **generated review packet** — one page per
