@@ -56,6 +56,10 @@ from app.services.machine_review import (
     run_admin_fake_machine_review,
     start_curator_task_review,
 )
+from app.services.record_refs import (
+    resolve_record_public_ref,
+    resolve_record_public_refs,
+)
 from app.services.scientific_read.handles import (
     resolve_energy_correction_scheme_handle,
 )
@@ -450,6 +454,29 @@ class AdminCuratorTaskResponse(BaseModel):
     Distinct from any public scientific schema; carries no public
     ``trust.machine_review``. ``record_id`` is an internal id, acceptable here
     because the surface is admin-only (spec §3).
+
+    ``record_public_ref`` is the same record's public ref, resolved at read
+    time and never stored on the task. A curator working this queue has to get
+    from "task #12 concerns calculation 431" to the record itself, and 431 is
+    not something any read route answers to -- ``calc_...`` is. Without it the
+    only way across is an internal id a curator cannot use and a UI must not
+    show (DR-0028 Req 2).
+
+    It is ``null`` when the record cannot be named: ``applied_energy_correction``
+    has no ``public_ref`` column, and a record may have been deleted since the
+    task was raised. ``null`` is the honest answer to both -- see
+    :mod:`app.services.record_refs`.
+
+    **On the name.** Across the API ``record_ref`` already means *the public
+    ref* -- it carries one in the frequency-scale-factor, level-of-theory,
+    literature, energy-correction-scheme and release read schemas. The outlier
+    is :class:`AdminMachineReviewRecordInspection` on this same router, where
+    ``record_ref`` holds the private machine-review *matching key* (the
+    stringified internal id). So the plain name is taken here by the one place
+    that uses it against the convention, and reusing it would put two meanings
+    under one name on one router -- which is how a UI ends up rendering a row
+    id as a link. ``record_public_ref`` cannot be read either way, and stays
+    correct whichever way that outlier is eventually reconciled.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -458,6 +485,7 @@ class AdminCuratorTaskResponse(BaseModel):
     submission_id: int
     record_type: SubmissionRecordType
     record_id: int
+    record_public_ref: str | None = None
     finding_fingerprint: str
     workflow_state: MachineReviewCuratorTaskState
     machine_review_status: MachineReviewStatus
@@ -522,12 +550,19 @@ class AdminCuratorTaskReopenRequest(BaseModel):
 
 def _to_curator_task_response(
     task: MachineReviewCuratorTask,
+    record_public_ref: str | None,
 ) -> AdminCuratorTaskResponse:
+    """Pure mapper: the ref is supplied, never looked up here.
+
+    Keeping the lookup out means the list route can resolve a whole page in
+    one query per record type instead of one query per task.
+    """
     return AdminCuratorTaskResponse(
         id=task.id,
         submission_id=task.submission_id,
         record_type=task.record_type,
         record_id=task.record_id,
+        record_public_ref=record_public_ref,
         finding_fingerprint=task.finding_fingerprint,
         workflow_state=task.workflow_state,
         machine_review_status=task.machine_review_status,
@@ -540,6 +575,19 @@ def _to_curator_task_response(
         resolved_at=task.resolved_at,
         resolved_by=task.resolved_by,
         resolution_note=task.resolution_note,
+    )
+
+
+def _curator_task_response(
+    session: Session,
+    task: MachineReviewCuratorTask,
+) -> AdminCuratorTaskResponse:
+    """The single-task form: resolve this one record's ref, then map."""
+    return _to_curator_task_response(
+        task,
+        resolve_record_public_ref(
+            session, record_type=task.record_type, record_id=task.record_id
+        ),
     )
 
 
@@ -607,8 +655,17 @@ def list_curator_tasks(
         .limit(limit)
     )
     tasks = session.scalars(stmt).all()
+    # One query per record type present on the page, not one per task.
+    public_refs = resolve_record_public_refs(
+        session, ((t.record_type, t.record_id) for t in tasks)
+    )
     return PaginatedResponse(
-        items=[_to_curator_task_response(t) for t in tasks],
+        items=[
+            _to_curator_task_response(
+                t, public_refs.get((t.record_type, t.record_id))
+            )
+            for t in tasks
+        ],
         total=total or 0,
         skip=offset,
         limit=limit,
@@ -632,7 +689,7 @@ def get_curator_task(
     assigning the same missing task said ``curator_task_not_found`` — one
     condition with two contracts, and a client could branch on only one.
     """
-    return _to_curator_task_response(get_curator_task_or_404(session, task_id))
+    return _curator_task_response(session, get_curator_task_or_404(session, task_id))
 
 
 @router.post(
@@ -690,7 +747,7 @@ def assign_curator_task_endpoint(
     task = assign_curator_task(
         session, task_id=task_id, assignee_id=request.assignee_id
     )
-    return _to_curator_task_response(task)
+    return _curator_task_response(session, task)
 
 
 @router.post(
@@ -716,7 +773,7 @@ def start_curator_task_review_endpoint(
         actor_id=actor_id,
         assign_actor_if_unassigned=body.assign_actor_if_unassigned,
     )
-    return _to_curator_task_response(task)
+    return _curator_task_response(session, task)
 
 
 @router.post(
@@ -744,7 +801,7 @@ def resolve_curator_task_endpoint(
         resolved_by=_admin.id,
         resolution_note=request.resolution_note,
     )
-    return _to_curator_task_response(task)
+    return _curator_task_response(session, task)
 
 
 @router.post(
@@ -769,7 +826,7 @@ def reopen_curator_task_endpoint(
         target_state=body.target_state,
         clear_assignment=body.clear_assignment,
     )
-    return _to_curator_task_response(task)
+    return _curator_task_response(session, task)
 
 
 # ---------------------------------------------------------------------------

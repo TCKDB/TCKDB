@@ -19,53 +19,23 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import (
     ReproducibilityAssessorKind,
     ReproducibilityGrade,
     SubmissionRecordType,
 )
-from app.db.models.energy_correction import AppliedEnergyCorrection
-from app.db.models.kinetics import Kinetics
-from app.db.models.network import Network
-from app.db.models.network_pdep import NetworkSolve
-from app.db.models.reaction import ChemReaction, ReactionEntry
 from app.db.models.reproducibility_assessment import (
     RecordReproducibilityAssessment,
 )
-from app.db.models.species import (
-    ConformerGroup,
-    ConformerObservation,
-    Species,
-    SpeciesEntry,
-)
-from app.db.models.statmech import Statmech
-from app.db.models.thermo import Thermo
-from app.db.models.transition_state import TransitionState, TransitionStateEntry
-from app.db.models.transport import Transport
 from app.schemas.entities.reproducibility_assessment import (
     ReproducibilityAssessmentAppend,
 )
+from app.services.record_models import RECORD_MODELS
 
-_RECORD_MODELS: dict[SubmissionRecordType, type[Any]] = {
-    SubmissionRecordType.species: Species,
-    SubmissionRecordType.species_entry: SpeciesEntry,
-    SubmissionRecordType.conformer_group: ConformerGroup,
-    SubmissionRecordType.conformer_observation: ConformerObservation,
-    SubmissionRecordType.reaction: ChemReaction,
-    SubmissionRecordType.reaction_entry: ReactionEntry,
-    SubmissionRecordType.transition_state: TransitionState,
-    SubmissionRecordType.transition_state_entry: TransitionStateEntry,
-    SubmissionRecordType.calculation: Calculation,
-    SubmissionRecordType.statmech: Statmech,
-    SubmissionRecordType.thermo: Thermo,
-    SubmissionRecordType.kinetics: Kinetics,
-    SubmissionRecordType.transport: Transport,
-    SubmissionRecordType.network: Network,
-    SubmissionRecordType.network_solve: NetworkSolve,
-    SubmissionRecordType.applied_energy_correction: AppliedEnergyCorrection,
-    SubmissionRecordType.artifact: CalculationArtifact,
-}
+#: Every record type is assessable, so this is the shared registry unfiltered.
+#: Aliased rather than rebuilt: a second copy is a second place for one entry to
+#: point at the wrong table (see :mod:`app.services.record_models`).
+_RECORD_MODELS = RECORD_MODELS
 
 SUPPORTED_REPRODUCIBILITY_RECORD_TYPES = frozenset(_RECORD_MODELS)
 

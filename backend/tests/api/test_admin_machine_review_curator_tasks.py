@@ -29,6 +29,7 @@ from app.db.models.common import MachineReviewSeverity as DBSeverity
 from app.db.models.common import MachineReviewStatus as DBStatus
 from app.db.models.common import SubmissionKind, SubmissionRecordType
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
+from app.db.models.network import Network
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import Submission
 from app.services.llm_precheck.schemas import (
@@ -49,6 +50,7 @@ from app.services.trust.models import (
     EvidenceEvaluation,
     EvidenceOutcome,
 )
+from tests.services.scientific_read._factories import make_species
 
 _BASE = "/api/v1/admin/machine-review/curator-tasks"
 
@@ -144,6 +146,7 @@ def _make_task(
     workflow_state: _STATE = _STATE.needs_curator_review,
     assigned_to: int | None = None,
     record_id: int = 101,
+    record_type: SubmissionRecordType = SubmissionRecordType.kinetics,
     fingerprint: str = "a" * 64,
     highest_severity: DBSeverity = DBSeverity.warning,
     resolved_by: int | None = None,
@@ -157,7 +160,7 @@ def _make_task(
         assert resolved_by is not None, "terminal seed needs resolved_by"
     task = MachineReviewCuratorTask(
         submission_id=submission_id,
-        record_type=SubmissionRecordType.kinetics,
+        record_type=record_type,
         record_id=record_id,
         finding_fingerprint=fingerprint,
         workflow_state=workflow_state,
@@ -588,3 +591,142 @@ def test_curator_task_api_does_not_change_public_trust_shape(
         "llm_precheck",
         "is_certified",
     }
+
+
+# --------------------------------------------------------------------------- #
+# record_public_ref -- getting a curator from a task to the record
+# --------------------------------------------------------------------------- #
+#
+# The task row stores ``record_id``, an internal database id. No read route
+# answers to it, so on its own it takes a curator nowhere: the identifier the
+# archive is addressed by is ``public_ref``. These tests pin the route's job of
+# resolving one to the other, and the two ways it is allowed to answer "I
+# cannot name this record".
+
+
+def test_get_task_carries_the_records_public_ref(
+    client, db_session, login_as, _api_admin_user
+):
+    species = make_species(db_session)
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+    )
+    login_as(_api_admin_user)
+
+    body = client.get(f"{_BASE}/{task.id}").json()
+
+    # Equality with the row's own ref, not a shape check: a route that returned
+    # some other species' ref would satisfy `startswith("spc_")` perfectly.
+    assert body["record_public_ref"] == species.public_ref
+    assert body["record_id"] == species.id
+
+
+def test_list_resolves_each_task_against_its_own_record_type(
+    client, db_session, login_as, _api_admin_user
+):
+    """Two tasks, two record types, two tables.
+
+    The list route resolves a page in one query per record type. Ids are
+    per-table sequences, so the mistake this catches -- answering from the
+    wrong table -- is not hypothetical: a species and a network routinely
+    share an id.
+    """
+    species = make_species(db_session)
+    network = Network(name="curator-task-list-ref", description="fixture")
+    db_session.add(network)
+    db_session.flush()
+
+    submission = _new_submission(db_session, _api_admin_user)
+    species_task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+        fingerprint="b" * 64,
+    )
+    network_task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.network,
+        record_id=network.id,
+        fingerprint="c" * 64,
+    )
+    login_as(_api_admin_user)
+
+    items = client.get(f"{_BASE}?submission_id={submission.id}").json()["items"]
+    by_id = {item["id"]: item for item in items}
+
+    assert by_id[species_task.id]["record_public_ref"] == species.public_ref
+    assert by_id[network_task.id]["record_public_ref"] == network.public_ref
+
+
+def test_a_task_whose_record_is_gone_reports_null_not_an_error(
+    client, db_session, login_as, _api_admin_user
+):
+    """Tasks outlive the records that raised them, and that is not a 500.
+
+    ``machine_review_curator_task.record_id`` is a plain column, not a foreign
+    key, so nothing stops a record being removed while its task stays open. The
+    curator still needs to see the task -- and to be told plainly that it can
+    no longer be followed to a record.
+    """
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.species,
+        record_id=9_000_000_002,
+    )
+    login_as(_api_admin_user)
+
+    resp = client.get(f"{_BASE}/{task.id}")
+
+    assert resp.status_code == 200
+    assert resp.json()["record_public_ref"] is None
+
+
+def test_the_write_routes_carry_the_ref_too(
+    client, db_session, login_as, _api_admin_user
+):
+    """Assign / start-review / resolve / reopen answer with the same schema.
+
+    A UI that renders the response of an action it just took would otherwise
+    lose the link on every click, and only the read routes would look right.
+    """
+    species = make_species(db_session)
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+    )
+    login_as(_api_admin_user)
+
+    assigned = client.post(
+        f"{_BASE}/{task.id}/assign", json={"assignee_id": _api_admin_user}
+    )
+    assert assigned.status_code == 200
+    assert assigned.json()["record_public_ref"] == species.public_ref
+
+    started = client.post(f"{_BASE}/{task.id}/start-review", json={})
+    assert started.status_code == 200
+    assert started.json()["record_public_ref"] == species.public_ref
+
+    resolved = client.post(
+        f"{_BASE}/{task.id}/resolve",
+        json={
+            "resolution_state": "dismissed_machine_finding",
+            "resolution_note": "Checked; the record is fine.",
+        },
+    )
+    assert resolved.status_code == 200
+    assert resolved.json()["record_public_ref"] == species.public_ref
+
+    reopened = client.post(f"{_BASE}/{task.id}/reopen", json={})
+    assert reopened.status_code == 200
+    assert reopened.json()["record_public_ref"] == species.public_ref

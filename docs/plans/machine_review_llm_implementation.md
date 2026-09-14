@@ -625,7 +625,8 @@ within budget; failure rate low and always degrading to `failed_to_review`.
 Let the admin curator-task / inspection surfaces consume real findings (still
 admin-only, still advisory). *Go:* curators confirm findings are useful and correctly
 scoped to records; the R2 `record_ref` basis decision is made *before* any public
-projection is contemplated. *No-go:* curator feedback that findings mislead or
+projection is contemplated (answered — see §9.2 item 6; the remaining gate is the
+`applied_energy_correction` public ref). *No-go:* curator feedback that findings mislead or
 overstate coverage.
 
 **Phase (d) — Precheck enablement.**
@@ -637,7 +638,8 @@ the real upload path; the submission AI-review-summary endpoint reflects real re
 *No-go:* any path where a provider stall delays or fails an upload.
 
 (Public `trust.machine_review` projection remains a *separate, later* read-API design,
-gated on real rows existing, the R2 ref-basis decision, and the policy display rules —
+gated on real rows existing, the R2 ref-basis decision (answered, §9.2 item 6, with
+`applied_energy_correction`'s missing public ref outstanding), and the policy display rules —
 explicitly out of scope for this plan.)
 
 ---
@@ -678,9 +680,46 @@ explicitly out of scope for this plan.)
 5. **`record_llm_precheck_audit_event` signature (plumbing §5.2).** Overload on a v2
    result type, or accept a pre-serialized `details_json` dict? Additive either way;
    the dict path is simpler and keeps the helper contract-agnostic.
-6. **R2 — `record_ref` basis** (readiness audit): id-based hashing is fine while
-   private; decide the public ref basis *before* any public projection. Not blocking
-   for phases (a)–(d).
+6. **R2 — `record_ref` basis** (readiness audit): **answered 2026-09-14.** The
+   question contained a conflation: one field was being asked to be both a stable
+   *matching key* (what groups findings onto a record, and what the context hash is
+   computed over) and a *followable handle* (what a curator clicks). Those have
+   different requirements — the first must never change for a record that has not
+   changed; the second must be an identifier a read route answers to.
+
+   **Decision: keep them as two fields.** The private matching key stays the
+   stringified internal `record_id` exactly as `audit_adapter.py` ("Internal-id
+   addressing") and `mapping.py` document it. The reason is `context_hash.py`, which
+   folds `record_ref` into the hashed payload: re-basing it would make every review
+   already written through that path read as stale and force a re-review, with
+   nothing about the science having changed. The id basis is also baked in two layers
+   below the caller — `orchestration.py` and `context_adapter.py` both fall back to
+   `str(record_id)` when no ref is supplied.
+
+   The reader-facing handle is a **separate, additive, resolved-at-read-time** field:
+   `record_public_ref` on the admin curator-task read, resolved from the record's own
+   `public_ref` column by `app.services.record_refs`. Nothing is stored twice, so the
+   two cannot drift.
+
+   *Scope note, measured:* `record_machine_review` has **no `record_ref` column** —
+   it stores `(record_type, record_id)`. The `(record_type, record_ref)` grouping in
+   `inspection.py` is built from submission *audit events*, not from stored review
+   rows, and `run_record_machine_review_with_producer` has exactly one caller (the
+   admin fake trigger). So "every stored review" above means the rows that path
+   writes, not the whole table.
+
+   Deliberately **not** named `record_ref` on that surface: that name already means
+   the matching key one class away on the same router, and one name for two meanings
+   is how a UI ends up linking to a row id.
+
+   **Residual, and it is a real prerequisite for a public projection:**
+   `applied_energy_correction` is a supported record type with **no `public_ref`
+   column** (`AppliedEnergyCorrection`, `energy_correction.py`). A finding on such a
+   record can be raised, queued and worked, but cannot be *named* to a reader — the
+   resolver returns `null` rather than falling back to the row id. A public
+   projection that covers that type therefore needs the table to gain a public ref
+   first. The same gap already blocks its supersession notices
+   (`scientific_read/supersession.py`), so it is one fix, not two.
 7. **Zero-data-retention / Fable 5 availability.** Fable 5 requires 30-day data
    retention (not available under ZDR). If a hosted deployment is ZDR, the escalation
    tier must fall back to an Opus/Sonnet model — confirm the org's retention posture

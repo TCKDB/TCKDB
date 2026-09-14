@@ -230,6 +230,23 @@ def run_admin_fake_machine_review(
         session,
         record_type=record_type,
         record_id=record_id,
+        # The stringified internal id, deliberately -- this is the private
+        # *matching key* the machine-review stack addresses records by (see
+        # ``audit_adapter``'s "Internal-id addressing" and ``mapping``'s
+        # docstring). Re-basing it on a public ref would change the
+        # ``context_hash``: ``context_hash.py`` folds ``record_ref`` into the
+        # hashed payload, so every review this path has already stored would
+        # read as stale and be re-reviewed, with nothing about the science
+        # having changed.
+        #
+        # It is also redundant rather than load-bearing -- ``orchestration.py``
+        # and ``context_adapter.py`` both fall back to ``str(record_id)`` when
+        # this is ``None``, so the id basis holds two layers down whatever is
+        # passed here. Spelled out because the line reads like a defect.
+        #
+        # A reader-facing handle is a separate, resolved-at-read-time field:
+        # ``record_public_ref`` on the curator-task read, via
+        # ``app.services.record_refs``.
         record_ref=str(record_id),
         trust_fragment=fragment,
         active_prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
