@@ -123,6 +123,16 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+# The cloud machine-review transport. Optional for the same reason RDKit is:
+# only a deployment that sets AI_REVIEW_ASSISTANT_MODE=cloud needs it, and the
+# backend ships as an arm64 image built under QEMU where every added wheel
+# costs build time. The transport imports httpx inside its constructor and
+# raises a configuration error naming this extra if it is absent, so an install
+# without it fails at the moment cloud mode is switched on rather than at
+# import. No vendor SDK: the Messages call is one POST.
+llm = [
+    "httpx>=0.27",
+]
 # RDKit is intentionally optional and split out:
 #   - Conda/mamba developers get the conda-forge build via
 #     environment.yml — they do NOT need to install this extra.
