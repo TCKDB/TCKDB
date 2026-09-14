@@ -24,7 +24,12 @@ from tckdb_schemas.enums import (
     EnergyUnit,
     MeliusBacComponentKind,
 )
-from tckdb_schemas.fragments.refs import FreqScaleFactorRef, LevelOfTheoryRef
+from tckdb_schemas.fragments.refs import (
+    FreqScaleFactorRef,
+    LevelOfTheoryRef,
+    SoftwareReleaseRef,
+    WorkflowToolReleaseRef,
+)
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 
@@ -36,15 +41,50 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 class EnergyCorrectionSchemeRef(SchemaBase):
     """Upload-facing reference to a correction scheme.
 
-    If a matching scheme already exists (by kind + name + LoT + version),
-    it is reused. Otherwise a new scheme is created.
+    If a matching scheme already exists — by the full identity tuple
+    ``(kind, name, level_of_theory, source_literature, software_release,
+    workflow_tool_release)`` — it is reused. Otherwise a new scheme is
+    created. A citation or software release that differs from an existing
+    same-``(kind, name, level_of_theory)`` scheme is never dropped: it
+    makes this a scientifically distinct scheme (a different citation, or
+    a different program build's numbers), so it resolves to a
+    different row rather than silently overwriting or discarding what was
+    supplied.
+
+    :param software: The program *release* that computed this scheme's
+        parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or
+        bond-additivity parameter set is the output of a program's own
+        build-level numerics (integration grid, SCF thresholds, a named
+        basis set's internal definition), which change between releases
+        of the same program -- so the correction is release-specific, not
+        merely program-specific. Only ``name`` is required; a depositor
+        who knows only the program (no version/revision/build) resolves
+        to the version-less release row for it, a complete and honest
+        deposit, not a degraded one. Load-bearing for ``atom_energy``,
+        ``bac_petersson`` and ``bac_melius`` (the three kinds whose
+        values a specific program build computes at a specific level of
+        theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,
+        which are physical/reference constants. Strongly advised for the
+        three software-scoped kinds, never required.
+    :param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose
+        data file was the proximate source, when the scheme was looked
+        up from a tool table rather than directly from a paper. Mirrors
+        ``FreqScaleFactorRef.workflow_tool_release``.
     """
 
     kind: EnergyCorrectionSchemeKind
     name: str = Field(min_length=1)
     level_of_theory: LevelOfTheoryRef | None = None
     source_literature: LiteratureUploadRequest | None = None
-    version: str | None = None
+    software: SoftwareReleaseRef | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = None
+    #: The unit ``atom_params``/``bond_params``/``component_params`` below
+    #: are expressed in. Recorded verbatim and **not** part of the
+    #: identity: an energy correction is always an energy, so hartree and
+    #: kcal/mol are one library written two ways, not two libraries.
+    #: Re-depositing the same library in another unit therefore resolves
+    #: to the same row, and the parameter values are converted before
+    #: they are compared.
     units: EnergyUnit | None = None
     note: str | None = None
 
@@ -56,7 +96,6 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     @model_validator(mode="after")
     def normalize_text_fields(self) -> Self:
         self.name = normalize_required_text(self.name)
-        self.version = normalize_optional_text(self.version)
         self.note = normalize_optional_text(self.note)
         return self
 

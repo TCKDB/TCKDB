@@ -499,8 +499,13 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
  * dropped, so `"NN, [H],"` (stray whitespace/trailing comma from typing) and
  * `""` (nothing typed) both behave exactly as intended -- one clean token
  * list, or none at all.
+ *
+ * Exported (not module-private) so `domain/reactionQuery.ts` -- reaction
+ * mode's equation grammar on the archive home page -- can split an
+ * equation's reactant/product sides with the identical rule, rather than a
+ * second, hand-copied comma splitter silently drifting from this one.
  */
-function splitSmilesList(value: string): string[] {
+export function splitSmilesList(value: string): string[] {
     return value.split(",").map((token) => token.trim()).filter((token) => token !== "")
 }
 

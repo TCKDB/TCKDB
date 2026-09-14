@@ -342,6 +342,7 @@ def resolve_or_create_statmech(
     uploaded_calculation_id: int | None = None,
     calculations_by_key: Mapping[str, int] | None = None,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
 
@@ -388,7 +389,9 @@ def resolve_or_create_statmech(
     role_links: list[RoleLink] = []
 
     literature = (
-        resolve_or_create_literature(session, payload.literature)
+        resolve_or_create_literature(
+            session, payload.literature, warnings_out=warnings_out
+        )
         if payload.literature is not None
         else None
     )
@@ -404,7 +407,10 @@ def resolve_or_create_statmech(
     fsf_id = None
     if payload.freq_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, payload.freq_scale_factor, created_by=created_by
+            session,
+            payload.freq_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings_out,
         )
         fsf_id = fsf.id
 
@@ -620,10 +626,13 @@ def resolve_or_create_statmech(
 # ---------------------------------------------------------------------------
 #
 # A harmonic frequency scale factor is specific to a level of theory AND to
-# the electronic-structure software the factor was fit against -- the same
-# LOT in Gaussian vs ORCA can legitimately need a different factor (the
-# comment on `frequency_scale_factor.software_id` says so; DR context: the
-# column has carried this dimension since the initial schema). Nothing
+# the electronic-structure software *release* the factor was fit against --
+# the same LOT in Gaussian vs ORCA (or Gaussian 16 vs Gaussian 09) can
+# legitimately need a different factor (the comment on
+# `frequency_scale_factor.software_release_id` says so; DR context: the
+# column has carried this dimension since the initial schema, at program
+# grain until the correction-scheme-provenance plan v2 §6 sibling revision
+# widened it to release grain). Nothing
 # previously checked that the software a factor was DERIVED FOR is the
 # software that actually produced the frequencies it was APPLIED TO. On the
 # deployed archive today the two always agree -- 95 statmech rows compare
@@ -684,8 +693,9 @@ def evaluate_frequency_scale_factor_software(
     2. **mismatch** -- both sides resolve to a known software and they
        differ.
     3. **not_comparable** -- the statmech's ``frequency_scale_factor_id``
-       is null, its factor's ``software_id`` is null (a software-agnostic
-       factor), it has no ``role='freq'`` source calculation, or that
+       is null, its factor's ``software_release_id`` is null (a
+       software-agnostic factor), it has no ``role='freq'`` source
+       calculation, or that
        calculation's ``software_release_id`` (and thus its software) is
        unresolved. This is deliberately never conflated with *match* --
        see the class docstring on :class:`FSFSoftwareComparisonState`.
@@ -719,7 +729,11 @@ def evaluate_frequency_scale_factor_software(
             FrequencyScaleFactor,
             FrequencyScaleFactor.id == Statmech.frequency_scale_factor_id,
         )
-        .outerjoin(Software, Software.id == FrequencyScaleFactor.software_id)
+        .outerjoin(
+            SoftwareRelease,
+            SoftwareRelease.id == FrequencyScaleFactor.software_release_id,
+        )
+        .outerjoin(Software, Software.id == SoftwareRelease.software_id)
         .where(
             Statmech.id.in_(ids),
             Statmech.frequency_scale_factor_id.is_not(None),

@@ -235,11 +235,234 @@ class TestUploadWithApiKey:
 # ---------------------------------------------------------------------------
 
 
+class TestAdminUserListEndpoint:
+    """``GET /admin/users`` -- what made role management callable at all.
+
+    ``PATCH /admin/users/{user_id}/role`` shipped in v1 keyed on a numeric
+    id that no endpoint disclosed, so changing a role meant reading ids
+    out of the database by hand. These tests pin the two things that make
+    the list route safe to have: it is admin-only, and it does not turn
+    into a bulk export of everyone's contact details.
+    """
+
+    def _register(self, raw_client, username: str, **extra) -> None:
+        raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": username, "password": "password-123", **extra},
+        )
+
+    def _login(self, raw_client, username: str) -> None:
+        raw_client.cookies.clear()
+        raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "password-123"},
+        )
+
+    def _make_admin(self, db_session, username: str) -> None:
+        user = db_session.scalar(select(AppUser).where(AppUser.username == username))
+        user.role = AppUserRole.admin
+        db_session.flush()
+
+    def test_an_admin_can_see_who_exists_and_what_role_they_hold(
+        self, raw_client, db_session
+    ):
+        self._register(raw_client, "mia")
+        self._register(raw_client, "noah")
+        self._make_admin(db_session, "mia")
+        self._login(raw_client, "mia")
+
+        resp = raw_client.get("/api/v1/admin/users")
+
+        assert resp.status_code == 200, resp.json()
+        body = resp.json()
+        by_name = {item["username"]: item for item in body["items"]}
+        assert by_name["mia"]["role"] == "admin"
+        assert by_name["noah"]["role"] == "user"
+        # The id is the whole point: it is what PATCH .../{user_id}/role
+        # consumes, and withholding it would leave that route uncallable.
+        assert isinstance(by_name["noah"]["id"], int)
+        assert body["total"] >= 2
+        assert body["skip"] == 0
+
+    def test_the_list_never_serves_email_addresses(self, raw_client, db_session):
+        """Decided with the owner: no emails on this surface.
+
+        Registered WITH an email on purpose. Asserting the key is absent
+        from a payload whose subject never had one would pass no matter
+        what the route did -- the absence has to be the route's choice,
+        not the fixture's.
+        """
+        self._register(raw_client, "mia", email="mia@example.com")
+        self._make_admin(db_session, "mia")
+        self._login(raw_client, "mia")
+
+        # The address really is stored, so its absence below is a decision.
+        assert db_session.scalar(
+            select(AppUser.email).where(AppUser.username == "mia")
+        ) == "mia@example.com"
+
+        resp = raw_client.get("/api/v1/admin/users")
+
+        assert resp.status_code == 200, resp.json()
+        items = resp.json()["items"]
+        assert any(item["username"] == "mia" for item in items)
+        for item in items:
+            assert "email" not in item
+            assert "orcid" not in item
+        assert "mia@example.com" not in resp.text
+
+    def test_a_non_admin_cannot_enumerate_accounts(self, raw_client, db_session):
+        self._register(raw_client, "noah")
+        self._login(raw_client, "noah")
+
+        resp = raw_client.get("/api/v1/admin/users")
+
+        assert resp.status_code == 403, resp.json()
+
+    def test_an_anonymous_caller_cannot_enumerate_accounts(self, raw_client):
+        raw_client.cookies.clear()
+        resp = raw_client.get("/api/v1/admin/users")
+        assert resp.status_code in (401, 403), resp.json()
+
+    def test_the_role_filter_narrows_the_result(self, raw_client, db_session):
+        self._register(raw_client, "mia")
+        self._register(raw_client, "noah")
+        self._make_admin(db_session, "mia")
+        self._login(raw_client, "mia")
+
+        curators = raw_client.get("/api/v1/admin/users", params={"role": "curator"})
+        assert curators.status_code == 200, curators.json()
+        assert curators.json()["items"] == []
+
+        admins = raw_client.get("/api/v1/admin/users", params={"role": "admin"})
+        assert admins.status_code == 200, admins.json()
+        names = {item["username"] for item in admins.json()["items"]}
+        assert "mia" in names
+        assert "noah" not in names
+        # A filter that returned everything would still satisfy the line
+        # above, so pin the property the filter claims.
+        assert all(item["role"] == "admin" for item in admins.json()["items"])
+
+
 class TestRoleChangeEndpoint:
     def _promote_to_admin(self, db_session, username: str) -> None:
         user = db_session.scalar(select(AppUser).where(AppUser.username == username))
         user.role = AppUserRole.admin
         db_session.flush()
+
+    def _login(self, raw_client, username: str) -> None:
+        raw_client.cookies.clear()
+        raw_client.post(
+            "/api/v1/auth/login",
+            json={"username": username, "password": "password-123"},
+        )
+
+    def _active_admin_usernames(self, db_session) -> set[str]:
+        return set(
+            db_session.scalars(
+                select(AppUser.username).where(
+                    AppUser.role == AppUserRole.admin,
+                    AppUser.is_active.is_(True),
+                )
+            ).all()
+        )
+
+    def test_the_only_active_admin_cannot_give_up_the_role(
+        self, raw_client, db_session
+    ):
+        """The one role change nothing in the API can undo.
+
+        No route grants ``admin`` back once nobody holds it, so a sole
+        admin demoting themselves locks every account out of every admin
+        surface permanently -- recovery means shell access to the host and
+        ``scripts/bootstrap_admin.py``.
+        """
+        raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "kate", "password": "password-123"},
+        )
+        self._promote_to_admin(db_session, "kate")
+        # Stated, not assumed: the refusal below is only the right answer
+        # if kate really is the last one. If a fixture ever seeds another
+        # admin, this fails loudly instead of passing for the wrong reason.
+        assert self._active_admin_usernames(db_session) == {"kate"}
+        kate_id = db_session.scalar(
+            select(AppUser.id).where(AppUser.username == "kate")
+        )
+        self._login(raw_client, "kate")
+
+        resp = raw_client.patch(
+            f"/api/v1/admin/users/{kate_id}/role",
+            json={"role": "curator"},
+        )
+
+        assert resp.status_code == 409, resp.json()
+        # The envelope's `code` field, which is what a client branches on
+        # -- not the prose, which the error contract tells clients to ignore.
+        assert resp.json()["code"] == "last_admin_demotion", resp.json()
+
+        db_session.expire_all()
+        assert db_session.get(AppUser, kate_id).role is AppUserRole.admin
+
+    def test_an_admin_may_step_down_once_another_admin_exists(
+        self, raw_client, db_session
+    ):
+        """The escape hatch the refusal advertises has to actually work.
+
+        The 409 tells the caller to promote someone else first and then
+        retry. That sentence is a promise about behaviour, and a guard
+        that over-refuses would break it while still looking correct from
+        the refusal's side.
+        """
+        for name in ("kate", "liam"):
+            raw_client.post(
+                "/api/v1/auth/register",
+                json={"username": name, "password": "password-123"},
+            )
+        self._promote_to_admin(db_session, "kate")
+        kate_id = db_session.scalar(
+            select(AppUser.id).where(AppUser.username == "kate")
+        )
+        liam_id = db_session.scalar(
+            select(AppUser.id).where(AppUser.username == "liam")
+        )
+        self._login(raw_client, "kate")
+
+        promoted = raw_client.patch(
+            f"/api/v1/admin/users/{liam_id}/role", json={"role": "admin"}
+        )
+        assert promoted.status_code == 200, promoted.json()
+
+        stepped_down = raw_client.patch(
+            f"/api/v1/admin/users/{kate_id}/role", json={"role": "curator"}
+        )
+        assert stepped_down.status_code == 200, stepped_down.json()
+
+        db_session.expire_all()
+        assert db_session.get(AppUser, kate_id).role is AppUserRole.curator
+        assert db_session.get(AppUser, liam_id).role is AppUserRole.admin
+
+    def test_demoting_a_non_last_admin_is_not_refused(self, raw_client, db_session):
+        """The guard must not degrade into "admins are undemotable"."""
+        for name in ("kate", "liam"):
+            raw_client.post(
+                "/api/v1/auth/register",
+                json={"username": name, "password": "password-123"},
+            )
+        self._promote_to_admin(db_session, "kate")
+        self._promote_to_admin(db_session, "liam")
+        liam_id = db_session.scalar(
+            select(AppUser.id).where(AppUser.username == "liam")
+        )
+        self._login(raw_client, "kate")
+
+        resp = raw_client.patch(
+            f"/api/v1/admin/users/{liam_id}/role", json={"role": "user"}
+        )
+
+        assert resp.status_code == 200, resp.json()
+        db_session.expire_all()
+        assert db_session.get(AppUser, liam_id).role is AppUserRole.user
 
     def test_non_admin_cannot_change_roles(self, raw_client, db_session):
         raw_client.post(

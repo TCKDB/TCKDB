@@ -129,8 +129,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "r0_sp",
           "value": 115.46839651056098,
@@ -330,8 +329,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "r0_sp",
           "value": -0.5508990295732462,
@@ -1498,8 +1496,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "r1_sp",
           "value": 77.85247455849938,
@@ -1692,8 +1689,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "r1_sp",
           "value": -0.5957913885593262,
@@ -2103,8 +2099,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "p0_sp",
           "value": 78.43314661468035,
@@ -2297,8 +2292,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "p0_sp",
           "value": -0.6759644412987749,
@@ -2715,8 +2709,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "p1_sp",
           "value": 114.88772445438,
@@ -2909,8 +2902,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "p1_sp",
           "value": -0.37816442166107606,
@@ -3328,8 +3320,7 @@
           "name": "atom_energy",
           "note": "Per-species AEC computed by Arkane.",
           "source_literature": null,
-          "units": "hartree",
-          "version": null
+          "units": "hartree"
         },
         "source_calculation_key": "ts_sp",
         "value": 193.3208710690604,
@@ -3507,8 +3498,7 @@
           "name": "bac_petersson",
           "note": "Per-species BAC computed by Arkane (bac_type=p).",
           "source_literature": null,
-          "units": "kcal_mol",
-          "version": null
+          "units": "kcal_mol"
         },
         "source_calculation_key": "ts_sp",
         "value": 0.0,

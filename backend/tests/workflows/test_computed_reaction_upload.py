@@ -985,9 +985,9 @@ def test_frequency_scale_factor_resolution_on_statmech(db_conn) -> None:
         assert fsf.value == 0.988
         assert fsf.level_of_theory is not None
         assert fsf.level_of_theory.method.lower() == "wb97xd"
-        # software dimension is resolved through the SoftwareRef
-        assert fsf.software is not None
-        assert fsf.software.name == "Gaussian"
+        # software dimension is resolved through the SoftwareReleaseRef
+        assert fsf.software_release is not None
+        assert fsf.software_release.software.name == "Gaussian"
 
 
 # ---------------------------------------------------------------------------
@@ -2702,7 +2702,6 @@ def _aec_scheme_ref_rxn(**overrides) -> dict:
         "kind": "atom_energy",
         "name": "AEC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2714,7 +2713,6 @@ def _bac_petersson_scheme_ref_rxn(**overrides) -> dict:
         "kind": "bac_petersson",
         "name": "Petersson BAC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2726,7 +2724,6 @@ def _bac_melius_scheme_ref_rxn(**overrides) -> dict:
         "kind": "bac_melius",
         "name": "Melius BAC v1 (rxn)",
         "level_of_theory": dict(_LOT_AEC_RXN),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -3307,7 +3304,6 @@ def test_target_exclusivity_enforced_by_check_constraint(db_conn) -> None:
         scheme = EnergyCorrectionScheme(
             kind=EnergyCorrectionSchemeKind.atom_energy,
             name="exclusivity probe",
-            version="1",
         )
         session.add(scheme)
         session.flush()

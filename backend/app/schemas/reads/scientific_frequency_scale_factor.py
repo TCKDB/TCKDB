@@ -6,8 +6,9 @@ Covers:
 - ``GET/POST /api/v1/scientific/frequency-scale-factors/search``
 
 FrequencyScaleFactor is a content-derived reference table — same
-(level_of_theory_id, software_id, scale_kind, value, source_literature_id,
-workflow_tool_release_id) tuple always produces the same ``public_ref``
+(level_of_theory_id, software_release_id, scale_kind, value,
+source_literature_id, workflow_tool_release_id) tuple always produces
+the same ``public_ref``
 (prefix ``fsf_``). It is **not** in ``SubmissionRecordType``, so it has
 no per-row review history; the response envelope still carries a
 ``review_summary`` block (always empty) to stay shape-compatible with

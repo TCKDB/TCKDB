@@ -598,6 +598,49 @@ class NetworkKineticsEvaluateResponse(TypedDict):
     points: list[NetworkKineticsEvaluatedPoint]
 
 
+class NetworkKineticsBatchFitEvaluation(TypedDict):
+    """One evaluated stored fit within a
+    :class:`NetworkKineticsBatchEvaluateResponse`.
+
+    ``channel_key`` + the composition-hash pair are carried so a caller
+    can group/label this entry against a channel it already has from a
+    network detail call, without a second request. Two entries can share
+    the same ``channel_key`` (a Chebyshev and a PLOG fit on one channel
+    is the norm on a real network, not an edge case) -- they are never
+    collapsed into one value, so a caller must not assume one entry per
+    channel.
+    """
+
+    network_kinetics_ref: str
+    channel_key: str
+    channel_kind: str
+    source_state_composition_hash: str
+    sink_state_composition_hash: str
+    network_solve_ref: str
+    model_kind: str
+    k_units: str
+    tmin_k: float | None
+    tmax_k: float | None
+    pmin_bar: float | None
+    pmax_bar: float | None
+    points: list[NetworkKineticsEvaluatedPoint]
+
+
+class NetworkKineticsBatchEvaluateResponse(TypedDict):
+    """Response envelope for
+    ``POST /scientific/networks/{ref}/kinetics/evaluate``.
+
+    Flat, like :class:`NetworkKineticsEvaluateResponse` -- evaluates
+    every stored fit for one network at a shared grid rather than
+    searching a corpus, so it carries no ``request``/``review_summary``/
+    ``pagination`` envelope. ``fits`` is ``[]`` (not a 404) for a network
+    that exists but has no stored kinetics yet.
+    """
+
+    network_ref: str
+    fits: list[NetworkKineticsBatchFitEvaluation]
+
+
 class StatmechRecord(TypedDict, total=False):
     statmech: Required[JSONDict]
     species: Required[JSONDict]
@@ -1132,6 +1175,8 @@ __all__ = [
     "LiteratureLinkedRecord",
     "LiteratureRecord",
     "LiteratureRecordsResponse",
+    "NetworkKineticsBatchEvaluateResponse",
+    "NetworkKineticsBatchFitEvaluation",
     "NetworkKineticsEvaluateResponse",
     "NetworkKineticsEvaluatedPoint",
     "NetworkKineticsRecord",

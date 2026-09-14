@@ -189,7 +189,11 @@ function handlers(options: HandlerOptions = {}) {
     ]
 }
 
-const server = setupServer()
+// `App` mounts `AuthProvider`, which probes `GET /auth/me` regardless of
+// route -- see `App.test.tsx`'s identical handler for why this default
+// (signed-out) has to be here for every test in this file that renders
+// `<App />`.
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/"); vi.useRealTimers() })
 afterAll(() => server.close())

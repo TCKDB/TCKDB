@@ -112,8 +112,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "r0_sp",
           "value": 118.48068657847452,
@@ -328,8 +327,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "r0_sp",
           "value": -6.072324292703964,
@@ -751,8 +749,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "p0_sp",
           "value": 118.48068657847452,
@@ -967,8 +964,7 @@
             "name": "bac_petersson",
             "note": "Per-species BAC computed by Arkane (bac_type=p).",
             "source_literature": null,
-            "units": "kcal_mol",
-            "version": null
+            "units": "kcal_mol"
           },
           "source_calculation_key": "p0_sp",
           "value": -6.072324292703964,
@@ -1391,8 +1387,7 @@
           "name": "atom_energy",
           "note": "Per-species AEC computed by Arkane.",
           "source_literature": null,
-          "units": "hartree",
-          "version": null
+          "units": "hartree"
         },
         "source_calculation_key": "ts_sp",
         "value": 118.48068657847452,
@@ -1592,8 +1587,7 @@
           "name": "bac_petersson",
           "note": "Per-species BAC computed by Arkane (bac_type=p).",
           "source_literature": null,
-          "units": "kcal_mol",
-          "version": null
+          "units": "kcal_mol"
         },
         "source_calculation_key": "ts_sp",
         "value": 0.0,

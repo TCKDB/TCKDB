@@ -5,7 +5,7 @@ import "../reaction-entry.css"
 import type { ReactionOverviewParticipant, ReactionOverviewRecord } from "../api/reactionOverviewApi"
 import { loadReactionOverview } from "../api/reactionOverviewApi"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
-import { Formula } from "../components/Formula"
+import { SpeciesFace } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { ReactionEquation } from "../components/ReactionEquation"
@@ -191,12 +191,15 @@ function ChooserDocument({ reactionRef, records, reviewSummary }: {
 }
 
 /**
- * One reactant/product cell: formula (or SMILES fallback) link, the
- * participant's own `spe_` ref with a copy button, and its
- * `species_entry_label` chip (e.g. "Z") when served -- the same four
- * facts the PR 0 mock's own chooser table rendered for every participant
- * (post-review fix: this row previously showed only the formula link,
- * dropping the ref/copy-button/label the mock had).
+ * One reactant/product cell: SMILES-leads-formula-in-brackets link (`../
+ * components/Formula.tsx`'s `SpeciesFace` -- owner ruling, applied here
+ * because two entries under the same reaction can legitimately be
+ * different isomers of the SAME formula, which a formula-only link could
+ * not tell apart), the participant's own `spe_` ref with a copy button,
+ * and its `species_entry_label` chip (e.g. "Z") when served -- the same
+ * four facts the PR 0 mock's own chooser table rendered for every
+ * participant (post-review fix: this row previously showed only the
+ * formula link, dropping the ref/copy-button/label the mock had).
  */
 function ParticipantCell({ participant, separator }: { participant: ReactionOverviewParticipant; separator: boolean }) {
     return (
@@ -207,7 +210,7 @@ function ParticipantCell({ participant, separator }: { participant: ReactionOver
         <span>
             {separator && " · "}
             <Link to={`/species-entries/${participant.species_entry_ref}`}>
-                {participant.formula ? <Formula value={participant.formula} /> : participant.smiles}
+                <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
             </Link>
             {" "}
             <code className="data">{participant.species_entry_ref}</code>

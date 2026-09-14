@@ -76,6 +76,17 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
         multiplicity: entry.multiplicity,
     }
     return <header className="entry-hero">
+        {/* Deliberately NOT SMILES-leads-formula-in-brackets (owner
+            ruling, applied everywhere else a species is shown): this h1
+            IS the species-entry record page's own title, one page's own
+            identity rather than two participants a reader could confuse
+            -- the collision the ruling exists to fix does not arise here.
+            `entry.canonicalSmiles` already renders two lines below, in
+            this same header's own identity block (`RecordIdentityHeader`'s
+            "SMILES" fact), so a long SMILES string in the h1 too would
+            only degrade the title (a 40-character SMILES reads badly as
+            a page heading) for no disambiguation this page did not
+            already have. */}
         <RecordIdentityHeader
             kicker="Species entry · deposited scientific record"
             pill={<span className={reviewPillClass(entry.review.status)}>{displayToken(entry.review.status)}</span>}

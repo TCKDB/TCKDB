@@ -40,6 +40,7 @@ from app.db.models.common import (
     TransportCalculationRole,
     ValidationStatus,
 )
+from app.db.models.energy_correction import AppliedEnergyCorrection
 from app.db.models.kinetics import Kinetics, KineticsSourceCalculation
 from app.db.models.reaction import ReactionEntry
 from app.db.models.statmech import (
@@ -1222,6 +1223,9 @@ def evaluate_computed_thermo(
             selectinload(Thermo.source_calculations)
             .selectinload(ThermoSourceCalculation.calculation)
             .selectinload(Calculation.path_search_result),
+            selectinload(Thermo.applied_energy_corrections).selectinload(
+                AppliedEnergyCorrection.scheme
+            ),
         )
     )
     thermo = session.scalars(statement).one_or_none()

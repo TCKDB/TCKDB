@@ -3,7 +3,6 @@ import { useEffect } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
-import { lotLabel } from "../api/scientificSchemas"
 import {
     loadEntryStatmechSection,
     readStatmechSectionField,
@@ -14,6 +13,7 @@ import {
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } from "../domain/conformerEvidence"
 import { groupByFingerprint, statmechRecordFingerprint } from "../domain/identicalRecordGroups"
+import { frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     allProductLevelsAgree,
     resolveProductLevels,
@@ -27,6 +27,7 @@ import { useEntryStatmech } from "../hooks/useEntryStatmech"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
+import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { SectionHeading } from "./PageSections"
 import { ProductLevelsFact, ProductLevelsTableCells, ProductLevelsTableHead } from "./ProductLevels"
 import { QuantityValue } from "./QuantityValue"
@@ -877,7 +878,7 @@ function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
             </>
         )
     }
-    const lot = fsf.level_of_theory ? lotLabel(fsf.level_of_theory) : null
+    const lot = fsf.level_of_theory ? <LevelOfTheoryLink levelOfTheory={fsf.level_of_theory} /> : null
     const fsfSoftwareLabel = fsf.software ? softwareLabel(fsf.software) : null
     return (
         <>
@@ -893,7 +894,7 @@ function FrequencyScaleFactorDetail({ core, fsf, productLevels }: {
                 </div>
                 {lot && <div><dt>Scale factor level of theory</dt><dd>{lot}</dd></div>}
                 {fsfSoftwareLabel && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
-                <div><dt>Frequency scale factor ref</dt><dd><code>{fsf.frequency_scale_factor_ref}</code></dd></div>
+                <div><dt>Frequency scale factor ref</dt><dd><code><Link to={frequencyScaleFactorPath(fsf.frequency_scale_factor_ref)}>{fsf.frequency_scale_factor_ref}</Link></code></dd></div>
             </dl>
         </>
     )

@@ -122,8 +122,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "r0_sp",
           "value": 40.377917419702094,
@@ -534,8 +533,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "r1_sp",
           "value": 75.67115114703985,
@@ -946,8 +944,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "p0_sp",
           "value": 39.79724536352113,
@@ -1358,8 +1355,7 @@
             "name": "atom_energy",
             "note": "Per-species AEC computed by Arkane.",
             "source_literature": null,
-            "units": "hartree",
-            "version": null
+            "units": "hartree"
           },
           "source_calculation_key": "p1_sp",
           "value": 76.25182320322081,
@@ -1778,8 +1774,7 @@
           "name": "atom_energy",
           "note": "Per-species AEC computed by Arkane.",
           "source_literature": null,
-          "units": "hartree",
-          "version": null
+          "units": "hartree"
         },
         "source_calculation_key": "ts_sp",
         "value": 116.04906856674194,

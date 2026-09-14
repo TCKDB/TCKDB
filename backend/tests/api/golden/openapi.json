@@ -261,6 +261,100 @@
         "title": "AdminCuratorTaskStartReviewRequest",
         "type": "object"
       },
+      "AdminEnergyCorrectionSchemeProvenanceRequest": {
+        "additionalProperties": false,
+        "description": "Provenance to attach to an existing, already-deposited scheme.\n\nEvery field is optional and independent: an admin may fill only the\ncitation, only the software, only the workflow-tool release, or any\ncombination -- whichever the row is missing. Supplying a field whose\nslot on the row is already non-null is refused (409), never\nsilently ignored or overwritten.\n\n``software`` is ``SoftwareReleaseRef`` -- the same release-grained\nreference ``EnergyCorrectionSchemeRef.software`` already accepts on\nthe upload path (correction-scheme-provenance plan §5.2, PR 3). An\nadmin can now correct a row at the same grain the column has carried\nsince PR 1 (``software_release_id``): \"Gaussian 16, Revision C.02\",\nnot merely \"Gaussian\". ``SoftwareReleaseRef`` is a superset of the\nold name-only ``SoftwareRef`` -- ``{\"software\": {\"name\": \"Gaussian\"}}``\nstill resolves to the version-less release row for that program\n(§3.2); that is a complete, honest value on its own, not a degraded\none.",
+        "properties": {
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "AdminEnergyCorrectionSchemeProvenanceRequest",
+        "type": "object"
+      },
+      "AdminEnergyCorrectionSchemeProvenanceResponse": {
+        "additionalProperties": false,
+        "description": "Auditable from the response alone: the scheme's own ref plus every\nresolved provenance ref it now carries (not just the ones this call\njust set).",
+        "properties": {
+          "energy_correction_scheme_ref": {
+            "title": "Energy Correction Scheme Ref",
+            "type": "string"
+          },
+          "software_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Release Ref"
+          },
+          "source_literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Literature Ref"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/UploadWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "workflow_tool_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Release Ref"
+          }
+        },
+        "required": [
+          "energy_correction_scheme_ref"
+        ],
+        "title": "AdminEnergyCorrectionSchemeProvenanceResponse",
+        "type": "object"
+      },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
         "description": "Admin-only machine-review projection for one linked record.",
@@ -440,6 +534,65 @@
           "submission_id"
         ],
         "title": "AdminSubmissionMachineReviewInspectionResponse",
+        "type": "object"
+      },
+      "AdminUserResponse": {
+        "additionalProperties": false,
+        "description": "One account, as an admin managing roles needs to see it.\n\nDeliberately omits ``email`` and ``orcid``. Role management needs to\nknow *who* someone is, not how to reach them, and this would\notherwise be the only route in the archive that serves contact\ndetails for every account at once. A bulk personal-data surface is\nworth not having when nothing needs it.\n\n``full_name`` and ``affiliation`` stay: an admin deciding whether to\nmake someone a curator is deciding about a person, and a username\nalone frequently cannot tell two people apart.\n\n``id`` is a raw row id, which the read layer otherwise sweeps out of\nresponses (DR-0028). It is correct here and not an exception being\nsmuggled in: this is an explicitly admin-only schema, and the route\nthat acts on the result -- ``PATCH /admin/users/{user_id}/role`` --\nis keyed on exactly this id. Withholding it would leave that route\nuncallable, which is the state this endpoint exists to end.",
+        "properties": {
+          "affiliation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affiliation"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/AppUserRole"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "full_name",
+          "affiliation",
+          "role",
+          "is_active",
+          "created_at"
+        ],
+        "title": "AdminUserResponse",
         "type": "object"
       },
       "AnalyticsRequestEcho": {
@@ -14265,17 +14418,6 @@
                 "type": "null"
               }
             ]
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
           }
         },
         "required": [
@@ -14317,6 +14459,10 @@
           "has_literature_source": {
             "title": "Has Literature Source",
             "type": "boolean"
+          },
+          "has_software": {
+            "title": "Has Software",
+            "type": "boolean"
           }
         },
         "required": [
@@ -14326,7 +14472,8 @@
           "has_corrections",
           "applied_usage_count",
           "has_applied_usage",
-          "has_literature_source"
+          "has_literature_source",
+          "has_software"
         ],
         "title": "EnergyCorrectionSchemeEvidenceSummary",
         "type": "object"
@@ -14417,6 +14564,17 @@
             ],
             "title": "Note"
           },
+          "software_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Software Id"
+          },
           "source_literature_id": {
             "anyOf": [
               {
@@ -14448,6 +14606,17 @@
               }
             ],
             "title": "Version"
+          },
+          "workflow_tool_release_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Tool Release Id"
           }
         },
         "required": [
@@ -14461,7 +14630,7 @@
       },
       "EnergyCorrectionSchemeRef": {
         "additionalProperties": false,
-        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists (by kind + name + LoT + version),\nit is reused. Otherwise a new scheme is created.",
+        "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, source_literature, software_release,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
         "properties": {
           "atom_params": {
             "items": {
@@ -14513,6 +14682,16 @@
             ],
             "title": "Note"
           },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_literature": {
             "anyOf": [
               {
@@ -14533,16 +14712,15 @@
               }
             ]
           },
-          "version": {
+          "workflow_tool_release": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Version"
+            ]
           }
         },
         "required": [
@@ -15617,7 +15795,7 @@
       },
       "FreqScaleFactorRef": {
         "additionalProperties": false,
-        "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software, scale_kind, value, source_literature,\nworkflow_tool_release)`` and matches the DB unique index on\n``frequency_scale_factor``. ``note`` is descriptive only and never\nparticipates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS software the factor applies to (e.g.\n    Gaussian). Null means software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
+        "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software_release, scale_kind, value,\nsource_literature, workflow_tool_release)`` and matches the DB unique\nindex on ``frequency_scale_factor``. ``note`` is descriptive only and\nnever participates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS program *release* the factor was fit against\n    (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale\n    factor is fit against a program's own build-level vibrational\n    frequencies, which change between releases of the same program\n    (correction-scheme-provenance plan v2 §6, mirroring\n    ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the\n    factor is release-specific, not merely program-specific. Only\n    ``name`` is required; a depositor who knows only the program\n    resolves to the version-less release row for it. Null means\n    software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
         "properties": {
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
@@ -15640,7 +15818,7 @@
           "software": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SoftwareRef"
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
               },
               {
                 "type": "null"
@@ -15909,7 +16087,7 @@
           "scale_kind": {
             "$ref": "#/components/schemas/FrequencyScaleKind"
           },
-          "software_id": {
+          "software_release_id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -15918,7 +16096,7 @@
                 "type": "null"
               }
             ],
-            "title": "Software Id"
+            "title": "Software Release Id"
           },
           "source_literature_id": {
             "anyOf": [
@@ -23454,6 +23632,151 @@
         "title": "NetworkEvidenceSummary",
         "type": "object"
       },
+      "NetworkKineticsBatchEvaluateRequest": {
+        "description": "Request body for ``POST /scientific/networks/{ref}/kinetics/evaluate``.\n\nBoth axes are required. Non-emptiness is enforced service-side, not\nhere with a Pydantic ``min_length`` — deliberately, so an empty list\nis still a *valid* body that reaches\n:func:`app.services.scientific_read.network_kinetics_batch_evaluate.evaluate_network_kinetics_batch`\nand is refused there with the same coded 422s the per-record endpoint\nuses for the identical check\n(``network_kinetics_evaluate_missing_temperature`` /\n``..._missing_pressure``), rather than with FastAPI's generic\n``request_validation_error``. A caller who wants a result must supply\nboth non-empty; this one shared grid is evaluated against *every* fit\nstored for the network — there is no per-fit or per-channel override,\nsince the whole point of the batch endpoint is one grid, one request,\nevery fit.",
+        "properties": {
+          "pressure_bar": {
+            "description": "One or more pressures, bar. Shared by every fit.",
+            "items": {
+              "type": "number"
+            },
+            "title": "Pressure Bar",
+            "type": "array"
+          },
+          "temperature_k": {
+            "description": "One or more temperatures, K. Shared by every fit.",
+            "items": {
+              "type": "number"
+            },
+            "title": "Temperature K",
+            "type": "array"
+          }
+        },
+        "required": [
+          "temperature_k",
+          "pressure_bar"
+        ],
+        "title": "NetworkKineticsBatchEvaluateRequest",
+        "type": "object"
+      },
+      "NetworkKineticsBatchEvaluateResponse": {
+        "description": "Response envelope for\n``POST /scientific/networks/{ref}/kinetics/evaluate``.\n\n``fits`` is empty (never a 404) for a network that exists but has no\nstored kinetics yet — an honest \"nothing to evaluate\", the same\n\"absent, not zero\" stance the rest of this surface takes. One entry\nper stored ``network_kinetics`` row, in ascending row-id order.",
+        "properties": {
+          "fits": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkKineticsBatchFitEvaluation"
+            },
+            "title": "Fits",
+            "type": "array"
+          },
+          "network_ref": {
+            "title": "Network Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "network_ref"
+        ],
+        "title": "NetworkKineticsBatchEvaluateResponse",
+        "type": "object"
+      },
+      "NetworkKineticsBatchFitEvaluation": {
+        "description": "One evaluated stored fit within a batch response.\n\n``channel_key`` is depositor-supplied free text (``NetworkChannel`` has\nno public ref — see ``docs/plans/pressure-dependent-network-surface.md``\n§1) but is the identifier already carried on the network detail\nendpoint's ``channels[].channel_key``, so it is what lets a client join\nthis entry back to the channel it rendered from that earlier call.\n``source_state_composition_hash`` / ``sink_state_composition_hash``\nare carried alongside it as the server-computed, non-arbitrary\nanchor — the same pair ``NetworkKineticsChannelContext`` and\n``NetworkChannelSummary`` already expose — for a client that wants a\nsturdier join than depositor text.\n\n``k_units`` / ``tmin_k`` / ``tmax_k`` / ``pmin_bar`` / ``pmax_bar`` are\ncarried per fit, not once at the envelope level, because two fits on\nthe same channel (a Chebyshev and a PLOG) are not guaranteed to share a\nvalidity range or even a rate-unit convention.",
+        "properties": {
+          "channel_key": {
+            "title": "Channel Key",
+            "type": "string"
+          },
+          "channel_kind": {
+            "$ref": "#/components/schemas/NetworkChannelKind"
+          },
+          "k_units": {
+            "$ref": "#/components/schemas/ArrheniusAUnits"
+          },
+          "model_kind": {
+            "$ref": "#/components/schemas/NetworkKineticsModelKind"
+          },
+          "network_kinetics_ref": {
+            "title": "Network Kinetics Ref",
+            "type": "string"
+          },
+          "network_solve_ref": {
+            "title": "Network Solve Ref",
+            "type": "string"
+          },
+          "pmax_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmax Bar"
+          },
+          "pmin_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pmin Bar"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/NetworkKineticsEvaluatedPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "sink_state_composition_hash": {
+            "title": "Sink State Composition Hash",
+            "type": "string"
+          },
+          "source_state_composition_hash": {
+            "title": "Source State Composition Hash",
+            "type": "string"
+          },
+          "tmax_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmax K"
+          },
+          "tmin_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmin K"
+          }
+        },
+        "required": [
+          "network_kinetics_ref",
+          "channel_key",
+          "channel_kind",
+          "source_state_composition_hash",
+          "sink_state_composition_hash",
+          "network_solve_ref",
+          "model_kind",
+          "k_units"
+        ],
+        "title": "NetworkKineticsBatchFitEvaluation",
+        "type": "object"
+      },
       "NetworkKineticsChannelContext": {
         "description": "Lightweight parent-channel pointer for a network-kinetics record.\n\n``NetworkChannel`` has no public_ref today, so ``network_channel_ref``\nis always ``None``. The composition_hash pair acts as the stable\nper-network address.",
         "properties": {
@@ -28338,6 +28661,37 @@
         "title": "PaginatedResponse[AdminCuratorTaskResponse]",
         "type": "object"
       },
+      "PaginatedResponse_AdminUserResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "skip": {
+            "title": "Skip",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "skip",
+          "limit"
+        ],
+        "title": "PaginatedResponse[AdminUserResponse]",
+        "type": "object"
+      },
       "PaginatedResponse_AppliedEnergyCorrectionRead_": {
         "properties": {
           "items": {
@@ -31310,8 +31664,19 @@
         "type": "object"
       },
       "RecordReviewBadge": {
-        "description": "Single record's direct review state — no chain traversal (D7).",
+        "description": "Single record's direct review state — no chain traversal (D7).\n\n``note`` is the curator's stated reason, and it is **public**. A status\non its own tells a reader that somebody formed a view without saying\nwhat it was: a record reading ``under_review`` with no reason is a\nwarning a reader cannot act on. The note is what makes the status\nusable, so it is projected alongside it rather than held back.\n\nConsequence for whoever writes one: a review note is reader-facing\nprose, not an internal remark. Say what was checked, what was found,\nand what a consumer of this record should do differently. Do not put\nanything in it you would not publish.",
         "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
           "reviewed_at": {
             "anyOf": [
               {
@@ -34147,6 +34512,16 @@
               }
             ]
           },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "used_by": {
             "anyOf": [
               {
@@ -34161,6 +34536,16 @@
             ],
             "title": "Used By",
             "x-tckdb-include-gated": "used_by"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__reads__scientific_common__WorkflowToolReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -37175,22 +37560,6 @@
           "name"
         ],
         "title": "SoftwareRead",
-        "type": "object"
-      },
-      "SoftwareRef": {
-        "additionalProperties": false,
-        "description": "Upload-facing reference to a software package (name only, no version).\n\nUsed when the relevant identifier is the software product rather than\na specific release — for example, the software context of a frequency\nscale factor entry.",
-        "properties": {
-          "name": {
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "SoftwareRef",
         "type": "object"
       },
       "SoftwareReleaseRead": {
@@ -51040,6 +51409,123 @@
         ]
       }
     },
+    "/api/v1/admin/energy-correction-schemes/{ref}/provenance": {
+      "patch": {
+        "description": "Fill missing citation/software provenance on a scheme (admin only).\n\nPath handle accepts an integer ``energy_correction_scheme.id`` or a\npublic ref of the form ``ecs_...``; unknown handles 404. Each of\n``source_literature``/``software``/``workflow_tool_release`` is\nrefused with 409 if the corresponding column is already non-null on\nthe row (per-field, not all-or-nothing -- one call can fill the\ncitation on a scheme that already has software recorded, or vice\nversa). Resolution reuses the exact same services the upload path\nuses (``resolve_or_create_literature``, ``resolve_software_release_ref``,\n``resolve_workflow_tool_release_ref``), so a citation/software\nrelease that already exists elsewhere in the archive is reused, not\nduplicated.\n\nMutating these fields on an already-inserted row does not regenerate\nits public ref -- refs are content-derived only at INSERT time\n(``PublicRefMixin``), and keeping the ref stable across a\nprovenance-fill matters more than the ref perfectly reflecting the\nrow's current content. If the resulting (kind, name, lot, version,\nunits, literature, software_release, workflow_tool_release) tuple\ncollides with another existing scheme row, the write is refused with\n409 rather than silently merging two rows' identities.",
+        "operationId": "attach_energy_correction_scheme_provenance_api_v1_admin_energy_correction_schemes__ref__provenance_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ref",
+            "required": true,
+            "schema": {
+              "title": "Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminEnergyCorrectionSchemeProvenanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminEnergyCorrectionSchemeProvenanceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Energy Correction Scheme Provenance",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/machine-review/curator-tasks": {
       "get": {
         "description": "List curator tasks (admin only).\n\nDeterministic ordering: open states first, then highest severity first,\nthen most-recently-updated, with ``id`` as the final tie-break. Filters are\nANDed. Terminal tasks are included; filter on ``workflow_state`` to narrow.",
@@ -52176,8 +52662,146 @@
         ]
       }
     },
+    "/api/v1/admin/users": {
+      "get": {
+        "description": "List accounts and their roles (admin only).\n\nThis exists because ``PATCH /admin/users/{user_id}/role`` is keyed on\na numeric user id and nothing in the API told an admin what those ids\nwere. The role-change route has shipped since v1 and has been\ncallable only by someone willing to read ids out of the database by\nhand -- which means role management was, in practice, a DB operation\nwearing an HTTP interface.\n\nOrdering is by ``username``, which carries a uniqueness constraint\nand is therefore a total order -- no tie-break needed, and no\nunstable page boundaries. It is also the thing an admin is scanning\nfor. ``role`` narrows; everything else the caller filters client-side\noff the returned fields.",
+        "operationId": "list_users_api_v1_admin_users_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/AppUserRole"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResponse_AdminUserResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Users",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/users/{user_id}/role": {
       "patch": {
+        "description": "Change one account's role (admin only).\n\nRefuses, with 409 ``last_admin_demotion``, to take ``admin`` from the\narchive's only active admin. Nothing in the API can grant the role\nback once nobody holds it, so that single request is unrecoverable\nin-app: repair means running ``scripts/bootstrap_admin.py`` against\nthe database, which needs shell access to the host.\n\nThe broader rule \"an admin may never demote *themselves*\" was\nconsidered and rejected. It would make this refusal unreachable:\nauthentication requires ``is_active`` and this route requires\n``admin``, so the caller is always an active admin, and therefore any\ndemotion of *someone else* leaves at least one admin standing by\nconstruction. Shipping both would mean publishing a code no request\ncan produce. Self-demotion while other admins exist is also\nrecoverable -- another admin can restore the role -- so it is the\nreversible half of the pair and is allowed.",
         "operationId": "change_user_role_api_v1_admin_users__user_id__role_patch",
         "parameters": [
           {
@@ -56028,22 +56652,6 @@
           },
           {
             "in": "query",
-            "name": "version",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Version"
-            }
-          },
-          {
-            "in": "query",
             "name": "skip",
             "required": false,
             "schema": {
@@ -56222,7 +56830,7 @@
           },
           {
             "in": "query",
-            "name": "software_id",
+            "name": "software_release_id",
             "required": false,
             "schema": {
               "anyOf": [
@@ -56233,7 +56841,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Software Id"
+              "title": "Software Release Id"
             }
           },
           {
@@ -64465,7 +65073,7 @@
             "description": "Authentication required."
           },
           "404": {
-            "description": "No artifact with this digest is approved, and none of the caller's own deposits carries it."
+            "description": "No artifact with this digest is in the archive."
           },
           "422": {
             "content": {
@@ -73283,6 +73891,90 @@
           }
         },
         "summary": "Scientific Network Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate": {
+      "post": {
+        "description": "Evaluate every stored k(T,P) fit belonging to one network, in one call.\n\nThe network-scoped batch companion to\n``GET /scientific/network-kinetics/{ref}/evaluate``: that endpoint\nevaluates one stored fit, so a chart covering a whole network would\nneed one request per fit (42 on the live hydrazine network — 21\nchannels, each carrying both a Chebyshev and a PLOG fit). This\nendpoint evaluates all of them at one caller-supplied\n``(temperature_k, pressure_bar)`` grid, in one request.\n\nBody carries the grid (JSON, not query params, since a chart-quality\ngrid times a real network's fit count is larger than this repo's\nother POST-search-form bodies) — ``temperature_k`` and\n``pressure_bar``, each a non-empty list of values, both required.\nQuery-string keys other than ``profile``/``release`` (the router-level\nread-profile dependency) are rejected the same way the POST search\nendpoints on this surface reject them, so a caller cannot silently\nhave a query-string field ignored.\n\nResponse is keyed by ``network_kinetics_ref``, **not** by channel: a\nchannel routinely carries more than one fit (Chebyshev + PLOG on the\nsame channel is the norm here, not an edge case), and the two are\nnever picked, preferred, averaged, or otherwise collapsed into one\nvalue — they can disagree materially. Every stored fit's evaluated\npoints are served, each entry also carrying its ``channel_key`` +\ncomposition-hash pair and its ``network_solve_ref`` so a client can\ngroup and label the results honestly.\n\nPath handle accepts an integer ``network.id`` or a public ref of the\nform ``net_…``, matching every other detail surface here. A network\nthat exists but has no stored kinetics yet returns ``fits: []``, not\na 404.\n\nTwo bounded-size 422s, checked in that order: a per-fit grid larger\nthan ``settings.public_max_limit`` points\n(``network_kinetics_evaluate_grid_too_large`` — the exact cap and\ncode the per-record endpoint enforces for one fit's own grid), and an\naggregate ``fit_count * grid_size`` larger than that cap squared\n(``network_kinetics_batch_evaluate_grid_too_large``). Refused, never\ntruncated — a chart silently missing channels would misrepresent the\nnetwork's evaluated coverage as complete. See\n``app/services/scientific_read/network_kinetics_batch_evaluate.py``\nfor the exact arithmetic.\n\nA requested point outside a fit's own stated validity range is still\nevaluated but flagged ``in_range=False``, identically to the\nper-record endpoint (including PLOG's pressure axis being judged\nagainst its own fitted-pressure table rather than the envelope's\n``pmin_bar``/``pmax_bar``) — never silently presented as interpolated.",
+        "operationId": "scientific_network_kinetics_batch_evaluate_api_v1_scientific_networks__network_ref_or_id__kinetics_evaluate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "network_ref_or_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Network Ref Or Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NetworkKineticsBatchEvaluateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NetworkKineticsBatchEvaluateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Network Kinetics Batch Evaluate",
         "tags": [
           "scientific"
         ]

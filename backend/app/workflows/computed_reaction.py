@@ -934,6 +934,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
 
@@ -991,6 +992,7 @@ def persist_computed_reaction_upload(
                 source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
+                warnings_out=sp_energy_warnings,
             )
             applied_correction_ids.append(applied.id)
 
@@ -1041,7 +1043,12 @@ def persist_computed_reaction_upload(
                 else bundle_workflow_tool_release
             )
             thermo_literature = (
-                resolve_or_create_literature(session, t.literature)
+                resolve_or_create_literature(
+                    session,
+                    t.literature,
+                    warnings_out=sp_energy_warnings,
+                    field_prefix=f"species[{sp_index}].thermo.literature.",
+                )
                 if t.literature is not None
                 else None
             )
@@ -1169,7 +1176,10 @@ def persist_computed_reaction_upload(
             fsf_id = None
             if s.freq_scale_factor is not None:
                 fsf = resolve_or_create_freq_scale_factor_ref(
-                    session, s.freq_scale_factor, created_by=created_by
+                    session,
+                    s.freq_scale_factor,
+                    created_by=created_by,
+                    warnings_out=sp_energy_warnings,
                 )
                 fsf_id = fsf.id
 
@@ -1188,7 +1198,12 @@ def persist_computed_reaction_upload(
                 else bundle_workflow_tool_release
             )
             statmech_literature = (
-                resolve_or_create_literature(session, s.literature)
+                resolve_or_create_literature(
+                    session,
+                    s.literature,
+                    warnings_out=sp_energy_warnings,
+                    field_prefix=f"species[{sp_index}].statmech.literature.",
+                )
                 if s.literature is not None
                 else None
             )
@@ -1479,7 +1494,9 @@ def persist_computed_reaction_upload(
 
         # Resolve bundle-level provenance
         literature = (
-            resolve_or_create_literature(session, request.literature)
+            resolve_or_create_literature(
+                session, request.literature, warnings_out=sp_energy_warnings
+            )
             if request.literature is not None
             else None
         )

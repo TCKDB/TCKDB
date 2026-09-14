@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
-import { Formula } from "./Formula"
+import { SpeciesFace } from "./Formula"
 import { buildEquationSides, type EquationParticipant, type EquationParticipantInput } from "../domain/reactionEquation"
 import { stereoChip } from "../domain/recordFacets"
 
@@ -15,10 +15,15 @@ const NBSP = " "
  * one reaction must read alike") can migrate onto this component too where
  * that migration is contained -- see that page's own call site comment.
  *
- * Each participant links to its species entry: `Formula` (subscripted)
- * when a `formula` was served, a SMILES-in-data-face fallback when it was
- * not (`formula` is a §3A field an older/pre-deployment response can omit).
- * Deliberately NOT `SpeciesEntryLink` here (unlike every other formula
+ * Each participant links to its species entry through `SpeciesFace`
+ * (`./Formula.tsx`): SMILES leads, in `code.data`, with the served
+ * `formula` -- still typeset with subscripts -- following in parentheses
+ * (`formula` is a §3A field an older/pre-deployment response can omit, in
+ * which case the SMILES stands alone). This is the fix for the owner's
+ * own reported defect: `rxn_fktlilofmrdaylunqva2hbltpq` rendered as
+ * "CH3OS <=> CH3OS" because a formula-only face cannot tell reactant
+ * `[CH2]SO` and product `OC[S]` apart -- they share a formula and nothing
+ * else. Deliberately NOT `SpeciesEntryLink` here (unlike every other formula
  * link in this app) -- that component renders its optional stereo-label
  * suffix (`species_entry_label`, e.g. "Z") as bare inherited-size text
  * with no wrapping element to scope. MEASURED (post-review): composed
@@ -101,9 +106,7 @@ function renderSide(participants: EquationParticipant[], keyPrefix: string, link
 }
 
 function EquationParticipantFace({ participant, linked }: { participant: EquationParticipant; linked: boolean }) {
-    const face = participant.formula
-        ? <Formula value={participant.formula} />
-        : <code className="data">{participant.smiles}</code>
+    const face = <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
     const chip = participant.speciesEntryLabel && (
         <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
     )

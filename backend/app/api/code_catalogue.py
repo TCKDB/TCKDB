@@ -1010,6 +1010,34 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "registration does not already disclose by refusing at "
                 "all -- and that argument covers this endpoint only."
             )),
+    ApiCode("energy_correction_scheme_identity_conflict", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            shape=Shape.relationship,
+            note=(
+                "The admin attach-provenance route "
+                "(PATCH /admin/energy-correction-schemes/{ref}/provenance) "
+                "fills a null source_literature_id/software_release_id/"
+                "workflow_tool_release_id on an existing scheme row. If the "
+                "resulting tuple collides with another scheme's full "
+                "identity under uq_energy_correction_scheme_identity, the "
+                "write is refused rather than silently merging two rows."
+            )),
+    ApiCode("energy_correction_scheme_literature_already_set", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            note=(
+                "Same admin route as energy_correction_scheme_identity_"
+                "conflict, and its sibling _software_already_set / "
+                "_workflow_tool_release_already_set. Per-field, "
+                "append-only: refuses to overwrite a value already "
+                "recorded on the row rather than silently ignoring or "
+                "replacing it."
+            )),
+    ApiCode("energy_correction_scheme_software_already_set", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py"),
+    ApiCode(
+        "energy_correction_scheme_workflow_tool_release_already_set", 409,
+        Surface.message_prefix, "backend/app/api/routes/admin.py",
+    ),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py",
             shape=Shape.relationship),
@@ -1199,6 +1227,24 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "-- name the statmech belonging to this subject -- and "
                 "which owner disagreed is already in context['owner_kind']."
             )),
+    ApiCode("last_admin_demotion", 409, Surface.message_prefix,
+            "backend/app/api/routes/admin.py",
+            note=(
+                "PATCH /admin/users/{user_id}/role refuses to take admin "
+                "from the archive's only active admin. No route grants the "
+                "role back once nobody holds it, so the request would be "
+                "unrecoverable through the API: repair means running "
+                "scripts/bootstrap_admin.py against the database, which "
+                "needs shell access to the host. Shape is a thing, not a "
+                "relationship -- the code names the whole situation and the "
+                "repair (promote someone else first) follows from the name, "
+                "so there is nothing for context to carry. The broader rule "
+                "'an admin may never demote themselves' was rejected "
+                "because it would make this code unreachable: auth requires "
+                "is_active and the route requires admin, so the caller is "
+                "always an active admin and any demotion of someone else "
+                "leaves one standing by construction."
+            )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),
@@ -1296,6 +1342,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("network_kinetics_batch_evaluate_grid_too_large", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/network_kinetics_batch_evaluate.py",
+            shape=Shape.relationship,
+            note=(
+                "The network-scoped batch evaluate endpoint's own cap, "
+                "distinct from network_kinetics_evaluate_grid_too_large: "
+                "that one bounds one fit's own (temperature_k x "
+                "pressure_bar) grid (reused here unchanged as a per-fit "
+                "pre-check) and is raised from network_kinetics.py; this "
+                "one bounds fit_count * grid_size, since the batch "
+                "endpoint evaluates every stored fit for the network with "
+                "no channel filter to shrink fit_count. Context carries "
+                "fit_count, grid_size, total_points and cap."
+            )),
     ApiCode("network_kinetics_evaluate_grid_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics.py",
             shape=Shape.relationship,
@@ -1303,7 +1363,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Same shape as export_all_cap_exceeded: context carries "
                 "grid_size (len(temperature_k) * len(pressure_bar)) and cap "
                 "(settings.public_max_limit) so a client can see by how much "
-                "it overshot rather than re-deriving the cap from the docs."
+                "it overshot rather than re-deriving the cap from the docs. "
+                "Also raised (reused, same code) by "
+                "network_kinetics_batch_evaluate.py's per-fit pre-check "
+                "ahead of the batch endpoint's own aggregate cap "
+                "(network_kinetics_batch_evaluate_grid_too_large)."
             )),
     ApiCode("network_kinetics_evaluate_invalid_point", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/network_kinetics.py",

@@ -1188,6 +1188,11 @@ _REVIEW_BADGE_FIELDS = {
     "status",
     "reviewed_at",
     "reviewer_kind",
+    # The curator's stated reason, public alongside the status it explains
+    # (`RecordReviewBadge`). An exact key-set match is the point of this
+    # constant, so a new field belongs in it rather than being excluded to
+    # keep the assertion green.
+    "note",
 }
 
 

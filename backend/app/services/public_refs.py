@@ -362,16 +362,19 @@ def _canonical_conformer_assignment_scheme(obj: Any) -> str:
 def _canonical_frequency_scale_factor(obj: Any) -> str:
     """FrequencyScaleFactor identity matches the table's natural uniqueness.
 
-    Per the model, the natural identity is the full tuple
-    ``(level_of_theory_id, software_id, scale_kind, value,
-    source_literature_id, workflow_tool_release_id)``. Two rows with the
-    same tuple are the same physical scale factor; different ``value``
-    or different provenance sources are different rows and must get
-    different refs.
+    Per the model (correction-scheme-provenance plan v2 §6), the natural
+    identity is the full tuple ``(level_of_theory_id,
+    software_release_id, scale_kind, value, source_literature_id,
+    workflow_tool_release_id)`` -- ``software_release_id`` replaced the
+    coarser ``software_id`` in that revision, the release-grain sibling of
+    what the same plan did for ``EnergyCorrectionScheme``. Two rows with
+    the same tuple are the same physical scale factor; different
+    ``value`` or different provenance sources are different rows and
+    must get different refs.
     """
     return (
         f"fsf:level_of_theory_id={obj.level_of_theory_id};"
-        f"software_id={obj.software_id};"
+        f"software_release_id={obj.software_release_id};"
         f"scale_kind={getattr(obj.scale_kind, 'value', obj.scale_kind)};"
         f"value={obj.value};"
         f"source_literature_id={obj.source_literature_id};"
@@ -381,26 +384,35 @@ def _canonical_frequency_scale_factor(obj: Any) -> str:
 
 def _canonical_energy_correction_scheme(obj: Any) -> str:
     """EnergyCorrectionScheme identity must include every field the
-    resolver/database treats as part of the row's identity, plus the
-    fields the schema considers metadata of a distinct scheme version.
+    resolver/database treats as part of the row's identity.
 
-    The database uniqueness constraint and
-    ``resolve_or_create_scheme`` both dedup on
-    ``(kind, name, level_of_theory_id, version)``; ``source_literature_id``
-    and ``units`` are not part of that key but a different value of
-    either still means a scientifically distinct scheme (different
-    citation, different unit convention). Two rows that the resolver
-    treats as distinct must therefore get distinct refs — otherwise
-    the ``ix_energy_correction_scheme_public_ref`` unique index trips
-    on insert.
+    The database uniqueness constraint (``uq_energy_correction_scheme_
+    identity``) and ``resolve_or_create_scheme`` both dedup on
+    ``(kind, name, level_of_theory_id, source_literature_id,
+    software_release_id, workflow_tool_release_id)`` as of
+    ``a7d4e2b9c351``. This function must list **exactly** those fields:
+    narrower than the index and two index-distinct rows collide on
+    ``ix_energy_correction_scheme_public_ref`` at insert; wider and two
+    rows the resolver considers identical would be handed different
+    refs, which the resolver never asks for but which would make this
+    function disagree with the key it exists to mirror.
+
+    ``units`` and ``version`` were both here and are both gone.
+    ``version`` no longer exists as a column at all: it was nullable
+    free text, null on every live row, and versioned nothing.
+    ``units`` still exists but is not identity — an energy correction is
+    always an energy, so hartree and kcal/mol are one library written
+    two ways. The unit-blind value comparison that once justified
+    keeping it here is fixed at its cause: the resolver converts before
+    it compares.
     """
     return (
         f"ecs:kind={getattr(obj.kind, 'value', obj.kind)};"
         f"name={(obj.name or '').strip().lower()};"
         f"level_of_theory_id={obj.level_of_theory_id};"
         f"source_literature_id={obj.source_literature_id};"
-        f"version={(obj.version or '').strip().lower()};"
-        f"units={getattr(obj.units, 'value', obj.units)}"
+        f"software_release_id={obj.software_release_id};"
+        f"workflow_tool_release_id={obj.workflow_tool_release_id}"
     )
 
 

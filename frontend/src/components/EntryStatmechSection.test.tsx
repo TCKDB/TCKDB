@@ -369,12 +369,15 @@ describe("EntryStatmechSection", () => {
         expect(scaleKindPill).toHaveClass("value-pill")
 
         // The identifier (the scale factor's own ref) renders as plain
-        // monospace text, on its own row -- never inside a `.value-pill`.
+        // monospace text, inside a `<code>` element (now a link into its
+        // own `/methods/frequency-scale-factors/:fsfRef` page,
+        // methods-surface plan PR 3) -- never inside a `.value-pill`.
         const refDd = ddFor(card, "Frequency scale factor ref")
         expect(refDd).toBe("fsf_pill_check")
-        const refElement = within(card).getByText("fsf_pill_check")
-        expect(refElement.tagName).toBe("CODE")
-        expect(refElement).not.toHaveClass("value-pill")
+        const refLink = within(card).getByRole("link", { name: "fsf_pill_check" })
+        expect(refLink).toHaveAttribute("href", "/methods/frequency-scale-factors/fsf_pill_check")
+        expect(refLink.closest("code")).not.toBeNull()
+        expect(refLink).not.toHaveClass("value-pill")
     })
 
     it("renders an available on-demand section as idle until opened, and fetches exactly its own token once -- unlike source_calculations and frequencies, which now load eagerly", async () => {

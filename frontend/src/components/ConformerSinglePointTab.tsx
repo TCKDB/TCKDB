@@ -5,7 +5,6 @@ import "../entry-science.css"
 import "../energy-display.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
-import { lotLabel } from "../api/scientificSchemas"
 import { conformerLabel } from "../domain/conformerEvidence"
 import {
     ENERGY_DISPLAY_UNITS,
@@ -14,6 +13,7 @@ import {
     type EnergyDisplayUnit,
 } from "../domain/energyUnits"
 import { softwareLabel } from "../domain/provenanceFormat"
+import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { SectionHeading } from "./PageSections"
 
 type Calculation = NonNullable<NonNullable<ConformerProjection["observations"]>[number]["calculations"]>[number]
@@ -139,7 +139,7 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                                 )}
                                             </td>
                                             <td data-label="Level of theory">
-                                                {row.calculation?.level_of_theory ? lotLabel(row.calculation.level_of_theory) : "not recorded"}
+                                                {row.calculation?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={row.calculation.level_of_theory} /> : "not recorded"}
                                             </td>
                                             <td data-label="Software">
                                                 {row.calculation ? (softwareLabel(row.calculation.software_release) ?? "not recorded") : "not recorded"}

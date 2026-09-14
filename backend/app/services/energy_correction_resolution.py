@@ -15,6 +15,8 @@ from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED as _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
 )
 
+from app.chemistry.units import convert_energy_to_hartree
+from app.db.models.common import EnergyUnit
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -25,6 +27,7 @@ from app.db.models.energy_correction import (
     FrequencyScaleFactor,
 )
 from app.schemas.fragments.refs import FreqScaleFactorRef
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.energy_correction_upload import (
     AppliedEnergyCorrectionUploadPayload,
     EnergyCorrectionSchemeRef,
@@ -35,7 +38,10 @@ from app.services.calculation_resolution import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_declared_key
-from app.services.software_resolution import resolve_software
+from app.services.provenance_warnings import (
+    collect_energy_correction_scheme_provenance_warnings,
+)
+from app.services.software_resolution import resolve_software_release_ref
 
 #: An applied correction names a source the enclosing upload never declared.
 #:
@@ -126,14 +132,38 @@ def resolve_or_create_scheme(
     ref: EnergyCorrectionSchemeRef,
     *,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> EnergyCorrectionScheme:
     """Resolve or create an energy correction scheme.
 
-    Dedup key: (kind, name, level_of_theory_id, version).
+    Dedup key: the full DB identity tuple ``(kind, name,
+    level_of_theory_id, version, units, source_literature_id,
+    software_release_id, workflow_tool_release_id)`` — matches
+    ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
+    plan v2 §3-§4). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    optionally version/revision/build): a depositor who names only the
+    program resolves to the version-less release row for it (§3.2 --
+    "program known, build not stated" is a first-class, complete value,
+    not a degraded one), and reusing that same program name reuses that
+    same row. A supplied citation, software release, or unit that differs
+    from an existing same-``(kind, name, lot, version)`` row is never
+    dropped: it is scientifically distinct identity, so it resolves to
+    (or creates) a *different* row rather than silently overwriting or
+    ignoring what the depositor sent. Two rows that agree on every field
+    including these still collapse into one, exactly as before this
+    widening — that residual ambiguity (same kind/LOT/release/units, both
+    uncited) is real and is reported, not resolved, via ``warnings_out``.
 
     :param session: Active SQLAlchemy session.
     :param ref: Upload-facing scheme reference.
     :param created_by: Optional application user id.
+    :param warnings_out: Optional sink for non-blocking provenance
+        warnings (missing citation, missing software for a
+        software-scoped kind, an ambiguous uncited sibling). Only
+        populated when a *new* row is created — reusing an existing row
+        already produced whatever warning applied when it was first
+        created. ``None`` (the default) means "caller does not want
+        these," matching every existing call site.
     :returns: Existing or newly created scheme row.
     """
     lot = (
@@ -143,37 +173,58 @@ def resolve_or_create_scheme(
     )
     lot_id = lot.id if lot else None
 
+    literature = (
+        resolve_or_create_literature(
+            session,
+            ref.source_literature,
+            warnings_out=warnings_out,
+            field_prefix="source_literature.",
+        )
+        if ref.source_literature is not None
+        else None
+    )
+    lit_id = literature.id if literature else None
+
+    software_release_id = None
+    if ref.software is not None:
+        release = resolve_software_release_ref(session, ref.software)
+        software_release_id = release.id
+
+    wtr_id = None
+    if ref.workflow_tool_release is not None:
+        wtr = resolve_workflow_tool_release_ref(session, ref.workflow_tool_release)
+        wtr_id = wtr.id if wtr is not None else None
+
+    def _match(col, val):
+        return col == val if val is not None else col.is_(None)
+
     existing = session.scalar(
         select(EnergyCorrectionScheme).where(
             EnergyCorrectionScheme.kind == ref.kind,
             EnergyCorrectionScheme.name == ref.name,
-            (
-                EnergyCorrectionScheme.level_of_theory_id == lot_id
-                if lot_id is not None
-                else EnergyCorrectionScheme.level_of_theory_id.is_(None)
-            ),
-            (
-                EnergyCorrectionScheme.version == ref.version
-                if ref.version is not None
-                else EnergyCorrectionScheme.version.is_(None)
-            ),
+            _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
+            # Neither `version` (dropped) nor `units` is matched on: this
+            # chain must mirror uq_energy_correction_scheme_identity
+            # exactly (a7d4e2b9c351), or the index and the resolver
+            # disagree about what a duplicate is. A deposit in a second
+            # unit is meant to land on the existing row; the parameter
+            # comparison converts before it compares.
+            _match(EnergyCorrectionScheme.source_literature_id, lit_id),
+            _match(EnergyCorrectionScheme.software_release_id, software_release_id),
+            _match(EnergyCorrectionScheme.workflow_tool_release_id, wtr_id),
         )
     )
+    created = existing is None
     if existing is not None:
         scheme = existing
     else:
-        literature = (
-            resolve_or_create_literature(session, ref.source_literature)
-            if ref.source_literature is not None
-            else None
-        )
-
         scheme = EnergyCorrectionScheme(
             kind=ref.kind,
             name=ref.name,
             level_of_theory_id=lot_id,
-            source_literature_id=literature.id if literature else None,
-            version=ref.version,
+            source_literature_id=lit_id,
+            software_release_id=software_release_id,
+            workflow_tool_release_id=wtr_id,
             units=ref.units,
             note=ref.note,
             created_by=created_by,
@@ -182,6 +233,13 @@ def resolve_or_create_scheme(
         session.flush()
 
     _merge_scheme_params(session, scheme, ref)
+
+    if warnings_out is not None and created:
+        warnings_out.extend(
+            collect_energy_correction_scheme_provenance_warnings(
+                session, scheme=scheme
+            )
+        )
 
     return scheme
 
@@ -200,22 +258,66 @@ def _assert_param_value_compatible(
     key: str,
     existing_value: float,
     supplied_value: float,
+    existing_units: EnergyUnit | None = None,
+    supplied_units: EnergyUnit | None = None,
 ) -> None:
     """Raise if an existing scheme parameter conflicts with a supplied value.
 
     Energy-correction scheme parameters are reference-library values.
-    Reusing a scheme identity with a different value for the same parameter
-    key would make the scheme row scientifically ambiguous, so conflicts
-    are rejected instead of silently overwriting or ignoring the new value.
+    Reusing a scheme identity with a different value for the same
+    parameter key would make the scheme row scientifically ambiguous, so
+    conflicts are rejected instead of silently overwriting or ignoring
+    the new value.
+
+    **Both sides are converted to hartree before comparing** when their
+    units are known. Without that, this function was unit-blind: a
+    depositor re-sending the same library in kcal/mol was told its
+    numbers conflicted (``existing=-0.42, supplied=-0.00067``) when they
+    are the same physical value, and told to "use a distinct identity",
+    which was not something they could do. ``a7d4e2b9c351`` removed
+    ``units`` from the identity precisely so that deposit lands here, on
+    the existing row -- which makes converting here the thing that has to
+    work.
+
+    When either unit is unknown, or is one ``convert_energy_to_hartree``
+    has no factor for, the raw values are compared as before and the
+    error says so. That is the honest fallback: refusing to compare would
+    reject a deposit this function cannot prove is wrong, and comparing
+    converted-against-raw would invent a conflict.
     """
-    if abs(existing_value - supplied_value) <= _PARAM_VALUE_ABS_TOL:
+    existing_cmp = existing_value
+    supplied_cmp = supplied_value
+    converted = False
+
+    if existing_units is not None and supplied_units is not None:
+        existing_h = convert_energy_to_hartree(existing_value, existing_units)
+        supplied_h = convert_energy_to_hartree(supplied_value, supplied_units)
+        if existing_h is not None and supplied_h is not None:
+            existing_cmp, supplied_cmp = existing_h, supplied_h
+            converted = True
+
+    if abs(existing_cmp - supplied_cmp) <= _PARAM_VALUE_ABS_TOL:
         return
 
+    if converted:
+        detail = (
+            f"existing={existing_value!r} {existing_units.value}, "
+            f"supplied={supplied_value!r} {supplied_units.value} "
+            "(compared in hartree)"
+        )
+    else:
+        detail = (
+            f"existing={existing_value!r}, supplied={supplied_value!r} "
+            "(compared as deposited: the unit of one or both is not "
+            "recorded, so neither could be converted)"
+        )
+
     raise ValueError(
-        f"Conflicting {table_name} value for key='{key}': "
-        f"existing={existing_value!r}, supplied={supplied_value!r}. "
-        "Use a distinct energy_correction_scheme identity if these parameters "
-        "represent a different correction library."
+        f"Conflicting {table_name} value for key='{key}': {detail}. "
+        "These are the same correction library by identity, so the "
+        "values have to agree. If they represent a different library, "
+        "give it a different citation or software release -- those are "
+        "what distinguish one library from another."
     )
 
 
@@ -259,6 +361,8 @@ def _merge_scheme_params(
                     key=p.element,
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if ref.bond_params:
@@ -285,6 +389,8 @@ def _merge_scheme_params(
                     key=p.bond_key,
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if ref.component_params:
@@ -314,6 +420,8 @@ def _merge_scheme_params(
                     key=f"{p.component_kind.value}:{p.key}",
                     existing_value=cur.value,
                     supplied_value=p.value,
+                    existing_units=scheme.units,
+                    supplied_units=ref.units,
                 )
 
     if added:
@@ -330,14 +438,20 @@ def resolve_or_create_freq_scale_factor_ref(
     ref: FreqScaleFactorRef,
     *,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> FrequencyScaleFactor:
     """Resolve or create a frequency scale factor from the unified FSF ref.
 
-    Dedup key: the full DB identity tuple
-    ``(level_of_theory, software, scale_kind, value, source_literature,
-    workflow_tool_release)``. ``note`` is descriptive and never used for
-    matching — when the identity collides with an existing row, the row
-    is reused and the incoming ``note`` is ignored.
+    Dedup key: the full DB identity tuple ``(level_of_theory,
+    software_release, scale_kind, value, source_literature,
+    workflow_tool_release)`` — matches
+    ``uq_frequency_scale_factor_identity`` (correction-scheme-provenance
+    plan v2 §6). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    optionally version/revision/build): a depositor who names only the
+    program resolves to the version-less release row for it, mirroring
+    ``resolve_or_create_scheme``. ``note`` is descriptive and never used
+    for matching — when the identity collides with an existing row, the
+    row is reused and the incoming ``note`` is ignored.
 
     :param session: Active SQLAlchemy session.
     :param ref: Unified upload-facing frequency scale factor reference.
@@ -346,13 +460,18 @@ def resolve_or_create_freq_scale_factor_ref(
     """
     lot = resolve_level_of_theory_ref(session, ref.level_of_theory)
 
-    software_id = None
+    software_release_id = None
     if ref.software is not None:
-        sw = resolve_software(session, ref.software.name)
-        software_id = sw.id
+        release = resolve_software_release_ref(session, ref.software)
+        software_release_id = release.id
 
     literature = (
-        resolve_or_create_literature(session, ref.source_literature)
+        resolve_or_create_literature(
+            session,
+            ref.source_literature,
+            warnings_out=warnings_out,
+            field_prefix="source_literature.",
+        )
         if ref.source_literature is not None
         else None
     )
@@ -366,7 +485,7 @@ def resolve_or_create_freq_scale_factor_ref(
     return _resolve_or_create_fsf_row(
         session,
         level_of_theory_id=lot.id,
-        software_id=software_id,
+        software_release_id=software_release_id,
         scale_kind=ref.scale_kind,
         value=ref.value,
         source_literature_id=lit_id,
@@ -380,7 +499,7 @@ def _resolve_or_create_fsf_row(
     session: Session,
     *,
     level_of_theory_id: int,
-    software_id: int | None,
+    software_release_id: int | None,
     scale_kind,
     value: float,
     source_literature_id: int | None,
@@ -400,7 +519,7 @@ def _resolve_or_create_fsf_row(
     existing = session.scalar(
         select(FrequencyScaleFactor).where(
             FrequencyScaleFactor.level_of_theory_id == level_of_theory_id,
-            _match(FrequencyScaleFactor.software_id, software_id),
+            _match(FrequencyScaleFactor.software_release_id, software_release_id),
             FrequencyScaleFactor.scale_kind == scale_kind,
             FrequencyScaleFactor.value == value,
             _match(FrequencyScaleFactor.source_literature_id, source_literature_id),
@@ -414,7 +533,7 @@ def _resolve_or_create_fsf_row(
         with session.begin_nested():
             fsf = FrequencyScaleFactor(
                 level_of_theory_id=level_of_theory_id,
-                software_id=software_id,
+                software_release_id=software_release_id,
                 scale_kind=scale_kind,
                 value=value,
                 source_literature_id=source_literature_id,
@@ -428,7 +547,7 @@ def _resolve_or_create_fsf_row(
         fsf = session.scalar(
             select(FrequencyScaleFactor).where(
                 FrequencyScaleFactor.level_of_theory_id == level_of_theory_id,
-                _match(FrequencyScaleFactor.software_id, software_id),
+                _match(FrequencyScaleFactor.software_release_id, software_release_id),
                 FrequencyScaleFactor.scale_kind == scale_kind,
                 FrequencyScaleFactor.value == value,
                 _match(FrequencyScaleFactor.source_literature_id, source_literature_id),
@@ -456,6 +575,7 @@ def create_applied_energy_correction(
     source_conformer_observation_id: int | None = None,
     source_calculation_id: int | None = None,
     created_by: int | None = None,
+    warnings_out: list[UploadWarning] | None = None,
 ) -> AppliedEnergyCorrection:
     """Resolve provenance refs and create an applied energy correction.
 
@@ -473,6 +593,9 @@ def create_applied_energy_correction(
     :param source_conformer_observation_id: Resolved source conformer id.
     :param source_calculation_id: Resolved source calculation id.
     :param created_by: Optional application user id.
+    :param warnings_out: Optional sink for the scheme's non-blocking
+        provenance warnings (see :func:`resolve_or_create_scheme`).
+        ``None`` (the default) is a no-op, matching every existing caller.
     :returns: Newly created ``AppliedEnergyCorrection`` row.
     """
     scheme_id = None
@@ -480,13 +603,16 @@ def create_applied_energy_correction(
 
     if payload.scheme is not None:
         scheme = resolve_or_create_scheme(
-            session, payload.scheme, created_by=created_by
+            session, payload.scheme, created_by=created_by, warnings_out=warnings_out
         )
         scheme_id = scheme.id
 
     if payload.frequency_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, payload.frequency_scale_factor, created_by=created_by
+            session,
+            payload.frequency_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings_out,
         )
         fsf_id = fsf.id
 

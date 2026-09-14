@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom"
 import type { CalculationDependency } from "../api/calculationApi"
 import type { ReactionFullCalculationEvidence, ReactionTransitionStateInFull } from "../api/reactionEntryApi"
-import { lotLabel } from "../api/scientificSchemas"
 import { CalculationDependencyGraph, type CentreSubject } from "./CalculationDependencyGraph"
+import { LevelOfTheoryLink } from "./LevelOfTheoryLink"
 import { ProductLevelsFact } from "./ProductLevels"
 import { StageFlow, type StageFlowBox } from "./StageFlow"
 import { deriveProductLevelsFromSourceCalculations } from "../domain/productLevels"
@@ -162,7 +162,7 @@ function TransitionStateBlock({ ts, calculationsByRef }: {
                                 <tr key={key}>
                                     <td data-label="Stage">{STAGE_LABEL[key] ?? slot.type}</td>
                                     <td data-label="Level of theory">
-                                        {evidence?.level_of_theory ? lotLabel(evidence.level_of_theory) : "not recorded"}
+                                        {evidence?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={evidence.level_of_theory} /> : "not recorded"}
                                     </td>
                                     <td data-label="Software / workflow">
                                         {evidence?.software ? (softwareLabel(evidence.software) ?? "not recorded") : "not recorded"}

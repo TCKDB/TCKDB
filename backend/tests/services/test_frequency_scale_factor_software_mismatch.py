@@ -1,10 +1,12 @@
 """Tests for the frequency-scale-factor / freq-calculation software cross-check.
 
 A harmonic frequency scale factor is specific to a level of theory AND to
-the electronic-structure software the factor was fit against -- the same
-level of theory in Gaussian vs ORCA can legitimately need a different
-factor (``frequency_scale_factor.software_id``'s column comment has said so
-since the initial schema). Nothing previously checked that the software a
+the electronic-structure software release the factor was fit against --
+the same level of theory in Gaussian vs ORCA can legitimately need a
+different factor (``frequency_scale_factor.software_release_id``'s column
+comment has said so since the initial schema, at program grain until the
+correction-scheme-provenance plan v2 §6 sibling revision widened it to
+release grain). Nothing previously checked that the software a
 factor was DERIVED FOR is the software that actually produced the
 frequencies it was APPLIED TO. Measured against the deployed archive: 95
 statmech rows compare cleanly today (Gaussian/Gaussian, ORCA/ORCA) and 6

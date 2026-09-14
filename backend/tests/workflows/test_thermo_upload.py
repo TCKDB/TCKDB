@@ -54,6 +54,7 @@ from app.schemas.entities.thermo import (
     ThermoSourceCalculationCreate,
 )
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_ownership import (
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -324,6 +325,46 @@ def test_persist_thermo_upload_resolves_all_provenance_refs(
         wtr = session.get(WorkflowToolRelease, thermo.workflow_tool_release_id)
         assert wtr is not None
         assert wtr.workflow_tool.name == "ARC"
+
+
+def test_persist_thermo_upload_surfaces_literature_title_mismatch_warning(
+    db_conn, monkeypatch,
+) -> None:
+    """#248: a depositor-supplied title that disagrees with the DOI's
+    fetched title still resolves (DOI wins, as above) but is now reported
+    as an ``UploadWarning`` when the caller asks for one via
+    ``warnings_out``."""
+    monkeypatch.setattr(
+        "app.services.literature_resolution.fetch_doi_metadata",
+        lambda doi: {
+            "title": "Enthalpy of formation of water",
+            "container-title": ["J. Phys. Chem. Ref. Data"],
+            "issued": 1998,
+            "URL": f"https://doi.org/{doi}",
+        },
+    )
+
+    request = _thermo_request(
+        literature={
+            "doi": "10.1063/1.555991",
+            "title": "A Completely Different Paper",
+        },
+    )
+
+    with Session(db_conn) as session, session.begin():
+        warnings: list[UploadWarning] = []
+        thermo = persist_thermo_upload(session, request, warnings_out=warnings)
+
+        lit = session.get(Literature, thermo.literature_id)
+        assert lit is not None
+        assert lit.title == "Enthalpy of formation of water"
+
+        title_warnings = [
+            w for w in warnings if w.code == "literature_title_mismatch"
+        ]
+        assert len(title_warnings) == 1
+        assert "A Completely Different Paper" in title_warnings[0].message
+        assert "Enthalpy of formation of water" in title_warnings[0].message
 
 
 def test_repeated_thermo_uploads_are_append_only(db_conn) -> None:

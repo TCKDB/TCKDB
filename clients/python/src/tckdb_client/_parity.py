@@ -404,6 +404,12 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         _NEW_METHOD_TESTS,
     ),
     (
+        "POST",
+        "/api/v1/scientific/networks/{network_ref_or_id}/kinetics/evaluate",
+        "evaluate_network_kinetics_batch", None, None,
+        _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/network-solves/search",
         "search_network_solves", "iter_network_solves", None,
         "tests/test_network_solve_client.py",
@@ -792,6 +798,10 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         # sat green until the next pull request that did.
         ("GET", "/api/v1/admin/artifact-storage/capacity"),
         ("POST", "/api/v1/admin/artifact-storage/capacity/clear"),
+        (
+            "PATCH",
+            "/api/v1/admin/energy-correction-schemes/{ref}/provenance",
+        ),
         ("GET", "/api/v1/admin/machine-review/curator-tasks"),
         (
             "POST",
@@ -815,6 +825,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
             "GET",
             "/api/v1/admin/submissions/{submission_id}/machine-review-inspection",
         ),
+        ("GET", "/api/v1/admin/users"),
         ("PATCH", "/api/v1/admin/users/{user_id}/role"),
     )
 ) + tuple(

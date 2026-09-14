@@ -19,10 +19,11 @@ from tests.services.scientific_read._factories import (
     make_frequency_scale_factor,
     make_literature,
     make_lot,
-    make_software,
+    make_software_release,
     make_species,
     make_species_entry,
     make_statmech,
+    make_workflow_tool_release,
     next_inchi_key,
 )
 
@@ -323,14 +324,119 @@ def test_fsf_search_by_method(client, db_session):
 
 
 def test_fsf_search_by_software(client, db_session):
-    sw = make_software(db_session, name="qchem")
-    fsf = make_frequency_scale_factor(db_session, software=sw)
+    """The ``software`` filter is backed by ``software_release_id``
+    (correction-scheme-provenance plan v2 §6 -- was ``software_id``),
+    joined through ``software_release``, mirroring ECS's
+    ``test_ecs_search_by_software`` below."""
+    release = make_software_release(db_session, name="qchem", version=None)
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
     body = client.get(_fsf_search_url(software="qchem")).json()
     refs = {
         r["frequency_scale_factor"]["frequency_scale_factor_ref"]
         for r in body["records"]
     }
     assert fsf.public_ref in refs
+
+
+def test_fsf_search_by_software_version(client, db_session):
+    """FSF now stores ``software_release_id``, so ``software_version`` is
+    implemented against the joined ``software_release`` -- it must match
+    versioned releases and must not return version-less ones (mirrors
+    ``test_ecs_search_by_software_version`` below)."""
+    versioned = make_software_release(
+        db_session, name="fsf-versioned-orca", version="6.0.1"
+    )
+    versionless = make_software_release(
+        db_session, name="fsf-versioned-orca", version=None
+    )
+    fsf_versioned = make_frequency_scale_factor(
+        db_session, software_release=versioned, value=0.9701
+    )
+    fsf_versionless = make_frequency_scale_factor(
+        db_session, software_release=versionless, value=0.9702
+    )
+
+    body = client.get(_fsf_search_url(software_version="6.0.1")).json()
+    refs = {
+        r["frequency_scale_factor"]["frequency_scale_factor_ref"]
+        for r in body["records"]
+    }
+    assert fsf_versioned.public_ref in refs
+    assert fsf_versionless.public_ref not in refs
+
+
+def test_fsf_detail_serves_software_release(client, db_session, allow_internal_ids):
+    """Plan §10 PR 6's read-layer criterion, mirroring
+    ``test_ecs_detail_serves_software_and_workflow_tool_release``: the
+    detail response's ``software_release`` is a real, resolvable
+    release, never the fabricated ``id=0, ref=""`` object.
+
+    *Mutation*: restore the ``software_release_id=0,
+    software_release_ref=""`` literal in
+    ``_build_software_release_summary`` -- these assertions must fail.
+    """
+    release = make_software_release(db_session, name="fsf-gaussian", version="16")
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
+    body = client.get(
+        _fsf_detail_url(fsf.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "fsf-gaussian"
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_id"] != 0
+    assert sw_release["software_release_ref"] == release.public_ref
+    assert sw_release["software_release_ref"] != ""
+    assert sw_release["version"] == "16"
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is True
+
+
+def test_fsf_detail_versionless_release_reports_program_and_null_version(
+    client, db_session, allow_internal_ids
+):
+    """A depositor who knows only the program resolves to the
+    version-less release row, and that is a complete deposit: the detail
+    response carries the program name and a real ref, with ``version``
+    exactly ``None`` -- never a filler string, never the whole object
+    dropped to ``null``.
+
+    *Mutation*: ``version=row.version or "unknown"`` in
+    ``_build_software_release_summary`` -- the ``version is None``
+    assertion must then fail.
+    """
+    release = make_software_release(db_session, name="fsf-molpro", version=None)
+    fsf = make_frequency_scale_factor(db_session, software_release=release)
+
+    body = client.get(
+        _fsf_detail_url(fsf.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "fsf-molpro"
+    assert sw_release["version"] is None
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_ref"] == release.public_ref
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is True
+
+
+def test_fsf_detail_has_software_dimension_false_when_absent(client, db_session):
+    fsf = make_frequency_scale_factor(db_session)
+    body = client.get(_fsf_detail_url(fsf.public_ref)).json()
+
+    assert body["record"]["software_release"] is None
+    assert body["record"]["evidence_summary"]["has_software_dimension"] is False
 
 
 def test_fsf_search_by_literature_ref(client, db_session):
@@ -613,14 +719,29 @@ def test_ecs_search_by_name(client, db_session):
     assert ecs.public_ref in refs
 
 
-def test_ecs_search_by_version(client, db_session):
-    ecs = make_energy_correction_scheme(db_session, version="v2")
-    body = client.get(_ecs_search_url(version="v2")).json()
-    refs = {
-        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
-        for r in body["records"]
-    }
-    assert ecs.public_ref in refs
+def test_ecs_search_by_version_is_refused_not_ignored(client, db_session):
+    """``version`` is gone from the schema (a7d4e2b9c351), and a removed
+    filter must fail closed.
+
+    Deleting the field outright was the first attempt and was worse than
+    leaving it: FastAPI does not reject an unknown query parameter, so
+    ``?version=v2`` came back **200 with the filter silently dropped** --
+    a client filtering by version received unfiltered results and no
+    indication anything had been ignored. Measured, not assumed, while
+    building this change.
+
+    *Mutation*: remove ``version`` from the rejected-filter dict in
+    ``energy_correction_schemes_search.py`` -- this must then fail,
+    returning 200.
+    """
+    make_energy_correction_scheme(db_session, name="version_filter_probe")
+
+    resp = client.get(_ecs_search_url(version="v2"))
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "unsupported_filter"
+    assert "version" in body["context"]["filters"]
 
 
 def test_ecs_search_by_scheme_kind(client, db_session):
@@ -655,6 +776,128 @@ def test_ecs_search_by_literature_ref(client, db_session):
         for r in body["records"]
     }
     assert ecs.public_ref in refs
+
+
+def test_ecs_search_by_software(client, db_session):
+    """The ``software`` filter is backed by ``software_release_id`` (was
+    deferred/422 before the correction-scheme-provenance v1 widening;
+    v2 moved it from ``software_id`` to a release, joined through
+    ``software_release``)."""
+    orca_release = make_software_release(db_session, name="orca", version=None)
+    gaussian_release = make_software_release(
+        db_session, name="gaussian", version=None
+    )
+    ecs_orca = make_energy_correction_scheme(
+        db_session, name="ecs_orca_scheme", software_release=orca_release
+    )
+    ecs_gaussian = make_energy_correction_scheme(
+        db_session, name="ecs_gaussian_scheme", software_release=gaussian_release
+    )
+    body = client.get(_ecs_search_url(software="orca")).json()
+    refs = {
+        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
+        for r in body["records"]
+    }
+    assert ecs_orca.public_ref in refs
+    assert ecs_gaussian.public_ref not in refs
+
+
+def test_ecs_search_by_software_version(client, db_session):
+    """ECS now stores ``software_release_id``, so ``software_version`` is
+    implemented against the joined ``software_release`` -- it must match
+    versioned releases and must not return version-less ones."""
+    versioned = make_software_release(db_session, name="orca", version="16")
+    versionless = make_software_release(db_session, name="orca", version=None)
+    ecs_versioned = make_energy_correction_scheme(
+        db_session, name="ecs_versioned", software_release=versioned
+    )
+    ecs_versionless = make_energy_correction_scheme(
+        db_session, name="ecs_versionless", software_release=versionless
+    )
+
+    body = client.get(_ecs_search_url(software_version="16")).json()
+    refs = {
+        r["energy_correction_scheme"]["energy_correction_scheme_ref"]
+        for r in body["records"]
+    }
+    assert ecs_versioned.public_ref in refs
+    assert ecs_versionless.public_ref not in refs
+
+
+def test_ecs_detail_serves_software_and_workflow_tool_release(
+    client, db_session, allow_internal_ids
+):
+    release = make_software_release(db_session, name="gaussian", version="16")
+    wtr = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
+    ecs = make_energy_correction_scheme(
+        db_session, software_release=release, workflow_tool_release=wtr
+    )
+    body = client.get(
+        _ecs_detail_url(ecs.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release["software"] == "gaussian"
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_id"] != 0
+    assert sw_release["software_release_ref"] == release.public_ref
+    assert sw_release["software_release_ref"] != ""
+    assert sw_release["version"] == "16"
+    # The ref must resolve to a real record, not merely be non-empty.
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    assert body["record"]["workflow_tool_release"]["workflow_tool"] == "arc"
+    assert body["record"]["evidence_summary"]["has_software"] is True
+
+
+def test_ecs_detail_versionless_release_reports_program_and_null_version(
+    client, db_session, allow_internal_ids
+):
+    """Plan §10 PR 2's third red-first criterion, and §3.2's load-bearing
+    shape: a depositor who knows the program but not the build resolves
+    to the version-less release row, and that is a *complete* deposit,
+    not a degraded one.
+
+    So the detail response must carry the program name and a real,
+    resolvable ref, with ``version`` exactly ``None`` -- never a filler
+    string, never the whole object dropped to ``null`` as if no software
+    had been recorded at all.
+
+    *Mutation*: ``version=row.version or "unknown"`` in
+    ``_build_software_release_summary`` -- the ``version is None``
+    assertion must then fail. Without this test that mutation survives
+    the whole suite (found in review of the read-layer branch).
+    """
+    release = make_software_release(db_session, name="molpro", version=None)
+    ecs = make_energy_correction_scheme(db_session, software_release=release)
+
+    body = client.get(
+        _ecs_detail_url(ecs.public_ref, include="internal_ids")
+    ).json()
+
+    sw_release = body["record"]["software_release"]
+    assert sw_release is not None
+    assert sw_release["software"] == "molpro"
+    assert sw_release["version"] is None
+    assert sw_release["software_release_id"] == release.id
+    assert sw_release["software_release_ref"] == release.public_ref
+
+    resolved = client.get(f"/api/v1/software-releases/{release.id}")
+    assert resolved.status_code == 200
+    assert resolved.json()["id"] == release.id
+
+    # Program known is software recorded, even with no build stated.
+    assert body["record"]["evidence_summary"]["has_software"] is True
+
+
+def test_ecs_detail_has_software_false_when_absent(client, db_session):
+    ecs = make_energy_correction_scheme(db_session)
+    body = client.get(_ecs_detail_url(ecs.public_ref)).json()
+
+    assert body["record"]["software_release"] is None
+    assert body["record"]["evidence_summary"]["has_software"] is False
 
 
 def test_ecs_search_has_corrections_true_and_false(client, db_session):

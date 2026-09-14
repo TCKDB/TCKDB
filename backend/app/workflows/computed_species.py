@@ -686,6 +686,7 @@ def persist_computed_species_upload(
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
+            warnings=upload_warnings,
         )
 
         statmech_row = _persist_statmech_block(
@@ -719,6 +720,7 @@ def persist_computed_species_upload(
             calc_keys_to_id=calc_keys_to_id,
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             created_by=created_by,
+            warnings=upload_warnings,
         )
 
         session.flush()
@@ -801,6 +803,7 @@ def _persist_thermo_block(
     conformer_keys_to_observation_id: dict[str, int],
     default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
+    warnings: list[UploadWarning] | None = None,
 ) -> tuple[Thermo | None, list[int]]:
     """Persist optional thermo + nested AECs.
 
@@ -809,6 +812,13 @@ def _persist_thermo_block(
 
     ``default_workflow_tool_release`` is the bundle-level fallback used
     when the thermo block names no workflow tool of its own.
+
+    ``warnings``, when supplied, is where each nested applied
+    correction's *newly created* scheme's non-blocking provenance
+    warnings (missing citation, missing software, ambiguous uncited
+    sibling — see ``collect_energy_correction_scheme_provenance_warnings``)
+    land, the same accumulator every other bundle-level warning source
+    already appends to.
     """
     if request.thermo is None:
         return None, []
@@ -874,7 +884,11 @@ def _persist_thermo_block(
         default_workflow_tool_release=default_workflow_tool_release,
     )
     thermo_create = resolve_thermo_upload(
-        session, synthetic, species_entry_id=species_entry_id
+        session,
+        synthetic,
+        species_entry_id=species_entry_id,
+        warnings_out=warnings,
+        literature_field_prefix="thermo.literature.",
     )
     thermo_create = thermo_create.model_copy(
         update={"source_calculations": resolved_sources}
@@ -926,6 +940,7 @@ def _persist_thermo_block(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
 
@@ -940,6 +955,7 @@ def _persist_top_level_applied_corrections(
     calc_keys_to_id: dict[str, Calculation],
     conformer_keys_to_observation_id: dict[str, int],
     created_by: int | None,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[int]:
     """Persist bundle-level applied energy corrections (AEC/BAC).
 
@@ -951,7 +967,8 @@ def _persist_top_level_applied_corrections(
     written via the shared ``create_applied_energy_correction`` service.
 
     Returns the list of created AEC ids so the caller can record review
-    state for each one.
+    state for each one. ``warnings`` mirrors ``_persist_thermo_block``'s
+    parameter of the same name.
     """
     if not request.applied_energy_corrections:
         return []
@@ -995,6 +1012,7 @@ def _persist_top_level_applied_corrections(
             source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
+            warnings_out=warnings,
         )
         applied_correction_ids.append(applied.id)
     return applied_correction_ids
@@ -1010,6 +1028,7 @@ def _persist_statmech_block(
     default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
+    literature_field_prefix: str = "statmech.literature.",
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1029,7 +1048,12 @@ def _persist_statmech_block(
     s: StatmechInBundle = statmech
 
     literature = (
-        resolve_or_create_literature(session, s.literature)
+        resolve_or_create_literature(
+            session,
+            s.literature,
+            warnings_out=warnings,
+            field_prefix=literature_field_prefix,
+        )
         if s.literature is not None
         else None
     )
@@ -1052,7 +1076,10 @@ def _persist_statmech_block(
     fsf_id: int | None = None
     if s.freq_scale_factor is not None:
         fsf = resolve_or_create_freq_scale_factor_ref(
-            session, s.freq_scale_factor, created_by=created_by
+            session,
+            s.freq_scale_factor,
+            created_by=created_by,
+            warnings_out=warnings,
         )
         fsf_id = fsf.id
 

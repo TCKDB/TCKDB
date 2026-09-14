@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.common import SubmissionRecordType
 from app.db.models.network import Network
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.services.network_resolution import persist_network, resolve_network_upload
@@ -22,6 +23,7 @@ def persist_network_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Network:
     """Persist a complete network upload workflow.
 
@@ -76,6 +78,7 @@ def persist_network_upload(
         request,
         species_entry_ids=species_entry_ids,
         reaction_entry_ids=reaction_entry_ids,
+        warnings_out=warnings_out,
     )
     network = persist_network(session, network_create, created_by=created_by)
 

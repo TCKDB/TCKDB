@@ -1687,8 +1687,8 @@ def test_computed_species_statmech_block_persists_with_fsf(db_conn) -> None:
         assert fsf is not None
         assert fsf.value == 0.977
         assert fsf.scale_kind.value == "fundamental"
-        assert fsf.software is not None
-        assert fsf.software.name == "Gaussian"
+        assert fsf.software_release is not None
+        assert fsf.software_release.software.name == "Gaussian"
 
         # Source calculation link by local key.
         links = session.scalars(
@@ -2331,7 +2331,6 @@ def _aec_scheme_ref(**overrides) -> dict:
         "kind": "atom_energy",
         "name": "AEC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2343,7 +2342,6 @@ def _bac_petersson_scheme_ref(**overrides) -> dict:
         "kind": "bac_petersson",
         "name": "Petersson BAC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)
@@ -2355,7 +2353,6 @@ def _bac_melius_scheme_ref(**overrides) -> dict:
         "kind": "bac_melius",
         "name": "Melius BAC v1",
         "level_of_theory": dict(_LOT_AEC),
-        "version": "1.0",
         "units": "hartree",
     }
     base.update(overrides)

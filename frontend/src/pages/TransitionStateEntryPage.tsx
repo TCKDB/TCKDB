@@ -5,8 +5,8 @@ import "../transition-state-entry.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
 import type { TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
-import { lotLabel } from "../api/scientificSchemas"
 import { Disclosure } from "../components/Disclosure"
+import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -404,7 +404,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         {siblingRef}
                                     </Link>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
-                                    <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
+                                    <span>{primary?.level_of_theory ? <LevelOfTheoryLink levelOfTheory={primary.level_of_theory} /> : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
                                     <span className={reviewPillClass(reviewStatus)}>
                                         {statusLabel(reviewStatus)}
@@ -655,7 +655,7 @@ function SaddlePointStatement({ saddlePoint, evidence }: {
         }
         return <p className="tse-saddle-point">No frequency calculation deposited for this entry.</p>
     }
-    const lotText = saddlePoint.level_of_theory ? lotLabel(saddlePoint.level_of_theory) : "level of theory not recorded"
+    const lotText = saddlePoint.level_of_theory ? <LevelOfTheoryLink levelOfTheory={saddlePoint.level_of_theory} /> : "level of theory not recorded"
     const freqText = saddlePoint.imag_freq_cm1 != null ? `${saddlePoint.imag_freq_cm1.toFixed(1)} cm⁻¹` : null
 
     let verdict: ReactNode
@@ -796,7 +796,7 @@ function CalculationTable({ calculations, entryRef }: { calculations: Calculatio
                     <tr key={calculation.calculation_ref}>
                         <td data-label="Stage">{calculation.type}</td>
                         <td data-label="Level of theory">
-                            {calculation.level_of_theory ? lotLabel(calculation.level_of_theory) : "not recorded"}
+                            {calculation.level_of_theory ? <LevelOfTheoryLink levelOfTheory={calculation.level_of_theory} /> : "not recorded"}
                         </td>
                         <td data-label="Software / workflow">
                             {softwareCellText(calculation.software_release) ?? "not recorded"}

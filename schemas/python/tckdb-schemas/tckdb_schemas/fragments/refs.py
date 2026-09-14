@@ -381,10 +381,10 @@ class FreqScaleFactorRef(SchemaBase):
     The service layer finds or creates the immutable
     ``frequency_scale_factor`` registry row whose identity matches the
     supplied fields. Identity is the full tuple
-    ``(level_of_theory, software, scale_kind, value, source_literature,
-    workflow_tool_release)`` and matches the DB unique index on
-    ``frequency_scale_factor``. ``note`` is descriptive only and never
-    participates in identity/dedupe.
+    ``(level_of_theory, software_release, scale_kind, value,
+    source_literature, workflow_tool_release)`` and matches the DB unique
+    index on ``frequency_scale_factor``. ``note`` is descriptive only and
+    never participates in identity/dedupe.
 
     Source handling:
 
@@ -404,8 +404,16 @@ class FreqScaleFactorRef(SchemaBase):
     :param level_of_theory: Level of theory this factor applies to.
     :param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).
     :param value: The scale factor value.
-    :param software: The ESS software the factor applies to (e.g.
-        Gaussian). Null means software-agnostic or unknown.
+    :param software: The ESS program *release* the factor was fit against
+        (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale
+        factor is fit against a program's own build-level vibrational
+        frequencies, which change between releases of the same program
+        (correction-scheme-provenance plan v2 §6, mirroring
+        ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the
+        factor is release-specific, not merely program-specific. Only
+        ``name`` is required; a depositor who knows only the program
+        resolves to the version-less release row for it. Null means
+        software-agnostic or unknown.
     :param source_literature: Structured literature provenance, when
         available. Mutually informative with ``workflow_tool_release``;
         either, both, or neither may be supplied.
@@ -418,7 +426,7 @@ class FreqScaleFactorRef(SchemaBase):
     level_of_theory: LevelOfTheoryRef
     scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental
     value: float = Field(gt=0)
-    software: SoftwareRef | None = None
+    software: SoftwareReleaseRef | None = None
     source_literature: "LiteratureUploadRequest | None" = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     note: str | None = None

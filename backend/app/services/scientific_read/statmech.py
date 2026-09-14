@@ -650,7 +650,7 @@ def _build_fsf_summary(
             else str(fsf.scale_kind)
         ),
         level_of_theory=_build_lot_summary(session, fsf.level_of_theory_id),
-        software=_build_software_for_software_id(session, fsf.software_id),
+        software=_build_software_summary(session, fsf.software_release_id),
         source_literature=_build_literature_summary(
             session, fsf.source_literature_id
         ),
@@ -699,28 +699,6 @@ def _build_software_summary(
         software_release_ref=row.public_ref,
         software=row.name,
         version=row.version,
-    )
-
-
-def _build_software_for_software_id(
-    session: Session, software_id: int | None
-) -> SoftwareReleaseSummary | None:
-    """Project a bare ``software`` row (no release) into a
-    SoftwareReleaseSummary so the FSF summary can carry it without a
-    second schema. ``software_release_id`` and ``version`` are left
-    null when the FSF only carries the software dimension and not a
-    specific release.
-    """
-    if software_id is None:
-        return None
-    sw = session.get(Software, software_id)
-    if sw is None:
-        return None
-    return SoftwareReleaseSummary(
-        software_release_id=0,  # placeholder; FSF doesn't reference a release
-        software_release_ref="",
-        software=sw.name,
-        version=None,
     )
 
 

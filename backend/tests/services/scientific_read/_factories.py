@@ -289,6 +289,7 @@ def set_review(
     record_id: int,
     status: RecordReviewStatus,
     reviewed_by: int | None = None,
+    note: str | None = None,
 ) -> RecordReview:
     """Set a polymorphic RecordReview row for a record.
 
@@ -304,6 +305,7 @@ def set_review(
         status=status,
         reviewed_at=datetime.now(timezone.utc),
         reviewed_by=reviewed_by,
+        note=note,
     )
     session.add(review)
     session.flush()
@@ -1983,7 +1985,7 @@ def make_frequency_scale_factor(
     session: Session,
     *,
     lot: LevelOfTheory | None = None,
-    software: Software | None = None,
+    software_release: SoftwareRelease | None = None,
     scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental,
     value: float | None = None,
     source_literature: Literature | None = None,
@@ -1992,16 +1994,25 @@ def make_frequency_scale_factor(
 ) -> FrequencyScaleFactor:
     """Create a FrequencyScaleFactor row.
 
-    The natural-identity uniqueness index covers (lot, software,
+    The natural-identity uniqueness index covers (lot, software_release,
     scale_kind, value, source_literature, workflow_tool_release); the
     factory bumps ``value`` per call by default so successive calls
     with identical other-keys still insert successfully.
+
+    ``software_release`` (not ``software``) since correction-scheme-
+    provenance plan v2 §6: the column is ``software_release_id``, keyed
+    on the release the same way ``EnergyCorrectionScheme`` is (and the
+    same way ``make_energy_correction_scheme`` below takes
+    ``software_release``, not ``software``). Build one with
+    ``make_software_release``.
     """
     if lot is None:
         lot = make_lot(session)
     fsf = FrequencyScaleFactor(
         level_of_theory_id=lot.id,
-        software_id=software.id if software is not None else None,
+        software_release_id=(
+            software_release.id if software_release is not None else None
+        ),
         scale_kind=scale_kind,
         value=value if value is not None else _next_fsf_value(),
         source_literature_id=(
@@ -2026,11 +2037,21 @@ def make_energy_correction_scheme(
     kind: EnergyCorrectionSchemeKind = EnergyCorrectionSchemeKind.bac_petersson,
     lot: LevelOfTheory | None = None,
     source_literature: Literature | None = None,
-    version: str | None = None,
+    software_release: SoftwareRelease | None = None,
+    workflow_tool_release: WorkflowToolRelease | None = None,
     units: EnergyUnit | None = EnergyUnit.hartree,
     note: str | None = None,
 ) -> EnergyCorrectionScheme:
-    """Create an EnergyCorrectionScheme row."""
+    """Create an EnergyCorrectionScheme row.
+
+    ``software_release`` (not ``software``) since correction-scheme-
+    provenance plan v2: the column is ``software_release_id``, keyed on
+    the release the same way every other provenance-bearing table in
+    this schema is (plan §2.2/§3). Build one with
+    ``make_software_release`` (e.g. ``make_software_release(session,
+    name="gaussian", version=None)`` for the version-less "program
+    known, build not stated" row).
+    """
     ecs = EnergyCorrectionScheme(
         kind=kind,
         name=name,
@@ -2038,8 +2059,13 @@ def make_energy_correction_scheme(
         source_literature_id=(
             source_literature.id if source_literature is not None else None
         ),
-        version=version,
-        units=units,
+        software_release_id=(
+            software_release.id if software_release is not None else None
+        ),
+        workflow_tool_release_id=(
+            workflow_tool_release.id if workflow_tool_release is not None else None
+        ),
+                units=units,
         note=note,
     )
     session.add(ecs)

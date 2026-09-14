@@ -86,6 +86,25 @@ const unroutedPublicRefLabels: Record<string, string> = {
     rman: "release-manifest",
 }
 
+/**
+ * True for input SHAPED like a public-reference attempt (`{prefix}_…`),
+ * whether or not it is a syntactically COMPLETE one -- the same broad
+ * heuristic `classifyIdentifier` uses internally (`anyPublicRefStartPattern`)
+ * to steer a malformed or unrecognized reference toward an honest "not a
+ * valid reference" message instead of falling through to a structure
+ * parser it was never meant for. Exported so `reactionQuery.ts` (reaction
+ * mode's own equation grammar, `IdentifierSearch.tsx`) can make the
+ * identical call: a value that starts like a reference is routed through
+ * `classifyIdentifier` end to end regardless of which search mode is
+ * active, rather than being fed to the reaction-equation grammar -- the
+ * fix for a `rxe_…` ref pasted while species mode is selected (or a
+ * `spc_…` ref pasted while reaction mode is selected) failing confusingly
+ * instead of routing.
+ */
+export function looksLikeReferenceAttempt(value: string): boolean {
+    return anyPublicRefStartPattern.test(value.trim())
+}
+
 function isFormula(value: string): boolean {
     const body = value.replace(/(?:[+-]\d*|\d+[+-])$/, "")
     if (!body) return false

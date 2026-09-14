@@ -561,6 +561,135 @@ class TestNetworkKineticsEvaluate:
         assert "profile" not in _query_of(str(seen2[0].url))
 
 
+class TestNetworkKineticsBatchEvaluate:
+    def _batch_body(self) -> dict:
+        return {
+            "network_ref": "net_1",
+            "fits": [
+                {
+                    "network_kinetics_ref": "nkin_1",
+                    "channel_key": "channel_1",
+                    "channel_kind": "isomerization",
+                    "source_state_composition_hash": "a" * 64,
+                    "sink_state_composition_hash": "b" * 64,
+                    "network_solve_ref": "nsolve_1",
+                    "model_kind": "chebyshev",
+                    "k_units": "cm3_mol_s",
+                    "tmin_k": 300.0,
+                    "tmax_k": 2000.0,
+                    "pmin_bar": 0.01,
+                    "pmax_bar": 100.0,
+                    "points": [
+                        {
+                            "temperature_k": 1000.0,
+                            "pressure_bar": 1.0,
+                            "k": 1.69,
+                            "in_range": True,
+                        }
+                    ],
+                },
+                {
+                    "network_kinetics_ref": "nkin_2",
+                    "channel_key": "channel_1",
+                    "channel_kind": "isomerization",
+                    "source_state_composition_hash": "a" * 64,
+                    "sink_state_composition_hash": "b" * 64,
+                    "network_solve_ref": "nsolve_1",
+                    "model_kind": "plog",
+                    "k_units": "cm3_mol_s",
+                    "tmin_k": 300.0,
+                    "tmax_k": 2000.0,
+                    "pmin_bar": None,
+                    "pmax_bar": None,
+                    "points": [
+                        {
+                            "temperature_k": 1000.0,
+                            "pressure_bar": 1.0,
+                            "k": 2.70,
+                            "in_range": True,
+                        }
+                    ],
+                },
+            ],
+        }
+
+    def test_reaches_the_batch_evaluate_path_for_the_given_network_ref(self):
+        handler, seen = _capture(self._batch_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics_batch(
+            "net_1", temperature_k=[1000.0], pressure_bar=[1.0]
+        )
+
+        assert seen[0].method == "POST"
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/networks/net_1/kinetics/evaluate"
+        )
+
+    def test_grid_lands_in_the_json_body_not_the_query_string(self):
+        handler, seen = _capture(self._batch_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics_batch(
+            "net_1",
+            temperature_k=[300.0, 500.0, 1000.0],
+            pressure_bar=[1.0, 10.0],
+        )
+
+        body = json.loads(seen[0].content)
+        assert body == {
+            "temperature_k": [300.0, 500.0, 1000.0],
+            "pressure_bar": [1.0, 10.0],
+        }
+        assert _query_of(str(seen[0].url)) == {}
+
+    def test_returns_the_parsed_envelope_with_both_fits_uncollapsed(self):
+        handler, _ = _capture(self._batch_body())
+        client, _ = make_client(handler)
+
+        result = client.evaluate_network_kinetics_batch(
+            "net_1", temperature_k=[1000.0], pressure_bar=[1.0]
+        )
+
+        assert result["network_ref"] == "net_1"
+        assert len(result["fits"]) == 2
+        refs = {fit["network_kinetics_ref"] for fit in result["fits"]}
+        assert refs == {"nkin_1", "nkin_2"}
+        # Both fits share channel_1 and neither is dropped/averaged away --
+        # the whole point of keying by network_kinetics_ref, not channel.
+        assert {fit["channel_key"] for fit in result["fits"]} == {"channel_1"}
+        assert {fit["model_kind"] for fit in result["fits"]} == {
+            "chebyshev", "plog",
+        }
+
+    def test_profile_reaches_the_query_string_body_stays_grid_only(self):
+        """Same contract every other typed scientific read method carries:
+        ``profile`` rides the query string, never the JSON body -- the
+        backend resolves it from a router-level dependency that only
+        reads the query string, even on a POST.
+        """
+        handler, seen = _capture(self._batch_body())
+        client, _ = make_client(handler)
+
+        client.evaluate_network_kinetics_batch(
+            "net_1",
+            temperature_k=[1000.0],
+            pressure_bar=[1.0],
+            profile="curated",
+        )
+
+        assert _query_of(str(seen[0].url))["profile"] == ["curated"]
+        body = json.loads(seen[0].content)
+        assert "profile" not in body
+
+        handler2, seen2 = _capture(self._batch_body())
+        client2, _ = make_client(handler2)
+        client2.evaluate_network_kinetics_batch(
+            "net_1", temperature_k=[1000.0], pressure_bar=[1.0]
+        )
+        assert "profile" not in _query_of(str(seen2[0].url))
+
+
 # ---------------------------------------------------------------------------
 # Reference libraries
 # ---------------------------------------------------------------------------

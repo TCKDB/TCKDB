@@ -2,9 +2,9 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
-import { lotLabel } from "../api/scientificSchemas"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
+import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -205,6 +205,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                             says that). */}
                                         <SpeciesEntryLink
                                             speciesEntryRef={species.species_entry_ref}
+                                            smiles={species.canonical_smiles}
                                             formula={species.formula}
                                             speciesEntryLabel={species.species_entry_label}
                                         />
@@ -516,7 +517,7 @@ function CalculationTable({ calculations, observationRef }: {
                             <td data-label="Stage">{calculation.type}</td>
                             <td data-label="Level of theory">
                                 {calculation.level_of_theory
-                                    ? lotLabel(calculation.level_of_theory)
+                                    ? <LevelOfTheoryLink levelOfTheory={calculation.level_of_theory} />
                                     : "not recorded"}
                             </td>
                             <td data-label="Software / workflow">

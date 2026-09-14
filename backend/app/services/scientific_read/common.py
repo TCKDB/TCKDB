@@ -440,6 +440,7 @@ def fetch_review_badges(
             status=row.status,
             reviewed_at=row.reviewed_at,
             reviewer_kind="human" if row.reviewed_by is not None else None,
+            note=row.note,
         )
         for row in rows
     }

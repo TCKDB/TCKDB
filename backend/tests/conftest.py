@@ -36,6 +36,82 @@ error_code_observer.install()
 error_body_observer.install()
 
 
+class ForeignSchemasPackageError(pytest.UsageError):
+    """Raised when ``tckdb_schemas`` resolves outside this checkout.
+
+    Derives from :class:`pytest.UsageError` for the same reason
+    :class:`ConcurrentTestRunError` does, and the reasoning is recorded
+    there in full: an exception out of ``pytest_sessionstart`` is rendered
+    as ``INTERNALERROR>`` plus a pluggy traceback, which buries the message
+    that is the entire point. ``UsageError`` is caught by pytest's entry
+    point and printed plainly with exit code 4.
+    """
+
+
+def _assert_schemas_package_is_this_checkout() -> None:
+    """Refuse a run that is silently testing a *different* checkout's copy of
+    the ``tckdb_schemas`` wire package.
+
+    The package is installed editable (``pip install -e
+    schemas/python/tckdb-schemas``), and an editable install points at one
+    fixed directory: the checkout it was installed from. Inside a ``git
+    worktree`` that is the MAIN checkout, not the worktree -- so a branch's
+    own changes to the wire schemas are invisible to its tests, and the
+    suite happily reports green against code that is not the code under
+    review.
+
+    The failure mode is worse than it sounds, because it is *silent and
+    symmetric*:
+
+    - A wrong ``PYTHONPATH`` entry does not error. Python skips a path that
+      does not exist, so a typo (``.../tckdb-schemas/src``, which has never
+      existed -- the package is at ``.../tckdb-schemas/tckdb_schemas``)
+      degrades to "use the editable install" with no diagnostic at all.
+    - Generators are affected too. Regenerating the OpenAPI golden under a
+      bad path reads the *other* checkout's schema and writes back the
+      content the file already had, after which the gate compares stale
+      against stale and passes. The artifact and its check agree with each
+      other and both disagree with the branch.
+
+    Both of those happened while building the correction-scheme release
+    grain (#458): three CI cycles were spent on a golden that had been
+    "regenerated" twice, and six tests failed against a schema change that
+    was in fact correct.
+
+    CI cannot hit this -- it has exactly one checkout, so the editable
+    install necessarily resolves inside it -- which is precisely why the
+    check belongs here rather than in a workflow.
+    """
+    try:
+        import tckdb_schemas
+    except ImportError:  # pragma: no cover - environment without the package
+        return
+
+    repo_root = Path(__file__).resolve().parents[2]
+    resolved = Path(tckdb_schemas.__file__).resolve()
+    if repo_root in resolved.parents:
+        return
+
+    expected = repo_root / "schemas" / "python" / "tckdb-schemas"
+    raise ForeignSchemasPackageError(
+        "tckdb_schemas resolves outside this checkout, so these tests would "
+        "exercise another checkout's wire schemas and any change made here "
+        "would be invisible.\n"
+        f"  this checkout: {repo_root}\n"
+        f"  resolved to:   {resolved}\n"
+        "This is what an editable install does inside a git worktree: it "
+        "points at the checkout it was installed from.\n"
+        "Fix it for this run by putting the package's parent directory "
+        "first on PYTHONPATH:\n"
+        f'  export PYTHONPATH="{expected}:$PYTHONPATH"\n'
+        "Note the path ends at 'tckdb-schemas' (the directory *containing* "
+        "the tckdb_schemas package). A path that does not exist is skipped "
+        "silently and leaves you exactly here.\n"
+        "The test-*.sh gate scripts do this for you; a bare pytest "
+        "invocation does not."
+    )
+
+
 def _check_error_bodies(item) -> None:
     """Fail the test whose error body carried an internal identifier.
 
@@ -803,6 +879,7 @@ def pytest_sessionstart(session) -> None:
     global _RESOLVED_WORKERS
     if os.environ.get("PYTEST_XDIST_WORKER"):
         return
+    _assert_schemas_package_is_this_checkout()
     _RESOLVED_WORKERS = _worker_count(session.config)
     load = _sample_server_load()
     session.config._tckdb_server_load_at_start = load  # type: ignore[attr-defined]

@@ -18,7 +18,7 @@ import "../record-identity-header.css"
 import "../reaction-entry.css"
 import type { NetworkMembership, ReactionEntrySpeciesParticipant, ReactionFullRecord } from "../api/reactionEntryApi"
 import { loadReactionEntry, loadReactionEntryNetworksFallback } from "../api/reactionEntryApi"
-import { Formula } from "../components/Formula"
+import { SpeciesFace } from "../components/Formula"
 import { ReactionEquation } from "../components/ReactionEquation"
 import { ReactionKineticsSection } from "../components/ReactionKineticsSection"
 import { ReactionTransitionStatesSection } from "../components/ReactionTransitionStatesSection"
@@ -27,6 +27,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
+import { levelOfTheoryPath } from "../domain/methodsLinks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -128,7 +129,11 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
         { label: "Reaction identity", value: entry.reaction_ref, to: `/reactions/${entry.reaction_ref}` },
         ...transitionStates.map((ts) => ({ label: "Transition state", value: ts.transition_state_ref })),
         ...(firstKinetics?.provenance.primary_level_of_theory?.level_of_theory_ref
-            ? [{ label: "Level of theory", value: firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref }]
+            ? [{
+                label: "Level of theory",
+                value: firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref,
+                to: levelOfTheoryPath(firstKinetics.provenance.primary_level_of_theory.level_of_theory_ref),
+            }]
             : []),
         ...(firstKinetics?.provenance.primary_software?.software_release_ref
             ? [{ label: "Software (opt / freq / sp / irc)", value: firstKinetics.provenance.primary_software.software_release_ref }]
@@ -306,6 +311,17 @@ function EntryDetail({ record }: { record: ReactionFullRecord }) {
     )
 }
 
+// The "Formula" and "SMILES" columns this table used to carry SEPARATELY
+// are now one "Species" column: since `SpeciesFace` (`../components/
+// Formula.tsx`) already leads with SMILES and brackets the formula after
+// it, a dedicated SMILES column beside it would print the exact same
+// SMILES string twice in one row. Consolidating is the deliberate call
+// here (owner ruling: "SMILES leads, formula follows in brackets",
+// applied generally) -- the Ref column this table's own earlier PR split
+// out from the Formula cell (owner: "we should add a 4th column ... that
+// is the reference rather than it being in the same column as Formula")
+// is untouched: this table still never folds the species-entry ref or
+// its copy button into the identity cell.
 function ParticipantsTable({ label, participants }: {
     label: "Reactants" | "Products"
     participants: ReactionEntrySpeciesParticipant[]
@@ -317,8 +333,7 @@ function ParticipantsTable({ label, participants }: {
                 <table className="data-table" aria-label={`${label === "Reactants" ? "Reactant" : "Product"} participants`}>
                     <thead>
                         <tr>
-                            <th scope="col">Formula</th>
-                            <th scope="col">SMILES</th>
+                            <th scope="col">Species</th>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
                         </tr>
@@ -326,12 +341,11 @@ function ParticipantsTable({ label, participants }: {
                     <tbody>
                         {participants.map((participant) => (
                             <tr key={participant.species_entry_ref}>
-                                <td data-label="Formula">
+                                <td data-label="Species">
                                     <Link to={`/species-entries/${participant.species_entry_ref}`}>
-                                        {participant.formula ? <Formula value={participant.formula} /> : participant.smiles}
+                                        <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
                                     </Link>
                                 </td>
-                                <td data-label="SMILES"><code className="data">{participant.smiles}</code></td>
                                 <td data-label="Ref">
                                     <code className="data">{participant.species_entry_ref}</code>
                                     <CopyButton value={participant.species_entry_ref} label="Species entry" srLabel="reference" />
@@ -372,7 +386,12 @@ function NetworkSection({ state }: { state: NetworksState }) {
                         <tr key={network.network_ref}>
                             <td data-label="Network">{network.name ?? "not recorded"}</td>
                             <td data-label="Ref">
-                                <code className="data">{network.network_ref}</code>
+                                {/* `/networks/:ref` is a real page now (PR 2 of
+                                    `docs/plans/pressure-dependent-network-surface.md`)
+                                    -- this ref used to render as inert `<code>`
+                                    with nothing to click because the route did
+                                    not exist. */}
+                                <Link to={`/networks/${network.network_ref}`}><code className="data">{network.network_ref}</code></Link>
                                 <CopyButton value={network.network_ref} label="Network" srLabel="reference" />
                             </td>
                             <td className="num" data-label="Solve T range">

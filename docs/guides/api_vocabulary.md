@@ -62,9 +62,9 @@ Three things are deliberately absent:
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
-| Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 174 | `backend/app/api/code_catalogue.py` |
-| **total** | **459** | |
+| Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
+| Refusal codes a caller can receive | 180 | `backend/app/api/code_catalogue.py` |
+| **total** | **467** | |
 
 ## How a record is named
 
@@ -242,6 +242,8 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `calculation_type_present` | `computed_calculation` | required | 1 | Calculation.type must be set. |
 | `charge_present` | `computed_transition_state` | required | 1 | transition_state_entry.charge must be set. |
 | `chem_reaction_present` | `computed_transition_state` | optional | 1 | Parent reaction_entry should resolve to a chem_reaction. |
+| `correction_scheme_literature_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme should cite the literature its parameters come from. |
+| `correction_scheme_software_release_present` | `computed_thermo` | optional | 1 | A cited software-scoped correction scheme (atom_energy, bac_petersson, bac_melius) should declare which software release computed its parameters. |
 | `dipole_present` | `computed_transport` | optional | 1 | Dipole evidence should be populated when this representation is present. |
 | `dipole_source_present_if_dipole_present` | `computed_transport` | optional | 1 | Computed dipole transport evidence should link a dipole source calculation. |
 | `epsilon_present` | `computed_transport` | optional | 1 | Lennard-Jones transport should include epsilon/k. |
@@ -660,7 +662,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unknown_statmech_ref` | a thing |
 | `unknown_transition_state_entry_ref` | a thing |
 
-### HTTP 409 (19 codes)
+### HTTP 409 (24 codes)
 
 | Code | Names |
 | --- | --- |
@@ -669,8 +671,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `curation_policy_version_conflict` | a relationship — read `context` |
 | `doi_already_recorded` | a relationship — read `context` |
 | `email_taken` | a thing |
+| `energy_correction_scheme_identity_conflict` | a relationship — read `context` |
+| `energy_correction_scheme_literature_already_set` | a thing |
+| `energy_correction_scheme_software_already_set` | a thing |
+| `energy_correction_scheme_workflow_tool_release_already_set` | a thing |
 | `energy_transfer_scope_columns_disagree` | a relationship — read `context` |
 | `idempotency_conflict` | a relationship — read `context` |
+| `last_admin_demotion` | a thing |
 | `manifest_already_frozen` | a thing |
 | `network_solve_reported_requires_literature` | a thing |
 | `reference_conflict` | a relationship — read `context` |
@@ -684,7 +691,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (131 codes)
+### HTTP 422 (132 codes)
 
 | Code | Names |
 | --- | --- |
@@ -747,6 +754,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `multiple_structure_queries` | a relationship — read `context` |
 | `n_imag_contradicts_minimum` | a relationship — read `context` |
 | `network_channel_key_undeclared` | a thing |
+| `network_kinetics_batch_evaluate_grid_too_large` | a relationship — read `context` |
 | `network_kinetics_evaluate_grid_too_large` | a relationship — read `context` |
 | `network_kinetics_evaluate_invalid_point` | a thing |
 | `network_kinetics_evaluate_missing_pressure` | a thing |

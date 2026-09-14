@@ -29,6 +29,8 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     ProfiledRequestEcho,
     ReviewStatusSummary,
+    SoftwareReleaseSummary,
+    WorkflowToolReleaseSummary,
 )
 
 # ---------------------------------------------------------------------------
@@ -54,7 +56,9 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
     energy_correction_scheme_ref: str
     name: str
     scheme_kind: EnergyCorrectionSchemeKind
-    version: str | None = None
+    #: The unit the parameter table is expressed in, as deposited. Not an
+    #: identity axis (a7d4e2b9c351); a consumer converts with it rather
+    #: than treating two units as two libraries.
     units: EnergyUnit | None = None
     note: str | None = None
     created_at: datetime
@@ -158,6 +162,7 @@ class EnergyCorrectionSchemeEvidenceSummary(BaseModel):
     applied_usage_count: int
     has_applied_usage: bool
     has_literature_source: bool
+    has_software: bool
 
 
 class AvailableEnergyCorrectionSchemeSections(BaseModel):
@@ -178,6 +183,8 @@ class ScientificEnergyCorrectionSchemeRecord(BaseModel):
 
     energy_correction_scheme: EnergyCorrectionSchemeCoreBlock
     level_of_theory: LevelOfTheorySummary | None = None
+    software_release: SoftwareReleaseSummary | None = None
+    workflow_tool_release: WorkflowToolReleaseSummary | None = None
     literature: LiteratureSummary | None = None
     evidence_summary: EnergyCorrectionSchemeEvidenceSummary
     available_sections: AvailableEnergyCorrectionSchemeSections

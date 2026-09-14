@@ -213,12 +213,35 @@ const ALLOWLISTED_UPPERCASE_SELECTORS: Record<string, string[]> = {
     ],
     "index.css": [
         ".accession-rail", // "species" / "entry" / "record"
-        ".identifier-search label", // "Exact species identifier"
+        ".identifier-search label", // "Exact species identifier" / "Exact reaction equation" (mode-dependent, both prose)
         ".destination > span:last-child", // "Coming soon" / "Open catalogue"
         ".brand", // "TCKDB" (already all-caps)
         ".brand span", // "T" (single letter, case-invariant)
         ".eyebrow", // "Archive index" / "Not found" / "Species record · chemical identity" / ...
         ".theme-toggle-option", // "Light" / "Dark" / "System"
+        ".identifier-search-mode-option", // "Species" / "Reactions" (IdentifierSearch.tsx's SearchModeToggle)
+    ],
+    "network-diagram.css": [
+        // `<legend>Layout</legend>` (NetworkDiagram.tsx) -- the literal word
+        // "Layout" on the PES layout-mode chooser. No unit, symbol or
+        // formula. The chemistry labels render inside the SVG and inside
+        // `.net-pes-layout-option`, neither of which this selector reaches.
+        ".net-pes-layout-fieldset legend",
+        // `<legend>{`Saddle points (${shownCount} of ${saddles.length} shown)`}</legend>`
+        // (NetworkDiagram.tsx's NetworkPesChannelFieldset) -- a count
+        // sentence around the literal words "Saddle points", no unit,
+        // symbol or formula. Each channel's own chemistry label
+        // ("[NH-][NH3+] to NN (isomerization)") renders inside a sibling
+        // `.net-pes-channel-option`, not this legend.
+        ".net-pes-channel-fieldset legend",
+    ],
+    "network-ktp-chart.css": [
+        // `<legend>{`Channels (${selectedGroups.length} of ${groups.length} shown)`}</legend>`
+        // (NetworkKtpChart.tsx) -- a count sentence around the literal word
+        // "Channels", no unit/symbol/formula. The channel's own chemistry
+        // label ("NN to [NH-][NH3+]") renders inside a sibling
+        // `.network-ktp-channel-option`, not this legend.
+        ".network-ktp-channel-fieldset legend",
     ],
     "page-shell.css": [
         ".page-toc nav::before", // "On this page" (generated content, not app text)

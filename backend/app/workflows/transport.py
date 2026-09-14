@@ -10,6 +10,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.transport import Transport
 from app.schemas.entities.transport import TransportSourceCalculationCreate
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.transport_upload import TransportUploadRequest
 from app.services.calculation_ownership import (
     W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -36,6 +37,7 @@ def persist_transport_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Transport:
     """Persist a complete standalone transport upload workflow.
 
@@ -98,6 +100,7 @@ def persist_transport_upload(
         species_entry_id=species_entry.id,
         source_calculations=resolved_source_calcs,
         created_by=created_by,
+        warnings_out=warnings_out,
     )
 
     session.flush()

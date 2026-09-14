@@ -373,6 +373,33 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
     })
 })
 
+/**
+ * `letter-spacing` inherits as an already-resolved length, not
+ * recomputed per descendant font-size, so a `.value-pill` sitting
+ * inside a `.t-display-1` heading (`letter-spacing: -.03em`, computed
+ * at THAT heading's own ~64px) used to inherit a fixed ~-1.8px tracking
+ * onto the pill's own 11.52px text -- several characters cramming into
+ * the space of one, measured live as illegible overlapping glyphs on
+ * `CorrectionSchemePage.tsx`'s level-of-theory pill and (unnoticed,
+ * pre-existing) `FrequencyScaleFactorPage.tsx`'s scale-kind pill. Both
+ * `.value-pill` and its `--muted` variant reset it explicitly so
+ * neither can drift back to inheriting a heading's tracking.
+ */
+describe("value-pill/value-pill--muted reset letter-spacing, so a pill inside a display heading never inherits its tracking", () => {
+    it("both declare letter-spacing: normal", () => {
+        // `\.value-pill\s*\{` only matches the BASE rule -- in the chained
+        // `.value-pill.value-pill--muted` selector, `.value-pill` is
+        // immediately followed by another `.`, never whitespace/`{`, so
+        // this pattern cannot match partway into that compound selector.
+        const base = /\.value-pill\s*\{([^}]*)\}/.exec(designSystemCss)
+        const muted = /\.value-pill--muted\s*\{([^}]*)\}/.exec(designSystemCss)
+        expect(base, ".value-pill rule not found").not.toBeNull()
+        expect(muted, ".value-pill.value-pill--muted rule not found").not.toBeNull()
+        expect(base![1]).toMatch(/letter-spacing:\s*normal/)
+        expect(muted![1]).toMatch(/letter-spacing:\s*normal/)
+    })
+})
+
 describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value (post-review pass)", () => {
     // What is true now: the 16rem column width (below) is what fixes all
     // six required routes, and `.data`/`code` inherit `overflow-wrap:

@@ -14,9 +14,11 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, get_write_db, require_admin
+from app.api.errors import not_found
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -27,12 +29,18 @@ from app.db.models.common import (
     MachineReviewStatus,
     SubmissionRecordType,
 )
+from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
+from app.schemas.fragments.refs import SoftwareReleaseRef, WorkflowToolReleaseRef
+from app.schemas.upload_warning import UploadWarning
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.artifact_storage_capacity import (
     append_observation,
     current_full_state,
 )
+from app.services.calculation_resolution import resolve_workflow_tool_release_ref
+from app.services.literature_resolution import resolve_or_create_literature
 from app.services.machine_review import (
     MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
@@ -48,6 +56,10 @@ from app.services.machine_review import (
     run_admin_fake_machine_review,
     start_curator_task_review,
 )
+from app.services.scientific_read.handles import (
+    resolve_energy_correction_scheme_handle,
+)
+from app.services.software_resolution import resolve_software_release_ref
 
 router = APIRouter()
 
@@ -62,6 +74,118 @@ class UserRoleResponse(BaseModel):
     role: AppUserRole
 
 
+class AdminUserResponse(BaseModel):
+    """One account, as an admin managing roles needs to see it.
+
+    Deliberately omits ``email`` and ``orcid``. Role management needs to
+    know *who* someone is, not how to reach them, and this would
+    otherwise be the only route in the archive that serves contact
+    details for every account at once. A bulk personal-data surface is
+    worth not having when nothing needs it.
+
+    ``full_name`` and ``affiliation`` stay: an admin deciding whether to
+    make someone a curator is deciding about a person, and a username
+    alone frequently cannot tell two people apart.
+
+    ``id`` is a raw row id, which the read layer otherwise sweeps out of
+    responses (DR-0028). It is correct here and not an exception being
+    smuggled in: this is an explicitly admin-only schema, and the route
+    that acts on the result -- ``PATCH /admin/users/{user_id}/role`` --
+    is keyed on exactly this id. Withholding it would leave that route
+    uncallable, which is the state this endpoint exists to end.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    username: str
+    full_name: str | None
+    affiliation: str | None
+    role: AppUserRole
+    is_active: bool
+    created_at: datetime
+
+
+@router.get("/users", response_model=PaginatedResponse[AdminUserResponse])
+def list_users(
+    role: AppUserRole | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_db),
+) -> PaginatedResponse[AdminUserResponse]:
+    """List accounts and their roles (admin only).
+
+    This exists because ``PATCH /admin/users/{user_id}/role`` is keyed on
+    a numeric user id and nothing in the API told an admin what those ids
+    were. The role-change route has shipped since v1 and has been
+    callable only by someone willing to read ids out of the database by
+    hand -- which means role management was, in practice, a DB operation
+    wearing an HTTP interface.
+
+    Ordering is by ``username``, which carries a uniqueness constraint
+    and is therefore a total order -- no tie-break needed, and no
+    unstable page boundaries. It is also the thing an admin is scanning
+    for. ``role`` narrows; everything else the caller filters client-side
+    off the returned fields.
+    """
+    filters = []
+    if role is not None:
+        filters.append(AppUser.role == role)
+
+    total = session.scalar(select(func.count()).select_from(AppUser).where(*filters))
+    users = session.scalars(
+        select(AppUser)
+        .where(*filters)
+        .order_by(AppUser.username)
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return PaginatedResponse(
+        items=[
+            AdminUserResponse(
+                id=user.id,
+                username=user.username,
+                full_name=user.full_name,
+                affiliation=user.affiliation,
+                role=user.role,
+                is_active=user.is_active,
+                created_at=user.created_at,
+            )
+            for user in users
+        ],
+        total=total or 0,
+        skip=offset,
+        limit=limit,
+    )
+
+
+_LAST_ADMIN_DEMOTION_CODE = "last_admin_demotion"
+
+
+def _locked_active_admin_ids(session: Session) -> set[int]:
+    """Every active admin's id, with those rows locked for this transaction.
+
+    The caller is a check-then-act: it counts admins and then writes. Two
+    concurrent demotions could each observe "someone else is still an
+    admin" and both commit, leaving the archive with none -- exactly the
+    state the guard exists to prevent, reachable by losing a race.
+
+    Locking every admin row serialises the pair. Ordering by ``id`` is
+    what stops two demotions of two *different* admins from deadlocking:
+    both transactions take the same locks in the same sequence, so the
+    second waits rather than both aborting.
+    """
+    return set(
+        session.scalars(
+            select(AppUser.id)
+            .where(AppUser.role == AppUserRole.admin, AppUser.is_active.is_(True))
+            .order_by(AppUser.id)
+            .with_for_update()
+        ).all()
+    )
+
+
 @router.patch("/users/{user_id}/role", response_model=UserRoleResponse)
 def change_user_role(
     user_id: int,
@@ -69,9 +193,40 @@ def change_user_role(
     _admin: AppUser = Depends(require_admin),
     session: Session = Depends(get_write_db),
 ) -> UserRoleResponse:
+    """Change one account's role (admin only).
+
+    Refuses, with 409 ``last_admin_demotion``, to take ``admin`` from the
+    archive's only active admin. Nothing in the API can grant the role
+    back once nobody holds it, so that single request is unrecoverable
+    in-app: repair means running ``scripts/bootstrap_admin.py`` against
+    the database, which needs shell access to the host.
+
+    The broader rule "an admin may never demote *themselves*" was
+    considered and rejected. It would make this refusal unreachable:
+    authentication requires ``is_active`` and this route requires
+    ``admin``, so the caller is always an active admin, and therefore any
+    demotion of *someone else* leaves at least one admin standing by
+    construction. Shipping both would mean publishing a code no request
+    can produce. Self-demotion while other admins exist is also
+    recoverable -- another admin can restore the role -- so it is the
+    reversible half of the pair and is allowed.
+    """
     user = session.get(AppUser, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found.")
+
+    if user.role is AppUserRole.admin and request.role is not AppUserRole.admin:
+        if not _locked_active_admin_ids(session) - {user_id}:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{_LAST_ADMIN_DEMOTION_CODE}: this is the archive's only "
+                    "active admin, and no route can grant the role back once "
+                    "nobody holds it. Promote another account to admin first, "
+                    "then change this one."
+                ),
+            )
+
     user.role = request.role
     session.flush()
     return UserRoleResponse(id=user.id, username=user.username, role=user.role)
@@ -703,3 +858,218 @@ def clear_artifact_storage_capacity(
         created_by=_admin.id,
     )
     return _capacity_state_response(current_full_state(session))
+
+
+# ---------------------------------------------------------------------------
+# Energy-correction-scheme provenance attach (admin-only, append-only)
+# ---------------------------------------------------------------------------
+#
+# correction-scheme-provenance plan §4.3: the only path that can add a
+# citation or software identity to a scheme deposited before it had one.
+# ``resolve_or_create_scheme`` (the upload path) never mutates an
+# existing row's identity fields -- a differing citation/software makes
+# a *new* row under the widened unique index rather than editing the old
+# one. This route is the deliberate exception: narrow, admin-gated, and
+# append-only per field. It fills a null; it never overwrites a value
+# someone already recorded, so it cannot be used to silently rewrite a
+# scheme's provenance out from under every ``applied_energy_correction``
+# that cites it. ``kind``/``name``/``level_of_theory_id``/``version``/
+# ``units`` are not accepted here on purpose -- rewriting those is a far
+# bigger surface than "attach missing provenance" (``EnergyCorrectionSchemeUpdate``
+# already exists and is deliberately left unrouted for that reason).
+
+
+class AdminEnergyCorrectionSchemeProvenanceRequest(BaseModel):
+    """Provenance to attach to an existing, already-deposited scheme.
+
+    Every field is optional and independent: an admin may fill only the
+    citation, only the software, only the workflow-tool release, or any
+    combination -- whichever the row is missing. Supplying a field whose
+    slot on the row is already non-null is refused (409), never
+    silently ignored or overwritten.
+
+    ``software`` is ``SoftwareReleaseRef`` -- the same release-grained
+    reference ``EnergyCorrectionSchemeRef.software`` already accepts on
+    the upload path (correction-scheme-provenance plan §5.2, PR 3). An
+    admin can now correct a row at the same grain the column has carried
+    since PR 1 (``software_release_id``): "Gaussian 16, Revision C.02",
+    not merely "Gaussian". ``SoftwareReleaseRef`` is a superset of the
+    old name-only ``SoftwareRef`` -- ``{"software": {"name": "Gaussian"}}``
+    still resolves to the version-less release row for that program
+    (§3.2); that is a complete, honest value on its own, not a degraded
+    one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source_literature: LiteratureUploadRequest | None = None
+    software: SoftwareReleaseRef | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+
+class AdminEnergyCorrectionSchemeProvenanceResponse(BaseModel):
+    """Auditable from the response alone: the scheme's own ref plus every
+    resolved provenance ref it now carries (not just the ones this call
+    just set)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    energy_correction_scheme_ref: str
+    source_literature_ref: str | None = None
+    #: Renamed from ``software_ref`` when ``energy_correction_scheme``
+    #: moved from ``software_id`` to ``software_release_id``
+    #: (c24ce2d9c198). The value this field carries changed referent at
+    #: the same moment -- it is now a ``software_release`` public ref
+    #: (``srel_...``), not a ``software`` one (``soft_...``). Keeping the
+    #: old name would have left an admin client silently resolving the
+    #: ref against the wrong table; renaming makes the break visible.
+    software_release_ref: str | None = None
+    workflow_tool_release_ref: str | None = None
+    #: Warnings raised while normalising the supplied refs, in the same
+    #: shape and from the same source the upload path uses.
+    #:
+    #: Widening ``software`` to ``SoftwareReleaseRef`` (PR 3) brought
+    #: ``normalize_composite_version`` onto this route, a validator
+    #: ``SoftwareRef`` never had. It *rewrites* what the admin sent: a
+    #: ``version`` of "Gaussian 16, Revision C.02" is split into
+    #: ``version="16"``/``revision="C.02"``, and a ``name``/``version``
+    #: pair naming two different programs is left alone but flagged.
+    #: Both are exactly the right behaviours and neither may happen
+    #: silently on a route whose entire purpose is *correcting*
+    #: provenance -- an admin who cannot see that their input was
+    #: reshaped cannot tell whether it was reshaped correctly.
+    #:
+    #: The upload path has surfaced these since it gained the validator
+    #: (``uploads.py``, via ``collect_software_release_version_warnings``).
+    #: This route now gives the same answer to the same input rather than
+    #: a quieter one. Raised in review of #461.
+    warnings: list[UploadWarning] = []
+
+
+_ALREADY_SET_CODES: dict[str, str] = {
+    "literature": "energy_correction_scheme_literature_already_set",
+    "software": "energy_correction_scheme_software_already_set",
+    "workflow_tool_release": (
+        "energy_correction_scheme_workflow_tool_release_already_set"
+    ),
+}
+
+
+def _already_set_conflict(field: str) -> HTTPException:
+    code = _ALREADY_SET_CODES[field]
+    return HTTPException(
+        status_code=409,
+        detail=(
+            f"{code}: this scheme already carries a recorded "
+            f"{field.replace('_', ' ')}. This route only fills a missing "
+            "field -- it never overwrites a value someone already "
+            "recorded."
+        ),
+    )
+
+
+@router.patch(
+    "/energy-correction-schemes/{ref}/provenance",
+    response_model=AdminEnergyCorrectionSchemeProvenanceResponse,
+)
+def attach_energy_correction_scheme_provenance(
+    ref: str,
+    request: AdminEnergyCorrectionSchemeProvenanceRequest,
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_write_db),
+) -> AdminEnergyCorrectionSchemeProvenanceResponse:
+    """Fill missing citation/software provenance on a scheme (admin only).
+
+    Path handle accepts an integer ``energy_correction_scheme.id`` or a
+    public ref of the form ``ecs_...``; unknown handles 404. Each of
+    ``source_literature``/``software``/``workflow_tool_release`` is
+    refused with 409 if the corresponding column is already non-null on
+    the row (per-field, not all-or-nothing -- one call can fill the
+    citation on a scheme that already has software recorded, or vice
+    versa). Resolution reuses the exact same services the upload path
+    uses (``resolve_or_create_literature``, ``resolve_software_release_ref``,
+    ``resolve_workflow_tool_release_ref``), so a citation/software
+    release that already exists elsewhere in the archive is reused, not
+    duplicated.
+
+    Mutating these fields on an already-inserted row does not regenerate
+    its public ref -- refs are content-derived only at INSERT time
+    (``PublicRefMixin``), and keeping the ref stable across a
+    provenance-fill matters more than the ref perfectly reflecting the
+    row's current content. If the resulting (kind, name, lot, version,
+    units, literature, software_release, workflow_tool_release) tuple
+    collides with another existing scheme row, the write is refused with
+    409 rather than silently merging two rows' identities.
+    """
+    scheme_id = resolve_energy_correction_scheme_handle(session, ref)
+    scheme = session.get(EnergyCorrectionScheme, scheme_id)
+    if scheme is None:  # pragma: no cover — defended by resolver 404
+        raise not_found(
+            "energy_correction_scheme", row_id=scheme_id, code="handle_not_found"
+        )
+
+    warnings: list[UploadWarning] = []
+
+    if request.source_literature is not None:
+        if scheme.source_literature_id is not None:
+            raise _already_set_conflict("literature")
+        literature = resolve_or_create_literature(
+            session,
+            request.source_literature,
+            warnings_out=warnings,
+            field_prefix="source_literature.",
+        )
+        scheme.source_literature_id = literature.id
+
+    if request.software is not None:
+        if scheme.software_release_id is not None:
+            raise _already_set_conflict("software")
+        # SoftwareReleaseRef resolves at whatever grain the admin supplied;
+        # a bare name (no version/revision/build) resolves to the
+        # version-less release row for that program (see the request
+        # model's docstring).
+        release = resolve_software_release_ref(session, request.software)
+        scheme.software_release_id = release.id
+
+    if request.workflow_tool_release is not None:
+        if scheme.workflow_tool_release_id is not None:
+            raise _already_set_conflict("workflow_tool_release")
+        wtr = resolve_workflow_tool_release_ref(session, request.workflow_tool_release)
+        scheme.workflow_tool_release_id = wtr.id if wtr is not None else None
+
+    try:
+        session.flush()
+    except IntegrityError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "energy_correction_scheme_identity_conflict: attaching this "
+                "provenance would make this scheme identical to another "
+                "existing scheme row."
+            ),
+        ) from exc
+
+    if request.software is not None:
+        software_warning = request.software.version_warning("software.")
+        if software_warning is not None:
+            warnings.append(software_warning)
+
+    return AdminEnergyCorrectionSchemeProvenanceResponse(
+        warnings=warnings,
+        energy_correction_scheme_ref=scheme.public_ref,
+        source_literature_ref=(
+            scheme.source_literature.public_ref
+            if scheme.source_literature_id is not None
+            else None
+        ),
+        software_release_ref=(
+            scheme.software_release.public_ref
+            if scheme.software_release_id is not None
+            else None
+        ),
+        workflow_tool_release_ref=(
+            scheme.workflow_tool_release.public_ref
+            if scheme.workflow_tool_release_id is not None
+            else None
+        ),
+    )

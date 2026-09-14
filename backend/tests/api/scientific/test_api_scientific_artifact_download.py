@@ -178,46 +178,55 @@ def test_approved_artifact_download_returns_verified_bytes(
     assert response.headers["cache-control"] == "private, no-store"
 
 
-def test_nonapproved_artifact_download_is_indistinguishable_from_missing(
+def test_an_unapproved_artifact_is_downloadable_by_any_authenticated_caller(
     client, db_session, monkeypatch, _api_other_user
 ) -> None:
-    """A stranger still cannot tell an unapproved digest from an unknown one.
+    """Rewritten 2026-09-14, when review status stopped gating access.
 
-    Rewritten 2026-08-24. It used to assert that *nobody* could download
-    an unapproved artifact, which was true and was the defect: the
-    depositor was in "nobody". The claim that survives is the narrower and
-    correct one — the refusal applies to a caller who did not deposit it,
-    and it is a 404, not a 403, so the response is not an existence
-    oracle. Asserted by comparing the answer to a digest that genuinely
-    does not exist, which is what a 403 regression could not survive.
+    This test previously asserted the opposite: that a caller who did not
+    deposit the file got a 404 for it. That rule made the hosted
+    instance's evidence unreadable by everyone but its uploader -- 563
+    artifacts, 0 approved, so the "approved" branch had never opened for
+    anybody -- and the archive's own admin could read none of it.
+
+    ADR 0004's argument is about ANONYMOUS access to unredacted logs, and
+    that gate is untouched (see the 401 test below). Review status answers
+    "should you trust this science", which is a different question and is
+    already surfaced as trust badges. It no longer decides who may read
+    the bytes.
+
+    Deposited by somebody else, never reviewed, and the caller gets it.
     """
-    artifact, _content = _downloadable_artifact(
+    artifact, content = _downloadable_artifact(
         db_session,
         status=RecordReviewStatus.under_review,
         deposited_by=_api_other_user,
     )
-    called = False
-
-    def fake_load(*_args, **_kwargs):
-        nonlocal called
-        called = True
-        return b"must not be returned"
-
     monkeypatch.setattr(
-        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        lambda *_a, **_k: content,
     )
+
     response = client.get(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
-    unknown = client.get(f"/api/v1/scientific/artifacts/{'e' * 64}/download")
 
-    assert response.status_code == 404
-    assert called is False
-    # Same status *and* same body: nothing in the answer says "this exists".
-    assert (response.status_code, response.json()) == (
-        unknown.status_code,
-        unknown.json(),
-    ), (response.text, unknown.text)
+    assert response.status_code == 200, response.text
+    assert response.content == content
+
+
+def test_an_unknown_digest_is_still_a_404(client, db_session) -> None:
+    """The one refusal that survives the change.
+
+    Worth keeping explicitly: with the visibility branches gone it would
+    be easy for the resolver to start answering 200 with an empty body
+    for a digest nobody ever stored.
+    """
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{'e' * 64}/download"
+    )
+
+    assert response.status_code == 404, response.text
 
 
 def test_depositor_downloads_their_own_unapproved_artifact(
@@ -286,19 +295,26 @@ def test_submission_owner_downloads_a_deposit_they_did_not_write(
     assert response.content == content
 
 
-def test_a_retired_submission_does_not_carry_download_ownership(
+def test_a_retired_submission_no_longer_changes_a_download(
     client, db_session, monkeypatch, _api_test_user, _api_other_user
 ) -> None:
-    """A rejected submission is no longer live lineage — on both paths.
+    """Rewritten 2026-09-14. The premise dissolved; the case did not.
 
-    The upload route already refuses to let a rejected submission's owner
-    attach artifacts to the calculations it once produced. The download
-    path is the *same* predicate, so it inherits that judgement rather
-    than inventing a second, more generous one. The depositor of the
-    calculation itself is unaffected; what is refused here is authority
-    held only by way of a submission that has been retired.
+    This asserted that authority held only via a REJECTED submission did
+    not extend to downloads -- a sound rule while downloads were gated on
+    ownership at all. They no longer are, so the rejected submission
+    changes nothing here, and asserting that plainly is more useful than
+    deleting the case: it is the strongest available statement that the
+    ownership branch is really gone, since this caller's only possible
+    claim to the file is one the old rule explicitly refused.
+
+    The retired-submission judgement itself is unaffected on the path
+    where it still bites: the UPLOAD route still refuses to let a
+    rejected submission's owner attach artifacts to the calculations it
+    once produced (``app.services.deposit_ownership``, tested with the
+    upload routes).
     """
-    artifact, _content = _downloadable_artifact(
+    artifact, content = _downloadable_artifact(
         db_session,
         status=RecordReviewStatus.not_reviewed,
         deposited_by=_api_other_user,
@@ -316,23 +332,17 @@ def test_a_retired_submission_does_not_carry_download_ownership(
     submission.rejection_reason = "not this time"
     submission.rejected_by = curator.id
     db_session.flush()
-
-    called = False
-
-    def fake_load(*_args, **_kwargs):
-        nonlocal called
-        called = True
-        return b"must not be returned"
-
     monkeypatch.setattr(
-        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        lambda *_a, **_k: content,
     )
+
     response = client.get(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
 
-    assert response.status_code == 404, response.text
-    assert called is False
+    assert response.status_code == 200, response.text
+    assert response.content == content
 
 
 def test_owner_download_still_verifies_stored_bytes(

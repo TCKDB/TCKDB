@@ -413,7 +413,12 @@ describe("ConformerGroupPage", () => {
     // which pairs the entry's served `formula` (RDKit-derived, backend
     // fix) with the discriminator expanded via `stereoChip` ("R" -> "R
     // enantiomer") rather than showing it raw.
-    it("shows the formula plus the EXPANDED label ('R' -> 'R enantiomer') instead of the raw discriminator", async () => {
+    // `getByRole(..., { name })` uses accessible-name computation, which
+    // collapses whitespace between the SMILES `code` and the bracketed-
+    // formula `span` differently from raw `textContent` -- queried by
+    // `href` and asserted on `textContent` here instead (see
+    // `RecordIdentityHeader.test.tsx`'s identical comment).
+    it("shows SMILES-leads-formula-in-brackets plus the EXPANDED label ('R' -> 'R enantiomer') instead of the raw discriminator", async () => {
         const labelledPayload = {
             record: {
                 ...payload.record,
@@ -424,13 +429,13 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        const link = within(identityDl).getByRole("link", { name: "CH3 · R enantiomer" })
-        expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        const link = identityDl.querySelector('a[href="/species-entries/spe_demo"]')!
+        expect(link.textContent).toBe("[CH3] (CH3) · R enantiomer")
         // Never the bare raw token as the whole link text.
-        expect(within(identityDl).queryByRole("link", { name: "R" })).not.toBeInTheDocument()
+        expect(link.textContent).not.toBe("R")
     })
 
-    it("shows the formula alone with no label suffix when the entry has no deposited label", async () => {
+    it("shows SMILES-leads-formula-in-brackets alone with no label suffix when the entry has no deposited label", async () => {
         const noLabelPayload = {
             record: {
                 ...payload.record,
@@ -441,19 +446,21 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        expect(within(identityDl).getByRole("link", { name: "CH3" })).toHaveAttribute("href", "/species-entries/spe_demo")
+        const link = identityDl.querySelector('a[href="/species-entries/spe_demo"]')!
+        expect(link.textContent).toBe("[CH3] (CH3)")
     })
 
     // Unified fallback rule (per this component's own reviewer-flagged
     // duplication fix): when the species SMILES did not parse and the
-    // backend serves no `formula`, the base link text is the entry REF
-    // as `<code className="data">`, never the literal words "Species
-    // entry" -- the `<dt>` beside this `<dd>` already says that.
-    it("falls back to the entry ref, as a data code run, when the species context carries no formula", async () => {
+    // backend serves neither a `formula` nor a `canonical_smiles`, the
+    // base link text is the entry REF as `<code className="data">`,
+    // never the literal words "Species entry" -- the `<dt>` beside this
+    // `<dd>` already says that.
+    it("falls back to the entry ref, as a data code run, when the species context carries no SMILES and no formula", async () => {
         const noFormulaPayload = {
             record: {
                 ...payload.record,
-                species: { ...payload.record.species, formula: null, species_entry_label: null },
+                species: { ...payload.record.species, canonical_smiles: null, formula: null, species_entry_label: null },
             },
         }
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noFormulaPayload)))

@@ -19,20 +19,45 @@ function renderEquation(reactants: EquationParticipantInput[], products: Equatio
 }
 
 describe("ReactionEquation", () => {
-    it("renders each participant's formula with subscripts when formula is served", () => {
+    // The owner's own reported defect, live:
+    // `rxn_fktlilofmrdaylunqva2hbltpq` rendered as "CH3OS <=> CH3OS" because
+    // a formula-only face cannot tell apart a reactant and a product that
+    // share a formula but are different structures (`[CH2]SO`, the carbon
+    // radical, vs `OC[S]`, the sulfur radical). SMILES leads now, so the
+    // two participants must never render the same text -- this is the
+    // regression test for that specific pair, and it is also the invariant
+    // this whole change exists to guarantee: no two DIFFERENT species in
+    // one equation may render identically.
+    it("never renders two structurally different participants identically, even when they share a formula ([CH2]SO vs OC[S])", () => {
+        const { container } = renderEquation(
+            [participant({ species_entry_ref: "spe_reactant", smiles: "[CH2]SO", formula: "CH3OS", participant_index: 0 })],
+            [participant({ species_entry_ref: "spe_product", smiles: "OC[S]", formula: "CH3OS", participant_index: 0 })],
+            true,
+        )
+        const reactantLink = container.querySelector('a[href="/species-entries/spe_reactant"]')!
+        const productLink = container.querySelector('a[href="/species-entries/spe_product"]')!
+        expect(reactantLink.textContent).not.toBe(productLink.textContent)
+        expect(reactantLink.textContent).toBe("[CH2]SO (CH3OS)")
+        expect(productLink.textContent).toBe("OC[S] (CH3OS)")
+    })
+
+    it("leads with SMILES in a data-face code element, formula (subscripted) following in parentheses", () => {
         const { container } = renderEquation(
             [participant({ species_entry_ref: "spe_a", smiles: "O", formula: "H2O", participant_index: 0 })],
             [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
             false,
         )
         const link = container.querySelector('a[href="/species-entries/spe_a"]')!
+        const code = link.querySelector("code.data")
+        expect(code).not.toBeNull()
+        expect(code!.textContent).toBe("O")
         expect(link.querySelector("sub")?.textContent).toBe("2")
-        expect(link.textContent).toBe("H2O")
+        expect(link.textContent).toBe("O (H2O)")
     })
 
-    // The brief's own case: formula absent -> the participant's SMILES,
-    // never the bare species-entry ref, in the data face.
-    it("falls back to the SMILES (not the ref) in a data-face code element when formula is absent", () => {
+    // The brief's own case: formula absent -> the participant's SMILES
+    // stands alone, never the bare species-entry ref, in the data face.
+    it("falls back to the SMILES alone (not the ref) in a data-face code element when formula is absent", () => {
         const { container } = renderEquation(
             [participant({ species_entry_ref: "spe_a", smiles: "[N-]=[NH2+]", formula: null, participant_index: 0 })],
             [participant({ species_entry_ref: "spe_b", smiles: "C", formula: "CH4", participant_index: 0 })],
@@ -42,6 +67,7 @@ describe("ReactionEquation", () => {
         const code = link.querySelector("code.data")
         expect(code).not.toBeNull()
         expect(code!.textContent).toBe("[N-]=[NH2+]")
+        expect(link.textContent).toBe("[N-]=[NH2+]")
         expect(link.textContent).not.toContain("spe_a")
     })
 
@@ -54,9 +80,9 @@ describe("ReactionEquation", () => {
             [participant({ species_entry_ref: "spe_nn", smiles: "NN", formula: "H4N2", participant_index: 0 })],
             true,
         )
-        expect(container.textContent).toContain("2 H2N")
+        expect(container.textContent).toContain("2 [NH2]")
         // The product side has coefficient 1 -- no leading "1 ".
-        expect(container.textContent).not.toContain("1 H4N2")
+        expect(container.textContent).not.toContain("1 NN")
     })
 
     it("uses <wbr> after the + and after the arrow, with a non-breaking space before each", () => {
@@ -134,7 +160,7 @@ describe("ReactionEquation", () => {
 // by every other test in this file, which never passes the prop and
 // still asserts `a[href="/species-entries/..."]` exists.
 describe("ReactionEquation: linkParticipants opt-out", () => {
-    it("linkParticipants=false: renders no <a> element at all, formula/subscripts still present", () => {
+    it("linkParticipants=false: renders no <a> element at all, SMILES/formula/subscripts still present", () => {
         const { container } = render(
             <MemoryRouter>
                 <p>
@@ -149,8 +175,28 @@ describe("ReactionEquation: linkParticipants opt-out", () => {
         )
         expect(container.querySelector("a")).toBeNull()
         expect(container.querySelector("sub")?.textContent).toBe("2")
-        expect(container.textContent).toContain("H2O")
-        expect(container.textContent).toContain("CH4")
+        expect(container.textContent).toContain("O (H2O)")
+        expect(container.textContent).toContain("C (CH4)")
+    })
+
+    // Same collision the linked test above guards, without the per-
+    // participant links `ReactionBrowseRow` opts out of -- the browse row
+    // is exactly the surface the live defect was measured on.
+    it("linkParticipants=false: two participants sharing a formula still render different text", () => {
+        const { container } = render(
+            <MemoryRouter>
+                <p>
+                    <ReactionEquation
+                        linkParticipants={false}
+                        reactants={[participant({ species_entry_ref: "spe_reactant", smiles: "[CH2]SO", formula: "CH3OS", participant_index: 0 })]}
+                        products={[participant({ species_entry_ref: "spe_product", smiles: "OC[S]", formula: "CH3OS", participant_index: 0 })]}
+                        reversible={true}
+                    />
+                </p>
+            </MemoryRouter>,
+        )
+        expect(container.textContent).toContain("[CH2]SO (CH3OS)")
+        expect(container.textContent).toContain("OC[S] (CH3OS)")
     })
 
     it("linkParticipants=false: the SMILES fallback and stereo chip still render as plain text, not swallowed", () => {

@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../calculation-detail.css"
 import { BROWSE_KIND_PATHS } from "../api/browseApi"
-import { lotLabel } from "../api/scientificSchemas"
 import {
     type CalculationArtifact,
     type CalculationConformer,
@@ -25,11 +24,13 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
+import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
@@ -37,6 +38,7 @@ import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { CopyButton, RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { typeLabel } from "../domain/calculationTypeFormat"
+import { correctionSchemePath, frequencyScaleFactorPath } from "../domain/methodsLinks"
 import {
     OPTIMISATION_STAGE_UNKNOWN_KICKER_SUFFIX,
     OPTIMISATION_STAGE_WORDS,
@@ -377,7 +379,20 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // of tse_...". A species entry prefers its formula, rendered through
     // the SAME `Formula` component `RecordIdentityHeader`'s own identity
     // tier uses (subscripted element counts), falling back to the plain
-    // canonical SMILES only when no formula was derived. A TS entry has
+    // canonical SMILES only when no formula was derived.
+    //
+    // Deliberately NOT SMILES-leads-formula-in-brackets (owner ruling,
+    // applied everywhere else a species is shown): this h1 is a sentence
+    // ("Optimisation of C2H4"), not a bare identity chip, and this
+    // calculation belongs to exactly ONE species -- no second participant
+    // for a bare formula to be confused with. `identity.canonicalSmiles`
+    // already renders in this same header's own identity block a few
+    // lines below (`RecordIdentityHeader`'s "SMILES" fact), so leading
+    // the sentence with a long SMILES string ("Optimisation of [CH2]SO
+    // (CH3OS)") would only make the h1 harder to read for no
+    // disambiguation this page did not already have.
+    //
+    // A TS entry has
     // no formula the way a species does, so it falls back through its own
     // ref instead -- never the depositor's own `transition_state.label`
     // (e.g. "TS0"), which this page no longer reads at all (house rule
@@ -499,7 +514,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             simply don't carry. */}
                         <dl className="kv-list record-context">
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                            <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
+                            <div><dt>Level of theory</dt><dd>{lot ? <LevelOfTheoryLink levelOfTheory={lot} /> : "not recorded"}</dd></div>
                             <div>
                                 <dt>Software</dt>
                                 <dd>{softwareLabel(software) ?? "not recorded"}</dd>
@@ -1280,8 +1295,16 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                     <td data-label="Applied value" className="num">{row.applied_value} {row.applied_value_unit}</td>
                                     <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
                                     <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
-                                    <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "not recorded"}</td>
-                                    <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "not recorded"}</td>
+                                    <td data-label="Scheme ref">
+                                        {row.energy_correction_scheme_ref
+                                            ? <Link to={correctionSchemePath(row.energy_correction_scheme_ref)}>{row.energy_correction_scheme_ref}</Link>
+                                            : "not recorded"}
+                                    </td>
+                                    <td data-label="Frequency scale factor ref">
+                                        {row.frequency_scale_factor_ref
+                                            ? <Link to={frequencyScaleFactorPath(row.frequency_scale_factor_ref)}>{row.frequency_scale_factor_ref}</Link>
+                                            : "not recorded"}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1603,6 +1626,7 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                 <th scope="col">Size</th>
                                 <th scope="col">Artifact ref</th>
                                 <th scope="col">SHA-256</th>
+                                <th scope="col">File</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1629,6 +1653,14 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                         is not a downloadable link, so this is the one stable handle for
                                         the bytes this row describes. */}
                                     <td data-label="SHA-256"><code className="data">{row.sha256}</code></td>
+                                    <td data-label="File">
+                                        <ArtifactDownloadButton
+                                            sha256={row.sha256}
+                                            artifactRef={row.artifact_ref}
+                                            filename={row.filename}
+                                            kind={row.kind}
+                                        />
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

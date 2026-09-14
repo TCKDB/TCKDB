@@ -446,20 +446,14 @@ span.browse-row-title {
     }
 }
 
-/* SHOULD-FIX-11/15 (species-entry/browse/chrome residuals re-review):
-   `.browse-row-ts-label` was RETIRED from this selector -- grepped, zero
-   `.tsx` consumers (not even a test). This class was also split across
-   TWO separate rules in this file (this one and a second, further down,
-   overriding `color`/`font-size`/`font-family` on the SAME selector) --
-   consolidated into the one rule below. The content is a species' own
-   SMILES string (`SpeciesBrowseRow.tsx`) -- an identifier, not prose --
-   so it takes `--type-data-font` (mono, the named step for exactly this
-   role) rather than either rule's own bespoke `.84rem`/`.78rem`. */
-.browse-row-smiles {
-    margin: .35rem 0 0;
-    color: var(--muted-2);
-    font: var(--type-data-font);
-}
+/* `.browse-row-smiles` (a species row's own SMILES line, once separate
+   from its title) was RETIRED here (SMILES-leads-formula-in-brackets
+   change): `SpeciesBrowseRow.tsx` now renders SMILES inside its title
+   itself, through `SpeciesFace`, so a second line repeating the same
+   string had zero consumers left -- the same "grepped, zero `.tsx`
+   consumers" bar `.browse-row-ts-label` was retired against just above in
+   this file's own history (SHOULD-FIX-11/15, species-entry/browse/chrome
+   residuals re-review). */
 
 /* Level-of-theory + software line (item 1): the two headline stages
    (opt/sp, falling back to whichever stages exist) plus the software that

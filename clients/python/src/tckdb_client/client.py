@@ -63,6 +63,7 @@ from tckdb_client.scientific_types import (
     LiteratureDetailResponse,
     LiteratureLinkedRecord,
     LiteratureRecordsResponse,
+    NetworkKineticsBatchEvaluateResponse,
     NetworkKineticsEvaluateResponse,
     NetworkKineticsRecord,
     NetworkKineticsSearchResponse,
@@ -2122,6 +2123,71 @@ class TCKDBClient:
             "GET",
             f"/scientific/network-kinetics/{network_kinetics_ref_or_id}/evaluate",
             params=params,
+            authenticated=False,
+        ).data
+
+    def evaluate_network_kinetics_batch(
+        self,
+        network_ref_or_id: int | str,
+        *,
+        temperature_k: list[float],
+        pressure_bar: list[float],
+        profile: str | None = None,
+    ) -> NetworkKineticsBatchEvaluateResponse:
+        """``POST /scientific/networks/{ref}/kinetics/evaluate`` -- one
+        request, every stored fit on the network.
+
+        The network-scoped companion to :meth:`evaluate_network_kinetics`:
+        that method evaluates one stored fit, so a chart covering a whole
+        network would need one call per fit (42 on the live hydrazine
+        network -- 21 channels, each carrying both a Chebyshev and a PLOG
+        fit). This method evaluates every stored fit for the network at
+        one shared ``temperature_k`` x ``pressure_bar`` grid, in one
+        request -- the batch call a k(T,P) chart needs.
+
+        Response is keyed by ``network_kinetics_ref``, **not** by
+        channel: a channel routinely carries more than one fit (a
+        Chebyshev and a PLOG fit on the same channel is the norm on a
+        real network, not an edge case), and the two are never picked,
+        preferred, averaged, or otherwise collapsed into one value --
+        they can disagree materially. Every stored fit's evaluated
+        points are served; each entry also carries its ``channel_key``,
+        composition-hash pair, and ``network_solve_ref`` so a caller can
+        group and label the results honestly without a second request.
+
+        Unlike :meth:`evaluate_network_kinetics`, both ``temperature_k``
+        and ``pressure_bar`` are required lists here, not optional
+        scalars-or-lists -- the grid is shared across every fit the
+        network has, so there is no single-point convenience form to
+        collapse to. Both travel in the JSON body, not the query string
+        (a chart-quality grid across a real network's fit count is
+        larger than this client's other POST-search-form bodies).
+
+        The grid size is capped server-side in two ways: a per-fit cap
+        shared with :meth:`evaluate_network_kinetics`
+        (``network_kinetics_evaluate_grid_too_large``) and an aggregate
+        ``fit_count * grid_size`` cap unique to this endpoint
+        (``network_kinetics_batch_evaluate_grid_too_large``) -- both
+        refused with a coded 422 rather than silently truncated, since
+        this endpoint evaluates every stored fit unconditionally and has
+        no channel filter to shrink ``fit_count`` instead.
+
+        :param network_ref_or_id: Integer id or ``net_…`` ref.
+        :param temperature_k: One or more temperatures, K. Required.
+        :param pressure_bar: One or more pressures, bar. Required.
+        :param profile: Read profile selecting which curated view of the
+            archive this read is answered from (see
+            ``backend/docs/specs/dataset_release_and_profiles.md``).
+            Forwarded like every other typed scientific read method;
+            omitted, the server default applies. Rides the query string,
+            not the JSON body -- the backend resolves it from a
+            router-level dependency that only reads the query.
+        """
+        return self.request_json(
+            "POST",
+            f"/scientific/networks/{network_ref_or_id}/kinetics/evaluate",
+            json={"temperature_k": temperature_k, "pressure_bar": pressure_bar},
+            params={"profile": profile},
             authenticated=False,
         ).data
 

@@ -205,3 +205,41 @@
    this page's own evidence card still renders through it (no tile row
    precedes it here, so it keeps the base `.ledger-summary` rule's default
    top/bottom margin unchanged -- see that rule's own comment). */
+
+/* ---------------------------------------------------------------------
+ * Artifact download (Artifacts section)
+ * ------------------------------------------------------------------ */
+
+.artifact-download {
+    border: 1px solid var(--control-border);
+    border-radius: .35rem;
+    padding: .25rem .6rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.artifact-download:hover:not(:disabled) { background: var(--surface-sunken); }
+.artifact-download:disabled { opacity: .7; cursor: wait; }
+
+.artifact-download:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 1px;
+}
+
+/* Shown instead of the button to a signed-out reader. Raw artifact bytes
+   are gated on every deployment (ADR 0004), so a download control here
+   would be a button whose only outcome is a 401. */
+.artifact-download-note {
+    color: var(--muted);
+    font: var(--type-note-font);
+    white-space: nowrap;
+}
+
+.artifact-download-error {
+    margin: var(--s-2) 0 0;
+    max-width: 24rem;
+}

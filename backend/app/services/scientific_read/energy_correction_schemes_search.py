@@ -23,6 +23,7 @@ from app.db.models.energy_correction import (
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.software import Software, SoftwareRelease
 from app.schemas.reads.scientific_common import ReviewStatusSummary
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeRecord,
@@ -51,10 +52,11 @@ from app.services.scientific_read.internal_ids import (
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "energy_correction_scheme_ref",
     "name",
-    "version",
     "scheme_kind",
     "method",
     "basis",
+    "software",
+    "software_version",
     "literature_ref",
     "has_corrections",
     "used_by_calculation",
@@ -62,14 +64,21 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
 
 # Legacy grouping name for declared filters without a backing path.
 # The service rejects these before querying; none is treated as a no-op.
-_DEFERRED_FILTER_FIELDS: tuple[str, ...] = (
-    "software",
-    "software_version",
-    "used_by_thermo",
-)
+# ``software`` moved out of this group once ``energy_correction_scheme``
+# gained a ``software_id`` column (correction-scheme-provenance plan v1).
+# ``software_version`` moved out too once the release-grain column
+# (``software_release_id``, plan v2 §3-4, PR 1) got a read-side join here
+# (PR 2, plan §10) -- alongside replacing ``_build_software_release_summary``'s
+# fabricated release object with a real one. ``used_by_thermo`` remains
+# deferred: it has no backing path yet.
+_DEFERRED_FILTER_FIELDS: tuple[str, ...] = ("used_by_thermo",)
 
 
-_DEFAULT_SORT_ECHO = "scheme_kind,name,version,id"
+#: Must match the ``order_by`` below. It said ``scheme_kind,name,version,id``
+#: while the query ordered by ``(kind, name, id)`` -- the echo advertised a
+#: sort key the query never applied, which was wrong before
+#: ``a7d4e2b9c351`` removed the column and merely more obvious after.
+_DEFAULT_SORT_ECHO = "scheme_kind,name,id"
 
 
 def search_energy_correction_schemes(
@@ -88,9 +97,10 @@ def search_energy_correction_schemes(
 
     reject_unsupported_filters(
         {
-            "software": request.software,
-            "software_version": request.software_version,
             "used_by_thermo": request.used_by_thermo,
+            # Not deferred -- removed. ``energy_correction_scheme.version``
+            # no longer exists (a7d4e2b9c351).
+            "version": request.version,
         },
         endpoint="/scientific/energy-correction-schemes/search",
     )
@@ -123,8 +133,6 @@ def search_energy_correction_schemes(
         stmt = stmt.where(EnergyCorrectionScheme.kind == request.scheme_kind)
     if request.name is not None:
         stmt = stmt.where(EnergyCorrectionScheme.name == request.name)
-    if request.version is not None:
-        stmt = stmt.where(EnergyCorrectionScheme.version == request.version)
     if request.method is not None or request.basis is not None:
         stmt = stmt.join(
             LevelOfTheory,
@@ -134,6 +142,18 @@ def search_energy_correction_schemes(
             stmt = stmt.where(LevelOfTheory.method == request.method)
         if request.basis is not None:
             stmt = stmt.where(LevelOfTheory.basis == request.basis)
+    if request.software is not None or request.software_version is not None:
+        # ECS stores software_release_id (correction-scheme-provenance plan
+        # v2 §3), so both the program-name filter and the release-grain
+        # version filter join through software_release/software.
+        stmt = stmt.join(
+            SoftwareRelease,
+            SoftwareRelease.id == EnergyCorrectionScheme.software_release_id,
+        ).join(Software, Software.id == SoftwareRelease.software_id)
+        if request.software is not None:
+            stmt = stmt.where(Software.name == request.software)
+        if request.software_version is not None:
+            stmt = stmt.where(SoftwareRelease.version == request.software_version)
     if request.has_corrections is not None:
         ex = or_(
             exists().where(

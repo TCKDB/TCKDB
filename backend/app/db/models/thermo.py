@@ -25,6 +25,7 @@ from app.db.models.common import (
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
+    from app.db.models.energy_correction import AppliedEnergyCorrection
     from app.db.models.group_additivity import AppliedGroupAdditivity
     from app.db.models.literature import Literature
     from app.db.models.software import SoftwareRelease
@@ -189,6 +190,24 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="thermo",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    # Read-only convenience for the trust rubric's correction-scheme
+    # provenance checks (correction-scheme-provenance plan v2 §7 / PR 5).
+    # ``applied_energy_correction`` targets a *species entry*
+    # (``target_species_entry_id``), not a specific thermo row -- a
+    # correction is applied at the species level and any thermo record for
+    # that species entry shares it. This is therefore a join on
+    # ``species_entry_id``, not a real foreign key between the two tables,
+    # so it must stay ``viewonly``: writes go through
+    # ``AppliedEnergyCorrection`` directly (see ``app/workflows/thermo.py``),
+    # never through this relationship.
+    applied_energy_corrections: Mapped[list["AppliedEnergyCorrection"]] = relationship(
+        "AppliedEnergyCorrection",
+        primaryjoin=(
+            "foreign(AppliedEnergyCorrection.target_species_entry_id) "
+            "== Thermo.species_entry_id"
+        ),
+        viewonly=True,
     )
 
     __table_args__ = (

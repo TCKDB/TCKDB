@@ -43,7 +43,6 @@ def list_energy_correction_schemes(
     name: str | None = Query(None),
     level_of_theory_id: int | None = Query(None),
     source_literature_id: int | None = Query(None),
-    version: str | None = Query(None),
 ):
     base = select(EnergyCorrectionScheme.id)
     if kind is not None:
@@ -58,8 +57,6 @@ def list_energy_correction_schemes(
         base = base.where(
             EnergyCorrectionScheme.source_literature_id == source_literature_id
         )
-    if version is not None:
-        base = base.where(EnergyCorrectionScheme.version == version)
 
     total = session.scalar(
         select(func.count()).select_from(base.subquery())
@@ -114,7 +111,7 @@ def list_frequency_scale_factors(
     session: Session = Depends(get_db),
     pagination: PaginationParams = Depends(),
     level_of_theory_id: int | None = Query(None),
-    software_id: int | None = Query(None),
+    software_release_id: int | None = Query(None),
     scale_kind: FrequencyScaleKind | None = Query(None),
     source_literature_id: int | None = Query(None),
     workflow_tool_release_id: int | None = Query(None),
@@ -124,8 +121,10 @@ def list_frequency_scale_factors(
         base = base.where(
             FrequencyScaleFactor.level_of_theory_id == level_of_theory_id
         )
-    if software_id is not None:
-        base = base.where(FrequencyScaleFactor.software_id == software_id)
+    if software_release_id is not None:
+        base = base.where(
+            FrequencyScaleFactor.software_release_id == software_release_id
+        )
     if scale_kind is not None:
         base = base.where(FrequencyScaleFactor.scale_kind == scale_kind)
     if source_literature_id is not None:

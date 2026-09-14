@@ -29,10 +29,14 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
 )
 from app.db.models.literature import Literature
+from app.db.models.software import Software, SoftwareRelease
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
     ReviewStatusSummary,
+    SoftwareReleaseSummary,
+    WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_energy_correction_scheme import (
     AvailableEnergyCorrectionSchemeSections,
@@ -132,6 +136,7 @@ def build_energy_correction_scheme_record(
         applied_usage_count=applied_n,
         has_applied_usage=applied_n > 0,
         has_literature_source=ecs.source_literature_id is not None,
+        has_software=ecs.software_release_id is not None,
     )
     available = AvailableEnergyCorrectionSchemeSections(
         has_corrections=total_terms > 0,
@@ -140,6 +145,10 @@ def build_energy_correction_scheme_record(
     )
 
     lot_summary = _build_lot_summary(session, ecs.level_of_theory_id)
+    sw_summary = _build_software_release_summary(session, ecs.software_release_id)
+    wf_summary = _build_workflow_release_summary(
+        session, ecs.workflow_tool_release_id
+    )
     lit_summary = _build_literature_summary(session, ecs.source_literature_id)
 
     core = EnergyCorrectionSchemeCoreBlock(
@@ -147,7 +156,6 @@ def build_energy_correction_scheme_record(
         energy_correction_scheme_ref=ecs.public_ref,
         name=ecs.name,
         scheme_kind=ecs.kind,
-        version=ecs.version,
         units=ecs.units,
         note=ecs.note,
         created_at=ecs.created_at,
@@ -164,6 +172,8 @@ def build_energy_correction_scheme_record(
     return ScientificEnergyCorrectionSchemeRecord(
         energy_correction_scheme=core,
         level_of_theory=lot_summary,
+        software_release=sw_summary,
+        workflow_tool_release=wf_summary,
         literature=lit_summary,
         evidence_summary=evidence,
         available_sections=available,
@@ -412,6 +422,69 @@ def _build_lot_summary(
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
         label=None,
+    )
+
+
+def _build_software_release_summary(
+    session: Session, software_release_id: int | None
+) -> SoftwareReleaseSummary | None:
+    """ECS stores ``software_release_id`` (correction-scheme-provenance
+    plan v2 §3) -- a real FK to ``software_release``. Build the summary
+    from an actual release→software join; never fabricate one.
+
+    ``FrequencyScaleFactor`` gained the same release grain in its own
+    sibling revision (correction-scheme-provenance plan v2 §6), and
+    ``app.services.scientific_read.frequency_scale_factors`` has a
+    same-named function of the same shape -- kept as a distinct helper
+    rather than merged, since the two surfaces share no base module.
+    """
+    if software_release_id is None:
+        return None
+    row = session.execute(
+        select(
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            SoftwareRelease.version,
+            Software.name,
+        )
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(SoftwareRelease.id == software_release_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    return SoftwareReleaseSummary(
+        software_release_id=row.id,
+        software_release_ref=row.public_ref,
+        software=row.name,
+        version=row.version,
+    )
+
+
+def _build_workflow_release_summary(
+    session: Session, workflow_tool_release_id: int | None
+) -> WorkflowToolReleaseSummary | None:
+    if workflow_tool_release_id is None:
+        return None
+    row = session.execute(
+        select(
+            WorkflowToolRelease.id,
+            WorkflowToolRelease.public_ref,
+            WorkflowToolRelease.version,
+            WorkflowTool.name,
+        )
+        .join(
+            WorkflowTool,
+            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
+        )
+        .where(WorkflowToolRelease.id == workflow_tool_release_id)
+    ).one_or_none()
+    if row is None:
+        return None
+    return WorkflowToolReleaseSummary(
+        workflow_tool_release_id=row.id,
+        workflow_tool_release_ref=row.public_ref,
+        workflow_tool=row.name,
+        version=row.version,
     )
 
 

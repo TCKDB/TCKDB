@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.statmech import Statmech
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.services.calculation_ownership import (
@@ -44,6 +45,7 @@ def persist_statmech_upload(
     *,
     created_by: int | None = None,
     review_policy: ReviewPolicy | None = ReviewPolicy(),
+    warnings_out: list[UploadWarning] | None = None,
 ) -> Statmech:
     """Persist a complete standalone statmech upload workflow.
 
@@ -169,6 +171,7 @@ def persist_statmech_upload(
             key: calc.id for key, calc in calculations_by_key.items()
         },
         created_by=created_by,
+        warnings_out=warnings_out,
     )
 
     # First-class rotational constants (cm⁻¹). These live only on the

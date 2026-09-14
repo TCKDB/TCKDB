@@ -1685,7 +1685,8 @@ Table energy_correction_scheme {
   name text [not null]
   level_of_theory_id bigint [ref: > level_of_theory.id]
   source_literature_id bigint [ref: > literature.id]
-  version text
+  software_release_id bigint [ref: > software_release.id]
+  workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   units EnergyUnit
   note text
   created_at timestamp [not null, default: 'now']
@@ -1694,7 +1695,7 @@ Table energy_correction_scheme {
 
   indexes {
     public_ref [unique, name: 'ix_energy_correction_scheme_public_ref']
-    (kind, name, level_of_theory_id, version) [unique, name: 'uq_energy_correction_scheme_kind_name_lot_version']
+    (kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id) [unique, name: 'uq_energy_correction_scheme_identity']
   }
 
   Note: 'Reusable energy-correction parameter set.'
@@ -1766,7 +1767,7 @@ Table execution_environment_manifest {
 Table frequency_scale_factor {
   id bigint [pk, not null]
   level_of_theory_id bigint [not null, ref: > level_of_theory.id]
-  software_id bigint [ref: > software.id]
+  software_release_id bigint [ref: > software_release.id]
   scale_kind FrequencyScaleKind [not null]
   value double [not null]
   source_literature_id bigint [ref: > literature.id]
@@ -1778,7 +1779,7 @@ Table frequency_scale_factor {
 
   indexes {
     public_ref [unique, name: 'ix_frequency_scale_factor_public_ref']
-    (level_of_theory_id, software_id, scale_kind, value, source_literature_id, workflow_tool_release_id) [unique, name: 'uq_frequency_scale_factor_identity']
+    (level_of_theory_id, software_release_id, scale_kind, value, source_literature_id, workflow_tool_release_id) [unique, name: 'uq_frequency_scale_factor_identity']
   }
 
   checks {

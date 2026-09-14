@@ -112,6 +112,10 @@ class RejectionCode(str, Enum):
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
     EMAIL_TAKEN = "email_taken"
+    ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT = "energy_correction_scheme_identity_conflict"
+    ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET = "energy_correction_scheme_literature_already_set"
+    ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET = "energy_correction_scheme_software_already_set"
+    ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET = "energy_correction_scheme_workflow_tool_release_already_set"
     ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
     EXPORT_SEED_EMPTY = "export_seed_empty"
@@ -135,6 +139,7 @@ class RejectionCode(str, Enum):
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
     KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
+    LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
@@ -153,6 +158,7 @@ class RejectionCode(str, Enum):
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+    NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE = "network_kinetics_batch_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE = "network_kinetics_evaluate_grid_too_large"
     NETWORK_KINETICS_EVALUATE_INVALID_POINT = "network_kinetics_evaluate_invalid_point"
     NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE = "network_kinetics_evaluate_missing_pressure"
@@ -321,6 +327,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE,
         RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT,
         RejectionCode.NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE,
@@ -410,8 +417,13 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
         RejectionCode.DOI_ALREADY_RECORDED,
         RejectionCode.EMAIL_TAKEN,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
+        RejectionCode.LAST_ADMIN_DEMOTION,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
         RejectionCode.REFERENCE_CONFLICT,
@@ -468,6 +480,10 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
     RejectionCode.EMAIL_TAKEN: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET: frozenset({409}),
     RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE: frozenset({409}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
@@ -491,6 +507,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
@@ -509,6 +526,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.NETWORK_KINETICS_BATCH_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_GRID_TOO_LARGE: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_INVALID_POINT: frozenset({422}),
     RejectionCode.NETWORK_KINETICS_EVALUATE_MISSING_PRESSURE: frozenset({422}),

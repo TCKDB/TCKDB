@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { Formula } from "./Formula"
+import { SpeciesFace } from "./Formula"
 import { stereoChip } from "../domain/recordFacets"
 
 /**
@@ -32,49 +32,59 @@ import { stereoChip } from "../domain/recordFacets"
  *
  * So the fix is not to suppress it (that would drop a real, if terse,
  * scientific fact) but to never let it stand ALONE as the entire link
- * text. Link text is the formula (RDKit-derived, TCKDB's own computed
- * fact — the same one this record's own title/h1 already renders
- * elsewhere on the page) followed by the label run through `stereoChip`
- * (the one existing `recordFacets.ts` expansion that applies to a bare
- * compact string like this — `facetChips` needs the four raw axes
- * separately, which none of these three pages' wire shapes serve; only
- * the already-joined `species_entry_label` string reaches this
- * component). `stereoChip("R")` -> "R enantiomer"; anything it does not
- * recognise (a term symbol, an isotope key, a multi-part discriminator)
- * passes through unchanged -- still shown, next to the formula, never as
- * the sole text.
+ * text. Link text is `SpeciesFace` (`./Formula.tsx`: SMILES leads, the
+ * RDKit-derived formula — the same one this record's own title/h1
+ * already renders elsewhere on the page — follows in parentheses)
+ * followed by the label run through `stereoChip` (the one existing
+ * `recordFacets.ts` expansion that applies to a bare compact string like
+ * this — `facetChips` needs the four raw axes separately, which none of
+ * these three pages' wire shapes serve; only the already-joined
+ * `species_entry_label` string reaches this component). `stereoChip("R")`
+ * -> "R enantiomer"; anything it does not recognise (a term symbol, an
+ * isotope key, a multi-part discriminator) passes through unchanged --
+ * still shown, next to the SMILES/formula, never as the sole text.
  *
- * Post-review fix: when there is no formula (an unparseable species
- * SMILES, on any caller), the base text falls back to the entry's own
- * ref as `<code className="data">` -- the same treatment every OTHER ref
- * on these pages gets -- NOT the literal words "Species entry". That
- * fallback existed in an earlier draft and produced "SPECIES ENTRY /
- * Species entry · R enantiomer": the `<dt>` beside this `<dd>` already
- * says "Species entry", so repeating it as the value said nothing a
- * reader didn't already have. A ref is a real, if terse, identifier the
- * same way `EntryStatmechSection.tsx`'s "Species entry: spe_…" rows
- * already treat one.
+ * SMILES leads (owner ruling, applied here even though this link is not
+ * the collision-prone case the ruling's own reported defect was -- two
+ * DIFFERENT species entries never appear side by side through this
+ * component the way two reaction participants can): a bare formula can
+ * still describe more than one structure, so it is never the honest
+ * identity fact on its own, wherever a species is shown.
  *
- * Every caller now reaches the intended "C9H9 · R enantiomer" shape:
- * `ConformerObservationPage`, `ConformerGroupPage`, and
+ * Post-review fix: when there is neither a SMILES nor a formula (an
+ * unparseable species SMILES with formula also absent, on any caller),
+ * the base text falls back to the entry's own ref as `<code
+ * className="data">` -- the same treatment every OTHER ref on these pages
+ * gets -- NOT the literal words "Species entry". That fallback existed in
+ * an earlier draft and produced "SPECIES ENTRY / Species entry · R
+ * enantiomer": the `<dt>` beside this `<dd>` already says "Species
+ * entry", so repeating it as the value said nothing a reader didn't
+ * already have. A ref is a real, if terse, identifier the same way
+ * `EntryStatmechSection.tsx`'s "Species entry: spe_…" rows already treat
+ * one.
+ *
+ * Every caller now reaches the intended "[CH2]SO (CH3OS) · R enantiomer"
+ * shape: `ConformerObservationPage`, `ConformerGroupPage`, and
  * `RecordIdentityHeader` (used by the calculation and geometry pages)
- * all pass this component their own `formula`. The conformer surfaces'
- * `formula` field was a backend gap (their `ConformerSpeciesContext`
- * carried no formula at all, unlike the calculation/geometry payloads'
- * `formula`-bearing shapes) closed alongside this component -- see
+ * all pass this component their own `smiles`/`formula`. The conformer
+ * surfaces' `formula` field was a backend gap (their
+ * `ConformerSpeciesContext` carried no formula at all, unlike the
+ * calculation/geometry payloads' `formula`-bearing shapes) closed
+ * alongside this component -- see
  * `backend/app/services/scientific_read/conformers.py`'s
  * `_build_species_context`. `RecordIdentityHeader` and
  * `ConformerGroupPage` were also switched to call this component
  * directly rather than re-deriving the same expression locally (a
  * duplicate flagged on #375's review).
  */
-export function SpeciesEntryLink({ speciesEntryRef, formula, speciesEntryLabel }: {
+export function SpeciesEntryLink({ speciesEntryRef, smiles, formula, speciesEntryLabel }: {
     speciesEntryRef: string
+    smiles?: string | null
     formula?: string | null
     speciesEntryLabel?: string | null
 }) {
-    const base = formula
-        ? <Formula value={formula} />
+    const base = (smiles || formula)
+        ? <SpeciesFace smiles={smiles} formula={formula} />
         : <code className="data">{speciesEntryRef}</code>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>

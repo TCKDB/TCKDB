@@ -263,9 +263,14 @@ describe("ConformerObservationPage", () => {
         // no-`formula` case, where the base text falls back to the entry
         // REF (`<code className="data">`) instead -- never the literal
         // words "Species entry" (the enclosing <dt> already says that).
+        // Queried by href and asserted on textContent, not accessible
+        // name: `getByRole(..., { name })` collapses the whitespace
+        // between the SMILES `code` and the bracketed-formula `span`
+        // differently from raw `textContent` (see
+        // `RecordIdentityHeader.test.tsx`'s identical comment).
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "CH3 · ground state" })
-        expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
+        const speciesEntryLink = identityHeader.querySelector('a[href="/species-entries/spe_demo"]')!
+        expect(speciesEntryLink.textContent).toBe("[CH3] (CH3) · ground state")
 
         // The conformer-basin link text is always the stable ref now, never
         // the depositor's own `conformer_group.label` (e.g. "conformer_1"
@@ -320,10 +325,11 @@ describe("ConformerObservationPage", () => {
     // Unified fallback rule (per `SpeciesEntryLink`'s own reviewer-flagged
     // duplication fix, shared with `ConformerGroupPage.tsx` and
     // `RecordIdentityHeader.tsx`): when the species SMILES did not parse
-    // and the backend serves no `formula`, the base link text is the
-    // entry REF as `<code className="data">`, never the literal words
-    // "Species entry" -- the enclosing <dt> already says that.
-    it("falls back to the entry ref, as a data code run, when the species context carries no formula", async () => {
+    // and the backend serves neither a `canonical_smiles` nor a
+    // `formula`, the base link text is the entry REF as `<code
+    // className="data">`, never the literal words "Species entry" -- the
+    // enclosing <dt> already says that.
+    it("falls back to the entry ref, as a data code run, when the species context carries no SMILES and no formula", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
             HttpResponse.json({
                 record: mockRecord({
@@ -332,7 +338,7 @@ describe("ConformerObservationPage", () => {
                         species_entry_ref: "spe_demo",
                         species_entry_label: "ground state",
                         formula: null,
-                        canonical_smiles: "not-a-smiles(((",
+                        canonical_smiles: null,
                     },
                 }),
             })

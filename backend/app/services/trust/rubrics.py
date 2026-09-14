@@ -26,6 +26,7 @@ from app.db.models.common import (
     CalculationDependencyRole,
     CalculationQuality,
     CalculationType,
+    EnergyCorrectionSchemeKind,
     KineticsCalculationRole,
     KineticsModelKind,
     ReactionRole,
@@ -38,6 +39,7 @@ from app.db.models.common import (
     TransportCalculationRole,
     ValidationStatus,
 )
+from app.db.models.energy_correction import EnergyCorrectionScheme
 from app.db.models.kinetics import Kinetics
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
@@ -1013,6 +1015,91 @@ def _check_thermo_uncertainty_present(thermo: Thermo) -> EvidenceOutcome:
     return _bool_outcome(
         thermo.h298_uncertainty_kj_mol is not None
         or thermo.s298_uncertainty_j_mol_k is not None
+    )
+
+
+# Kinds whose parameters are the output of a program's own build-level
+# numerics (integration grid, SCF thresholds, basis-set definition) and are
+# therefore release-specific (correction-scheme-provenance plan v2 §3.1,
+# §7). ``atom_hf`` / ``atom_thermal`` / ``soc`` are physical or reference
+# constants -- not a program's output -- so the software axis does not
+# apply to them, and neither does ``isodesmic`` / ``other``, which this
+# rubric does not attempt to classify.
+_SOFTWARE_SCOPED_CORRECTION_SCHEME_KINDS: frozenset[EnergyCorrectionSchemeKind] = (
+    frozenset(
+        {
+            EnergyCorrectionSchemeKind.atom_energy,
+            EnergyCorrectionSchemeKind.bac_petersson,
+            EnergyCorrectionSchemeKind.bac_melius,
+        }
+    )
+)
+
+
+def _thermo_cited_correction_schemes(thermo: Thermo) -> list[EnergyCorrectionScheme]:
+    """Return the distinct correction schemes cited by ``thermo``, if any.
+
+    ``applied_energy_correction`` targets a species entry
+    (``target_species_entry_id``), not a specific thermo row -- a
+    correction is applied at the species level and every thermo record for
+    that species entry shares it (correction-scheme-provenance plan v2
+    §7). Rows sourced from a frequency scale factor rather than a
+    correction scheme (``scheme_id IS NULL``) are excluded: this rubric
+    axis is about scheme self-documentation, not frequency scaling.
+    """
+    schemes_by_id: dict[int, EnergyCorrectionScheme] = {}
+    for applied in thermo.applied_energy_corrections:
+        scheme = applied.scheme
+        if scheme is not None:
+            schemes_by_id[scheme.id] = scheme
+    return list(schemes_by_id.values())
+
+
+def _thermo_software_scoped_correction_schemes(
+    thermo: Thermo,
+) -> list[EnergyCorrectionScheme]:
+    """Return cited schemes whose kind is software-scoped (see above)."""
+    return [
+        scheme
+        for scheme in _thermo_cited_correction_schemes(thermo)
+        if scheme.kind in _SOFTWARE_SCOPED_CORRECTION_SCHEME_KINDS
+    ]
+
+
+def _check_correction_scheme_software_release_present(
+    thermo: Thermo,
+) -> EvidenceOutcome:
+    """A cited software-scoped correction scheme should carry its software release.
+
+    A different axis from the existing source-calculation checks above:
+    those ask whether a correction was *applied* to the record at all;
+    this asks whether the *cited scheme itself* documents which program
+    release computed its parameters (correction-scheme-provenance plan v2
+    §7). ``not_applicable`` -- never a vacuous pass -- when the record
+    cites no scheme, or cites only constant-kind schemes for which the
+    software axis does not apply.
+    """
+    schemes = _thermo_software_scoped_correction_schemes(thermo)
+    if not schemes:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(scheme.software_release_id is not None for scheme in schemes)
+    )
+
+
+def _check_correction_scheme_literature_present(thermo: Thermo) -> EvidenceOutcome:
+    """A cited software-scoped correction scheme should carry its literature citation.
+
+    Same applicability rule as
+    :func:`_check_correction_scheme_software_release_present`:
+    ``not_applicable`` when the record cites no scheme, or cites only
+    constant-kind schemes.
+    """
+    schemes = _thermo_software_scoped_correction_schemes(thermo)
+    if not schemes:
+        return EvidenceOutcome.not_applicable
+    return _bool_outcome(
+        all(scheme.source_literature_id is not None for scheme in schemes)
     )
 
 
@@ -2066,6 +2153,25 @@ COMPUTED_THERMO_V1: EvidenceRubric = EvidenceRubric(
             kind=EvidenceCheckKind.optional,
             explain="At least one thermo uncertainty field should be populated.",
             runner=_check_thermo_uncertainty_present,
+        ),
+        EvidenceCheckSpec(
+            name="correction_scheme_software_release_present",
+            kind=EvidenceCheckKind.optional,
+            explain=(
+                "A cited software-scoped correction scheme (atom_energy, "
+                "bac_petersson, bac_melius) should declare which software "
+                "release computed its parameters."
+            ),
+            runner=_check_correction_scheme_software_release_present,
+        ),
+        EvidenceCheckSpec(
+            name="correction_scheme_literature_present",
+            kind=EvidenceCheckKind.optional,
+            explain=(
+                "A cited software-scoped correction scheme should cite the "
+                "literature its parameters come from."
+            ),
+            runner=_check_correction_scheme_literature_present,
         ),
         EvidenceCheckSpec(
             name="thermo_not_rejected_or_deprecated_if_applicable",

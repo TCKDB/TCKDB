@@ -11,7 +11,12 @@ import { bySummaryText } from "./test/disclosureQueries"
 const speciesRef = "spc_abcde234567abcde234567abcd"
 const speciesRefTwo = "spc_bcdef234567bcdef234567abcde"
 const entryRef = "spe_cdefg234567cdefg234567abcd"
-const server = setupServer()
+// `App` now mounts `AuthProvider`, which probes `GET /auth/me` on every
+// render regardless of which route is under test -- an unmocked 401
+// default keeps every test in this file signed-out (the ordinary case
+// for these public-archive tests) without each one having to know that
+// probe exists.
+const server = setupServer(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
 
 function overviewSpecies(ref = speciesRef) {
     return {
@@ -71,13 +76,14 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "Cl", canonical_smiles: "[Cl]", charge: 0, multiplicity: 2, entries: [] }],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "Cl")
+        await user.type(await screen.findByLabelText("Exact species identifier"), "Cl")
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        // The result reads as chemistry (formula + SMILES), not as the raw
-        // ref -- the ref stays present, but demoted, alongside it.
-        const result = await screen.findByRole("link", { name: /^Cl \[Cl\]/ })
+        // The result reads as chemistry (SMILES leads, formula follows in
+        // parentheses), not as the raw ref -- the ref stays present, but
+        // demoted, alongside it.
+        const result = await screen.findByRole("link", { name: /^\[Cl\] \(Cl\)/ })
         expect(result).toBeVisible()
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(screen.getByText(speciesRef)).toBeVisible()
@@ -88,10 +94,10 @@ describe("public archive shell", () => {
             records: [{ species_ref: speciesRef, formula: "H2O", canonical_smiles: "O", charge: 0, multiplicity: 1, entries: [] }],
         })))
         const user = userEvent.setup(); render(<StrictMode><App /></StrictMode>)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
-        expect(await screen.findByRole("link", { name: /^H2O O /})).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^O \(H2O\)/})).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
         expect(button).toHaveAttribute("aria-busy", "false")
     })
@@ -101,7 +107,7 @@ describe("public archive shell", () => {
             HttpResponse.json({ records: [overviewSpecies()] })
         )))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), speciesRef)
+        await user.type(await screen.findByLabelText("Exact species identifier"), speciesRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
@@ -140,7 +146,7 @@ describe("public archive shell", () => {
             http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [] })),
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), entryRef)
+        await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         // The entry's OWN ref is visible at rest, first in the identity
@@ -170,14 +176,14 @@ describe("public archive shell", () => {
             ] })
         }))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "H2O")
+        await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // Each row reads by its own chemistry, not by an interchangeable ref:
         // the two matches share the same formula prefix but diverge past it,
         // and each keeps its own entry count ("1 entry" vs "0 entries").
-        const result = await screen.findByRole("link", { name: /^H2O O charge 0 · spin singlet \(1\) · 1 entry$/ })
+        const result = await screen.findByRole("link", { name: /^O \(H2O\) charge 0 · spin singlet \(1\) · 1 entry$/ })
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
-        const other = screen.getByRole("link", { name: /^H2O2 OO charge 0 · spin singlet \(1\) · 0 entries$/ })
+        const other = screen.getByRole("link", { name: /^OO \(H2O2\) charge 0 · spin singlet \(1\) · 0 entries$/ })
         expect(other).toBeVisible()
         expect(other).toHaveAttribute("href", `/species/${speciesRefTwo}`)
         // The ref stays present and copyable alongside the chemistry, just demoted.
@@ -192,17 +198,16 @@ describe("public archive shell", () => {
             http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
                 records: [{ species_ref: speciesRef, species_entry_ref: entryRef, smiles: "CCO", charge: 0, multiplicity: 1 }],
             })),
-            // A successful SMILES/InChI/InChIKey match also fires the
-            // reaction-participation lookup (`IdentifierSearch`'s "Reactions
-            // involving …" group) -- this file's server is configured
-            // `onUnhandledRequest: "error"`, so this handler is required for
-            // the test to run at all, not just to assert on.
-            http.get("/api/v1/scientific/reactions/browse", () => HttpResponse.json({
-                records: [], pagination: { offset: 0, limit: 5, returned: 0, total: 0 },
-            })),
+            // Species mode no longer fires a reaction-participation lookup on
+            // its own (that used to be automatic; it is now the explicit
+            // "Also search reactions involving …" cross-link, reaction mode's
+            // job) -- no `/reactions/browse` handler is registered here, and
+            // this file's server is `onUnhandledRequest: "error"`, so a
+            // regression that brought the old automatic fetch back would fail
+            // this test for that reason alone.
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), "smiles:CCO")
+        await user.type(await screen.findByLabelText("Exact species identifier"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
         // The structure-search endpoint never returns a formula (#251): the
         // row leads with SMILES instead and says so honestly, rather than
@@ -224,12 +229,12 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: ref, ...chemistry, charge: 0, multiplicity: 1, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species or reaction identifier")
+        const input = await screen.findByLabelText("Exact species identifier")
         await user.type(input, "H2O"); await user.click(screen.getByRole("button", { name: "Search" }))
         await user.clear(input); await user.type(input, "H2"); await user.click(screen.getByRole("button", { name: "Search" }))
         // The stale, slower "H2O" response must never overwrite the "H2" result.
-        expect(await screen.findByRole("link", { name: /^H2 \[H\]\[H\]/ })).toBeVisible()
-        expect(screen.queryByRole("link", { name: /^H2O O/ })).not.toBeInTheDocument()
+        expect(await screen.findByRole("link", { name: /^\[H\]\[H\] \(H2\)/ })).toBeVisible()
+        expect(screen.queryByRole("link", { name: /^O \(H2O\)/ })).not.toBeInTheDocument()
         cleanup(); await delay(60); expect(window.location.pathname).toBe("/")
     })
 
@@ -241,7 +246,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species or reaction identifier")
+        const input = await screen.findByLabelText("Exact species identifier")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         expect(await screen.findByRole("status")).toHaveTextContent("No exact formula record")
@@ -260,7 +265,7 @@ describe("public archive shell", () => {
             return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species or reaction identifier")
+        const input = await screen.findByLabelText("Exact species identifier")
         const button = screen.getByRole("button", { name: "Search" })
         await user.type(input, "H2O"); await user.click(button)
         await user.clear(input); await user.type(input, "spc_BAD"); await user.click(button)
@@ -285,7 +290,7 @@ describe("public archive shell", () => {
             })
         }))
         const user = userEvent.setup(); render(<App />)
-        const input = await screen.findByLabelText("Exact species or reaction identifier")
+        const input = await screen.findByLabelText("Exact species identifier")
         await user.type(input, "Cl"); await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("button", { name: "Formula" })).toBeVisible()
         await user.clear(input); await user.type(input, "Br")
@@ -293,7 +298,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Br” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        const result = await screen.findByRole("link", { name: /^Br \[Br\]/ })
+        const result = await screen.findByRole("link", { name: /^\[Br\] \(Br\)/ })
         expect(result).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
     })
@@ -331,7 +336,13 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // equation heading, rather than forcing it through this shared table's
     // generic `heading`/`ref` string-equality checks (which assumed the
     // old placeholder's fixed "Reaction" title).
-    ["/methods", "Methods", undefined],
+    //
+    // `/methods` is no longer `RecordPlaceholderPage` either (methods-surface
+    // plan PR 3) -- it is `MethodsIndexPage`, which fires its own three
+    // requests (`level-of-theories/browse`, `meta/software`,
+    // `meta/workflow-tools`) this shared table's per-path handler setup
+    // does not provide. Same treatment as `/reactions` above: its own
+    // dedicated test below instead of a row in this table.
 ]
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
@@ -501,6 +512,45 @@ describe("browse kind paths: each of the four renders BrowsePage with its own ki
         render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         expect(window.location.pathname).toBe(path)
+    })
+})
+
+// `/methods` used to render `RecordPlaceholderPage` (a bare "Methods" h1,
+// no data) -- it is `MethodsIndexPage` now (methods-surface plan PR 3),
+// so it gets its own dedicated test, same treatment `/reactions` got
+// above when IT stopped being the placeholder.
+describe("/methods renders the real methods index, not RecordPlaceholderPage", () => {
+    it("shows the Methods h1 and a level-of-theory row from level-of-theories/browse", async () => {
+        server.use(
+            http.get("/api/v1/scientific/level-of-theories/browse", () => HttpResponse.json({
+                records: [{
+                    level_of_theory: {
+                        level_of_theory_ref: "lot_abc", method: "b3lyp", basis: "def2tzvp",
+                        dispersion: null, solvent: null, lot_hash: "hash1", created_at: "2026-07-21T11:59:29Z",
+                    },
+                    evidence_summary: {
+                        calculation_usage_count: 416, has_correction_schemes: true,
+                        has_frequency_scale_factors: true, distinct_software_count: 1,
+                    },
+                    available_sections: { has_correction_schemes: true, has_frequency_scale_factors: true, has_used_by: true, has_software: true },
+                }],
+                pagination: { offset: 0, limit: 200, returned: 1, total: 1 },
+            })),
+            http.get("/api/v1/scientific/meta/software", () => HttpResponse.json({ results: [{ value: "Gaussian", count: 416 }] })),
+            http.get("/api/v1/scientific/meta/workflow-tools", () => HttpResponse.json({ results: [{ value: "ARC", count: 416 }] })),
+        )
+        window.history.replaceState({}, "", "/methods")
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "Methods" })).toBeVisible()
+        expect(window.location.pathname).toBe("/methods")
+        const lotLink = await screen.findByRole("link", { name: "b3lyp/def2tzvp" })
+        expect(lotLink).toHaveAttribute("href", "/methods/lot_abc")
+        expect(await screen.findByText("Gaussian")).toBeVisible()
+        expect(await screen.findByText("ARC")).toBeVisible()
+        // The old placeholder rendered an h1 literally reading "Methods" too,
+        // but with no `<code>` ref and none of the vocabulary content this
+        // page fetches -- confirming the three fetched rows above render is
+        // what proves this is genuinely `MethodsIndexPage`.
     })
 })
 
@@ -712,7 +762,7 @@ describe("the home-page identifier search recognizes and routes public reference
             }],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `rxn_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Exact species identifier"), `rxn_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByText(`rxn_${REF_BODY}`)).toBeVisible()
         expect(window.location.pathname).toBe(`/reactions/rxn_${REF_BODY}`)
@@ -734,7 +784,7 @@ describe("the home-page identifier search recognizes and routes public reference
             kinetics: [], transition_states: [], calculations: [], networks: [],
         })))
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `rxe_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Exact species identifier"), `rxe_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByText(`rxe_${REF_BODY}`)).toBeVisible()
         expect(window.location.pathname).toBe(`/reaction-entries/rxe_${REF_BODY}`)
@@ -773,7 +823,7 @@ describe("the home-page identifier search recognizes and routes public reference
             })),
         )
         const user = userEvent.setup(); render(<App />)
-        await user.type(await screen.findByLabelText("Exact species or reaction identifier"), `tse_${REF_BODY}`)
+        await user.type(await screen.findByLabelText("Exact species identifier"), `tse_${REF_BODY}`)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
         expect(window.location.pathname).toBe(`/transition-state-entries/tse_${REF_BODY}`)
@@ -787,7 +837,7 @@ describe("unmatched routes (finding #12)", () => {
         expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
         expect(screen.getByText("/this-route-does-not-exist")).toBeVisible()
         // Not the home page, which this route used to silently redirect to.
-        expect(screen.queryByLabelText("Exact species or reaction identifier")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Exact species identifier")).not.toBeInTheDocument()
     })
 
     it("shows the not-found page for a plausible-looking but wrong tab segment, not the first tab", async () => {

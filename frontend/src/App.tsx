@@ -2,26 +2,35 @@ import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes, useParams } from "react-router-dom"
 import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
 import { AppShell } from "./components/AppShell"
+import { AuthProvider } from "./components/AuthProvider"
 import { LoadingPage } from "./components/LoadingPage"
 import { BROWSE_KIND_PATHS } from "./api/browseApi"
 import { isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "./domain/speciesEntrySections"
 
+const AccountPage = lazy(() => import("./pages/AccountPage"))
+const AdminPage = lazy(() => import("./pages/AdminPage"))
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const BrowsePage = lazy(() => import("./pages/BrowsePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
+const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
+const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
+const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
+const LoginPage = lazy(() => import("./pages/LoginPage"))
+const MethodsIndexPage = lazy(() => import("./pages/MethodsIndexPage"))
+const NetworkEntryPage = lazy(() => import("./pages/NetworkEntryPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
 const ReactionEntryPage = lazy(() => import("./pages/ReactionEntryPage"))
 const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
-const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
 const TransitionStateEntryPage = lazy(() => import("./pages/TransitionStateEntryPage"))
 
 function App() {
   return (
+    <AuthProvider>
     <BrowserRouter>
       <Suspense fallback={<LoadingPage />}>
         <Routes>
@@ -108,7 +117,50 @@ function App() {
                 other kind uses. */}
             <Route path={BROWSE_KIND_PATHS.reaction} element={<BrowsePage />} />
             <Route path="/reactions/:reactionRef" element={<ReactionOverviewPage />} />
-            <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
+            {/* PR 2 of `docs/plans/pressure-dependent-network-surface.md` --
+                the record page a `net_...` ref finally has somewhere to
+                link to. `NetworkSection` on `ReactionEntryPage.tsx` used to
+                render that ref as inert `<code>`, with nothing to click,
+                because this route did not exist; it links here now. */}
+            <Route path="/networks/:networkRef" element={<NetworkEntryPage />} />
+            {/* Was `<RecordPlaceholderPage kind="Methods" />` -- the last
+                consumer of that component (see its own file: every other
+                route that used to render it now has a real page). Three
+                more routes below it: `/methods/:lotRef` is the real
+                level-of-theory record page (methods-surface plan §4.2);
+                `/methods/schemes/:ecsRef` and
+                `/methods/frequency-scale-factors/:fsfRef` are the thin
+                anchor pages §4.3 gives the two other dead-ref kinds found
+                on this site (an energy-correction-scheme ref, a
+                frequency-scale-factor ref). No ordering hazard between
+                `/methods/:lotRef` and the two three-segment routes below
+                it -- `/methods/schemes/ecs_…` has one more path segment
+                than `/methods/:lotRef` can ever match, so React Router's
+                ranked matching (specificity, not declaration order) sends
+                it to the right route regardless of which is listed first;
+                listed in this order only because it reads best next to
+                the index above it. */}
+            <Route path="/methods" element={<MethodsIndexPage />} />
+            <Route path="/methods/schemes/:ecsRef" element={<CorrectionSchemePage />} />
+            <Route path="/methods/frequency-scale-factors/:fsfRef" element={<FrequencyScaleFactorPage />} />
+            <Route path="/methods/:lotRef" element={<LevelOfTheoryPage />} />
+            {/* Both render inside the same `AppShell` every public page
+                does -- signing in/managing keys is an ordinary part of
+                this site, not a separate admin shell the way
+                `/admin/machine-review-inspection` below is. `LoginPage`
+                gates nothing itself (it just redirects away once
+                `useAuth()` reports signed-in); `AccountPage` is the one
+                page in this PR that DOES require a session, and redirects
+                to `/login` on its own when there isn't one -- see its own
+                component for why that is not "gating an existing page"
+                (it is a brand-new one). */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/account" element={<AccountPage />} />
+            {/* Role-gated inside the page, not by the router: the component
+                has to distinguish "still probing /auth/me", "signed out",
+                "archive unreachable" and "signed in without the role", and a
+                router-level guard collapses the last two into one redirect. */}
+            <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route
@@ -118,6 +170,7 @@ function App() {
         </Routes>
       </Suspense>
     </BrowserRouter>
+    </AuthProvider>
   )
 }
 

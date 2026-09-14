@@ -1,0 +1,324 @@
+/*
+ * `NetworkDiagram.tsx` -- the network entry page's potential-energy
+ * surface (PES) and its always-rendered accessible table equivalents.
+ * Replaces the earlier force-directed web (states as nodes, channels as
+ * edges, no energy axis) -- see `domain/networkPesLayout.ts`'s own header
+ * comment for the full reasoning behind the switch and this component's
+ * own header comment for the scope decision on what carried over.
+ * Every colour is `var(--token)` (`theme.css.test.ts` enforces this
+ * against every stylesheet in `src/`, this one included).
+ *
+ * FIXED-WIDTH SVG, same pattern as `arrhenius-chart.css`'s own
+ * `.arrhenius-chart-svg` (see that file's header comment for the
+ * accessibility-floor defect this pattern exists to avoid): the
+ * component sets `width`/`height` as real SVG attributes, never scaled
+ * by CSS -- `networkPesLayout.ts`'s own `computeNetworkPesLayout` grows
+ * that width with the number of plotted states, so `.network-diagram`
+ * gives it somewhere to overflow into horizontally instead of cramming.
+ */
+
+.network-diagram {
+    margin: var(--s-4) 0 0;
+    overflow-x: auto;
+}
+
+.network-diagram-svg {
+    display: block;
+    height: auto;
+}
+
+/* ---- Y axis ---- */
+.net-pes-gridline {
+    stroke: var(--line-2);
+    stroke-width: 1;
+}
+.net-pes-axis-line {
+    stroke: var(--line);
+    stroke-width: 1.25;
+}
+.net-pes-tick-label {
+    fill: var(--muted);
+    font: var(--type-data-font);
+    text-anchor: end;
+    dominant-baseline: middle;
+}
+.net-pes-axis-title {
+    margin: .3rem 0 0;
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+}
+.net-pes-axis-title--x {
+    margin-top: .1rem;
+}
+
+/* ---- State levels: kind is a LINE STYLE, never inferred from label text
+   (same "shape/colour is never inferred from text" rule the old node
+   diagram followed, invariant 6/3) ---- */
+.net-pes-level {
+    stroke-width: 4;
+    stroke-linecap: round;
+}
+.net-pes-level-well {
+    stroke: var(--accent);
+}
+.net-pes-level-bimolecular {
+    stroke: var(--muted);
+}
+.net-pes-level-link:hover .net-pes-level-well,
+.net-pes-level-link:focus-visible .net-pes-level-well {
+    stroke: var(--accent-700);
+}
+.net-pes-level-link:hover .net-pes-level-bimolecular,
+.net-pes-level-link:focus-visible .net-pes-level-bimolecular {
+    stroke: var(--ink-2);
+}
+.net-pes-level-link:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
+}
+
+/* Both text runs on a level carry a surface-coloured halo (paint-order
+   trick) so a connector line passing near a label never draws straight
+   through the letters. `composition.state_label`/the computed energy
+   value only -- never `channel_key` (invariant 4) and never
+   `states[].label` (invariant 3). */
+.net-pes-level-label,
+.net-pes-peak-label {
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+    fill: var(--ink);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+.net-pes-level-value {
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
+    fill: var(--muted);
+    paint-order: stroke;
+    stroke: var(--surface);
+    stroke-width: 4px;
+    stroke-linejoin: round;
+}
+/* A level caption's own opaque backing, drawn behind its `<text>` --
+   the per-glyph stroke halo above protects each glyph's own outline but
+   not the GAPS between glyphs, and a y-axis gridline landing close to a
+   caption's own y (purely a coincidence of that state's own energy, not
+   of anything in the x layout) drew straight through those gaps on the
+   live hydrazine archive. This rect blocks anything behind it -- a
+   gridline, a connector leg -- across the caption's full width, not just
+   under each letter. */
+.net-pes-caption-backing {
+    fill: var(--surface);
+}
+
+/* ---- Saddle points: colour = channel.kind, dash = has_kinetics (two
+   independent encodings carried over from the old edge encoding,
+   documented in `NetworkDiagram.tsx`'s own scope-decision comment) ---- */
+.net-pes-connector {
+    /* Overridden by every `.net-pes-connector-*` kind class below (same
+       specificity, later in the cascade) -- this default only shows on
+       the legend's own "no kinetics fit deposited" dash sample, which
+       carries `.net-pes-connector` alone with no kind class. */
+    stroke: var(--muted);
+    stroke-width: 1.8;
+    opacity: 0.75;
+    fill: none;
+    stroke-linejoin: round;
+}
+.net-pes-connector-isomerization {
+    stroke: var(--chart-series-1);
+    stroke-width: 2.75;
+    opacity: 0.95;
+}
+.net-pes-connector-association {
+    stroke: var(--chart-series-3);
+}
+.net-pes-connector-exchange {
+    stroke: var(--chart-series-2);
+}
+/* Any channel kind other than the three enum values measured against the
+   live archive -- a defensive fourth colour, same convention as the old
+   edge diagram's own `.net-edge-other`. */
+.net-pes-connector-other {
+    stroke: var(--chart-series-4);
+}
+.net-pes-saddle-link:hover .net-pes-connector,
+.net-pes-saddle-link:focus-visible .net-pes-connector {
+    opacity: 1;
+    stroke-width: 3.25;
+}
+.net-pes-saddle-link:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 1px;
+}
+/* The TS bar itself -- a short horizontal level, same visual family as a
+   state's own `.net-pes-level`, coloured by `channel.kind` (same
+   `net-pes-connector-*` classes as the sloped legs either side of it) so a
+   saddle reads as one connected mark rather than three separate pieces. */
+.net-pes-ts-bar {
+    stroke-width: 3.25;
+    stroke-linecap: round;
+}
+
+/* Dashed vertical rule separating the connectivity-laid-out state group(s)
+   from the unconnected-states group (module header, "UNCONNECTED
+   STATES") -- decorative only, never carries text of its own. */
+.net-pes-group-divider {
+    stroke: var(--line-2);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+}
+
+/* ---- Legend ---- */
+.net-legend-icon {
+    flex: none;
+    display: block;
+}
+.net-legend-line {
+    flex: none;
+    display: inline-block;
+    width: 1.4rem;
+    height: 2px;
+}
+/* Legend swatches use `background-color`, not `stroke` -- these are plain
+   `<span>`s, not SVG shapes, so the `.net-pes-connector-*` classes above
+   (which set `stroke`, an SVG-only property) do nothing here. Same colour
+   per kind, a different CSS property to reach it. */
+.net-legend-line-isomerization {
+    background: var(--chart-series-1);
+}
+.net-legend-line-association {
+    background: var(--chart-series-3);
+}
+.net-legend-line-exchange {
+    background: var(--chart-series-2);
+}
+.net-legend-line-other {
+    background: var(--chart-series-4);
+}
+
+/* ---- Honest-absence notes: a barrier that WAS deposited but could not be
+   placed (unmatched channel reference, missing endpoint energy, or a
+   forward/reverse disagreement past tolerance -- `networkPesLayout.ts`'s
+   own header comment). Reuses the app's plain `.note` text styling, one
+   per line. ---- */
+.net-pes-excluded-notes {
+    margin: .6rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: .3rem;
+}
+
+/* ---- Accessible-table participant lists ---- */
+.net-participant-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.3rem;
+}
+
+/* Layout-mode chooser. Both modes render identical energies; only the
+   horizontal arrangement differs, which is why the control sits above the
+   plot rather than inside the legend that describes the encoding. */
+.net-pes-layout-fieldset {
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
+    padding: .5rem .9rem .7rem;
+    margin: 0 0 1rem;
+}
+
+.net-pes-layout-fieldset legend {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+    padding: 0 .3rem;
+}
+
+.net-pes-layout-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.4rem;
+}
+
+.net-pes-layout-option {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    font: var(--type-body-font);
+}
+
+.net-pes-layout-note {
+    margin: .5rem 0 0;
+    color: var(--muted);
+}
+
+/* Channel show/hide chooser -- same shape/idiom as
+   `network-ktp-chart.css`'s own `.network-ktp-channel-fieldset` (chip-style
+   checkboxes in a flex-wrapped list under a count-sentence legend). Kept as
+   its own rules rather than importing that file's classes, matching this
+   file's own "one component, one stylesheet" convention (see this file's
+   header comment) -- a component's styling should not depend on another
+   component's stylesheet having loaded first. Styled as a SIBLING of
+   `.net-pes-layout-fieldset` immediately above, not a competing design. */
+.net-pes-channel-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin: 0 0 1rem;
+    padding: .5rem .9rem .7rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
+}
+
+.net-pes-channel-fieldset legend {
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
+    color: var(--muted);
+    padding: 0 .3rem;
+}
+
+.net-pes-channel-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem .75rem;
+}
+
+.net-pes-channel-option {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    font: var(--type-data-font);
+    color: var(--ink-2);
+    cursor: pointer;
+}
+
+.net-pes-channel-option:has(input:checked) {
+    border-color: var(--accent-300);
+    background: var(--accent-50);
+    color: var(--ink);
+}
+
+.net-pes-channel-option input {
+    margin: 0;
+}
+
+/* Invariant 5 (channel-visibility brief): a filtered view states itself,
+   using the same plain-note styling every other honest-absence sentence on
+   this page uses -- no bespoke class needed, but named here for the one
+   spot it needs a touch more emphasis than a bare `.t-body` note. */
+.net-pes-filtered-note {
+    color: var(--muted);
+}
