@@ -120,7 +120,7 @@ pairs) carrying machine concerns. Recommended columns:
 |---|---|
 | `submission_id` | inspection response |
 | `record_type` | inspection record summary |
-| `record_ref` / `record_id` | inspection record summary |
+| `record_public_ref` / `record_id` | inspection record summary |
 | `machine_review_status` | `latest_summary.status` |
 | `highest_severity` | `latest_summary.highest_severity` |
 | `findings_count` | `latest_summary.findings_count` |

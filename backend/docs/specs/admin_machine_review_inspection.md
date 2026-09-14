@@ -126,9 +126,14 @@ Each entry in `record_summaries`
 | Field | Meaning |
 |---|---|
 | `record_type` | The record's controlled `SubmissionRecordType` value, e.g. `kinetics`. |
-| `record_match_key` | The mapping key used by the stack — the stringified internal record id. Named `record_ref` before 2026-09-14, which read as a public ref and was not one. |
 | `record_public_ref` | The record's `public_ref` — the identifier the archive is addressed by — resolved at read time. `null` when the record cannot be named: `applied_energy_correction` has no such column, and the row may have been deleted since the review. |
 | `record_id` | The internal record id (passthrough; admin-only). |
+
+> **Removed 2026-09-14: `record_ref`.** It held the stack's private matching key,
+> under a name that means the *public* ref everywhere else in this API. It is not
+> replaced: on this surface the matching key is always `str(record_id)`
+> (`audit_adapter` keys every link that way and drops links without an id), so
+> publishing it would duplicate `record_id` under a second name.
 | `latest_summary` | The latest machine-review summary for *this record* (see below). |
 | `all_record_reviews_count` | How many machine-review passes mapped to this record across the submission's events. |
 
@@ -241,7 +246,6 @@ or unlinked finding kept as a diagnostic):
   "record_summaries": [
     {
       "record_type": "kinetics",
-      "record_match_key": "101",
       "record_public_ref": "kin_2xq4mzv7ka5rjw3ph6ftnc8yde",
       "record_id": 101,
       "latest_summary": {

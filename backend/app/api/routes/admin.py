@@ -254,36 +254,40 @@ def change_user_role(
 class AdminMachineReviewRecordInspection(BaseModel):
     """Admin-only machine-review projection for one linked record.
 
-    Two different identifiers, deliberately named apart:
-
-    ``record_match_key`` is the private key the machine-review stack groups
-    findings by. In the audit path it is the **stringified internal row id**
-    (the public ref is not available at the audit layer -- see
-    ``audit_adapter``'s "Internal-id addressing"). It is exposed here because
-    this is a debugging surface and a maintainer chasing why a finding did or
-    did not map to a record needs to see the key it was matched on. It is not
-    an identifier anything else answers to.
-
     ``record_public_ref`` is the handle a human follows -- the record's own
     ``public_ref``, resolved at read time, ``null`` when the record cannot be
     named (``applied_energy_correction`` has no such column, and the row may
     have been deleted since the review). See :mod:`app.services.record_refs`.
+    ``record_id`` remains the internal id, acceptable on an admin-only surface
+    (spec §3).
 
-    The field was called ``record_ref`` until 2026-09-14, which read as the
-    public ref: that is what ``record_ref`` means everywhere else in this API
-    (the frequency-scale-factor, level-of-theory, literature,
-    energy-correction-scheme and release read schemas all carry one). This
-    surface was the single outlier, and the admin page rendered a row id under
-    a column headed ``record_ref``. Renamed rather than kept, because adding a
-    real public ref beside it would have made the collision worse, not better
-    -- ``record_ref`` and ``record_public_ref`` side by side read as variants
-    of one thing, with the misleading one first.
+    **A field was removed here, not renamed.** Until 2026-09-14 this carried
+    ``record_ref``, holding the machine-review stack's private *matching key*.
+    That name reads as the public ref -- which is what ``record_ref`` means
+    everywhere else in this API, across six scientific read schemas and the
+    release-admin request bodies -- so the admin page rendered a database row
+    id under a column promising a handle.
+
+    The first fix renamed it to ``record_match_key``. Review showed that field
+    was redundant: on this surface the matching key is **always**
+    ``str(record_id)``. ``audit_adapter`` keys every linked record by
+    ``str(record_id)`` and drops links that have no id, and ``mapping`` gives a
+    matched record its id from that same link -- so a finding citing its own
+    ``record_ref`` reaches ``record_summaries`` only by *equalling* the link
+    key. The two can never differ here. Publishing it would have put a second
+    row-id-shaped value on a page whose point is to stop presenting row ids as
+    handles, and no test could tell the two columns apart.
+
+    So the surface now carries one identifier of each kind: ``record_id`` for
+    the machine, ``record_public_ref`` for the reader. A maintainer chasing a
+    finding that did *not* map is served elsewhere -- unmapped findings never
+    reach ``record_summaries``, and ``mapping`` already quotes the offending
+    ref in ``mapping_warnings``.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     record_type: str
-    record_match_key: str | None = None
     record_public_ref: str | None = None
     record_id: int | None = None
     latest_summary: MachineReviewRecordSummary
@@ -316,18 +320,17 @@ def _to_admin_inspection_response(
 ) -> AdminSubmissionMachineReviewInspectionResponse:
     """Map the private inspection result onto the admin response schema.
 
-    ``record.record_ref`` is the service layer's name for the matching key and
-    stays that way inside ``app.services.machine_review`` -- it is the key
-    ``context_hash`` is computed over, so it cannot be renamed without
-    restaling every stored review. The translation to the published name
-    happens here, at the boundary, and nowhere else.
+    ``record.record_ref`` -- the service layer's matching key -- is deliberately
+    **not** carried across. It stays internal, where it is the key
+    ``context_hash`` is computed over and so cannot be renamed without
+    restaling every stored review, and it is not published because on this
+    surface it always equals ``str(record_id)`` (see the response docstring).
     """
     return AdminSubmissionMachineReviewInspectionResponse(
         submission_id=inspection.submission_id,
         record_summaries=tuple(
             AdminMachineReviewRecordInspection(
                 record_type=record.record_type,
-                record_match_key=record.record_ref,
                 record_public_ref=(
                     None
                     if record.record_id is None

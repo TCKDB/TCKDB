@@ -100,8 +100,13 @@ def resolve_record_public_refs(
 #: alternative -- ``SubmissionRecordType(name)`` inside ``try/except
 #: ValueError`` -- silently swallows ``CodedValidationError``, which subclasses
 #: ``ValueError``. A coded refusal raised anywhere beneath such a handler loses
-#: its ``code`` and ``context``; ``tests/api/test_coded_exception_reraise_gate``
-#: fails the build for exactly that shape, and it caught this one.
+#: its ``code`` and ``context``.
+#:
+#: ``tests/api/test_coded_exception_reraise_gate`` caught exactly that shape on
+#: 2026-09-14, while this helper still lived in ``app/api/routes/admin.py``.
+#: **It would not catch it here:** that gate walks ``backend/app/api`` only, so
+#: moving the helper into the service layer moved it out of the gate's reach.
+#: The lookup below is what keeps the property, not the gate.
 _RECORD_TYPE_BY_VALUE: dict[str, SubmissionRecordType] = {
     record_type.value: record_type for record_type in SubmissionRecordType
 }

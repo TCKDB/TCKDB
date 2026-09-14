@@ -239,9 +239,6 @@ def test_admin_submission_machine_review_inspection_maps_record_finding(
     assert len(body["record_summaries"]) == 1
     record = body["record_summaries"][0]
     assert record["record_type"] == "calculation"
-    # The matching key the projection grouped on: the stringified internal id
-    # in the audit path. Published under a name that says so since 2026-09-14.
-    assert record["record_match_key"] == "9001"
     assert record["record_id"] == 9001
     # 9001 is a fabricated id with no calculation row behind it, so there is
     # nothing to name. `null`, not the row id dressed up as a handle.
@@ -468,19 +465,22 @@ def test_inspection_resolves_the_public_ref_of_a_real_record(
     # Equality with the row's own ref: returning some other species' ref would
     # satisfy any shape check perfectly.
     assert record["record_public_ref"] == species.public_ref
-    # And the match key is still the internal id -- these are two different
-    # things and the endpoint must not collapse them into one.
-    assert record["record_match_key"] == str(species.id)
-    assert record["record_public_ref"] != record["record_match_key"]
+    # And it is a handle, not the row id restated -- the whole point.
+    assert record["record_public_ref"] != str(record["record_id"])
 
 
 def test_inspection_never_publishes_the_old_name(
     client, db_session, login_as, _api_admin_user
 ):
-    """`record_ref` is gone from this surface, not merely duplicated.
+    """`record_ref` is gone from this surface, and nothing stands in for it.
 
-    Leaving the old key in place alongside the new one would keep the page's
-    ambiguity alive and let a consumer carry on reading a row id as a handle.
+    Leaving the old key in place alongside a new one would keep the page's
+    ambiguity alive. Renaming it would have been little better: on this surface
+    the matching key is always ``str(record_id)`` -- ``audit_adapter`` keys
+    every link that way and drops links with no id -- so a second field would
+    restate ``record_id`` under another name, on a page whose whole purpose is
+    to stop presenting row ids as handles. The exact field set is asserted so
+    that reintroducing one fails here.
     """
     species = make_species(db_session)
     submission = _new_submission(db_session, _api_admin_user)
@@ -507,9 +507,9 @@ def test_inspection_never_publishes_the_old_name(
     record = client.get(_url(submission.id)).json()["record_summaries"][0]
 
     assert "record_ref" not in record
+    assert "record_match_key" not in record
     assert set(record) == {
         "record_type",
-        "record_match_key",
         "record_public_ref",
         "record_id",
         "latest_summary",

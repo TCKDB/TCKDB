@@ -7,16 +7,14 @@ import userEvent from "@testing-library/user-event"
 import MachineReviewInspectionPage from "./MachineReviewInspectionPage"
 
 /**
- * The record-summaries table carries two identifiers that are easy to confuse
- * and were confused: `record_match_key` is the private key the machine-review
- * stack grouped the finding by (a stringified database row id in the audit
- * path), and `record_public_ref` is the handle the archive is addressed by.
+ * The record-summaries table used to carry a column headed `record_ref` whose
+ * value was a database row id. `record_ref` means the *public* ref everywhere
+ * else in this API, so the page promised a handle and delivered a row number.
  *
- * Until 2026-09-14 only the first was published, under the name `record_ref` --
- * which is what the public read surfaces call a *public* ref. So this page
- * rendered a row id beneath a heading that promised a handle. These tests pin
- * which value lands in which column, which is the one thing a rename of this
- * kind can silently get wrong.
+ * It now shows `record_public_ref` -- the identifier the archive is addressed
+ * by -- and `record_id`, which an admin-only surface may carry. These tests pin
+ * which value lands in which column, and that a record with no public ref shows
+ * nothing rather than falling back to its id.
  */
 
 const server = setupServer()
@@ -34,84 +32,70 @@ const SUMMARY = {
     submission_id: 7,
 }
 
-function inspectionBody(record: Record<string, unknown>) {
-    return {
-        submission_id: 7,
-        record_summaries: [record],
-        unmapped_findings_count: 0,
-        mapping_warnings: [],
-        parse_warnings: [],
-        source_audit_event_ids: [11],
-    }
-}
+const PUBLIC_REF = "spc_vu7cuk4s37szxaudjpf355tqda"
 
-function renderPage() {
-    const client = new QueryClient({
-        defaultOptions: { queries: { retry: false } },
-    })
-    return render(
-        <QueryClientProvider client={client}>
-            <MachineReviewInspectionPage />
-        </QueryClientProvider>,
+function serve(record: Record<string, unknown>) {
+    server.use(
+        http.get("/api/v1/admin/submissions/7/machine-review-inspection", () =>
+            HttpResponse.json({
+                submission_id: 7,
+                record_summaries: [record],
+                unmapped_findings_count: 0,
+                mapping_warnings: [],
+                parse_warnings: [],
+                source_audit_event_ids: [11],
+            }),
+        ),
     )
 }
 
 async function inspect() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const user = userEvent.setup()
-    renderPage()
+    render(
+        <QueryClientProvider client={client}>
+            <MachineReviewInspectionPage />
+        </QueryClientProvider>,
+    )
     await user.type(screen.getByLabelText(/submission_id/), "7")
     await user.click(screen.getByRole("button", { name: "Inspect" }))
-    return user
 }
 
-/** The record row, as a list of cell texts in column order. */
+/** The record row's cell texts, in column order. */
 async function recordCells(): Promise<string[]> {
     const table = (await screen.findAllByRole("table")).at(-1)!
     const bodyRow = within(table).getAllByRole("row").at(-1)!
-    return within(bodyRow).getAllByRole("cell").map((c) => c.textContent ?? "")
+    return within(bodyRow).getAllByRole("cell").map((c) => (c.textContent ?? "").trim())
 }
 
 describe("the record summaries table", () => {
-    it("puts the public ref and the match key in their own columns", async () => {
-        server.use(
-            http.get(
-                "/api/v1/admin/submissions/7/machine-review-inspection",
-                () => HttpResponse.json(inspectionBody({
-                    record_type: "species",
-                    record_match_key: "431",
-                    record_public_ref: "spc_vu7cuk4s37szxaudjpf355tqda",
-                    record_id: 431,
-                    latest_summary: SUMMARY,
-                    all_record_reviews_count: 1,
-                })),
-            ),
-        )
+    it("shows the public ref and the row id in their own columns", async () => {
+        serve({
+            record_type: "species",
+            record_public_ref: PUBLIC_REF,
+            record_id: 431,
+            latest_summary: SUMMARY,
+            all_record_reviews_count: 1,
+        })
         await inspect()
 
+        // By position, not just presence: a swap leaves both strings on the
+        // page and would satisfy any "is it rendered" check. The two values are
+        // deliberately unlike each other so a swap is visible.
         const cells = await recordCells()
-        // Column order: record_type, record_public_ref, record_match_key, record_id.
-        // Asserting positions, not just presence: a swap would leave both
-        // strings on the page and satisfy any "is it rendered" check.
         expect(cells[0]).toBe("species")
-        expect(cells[1]).toBe("spc_vu7cuk4s37szxaudjpf355tqda")
+        expect(cells[1]).toBe(PUBLIC_REF)
         expect(cells[2]).toBe("431")
-        expect(cells[3]).toBe("431")
     })
 
     it("headings name what the columns hold", async () => {
-        server.use(
-            http.get(
-                "/api/v1/admin/submissions/7/machine-review-inspection",
-                () => HttpResponse.json(inspectionBody({
-                    record_type: "species",
-                    record_match_key: "431",
-                    record_public_ref: "spc_vu7cuk4s37szxaudjpf355tqda",
-                    record_id: 431,
-                    latest_summary: SUMMARY,
-                    all_record_reviews_count: 1,
-                })),
-            ),
-        )
+        serve({
+            record_type: "species",
+            record_public_ref: PUBLIC_REF,
+            record_id: 431,
+            latest_summary: SUMMARY,
+            all_record_reviews_count: 1,
+        })
         await inspect()
 
         const table = (await screen.findAllByRole("table")).at(-1)!
@@ -120,37 +104,32 @@ describe("the record summaries table", () => {
             .map((h) => h.textContent)
 
         expect(headings).toContain("record_public_ref")
-        expect(headings).toContain("record_match_key")
+        expect(headings).toContain("record_id")
         // The old name promised a public ref and delivered a row id.
         expect(headings).not.toContain("record_ref")
+        // Dropped rather than renamed: it was always `String(record_id)`.
+        expect(headings).not.toContain("record_match_key")
     })
 
-    it("a record that cannot be named shows a dash, not its row id", async () => {
+    it("a record that cannot be named shows a dash, never its row id", async () => {
         /**
          * `applied_energy_correction` has no `public_ref` column, so the
-         * backend answers `null`. The column must stay empty rather than fall
-         * back to `record_id` -- a row id under a heading that says "public
-         * ref" is exactly the defect this change removes.
+         * backend answers `null`. Falling back to `record_id` would put a row
+         * id under a heading that says "public ref" -- the exact defect this
+         * page had.
          */
-        server.use(
-            http.get(
-                "/api/v1/admin/submissions/7/machine-review-inspection",
-                () => HttpResponse.json(inspectionBody({
-                    record_type: "applied_energy_correction",
-                    record_match_key: "88",
-                    record_public_ref: null,
-                    record_id: 88,
-                    latest_summary: SUMMARY,
-                    all_record_reviews_count: 1,
-                })),
-            ),
-        )
+        serve({
+            record_type: "applied_energy_correction",
+            record_public_ref: null,
+            record_id: 88,
+            latest_summary: SUMMARY,
+            all_record_reviews_count: 1,
+        })
         await inspect()
 
         const cells = await recordCells()
         expect(cells[1]).not.toBe("88")
-        expect(cells[1].trim()).not.toBe("")
+        expect(cells[1]).not.toBe("")
         expect(cells[2]).toBe("88")
-        expect(cells[3]).toBe("88")
     })
 })

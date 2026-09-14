@@ -368,7 +368,7 @@
       },
       "AdminMachineReviewRecordInspection": {
         "additionalProperties": false,
-        "description": "Admin-only machine-review projection for one linked record.\n\nTwo different identifiers, deliberately named apart:\n\n``record_match_key`` is the private key the machine-review stack groups\nfindings by. In the audit path it is the **stringified internal row id**\n(the public ref is not available at the audit layer -- see\n``audit_adapter``'s \"Internal-id addressing\"). It is exposed here because\nthis is a debugging surface and a maintainer chasing why a finding did or\ndid not map to a record needs to see the key it was matched on. It is not\nan identifier anything else answers to.\n\n``record_public_ref`` is the handle a human follows -- the record's own\n``public_ref``, resolved at read time, ``null`` when the record cannot be\nnamed (``applied_energy_correction`` has no such column, and the row may\nhave been deleted since the review). See :mod:`app.services.record_refs`.\n\nThe field was called ``record_ref`` until 2026-09-14, which read as the\npublic ref: that is what ``record_ref`` means everywhere else in this API\n(the frequency-scale-factor, level-of-theory, literature,\nenergy-correction-scheme and release read schemas all carry one). This\nsurface was the single outlier, and the admin page rendered a row id under\na column headed ``record_ref``. Renamed rather than kept, because adding a\nreal public ref beside it would have made the collision worse, not better\n-- ``record_ref`` and ``record_public_ref`` side by side read as variants\nof one thing, with the misleading one first.",
+        "description": "Admin-only machine-review projection for one linked record.\n\n``record_public_ref`` is the handle a human follows -- the record's own\n``public_ref``, resolved at read time, ``null`` when the record cannot be\nnamed (``applied_energy_correction`` has no such column, and the row may\nhave been deleted since the review). See :mod:`app.services.record_refs`.\n``record_id`` remains the internal id, acceptable on an admin-only surface\n(spec §3).\n\n**A field was removed here, not renamed.** Until 2026-09-14 this carried\n``record_ref``, holding the machine-review stack's private *matching key*.\nThat name reads as the public ref -- which is what ``record_ref`` means\neverywhere else in this API, across six scientific read schemas and the\nrelease-admin request bodies -- so the admin page rendered a database row\nid under a column promising a handle.\n\nThe first fix renamed it to ``record_match_key``. Review showed that field\nwas redundant: on this surface the matching key is **always**\n``str(record_id)``. ``audit_adapter`` keys every linked record by\n``str(record_id)`` and drops links that have no id, and ``mapping`` gives a\nmatched record its id from that same link -- so a finding citing its own\n``record_ref`` reaches ``record_summaries`` only by *equalling* the link\nkey. The two can never differ here. Publishing it would have put a second\nrow-id-shaped value on a page whose point is to stop presenting row ids as\nhandles, and no test could tell the two columns apart.\n\nSo the surface now carries one identifier of each kind: ``record_id`` for\nthe machine, ``record_public_ref`` for the reader. A maintainer chasing a\nfinding that did *not* map is served elsewhere -- unmapped findings never\nreach ``record_summaries``, and ``mapping`` already quotes the offending\nref in ``mapping_warnings``.",
         "properties": {
           "all_record_reviews_count": {
             "default": 0,
@@ -388,17 +388,6 @@
               }
             ],
             "title": "Record Id"
-          },
-          "record_match_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Record Match Key"
           },
           "record_public_ref": {
             "anyOf": [
