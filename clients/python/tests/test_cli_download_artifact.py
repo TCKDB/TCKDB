@@ -296,3 +296,28 @@ def test_a_directory_target_uses_the_derived_name_inside_it(monkeypatch, tmp_pat
         ["download", "artifact", DIGEST, "-o", str(tmp_path)]
     ) == cli.EXIT_OK
     assert (tmp_path / DIGEST).read_bytes() == PAYLOAD
+
+
+def test_the_missing_credential_message_never_echoes_what_was_passed(
+    monkeypatch, tmp_path, capsys
+):
+    """`--api-key-env` takes a variable NAME, but a caller can get that wrong.
+
+    `--api-key-env "$TCKDB_API_KEY"` passes the key itself. Echoing the
+    argument back in the error would then print the secret to stderr,
+    into CI logs and shell scrollback. Naming the default instead is just
+    as actionable and cannot leak.
+    """
+    monkeypatch.setattr(cli, "TCKDBClient", _FakeClient)
+    monkeypatch.delenv("TCKDB_API_KEY", raising=False)
+    secret = "tck_pretend_this_is_a_real_key"
+
+    rc = cli.main_tckdb([
+        "download", "artifact", DIGEST, "--api-key-env", secret,
+        "-o", str(tmp_path / "x"),
+    ])
+
+    assert rc == cli.EXIT_FAILURES
+    err = capsys.readouterr().err
+    assert secret not in err
+    assert "TCKDB_API_KEY" in err

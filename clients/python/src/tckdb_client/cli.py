@@ -822,8 +822,16 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         # unconditionally, per ADR 0004, because unredacted logs can carry
         # producer-side paths and hostnames. Saying so here beats letting
         # the caller discover it as a 401.
+        #
+        # The message deliberately does NOT echo `--api-key-env` back.
+        # That argument is a variable NAME, but nothing stops a confused
+        # caller passing the key itself (`--api-key-env "$TCKDB_API_KEY"`),
+        # and echoing it would then print the secret to stderr, where it
+        # lands in CI logs and shell scrollback. Naming the default is
+        # just as actionable and cannot leak anything.
         print(
-            f"error: API key env var {args.api_key_env!r} is not set. "
+            "error: no API key found. Set TCKDB_API_KEY, or pass "
+            "--api-key-env naming the variable that holds it. "
             "Artifact downloads require authentication.",
             file=sys.stderr,
         )

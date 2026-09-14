@@ -565,6 +565,9 @@ paths, usernames and cluster hostnames, so the gate has no opt-out
 export TCKDB_API_KEY=tck_...
 ```
 
+`--api-key-env` names a *different variable* to read the key from; it
+never takes the key itself.
+
 From the command line:
 
 ```bash
