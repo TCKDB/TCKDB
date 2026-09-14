@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
@@ -11,6 +11,17 @@ const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup() })
 afterAll(() => server.close())
+
+// The page also renders `StorageCapacityPanel`, which reads its own
+// endpoint on mount. These tests are about accounts and roles, so the
+// store is quiet by default -- without this the panel's failed read adds
+// a second `role="alert"` and the row-error assertions below become
+// ambiguous. `StorageCapacityPanel.test.tsx` covers the panel itself.
+beforeEach(() => {
+    server.use(http.get("/api/v1/admin/artifact-storage/capacity", () => HttpResponse.json({
+        storage_full: false, storage_full_observed_at: null, s3_code: null, refused_bytes: null,
+    })))
+})
 
 const admin = {
     id: 1, username: "calvin", email: "calvin@example.com", full_name: "Calvin Pieters",

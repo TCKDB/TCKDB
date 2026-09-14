@@ -40,3 +40,24 @@ export const UserRoleChangeSchema = z.object({
     role: AppUserRoleSchema,
 })
 export type UserRoleChange = z.infer<typeof UserRoleChangeSchema>
+
+/**
+ * `GET /admin/artifact-storage/capacity` -- whether the object store is
+ * currently refusing writes for want of room.
+ *
+ * Every field but `storage_full` is null when nothing is outstanding, and
+ * that is the honest shape: there is no "last checked" timestamp because
+ * the endpoint reports the head of an append-only log, not a probe it
+ * just ran. A UI that invented "checked just now" would be claiming a
+ * measurement nobody took.
+ *
+ * Carries no row ids, digests or bucket names by design (DR-0028 Req. 2
+ * applies to operational reports as much as to error bodies).
+ */
+export const StorageCapacityStateSchema = z.object({
+    storage_full: z.boolean(),
+    storage_full_observed_at: z.string().nullable().default(null),
+    s3_code: z.string().nullable().default(null),
+    refused_bytes: z.number().int().nullable().default(null),
+})
+export type StorageCapacityState = z.infer<typeof StorageCapacityStateSchema>
