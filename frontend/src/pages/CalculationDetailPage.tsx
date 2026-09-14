@@ -24,6 +24,7 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { ArtifactDownloadButton } from "../components/ArtifactDownloadButton"
 import { CalculationDependencyGraph } from "../components/CalculationDependencyGraph"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
@@ -1625,6 +1626,7 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                 <th scope="col">Size</th>
                                 <th scope="col">Artifact ref</th>
                                 <th scope="col">SHA-256</th>
+                                <th scope="col">File</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1651,6 +1653,13 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                                         is not a downloadable link, so this is the one stable handle for
                                         the bytes this row describes. */}
                                     <td data-label="SHA-256"><code className="data">{row.sha256}</code></td>
+                                    <td data-label="File">
+                                        <ArtifactDownloadButton
+                                            sha256={row.sha256}
+                                            artifactRef={row.artifact_ref}
+                                            filename={row.filename}
+                                        />
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

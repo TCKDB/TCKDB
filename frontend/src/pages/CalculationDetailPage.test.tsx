@@ -1,8 +1,9 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
+import { AuthProvider } from "../components/AuthProvider"
 import CalculationDetailPage from "./CalculationDetailPage"
 import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
@@ -14,6 +15,15 @@ import "../design-system.css"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+
+// The page's `AuthProvider` probes /auth/me on mount. A 401 is the state
+// these tests are about -- they assert what a PUBLIC reader sees, so the
+// Artifacts section should show "Sign in to download" and no button.
+// Without a handler, `onUnhandledRequest: "error"` fails every test here
+// for a reason that has nothing to do with what they check.
+beforeEach(() => {
+    server.use(http.get("/api/v1/auth/me", () => new HttpResponse(null, { status: 401 })))
+})
 afterEach(() => {
     server.resetHandlers()
     cleanup()
@@ -22,13 +32,21 @@ afterAll(() => server.close())
 
 const ENDPOINT = "/api/v1/scientific/calculations/calc_freq_one"
 
+// `AuthProvider` because the Artifacts section's download control asks
+// whether anyone is signed in -- the real app always has one (App.tsx
+// wraps the whole router), so rendering the page without it was the test
+// harness diverging from production, not the page gaining a dependency.
+// Handlers below answer /auth/me as signed-out, which is the state these
+// tests are about: they assert what a public reader sees.
 function page() {
     return render(
-        <MemoryRouter initialEntries={["/calculations/calc_freq_one"]}>
-            <Routes>
-                <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
-            </Routes>
-        </MemoryRouter>,
+        <AuthProvider>
+            <MemoryRouter initialEntries={["/calculations/calc_freq_one"]}>
+                <Routes>
+                    <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
+                </Routes>
+            </MemoryRouter>
+        </AuthProvider>,
     )
 }
 
@@ -1621,11 +1639,13 @@ describe("CalculationDetailPage", () => {
     describe("headline energy", () => {
         function pageFor(ref: string) {
             return render(
-                <MemoryRouter initialEntries={[`/calculations/${ref}`]}>
-                    <Routes>
-                        <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
-                    </Routes>
-                </MemoryRouter>,
+                <AuthProvider>
+                    <MemoryRouter initialEntries={[`/calculations/${ref}`]}>
+                        <Routes>
+                            <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
+                        </Routes>
+                    </MemoryRouter>
+                </AuthProvider>,
             )
         }
 
