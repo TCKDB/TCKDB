@@ -141,3 +141,87 @@
     color: var(--muted);
     font: var(--type-note-font);
 }
+
+
+/* ---------------------------------------------------------------------------
+   Curator queue
+   ---------------------------------------------------------------------------
+   Severity is what a curator scans the queue for, so it is the one column that
+   gets emphasis.
+
+   `critical` and `warning` share `--warning` and differ by weight, rather than
+   taking a second colour. `auth.css` already settled this: the theme has only
+   `--warning`, and inventing an "error" token beside it was considered and
+   rejected there. Repeating that choice here keeps one severity colour in the
+   palette instead of two that have to be kept in step.
+
+   `info` takes `--muted` on purpose. An informational finding is present, not
+   urgent; colouring it like the other two makes a queue of nothing-much read
+   as alarming, which is how a reader learns to ignore the column. */
+.severity-critical {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.severity-warning {
+    color: var(--warning);
+}
+
+.severity-info {
+    color: var(--muted);
+}
+
+.admin-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-4);
+    margin: var(--s-4) 0;
+}
+
+/* `index.css` resets every anchor to `color: inherit; text-decoration: none`
+   and each context restyles its own links, so without these rules the nav
+   renders as plain prose -- two admin pages nobody can tell are clickable.
+   Screenshotted before this rule existed; that is exactly how it looked.
+   Matched to `.record-breadcrumbs a`, the nearest existing case of "a small
+   row of in-page links", rather than inventing a third link treatment. */
+.admin-nav a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.admin-nav a:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.admin-nav a:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 2px;
+}
+
+.admin-filter {
+    margin: var(--s-4) 0;
+}
+
+.admin-record-type {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+/* The close form opens inside a table cell, so it is constrained rather than
+   free to widen the column and reflow every other row while a curator types. */
+.admin-resolve {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    margin-top: var(--s-3);
+    max-width: 22rem;
+}
+
+.admin-hint {
+    margin: 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}

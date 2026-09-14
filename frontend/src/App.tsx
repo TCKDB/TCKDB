@@ -15,6 +15,7 @@ const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage")
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
 const CorrectionSchemePage = lazy(() => import("./pages/CorrectionSchemePage"))
+const CuratorQueuePage = lazy(() => import("./pages/CuratorQueuePage"))
 const FrequencyScaleFactorPage = lazy(() => import("./pages/FrequencyScaleFactorPage"))
 const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const LevelOfTheoryPage = lazy(() => import("./pages/LevelOfTheoryPage"))
@@ -161,6 +162,7 @@ function App() {
                 "archive unreachable" and "signed in without the role", and a
                 router-level guard collapses the last two into one redirect. */}
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/curator-queue" element={<CuratorQueuePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route
