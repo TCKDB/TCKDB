@@ -35,6 +35,7 @@ from app.db.models.submission import (
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
+from app.db.models.thermo import Thermo
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
@@ -416,6 +417,117 @@ class TestRecordReviewApi:
         rows = resp.json()
         assert rows
         assert all(r["status"] == "not_reviewed" for r in rows)
+
+    def test_a_review_row_names_its_record_by_public_ref(self, client, db_session):
+        """The queue's whole job is "go and look at this record".
+
+        ``record_id`` alone cannot be pasted into a URL or looked up
+        through any public route, so a reviewer holding only that has
+        nothing to act on. This is the same gap #479 closed on the
+        machine-review inspection surface.
+        """
+        thermo_id = self._seed_thermo(client)
+        resp = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}")
+        assert resp.status_code == 200
+        body = resp.json()
+
+        ref = body["record_public_ref"]
+        assert ref, "thermo carries PublicRefMixin, so a ref must resolve"
+        # Not the row id wearing a different name -- the two are
+        # deliberately compared, because falling back to the id is exactly
+        # the defect this field exists to prevent.
+        assert ref != str(thermo_id)
+        assert body["record_id"] == thermo_id
+        # And it is THIS record's ref, read back from the record itself.
+        # "a plausible-looking ref came back" is a weaker claim than "the
+        # right ref came back", and only the second is worth anything to a
+        # reviewer about to click it.
+        assert ref == db_session.get(Thermo, thermo_id).public_ref
+
+    def test_the_list_route_names_every_row_it_returns(self, client, db_session):
+        """Resolved for a whole page, not just for the single-row read.
+
+        A list that omitted the ref would send a reviewer to the detail
+        route for every row just to learn what each row is about.
+        """
+        first = self._seed_thermo(client)
+        second = self._seed_thermo(client)
+        resp = client.get(
+            "/api/v1/record-reviews",
+            params={"record_type": "thermo", "status": "not_reviewed", "limit": 50},
+        )
+        assert resp.status_code == 200
+        rows = {r["record_id"]: r for r in resp.json()}
+
+        for record_id in (first, second):
+            assert record_id in rows, "seeded row missing from the listing"
+            ref = rows[record_id]["record_public_ref"]
+            assert ref, f"row {record_id} came back unnamed"
+            assert ref != str(record_id)
+            # Each row must carry ITS OWN record's ref. Checking only that
+            # the refs are non-null and distinct lets a mapper that pairs
+            # refs to rows positionally through: the listing is ordered
+            # newest-first and the ref lookup comes back id-ascending, so
+            # the two orders really do differ and every row would name its
+            # neighbour. A reviewer would click the row they were asked to
+            # review and land on a different record -- worse than a null.
+            assert ref == db_session.get(Thermo, record_id).public_ref
+        # Two records, two distinct refs -- a mapper that resolved one ref
+        # and reused it for the page would pass every check above.
+        assert rows[first]["record_public_ref"] != rows[second]["record_public_ref"]
+
+    def test_a_row_whose_record_cannot_be_named_is_still_listed(
+        self, client, db_session
+    ):
+        """Unnameable is not a reason to hide the work.
+
+        Two records cannot produce a ref: ``applied_energy_correction``
+        has no ``public_ref`` column at all (task #253), and a row may
+        point at a record that no longer exists. Either way the review is
+        outstanding and a queue that quietly drops it understates the
+        backlog -- the one thing a backlog must not do.
+        """
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.thermo,
+                record_id=9_999_999,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews",
+            params={"record_type": "thermo", "status": "not_reviewed", "limit": 200},
+        )
+        assert resp.status_code == 200
+        rows = {r["record_id"]: r for r in resp.json()}
+
+        assert 9_999_999 in rows, "an unnameable row was dropped from the queue"
+        assert rows[9_999_999]["record_public_ref"] is None
+
+    def test_the_ref_survives_a_curator_transition(
+        self, client, login_as, _api_curator_user
+    ):
+        """PATCH answers with the same shape the reads do.
+
+        A client that re-renders a row from the PATCH reply would lose the
+        record's name on every approval if this route were the one that
+        forgot to resolve it.
+        """
+        thermo_id = self._seed_thermo(client)
+        before = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}").json()
+
+        login_as(_api_curator_user)
+        resp = client.patch(
+            f"/api/v1/record-reviews/thermo/{thermo_id}",
+            json={"status": "approved"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "approved"
+        assert body["record_public_ref"] == before["record_public_ref"]
+        assert body["record_public_ref"]
 
     def test_patch_requires_curator(self, client):
         thermo_id = self._seed_thermo(client)

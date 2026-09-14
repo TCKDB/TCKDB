@@ -288,6 +288,14 @@ row id still needs one to write. Resolvable — accept a ref and resolve
 server-side — but it is a decision, and it is the same seam #478/#479 have been
 working along.
 
+**Updated by #484.** Half of that is now closed: every record-review *response*
+— the list, the single read, and the PATCH reply — carries `record_public_ref`
+beside `record_id`, so a UI can name and link the record it is asking somebody
+to review. The other half stands: the PATCH is still *addressed* by row id in
+the path, so a page reads a ref and writes an id. That asymmetry is tolerable
+while the surface is admin/curator-only and the id never reaches the screen,
+and it is the thing to revisit if these routes ever serve a wider audience.
+
 ---
 
 ## 5. The gap list, ranked by distance from the number under review

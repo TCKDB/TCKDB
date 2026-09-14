@@ -22,9 +22,14 @@ from app.api.deps import (
 )
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.record_review import RecordReview
 from app.schemas.entities.record_review import (
     RecordReviewRead,
     RecordReviewSetStatusRequest,
+)
+from app.services.record_refs import (
+    resolve_record_public_ref,
+    resolve_record_public_refs,
 )
 from app.services.record_review import (
     get_record_review,
@@ -33,6 +38,30 @@ from app.services.record_review import (
 )
 
 router = APIRouter()
+
+
+def _read(row: RecordReview, record_public_ref: str | None) -> RecordReviewRead:
+    """Pure mapper: the ref is supplied, never looked up here.
+
+    Keeping the lookup out is what lets the list route resolve a whole page
+    in one query per record type instead of one query per row. The same
+    split is why ``_to_curator_task_response`` exists in ``admin.py``.
+    """
+    return RecordReviewRead.model_validate(row).model_copy(update={"record_public_ref": record_public_ref})
+
+
+def _read_many(session: Session, rows: list[RecordReview]) -> list[RecordReviewRead]:
+    """Map a page, resolving every row's ref in one pass."""
+    refs = resolve_record_public_refs(session, [(row.record_type, row.record_id) for row in rows])
+    return [_read(row, refs.get((row.record_type, row.record_id))) for row in rows]
+
+
+def _read_one(session: Session, row: RecordReview) -> RecordReviewRead:
+    """The single-row form: resolve this one record's ref, then map."""
+    return _read(
+        row,
+        resolve_record_public_ref(session, record_type=row.record_type, record_id=row.record_id),
+    )
 
 
 @router.get("", response_model=list[RecordReviewRead])
@@ -53,7 +82,7 @@ def list_reviews(
         limit=pagination.limit,
         offset=pagination.skip,
     )
-    return [RecordReviewRead.model_validate(r) for r in rows]
+    return _read_many(session, rows)
 
 
 @router.get(
@@ -72,15 +101,13 @@ def read_review(
     should treat that as ``not_reviewed`` if and only if they have
     independently confirmed the underlying record exists).
     """
-    row = get_record_review(
-        session, record_type=record_type, record_id=record_id
-    )
+    row = get_record_review(session, record_type=record_type, record_id=record_id)
     if row is None:
         raise HTTPException(
             status_code=404,
             detail="No review row found for this record.",
         )
-    return RecordReviewRead.model_validate(row)
+    return _read_one(session, row)
 
 
 @router.patch(
@@ -110,4 +137,4 @@ def set_status(
         submission_id=body.submission_id,
         note=body.note,
     )
-    return RecordReviewRead.model_validate(row)
+    return _read_one(session, row)
