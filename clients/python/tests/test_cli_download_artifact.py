@@ -142,10 +142,12 @@ def test_an_unreadable_artifact_exits_not_found_and_says_why(
 
     assert rc == cli.EXIT_NOT_FOUND
     err = capsys.readouterr().err
-    # Both reasons, because the caller cannot tell them apart and the
-    # difference changes what they do next.
-    assert "not in the archive" in err
-    assert "not one of your own deposits" in err
+    # One reason since 2026-09-14. A 404 used to also cover "exists, but
+    # not approved and not yours", so the message had to name both and the
+    # caller could not tell which applied. Authentication is the whole gate
+    # now, so this can be taken literally.
+    assert "is in the archive" in err
+    assert "deposits" not in err
 
 
 def test_a_connection_failure_is_a_plain_failure(

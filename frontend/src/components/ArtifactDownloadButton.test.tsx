@@ -114,7 +114,7 @@ describe("downloading", () => {
 })
 
 describe("when the archive refuses", () => {
-    it("a 404 names both reasons, because the reader cannot tell them apart", async () => {
+    it("a 404 now says one thing, because there is only one thing left to say", async () => {
         signedIn()
         server.use(http.get(DOWNLOAD, () =>
             HttpResponse.json({ code: "not_found", detail: "x", context: {} }, { status: 404 })))
@@ -123,8 +123,11 @@ describe("when the archive refuses", () => {
         await userEvent.click(await screen.findByRole("button", { name: "Download" }))
 
         const alert = await screen.findByRole("alert")
-        expect(alert).toHaveTextContent(/not in the archive/i)
-        expect(alert).toHaveTextContent(/not one of your own deposits/i)
+        // Until 2026-09-14 a 404 also covered "exists, but not approved and
+        // not yours", so the copy had to name both and the reader could not
+        // tell which applied. Authentication is the whole gate now.
+        expect(alert).toHaveTextContent(/no file with that digest is in the archive/i)
+        expect(alert.textContent).not.toMatch(/deposits|approved/i)
     })
 
     it("a 502 says retrying will not help, because it is a recorded custody break", async () => {
