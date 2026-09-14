@@ -1,0 +1,96 @@
+/* `/admin` -- accounts and roles.
+ *
+ * Deliberately thin. The table composes `.data-table` and `.table-scroll`
+ * from `design-system.css` unmodified, the same way `auth.css` does, so
+ * this file only styles what is genuinely new here: the page wrapper, the
+ * role control, and the two row annotations. Every colour is a token --
+ * `theme.css` is the one place a literal is allowed, and `theme.css.test.ts`
+ * enforces it across every stylesheet in `src/`.
+ */
+
+.admin-page {
+    max-width: 68rem;
+    margin: 0 auto;
+    padding-block: var(--s-5);
+    padding-inline: var(--s-4);
+}
+
+.admin-lede {
+    margin: 0 0 var(--s-4);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.admin-count {
+    margin: 0 0 var(--s-2);
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+/* `.data-table th` is written for COLUMN headers: small-caps, muted, the
+   label typeface. Applied to a `<th scope="row">` it uppercases the cell
+   contents -- and this table's row header is a username, which is the
+   reader's own data, not UI chrome. It rendered "CALVIN" for an account
+   named `calvin`, misstating the value it exists to show. `auth.css`
+   makes the identical argument for its own field labels.
+
+   The row-header semantics are worth keeping (a screen reader announces
+   the username with each cell in the row), so the markup stays `<th>`
+   and only the presentation is put back. MEASURED by rendering the real
+   markup against the real stylesheets in headless Chrome -- jsdom
+   applies no CSS, so no test in this suite could see it. */
+.admin-page .data-table tbody th {
+    color: var(--ink);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+    text-transform: none;
+}
+
+.admin-role-select {
+    padding: var(--s-2);
+    border: 1px solid var(--control-border);
+    border-radius: .4rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-value-font);
+}
+
+.admin-role-select:disabled {
+    opacity: .6;
+    cursor: wait;
+}
+
+.admin-role-select:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 1px;
+}
+
+/* Marks the signed-in admin's own row. Not decoration: the one refusal
+   this page can provoke -- removing the last admin -- is almost always
+   someone acting on themselves, and a row you cannot tell is yours is a
+   row you can change by accident. */
+.admin-you {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+.admin-inactive {
+    color: var(--warning);
+    font: var(--type-note-font);
+}
+
+.admin-absent {
+    color: var(--faint);
+    font: var(--type-note-font);
+}
+
+.admin-row-error {
+    margin: var(--s-2) 0 0;
+    max-width: 22rem;
+}
+
+.admin-truncated {
+    margin: var(--s-3) 0 0;
+    color: var(--muted);
+    font: var(--type-note-font);
+}
