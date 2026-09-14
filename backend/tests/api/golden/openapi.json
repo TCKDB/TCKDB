@@ -65073,7 +65073,7 @@
             "description": "Authentication required."
           },
           "404": {
-            "description": "No artifact with this digest is approved, and none of the caller's own deposits carries it."
+            "description": "No artifact with this digest is in the archive."
           },
           "422": {
             "content": {

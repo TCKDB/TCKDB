@@ -52,14 +52,12 @@ function messageFor(status: number, code: string | undefined): { message: string
         return { message: "Sign in to download stored files.", retryable: false }
     }
     if (status === 404) {
-        // Two reasons, deliberately both: the reader cannot tell them
-        // apart and the difference changes what they do next.
-        return {
-            message:
-                "This file is not available to you. It is either not in the archive, "
-                + "or not yet approved and not one of your own deposits.",
-            retryable: false,
-        }
+        // One reason now. Until 2026-09-14 a 404 here also covered "exists,
+        // but not approved and not yours", so the message had to name both
+        // and the reader could not tell which applied. Authentication is the
+        // whole gate now, so a signed-in reader seeing this can take it
+        // literally: the archive has no file with that digest.
+        return { message: "No file with that digest is in the archive.", retryable: false }
     }
     if (status === 502) {
         return {

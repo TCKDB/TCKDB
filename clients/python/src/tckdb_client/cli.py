@@ -862,10 +862,11 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         return EXIT_FAILURES
     except TCKDBHTTPError as exc:
         if exc.status_code == 404:
+            # One reason since 2026-09-14. A 404 used to also mean "exists,
+            # but not approved and not yours", so the message had to name
+            # both. Authentication is the whole gate now.
             print(
-                f"error: no artifact {args.sha256} is readable by this "
-                "credential. It is either not in the archive, or not "
-                "approved and not one of your own deposits.",
+                f"error: no artifact {args.sha256} is in the archive.",
                 file=sys.stderr,
             )
             return EXIT_NOT_FOUND
