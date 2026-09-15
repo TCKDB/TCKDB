@@ -51,6 +51,18 @@ type LoadState =
 /** The open transition form, for the one row it belongs to. */
 type Draft = { rowId: number; status: RecordReviewStatus; note: string }
 
+/**
+ * A refusal, carrying enough to name its record after the row is gone.
+ *
+ * The commonest refusal is a state conflict -- somebody else moved the
+ * record -- and the re-read that follows drops the row out of the
+ * default `not_reviewed` view. Keyed only by row id and rendered only
+ * inside the table, the message then vanished together with the row: the
+ * curator pressed the button, the row disappeared, and nothing was ever
+ * said. Carrying the label lets the message survive its row.
+ */
+type RowError = { message: string; recordLabel: string }
+
 const PAGE_LIMIT = 50
 
 /** A stable key for a row: the review row's own id. */
@@ -63,9 +75,10 @@ export default function ReviewQueuePage() {
     const [statusFilter, setStatusFilter] = useState<RecordReviewStatus | "all">(
         "not_reviewed",
     )
+    const [offset, setOffset] = useState(0)
     const [load, setLoad] = useState<LoadState>({ status: "loading" })
     const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
-    const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, string>>(new Map())
+    const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, RowError>>(new Map())
     const [draft, setDraft] = useState<Draft | null>(null)
 
     const role = state.status === "signed-in" ? state.user.role : null
@@ -80,6 +93,11 @@ export default function ReviewQueuePage() {
         filterRef.current = statusFilter
     }, [statusFilter])
 
+    const offsetRef = useRef(offset)
+    useEffect(() => {
+        offsetRef.current = offset
+    }, [offset])
+
     const requestSeq = useRef(0)
 
     const refresh = useCallback(async (options?: { keepRows?: boolean }) => {
@@ -90,6 +108,7 @@ export default function ReviewQueuePage() {
             const page = await listRecordReviews({
                 ...(current === "all" ? {} : { status: current }),
                 limit: PAGE_LIMIT,
+                offset: offsetRef.current,
             })
             if (seq !== requestSeq.current) return
             setLoad({
@@ -112,7 +131,7 @@ export default function ReviewQueuePage() {
 
     useEffect(() => {
         if (canReview) void refresh()
-    }, [canReview, refresh, statusFilter])
+    }, [canReview, refresh, statusFilter, offset])
 
     if (state.status === "loading") {
         return (
@@ -146,19 +165,43 @@ export default function ReviewQueuePage() {
         )
     }
 
-    function setRowError(rowId: number, message: string | null) {
+    function setRowError(rowId: number, error: RowError | null) {
         setRowErrors((current) => {
             const next = new Map(current)
-            if (message === null) next.delete(rowId)
-            else next.set(rowId, message)
+            if (error === null) next.delete(rowId)
+            else next.set(rowId, error)
             return next
         })
+    }
+
+    /** How to name a record in a message that may outlive its row. */
+    function labelOf(row: RecordReview): string {
+        return row.record_public_ref ?? `${row.record_type} (unnamed)`
+    }
+
+    /**
+     * The transitions this curator can actually perform on this row.
+     *
+     * The service refuses to let an actor approve a record they
+     * deposited (`record_review.py`'s self-approval guard), and the page
+     * holds both facts -- `created_by` on the row and the signed-in
+     * user's id. Offering "approved" there is a button that can only
+     * fail, which is the very thing mirroring the transition table was
+     * for.
+     */
+    function offeredTransitions(row: RecordReview): readonly RecordReviewStatus[] {
+        const all = allowedTransitions(row.status)
+        const ownDeposit =
+            state.status === "signed-in" &&
+            row.created_by !== null &&
+            row.created_by === state.user.id
+        return ownDeposit ? all.filter((s) => s !== "approved") : all
     }
 
     /** Open the transition form for one row, or shut it. Always starts blank. */
     function toggleDraft(row: RecordReview) {
         const rowId = keyOf(row)
-        const first = allowedTransitions(row.status)[0]
+        const first = offeredTransitions(row)[0]
         setDraft((current) =>
             current?.rowId === rowId || first === undefined
                 ? null
@@ -181,12 +224,13 @@ export default function ReviewQueuePage() {
             await refresh({ keepRows: true })
         } catch (caught) {
             const saved = caught instanceof RecordReviewResponseError
-            setRowError(
-                rowId,
-                saved || caught instanceof AuthApiError
-                    ? caught.message
-                    : "That did not go through. Nothing was changed.",
-            )
+            setRowError(rowId, {
+                message:
+                    saved || caught instanceof AuthApiError
+                        ? caught.message
+                        : "That did not go through. Nothing was changed.",
+                recordLabel: labelOf(row),
+            })
             if (saved) {
                 setDraft((current) => (current?.rowId === rowId ? null : current))
             }
@@ -222,9 +266,14 @@ export default function ReviewQueuePage() {
                     id="review-filter"
                     className="admin-role-select"
                     value={statusFilter}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                        // Back to the first page: an offset carried over
+                        // from a longer view lands mid-way through a
+                        // shorter one, showing a curator page three of a
+                        // two-page list and calling it empty.
+                        setOffset(0)
                         setStatusFilter(e.target.value as RecordReviewStatus | "all")
-                    }
+                    }}
                 >
                     <option value="all">every record</option>
                     {ALL_STATUSES.map((s) => (
@@ -241,6 +290,22 @@ export default function ReviewQueuePage() {
                     {load.message}
                 </p>
             )}
+
+            {load.status === "ready" &&
+                [...rowErrors.entries()]
+                    .filter(([rowId]) => !load.rows.some((r) => keyOf(r) === rowId))
+                    .map(([rowId, error]) => (
+                        // The row this refusal was about is no longer in
+                        // view -- almost always because the re-read that
+                        // followed found somebody else had moved it out of
+                        // this filter. Saying nothing here is how a curator
+                        // presses a button, watches a row vanish, and never
+                        // learns why.
+                        <p key={rowId} className="auth-error" role="alert">
+                            {error.recordLabel}: {error.message} It is no longer
+                            in this view.
+                        </p>
+                    ))}
 
             {load.status === "ready" && load.unreadable > 0 && (
                 <p className="auth-error" role="alert">
@@ -263,10 +328,30 @@ export default function ReviewQueuePage() {
                 <>
                     <p className="admin-count" role="status">
                         {load.rows.length} shown
+                        {offset > 0 ? `, from ${offset + 1}` : ""}
                         {load.full
                             ? ", a full page — there are more than this, and this page cannot say how many"
                             : ""}
                     </p>
+                    <div className="admin-paging">
+                        {/* The list is newest-first, so without paging the
+                            oldest deposits -- the actual backlog -- are
+                            unreachable until the newest are cleared. */}
+                        <button
+                            type="button"
+                            disabled={offset === 0}
+                            onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
+                        >
+                            Newer
+                        </button>{" "}
+                        <button
+                            type="button"
+                            disabled={!load.full}
+                            onClick={() => setOffset(offset + PAGE_LIMIT)}
+                        >
+                            Older
+                        </button>
+                    </div>
                     <div className="table-scroll">
                         <table className="data-table" aria-label="Record reviews">
                             <thead>
@@ -285,7 +370,23 @@ export default function ReviewQueuePage() {
                                         row.record_public_ref,
                                     )
                                     const rowBusy = busy.has(rowId)
-                                    const options = allowedTransitions(row.status)
+                                    const options = offeredTransitions(row)
+                                    // What the form will actually send. A
+                                    // re-read can change a row's status
+                                    // under an open form, leaving the held
+                                    // choice no longer among the options --
+                                    // and a controlled <select> whose value
+                                    // matches nothing displays the FIRST
+                                    // option. The select then showed one
+                                    // state, the hint described it, and
+                                    // submitting sent a third. Deriving all
+                                    // three from one value removes the
+                                    // disagreement rather than papering it.
+                                    const chosen =
+                                        draft?.rowId === rowId &&
+                                        options.includes(draft.status)
+                                            ? draft.status
+                                            : options[0]
                                     const cls = statusClass(row.status)
                                     return (
                                         <tr key={rowId}>
@@ -342,7 +443,7 @@ export default function ReviewQueuePage() {
                                                         className="auth-error admin-row-error"
                                                         role="alert"
                                                     >
-                                                        {rowErrors.get(rowId)}
+                                                        {rowErrors.get(rowId)?.message}
                                                     </p>
                                                 )}
                                                 {draft?.rowId === rowId && (
@@ -351,7 +452,10 @@ export default function ReviewQueuePage() {
                                                         className="admin-resolve"
                                                         onSubmit={(e) => {
                                                             e.preventDefault()
-                                                            void submit(row, draft)
+                                                            void submit(row, {
+                                                                ...draft,
+                                                                status: chosen,
+                                                            })
                                                         }}
                                                     >
                                                         <label htmlFor={`st-${rowId}`}>
@@ -360,7 +464,7 @@ export default function ReviewQueuePage() {
                                                         <select
                                                             id={`st-${rowId}`}
                                                             className="admin-role-select"
-                                                            value={draft.status}
+                                                            value={chosen}
                                                             onChange={(e) =>
                                                                 setDraft({
                                                                     ...draft,
@@ -376,7 +480,7 @@ export default function ReviewQueuePage() {
                                                             ))}
                                                         </select>
                                                         <p className="admin-hint">
-                                                            {statusMeaning(draft.status)}
+                                                            {statusMeaning(chosen)}
                                                         </p>
                                                         <label htmlFor={`note-${rowId}`}>
                                                             Why (required)

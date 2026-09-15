@@ -77,6 +77,15 @@ function otherReview(over: Record<string, unknown> = {}) {
     })
 }
 
+/**
+ * Serve these rows for EVERY request, whatever the page asked for.
+ *
+ * Deliberately unrealistic, and that is a trap worth naming: because it
+ * ignores `status`, a test using it cannot see anything that depends on
+ * a row leaving the current view. Exactly that hid a defect where a
+ * refusal message vanished along with its row. Use `queueByStatus` for
+ * anything about filtering, or about what happens after a re-read.
+ */
 function queueIs(rows: Record<string, unknown>[]): { reads: number } {
     const counter = { reads: 0 }
     server.use(
@@ -86,6 +95,19 @@ function queueIs(rows: Record<string, unknown>[]): { reads: number } {
         }),
     )
     return counter
+}
+
+/** Serve rows the way the server does: filtered by the `status` asked for. */
+function queueByStatus(rowsNow: () => Record<string, unknown>[]) {
+    server.use(
+        http.get(REVIEWS, ({ request }) => {
+            const wanted = new URL(request.url).searchParams.get("status")
+            const rows = rowsNow()
+            return HttpResponse.json(
+                wanted === null ? rows : rows.filter((r) => r.status === wanted),
+            )
+        }),
+    )
 }
 
 function renderPage() {
@@ -464,6 +486,11 @@ describe("recording a judgement", () => {
         expect(alert).toHaveTextContent(/was saved/i)
         expect(alert).not.toHaveTextContent(/Nothing was changed/i)
         expect(hits).toBe(1)
+        // The judgement IS recorded. Leaving the filled-in form open
+        // beneath it invites recording it a second time.
+        await waitFor(() =>
+            expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument(),
+        )
     })
 })
 
@@ -656,6 +683,381 @@ describe("everything a row owns stays with that row", () => {
     })
 })
 
+describe("a refusal is still said when its row has gone", () => {
+    it("says what was refused, and about which record, after the row leaves the view", async () => {
+        meIs(curator)
+        // The commonest refusal: somebody else moved the record. The
+        // re-read that follows is under `not_reviewed`, and the record is
+        // not that any more -- so the row goes.
+        let moved = false
+        queueByStatus(() =>
+            moved
+                ? [review({ status: "approved" })]
+                : [review({ status: "not_reviewed" })],
+        )
+        server.use(
+            http.patch(`${REVIEWS}/:type/:id`, () => {
+                moved = true
+                return HttpResponse.json(
+                    {
+                        code: "domain_error",
+                        detail: "Transition not_reviewed -> rejected is not allowed.",
+                    },
+                    { status: 400 },
+                )
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton(SPECIES, "Review…"))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "wrong")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        // Previously the message was keyed to the row and rendered only
+        // inside it, so it vanished with the row: the curator pressed the
+        // button, the row disappeared, and nothing was ever said. The
+        // earlier test could not see this because its mock ignored the
+        // `status` the page sends.
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent(/is not allowed/)
+        expect(alert).toHaveTextContent(SPECIES)
+        expect(alert).toHaveTextContent(/no longer in this view/i)
+    })
+
+    it("names an unnameable record in that message rather than saying nothing", async () => {
+        meIs(curator)
+        let moved = false
+        queueByStatus(() =>
+            moved
+                ? []
+                : [
+                      review({
+                          record_type: "applied_energy_correction",
+                          record_public_ref: null,
+                      }),
+                  ],
+        )
+        server.use(
+            http.patch(`${REVIEWS}/:type/:id`, () => {
+                moved = true
+                return HttpResponse.json(
+                    { code: "domain_error", detail: "Somebody else got there first." },
+                    { status: 400 },
+                )
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton("cannot be named", "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "mine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent("applied_energy_correction (unnamed)")
+        expect(alert).toHaveTextContent(/Somebody else got there first/)
+    })
+})
+
+describe("the form never shows one judgement and sends another", () => {
+    it("re-derives the choice when a re-read makes it impossible", async () => {
+        meIs(curator)
+        // not_reviewed offers rejected; approved does not. A re-read that
+        // moves the row to approved leaves "rejected" held in a draft that
+        // no option matches -- and a controlled <select> whose value
+        // matches nothing displays the FIRST option instead.
+        let moved = false
+        queueByStatus(() => [
+            moved ? review({ status: "approved" }) : review({ status: "not_reviewed" }),
+        ])
+        let sent: Record<string, unknown> = {}
+        server.use(
+            http.patch(`${REVIEWS}/:type/:id`, async ({ request }) => {
+                const body = (await request.json()) as Record<string, unknown>
+                if (!moved) {
+                    moved = true
+                    return HttpResponse.json(
+                        { code: "domain_error", detail: "Not allowed." },
+                        { status: 400 },
+                    )
+                }
+                sent = body
+                return HttpResponse.json(review({ status: "under_review" }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        await screen.findByRole("table")
+
+        await user.click(rowButton(SPECIES, "Review…"))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "first try")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        // The row is now approved, whose options are under_review and
+        // deprecated. Whatever the select shows must be what is sent.
+        await waitFor(async () =>
+            expect(await rowStatus(SPECIES)).toBe("approved"),
+        )
+        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
+        const shown = select.value
+        expect(["under_review", "deprecated"]).toContain(shown)
+
+        // The hint is the third thing that must agree. With the stale
+        // draft still held, the select showed one state and the sentence
+        // beneath it described another.
+        const hint =
+            shown === "under_review"
+                ? /No judgement is recorded yet/i
+                : /without being judged wrong/i
+        expect(screen.getByText(hint)).toBeInTheDocument()
+        expect(screen.queryByText(/judged this record wrong/i)).not.toBeInTheDocument()
+
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await waitFor(() => expect(sent.status).toBe(shown))
+    })
+
+    it("describes the state it is actually offering", async () => {
+        meIs(curator)
+        queueIs([review({ status: "approved" })])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
+
+        // The hint and the select must agree: they are the two things a
+        // curator reads before deciding.
+        expect(select.value).toBe("under_review")
+        expect(screen.getByText(/No judgement is recorded yet/i)).toBeInTheDocument()
+    })
+})
+
+describe("one row's write leaves the other rows alone", () => {
+    it("does not close another row's open form when a write succeeds", async () => {
+        meIs(curator)
+        queueIs([review(), otherReview()])
+        const species = gate()
+        server.use(
+            http.patch(`${REVIEWS}/species/987654`, async () => {
+                await species.held
+                return HttpResponse.json(review({ status: "under_review" }))
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        // Start the species write, then open the calculation's form while
+        // it is still out.
+        await user.click(rowButton(SPECIES, "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "species reason")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await user.click(rowButton(CALC, "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "calculation reason")
+
+        species.release()
+
+        // Wait for the species write to have FINISHED before asserting.
+        // Without this the assertion ran while the write was still out and
+        // passed on the first check, so it could not see a later close --
+        // the test ended before the behaviour it was written for happened.
+        await waitFor(() => expect(rowButton(SPECIES, "Review…")).toBeEnabled())
+
+        // The species row finishing must not throw away what is being
+        // typed against the calculation.
+        expect(screen.getByLabelText(/Why/)).toHaveValue("calculation reason")
+    })
+})
+
+describe("what a curator may not do to their own deposit", () => {
+    it("does not offer approval on a record this curator deposited", async () => {
+        meIs(curator)
+        // The service refuses self-approval. Offering the option is a
+        // button that can only fail, which is the thing mirroring the
+        // transition table was supposed to prevent.
+        queueIs([review({ created_by: curator.id })])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).not.toContain("approved")
+        expect(options).toContain("rejected")
+    })
+
+    it("still offers approval on somebody else's deposit", async () => {
+        meIs(curator)
+        queueIs([review({ created_by: curator.id + 999 })])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).toContain("approved")
+    })
+
+    it("offers approval when the depositor is unknown", async () => {
+        meIs(curator)
+        // `created_by` is nullable. Withholding approval on a null would
+        // block review of anything whose depositor was not recorded.
+        queueIs([review({ created_by: null })])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).toContain("approved")
+    })
+})
+
+describe("the filter control", () => {
+    it("asks the server for the status chosen", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                asked.push(new URL(request.url).searchParams.get("status"))
+                return HttpResponse.json([review({ status: "approved" })])
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+        await waitFor(() => expect(asked).toEqual(["not_reviewed", "approved"]))
+    })
+
+    it("sends no status at all for 'every record'", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                asked.push(new URL(request.url).searchParams.get("status"))
+                return HttpResponse.json([review()])
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        // `status=all` is not a value the enum has; sending it would be a
+        // 422 rather than "every record".
+        await user.selectOptions(screen.getByLabelText("Showing"), "all")
+        await waitFor(() => expect(asked).toEqual(["not_reviewed", null]))
+    })
+
+    it("actually shows what the new filter returned", async () => {
+        meIs(curator)
+        queueByStatus(() => [
+            review({ record_public_ref: "spc_unreviewed", status: "not_reviewed" }),
+            otherReview({ record_public_ref: "calc_approved", status: "approved" }),
+        ])
+        const user = userEvent.setup()
+        renderPage()
+
+        expect(await screen.findByText("spc_unreviewed")).toBeInTheDocument()
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+
+        expect(await screen.findByText("calc_approved")).toBeInTheDocument()
+        expect(screen.queryByText("spc_unreviewed")).not.toBeInTheDocument()
+    })
+
+    it("asks for a page of the size it claims", async () => {
+        meIs(curator)
+        let limit: string | null = null
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                limit = new URL(request.url).searchParams.get("limit")
+                return HttpResponse.json([review()])
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        // The "a full page" wording is only true if the page asked for
+        // exactly as many rows as it treats as full.
+        expect(limit).toBe("50")
+    })
+})
+
+describe("reaching past the newest page", () => {
+    it("asks for the next page, and says where it is", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                asked.push(new URL(request.url).searchParams.get("skip"))
+                return HttpResponse.json(fifty)
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        // The list is newest-first, so without this the oldest deposits --
+        // the actual backlog -- cannot be reached at all.
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toEqual(["0", "50"]))
+        expect(await screen.findByText(/from 51/)).toBeInTheDocument()
+    })
+
+    it("cannot go older than a page that is not full", async () => {
+        meIs(curator)
+        queueIs([review()])
+        renderPage()
+        await screen.findByRole("table")
+
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Newer" })).toBeDisabled()
+    })
+
+    it("returns to the first page when the filter changes", async () => {
+        meIs(curator)
+        const asked: string[] = []
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                const url = new URL(request.url)
+                asked.push(`${url.searchParams.get("status")}@${url.searchParams.get("skip")}`)
+                return HttpResponse.json(fifty)
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(2))
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+
+        // Carrying the offset across would show page two of a view the
+        // curator has not seen page one of.
+        await waitFor(() => expect(asked.at(-1)).toBe("approved@0"))
+    })
+})
+
 describe("what this page can and cannot tell you", () => {
     it("says plainly when the page is full, rather than implying it is the whole backlog", async () => {
         meIs(curator)
@@ -727,6 +1129,45 @@ describe("what this page can and cannot tell you", () => {
     })
 })
 
+describe("how much of the queue this page claims to show", () => {
+    it("says nothing about more rows when the page is neither empty nor full", async () => {
+        meIs(curator)
+        // Three rows: not the 1 and not the 50 the other tests use. A
+        // threshold that fires on "more than one" would claim a partial
+        // page is full, and send a curator looking for pages that do not
+        // exist.
+        queueIs([
+            review({ id: 11, record_public_ref: "spc_a" }),
+            review({ id: 12, record_public_ref: "spc_b" }),
+            review({ id: 13, record_public_ref: "spc_c" }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        expect(screen.getByText(/3 shown/)).toBeInTheDocument()
+        expect(screen.queryByText(/cannot say how many/i)).not.toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+    })
+
+    it("does not call an empty filtered view a finished backlog", async () => {
+        meIs(curator)
+        queueByStatus(() => [review({ status: "not_reviewed" })])
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "rejected")
+
+        // "Every record has been looked at" is a claim about the whole
+        // archive. An empty `rejected` view means nothing was rejected,
+        // which is a different sentence entirely.
+        expect(await screen.findByText(/No records match this filter/i)).toBeInTheDocument()
+        expect(
+            screen.queryByText(/Every record has been looked at/i),
+        ).not.toBeInTheDocument()
+    })
+})
+
 describe("the status a row shows", () => {
     it("shows each row's own state, not a neighbour's", async () => {
         meIs(curator)
@@ -741,12 +1182,12 @@ describe("the status a row shows", () => {
         expect(rowStatus(CALC)).toBe("rejected")
     })
 
-    it("offers nothing to act on where no transition exists", async () => {
+    it("offers a control on every status a row can actually hold", async () => {
         meIs(curator)
-        // Every real status has at least one transition, so this is the
-        // unknown-status path -- which the row parser rejects. The guard
-        // is here so that a future terminal state renders as a row with
-        // no control rather than a button that cannot work.
+        // Named for what it checks. Every one of the five statuses has at
+        // least one allowed transition, and an unknown status never
+        // reaches the table (the parser rejects the row), so "a row with
+        // no transitions" is not a state this page can be in.
         queueIs([review({ status: "approved" })])
         renderPage()
         await screen.findByRole("table")
