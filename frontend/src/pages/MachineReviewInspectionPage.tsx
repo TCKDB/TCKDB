@@ -1,6 +1,16 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
+import { AuthApiError } from "../api/authApi"
+import {
+    buildCuratorTasksForSubmission,
+    CuratorTaskResponseError,
+} from "../api/curatorTasksApi"
+import {
+    findingsConsidered,
+    type CuratorTaskBuildResult,
+} from "../types/curatorTask"
 import {
     overallHighestSeverity,
     type MachineReviewStatus,
@@ -84,6 +94,220 @@ function StatusBadge({ status }: { status: MachineReviewStatus }) {
 
 function dash(value: unknown): string {
     return value === null || value === undefined || value === "" ? "—" : String(value)
+}
+
+/**
+ * What the build is doing right now.
+ *
+ * Four states rather than a pair of booleans, because the pair admits
+ * combinations that mean nothing -- "running and failed", "idle with a
+ * result" -- and every one of those is a way to show an admin a tally
+ * belonging to a run that is not the one they are watching.
+ */
+type BuildState =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "done"; result: CuratorTaskBuildResult }
+    | { kind: "failed"; message: string }
+
+/**
+ * What to tell an admin when the build did not come back with a tally.
+ *
+ * Three failures, and they do NOT share an answer. Prefixing all of them
+ * with "no tasks were built" was wrong in two cases out of three -- worst
+ * on the middle one, where the page would assert a thing and its opposite
+ * inside one sentence:
+ *
+ *   "No tasks were built: The build ran, but this page could not read
+ *    the tally. Any tasks it made are in the curator queue."
+ *
+ * Only a refusal that reached the server and came back as an error status
+ * supports "nothing was built". A 2xx whose body would not parse means
+ * the build DID run. And a request that never got an answer at all means
+ * this page does not know, which is the honest thing to say rather than
+ * guessing in either direction.
+ */
+function failureMessage(error: unknown): string {
+    if (error instanceof CuratorTaskResponseError) {
+        // 2xx. It ran; only the tally was unreadable. The error already
+        // carries the whole sentence, including where to go and look.
+        return error.message
+    }
+    if (error instanceof AuthApiError) {
+        // The server answered with a refusal, so it wrote nothing.
+        return `No tasks were built: ${error.message}`
+    }
+    // No answer: offline, DNS, a dropped connection, a request that never
+    // left. The server may or may not have committed.
+    const detail = error instanceof Error ? error.message : String(error)
+    return (
+        `The build did not report back: ${detail}. It may or may not have ` +
+        "run; check the curator queue before pressing it again."
+    )
+}
+
+/**
+ * The one control that puts work into the curator queue.
+ *
+ * Curator tasks are built by nothing else. The backend route says so in as
+ * many words ("Explicit/admin-triggered only -- never runs on upload"), so
+ * until this button existed the queue stayed empty however many
+ * submissions arrived, and the only way to fill it was a hand-written curl
+ * (task #256).
+ *
+ * It lives here because this page is already showing the exact findings
+ * the build reads: an admin who has just looked at a submission's
+ * machine-review projection is the person who can judge whether those
+ * findings deserve a curator's time.
+ *
+ * **A tally must never outlive its submission.** Submission 9's findings
+ * under submission 7's tally is a false report, and the more convincing
+ * for being half true. `key={submissionId}` at the mount site is what
+ * prevents it, and it is load-bearing TODAY -- not insurance, as an
+ * earlier version of this comment claimed.
+ *
+ * That earlier claim came from measuring in one direction only. Walking
+ * to a submission this session has not seen, `query.data` goes undefined
+ * while it loads, the parent unmounts the whole results block, and this
+ * component's state goes with it -- so removing the key changes nothing
+ * and the test still passed. But react-query caches (`gcTime`, five
+ * minutes by default): walk BACK to a submission already visited and its
+ * data arrives synchronously, `query.data` never goes undefined, nothing
+ * unmounts, and without the key the old tally sits under the new
+ * submission's findings. MEASURED, both ways, by the two tests that walk
+ * 7 -> 9 and 7 -> 9 -> 7.
+ */
+function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
+    const [state, setState] = useState<BuildState>({ kind: "idle" })
+
+    async function build() {
+        setState({ kind: "running" })
+        try {
+            const result = await buildCuratorTasksForSubmission(submissionId)
+            setState({ kind: "done", result })
+        } catch (error) {
+            setState({ kind: "failed", message: failureMessage(error) })
+        }
+    }
+
+    return (
+        <section>
+            <h3>Curator tasks</h3>
+            <p style={{ color: "#6b7280", marginTop: "-6px" }}>
+                Tasks are <strong>not</strong> created on upload. This builds them
+                from the warning and critical findings above, for this submission
+                only, and writes nothing but task rows: the submission&apos;s status
+                and every record&apos;s review state are untouched. A task is
+                advisory. It asks a person to look, and endorses nothing.
+            </p>
+            <button type="button" onClick={build} disabled={state.kind === "running"}>
+                {state.kind === "running"
+                    ? "Building\u2026"
+                    : "Build curator tasks for this submission"}
+            </button>
+
+            {/* Both live regions are mounted permanently and empty. A
+                `role="status"` or `role="alert"` container that is inserted
+                into the page ALREADY populated is frequently not announced
+                at all -- a screen reader watches regions that exist for
+                changes inside them. An unannounced status region is a
+                guard that does nothing, which is the shape of defect this
+                repo files tasks about. Empty divs take no vertical space,
+                so this costs the sighted layout nothing. */}
+            <div role="alert" style={{ color: "#b91c1c" }}>
+                {state.kind === "failed" ? <p>{state.message}</p> : null}
+            </div>
+            <div role="status">
+                {state.kind === "done" ? <BuildTally result={state.result} /> : null}
+            </div>
+        </section>
+    )
+}
+
+/**
+ * The tally of one build, in wording an admin can act on.
+ *
+ * Two things this must not do. It must not add the counts up:
+ * `refreshed_count` is a sub-count of `reused_count`, so a total would
+ * exceed the findings considered. And it must not print a task id -- the
+ * server sends `task_ids`, and `CuratorTaskBuildResultSchema` drops it
+ * before it can reach here (DR-0028 Req 2).
+ */
+function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
+    const made = result.created_count
+    const considered = findingsConsidered(result)
+    const headline =
+        made > 0
+            ? `${made} new task${made === 1 ? " is" : "s are"} now in the curator queue.`
+            : considered > 0
+              ? // "already has one" on its own invites the inference that it
+                // is therefore waiting in the queue, which is false when the
+                // task was closed months ago and the queue's open filter will
+                // not show it.
+                "No new tasks: every warning or critical finding here already " +
+                "has a task, open or closed."
+              : result.warnings.length > 0
+                ? // Counting zero is not the same as finding nothing. A
+                  // finding on a record the builder could not key reaches none
+                  // of the six counts and lands in `warnings` instead, so
+                  // "nothing here is a warning or critical finding" would
+                  // contradict the warning printed directly beneath it.
+                  "No tasks were made, and not because there was nothing to " +
+                  "make them from. The warnings below say what was skipped."
+                : "No tasks: nothing in this submission is a warning or critical " +
+                  "finding mapped to a record."
+
+    return (
+        <div
+            // Framed, so the tally reads as the answer to the button above
+            // it rather than as one more paragraph of this page's furniture.
+            style={{
+                borderLeft: "3px solid #6b7280",
+                paddingLeft: "12px",
+                marginTop: "12px",
+            }}
+        >
+            <p>{headline}</p>
+            <ul>
+                <li>new tasks created: {result.created_count}</li>
+                <li>
+                    findings that already had an open task: {result.reused_count}
+                    {result.reused_count > 0
+                        ? ` (${result.refreshed_count} of them refreshed with the latest snapshot)`
+                        : null}
+                </li>
+                <li>
+                    findings whose task is already closed, left closed:{" "}
+                    {result.skipped_terminal_count}
+                </li>
+                <li>
+                    info findings, which never become tasks: {result.skipped_info_count}
+                </li>
+                <li>
+                    unmapped findings, which are about no record:{" "}
+                    {result.skipped_unmapped_count}
+                </li>
+            </ul>
+            {result.warnings.length > 0 && (
+                <>
+                    <h4>build warnings</h4>
+                    <ul>
+                        {result.warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                        ))}
+                    </ul>
+                </>
+            )}
+            <p>
+                <Link
+                    to="/admin/curator-queue"
+                    style={{ color: "#1d4ed8", textDecoration: "underline" }}
+                >
+                    Open the curator queue
+                </Link>
+            </p>
+        </div>
+    )
 }
 
 function MachineReviewInspectionPage() {
@@ -251,6 +475,11 @@ function MachineReviewInspectionPage() {
                             ))}
                         </ul>
                     </section>
+
+                    <CuratorTaskBuilder
+                        key={data.submission_id}
+                        submissionId={data.submission_id}
+                    />
 
                     {/* Diagnostics */}
                     <section>

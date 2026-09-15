@@ -183,3 +183,51 @@ export function severityClass(severity: string): string | null {
         ? `severity-${severity}`
         : null
 }
+
+/**
+ * The result of an explicit build-for-submission run.
+ *
+ * Source of truth: `AdminCuratorTaskBuildResponse` in
+ * `backend/app/api/routes/admin.py`, mirroring `CuratorTaskBuildResult` in
+ * `backend/app/services/machine_review/curator_tasks.py`.
+ *
+ * ## `task_ids` is deliberately absent
+ *
+ * The response carries one and this schema drops it. zod strips keys it
+ * does not declare, so the ids never reach the object the page renders
+ * from: they cannot be printed by accident, and no later edit to the page
+ * can print them without coming back here first. They are internal row
+ * ids, which DR-0028 Req 2 keeps out of user-facing output. Nothing is
+ * lost -- `created_count + reused_count` is the same number, and a task is
+ * reached through the queue, never by typing its id.
+ *
+ * ## The counts are not all disjoint
+ *
+ * `refreshed_count` is a SUB-count of `reused_count`: an open task whose
+ * snapshot was updated in place is counted in both. Listing the six as
+ * siblings would total more findings than were considered, which is why
+ * the page nests it rather than giving it a line of its own.
+ */
+export const CuratorTaskBuildResultSchema = z.object({
+    created_count: z.number().int(),
+    reused_count: z.number().int(),
+    refreshed_count: z.number().int(),
+    skipped_info_count: z.number().int(),
+    skipped_unmapped_count: z.number().int(),
+    skipped_terminal_count: z.number().int(),
+    warnings: z.array(z.string()),
+})
+export type CuratorTaskBuildResult = z.infer<typeof CuratorTaskBuildResultSchema>
+
+/**
+ * The warning/critical findings the run actually weighed for a task.
+ *
+ * Disjoint by construction (see `CuratorTaskBuildResult` above): each such
+ * finding lands in exactly one of created / reused / skipped_terminal.
+ * Zero here means the submission had no warning or critical finding mapped
+ * to a record at all -- which is a different sentence from "they all had
+ * tasks already", and the page must not print one for the other.
+ */
+export function findingsConsidered(result: CuratorTaskBuildResult): number {
+    return result.created_count + result.reused_count + result.skipped_terminal_count
+}
