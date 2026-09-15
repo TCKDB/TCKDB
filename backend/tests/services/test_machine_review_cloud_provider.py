@@ -2,8 +2,8 @@
 
 No network and no API key. The provider takes an injected client (plan
 7.1: "CI never calls the API"), so these drive the **real** prompt, the
-**real** Anthropic response-shape extraction and the **real** parse boundary
-against a committed response fixture.
+**real** OpenAI-compatible response-shape extraction and the **real** parse
+boundary against a committed response fixture.
 
 What is being pinned here is the provider's half of the bargain, not the
 model's: that untrusted output cannot smuggle a mutation or a RAG claim past
@@ -21,7 +21,11 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.llm_precheck.schemas import LLMPrecheckContext, LLMRecordRef
-from app.services.machine_review.providers.anthropic_transport import extract_text
+from app.services.machine_review.providers.openai_transport import (
+    ModelOutputTruncatedError,
+    ModelRefusedError,
+    extract_text,
+)
 from app.services.machine_review.providers.cloud import (
     CloudMachineReviewProvider,
     MachineReviewModelClient,
@@ -43,7 +47,7 @@ from app.services.machine_review.schemas import (
 )
 
 _FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures" / "machine_review"
-_RECORDED_RESPONSE = _FIXTURES / "anthropic_messages_warning_response.json"
+_RECORDED_RESPONSE = _FIXTURES / "openai_chat_completion_warning_response.json"
 
 
 class RecordedClient:
@@ -90,7 +94,7 @@ class RaisingClient:
 
 
 def recorded_reply() -> str:
-    """The model text out of the committed Anthropic response fixture."""
+    """The model text out of the committed chat-completions fixture."""
     return extract_text(json.loads(_RECORDED_RESPONSE.read_text()))
 
 
@@ -111,7 +115,7 @@ def a_context() -> MachineReviewContext:
 def build(client: object, **kwargs: object) -> CloudMachineReviewProvider:
     return CloudMachineReviewProvider(
         client=client,  # type: ignore[arg-type]
-        model=kwargs.pop("model", "claude-sonnet-5"),  # type: ignore[arg-type]
+        model=kwargs.pop("model", "fixture-model-v1"),  # type: ignore[arg-type]
         **kwargs,  # type: ignore[arg-type]
     )
 
@@ -167,7 +171,7 @@ def test_the_prompt_and_the_context_actually_reach_the_client():
     # The context's records must be in what was sent -- a provider that posted
     # an empty context would still get a valid answer out of a recorded reply.
     assert "transition_state_entry" in str(call["user"])
-    assert call["model"] == "claude-sonnet-5"
+    assert call["model"] == "fixture-model-v1"
 
 
 def test_limits_are_passed_through_not_silently_defaulted():
@@ -204,10 +208,10 @@ def test_the_model_cannot_name_itself():
     )
 
     result = build(
-        RecordedClient(lying), model="claude-sonnet-5"
+        RecordedClient(lying), model="fixture-model-v1"
     ).review_submission(a_context())
 
-    assert result.model == "claude-sonnet-5"
+    assert result.model == "fixture-model-v1"
     assert result.provider == "CloudMachineReviewProvider"
 
 
@@ -311,13 +315,27 @@ def test_a_transport_failure_propagates(exc: Exception):
 # --------------------------------------------------------------------------- #
 
 
-def test_text_extraction_concatenates_text_blocks_and_ignores_others():
+def test_text_extraction_reads_the_first_choice_and_ignores_the_rest():
+    """One request, one answer: ``n`` is never sent, so a second choice is noise.
+
+    Reading anything but ``choices[0]`` would make the review depend on an
+    ordering the endpoint does not promise to preserve.
+    """
     payload = {
-        "content": [
-            {"type": "thinking", "thinking": "ignored"},
-            {"type": "text", "text": '{"a":'},
-            {"type": "text", "text": "1}"},
-        ]
+        "id": "chatcmpl-x",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": '{"a":1}'},
+                "finish_reason": "stop",
+            },
+            {
+                "index": 1,
+                "message": {"role": "assistant", "content": "SECOND ANSWER"},
+                "finish_reason": "stop",
+            },
+        ],
+        "usage": {"total_tokens": 9},
     }
 
     assert extract_text(payload) == '{"a":1}'
@@ -326,18 +344,32 @@ def test_text_extraction_concatenates_text_blocks_and_ignores_others():
 @pytest.mark.parametrize(
     "payload",
     [
-        {"content": []},
-        {"content": [{"type": "thinking", "thinking": "no text at all"}]},
-        {"content": "not a list"},
+        {"choices": []},
+        {"choices": "not a list"},
+        {"id": "chatcmpl-x"},
+        {"choices": [{"index": 0, "finish_reason": "stop"}]},
+        {"choices": [{"index": 0, "message": {"content": None}}]},
+        {"choices": [{"index": 0, "message": "not an object"}]},
+        {"choices": ["not an object"]},
         ["not a dict"],
     ],
-    ids=["empty", "no_text_block", "content_not_a_list", "not_an_object"],
+    ids=[
+        "no_choices",
+        "choices_not_a_list",
+        "choices_absent",
+        "choice_without_message",
+        "content_is_null",
+        "message_not_an_object",
+        "choice_not_an_object",
+        "not_an_object",
+    ],
 )
 def test_a_response_with_no_usable_text_is_an_error_not_an_empty_review(payload):
     """An empty string would parse as malformed JSON and misreport the fault.
 
     "The model returned nothing" and "the model returned something we could not
     parse" are different failures, and only one of them is worth re-running.
+    Every shape here is one a real endpoint or a proxy has been known to emit.
     """
     with pytest.raises(ValueError):
         extract_text(payload)
@@ -401,3 +433,130 @@ def test_the_user_message_carries_the_context_and_nothing_else():
     assert submission["included_artifact_text"] is False
     assert submission["included_coordinates"] is False
     assert submission["included_private_notes"] is False
+
+
+# --------------------------------------------------------------------------- #
+# The transport's own two halves: what it sends, and what it refuses to return
+#
+# `extract_text` was always covered by the fixture; the REQUEST was not, so a
+# wrong header name or a dropped parameter shipped untested. These drive the
+# real client with a stub SDK object in place of the network.
+# --------------------------------------------------------------------------- #
+
+
+class _RecordingCompletions:
+    """Stands in for ``client.chat.completions``; records one call."""
+
+    def __init__(self, reply: dict) -> None:
+        self.reply = reply
+        self.kwargs: dict | None = None
+
+    def create(self, **kwargs: object) -> object:
+        self.kwargs = dict(kwargs)
+        reply = self.reply
+
+        class _Response:
+            def model_dump(self) -> dict:
+                return reply
+
+        return _Response()
+
+
+def _client_with(reply: dict):
+    """An OpenAICompatibleClient whose SDK object is the recorder above."""
+    from app.services.machine_review.providers import openai_transport
+
+    client = openai_transport.OpenAICompatibleClient.__new__(
+        openai_transport.OpenAICompatibleClient
+    )
+    completions = _RecordingCompletions(reply)
+
+    class _Chat:
+        pass
+
+    class _SDK:
+        pass
+
+    chat = _Chat()
+    chat.completions = completions  # type: ignore[attr-defined]
+    sdk = _SDK()
+    sdk.chat = chat  # type: ignore[attr-defined]
+    client._client = sdk  # type: ignore[attr-defined]
+    return client, completions
+
+
+def test_the_request_carries_every_parameter_it_was_given():
+    """A dropped parameter is a silently different call, not an error.
+
+    ``max_tokens`` in particular: without this, a provider built with the
+    operator's configured ceiling could send the endpoint's own default and
+    nothing would notice until the bill.
+    """
+    client, completions = _client_with(json.loads(_RECORDED_RESPONSE.read_text()))
+
+    client.complete(
+        model="some-model",
+        system="SYSTEM TEXT",
+        user="USER TEXT",
+        max_output_tokens=321,
+        timeout_seconds=12.5,
+    )
+
+    sent = completions.kwargs
+    assert sent is not None
+    assert sent["model"] == "some-model"
+    assert sent["max_tokens"] == 321
+    assert sent["timeout"] == 12.5
+    # json_object, not json_schema: the portable one. See the module docstring.
+    assert sent["response_format"] == {"type": "json_object"}
+    assert sent["messages"] == [
+        {"role": "system", "content": "SYSTEM TEXT"},
+        {"role": "user", "content": "USER TEXT"},
+    ]
+
+
+def test_a_truncated_reply_is_not_reported_as_malformed_output():
+    """`finish_reason == "length"` names a different fault, and a fixable one.
+
+    Without the check the reply is simply incomplete JSON, and the service
+    layer records "malformed output" -- which sends a reader looking for a
+    model that cannot follow a schema, when the answer is "raise the ceiling".
+    """
+    reply = json.loads(_RECORDED_RESPONSE.read_text())
+    reply["choices"][0]["finish_reason"] = "length"
+
+    with pytest.raises(ModelOutputTruncatedError) as caught:
+        extract_text(reply)
+    assert "LLM_PRECHECK_MAX_OUTPUT_TOKENS" in str(caught.value)
+
+
+def test_a_refusal_keeps_the_reason_the_model_gave():
+    """A refusal is an answer, and discarding its reason discards the run."""
+    reply = json.loads(_RECORDED_RESPONSE.read_text())
+    reply["choices"][0]["message"]["refusal"] = "I will not assess this."
+
+    with pytest.raises(ModelRefusedError) as caught:
+        extract_text(reply)
+    assert "I will not assess this." in str(caught.value)
+
+
+def test_an_empty_message_is_a_failure_not_an_empty_review():
+    reply = json.loads(_RECORDED_RESPONSE.read_text())
+    reply["choices"][0]["message"]["content"] = "   "
+
+    with pytest.raises(ValueError):
+        extract_text(reply)
+
+
+def test_truncation_is_checked_before_the_text_is_returned():
+    """Order matters: a truncated reply still carries text.
+
+    Returning it would launder a known, named fault into a generic parse
+    failure one layer up, which is the defect this whole class exists to stop.
+    """
+    reply = json.loads(_RECORDED_RESPONSE.read_text())
+    assert reply["choices"][0]["message"]["content"].strip()  # there IS text
+    reply["choices"][0]["finish_reason"] = "length"
+
+    with pytest.raises(ModelOutputTruncatedError):
+        extract_text(reply)

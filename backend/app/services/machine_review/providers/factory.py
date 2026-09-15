@@ -6,8 +6,9 @@ provider:
 * ``off``   -> :class:`DisabledMachineReviewProvider` (no dependencies).
 * ``cloud`` -> validates required config (model + API-key-env), then builds a
   :class:`~app.services.machine_review.providers.cloud.CloudMachineReviewProvider`
-  over the default Anthropic transport. Nothing is called at build time; the
-  model call happens when a review is actually requested.
+  over the default OpenAI-compatible transport, passing every configured value
+  through (base URL, output ceiling, timeout). Nothing is called at build time;
+  the model call happens when a review is actually requested.
 * ``local`` -> validates required config (model + base URL), then raises
   :class:`NotImplementedError` — no local call is implemented in this slice.
 * ``test``  -> refuses: the fake provider is test-only and is reached via
@@ -90,18 +91,31 @@ def build_machine_review_provider(
         # optional ``llm`` extra, and an install that never turns cloud mode on
         # should not need it. ``_validate_cloud_config`` has already proved the
         # key env var is set and non-empty.
-        from app.services.machine_review.providers.anthropic_transport import (
-            AnthropicMessagesClient,
-        )
         from app.services.machine_review.providers.cloud import (
             CloudMachineReviewProvider,
         )
+        from app.services.machine_review.providers.openai_transport import (
+            OpenAICompatibleClient,
+        )
 
+        # Every configured value is passed through. An earlier version passed
+        # only the key and the model, which left three settings looking
+        # honoured and silently ignored -- and not harmlessly, because the
+        # provider's own defaults DISAGREE with the settings defaults: a
+        # deployment that capped output at 1200 tokens got 4096, and one that
+        # set a 30-second timeout got 120. A spend ceiling that is 3.4x what
+        # the operator wrote is worse than no ceiling, because it reads as
+        # obeyed.
         return CloudMachineReviewProvider(
-            client=AnthropicMessagesClient(
+            client=OpenAICompatibleClient(
                 api_key=os.environ[settings_obj.llm_precheck_api_key_env],
+                # ``None`` means the transport's default endpoint; this is the
+                # setting that makes "any OpenAI-compatible provider" true.
+                base_url=settings_obj.llm_precheck_base_url,
             ),
             model=settings_obj.llm_precheck_model,
+            max_output_tokens=settings_obj.llm_precheck_max_output_tokens,
+            timeout_seconds=float(settings_obj.llm_precheck_timeout_seconds),
         )
 
     if mode == "local":
