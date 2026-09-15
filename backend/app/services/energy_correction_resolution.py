@@ -11,10 +11,17 @@ from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.enums import (
+    AppliedCorrectionComponentKind,
+    EnergyCorrectionApplicationRole,
+    EnergyCorrectionSchemeKind,
+)
 from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED as _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
 )
 
+from app.api.error_contract import CodedValueError
+from app.chemistry.species import species_smiles_has_any_bonds
 from app.chemistry.units import convert_energy_to_hartree
 from app.db.models.common import EnergyUnit
 from app.db.models.energy_correction import (
@@ -26,6 +33,7 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.species import Species, SpeciesEntry
 from app.schemas.fragments.refs import FreqScaleFactorRef
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.energy_correction_upload import (
@@ -558,6 +566,131 @@ def _resolve_or_create_fsf_row(
             )
         )
     return fsf
+
+
+# ---------------------------------------------------------------------------
+# bac_total component contract
+# ---------------------------------------------------------------------------
+
+#: A ``bac_petersson`` ``bac_total`` correction with no *bond* component,
+#: targeting a subject where "no bonds were summed" can never be
+#: established.
+#:
+#: A component of any other kind does not satisfy this: a single
+#: ``{"component_kind": "other", ...}`` placeholder re-admits the exact
+#: false shape this check exists to refuse, with the contract's blessing.
+#: Nothing here checks that a bond component names a bond that exists on
+#: the target, or that contributions sum to ``value`` -- both are real
+#: gaps, left for a follow-up; this closes the gap actually measured.
+#:
+#: A bond-additivity correction is definitionally a sum over bonds. A
+#: transition state carries no bond assignment at all: Arkane's own
+#: Petersson-BAC routine sums whatever bond dictionary it is handed, and
+#: ARC supplies none for a saddle point, so a componentless total there
+#: can never be told apart from "nothing was actually summed" (task
+#: #264's measured 17 rows are exactly that shape). A species entry is
+#: different: its identity SMILES states its bonds, so a monatomic
+#: species has an honest zero total with nothing to decompose (the same
+#: task's other 2 rows, on ``[H]`` and ``[O]``).
+#:
+#: Scoped to ``bac_petersson``. A ``bac_melius`` total does not decompose
+#: into a stable per-component breakdown even for a bonded species -- see
+#: ``test_bac_melius_no_components_persists`` -- so a componentless
+#: Melius total proves nothing about whether bonds were summed, on either
+#: kind of target, and is left alone.
+W_BAC_TOTAL_REQUIRES_COMPONENTS = "bac_total_requires_components"
+
+
+def assert_bac_total_has_required_components(
+    session: Session,
+    payload: AppliedEnergyCorrectionUploadPayload,
+    *,
+    field: str,
+    target_species_entry_id: int | None = None,
+    target_transition_state_entry_id: int | None = None,
+) -> None:
+    """Refuse a componentless ``bac_total`` unless the target has no bonds.
+
+    Every workflow that is about to hand *payload* to
+    :func:`create_applied_energy_correction` calls this first. Storage
+    stores exactly what it is given -- see that function's own
+    docstring -- so the shape has to be settled before it gets there,
+    not inside it.
+
+    :param session: Active session, used to look up the target species
+        entry's identity SMILES when the target is a species entry.
+    :param payload: The upload-facing correction about to be persisted.
+    :param field: Field path naming this correction (not a sub-field of
+        it), echoed verbatim in the refusal.
+    :param target_species_entry_id: Resolved target species entry id, or
+        ``None`` when the target is not a species entry.
+    :param target_transition_state_entry_id: Resolved target transition
+        state entry id, or ``None`` when the target is not one.
+    :raises CodedValueError: if the shape cannot be shown to be honest.
+    """
+    if payload.application_role != EnergyCorrectionApplicationRole.bac_total:
+        return
+    # ``bac_total`` always carries a scheme, of one of these two kinds
+    # (``AppliedEnergyCorrectionUploadPayload.validate_role_source_compatibility``
+    # and ``validate_role_scheme_kind_compatibility``, both schema-level).
+    # The ``is not None`` check is defensive, not load-bearing.
+    if (
+        payload.scheme is not None
+        and payload.scheme.kind == EnergyCorrectionSchemeKind.bac_melius
+    ):
+        return
+
+    # A component of *any* kind used to satisfy this check, which let a
+    # single placeholder -- ``{"component_kind": "other", "key":
+    # "unspecified", ...}`` -- re-admit the exact false shape this
+    # function exists to refuse: a total with nothing behind it, now
+    # bearing the contract's blessing. A Petersson BAC is definitionally
+    # a sum over *bonds*, so the honest floor is a real bond component,
+    # not merely a nonempty list.
+    has_bond_component = any(
+        component.component_kind == AppliedCorrectionComponentKind.bond
+        for component in payload.components
+    )
+    if has_bond_component:
+        return
+
+    remedy = (
+        "Supply at least one component of kind 'bond', naming a bond that "
+        "was actually summed, or omit this correction entirely: a "
+        "correction that was not applied is expressed by leaving the row "
+        "out, not by depositing a zero."
+    )
+
+    if target_transition_state_entry_id is not None:
+        raise CodedValueError(
+            W_BAC_TOTAL_REQUIRES_COMPONENTS,
+            f"{field}: application_role='bac_total' with no bond "
+            f"component cannot target a transition state. A transition "
+            f"state carries no bond assignment, so a total with nothing "
+            f"behind it can never be shown to be a real bond additivity "
+            f"correction rather than an empty sum. {remedy}",
+            context={"field": field, "target_kind": "transition_state_entry"},
+            message_prefix=False,
+        )
+
+    if target_species_entry_id is not None:
+        species_entry = session.get(SpeciesEntry, target_species_entry_id)
+        species = (
+            session.get(Species, species_entry.species_id)
+            if species_entry is not None
+            else None
+        )
+        if species is not None and species_smiles_has_any_bonds(species.smiles):
+            raise CodedValueError(
+                W_BAC_TOTAL_REQUIRES_COMPONENTS,
+                f"{field}: application_role='bac_total' with no bond "
+                f"component targets a species with at least one bond, so "
+                f"a total with nothing behind it can never be shown to be "
+                f"a real bond additivity correction rather than an empty "
+                f"sum. {remedy}",
+                context={"field": field, "target_kind": "species_entry"},
+                message_prefix=False,
+            )
 
 
 # ---------------------------------------------------------------------------

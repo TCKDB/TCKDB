@@ -226,6 +226,34 @@ def element_counts_from_smiles(smiles: str) -> Counter[str]:
     return counts
 
 
+def species_smiles_has_any_bonds(smiles: str) -> bool:
+    """Whether *smiles* names a species with at least one bond.
+
+    Hydrogens are made explicit first, for the same reason
+    :func:`element_counts_from_smiles` makes them explicit: a bare
+    ``Chem.MolFromSmiles`` graph never carries a bond for an implicit
+    hydrogen, so ``"C"`` (methane) reports zero bonds until
+    :func:`rdkit.Chem.AddHs` adds the four C-H bonds the molecule
+    actually has. Left un-added, every organic species with only
+    implicit hydrogens would misreport as bondless.
+
+    A single free atom -- ``"[H]"``, ``"[O]"`` -- has no bond to add
+    either way; this is the monatomic case a bond-additivity correction's
+    componentless zero is honest for.
+
+    :param smiles: SMILES string to inspect.
+    :returns: ``True`` if the molecule has at least one bond (to any atom,
+        explicit or implicit), ``False`` for a single free atom.
+    :raises ValueError: If RDKit cannot parse the SMILES string.
+    """
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"RDKit failed to parse SMILES: {smiles}")
+    mol = Chem.AddHs(mol)
+    return mol.GetNumBonds() > 0
+
+
 def format_element_counts(counts: Mapping[str, int]) -> str:
     """Render an element count as a formula, for an error a human can read.
 

@@ -91,6 +91,7 @@ from app.services.charge_multiplicity_extraction import (
 )
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
+    assert_bac_total_has_required_components,
     create_applied_energy_correction,
     resolve_applied_correction_source_key,
     resolve_or_create_freq_scale_factor_ref,
@@ -933,6 +934,12 @@ def _persist_thermo_block(
             declares=_BUNDLE_CONFORMER_KEY_REMEDY,
         )
 
+        assert_bac_total_has_required_components(
+            session,
+            ac,
+            field=f"thermo.applied_energy_corrections[{i}]",
+            target_species_entry_id=species_entry_id,
+        )
         applied = create_applied_energy_correction(
             session,
             ac,
@@ -1005,6 +1012,12 @@ def _persist_top_level_applied_corrections(
             declares=_BUNDLE_CONFORMER_KEY_REMEDY,
         )
 
+        assert_bac_total_has_required_components(
+            session,
+            ac,
+            field=f"applied_energy_corrections[{i}]",
+            target_species_entry_id=species_entry_id,
+        )
         applied = create_applied_energy_correction(
             session,
             ac,

@@ -44,6 +44,7 @@ from app.services.calculation_resolution import (
     resolve_level_of_theory_ref,
 )
 from app.services.energy_correction_resolution import (
+    assert_bac_total_has_required_components,
     create_applied_energy_correction,
     resolve_applied_correction_source_key,
 )
@@ -473,6 +474,12 @@ def persist_thermo_upload(
             )
             source_calc_id = calc_row.id
 
+        assert_bac_total_has_required_components(
+            session,
+            correction_payload,
+            field=f"applied_energy_corrections[{correction_index}]",
+            target_species_entry_id=species_entry.id,
+        )
         applied_corrections.append(
             create_applied_energy_correction(
                 session,
