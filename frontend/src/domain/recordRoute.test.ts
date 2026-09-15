@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
-import { LINKABLE_RECORD_TYPES, recordRoute, recordTypeHasPage } from "./recordRoute"
+import {
+    LINKABLE_RECORD_TYPES,
+    recordRoute,
+    recordTypeHasPage,
+    recordTypeWords,
+    resolveRecordLocation,
+} from "./recordRoute"
 
 /**
  * The defect this module exists to prevent is a link that 404s, and the
@@ -171,5 +177,149 @@ describe("the ref goes into the path safely", () => {
         // rather than a link into an unrelated record.
         expect(recordRoute("species", "a/b")).toBe("/species/a%2Fb")
         expect(recordRoute("species", "a b")).toBe("/species/a%20b")
+    })
+})
+
+
+/**
+ * #262: where a record can be SEEN, when it has no page of its own.
+ *
+ * `recordRoute` answers "is there a page for this type", and for 385 of the
+ * review queue's 1,299 rows the answer is no. Six of those types are still
+ * rendered -- inside their parent -- and the review row now carries which
+ * parent. `resolveRecordLocation` is the decision that turns those two facts
+ * into a link, or into an honest statement of why there isn't one.
+ */
+describe("where a record can be seen", () => {
+    it("links the record's own page when it has one", () => {
+        expect(resolveRecordLocation("species", "spc_1", null, null)).toEqual({
+            kind: "record",
+            href: "/species/spc_1",
+            ref: "spc_1",
+        })
+    })
+
+    it("prefers the record's own page over its container", () => {
+        // A species entry belongs to a species, and the backend reports that.
+        // Following the container here would send a curator to a DIFFERENT
+        // record from the one they were asked to review -- the precedence in
+        // `resolveRecordLocation` is the only thing preventing it.
+        const location = resolveRecordLocation("species_entry", "spe_1", "species", "spc_1")
+        expect(location.kind).toBe("record")
+        expect(location).toMatchObject({ href: "/species-entries/spe_1" })
+    })
+
+    it.each([
+        ["thermo", "thm_1", "species_entry", "spe_1", "/species-entries/spe_1"],
+        ["statmech", "stm_1", "species_entry", "spe_1", "/species-entries/spe_1"],
+        [
+            "statmech",
+            "stm_2",
+            "transition_state_entry",
+            "tse_1",
+            "/transition-state-entries/tse_1",
+        ],
+        ["kinetics", "kin_1", "reaction_entry", "rxe_1", "/reaction-entries/rxe_1"],
+        ["transition_state", "ts_1", "reaction_entry", "rxe_1", "/reaction-entries/rxe_1"],
+        ["network_solve", "nsv_1", "network", "net_1", "/networks/net_1"],
+    ])(
+        "%s has no page, so it opens at its %s",
+        (recordType, ref, containerType, containerRef, expectedHref) => {
+            const location = resolveRecordLocation(
+                recordType,
+                ref,
+                containerType,
+                containerRef,
+            )
+
+            expect(location).toEqual({
+                kind: "container",
+                href: expectedHref,
+                ref,
+                containerType,
+                containerRef,
+            })
+        },
+    )
+
+    it("locates a record that cannot be named at all", () => {
+        // applied_energy_correction, 164 of the 385 and the only table in the
+        // archive with no public ref (task #253). "a correction on spe_1" is
+        // what a reviewer needs, and it does not wait on #253.
+        expect(
+            resolveRecordLocation(
+                "applied_energy_correction",
+                null,
+                "species_entry",
+                "spe_1",
+            ),
+        ).toEqual({
+            kind: "container",
+            href: "/species-entries/spe_1",
+            ref: null,
+            containerType: "species_entry",
+            containerRef: "spe_1",
+        })
+    })
+
+    it("distinguishes 'no page yet' from 'could not be named'", () => {
+        // The two are different things to do about, and collapsing them is
+        // what made eight identical lines tell a curator nothing.
+        expect(resolveRecordLocation("artifact", "art_1", null, null).kind).toBe("no-page")
+        expect(resolveRecordLocation("artifact", null, null, null).kind).toBe("unnamed")
+    })
+
+    it("refuses half a container pair", () => {
+        // A ref with no type cannot be routed; a type with no ref names
+        // nothing. Either would otherwise render as a link to nowhere.
+        expect(resolveRecordLocation("thermo", "thm_1", null, "spe_1").kind).toBe("no-page")
+        expect(resolveRecordLocation("thermo", "thm_1", "species_entry", null).kind).toBe(
+            "no-page",
+        )
+    })
+
+    it("does not follow a container whose own type has no page", () => {
+        // transition_state_entry's owner is transition_state, which has no
+        // route. Falling back to it would build `/undefined/ts_1`.
+        expect(
+            resolveRecordLocation("statmech", "stm_1", "transition_state", "ts_1").kind,
+        ).toBe("no-page")
+    })
+
+    it("escapes a container ref that would otherwise reshape the path", () => {
+        expect(
+            resolveRecordLocation("thermo", "thm_1", "species_entry", "a/b"),
+        ).toMatchObject({ href: "/species-entries/a%2Fb" })
+    })
+
+    it("words a container type for a reader without inventing one", () => {
+        expect(recordTypeWords("species_entry")).toBe("species entry")
+        expect(recordTypeWords("transition_state_entry")).toBe("transition state entry")
+        expect(recordTypeWords("network")).toBe("network")
+    })
+
+    it("every container type the backend can send has a page", () => {
+        // Written out from `_CONTAINER_COLUMNS` in
+        // `backend/app/services/record_containers.py`. If the backend adds a
+        // container type this frontend cannot route, rows of its children
+        // silently drop back to "no page yet" -- the safe direction, but a
+        // silent one, and this is where it becomes loud.
+        //
+        // transition_state is the one exception and is deliberate: only
+        // transition_state_entry names it as a container, and that type has a
+        // page of its own, so the fallback is never reached.
+        const CONTAINER_TYPES_THE_BACKEND_SENDS = [
+            "species",
+            "species_entry",
+            "conformer_group",
+            "reaction",
+            "reaction_entry",
+            "transition_state_entry",
+            "calculation",
+            "network",
+        ]
+        for (const containerType of CONTAINER_TYPES_THE_BACKEND_SENDS) {
+            expect(recordTypeHasPage(containerType), containerType).toBe(true)
+        }
     })
 })

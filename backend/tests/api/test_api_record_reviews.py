@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -30,12 +30,20 @@ from app.db.models.common import (
     SubmissionStatus,
 )
 from app.db.models.record_review import RecordReview
+from app.db.models.species import SpeciesEntry
 from app.db.models.submission import (
     Submission,
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
+from tests.services.scientific_read._factories import (
+    make_applied_energy_correction,
+    make_energy_correction_scheme,
+    make_species,
+    make_species_entry,
+    make_thermo_scalar,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
@@ -566,3 +574,231 @@ class TestRecordReviewApi:
         )
         assert bad.status_code == 400
         assert "Disallowed" in bad.json()["detail"]
+
+
+class TestReviewRowSaysWhereItsRecordCanBeSeen:
+    """#262: 385 of 1,299 queue rows could not be opened, and it was the wrong
+    385 -- the thermochemistry, kinetics and energy corrections the archive
+    exists to publish.
+
+    ``record_public_ref`` names a record; it does not locate one. Six record
+    types are rendered only inside their parent, so a ``thm_...`` addresses no
+    route. ``container_type``/``container_ref`` are what a client turns into a
+    link, and they are resolved the same way the ref is: at read time, in bulk.
+    """
+
+    def _seed_thermo(self, client) -> int:
+        resp = client.post(
+            "/api/v1/uploads/thermo",
+            json={
+                "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
+                "scientific_origin": "computed",
+                "h298_kj_mol": 217.998,
+            },
+        )
+        assert resp.status_code == 201
+        return resp.json()["id"]
+
+    def test_a_thermo_row_names_the_species_entry_it_is_shown_on(
+        self, client, db_session
+    ):
+        """The measured defect, at the wire.
+
+        Thermo is 65 of the 385. It renders as a tab on the species entry
+        page, and this is the field that says which one.
+        """
+        thermo_id = self._seed_thermo(client)
+
+        body = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}").json()
+
+        thermo = db_session.get(Thermo, thermo_id)
+        entry = db_session.get(SpeciesEntry, thermo.species_entry_id)
+        assert body["container_type"] == "species_entry"
+        # THIS thermo's species entry, read back from the record itself. "a
+        # ref came back" would pass against any other entry in the database.
+        assert body["container_ref"] == entry.public_ref
+
+    def test_the_container_is_a_ref_and_never_a_row_id(self, client, db_session):
+        """DR-0028 Req 2: no internal row id in what a reader is shown.
+
+        The shortcut this rules out is real and tempting -- the parent's id is
+        already in hand after the first query, and returning it would save the
+        second. It would also put a number in front of a curator that resolves
+        through no public route, while looking like an identifier.
+        """
+        thermo_id = self._seed_thermo(client)
+
+        body = client.get(f"/api/v1/record-reviews/thermo/{thermo_id}").json()
+
+        thermo = db_session.get(Thermo, thermo_id)
+        assert body["container_ref"] != str(thermo.species_entry_id)
+        assert body["container_ref"] != thermo.species_entry_id
+        # No id-shaped sibling crept in beside the ref, under any spelling.
+        assert "container_id" not in body
+        assert not any(
+            key.startswith("container") and key.endswith("_id") for key in body
+        )
+
+    def test_the_two_halves_are_null_together(self, client, db_session):
+        """A ref with no type cannot be linked; a type with no ref names
+        nothing. The schema promises they move together, so a row that has
+        neither must have neither -- not one of them.
+        """
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.species,
+                record_id=make_species(db_session).id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        rows = client.get(
+            "/api/v1/record-reviews",
+            params={"record_type": "species", "status": "not_reviewed", "limit": 200},
+        ).json()
+        assert rows, "seeded species review row missing from the listing"
+
+        for row in rows:
+            assert (row["container_type"] is None) == (row["container_ref"] is None)
+        # species is a root: it has no owner, and that is a normal answer.
+        assert all(row["container_type"] is None for row in rows)
+
+    def test_a_correction_that_cannot_be_named_still_says_where_it_applies(
+        self, client, db_session
+    ):
+        """164 of the 385, and the case the whole field is justified by.
+
+        ``applied_energy_correction`` has no ``public_ref`` column, so the
+        queue renders it as "applied_energy_correction cannot be named".
+        Giving that table a ref is task #253 and is NOT needed here: "a
+        correction on species entry spc_..." is the more useful sentence
+        anyway, because it says what the correction is attached to.
+        """
+        entry = make_species_entry(db_session, make_species(db_session))
+        correction = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="api_container"),
+        )
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.applied_energy_correction,
+                record_id=correction.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        body = client.get(
+            f"/api/v1/record-reviews/applied_energy_correction/{correction.id}"
+        ).json()
+
+        # Still unnameable -- this change does not invent a ref for it.
+        assert body["record_public_ref"] is None
+        # But no longer unreachable.
+        assert body["container_type"] == "species_entry"
+        assert body["container_ref"] == entry.public_ref
+
+    def test_the_list_route_gives_every_row_its_own_container(
+        self, client, db_session
+    ):
+        """Resolved for a whole page, and per row rather than once per page.
+
+        Two thermos on two different species entries. A mapper that resolved
+        one container and reused it for the page, or that paired containers to
+        rows positionally, would pass a check that only asserted non-null --
+        and would send a curator to the wrong record, which is worse than
+        sending them nowhere.
+        """
+        first = self._seed_thermo(client)
+        second_entry = make_species_entry(db_session, make_species(db_session))
+        second = make_thermo_scalar(
+            db_session, species_entry=second_entry, h298_kj_mol=-99.5
+        )
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.thermo,
+                record_id=second.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        rows = {
+            r["record_id"]: r
+            for r in client.get(
+                "/api/v1/record-reviews",
+                params={
+                    "record_type": "thermo",
+                    "status": "not_reviewed",
+                    "limit": 200,
+                },
+            ).json()
+        }
+
+        first_entry = db_session.get(
+            SpeciesEntry, db_session.get(Thermo, first).species_entry_id
+        )
+        assert rows[first]["container_ref"] == first_entry.public_ref
+        assert rows[second.id]["container_ref"] == second_entry.public_ref
+        assert rows[first]["container_ref"] != rows[second.id]["container_ref"]
+
+    def test_a_longer_page_does_not_cost_more_queries(self, client, db_session):
+        """The bulk resolve, measured at the route rather than the service.
+
+        Counted as "the same number of statements for 2 rows as for 10",
+        which is the property that matters and is insensitive to however many
+        fixed queries authentication and the listing itself take. A resolver
+        moved inside the row loop -- the single most likely regression here,
+        since the pure-mapper split is the only thing preventing it -- makes
+        this grow by eight and fails nothing else in this file.
+        """
+        entry = make_species_entry(db_session, make_species(db_session))
+
+        def _seed(n: int) -> None:
+            for i in range(n):
+                thermo = make_thermo_scalar(
+                    db_session, species_entry=entry, h298_kj_mol=-500.0 - i
+                )
+                db_session.add(
+                    RecordReview(
+                        record_type=SubmissionRecordType.thermo,
+                        record_id=thermo.id,
+                        status=RecordReviewStatus.under_review,
+                    )
+                )
+            db_session.flush()
+
+        def _count() -> int:
+            statements = 0
+            engine = db_session.connection().engine
+
+            def _before(conn, cursor, statement, parameters, context, executemany):
+                nonlocal statements
+                statements += 1
+
+            event.listen(engine, "before_cursor_execute", _before)
+            try:
+                resp = client.get(
+                    "/api/v1/record-reviews",
+                    params={
+                        "record_type": "thermo",
+                        "status": "under_review",
+                        "limit": 200,
+                    },
+                )
+                assert resp.status_code == 200
+            finally:
+                event.remove(engine, "before_cursor_execute", _before)
+            return statements
+
+        _seed(2)
+        two_rows = _count()
+        _seed(8)
+        ten_rows = _count()
+
+        assert ten_rows == two_rows, (
+            f"the page cost {two_rows} queries for 2 rows and {ten_rows} for "
+            "10 -- the ref or container resolve is running per row"
+        )

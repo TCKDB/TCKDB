@@ -31803,6 +31803,29 @@
       "RecordReviewRead": {
         "description": "Read schema for one ``record_review`` row.",
         "properties": {
+          "container_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The public handle naming the record given by container_type, resolved at read time. This is what to open to see a record that has no page of its own: an applied_energy_correction cannot be named at all, but 'a correction on species entry spc_...' still says where to look. Null under exactly the conditions container_type is null.",
+            "title": "Container Ref"
+          },
+          "container_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The record type of the record this one belongs to and is displayed inside, e.g. species_entry for a thermo or statmech, reaction_entry for a kinetics or transition state. Null when the record has no owning parent (species, reaction and network are roots), or when that parent no longer exists. Always null or non-null together with container_ref."
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",

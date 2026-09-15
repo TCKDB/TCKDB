@@ -45,6 +45,49 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
             "internal row id and resolves through no public route."
         ),
     )
+    #: Where this record can be *seen*, when it has no page of its own.
+    #:
+    #: ``record_public_ref`` names the record; these two say where to go and
+    #: look at it. Six record types are rendered only inside their parent --
+    #: thermo and statmech on the species entry page, kinetics and transition
+    #: states on the reaction entry page -- so for those a ref addresses no
+    #: route and a review queue built on the ref alone can point at nothing.
+    #:
+    #: The pair moves together on purpose. A ref with no type cannot be turned
+    #: into a link, because the ``spc_``/``rxn_`` prefixes are a naming
+    #: convention and not a contract a client may parse; a type with no ref
+    #: names nothing. Either both are set or both are null.
+    #:
+    #: This is the record's owner in the schema (``thermo.species_entry_id``
+    #: and its siblings), NOT a statement about which client can display what.
+    #: Types that are perfectly addressable on their own carry it too, and a
+    #: client that can already open the record simply prefers the record.
+    #:
+    #: Null is a NORMAL answer, not a failure -- see the ``description``, which
+    #: is what reaches a reader of the published OpenAPI who has neither this
+    #: source nor any other statement of when the field is null.
+    container_type: SubmissionRecordType | None = Field(
+        default=None,
+        description=(
+            "The record type of the record this one belongs to and is "
+            "displayed inside, e.g. species_entry for a thermo or statmech, "
+            "reaction_entry for a kinetics or transition state. Null when "
+            "the record has no owning parent (species, reaction and network "
+            "are roots), or when that parent no longer exists. Always null "
+            "or non-null together with container_ref."
+        ),
+    )
+    container_ref: str | None = Field(
+        default=None,
+        description=(
+            "The public handle naming the record given by container_type, "
+            "resolved at read time. This is what to open to see a record "
+            "that has no page of its own: an applied_energy_correction "
+            "cannot be named at all, but 'a correction on species entry "
+            "spc_...' still says where to look. Null under exactly the "
+            "conditions container_type is null."
+        ),
+    )
     status: RecordReviewStatus
     submission_id: int | None = None
     reviewed_by: int | None = None
