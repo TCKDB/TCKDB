@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 104 |
 | raw_only | 106 |
-| not_applicable | 41 |
-| **total** | **251** |
+| not_applicable | 42 |
+| **total** | **252** |
 
 ## Typed coverage
 
@@ -321,6 +321,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/resolve` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/curator-tasks/{task_id}/start-review` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake` | yes | — | — | — | — |
+| `POST /api/v1/admin/machine-review/run-for-submission/{submission_id}` | yes | — | — | — | — |
 | `GET /api/v1/admin/submissions/{submission_id}/machine-review-inspection` | yes | — | — | — | — |
 | `GET /api/v1/admin/users` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/users/{user_id}/role` | yes | — | — | — | — |

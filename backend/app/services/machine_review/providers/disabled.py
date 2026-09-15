@@ -2,10 +2,13 @@
 
 Selected when ``AI_REVIEW_ASSISTANT_MODE=off``. Makes no model call, needs no
 API key, base URL, or extra service, and returns a valid native v2 result with
-``status=not_run``. The service layer (a later slice) may choose to write
-nothing in off mode — absence of an audit event already means ``not_run``
-(``optional_llm_precheck.md`` §13). This provider exists so the v2 type contract
-holds in every mode and so off mode has a deterministic, dependency-free result.
+``status=not_run``. The service layer
+(:func:`~app.services.machine_review.run.run_machine_review_for_submission`)
+writes nothing when it gets this provider — absence of an audit event already
+means ``not_run`` (``optional_llm_precheck.md`` §13), so a row saying "nothing
+happened" would only be noise a curator reads past. This provider exists so the
+v2 type contract holds in every mode and so off mode has a deterministic,
+dependency-free result.
 """
 
 from __future__ import annotations
