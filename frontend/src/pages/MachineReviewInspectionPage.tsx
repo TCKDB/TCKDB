@@ -1,6 +1,12 @@
 import { useState } from "react"
+import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
+import { buildCuratorTasksForSubmission } from "../api/curatorTasksApi"
+import {
+    findingsConsidered,
+    type CuratorTaskBuildResult,
+} from "../types/curatorTask"
 import {
     overallHighestSeverity,
     type MachineReviewStatus,
@@ -84,6 +90,168 @@ function StatusBadge({ status }: { status: MachineReviewStatus }) {
 
 function dash(value: unknown): string {
     return value === null || value === undefined || value === "" ? "—" : String(value)
+}
+
+/**
+ * What the build is doing right now.
+ *
+ * Four states rather than a pair of booleans, because the pair admits
+ * combinations that mean nothing -- "running and failed", "idle with a
+ * result" -- and every one of those is a way to show an admin a tally
+ * belonging to a run that is not the one they are watching.
+ */
+type BuildState =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "done"; result: CuratorTaskBuildResult }
+    | { kind: "failed"; message: string }
+
+/**
+ * The one control that puts work into the curator queue.
+ *
+ * Curator tasks are built by nothing else. The backend route says so in as
+ * many words ("Explicit/admin-triggered only -- never runs on upload"), so
+ * until this button existed the queue stayed empty however many
+ * submissions arrived, and the only way to fill it was a hand-written curl
+ * (task #256).
+ *
+ * It lives here because this page is already showing the exact findings
+ * the build reads: an admin who has just looked at a submission's
+ * machine-review projection is the person who can judge whether those
+ * findings deserve a curator's time.
+ *
+ * **A tally must never outlive its submission.** Submission 9's findings
+ * under submission 7's tally is a false report, and the more convincing
+ * for being half true. What actually drops it today is the parent: while
+ * the next inspection loads, `query.data` is undefined, the whole results
+ * block unmounts, and this component's state goes with it.
+ *
+ * The `key={submissionId}` at the mount site adds nothing to that --
+ * MEASURED: removing it fails no test. It is there for the one-line edit
+ * that would undo it (`placeholderData` on the query, to stop the page
+ * flashing empty between submissions), after which the key is the only
+ * thing left dropping the tally. Measured too: with `placeholderData` and
+ * no key, "does not follow the admin to another submission" fails; with
+ * `placeholderData` and the key, it passes.
+ *
+ * So the guard that is actually load-bearing is that test, not either
+ * mechanism. Whoever next changes how this page holds its query data will
+ * hear about it from the test rather than from an admin.
+ */
+function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
+    const [state, setState] = useState<BuildState>({ kind: "idle" })
+
+    async function build() {
+        setState({ kind: "running" })
+        try {
+            const result = await buildCuratorTasksForSubmission(submissionId)
+            setState({ kind: "done", result })
+        } catch (error) {
+            setState({
+                kind: "failed",
+                message: error instanceof Error ? error.message : String(error),
+            })
+        }
+    }
+
+    return (
+        <section>
+            <h3>Curator tasks</h3>
+            <p style={{ color: "#6b7280", marginTop: "-6px" }}>
+                Tasks are <strong>not</strong> created on upload. This builds them
+                from the warning and critical findings above, for this submission
+                only, and writes nothing but task rows: the submission&apos;s status
+                and every record&apos;s review state are untouched. A task is
+                advisory. It asks a person to look, and endorses nothing.
+            </p>
+            <button type="button" onClick={build} disabled={state.kind === "running"}>
+                {state.kind === "running"
+                    ? "Building\u2026"
+                    : "Build curator tasks for this submission"}
+            </button>
+
+            {state.kind === "failed" && (
+                <p role="alert" style={{ color: "#b91c1c" }}>
+                    No tasks were built: {state.message}
+                </p>
+            )}
+
+            {state.kind === "done" && <BuildTally result={state.result} />}
+        </section>
+    )
+}
+
+/**
+ * The tally of one build, in wording an admin can act on.
+ *
+ * Two things this must not do. It must not add the counts up:
+ * `refreshed_count` is a sub-count of `reused_count`, so a total would
+ * exceed the findings considered. And it must not print a task id -- the
+ * server sends `task_ids`, and `CuratorTaskBuildResultSchema` drops it
+ * before it can reach here (DR-0028 Req 2).
+ */
+function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
+    const made = result.created_count
+    const considered = findingsConsidered(result)
+    const headline =
+        made > 0
+            ? `${made} new task${made === 1 ? " is" : "s are"} now in the curator queue.`
+            : considered > 0
+              ? "No new tasks: every warning or critical finding here already has one."
+              : "No tasks: nothing in this submission is a warning or critical " +
+                "finding mapped to a record."
+
+    return (
+        <div
+            role="status"
+            // Framed, so the tally reads as the answer to the button above
+            // it rather than as one more paragraph of this page's furniture.
+            style={{
+                borderLeft: "3px solid #6b7280",
+                paddingLeft: "12px",
+                marginTop: "12px",
+            }}
+        >
+            <p>{headline}</p>
+            <ul>
+                <li>new tasks created: {result.created_count}</li>
+                <li>
+                    findings that already had an open task: {result.reused_count} (
+                    {result.refreshed_count} of them refreshed with the latest
+                    snapshot)
+                </li>
+                <li>
+                    findings whose task is already closed, left closed:{" "}
+                    {result.skipped_terminal_count}
+                </li>
+                <li>
+                    info findings, which never become tasks: {result.skipped_info_count}
+                </li>
+                <li>
+                    unmapped findings, which are about no record:{" "}
+                    {result.skipped_unmapped_count}
+                </li>
+            </ul>
+            {result.warnings.length > 0 && (
+                <>
+                    <h4>build warnings</h4>
+                    <ul>
+                        {result.warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                        ))}
+                    </ul>
+                </>
+            )}
+            <p>
+                <Link
+                    to="/admin/curator-queue"
+                    style={{ color: "#1d4ed8", textDecoration: "underline" }}
+                >
+                    Open the curator queue
+                </Link>
+            </p>
+        </div>
+    )
 }
 
 function MachineReviewInspectionPage() {
@@ -251,6 +419,11 @@ function MachineReviewInspectionPage() {
                             ))}
                         </ul>
                     </section>
+
+                    <CuratorTaskBuilder
+                        key={data.submission_id}
+                        submissionId={data.submission_id}
+                    />
 
                     {/* Diagnostics */}
                     <section>
