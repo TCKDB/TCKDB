@@ -1543,6 +1543,34 @@ describe("a row says where its record can be seen", () => {
         ).toHaveAttribute("href", "/species-entries/spe_ccc")
     })
 
+    it("reads as a sentence when the record cannot be named", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: "species_entry",
+                container_ref: "spe_ccc",
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        const cell = within(rowFor("spe_ccc")).getAllByRole("cell")[0]
+
+        // The comma is not decoration, and this is the whole cell rather
+        // than a substring because that is the only way to pin it. Without
+        // it the row reads "applied_energy_correction cannot be named shown
+        // on species entry spe_ccc" -- one broken sentence instead of two
+        // facts about one record. Found by looking at the rendered page in
+        // headless Chrome, and it survived all 109 tests in this file until
+        // this one existed.
+        expect(cell.textContent?.replace(/\s+/g, " ").trim()).toBe(
+            "applied_energy_correction cannot be named, shown on species " +
+                "entry spe_ccc (opens in a new tab)",
+        )
+    })
+
     it("opens every record link in a new tab, safely", async () => {
         meIs(curator)
         queueIs([
@@ -1603,12 +1631,12 @@ describe("a row says where its record can be seen", () => {
 
         await screen.findByRole("table")
         const gap = rowFor("art_fff")
-        expect(gap).toHaveTextContent(/no page for this record type yet/i)
+        expect(gap).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
         expect(gap).not.toHaveTextContent(/cannot be named/i)
 
         const missing = rowFor("cannot be named")
         expect(missing).toHaveTextContent(/this record cannot be named/i)
-        expect(missing).not.toHaveTextContent(/no page for this record type yet/i)
+        expect(missing).not.toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
     })
 
     it("still puts no internal row id in the table when it links a container", async () => {
@@ -1690,7 +1718,7 @@ describe("a row says where its record can be seen", () => {
         renderPage()
 
         await screen.findByRole("table")
-        expect(rowFor("thm_old")).toHaveTextContent(/no page for this record type yet/i)
+        expect(rowFor("thm_old")).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
         expect(screen.queryByText(/could not be read/i)).not.toBeInTheDocument()
     })
 })

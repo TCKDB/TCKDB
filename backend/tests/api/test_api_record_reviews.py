@@ -754,12 +754,20 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         since the pure-mapper split is the only thing preventing it -- makes
         this grow by eight and fails nothing else in this file.
         """
-        entry = make_species_entry(db_session, make_species(db_session))
-
         def _seed(n: int) -> None:
             for i in range(n):
+                # A DIFFERENT species entry per row, which is how a real page
+                # looks and is what makes this count meaningful. Seeded under
+                # one shared parent -- as this test originally was -- the
+                # whole page has a single distinct container, and a resolver
+                # that queried once per container would cost the same for 2
+                # rows as for 10 and pass unchanged.
                 thermo = make_thermo_scalar(
-                    db_session, species_entry=entry, h298_kj_mol=-500.0 - i
+                    db_session,
+                    species_entry=make_species_entry(
+                        db_session, make_species(db_session)
+                    ),
+                    h298_kj_mol=-500.0 - i,
                 )
                 db_session.add(
                     RecordReview(

@@ -31824,7 +31824,7 @@
                 "type": "null"
               }
             ],
-            "description": "The record type of the record this one belongs to and is displayed inside, e.g. species_entry for a thermo or statmech, reaction_entry for a kinetics or transition state. Null when the record has no owning parent (species, reaction and network are roots), or when that parent no longer exists. Always null or non-null together with container_ref."
+            "description": "The record type of the record this one belongs to and is displayed inside, e.g. species_entry for a thermo or statmech, reaction_entry for a kinetics or transition state. Null for any of four reasons, all of them normal answers rather than errors: the record type has no owning parent (species, reaction and network are roots of their own trees); the record itself no longer exists; the record names no owner (not reachable for any type today, since every owning key is NOT NULL or covered by an exclusive-or constraint); or the owner no longer exists. Always null or non-null together with container_ref."
           },
           "created_at": {
             "format": "date-time",

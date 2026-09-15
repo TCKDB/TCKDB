@@ -85,12 +85,32 @@ export const LINKABLE_RECORD_TYPES: readonly string[] = Object.keys(
  * be named" lines told a curator nothing about whether they were looking at
  * a bug or a known gap, and those are different things to do about:
  *
- * - `no-page`: the record IS named, there is simply nowhere to open it. A
- *   known gap. The ref is still shown so it can be pasted into the API.
+ * - `no-page`: the record IS named, there is simply nowhere to open it. The
+ *   ref is still shown so it can be pasted into the API.
  * - `unnamed`: the backend could not name the record at all -- either its
  *   table has no `public_ref` (only `applied_energy_correction` today), or
  *   the row is gone. A missing row is a real defect and must not be filed
  *   under the same sentence as a missing page.
+ *
+ * **What `no-page` deliberately does NOT distinguish,** because it cannot:
+ * a record whose type has no page AND whose parent could not be named looks
+ * identical here to one whose type simply has no parent. Both arrive as two
+ * nulls, because the wire contract is that `container_type` and
+ * `container_ref` are null together -- a type without a ref names nothing a
+ * client could address, so sending half a pair would be worse.
+ *
+ * Telling those apart needs a third wire field saying WHY the container is
+ * absent, and that is not worth it here: the backend's four null causes are
+ * enumerated in `app/services/record_containers.py`, and the one that would
+ * make the difference (the parent row is gone) is unreachable in production.
+ * The foreign keys are ON DELETE NO ACTION, so Postgres refuses to delete a
+ * parent that still has children; producing it at all takes a deferred
+ * -constraint transaction, which is exactly how the backend test for it is
+ * written. So rather than assert a cause it cannot check, the `no-page`
+ * sentence states only the two things that are certainly true -- the type
+ * has no page, and nothing else could be opened either. It used to read "no
+ * page for this record type yet", which named the missing page as the sole
+ * reason and would have been actively misleading in that case.
  */
 export type RecordLocation =
     /** The record's own page. */

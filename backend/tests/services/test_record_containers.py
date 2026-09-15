@@ -459,6 +459,56 @@ def test_a_page_of_one_type_costs_two_queries(db_session, record_count):
     )
 
 
+@pytest.mark.parametrize("record_count", [2, 6])
+def test_a_page_whose_rows_have_DIFFERENT_parents_still_costs_two(
+    db_session, record_count
+):
+    """The cost pin that the two above cannot make.
+
+    Every other cost test on this page puts all its rows under ONE shared
+    parent, and that is a hole rather than a simplification: with a single
+    distinct container, a resolver that queried once per *container* costs
+    exactly what the grouped one does, so all of them pass it. MEASURED
+    2026-09-16 -- replacing pass 2 with
+
+        for c in set(container_ids.values()):
+            container_refs.update(resolve_record_public_refs(session, [c]))
+
+    passed all 44 tests in this file and ``test_api_record_reviews.py``.
+
+    On a real page the rows do NOT share a parent: thermo rows sit on the
+    species entries they were deposited against, so that sabotage is one
+    round trip per row, which is the very regression the grouping exists to
+    prevent -- reintroduced one layer below where the earlier pins look.
+
+    So: N rows, N distinct species entries, still two queries. The count must
+    not move with ``record_count``, which is what makes the parametrisation
+    load-bearing rather than decorative.
+    """
+    thermos = [
+        make_thermo_scalar(db_session, species_entry=_species_entry(db_session))
+        for _ in range(record_count)
+    ]
+    refs = [(SubmissionRecordType.thermo, t.id) for t in thermos]
+
+    # The parents really are distinct -- otherwise this test degrades into a
+    # copy of the shared-parent one and silently stops testing anything.
+    parents = {
+        db_session.get(Thermo, t.id).species_entry_id for t in thermos
+    }
+    assert len(parents) == record_count, "fixture failed to build distinct parents"
+
+    with _counted(db_session) as count:
+        resolved = resolve_record_containers(db_session, refs)
+
+    assert len(resolved) == record_count
+    assert count.statements == 2, (
+        f"expected two grouped SELECTs for {record_count} rows on "
+        f"{record_count} different parents, saw {count.statements} -- the "
+        "container refs are being resolved one parent at a time"
+    )
+
+
 def test_a_mixed_page_stays_bounded_by_the_types_present(db_session):
     """Twelve rows of two record types still cost four queries.
 

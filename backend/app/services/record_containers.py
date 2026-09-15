@@ -30,16 +30,25 @@ addressable in their own right -- ``species_entry``, ``reaction_entry`` --
 are listed too: they have an owner, so the owner is reported, and a client
 that can already open the record simply prefers it.
 
-``None`` is a normal answer with three causes, none of them a failure:
+.. _container-null-causes:
 
-* the record type has no owning parent at all (``species``, ``reaction``,
-  ``network`` are roots of their own trees);
-* every candidate column on the row is NULL -- not reachable today, since
-  every entry below is either NOT NULL or covered by an XOR ``CHECK``, but
-  the resolver must not assume a constraint it cannot see;
-* the parent row named by the key is gone, so it cannot be named.
+``None`` is a normal answer, never a failure, and it has exactly **four**
+causes. This list is the canonical one: the docstring of
+:func:`resolve_record_containers` and the OpenAPI ``description`` on
+``RecordReviewRead.container_type`` restate it, and all three must agree --
+an earlier draft had three causes here, four there and two on the wire, which
+left a reader of any one of them with a different idea of what null meant.
 
-Callers get ``None`` for all three and must present it as "cannot be linked",
+1. **The record type has no owning parent.** ``species``, ``reaction`` and
+   ``network`` are roots of their own trees.
+2. **The record itself no longer exists.** A review row outliving the record
+   it was raised for. This is the one that actually happens in production.
+3. **The record names no owner.** Not reachable for any type today -- every
+   owning key below is either NOT NULL or covered by an XOR ``CHECK`` -- but
+   the resolver must not assume a constraint it cannot see.
+4. **The owner no longer exists,** so it cannot be named.
+
+Callers get ``None`` for all four and must present it as "cannot be linked",
 never as an error. The same refusal, and the same reason, as
 :mod:`app.services.record_refs`.
 """
@@ -201,10 +210,13 @@ def resolve_record_containers(
     So a 50-row page of one record type costs two queries, not 50, and a mixed
     page is bounded by the number of types present rather than by its length.
 
-    Pairs that resolve to nothing are **absent** from the result, exactly as in
-    ``record_refs``: a type with no owner, a row whose owner columns are all
-    NULL, an id naming no row, and an owner since deleted all read as "cannot
-    be linked", which is the honest answer for every one of them.
+    Pairs that resolve to nothing are **absent** from the result, exactly as
+    in ``record_refs``, for the four causes this module's docstring lists and
+    no others: the record type has no owning parent, the record itself no
+    longer exists, the record names no owner, or the owner no longer exists.
+    All four read as "cannot be linked", which is the honest answer for every
+    one of them. See :ref:`container-null-causes` -- that list is canonical
+    and this paragraph must not drift from it.
     """
     by_type: dict[SubmissionRecordType, set[int]] = defaultdict(set)
     for record_type, record_id in refs:
@@ -240,6 +252,14 @@ def resolve_record_containers(
                     break
 
     # Pass 2: name those containers, grouped by container type.
+    # One call with every (type, id) pair, NOT a call per pair. The whole set
+    # goes in so that ``resolve_record_public_refs`` can group it; handing it
+    # one pair at a time would look identical here and cost a round trip per
+    # distinct parent -- which on a real page, where rows do not share a
+    # parent, is a round trip per row. Reproduced 2026-09-16; it passed all
+    # 44 tests until ``test_a_page_whose_rows_have_DIFFERENT_parents_still
+    # _costs_two`` was written, because every cost test then in the file put
+    # its whole page under one shared parent.
     container_refs = resolve_record_public_refs(session, set(container_ids.values()))
 
     resolved: dict[tuple[SubmissionRecordType, int], RecordContainer] = {}

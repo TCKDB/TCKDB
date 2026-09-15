@@ -63,18 +63,30 @@ class RecordReviewRead(TimestampedCreatedByReadSchema):
     #: Types that are perfectly addressable on their own carry it too, and a
     #: client that can already open the record simply prefers the record.
     #:
-    #: Null is a NORMAL answer, not a failure -- see the ``description``, which
-    #: is what reaches a reader of the published OpenAPI who has neither this
-    #: source nor any other statement of when the field is null.
+    #: Null is a NORMAL answer, not a failure, and it has exactly four causes.
+    #: They are listed canonically in
+    #: :mod:`app.services.record_containers` (``container-null-causes``); the
+    #: ``description`` below restates the same four, in the same order, and
+    #: must not drift from them -- an earlier draft said three in the module,
+    #: four in the resolver and two here, so a reader of any one of them came
+    #: away with a different idea of what null meant.
+    #:
+    #: The ``description`` is not a duplicate of this comment: it is what
+    #: reaches a reader of the published OpenAPI, who has neither this source
+    #: nor any other statement of when the field is null.
     container_type: SubmissionRecordType | None = Field(
         default=None,
         description=(
             "The record type of the record this one belongs to and is "
             "displayed inside, e.g. species_entry for a thermo or statmech, "
-            "reaction_entry for a kinetics or transition state. Null when "
-            "the record has no owning parent (species, reaction and network "
-            "are roots), or when that parent no longer exists. Always null "
-            "or non-null together with container_ref."
+            "reaction_entry for a kinetics or transition state. Null for any "
+            "of four reasons, all of them normal answers rather than errors: "
+            "the record type has no owning parent (species, reaction and "
+            "network are roots of their own trees); the record itself no "
+            "longer exists; the record names no owner (not reachable for any "
+            "type today, since every owning key is NOT NULL or covered by an "
+            "exclusive-or constraint); or the owner no longer exists. Always "
+            "null or non-null together with container_ref."
         ),
     )
     container_ref: str | None = Field(

@@ -195,8 +195,14 @@ function RecordCell({ location }: { location: RecordLocation }) {
             return (
                 <>
                     <span className="data">{location.ref}</span>{" "}
+                    {/* Two facts, both certainly true here, and no claim
+                        about WHICH of them is the operative one -- see
+                        `resolveRecordLocation`. The earlier wording, "no
+                        page for this record type yet", named the missing
+                        page as the sole reason, which is wrong whenever the
+                        container was the thing that could not be named. */}
                     <span className="admin-absent">
-                        no page for this record type yet
+                        no page for this record type, and nowhere it can be seen
                     </span>
                 </>
             )
