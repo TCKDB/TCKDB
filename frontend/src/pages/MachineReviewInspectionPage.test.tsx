@@ -169,15 +169,15 @@ const BUILD =
 
 const BUILD_BUTTON = "Build curator tasks for this submission"
 
-const RECORD = {
-    record_type: "species",
-    record_public_ref: PUBLIC_REF,
-    record_id: 431,
-    latest_summary: SUMMARY,
-    all_record_reviews_count: 1,
-}
-
-/** Serve the inspection for ANY submission id, echoing the one asked for. */
+/**
+ * Serve the inspection for ANY submission id.
+ *
+ * The record's public ref names the submission it came from (`spc_sub_9`),
+ * which is what makes "wait until the page is showing submission 9" an
+ * assertion rather than a hope. Every control on this page is present both
+ * before and after a submission change, so without a value that differs
+ * per submission there is nothing to wait for.
+ */
 function serveAnyInspection() {
     server.use(
         http.get(
@@ -185,7 +185,15 @@ function serveAnyInspection() {
             ({ params }) =>
                 HttpResponse.json({
                     submission_id: Number(params.submissionId),
-                    record_summaries: [RECORD],
+                    record_summaries: [
+                        {
+                            record_type: "species",
+                            record_public_ref: `spc_sub_${params.submissionId}`,
+                            record_id: 431,
+                            latest_summary: SUMMARY,
+                            all_record_reviews_count: 1,
+                        },
+                    ],
                     unmapped_findings_count: 0,
                     mapping_warnings: [],
                     parse_warnings: [],
@@ -193,6 +201,32 @@ function serveAnyInspection() {
                 }),
         ),
     )
+}
+
+/** Wait until the page is showing this submission's findings. */
+function showing(id: string): Promise<HTMLElement> {
+    return screen.findByText(`spc_sub_${id}`)
+}
+
+/**
+ * The tally region, once it has something in it.
+ *
+ * `role="status"` is now a permanently mounted, initially EMPTY container
+ * (see the component), so its mere presence proves nothing and
+ * `findByRole("status")` resolves instantly whether a build has run or
+ * not. Emptiness is the signal.
+ */
+async function tallyShown(): Promise<HTMLElement> {
+    const region = screen.getByRole("status")
+    await waitFor(() => expect(region).not.toBeEmptyDOMElement())
+    return region
+}
+
+/** The alert region's text, once it has some. */
+async function alertSays(pattern: RegExp): Promise<HTMLElement> {
+    const region = screen.getByRole("alert")
+    await waitFor(() => expect(region).toHaveTextContent(pattern))
+    return region
 }
 
 type Tally = {
@@ -282,7 +316,7 @@ describe("building curator tasks for a submission", () => {
         const build = serveBuild(tally({ created_count: 1 }))
         const user = await inspect("9")
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
-        await screen.findByRole("status")
+        await tallyShown()
 
         // The id is in the URL path, so a page that built for a constant, or
         // for whatever was typed last, would still show a plausible tally.
@@ -304,7 +338,7 @@ describe("building curator tasks for a submission", () => {
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        const status = await screen.findByRole("status")
+        const status = await tallyShown()
         const lines = within(status)
             .getAllByRole("listitem")
             .map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim())
@@ -359,7 +393,7 @@ describe("building curator tasks for a submission", () => {
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        const status = await screen.findByRole("status")
+        const status = await tallyShown()
         expect(
             within(status).getByText(/1 new task is now in the curator queue/),
         ).toBeInTheDocument()
@@ -370,13 +404,19 @@ describe("building curator tasks for a submission", () => {
         serveBuild(tally({ created_count: 2, task_ids: [4471, 4472] }))
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
-        await screen.findByRole("status")
+        await tallyShown()
 
-        // Whole-document, because a row id could be rendered anywhere --
-        // a debug line, a title attribute, the link's text. DR-0028 Req 2.
+        // `textContent` covers the rendered words; `outerHTML` covers the
+        // places an id can hide from it -- a `title`, a `data-` attribute,
+        // an `aria-label`. A reviewer landed exactly that mutation and the
+        // textContent-only check passed with both ids in the DOM.
+        // DR-0028 Req 2.
         const text = document.body.textContent ?? ""
-        expect(text).not.toContain("4471")
-        expect(text).not.toContain("4472")
+        const markup = document.body.outerHTML
+        for (const id of ["4471", "4472"]) {
+            expect(text).not.toContain(id)
+            expect(markup).not.toContain(id)
+        }
         expect(text).toContain("new tasks created: 2")
     })
 
@@ -386,7 +426,7 @@ describe("building curator tasks for a submission", () => {
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        const status = await screen.findByRole("status")
+        const status = await tallyShown()
         expect(
             within(status).getByText(
                 /nothing in this submission is a warning or critical finding/i,
@@ -394,7 +434,7 @@ describe("building curator tasks for a submission", () => {
         ).toBeInTheDocument()
         // The other empty-handed sentence would be a lie here: there was no
         // warning or critical finding at all, so nothing "already has" a task.
-        expect(within(status).queryByText(/already has one/i)).toBeNull()
+        expect(within(status).queryByText(/already has a task/i)).toBeNull()
     })
 
     it("distinguishes 'nothing to queue' from 'already queued'", async () => {
@@ -403,15 +443,74 @@ describe("building curator tasks for a submission", () => {
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        const status = await screen.findByRole("status")
+        const status = await tallyShown()
         expect(
             within(status).getByText(
-                /every warning or critical finding here already has one/i,
+                /every warning or critical finding here already has a task/i,
             ),
         ).toBeInTheDocument()
         expect(
             within(status).queryByText(/nothing in this submission is a warning/i),
         ).toBeNull()
+    })
+
+    it("does not imply a closed task is waiting in the queue", async () => {
+        /**
+         * `created = reused = 0, skipped_terminal = 3`. "Already has one"
+         * on its own invites the inference that it is therefore in the
+         * queue -- and the queue's open filter will show nothing for this
+         * submission, because all three tasks are closed.
+         */
+        serveAnyInspection()
+        serveBuild(tally({ skipped_terminal_count: 3 }))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
+
+        const status = await tallyShown()
+        expect(
+            within(status).getByText(/already has a task, open or closed/i),
+        ).toBeInTheDocument()
+    })
+
+    it("does not say there was nothing to build from when there was", async () => {
+        /**
+         * A finding on a record the builder could not key -- no resolved
+         * internal id, an unknown record type -- reaches NONE of the six
+         * counts and lands in `warnings` instead. Saying "nothing here is
+         * a warning or critical finding" would contradict the warning
+         * printed two inches below it.
+         */
+        serveAnyInspection()
+        serveBuild(
+            tally({
+                warnings: ["Record species/spc_x has no resolved internal id; skipped"],
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
+
+        const status = await tallyShown()
+        expect(
+            within(status).queryByText(/nothing in this submission is a warning/i),
+        ).toBeNull()
+        expect(
+            within(status).getByText(/the warnings below say what was skipped/i),
+        ).toBeInTheDocument()
+    })
+
+    it("drops the refreshed aside when nothing was reused", async () => {
+        // "0 (0 of them refreshed with the latest snapshot)" is noise
+        // about a thing that did not happen.
+        serveAnyInspection()
+        serveBuild(tally({ created_count: 2 }))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
+
+        const status = await tallyShown()
+        const lines = within(status)
+            .getAllByRole("listitem")
+            .map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim())
+        expect(lines).toContain("findings that already had an open task: 0")
     })
 
     it("counts a finding whose task is already closed as considered", async () => {
@@ -426,7 +525,7 @@ describe("building curator tasks for a submission", () => {
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        const status = await screen.findByRole("status")
+        const status = await tallyShown()
         expect(
             within(status).queryByText(/nothing in this submission is a warning/i),
         ).toBeNull()
@@ -445,19 +544,50 @@ describe("building curator tasks for a submission", () => {
         ).toBeInTheDocument()
     })
 
-    it("reports a refusal and claims nothing was built", async () => {
+    it("says nothing was built when the server refused", async () => {
         serveAnyInspection()
         serveBuild({ detail: "Submission not found." }, { status: 404 })
         const user = await inspect()
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
 
-        expect(await screen.findByRole("alert")).toHaveTextContent(
-            /Submission not found/,
-        )
+        await alertSays(/No tasks were built: Submission not found/)
         // No tally: a refused build must not leave a row of zeroes looking
         // like a run that happened and found nothing.
-        expect(screen.queryByRole("status")).toBeNull()
+        expect(screen.getByRole("status")).toBeEmptyDOMElement()
         expect(screen.getByRole("button", { name: BUILD_BUTTON })).toBeEnabled()
+    })
+
+    it("does NOT say nothing was built when the build ran unreadably", async () => {
+        /**
+         * The 2xx-with-an-unparseable-body case. The build HAS run and may
+         * have written rows. The page used to prefix every failure with
+         * "No tasks were built:", which made this one assert a thing and
+         * its opposite in a single sentence:
+         *
+         *   "No tasks were built: The build ran, but this page could not
+         *    read the tally. Any tasks it made are in the curator queue."
+         */
+        serveAnyInspection()
+        serveBuild({ this_is: "not a tally" })
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
+
+        const alert = await alertSays(/could not read the tally/)
+        expect(alert).not.toHaveTextContent(/No tasks were built/)
+        // And it must point at the one place the truth can be found.
+        expect(alert).toHaveTextContent(/curator queue/)
+    })
+
+    it("admits it does not know when the request got no answer", async () => {
+        // Offline, DNS, a dropped connection. The server may or may not
+        // have committed, and guessing either way is a false report.
+        serveAnyInspection()
+        server.use(http.post(BUILD, () => HttpResponse.error()))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
+
+        const alert = await alertSays(/may or may not have run/)
+        expect(alert).not.toHaveTextContent(/No tasks were built/)
     })
 
     it("cannot be pressed twice while one build is in flight", async () => {
@@ -479,7 +609,7 @@ describe("building curator tasks for a submission", () => {
         expect(busy).toBeDisabled()
 
         held.release()
-        await screen.findByRole("status")
+        await tallyShown()
     })
 
     it("does not follow the admin to another submission", async () => {
@@ -496,17 +626,42 @@ describe("building curator tasks for a submission", () => {
         serveBuild(tally({ created_count: 3 }))
         const user = await inspect("7")
         await user.click(await screen.findByRole("button", { name: BUILD_BUTTON }))
-        await screen.findByRole("status")
+        await tallyShown()
 
         await reinspect(user, "9")
+        await showing("9")
 
         // Submission 9's findings with submission 7's tally under them is a
         // false report, and the more convincing for being partly true.
-        await waitFor(() =>
-            expect(screen.queryByRole("status")).toBeNull(),
-        )
-        expect(
-            await screen.findByRole("button", { name: BUILD_BUTTON }),
-        ).toBeInTheDocument()
+        expect(screen.getByRole("status")).toBeEmptyDOMElement()
+    })
+
+    it("does not follow the admin BACK to a submission already seen", async () => {
+        /**
+         * The same rule through the cached door, and the one that made the
+         * first version of this feature's comments wrong.
+         *
+         * Walking to a submission this session has not fetched, `query.data`
+         * goes undefined while it loads and the parent unmounts the whole
+         * results block -- so the tally dies whether or not the component
+         * carries a `key`. Walking BACK, react-query answers from its cache
+         * (`gcTime`, five minutes by default): data never goes undefined,
+         * nothing unmounts, and the `key` is the only thing left that drops
+         * the tally. MEASURED: without the key this test fails and the
+         * one above still passes.
+         */
+        serveAnyInspection()
+        serveBuild(tally({ created_count: 3 }))
+        const user = await inspect("7")
+        await showing("7")
+
+        await reinspect(user, "9")
+        await showing("9")
+        await user.click(screen.getByRole("button", { name: BUILD_BUTTON }))
+        await tallyShown()
+
+        await reinspect(user, "7")
+        await showing("7")
+        expect(screen.getByRole("status")).toBeEmptyDOMElement()
     })
 })

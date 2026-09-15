@@ -2,7 +2,11 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
-import { buildCuratorTasksForSubmission } from "../api/curatorTasksApi"
+import { AuthApiError } from "../api/authApi"
+import {
+    buildCuratorTasksForSubmission,
+    CuratorTaskResponseError,
+} from "../api/curatorTasksApi"
 import {
     findingsConsidered,
     type CuratorTaskBuildResult,
@@ -107,6 +111,42 @@ type BuildState =
     | { kind: "failed"; message: string }
 
 /**
+ * What to tell an admin when the build did not come back with a tally.
+ *
+ * Three failures, and they do NOT share an answer. Prefixing all of them
+ * with "no tasks were built" was wrong in two cases out of three -- worst
+ * on the middle one, where the page would assert a thing and its opposite
+ * inside one sentence:
+ *
+ *   "No tasks were built: The build ran, but this page could not read
+ *    the tally. Any tasks it made are in the curator queue."
+ *
+ * Only a refusal that reached the server and came back as an error status
+ * supports "nothing was built". A 2xx whose body would not parse means
+ * the build DID run. And a request that never got an answer at all means
+ * this page does not know, which is the honest thing to say rather than
+ * guessing in either direction.
+ */
+function failureMessage(error: unknown): string {
+    if (error instanceof CuratorTaskResponseError) {
+        // 2xx. It ran; only the tally was unreadable. The error already
+        // carries the whole sentence, including where to go and look.
+        return error.message
+    }
+    if (error instanceof AuthApiError) {
+        // The server answered with a refusal, so it wrote nothing.
+        return `No tasks were built: ${error.message}`
+    }
+    // No answer: offline, DNS, a dropped connection, a request that never
+    // left. The server may or may not have committed.
+    const detail = error instanceof Error ? error.message : String(error)
+    return (
+        `The build did not report back: ${detail}. It may or may not have ` +
+        "run; check the curator queue before pressing it again."
+    )
+}
+
+/**
  * The one control that puts work into the curator queue.
  *
  * Curator tasks are built by nothing else. The backend route says so in as
@@ -122,21 +162,20 @@ type BuildState =
  *
  * **A tally must never outlive its submission.** Submission 9's findings
  * under submission 7's tally is a false report, and the more convincing
- * for being half true. What actually drops it today is the parent: while
- * the next inspection loads, `query.data` is undefined, the whole results
- * block unmounts, and this component's state goes with it.
+ * for being half true. `key={submissionId}` at the mount site is what
+ * prevents it, and it is load-bearing TODAY -- not insurance, as an
+ * earlier version of this comment claimed.
  *
- * The `key={submissionId}` at the mount site adds nothing to that --
- * MEASURED: removing it fails no test. It is there for the one-line edit
- * that would undo it (`placeholderData` on the query, to stop the page
- * flashing empty between submissions), after which the key is the only
- * thing left dropping the tally. Measured too: with `placeholderData` and
- * no key, "does not follow the admin to another submission" fails; with
- * `placeholderData` and the key, it passes.
- *
- * So the guard that is actually load-bearing is that test, not either
- * mechanism. Whoever next changes how this page holds its query data will
- * hear about it from the test rather than from an admin.
+ * That earlier claim came from measuring in one direction only. Walking
+ * to a submission this session has not seen, `query.data` goes undefined
+ * while it loads, the parent unmounts the whole results block, and this
+ * component's state goes with it -- so removing the key changes nothing
+ * and the test still passed. But react-query caches (`gcTime`, five
+ * minutes by default): walk BACK to a submission already visited and its
+ * data arrives synchronously, `query.data` never goes undefined, nothing
+ * unmounts, and without the key the old tally sits under the new
+ * submission's findings. MEASURED, both ways, by the two tests that walk
+ * 7 -> 9 and 7 -> 9 -> 7.
  */
 function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
     const [state, setState] = useState<BuildState>({ kind: "idle" })
@@ -147,10 +186,7 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
             const result = await buildCuratorTasksForSubmission(submissionId)
             setState({ kind: "done", result })
         } catch (error) {
-            setState({
-                kind: "failed",
-                message: error instanceof Error ? error.message : String(error),
-            })
+            setState({ kind: "failed", message: failureMessage(error) })
         }
     }
 
@@ -170,13 +206,20 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
                     : "Build curator tasks for this submission"}
             </button>
 
-            {state.kind === "failed" && (
-                <p role="alert" style={{ color: "#b91c1c" }}>
-                    No tasks were built: {state.message}
-                </p>
-            )}
-
-            {state.kind === "done" && <BuildTally result={state.result} />}
+            {/* Both live regions are mounted permanently and empty. A
+                `role="status"` or `role="alert"` container that is inserted
+                into the page ALREADY populated is frequently not announced
+                at all -- a screen reader watches regions that exist for
+                changes inside them. An unannounced status region is a
+                guard that does nothing, which is the shape of defect this
+                repo files tasks about. Empty divs take no vertical space,
+                so this costs the sighted layout nothing. */}
+            <div role="alert" style={{ color: "#b91c1c" }}>
+                {state.kind === "failed" ? <p>{state.message}</p> : null}
+            </div>
+            <div role="status">
+                {state.kind === "done" ? <BuildTally result={state.result} /> : null}
+            </div>
         </section>
     )
 }
@@ -197,13 +240,25 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
         made > 0
             ? `${made} new task${made === 1 ? " is" : "s are"} now in the curator queue.`
             : considered > 0
-              ? "No new tasks: every warning or critical finding here already has one."
-              : "No tasks: nothing in this submission is a warning or critical " +
-                "finding mapped to a record."
+              ? // "already has one" on its own invites the inference that it
+                // is therefore waiting in the queue, which is false when the
+                // task was closed months ago and the queue's open filter will
+                // not show it.
+                "No new tasks: every warning or critical finding here already " +
+                "has a task, open or closed."
+              : result.warnings.length > 0
+                ? // Counting zero is not the same as finding nothing. A
+                  // finding on a record the builder could not key reaches none
+                  // of the six counts and lands in `warnings` instead, so
+                  // "nothing here is a warning or critical finding" would
+                  // contradict the warning printed directly beneath it.
+                  "No tasks were made, and not because there was nothing to " +
+                  "make them from. The warnings below say what was skipped."
+                : "No tasks: nothing in this submission is a warning or critical " +
+                  "finding mapped to a record."
 
     return (
         <div
-            role="status"
             // Framed, so the tally reads as the answer to the button above
             // it rather than as one more paragraph of this page's furniture.
             style={{
@@ -216,9 +271,10 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
             <ul>
                 <li>new tasks created: {result.created_count}</li>
                 <li>
-                    findings that already had an open task: {result.reused_count} (
-                    {result.refreshed_count} of them refreshed with the latest
-                    snapshot)
+                    findings that already had an open task: {result.reused_count}
+                    {result.reused_count > 0
+                        ? ` (${result.refreshed_count} of them refreshed with the latest snapshot)`
+                        : null}
                 </li>
                 <li>
                     findings whose task is already closed, left closed:{" "}
