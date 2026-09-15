@@ -8,12 +8,12 @@ import ReviewQueuePage from "./ReviewQueuePage"
 import { AuthProvider } from "../components/AuthProvider"
 
 /**
- * The review queue is the one surface in this app where a click changes
+ * Record review is the one surface in this app where a click changes
  * what readers are told to trust. These tests pin:
  *
  * 1. Who gets in (curator or admin; a plain signed-in user is told why).
  * 2. That the page says which review axis it is, since "review" alone
- *    does not distinguish it from the curator queue.
+ *    does not distinguish it from Machine findings.
  * 3. That only transitions the backend allows are offered, and that a
  *    refusal is believed over the page's own copy of the policy.
  * 4. That everything a row owns stays with that row.
@@ -162,7 +162,7 @@ function gate(): { held: Promise<void>; release: () => void } {
 const SPECIES = "spc_vu7cuk4s37szxaudjpf355tqda"
 const CALC = "calc_7k2mq9x4ta8ndrwe5hvzcbj6y1"
 
-describe("who can open the review queue", () => {
+describe("who can open record review", () => {
     it("a curator can", async () => {
         meIs(curator)
         queueIs([review()])
@@ -198,14 +198,34 @@ describe("who can open the review queue", () => {
 })
 
 describe("the page says which review this is", () => {
+    it("is titled Record review, and never by its old name", async () => {
+        /**
+         * The rename is the fix for the actual complaint: the owner could
+         * not tell this page from `/admin/curator-queue`, because "Review
+         * queue" and "Curator queue" both named an audience instead of a
+         * subject.
+         *
+         * The heading alone is not enough to assert -- the old name left
+         * lying in the lede, an empty state or an error string leaves the
+         * pair exactly as confusable as before -- so the absence of the
+         * old wording anywhere on the page is asserted beside it.
+         */
+        meIs(curator)
+        queueIs([])
+        renderPage()
+
+        expect(await screen.findByRole("heading", { name: "Record review", level: 1 })).toBeInTheDocument()
+        expect(screen.queryByText(/review queue/i)).not.toBeInTheDocument()
+    })
+
     it("states that approving here changes what readers are told to trust", async () => {
         meIs(curator)
         queueIs([])
         renderPage()
 
-        // The curator queue's lede says the opposite about itself. Two
-        // surfaces both called "review" must each say which they are, or
-        // the distinction lives only in an ADR.
+        // Machine findings' lede says the opposite about itself. Two
+        // surfaces that both sound like "review" must each say which they
+        // are, or the distinction lives only in an ADR.
         expect(
             await screen.findByText(/changes what every reader is told to trust/i),
         ).toBeInTheDocument()
@@ -216,7 +236,7 @@ describe("the page says which review this is", () => {
         queueIs([])
         renderPage()
 
-        const link = await screen.findByRole("link", { name: /curator queue/i })
+        const link = await screen.findByRole("link", { name: "Machine findings" })
         expect(link).toHaveAttribute("href", "/admin/curator-queue")
     })
 

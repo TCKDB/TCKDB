@@ -21,6 +21,34 @@
     font: var(--type-note-font);
 }
 
+/* Record review and Machine findings each name the other in their lede, and
+   that cross-reference is the whole point: the two were renamed because a
+   reader could not tell them apart, so each has to be able to go and look at
+   the other one.
+
+   `index.css` resets every anchor to `color: inherit; text-decoration: none`,
+   so without this rule that link renders as plain prose -- MEASURED, by
+   screenshotting the page: "Machine findings" in Record review's lede was
+   indistinguishable from the words either side of it. Matched to
+   `.record-breadcrumbs a` (`index.css`), the house treatment for a link in
+   running text, rather than inventing a third one. */
+.admin-lede a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
+}
+
+.admin-lede a:hover {
+    color: var(--accent-700);
+    text-decoration-color: currentColor;
+}
+
+.admin-lede a:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
+}
+
 .admin-count {
     margin: 0 0 var(--s-2);
     color: var(--muted);
@@ -144,7 +172,7 @@
 
 
 /* ---------------------------------------------------------------------------
-   Curator queue
+   Machine findings (`CuratorQueuePage.tsx`)
    ---------------------------------------------------------------------------
    Severity is what a curator scans the queue for, so it is the one column that
    gets emphasis.
@@ -171,35 +199,11 @@
     color: var(--muted);
 }
 
-.admin-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-4);
-    margin: var(--s-4) 0;
-}
-
-/* `index.css` resets every anchor to `color: inherit; text-decoration: none`
-   and each context restyles its own links, so without these rules the nav
-   renders as plain prose -- two admin pages nobody can tell are clickable.
-   Screenshotted before this rule existed; that is exactly how it looked.
-   Matched to `.record-breadcrumbs a`, the nearest existing case of "a small
-   row of in-page links", rather than inventing a third link treatment. */
-.admin-nav a {
-    color: var(--accent);
-    text-decoration: underline;
-    text-decoration-color: var(--accent-underline);
-    text-underline-offset: .16em;
-}
-
-.admin-nav a:hover {
-    color: var(--accent-700);
-    text-decoration-color: currentColor;
-}
-
-.admin-nav a:focus-visible {
-    outline: 3px solid var(--accent-300);
-    outline-offset: 2px;
-}
+/* `.admin-nav` and its three link rules lived here. They styled an in-page
+   nav on `/admin` that duplicated the header menu's own entries; the nav is
+   deleted, so the rules are too. Nothing else in the app used them (grepped
+   across `src/`), and `.admin-filter` below is the next rule, not a sibling
+   that depended on them. */
 
 .admin-filter {
     margin: var(--s-4) 0;
@@ -263,7 +267,7 @@
 }
 
 
-/* The review queue's paging controls. Sits under the table, spaced like
+/* Record review's paging controls. Sits under the table, spaced like
    the filter above it so the two read as the same kind of control. */
 .admin-paging {
     margin: var(--s-4) 0;

@@ -375,7 +375,7 @@ type BuildState =
  * inside one sentence:
  *
  *   "No tasks were built: The build ran, but this page could not read
- *    the tally. Any tasks it made are in the curator queue."
+ *    the tally. Any tasks it made are under Machine findings."
  *
  * Only a refusal that reached the server and came back as an error status
  * supports "nothing was built". A 2xx whose body would not parse means
@@ -398,12 +398,12 @@ function failureMessage(error: unknown): string {
     const detail = error instanceof Error ? error.message : String(error)
     return (
         `The build did not report back: ${detail}. It may or may not have ` +
-        "run; check the curator queue before pressing it again."
+        "run; check Machine findings before pressing it again."
     )
 }
 
 /**
- * The one control that puts work into the curator queue.
+ * The one control that puts work into Machine findings.
  *
  * Curator tasks are built by nothing else. The backend route says so in as
  * many words ("Explicit/admin-triggered only -- never runs on upload"), so
@@ -504,7 +504,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
     const considered = findingsConsidered(result)
     const headline =
         made > 0
-            ? `${made} new task${made === 1 ? " is" : "s are"} now in the curator queue.`
+            ? `${made} new task${made === 1 ? " is" : "s are"} now under Machine findings.`
             : considered > 0
               ? // "already has one" on its own invites the inference that it
                 // is therefore waiting in the queue, which is false when the
@@ -569,7 +569,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
                     to="/admin/curator-queue"
                     style={{ color: "#1d4ed8", textDecoration: "underline" }}
                 >
-                    Open the curator queue
+                    Open Machine findings
                 </Link>
             </p>
         </div>

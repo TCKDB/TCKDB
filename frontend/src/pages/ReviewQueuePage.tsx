@@ -21,15 +21,29 @@ import {
 } from "../types/recordReview"
 
 /**
- * The review queue: every record, and whether a person has judged it.
+ * Record review: every record, and whether a person has judged it.
+ *
+ * Named "Record review" on screen, not "Review queue". The owner could
+ * not tell this page from the other one at a glance, and he was right
+ * that the names were the defect: "Review queue" and "Curator queue"
+ * are two arbitrary labels for two things that differ in what they
+ * ASSERT, not in who opens them. The pair now says what each is about --
+ * this one is about records, the other (`/admin/curator-queue`, shown as
+ * "Machine findings") is about what a machine flagged.
  *
  * This is the **authoritative** review axis. Approving here changes what
- * a reader is told to trust, which is exactly what the curator queue
- * (`/admin/curator-queue`) does not do -- that one triages a machine's
- * advisory findings and endorses nothing. Two queues, two meanings; the
- * lede says which this is, because "review" alone does not.
+ * a reader is told to trust, which is exactly what Machine findings does
+ * not do -- that one triages a machine's advisory findings and endorses
+ * nothing. Two queues, two meanings; the lede says which this is,
+ * because "review" alone does not.
  *
- * Unlike the curator queue, nothing has to be run to fill this one. A
+ * The route is still `/review-queue`, and deliberately so: a rename of
+ * the words a reader sees is not a reason to break every bookmark and
+ * every link already sent to a curator. The file, the component and the
+ * query keys keep their old names for the same reason -- this was a
+ * wording defect, not a modelling one.
+ *
+ * Unlike Machine findings, nothing has to be run to fill this one. A
  * `record_review` row is written for every record by the review-policy
  * write that ends every upload, starting at `not_reviewed`. The default
  * filter is therefore the backlog: everything nobody has looked at.
@@ -138,7 +152,7 @@ export default function ReviewQueuePage() {
                 message:
                     caught instanceof AuthApiError
                         ? caught.message
-                        : "Could not load the review queue.",
+                        : "Could not load the record review list.",
             })
         }
     }, [])
@@ -150,7 +164,7 @@ export default function ReviewQueuePage() {
     if (state.status === "loading") {
         return (
             <section className="admin-page">
-                <h1>Review queue</h1>
+                <h1>Record review</h1>
                 <p role="status">Checking your account…</p>
             </section>
         )
@@ -158,7 +172,7 @@ export default function ReviewQueuePage() {
     if (state.status === "unreachable") {
         return (
             <section className="admin-page">
-                <h1>Review queue</h1>
+                <h1>Record review</h1>
                 <p className="auth-error" role="alert">
                     The archive could not be reached, so your account could not be
                     checked. This is not a sign that you are signed out.
@@ -170,7 +184,7 @@ export default function ReviewQueuePage() {
     if (!canReview) {
         return (
             <section className="admin-page">
-                <h1>Review queue</h1>
+                <h1>Record review</h1>
                 <p className="auth-error" role="alert">
                     This queue is for curators. Reviewing a record changes what every
                     reader is told to trust about it.
@@ -264,14 +278,15 @@ export default function ReviewQueuePage() {
 
     return (
         <section className="admin-page">
-            <h1>Review queue</h1>
+            <h1>Record review</h1>
             <p className="admin-lede">
-                Every record in the archive, and whether a person has judged it. A
-                review row exists for each one from the moment it is deposited, so
-                this queue needs nothing run to fill it. Unlike the{" "}
-                <Link to="/admin/curator-queue">curator queue</Link>, which triages a
-                machine&apos;s advisory findings,{" "}
-                <strong>approving here changes what every reader is told to trust</strong>.
+                Every record in the archive, and whether a human has vouched for it.
+                A review row exists for each one from the moment it is deposited, so
+                this list needs nothing run to fill it. Approving here is{" "}
+                <strong>authoritative</strong>: it changes what every reader is told
+                to trust about the record. That is what{" "}
+                <Link to="/admin/curator-queue">Machine findings</Link> is not: it
+                triages what an automated reviewer raised, and endorses nothing.
             </p>
 
             <div className="admin-filter">

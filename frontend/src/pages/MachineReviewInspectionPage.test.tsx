@@ -59,8 +59,8 @@ function serve(record: Record<string, unknown>) {
 /**
  * Render and inspect one submission; returns the `user` for further acts.
  *
- * `MemoryRouter` is here because the build tally offers a link into the
- * curator queue, and a `<Link>` outside a router throws. The page itself
+ * `MemoryRouter` is here because the build tally offers a link into
+ * Machine findings, and a `<Link>` outside a router throws. The page itself
  * is mounted outside the app's `Layout` route (see `App.tsx`) but still
  * inside `BrowserRouter`, so this matches how it really renders.
  */
@@ -399,12 +399,12 @@ describe("building curator tasks for a submission", () => {
             "unmapped findings, which are about no record: 6",
         )
         expect(
-            within(status).getByText(/3 new tasks are now in the curator queue/),
+            within(status).getByText(/3 new tasks are now under Machine findings/),
         ).toBeInTheDocument()
 
         // And somewhere to go and look at them. A tally with no way through
         // to the queue leaves the admin to remember the URL.
-        expect(within(status).getByRole("link", { name: /curator queue/i })).toHaveAttribute(
+        expect(within(status).getByRole("link", { name: "Open Machine findings" })).toHaveAttribute(
             "href",
             "/admin/curator-queue",
         )
@@ -441,7 +441,7 @@ describe("building curator tasks for a submission", () => {
 
         const status = await tallyShown()
         expect(
-            within(status).getByText(/1 new task is now in the curator queue/),
+            within(status).getByText(/1 new task is now under Machine findings/),
         ).toBeInTheDocument()
     })
 
@@ -611,7 +611,7 @@ describe("building curator tasks for a submission", () => {
          * its opposite in a single sentence:
          *
          *   "No tasks were built: The build ran, but this page could not
-         *    read the tally. Any tasks it made are in the curator queue."
+         *    read the tally. Any tasks it made are under Machine findings."
          */
         serveAnyInspection()
         serveBuild({ this_is: "not a tally" })
@@ -621,7 +621,7 @@ describe("building curator tasks for a submission", () => {
         const alert = await alertSays(/could not read the tally/)
         expect(alert).not.toHaveTextContent(/No tasks were built/)
         // And it must point at the one place the truth can be found.
-        expect(alert).toHaveTextContent(/curator queue/)
+        expect(alert).toHaveTextContent(/Machine findings/)
     })
 
     it("admits it does not know when the request got no answer", async () => {
