@@ -306,7 +306,7 @@ and it is the thing to revisit if these routes ever serve a wider audience.
 | 2 | **No tunnelling application recorded** (`kinetics_tunneling_application` 0 rows) | The Eckart correction's barriers and energy zero are unrecorded; only the word survives |
 | 3 | **Reaction coordinate never declared** (0/124), `imaginary_disposition` always NULL (0/26), **`reaction_atom_map` and `transition_state_validation_evidence` both empty** | "Is this the right saddle?" is unanswerable by any of the three available mechanisms — while the checklist reads as if IRC settled it |
 | 4 | **Spin diagnostics deposited but unsurfaced** (40 rows; TS ⟨S²⟩ 0.7816) | The contamination fact a doublet-barrier reviewer needs is present and not shown |
-| 5 | `applied_energy_correction` has no `public_ref` | 8 of 36 rows cannot be linked |
+| 5 | `applied_energy_correction` has no `public_ref` | It cannot be cited or addressed directly. **No longer blocks linking** — see the note below |
 | 6 | Correction components do not reconcile against published parameters | The identity check works; the derivation check does not |
 | 7 | `uses_projected_frequencies` NULL (65/101) | Double-counting unanswerable for hindered-rotor species |
 | 8 | `calc_scf_stability` empty (0 rows db-wide) | A checklist item that can never currently be true |
@@ -315,6 +315,37 @@ Gaps 1–4 are **deposit-side**: the data was computed and not sent, or the fiel
 exists and nothing fills it, or it was sent and nothing surfaces it. No UI
 fixes them. They are the honest answer to "what does the backend need first" —
 and they are not what #222 guessed, which was more read routes.
+
+### Slice shipped: gap 5 was diagnosed wrongly here (PR #488, task #262)
+
+This section said a missing `public_ref` was why 8 of 36 correction rows could
+not be linked. That was the wrong diagnosis, and acting on it would have
+produced the wrong fix.
+
+The real shape was broader and cheaper. Six of the seventeen record types name
+a table with no page of its own — `thermo`, `statmech`, `kinetics`,
+`transition_state`, `network_solve`, `applied_energy_correction` — so roughly a
+third of the queue rendered as inert text, not 8 rows of one type. And every one
+of those tables already carries a foreign key naming the parent it is displayed
+inside, enforced `NOT NULL` or by an XOR `CHECK`. So the fix was one registry
+from record type to owning column, not a new identifier per table.
+
+`app/services/record_containers.py` now resolves that, `RecordReviewRead` carries
+`container_type` and `container_ref`, and the queue links to the parent page in
+a new tab. `transition_state` and `network_solve` turned out to have parents too,
+so every queue row is linkable, not the four types first enumerated.
+
+**What this changes about gap 5.** A public ref is still worth having so a
+correction can be cited and addressed directly, and it still unblocks
+supersession notices and any public projection of machine review. It no longer
+unblocks anything on this page. It is also not the better surface for a
+reviewer: `aec_7k2m...` says nothing about what is being looked at, whereas
+"a correction on species entry `spe_cyue...`" says what the correction is
+attached to, which is the fact needed to judge it.
+
+Still open on this surface: the machine-findings queue (`CuratorQueuePage`)
+shows the same inert refs, because its response carries no container fields
+(task #267).
 
 ---
 
@@ -422,9 +453,11 @@ which is read-only.
    without it; the database cannot distinguish "never sent" from "sent and
    dropped", so that should be confirmed against the producer before planning
    the fix.
-3. **Give `applied_energy_correction` a public ref.** Small, unblocks 8 of 36
-   rows here, and also unblocks its supersession notices and any public
-   projection of machine review. One fix, three consumers.
+3. **Give `applied_energy_correction` a public ref.** Small, and it unblocks its
+   supersession notices and any public projection of machine review. It no
+   longer unblocks the 8 rows on this page: PR #488 made those reachable
+   through the parent they are displayed on, and a ref is the weaker surface
+   for a reviewer anyway. Two consumers, not three, and no longer urgent.
 4. **Only then**, the surface — and the first version should be a *list with
    evidence*, not a form. The `evidence_completeness` checklist is already the
    right spine; it needs items for tunnelling application and spin
