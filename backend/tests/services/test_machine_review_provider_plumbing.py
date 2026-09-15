@@ -227,25 +227,109 @@ def test_cloud_mode_requires_api_key_env_var_present(monkeypatch):
         build_machine_review_provider(settings)
 
 
+class _StubTransport:
+    """Stands in for ``OpenAICompatibleClient``, recording how it was built.
+
+    The real transport reaches for the optional ``llm`` extra, which is
+    deliberately absent from the default install -- so these tests would
+    otherwise be asserting that the extra is installed rather than that the
+    factory wires the configuration through. Patching at the transport class
+    keeps the factory's own code path real: it still resolves the mode,
+    validates, reads the key from the environment, and decides what to pass.
+    """
+
+    last: "_StubTransport | None" = None
+
+    def __init__(self, *, api_key: str, base_url: str | None = None) -> None:
+        self.api_key = api_key
+        self.base_url = base_url
+        type(self).last = self
+
+    def complete(self, **_kwargs: object) -> str:  # pragma: no cover - guard
+        raise AssertionError("building a provider must not call the model")
+
+
+def _patch_transport(monkeypatch) -> type[_StubTransport]:
+    from app.services.machine_review.providers import openai_transport
+
+    _StubTransport.last = None
+    monkeypatch.setattr(
+        openai_transport, "OpenAICompatibleClient", _StubTransport
+    )
+    return _StubTransport
+
+
+def _cloud_settings(**overrides) -> Settings:
+    base = dict(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env="MR_TEST_KEY",
+    )
+    base.update(overrides)
+    return Settings(**base)
+
+
 def test_cloud_mode_builds_a_real_provider(monkeypatch):
     """Cloud mode returns the real provider (it raised NotImplementedError until 2026-09-14)."""
     from app.services.machine_review.providers.cloud import (
         CloudMachineReviewProvider,
     )
 
+    _patch_transport(monkeypatch)
     monkeypatch.setenv("MR_TEST_KEY", "secret-value")
-    settings = Settings(
-        ai_review_assistant_mode="cloud",
-        llm_precheck_model="vendor/model",
-        llm_precheck_api_key_env="MR_TEST_KEY",
-    )
 
-    provider = build_machine_review_provider(settings)
+    provider = build_machine_review_provider(_cloud_settings())
 
     assert isinstance(provider, CloudMachineReviewProvider)
     # The configured model must reach the provider: a factory that built one on
     # a default would pass an isinstance check and review with the wrong model.
     assert provider._model == "vendor/model"
+
+
+def test_every_configured_value_reaches_the_call(monkeypatch):
+    """The settings an operator writes are the settings the model call uses.
+
+    This is the defect the first version of this factory had, and it was worse
+    than a no-op: it passed only the key and the model, and the provider's own
+    defaults DISAGREE with the settings defaults. A deployment that capped
+    output at 1200 tokens got 4096, and one that set a 30-second timeout got
+    120. A ceiling that is 3.4x what the operator wrote is worse than no
+    ceiling, because it reads as obeyed.
+
+    ``base_url`` is the one that makes "any OpenAI-compatible provider" true at
+    all: dropped, cloud mode can only ever reach OpenAI itself.
+    """
+    transport = _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    provider = build_machine_review_provider(
+        _cloud_settings(
+            llm_precheck_base_url="https://gateway.example/v1",
+            llm_precheck_max_output_tokens=1234,
+            llm_precheck_timeout_seconds=17,
+        )
+    )
+
+    assert transport.last is not None
+    assert transport.last.base_url == "https://gateway.example/v1"
+    assert provider._max_output_tokens == 1234
+    assert provider._timeout_seconds == 17.0
+
+
+def test_an_unset_base_url_means_the_default_endpoint(monkeypatch):
+    """``None`` must flow through, not crash and not become the string 'None'.
+
+    ``llm_precheck_base_url`` is ``str | None`` and unset by default, so the
+    factory hands ``None`` straight to the transport, which is the one place
+    that decides what the default endpoint is.
+    """
+    transport = _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    build_machine_review_provider(_cloud_settings())
+
+    assert transport.last is not None
+    assert transport.last.base_url is None
 
 
 def test_building_the_cloud_provider_calls_nothing(monkeypatch):
@@ -255,39 +339,55 @@ def test_building_the_cloud_provider_calls_nothing(monkeypatch):
     including at import or startup in some call paths -- and a transport that
     dialled out on construction would turn "is cloud mode configured?" into a
     billable request, or a startup hang behind a firewall.
+
+    The stub transport raises from ``complete``, so a factory that reviewed
+    anything while building fails here rather than somewhere expensive.
     """
-    import httpx
-
-    def explode(*_args, **_kwargs):  # pragma: no cover - must never run
-        raise AssertionError("building a provider must not make an HTTP call")
-
-    monkeypatch.setattr(httpx, "post", explode)
+    _patch_transport(monkeypatch)
     monkeypatch.setenv("MR_TEST_KEY", "secret-value")
-    settings = Settings(
-        ai_review_assistant_mode="cloud",
-        llm_precheck_model="vendor/model",
-        llm_precheck_api_key_env="MR_TEST_KEY",
-    )
 
-    build_machine_review_provider(settings)
+    build_machine_review_provider(_cloud_settings())
 
 
 def test_the_api_key_never_reaches_the_provider_repr(monkeypatch):
     """A key in a repr reaches a traceback, and a traceback reaches a log.
 
     The transport holds the key to send it; nothing else should be able to read
-    it back out casually.
+    it back out casually. The stub holds it on a plain attribute, which is the
+    least favourable case for this assertion -- a default dataclass-ish repr
+    would expose it.
     """
+    transport = _patch_transport(monkeypatch)
     monkeypatch.setenv("MR_TEST_KEY", "super-secret-value")
-    settings = Settings(
-        ai_review_assistant_mode="cloud",
-        llm_precheck_model="vendor/model",
-        llm_precheck_api_key_env="MR_TEST_KEY",
-    )
 
-    provider = build_machine_review_provider(settings)
+    provider = build_machine_review_provider(_cloud_settings())
 
+    assert transport.last is not None
+    assert transport.last.api_key == "super-secret-value"  # it really has it
     assert "super-secret-value" not in repr(provider)
+
+
+def test_cloud_mode_without_the_llm_extra_names_the_extra(monkeypatch):
+    """The install-shaped failure says what to install, not ImportError.
+
+    ``openai`` is deliberately absent from the default install. Somebody
+    switching cloud mode on without the extra should learn that from the error,
+    rather than reading a traceback out of the middle of a request.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def refuse_openai(name, *args, **kwargs):
+        if name == "openai" or name.startswith("openai."):
+            raise ModuleNotFoundError("No module named 'openai'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", refuse_openai)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    with pytest.raises(MachineReviewProviderConfigurationError, match="llm"):
+        build_machine_review_provider(_cloud_settings())
 
 
 def test_local_mode_requires_base_url_and_model_config():

@@ -12,10 +12,11 @@ three are the reason for the shape:
 * CI exercises the real parse and the real prompt against a **committed
   response fixture**, so the wire shape is covered with no network and no key
   (plan §7.1: "CI never calls the API").
-* No vendor SDK becomes a hard dependency of the backend. The default transport
-  (:mod:`app.services.machine_review.providers.anthropic_transport`) is a thin
-  ``httpx`` client behind an optional extra, imported only when cloud mode is
-  actually selected.
+* No model supplier becomes a hard dependency of the backend. The default
+  transport (:mod:`app.services.machine_review.providers.openai_transport`)
+  speaks the OpenAI-compatible ``/chat/completions`` shape, which every major
+  hosted and self-hosted endpoint accepts, and lives behind an optional extra
+  imported only when cloud mode is actually selected.
 * A local/self-hosted transport is the same protocol, which is what Phase (a)'s
   sibling needs.
 
@@ -50,14 +51,23 @@ from app.services.machine_review.providers.prompt import (
 )
 from app.services.machine_review.schemas import MachineReviewProviderResultV2
 
-#: Ceiling on the model's reply. The contract caps findings at 50, each message
-#: at 1000 characters, so a well-formed maximal answer is far below this; the
-#: limit exists to bound a runaway generation, not to shape the answer.
+#: Ceiling on the model's reply, used only when a caller constructs a provider
+#: directly. :func:`~app.services.machine_review.providers.factory.build_machine_review_provider`
+#: always passes ``LLM_PRECHECK_MAX_OUTPUT_TOKENS`` instead, so this is not
+#: what a deployment gets.
+#:
+#: It does NOT bound a maximal well-formed answer, and an earlier comment here
+#: claimed it did. The contract allows 50 findings whose messages may each run
+#: to 1000 characters, which is on the order of 14,000 tokens -- several times
+#: this. A reply cut off at the ceiling is reported as
+#: :class:`~app.services.machine_review.providers.openai_transport.ModelOutputTruncatedError`,
+#: which names the setting to raise, rather than as malformed output.
 DEFAULT_MAX_OUTPUT_TOKENS = 4096
 
-#: Wall-clock ceiling for one review. Machine review is advisory and runs out of
-#: band, so a slow answer is worth waiting for -- but not unboundedly, because
-#: the caller is holding a worker.
+#: Wall-clock ceiling for one review, used only when a caller constructs a
+#: provider directly; the factory passes ``LLM_PRECHECK_TIMEOUT_SECONDS``.
+#: Machine review is advisory and runs out of band, so a slow answer is worth
+#: waiting for -- but not unboundedly, because the caller is holding a worker.
 DEFAULT_TIMEOUT_SECONDS = 120.0
 
 

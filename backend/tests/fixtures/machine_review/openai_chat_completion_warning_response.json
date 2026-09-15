@@ -1,0 +1,23 @@
+{
+  "_fixture_note": "A recorded-shape OpenAI-compatible chat-completions response whose assistant message carries a machine_review_v2 payload. Hand-built to the documented response shape rather than recorded from a live call, because no key is available in CI and the shape is stable and small. Replace with a genuinely recorded response the first time the live smoke test is run; the assertions do not depend on which it is. finish_reason is 'stop', not 'length' -- a 'length' fixture is a separate test, because truncation is a different fault with its own type.",
+  "id": "chatcmpl-FixtureNotARealCompletionId",
+  "object": "chat.completion",
+  "created": 1789000000,
+  "model": "fixture-model-v1",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "{\"schema_version\":\"machine_review_v2\",\"status\":\"machine_screened_warning\",\"curator_priority\":\"medium\",\"summary\":\"One transition state carries no evidence that it is the saddle for the reaction it is attached to.\",\"findings\":[{\"severity\":\"warning\",\"category\":\"transition_state_validation\",\"record_type\":\"transition_state_entry\",\"record_ref\":\"9\",\"record_id\":9,\"message\":\"The transition state has one imaginary mode but nothing records whether that mode is the reaction coordinate, and no IRC connectivity conclusion is present.\",\"evidence_keys\":[\"missing_checks.reaction_coordinate_declared\"],\"recommended_action\":\"Ask the depositor to declare the reaction-coordinate mode index, or to deposit the IRC connectivity conclusion.\"},{\"severity\":\"info\",\"category\":\"provenance\",\"record_type\":\"calculation\",\"record_ref\":\"111\",\"record_id\":111,\"message\":\"The Hessian method is not stated, so the imaginary-mode tolerance basis is an assumed program default.\",\"evidence_keys\":[],\"recommended_action\":null}],\"used_rag\":false}",
+        "refusal": null
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 812,
+    "completion_tokens": 214,
+    "total_tokens": 1026
+  }
+}
