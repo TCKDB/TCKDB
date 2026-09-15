@@ -272,3 +272,66 @@
 .admin-paging {
     margin: var(--s-4) 0;
 }
+
+
+/* ------------------------------------------------------------------------
+ * Record review: where a record can be SEEN (task 262)
+ *
+ * The task number is written without its hash on purpose: `theme.css.test.ts`
+ * scans every non-token stylesheet for hex colour literals, and a hash
+ * followed by those three digits is a valid three-digit one.
+ * --------------------------------------------------------------------- */
+
+/* "shown on species entry spc_..." -- the link a row gets when its record
+   has no page of its own and is rendered inside its parent.
+
+   Only the typography is set here. Colour, underline and focus ring come
+   from `.data-table a` in `design-system.css`, which is the house link
+   treatment; restating them would be a second place for this app's link
+   colour to live. That inheritance matters more than it looks, because
+   `index.css` resets EVERY anchor to `color: inherit; text-decoration:
+   none` -- an <a> that misses a link rule renders as plain prose and a
+   curator has no way to tell it is clickable.
+
+   `--type-note-font` (sans, 13px) rather than the mono data font: this is
+   a sentence about the record, not a value to be read character by
+   character. The ref inside it still carries `.data`, so the part that IS
+   an identifier stays mono and unbreakable. */
+.review-container-link {
+    font: var(--type-note-font);
+    white-space: nowrap;
+}
+
+/* At phone width the Record column is the widest thing in the table, and a
+   non-wrapping "shown on ..." phrase next to a 30-character ref is what
+   pushes the row into a horizontal scroll. Below the table's own breakpoint
+   the phrase goes on its own line and is allowed to wrap. */
+@media (max-width: 40rem) {
+    .review-container-link {
+        display: inline-block;
+        white-space: normal;
+    }
+}
+
+/* Present in the accessibility tree, invisible on screen. Carries the
+   "(opens in a new tab)" warning on every link out of the record review
+   queue -- those links are `target="_blank"` on purpose (see
+   `ReviewQueuePage.tsx`), and a screen reader user given no warning simply
+   finds themselves in a window they did not ask for, with Back doing
+   nothing.
+
+   Scoped to admin surfaces rather than added as a global utility, matching
+   `.arrhenius-chart-visually-hidden`: this app has deliberately never had a
+   global one (see the note in `AdminPage.tsx`), and one PR is not the place
+   to start a shared utility layer. */
+.admin-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

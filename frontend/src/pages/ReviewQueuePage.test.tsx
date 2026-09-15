@@ -55,6 +55,11 @@ function review(over: Record<string, unknown> = {}) {
         record_type: "species",
         record_id: 987654,
         record_public_ref: "spc_vu7cuk4s37szxaudjpf355tqda",
+        // Null by default, which is what the server sends for a root record
+        // type like `species`. Written out rather than left off so a reader
+        // can see the fields exist, and so a test that needs them says so.
+        container_type: null,
+        container_ref: null,
         status: "not_reviewed",
         submission_id: 7,
         reviewed_by: null,
@@ -291,8 +296,18 @@ describe("how a row names the record it concerns", () => {
         queueIs([review()])
         renderPage()
 
-        const link = await screen.findByRole("link", { name: SPECIES })
+        // Found BY the new-tab warning, not merely checked for it after --
+        // a link that lost the note fails to be found at all.
+        //
+        // A regex rather than an exact accessible name: jsdom's
+        // `dom-accessibility-api` concatenates adjacent inline chunks with no
+        // separator, so the name computes here as "spc_...(opens in a new
+        // tab)" while a real browser inserts the space that is in the DOM.
+        // Pinning jsdom's spelling would document a polyfill quirk as if it
+        // were the contract.
+        const link = await screen.findByRole("link", { name: /opens in a new tab/ })
         expect(link).toHaveAttribute("href", `/species/${SPECIES}`)
+        expect(link).toHaveTextContent(SPECIES)
     })
 
     it("puts no internal row id anywhere in the table", async () => {
@@ -1450,5 +1465,260 @@ describe("the status a row shows", () => {
         renderPage()
         await screen.findByRole("table")
         expect(rowButton(SPECIES, "Review…")).toBeEnabled()
+    })
+})
+
+
+/**
+ * #262: the queue points at the record, or says honestly why it cannot.
+ *
+ * 385 of 1,299 rows could not be opened, and it was the wrong 385 -- the
+ * thermochemistry, kinetics and energy corrections the archive exists to
+ * publish. Two rows wherever a row-owned value is involved, for the reason
+ * at the top of this file.
+ */
+describe("a row says where its record can be seen", () => {
+    it("links a record with no page of its own at the page it is shown on", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "thermo",
+                record_public_ref: "thm_aaa",
+                container_type: "species_entry",
+                container_ref: "spe_bbb",
+            }),
+        ])
+        renderPage()
+
+        const link = await screen.findByRole("link", { name: /shown on species entry/ })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_bbb")
+        // The link SAYS what it is. A bare ref would leave a curator unable
+        // to tell whether they are about to open the thermo or something
+        // else entirely.
+        expect(link).toHaveTextContent("shown on species entry spe_bbb")
+    })
+
+    it("keeps the record distinguishable from the container it is shown in", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "thermo",
+                record_public_ref: "thm_aaa",
+                container_type: "species_entry",
+                container_ref: "spe_bbb",
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        const row = rowFor("thm_aaa")
+        // Both present: the record under review, and where to see it. A cell
+        // showing only the container would read as if the species entry were
+        // what needs judging.
+        expect(row).toHaveTextContent("thm_aaa")
+        expect(row).toHaveTextContent("spe_bbb")
+        // And the ref that is NOT a link is the container's, not the record's.
+        expect(within(row).getByRole("link")).toHaveTextContent("spe_bbb")
+        expect(within(row).getByRole("link")).not.toHaveTextContent("thm_aaa")
+    })
+
+    it("locates a correction that cannot be named", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: "species_entry",
+                container_ref: "spe_ccc",
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        // Still unnamed -- this change invents no ref for it (task #253).
+        expect(screen.getByText(/cannot be named/i)).toBeInTheDocument()
+        // But no longer unreachable, which is what a reviewer actually needs.
+        expect(
+            screen.getByRole("link", { name: /shown on species entry/ }),
+        ).toHaveAttribute("href", "/species-entries/spe_ccc")
+    })
+
+    it("reads as a sentence when the record cannot be named", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: "species_entry",
+                container_ref: "spe_ccc",
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        const cell = within(rowFor("spe_ccc")).getAllByRole("cell")[0]
+
+        // The comma is not decoration, and this is the whole cell rather
+        // than a substring because that is the only way to pin it. Without
+        // it the row reads "applied_energy_correction cannot be named shown
+        // on species entry spe_ccc" -- one broken sentence instead of two
+        // facts about one record. Found by looking at the rendered page in
+        // headless Chrome, and it survived all 109 tests in this file until
+        // this one existed.
+        expect(cell.textContent?.replace(/\s+/g, " ").trim()).toBe(
+            "applied_energy_correction cannot be named, shown on species " +
+                "entry spe_ccc (opens in a new tab)",
+        )
+    })
+
+    it("opens every record link in a new tab, safely", async () => {
+        meIs(curator)
+        queueIs([
+            review(),
+            review({
+                id: 12,
+                record_type: "kinetics",
+                record_public_ref: "kin_ddd",
+                container_type: "reaction_entry",
+                container_ref: "rxe_eee",
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        const table = await screen.findByRole("table")
+        const links = within(table).getAllByRole("link")
+        expect(links).toHaveLength(2)
+
+        for (const link of links) {
+            // The queue holds filter, offset and a half-typed reason that no
+            // URL captures, so navigating away in this tab discards work.
+            expect(link).toHaveAttribute("target", "_blank")
+            // `noopener` is what stops the opened page holding a live handle
+            // back into this one. Asserted by name, not by "rel is truthy":
+            // `rel="noreferrer"` alone would pass the weaker check on older
+            // browsers while leaving `window.opener` live.
+            const rel = link.getAttribute("rel") ?? ""
+            expect(rel.split(/\s+/)).toContain("noopener")
+            expect(rel.split(/\s+/)).toContain("noreferrer")
+            // Announced, so a screen reader user is not simply moved to a
+            // window they did not ask for.
+            expect(link).toHaveTextContent(/opens in a new tab/)
+        }
+    })
+
+    it("says WHICH reason it cannot link a row, not just that it cannot", async () => {
+        meIs(curator)
+        queueIs([
+            // Named, but nothing renders it: a known gap.
+            review({
+                id: 21,
+                record_type: "artifact",
+                record_public_ref: "art_fff",
+                container_type: null,
+                container_ref: null,
+            }),
+            // Not named at all: a record that has gone missing.
+            review({
+                id: 22,
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: null,
+                container_ref: null,
+            }),
+        ])
+        renderPage()
+
+        await screen.findByRole("table")
+        const gap = rowFor("art_fff")
+        expect(gap).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
+        expect(gap).not.toHaveTextContent(/cannot be named/i)
+
+        const missing = rowFor("cannot be named")
+        expect(missing).toHaveTextContent(/this record cannot be named/i)
+        expect(missing).not.toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
+    })
+
+    it("still puts no internal row id in the table when it links a container", async () => {
+        meIs(curator)
+        queueIs([
+            review({
+                record_type: "thermo",
+                record_id: 987654,
+                record_public_ref: "thm_aaa",
+                container_type: "species_entry",
+                container_ref: "spe_bbb",
+            }),
+        ])
+        renderPage()
+
+        const markup = (await screen.findByRole("table")).outerHTML
+        // DR-0028 Req 2. The container's own row id is the tempting shortcut
+        // on the backend -- it is in hand after the first query -- so this
+        // checks the wire contract held all the way to the screen.
+        expect(markup).not.toContain("987654")
+    })
+
+    it("names an unnameable record by its container in a message that outlives its row", async () => {
+        meIs(curator)
+        let moved = false
+        server.use(
+            http.get(REVIEWS, () =>
+                HttpResponse.json(
+                    moved
+                        ? []
+                        : [
+                              review({
+                                  record_type: "applied_energy_correction",
+                                  record_public_ref: null,
+                                  container_type: "species_entry",
+                                  container_ref: "spe_ggg",
+                              }),
+                          ],
+                ),
+            ),
+            http.patch(`${REVIEWS}/:type/:id`, () => {
+                moved = true
+                return HttpResponse.json(
+                    { code: "domain_error", detail: "Somebody else got there first." },
+                    { status: 400 },
+                )
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton("cannot be named", "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "mine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        const banner = await screen.findByText(/no longer in this view/i)
+        // "applied_energy_correction (unnamed)" does not identify WHICH of
+        // the 164 correction rows the refusal was about. Its container does.
+        expect(banner).toHaveTextContent("applied_energy_correction on spe_ggg")
+    })
+
+    it("reads a row from a server that has never heard of containers", async () => {
+        // An older backend sends neither field. Dropping the row would be the
+        // worst answer a backlog can give, so the schema defaults them to
+        // null and the row renders as it did before.
+        meIs(curator)
+        server.use(
+            http.get(REVIEWS, () => {
+                const withoutContainer: Record<string, unknown> = review({
+                    record_type: "thermo",
+                    record_public_ref: "thm_old",
+                })
+                delete withoutContainer.container_type
+                delete withoutContainer.container_ref
+                return HttpResponse.json([withoutContainer])
+            }),
+        )
+        renderPage()
+
+        await screen.findByRole("table")
+        expect(rowFor("thm_old")).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
+        expect(screen.queryByText(/could not be read/i)).not.toBeInTheDocument()
     })
 })

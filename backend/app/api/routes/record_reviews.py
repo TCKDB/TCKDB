@@ -27,6 +27,11 @@ from app.schemas.entities.record_review import (
     RecordReviewRead,
     RecordReviewSetStatusRequest,
 )
+from app.services.record_containers import (
+    RecordContainer,
+    resolve_record_container,
+    resolve_record_containers,
+)
 from app.services.record_refs import (
     resolve_record_public_ref,
     resolve_record_public_refs,
@@ -40,27 +45,64 @@ from app.services.record_review import (
 router = APIRouter()
 
 
-def _read(row: RecordReview, record_public_ref: str | None) -> RecordReviewRead:
-    """Pure mapper: the ref is supplied, never looked up here.
+def _read(
+    row: RecordReview,
+    record_public_ref: str | None,
+    container: RecordContainer | None,
+) -> RecordReviewRead:
+    """Pure mapper: the ref and the container are supplied, never looked up here.
 
-    Keeping the lookup out is what lets the list route resolve a whole page
-    in one query per record type instead of one query per row. The same
-    split is why ``_to_curator_task_response`` exists in ``admin.py``.
+    Keeping the lookups out is what lets the list route resolve a whole page
+    in a handful of grouped queries instead of a few per row. The same split
+    is why ``_to_curator_task_response`` exists in ``admin.py``.
+
+    ``container`` carries its type and its ref as one value, so this mapper
+    cannot emit half a pair -- a ``container_ref`` with no ``container_type``
+    is not addressable by a client, and the schema promises the two are null
+    together.
     """
-    return RecordReviewRead.model_validate(row).model_copy(update={"record_public_ref": record_public_ref})
+    return RecordReviewRead.model_validate(row).model_copy(
+        update={
+            "record_public_ref": record_public_ref,
+            "container_type": container.container_type if container else None,
+            "container_ref": container.container_ref if container else None,
+        }
+    )
 
 
 def _read_many(session: Session, rows: list[RecordReview]) -> list[RecordReviewRead]:
-    """Map a page, resolving every row's ref in one pass."""
-    refs = resolve_record_public_refs(session, [(row.record_type, row.record_id) for row in rows])
-    return [_read(row, refs.get((row.record_type, row.record_id))) for row in rows]
+    """Map a page, resolving every row's ref and container in grouped passes.
+
+    Both resolvers are bulk and neither is called inside the loop: a page of
+    50 costs one query per distinct record type for the refs, plus one per
+    distinct record type and one per distinct container type for the
+    containers. Moving either call into the comprehension below would restore
+    the per-row round trips both services exist to avoid, and every assertion
+    about the *content* of this route's responses would still pass -- which
+    is why ``test_a_longer_page_does_not_cost_more_queries`` counts
+    statements instead. Measured: moving the container resolve into the
+    comprehension below takes a ten-row page from 6 queries to 22, and that
+    test is the only one that notices.
+    """
+    keys = [(row.record_type, row.record_id) for row in rows]
+    refs = resolve_record_public_refs(session, keys)
+    containers = resolve_record_containers(session, keys)
+    return [
+        _read(
+            row,
+            refs.get((row.record_type, row.record_id)),
+            containers.get((row.record_type, row.record_id)),
+        )
+        for row in rows
+    ]
 
 
 def _read_one(session: Session, row: RecordReview) -> RecordReviewRead:
-    """The single-row form: resolve this one record's ref, then map."""
+    """The single-row form: resolve this one record's ref and container, then map."""
     return _read(
         row,
         resolve_record_public_ref(session, record_type=row.record_type, record_id=row.record_id),
+        resolve_record_container(session, record_type=row.record_type, record_id=row.record_id),
     )
 
 

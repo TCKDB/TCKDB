@@ -57,6 +57,21 @@ export const RecordReviewSchema = z.object({
     record_type: z.string(),
     record_id: z.number().int(),
     record_public_ref: z.string().nullable().default(null),
+    // Where the record can be SEEN, as opposed to what it is called. Added
+    // in #262: six record types are rendered only inside their parent, so a
+    // ref addresses no route and 30% of this queue pointed at nothing.
+    //
+    // `.default(null)` on both, so a server that predates the field parses
+    // rather than costing the row -- `listRecordReviews` drops a row it
+    // cannot read, and a queue that renders nothing is the worst possible
+    // answer to "what still needs looking at".
+    //
+    // Loosely typed as strings on purpose, matching `record_type`: they are
+    // displayed and passed to `resolveRecordLocation`, which already answers
+    // "no page" for anything it does not recognise. A strict enum here would
+    // turn a record type this build has not heard of into an unreadable row.
+    container_type: z.string().nullable().default(null),
+    container_ref: z.string().nullable().default(null),
     status: RecordReviewStatusSchema,
     submission_id: z.number().int().nullable().default(null),
     reviewed_by: z.number().int().nullable().default(null),

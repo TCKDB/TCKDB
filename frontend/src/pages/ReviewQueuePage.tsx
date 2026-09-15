@@ -8,7 +8,11 @@ import {
     listRecordReviews,
     setRecordReviewStatus,
 } from "../api/recordReviewsApi"
-import { recordRoute } from "../domain/recordRoute"
+import {
+    recordTypeWords,
+    resolveRecordLocation,
+    type RecordLocation,
+} from "../domain/recordRoute"
 import { useAuth } from "../hooks/useAuth"
 import {
     ALL_STATUSES,
@@ -106,6 +110,113 @@ const PAGE_LIMIT = 50
 /** A stable key for a row: the review row's own id. */
 function keyOf(row: RecordReview): number {
     return row.id
+}
+
+/**
+ * Every link out of this queue opens in a new tab.
+ *
+ * This is deliberately against the usual advice, which is that a page
+ * should not decide how a link opens. It is made here because the queue is
+ * **stateful in a way the URL does not capture**: the status filter, the
+ * page offset, which rows have an open form, and -- the one that actually
+ * costs work -- a half-typed reason in one of them. Every transition here
+ * requires a written reason, so navigating away in the same tab can
+ * discard several sentences a curator has just composed, and the browser
+ * Back button restores the route without restoring any of it.
+ *
+ * `rel="noopener noreferrer"` is not optional with `target="_blank"`:
+ * without `noopener` the opened page gets a live `window.opener` handle
+ * back into this one and can navigate it.
+ *
+ * The note is for screen reader users, who otherwise get no warning that
+ * focus is about to leave for a window they did not ask for. It is read
+ * aloud and never seen.
+ */
+function NewTabNote() {
+    return <span className="admin-visually-hidden"> (opens in a new tab)</span>
+}
+
+/**
+ * What a row shows in its Record column: the record, and where to see it.
+ *
+ * Four outcomes, and the two that cannot be linked are kept apart on
+ * purpose -- see `resolveRecordLocation`. Eight identical "cannot be named"
+ * lines is what this column used to render for every applied energy
+ * correction, and it told a curator nothing about whether they were looking
+ * at a bug (a record that has gone missing) or a known gap (a type with no
+ * page yet). Those call for different actions, so they get different words.
+ */
+function RecordCell({ location }: { location: RecordLocation }) {
+    switch (location.kind) {
+        case "record":
+            return (
+                <Link
+                    to={location.href}
+                    className="data"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {location.ref}
+                    <NewTabNote />
+                </Link>
+            )
+        case "container":
+            return (
+                <>
+                    {/* The record's own name first, when it has one, so the
+                        record stays distinguishable from the thing it is
+                        shown inside. Without it the row would read as if the
+                        container itself were what needs reviewing. */}
+                    {location.ref !== null ? (
+                        <span className="data">{location.ref}</span>
+                    ) : (
+                        // The comma is load-bearing, and only here. A ref
+                        // followed by "shown on ..." reads as two facts about
+                        // one record; "cannot be named shown on ..." with
+                        // nothing between them reads as one broken sentence.
+                        // Seen on the rendered page, not reasoned about.
+                        <>
+                            <span className="admin-absent">cannot be named</span>,
+                        </>
+                    )}{" "}
+                    <Link
+                        to={location.href}
+                        className="review-container-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        shown on {recordTypeWords(location.containerType)}{" "}
+                        <span className="data">{location.containerRef}</span>
+                        <NewTabNote />
+                    </Link>
+                </>
+            )
+        case "no-page":
+            return (
+                <>
+                    <span className="data">{location.ref}</span>{" "}
+                    {/* Two facts, both certainly true here, and no claim
+                        about WHICH of them is the operative one -- see
+                        `resolveRecordLocation`. The earlier wording, "no
+                        page for this record type yet", named the missing
+                        page as the sole reason, which is wrong whenever the
+                        container was the thing that could not be named. */}
+                    <span className="admin-absent">
+                        no page for this record type, and nowhere it can be seen
+                    </span>
+                </>
+            )
+        case "unnamed":
+            // Kept word-for-word as the phrase this column has always used
+            // for an unnameable record. What changed is that it is no longer
+            // the ONLY thing an unlinkable row can say: "no page for this
+            // record type yet" above is a different sentence for a different
+            // situation, which is the whole point -- one is a record that has
+            // gone missing, the other a page nobody has built.
+            return (
+                <span className="admin-absent">this record cannot be named</span>
+            )
+    }
 }
 
 export default function ReviewQueuePage() {
@@ -220,9 +331,18 @@ export default function ReviewQueuePage() {
         })
     }
 
-    /** How to name a record in a message that may outlive its row. */
+    /**
+     * How to name a record in a message that may outlive its row.
+     *
+     * Falls back to the container before giving up. "applied_energy_correction
+     * (unnamed)" is what a curator used to be told after a refusal on one of
+     * the 164 correction rows, and with several of them on a page it does not
+     * identify which. "applied_energy_correction on spc_..." does.
+     */
     function labelOf(row: RecordReview): string {
-        return row.record_public_ref ?? `${row.record_type} (unnamed)`
+        if (row.record_public_ref) return row.record_public_ref
+        if (row.container_ref) return `${row.record_type} on ${row.container_ref}`
+        return `${row.record_type} (unnamed)`
     }
 
     /**
@@ -397,9 +517,11 @@ export default function ReviewQueuePage() {
                             <tbody>
                                 {load.rows.map((row) => {
                                     const rowId = keyOf(row)
-                                    const href = recordRoute(
+                                    const location = resolveRecordLocation(
                                         row.record_type,
                                         row.record_public_ref,
+                                        row.container_type,
+                                        row.container_ref,
                                     )
                                     const rowBusy = busy.has(rowId)
                                     const options = offeredTransitions(row)
@@ -432,19 +554,7 @@ export default function ReviewQueuePage() {
                                                 <span className="admin-record-type">
                                                     {row.record_type}
                                                 </span>{" "}
-                                                {href !== null ? (
-                                                    <Link to={href} className="data">
-                                                        {row.record_public_ref}
-                                                    </Link>
-                                                ) : row.record_public_ref !== null ? (
-                                                    <span className="data">
-                                                        {row.record_public_ref}
-                                                    </span>
-                                                ) : (
-                                                    <span className="admin-absent">
-                                                        cannot be named
-                                                    </span>
-                                                )}
+                                                <RecordCell location={location} />
                                             </td>
                                             <td>
                                                 <span className={cls ?? undefined}>
