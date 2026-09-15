@@ -96,9 +96,16 @@ export async function listRecordReviews(options: {
  * takes. The page reads `record_public_ref` and writes the id; see the
  * note in `docs/plans/reviewer-surface-walkthrough.md`.
  *
- * `note` is optional to the backend. The page requires one anyway for
- * the judgement transitions -- a bare "approved" with no reason tells the
- * next reader nothing about why this record is now trusted.
+ * `note` is optional to the backend. The page requires one for EVERY
+ * transition, not only the judgements -- a bare "approved" with no
+ * reason tells the next reader nothing about why this record is now
+ * trusted, and "under review" with no reason tells the next curator
+ * nothing about what is being checked or by whom.
+ *
+ * One consequence worth knowing: the backend overwrites `record_review.note`
+ * on each transition that carries one, so the row holds only the latest
+ * reason. The full sequence survives in `record_review_event`, which no
+ * read surface exposes yet.
  */
 export async function setRecordReviewStatus(args: {
     recordType: string
