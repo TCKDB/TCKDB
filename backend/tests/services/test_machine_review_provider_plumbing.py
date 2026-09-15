@@ -494,3 +494,99 @@ def test_v2_provider_result_flows_through_audit_adapter():
         is MachineReviewCategory.transition_state_validation
     )
     assert parsed.result.findings[0].recommended_action is not None
+
+
+# --------------------------------------------------------------------------- #
+# Who is entitled to say what happened to the run
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("reserved", ["not_run", "machine_review_failed"])
+def test_a_provider_may_not_claim_a_status_only_the_runner_sets(reserved):
+    """Two of the five statuses are this system's words, not the reviewer's.
+
+    ``MachineReviewStatus`` carries all five because a STORED review uses all
+    five; the prompt asks for three. Nothing enforced that gap, so a model
+    could pick either reserved token and be believed all the way to the
+    surface.
+
+    MEASURED before the guard: a model answering ``{"status": "not_run"}``
+    produced a recorded audit event AND a page telling an admin "the machine
+    reviewer is switched off in this deployment, so no provider was asked
+    anything and nothing was recorded" -- three statements, all false, none of
+    them the model's to make. ``machine_review_failed`` alongside two findings
+    produced "no record was judged" while two had been.
+    """
+    from app.services.machine_review.providers.interface import (
+        ReservedMachineReviewStatusError,
+    )
+
+    payload = _valid_v2_payload()
+    payload["status"] = reserved
+
+    with pytest.raises(ReservedMachineReviewStatusError, match=reserved):
+        parse_machine_review_v2_payload(payload)
+
+
+@pytest.mark.parametrize(
+    "screening",
+    [
+        "machine_screened_pass",
+        "machine_screened_warning",
+        "machine_screened_needs_attention",
+    ],
+)
+def test_the_three_statuses_the_prompt_asks_for_still_parse(screening):
+    """The narrowing must not cost the reviewer its actual vocabulary."""
+    payload = _valid_v2_payload()
+    payload["status"] = screening
+
+    assert parse_machine_review_v2_payload(payload).status.value == screening
+
+
+def test_a_key_pasted_into_the_env_var_name_setting_is_not_echoed(monkeypatch):
+    """``LLM_PRECHECK_API_KEY_ENV`` holds a NAME; people will paste the key.
+
+    That slip reads as though it ought to work, and the error message used to
+    format the value straight in -- reaching a durable
+    ``submission_audit_event`` and an HTTP response body.
+
+    The runner's ``_redact_secrets`` cannot catch this one: it redacts by
+    looking the configured name up in the environment, and when the "name" IS
+    the key that lookup returns ``None``, so there is nothing to match on.
+    Hence a check on shape rather than on a lookup.
+    """
+    secret = "sk-live-0123456789abcdef"
+    monkeypatch.delenv(secret, raising=False)
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env=secret,
+    )
+
+    with pytest.raises(MachineReviewProviderConfigurationError) as caught:
+        build_machine_review_provider(settings)
+
+    assert secret not in str(caught.value)
+    # Not truncated, either: a prefix of a secret is still a piece of one.
+    assert "sk-live" not in str(caught.value)
+
+
+def test_a_real_variable_name_is_still_named_in_the_error(monkeypatch):
+    """The redaction must not cost the diagnostic it exists beside.
+
+    Naming the variable is exactly what an operator needs when the variable is
+    genuinely missing, so a legal POSIX name echoes as before.
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env="OPENAI_API_KEY",
+    )
+
+    with pytest.raises(MachineReviewProviderConfigurationError) as caught:
+        build_machine_review_provider(settings)
+
+    assert "OPENAI_API_KEY" in str(caught.value)
+

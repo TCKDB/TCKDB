@@ -982,8 +982,8 @@ describe("running machine review for a submission", () => {
         await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
 
         const outcome = await runShown()
-        expect(outcome).toHaveTextContent(/The review ran/)
-        expect(outcome).toHaveTextContent(/the reviewer failed/i)
+        expect(outcome).toHaveTextContent(/did not produce a usable result/i)
+        expect(outcome).toHaveTextContent(/Why the run failed/i)
         expect(outcome).toHaveTextContent(
             /provider returned no usable JSON after 3 tries/,
         )
@@ -1009,7 +1009,50 @@ describe("running machine review for a submission", () => {
         await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
 
         const outcome = await runShown()
-        expect(outcome).toHaveTextContent(/not of this submission/i)
+        expect(outcome).toHaveTextContent(/not a finding about this submission/i)
+    })
+
+    it("does not put a local configuration failure in the reviewer's mouth", async () => {
+        /**
+         * Not every failure on this path reached a reviewer. A missing API
+         * key or an unreachable endpoint fails inside this application, and
+         * the runner records exactly that sentence.
+         *
+         * The page used to label it "Reason the reviewer gave" and headline
+         * it "the reviewer failed" -- which points an admin at the model when
+         * the fault is their own configuration, and blurs the axis between a
+         * machine reviewer's judgement and this system's plumbing. Those are
+         * the three axes this page is careful about everywhere else.
+         */
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                status: "machine_review_failed",
+                failure_reason:
+                    "Machine review could not be configured: Cloud mode requires " +
+                    "LLM_PRECHECK_MODEL to be set.",
+                summary:
+                    "Machine review could not be configured: Cloud mode requires " +
+                    "LLM_PRECHECK_MODEL to be set.",
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/Why the run failed/i)
+        expect(outcome).not.toHaveTextContent(/reason the reviewer gave/i)
+        expect(outcome).not.toHaveTextContent(/the reviewer failed/i)
+
+        // And the same sentence must not also appear as the reviewer's own
+        // summary. The runner sets `summary` and `failure_reason` to the same
+        // text on every failure, so an unguarded page printed a configuration
+        // error twice -- once as the reviewer's words, which it never was.
+        expect(outcome).not.toHaveTextContent(/reviewer.s summary/i)
+        const shown = (outcome.textContent ?? "").match(
+            /Cloud mode requires LLM_PRECHECK_MODEL to be set/g,
+        )
+        expect(shown).toHaveLength(1)
     })
 
     it("shows the findings the run just produced, without a second inspect", async () => {

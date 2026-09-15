@@ -26,6 +26,7 @@ service layer converts into an advisory failed result rather than a crash.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from app.api.config import settings as app_settings
@@ -36,6 +37,34 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProvider,
     MachineReviewProviderConfigurationError,
 )
+
+#: What a POSIX environment-variable name may contain. Anything else is, by
+#: construction, not a variable name -- and the one thing an operator is most
+#: likely to put in this setting by mistake is the key itself.
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_env_name(value: str) -> str:
+    """Render ``LLM_PRECHECK_API_KEY_ENV`` for an error message, or refuse to.
+
+    ``LLM_PRECHECK_API_KEY_ENV`` holds the NAME of the variable that holds the
+    key. Setting it to the key itself is an easy slip and reads as if it ought
+    to work, and the old message formatted it straight into the error -- which
+    reaches a durable ``submission_audit_event`` and an HTTP response body.
+
+    The runner's ``_redact_secrets`` cannot save this one: it redacts by
+    looking the configured name up in the environment, and when the "name" IS
+    the key that lookup returns ``None``, so there is nothing to match on and
+    the key passes through verbatim. MEASURED with
+    ``LLM_PRECHECK_API_KEY_ENV=sk-live-...``: the secret appeared in full in
+    the recorded event.
+
+    So the check is on shape, not on a lookup. A real variable name echoes
+    normally, because naming it is genuinely useful when diagnosing a missing
+    one. Anything that is not a legal name is replaced wholesale -- not
+    truncated, since a prefix of a secret is still a piece of a secret.
+    """
+    return repr(value) if _ENV_NAME.match(value) else "<not a variable name>"
 
 
 def _validate_cloud_config(settings_obj: Any) -> None:
@@ -53,7 +82,8 @@ def _validate_cloud_config(settings_obj: Any) -> None:
     if not os.environ.get(key_env):
         raise MachineReviewProviderConfigurationError(
             "Cloud mode requires the environment variable named by "
-            f"LLM_PRECHECK_API_KEY_ENV ({key_env!r}) to be set and non-empty."
+            f"LLM_PRECHECK_API_KEY_ENV ({_safe_env_name(key_env)}) to be set "
+            "and non-empty."
         )
 
 

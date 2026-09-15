@@ -242,6 +242,26 @@ def _record(
             provider=provider_name,
         )
     except Exception:
+        # Roll back, or the caller inherits a poisoned session and the route
+        # 500s in teardown -- which is the failure this whole function exists
+        # to avoid, arriving one layer later and less legibly.
+        #
+        # MEASURED: without this, a write failure leaves the session in
+        # ``InFailedSqlTransaction``; ``get_write_db`` then commits during
+        # teardown, that commit raises, and the admin gets a 500 instead of
+        # the 200 carrying ``audit_event_recorded=false``. The API tests
+        # cannot see it because they override ``get_write_db`` with the test
+        # session, so the teardown commit never runs.
+        #
+        # Rolling back discards nothing a caller wanted kept: this function
+        # is the only writer on the path, and the audit event is the only
+        # thing in the transaction.
+        try:
+            session.rollback()
+        except Exception:
+            # A session too broken to roll back is still not worth raising
+            # over. The outcome already says the event did not land.
+            pass
         return False
     return True
 

@@ -23,7 +23,7 @@ provider -- no test path can reach a transport.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.config import Settings
@@ -554,3 +554,46 @@ def test_missing_submission_writes_no_event(db_session, _api_test_user):
         )
 
     assert _count(db_session, SubmissionAuditEvent) == before
+
+
+def test_a_failed_audit_write_leaves_a_usable_session(
+    db_session, _api_test_user, monkeypatch
+):
+    """Swallowing the write error is not enough; the session must be clean.
+
+    ``_record`` already refused to raise -- an advisory reviewer that cannot
+    journal must not take down an admin request. But it left the session in
+    ``InFailedSqlTransaction``, so ``get_write_db`` committed during teardown,
+    THAT commit raised, and the admin got a 500 instead of the 200 carrying
+    ``audit_event_recorded=false``. The failure this function exists to avoid,
+    arriving one layer later and less legibly.
+
+    The API tests cannot see it: they override ``get_write_db`` with the test
+    session, so the teardown commit never runs. This one asserts on the
+    session directly instead.
+    """
+    submission = _seed_submission(db_session, _api_test_user)
+
+    def explode(session, **_kwargs):
+        # Must fail IN THE DATABASE, not merely in Python. A plain `raise`
+        # never emits SQL, so the transaction is never aborted and the test
+        # passes with or without the rollback -- which is exactly what this
+        # test did in its first draft, and it escaped the mutation.
+        session.execute(text("SELECT 1 / 0"))
+
+    monkeypatch.setattr(
+        "app.services.machine_review.run.record_machine_review_v2_audit_event",
+        explode,
+    )
+
+    outcome = run_machine_review_for_submission(
+        db_session,
+        submission.id,
+        provider=build_fake_machine_review_provider(),
+    )
+
+    assert outcome.audit_event_recorded is False
+    # The point: the caller can still use this session. Without the rollback
+    # the next statement raises PendingRollbackError.
+    assert db_session.scalar(select(func.count()).select_from(RecordReview)) >= 0
+

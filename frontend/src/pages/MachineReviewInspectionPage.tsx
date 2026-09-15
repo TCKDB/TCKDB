@@ -284,9 +284,15 @@ function RunOutcome({ result }: { result: MachineReviewRunResult }) {
     const count = result.findings_count
 
     const headline = failed
-        ? "The review ran, and the reviewer failed. That is a failure of the " +
-          "reviewer, not of this submission: no record was judged and nothing " +
-          "about the submission changed."
+        ? // NOT "the review ran, and the reviewer failed". Several of the
+          // failures that land here never reached a reviewer at all -- a
+          // missing API key or an unreachable endpoint fails in this app, and
+          // telling an admin the reviewer failed would point them at the
+          // model when the fault is local configuration. What IS true of
+          // every failure on this path is that no usable result came back.
+          "The review did not produce a usable result. That is not a finding " +
+          "about this submission: no record was judged and nothing about the " +
+          "submission changed."
         : reviewDidNotStart(result)
           ? // Zero findings from a reviewer that looked and zero from one
             // that is switched off are the same number and opposite news.
@@ -329,15 +335,22 @@ function RunOutcome({ result }: { result: MachineReviewRunResult }) {
             </ul>
             {failed && (
                 <p>
-                    Reason the reviewer gave:{" "}
+                    {/* "Why the run failed", not "reason the reviewer gave".
+                        This text can come from the reviewer, but it can just
+                        as easily be this app's own ("Machine review could not
+                        be configured: ...") or a transport library's. Putting
+                        a configuration error in the reviewer's mouth blurs
+                        the three axes this page is careful about everywhere
+                        else. */}
+                    Why the run failed:{" "}
                     {result.failure_reason !== null ? (
                         result.failure_reason
                     ) : (
-                        <em>none was given.</em>
+                        <em>no reason was recorded.</em>
                     )}
                 </p>
             )}
-            {result.summary !== null && (
+            {result.summary !== null && result.summary !== result.failure_reason && (
                 <>
                     <h4>reviewer&apos;s summary</h4>
                     {/* The reviewer's own words, advisory like everything else

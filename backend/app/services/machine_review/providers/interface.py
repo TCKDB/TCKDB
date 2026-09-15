@@ -42,7 +42,10 @@ from pydantic import BaseModel, ConfigDict
 
 from app.services.llm_precheck.providers import LLMPrecheckConfigurationError
 from app.services.llm_precheck.schemas import LLMPrecheckContext
-from app.services.machine_review.schemas import MachineReviewProviderResultV2
+from app.services.machine_review.schemas import (
+    MachineReviewProviderResultV2,
+    MachineReviewStatus,
+)
 
 
 class MachineReviewProviderConfigurationError(LLMPrecheckConfigurationError):
@@ -101,6 +104,42 @@ class MachineReviewProvider(Protocol):
         """
 
 
+#: Statuses a *provider* may not claim, because they are not statements about
+#: the science -- they are this system's own account of what happened to the
+#: run, and only the runner is in a position to make either.
+#:
+#: ``not_run``            the reviewer was never asked (off mode).
+#: ``machine_review_failed``  asking it did not produce a usable answer.
+#:
+#: :class:`MachineReviewStatus` carries all five because the *stored* review
+#: uses all five; the prompt asks for three. Nothing enforced that gap, so a
+#: model could pick either reserved token and have it believed all the way to
+#: the surface. MEASURED consequence before this guard: a model answering
+#: ``{"status": "not_run"}`` produced a recorded audit event and a page that
+#: told an admin "the machine reviewer is switched off in this deployment, so
+#: no provider was asked anything and nothing was recorded" -- three
+#: statements, all false, none of them the model's to make. A model answering
+#: ``machine_review_failed`` alongside two findings produced "no record was
+#: judged" while two had been, and then made ``failed`` dominate every record
+#: that pass touched.
+_PROVIDER_RESERVED_STATUSES: frozenset[MachineReviewStatus] = frozenset(
+    {
+        MachineReviewStatus.not_run,
+        MachineReviewStatus.machine_review_failed,
+    }
+)
+
+
+class ReservedMachineReviewStatusError(ValueError):
+    """A provider claimed a status that only the runner may set.
+
+    A ``ValueError`` so the service layer's existing conversion treats it like
+    any other contract violation: the review is recorded as failed, with this
+    sentence as the reason. The model does not get a second attempt at
+    narrating its own absence.
+    """
+
+
 def parse_machine_review_v2_payload(
     raw: str | dict[str, Any],
 ) -> MachineReviewProviderResultV2:
@@ -110,12 +149,21 @@ def parse_machine_review_v2_payload(
     (parsed with :func:`json.loads`) or an already-decoded ``dict``. The result
     is validated against :class:`MachineReviewProviderResultV2`, whose
     ``extra="forbid"`` / ``Literal[False]`` ``used_rag`` constraints reject any
-    mutation payload or RAG claim.
+    mutation payload or RAG claim, and then against
+    :data:`_PROVIDER_RESERVED_STATUSES`.
+
+    **The narrowing lives here and not on the model** because the runner builds
+    a ``machine_review_failed`` result of its own on every failure path, and a
+    validator on :class:`MachineReviewProviderResultV2` would refuse that too.
+    The distinction being drawn is not "is this value legal" but "who is
+    entitled to say it", and this function is the one place that knows the
+    answer came from a model.
 
     Raises :class:`json.JSONDecodeError` (bad JSON), :class:`TypeError`
-    (non-object payload), or :class:`pydantic.ValidationError` (contract
-    violation). Callers convert any of these into an advisory failed review;
-    this helper never silently repairs malformed output.
+    (non-object payload), :class:`pydantic.ValidationError` (contract
+    violation), or :class:`ReservedMachineReviewStatusError`. Callers convert
+    any of these into an advisory failed review; this helper never silently
+    repairs malformed output.
     """
     if isinstance(raw, str):
         raw = json.loads(raw)
@@ -124,7 +172,14 @@ def parse_machine_review_v2_payload(
             "machine-review v2 payload must be a JSON object, got "
             f"{type(raw).__name__}."
         )
-    return MachineReviewProviderResultV2.model_validate(raw)
+    parsed = MachineReviewProviderResultV2.model_validate(raw)
+    if parsed.status in _PROVIDER_RESERVED_STATUSES:
+        raise ReservedMachineReviewStatusError(
+            f"A machine-review provider may not report status "
+            f"{parsed.status.value!r}: that is this system's account of what "
+            f"happened to the run, not the reviewer's account of the science."
+        )
+    return parsed
 
 
 def machine_review_v2_result_to_details_json(

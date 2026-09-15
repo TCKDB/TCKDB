@@ -283,7 +283,25 @@ function AccountMenu({
             }
             case "Tab":
                 // Deliberately NOT prevented: Tab means "I am done here".
-                close(false)
+                //
+                // Deferred to the next frame, and that is the whole fix.
+                // Closing synchronously unmounts the focused menu item
+                // BEFORE the browser performs the default Tab, which leaves
+                // it with no element to move from -- so it restarts at the
+                // top of the document. MEASURED in real Chrome: Tab from the
+                // first item landed on "Skip to content", i.e. a keyboard
+                // user was thrown to the top of the page by tabbing out of a
+                // menu. That is worse than the plain links this replaced.
+                //
+                // Deferring keeps the item mounted for the default, so focus
+                // lands on the next tabbable element after the menu, and the
+                // close happens once it has.
+                //
+                // jsdom does not implement Tab's default at all, so no jsdom
+                // test can see this either way -- the existing one asserted
+                // only "focus is not on body", which was true in both worlds.
+                // The test for this is a real-browser one.
+                requestAnimationFrame(() => close(false))
                 break
         }
     }
