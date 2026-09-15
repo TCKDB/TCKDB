@@ -231,6 +231,35 @@ describe("the page says which review this is", () => {
         ).toBeInTheDocument()
     })
 
+    it("warns that approving is permanent before anyone clicks it", async () => {
+        /**
+         * The one claim on this page a reviewer is entitled to read BEFORE
+         * acting, because the action cannot be taken back.
+         *
+         * An earlier draft of this lede dropped it, on the reading that
+         * `approved -> under_review` being an allowed transition means the
+         * approval can be undone. It does not. The status is reversible and
+         * the DATA freeze is not: `set_record_review_status` stamps
+         * `first_approved_at` only when null and clears it nowhere, and the
+         * deployed `tckdb_record_is_accepted` is exactly an EXISTS over
+         * `first_approved_at IS NOT NULL`. Reopening the review leaves the
+         * record frozen; ADR 0015's repair ledger is the only way back.
+         *
+         * Pinned here rather than left to the docstring because a docstring
+         * warns the next programmer and this sentence warns the reviewer,
+         * and it is the reviewer who is about to close the door.
+         */
+        meIs(curator)
+        queueIs([])
+        renderPage()
+
+        const lede = await screen.findByText(/freezes the record against further edits/i)
+        expect(lede).toBeInTheDocument()
+        // And that reopening does not undo it -- the half a reader is most
+        // likely to assume the opposite of.
+        expect(lede).toHaveTextContent(/does not unfreeze it/i)
+    })
+
     it("links to the other queue, so the two are not confused", async () => {
         meIs(curator)
         queueIs([])

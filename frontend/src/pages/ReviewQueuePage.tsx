@@ -31,7 +31,25 @@ import {
  * this one is about records, the other (`/admin/curator-queue`, shown as
  * "Machine findings") is about what a machine flagged.
  *
- * This is the **authoritative** review axis. Approving here changes what
+ * This is the **authoritative** review axis, and approving is a one-way
+ * door for the data even though the review status is not.
+ *
+ * MEASURED, because an earlier draft of this page's lede said the opposite
+ * and it was wrong in the direction that matters. `_ALLOWED_TRANSITIONS`
+ * does permit `approved -> under_review` and `approved -> deprecated`, so
+ * the STATUS can be reopened -- but `set_record_review_status` stamps
+ * `first_approved_at` only when it is null and CLEARS it nowhere (one
+ * writer in `app/`, plus a one-off migration backfill), and the deployed
+ * `tckdb_record_is_accepted` is exactly
+ * `EXISTS (... WHERE record_type = $1 AND record_id = $2 AND
+ * first_approved_at IS NOT NULL)`. So the ADR 0003 freeze keys off a
+ * column that only ever goes from null to set: reopening the review does
+ * not thaw the record, and ADR 0015's repair ledger is the only way back.
+ *
+ * A reviewer is entitled to know that before they click approve, which is
+ * why the lede says it rather than only this comment.
+ *
+ * Approving here changes what
  * a reader is told to trust, which is exactly what Machine findings does
  * not do -- that one triages a machine's advisory findings and endorses
  * nothing. Two queues, two meanings; the lede says which this is,
@@ -283,8 +301,10 @@ export default function ReviewQueuePage() {
                 Every record in the archive, and whether a human has vouched for it.
                 A review row exists for each one from the moment it is deposited, so
                 this list needs nothing run to fill it. Approving here is{" "}
-                <strong>authoritative</strong>: it changes what every reader is told
-                to trust about the record. That is what{" "}
+                <strong>authoritative, and permanent in its effect on the data</strong>:
+                it changes what every reader is told to trust, and it freezes the
+                record against further edits. Moving the review back to under review
+                afterwards does not unfreeze it. That is what{" "}
                 <Link to="/admin/curator-queue">Machine findings</Link> is not: it
                 triages what an automated reviewer raised, and endorses nothing.
             </p>
