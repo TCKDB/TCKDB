@@ -25,6 +25,7 @@ const NetworkEntryPage = lazy(() => import("./pages/NetworkEntryPage"))
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"))
 const ReactionEntryPage = lazy(() => import("./pages/ReactionEntryPage"))
 const ReactionOverviewPage = lazy(() => import("./pages/ReactionOverviewPage"))
+const ReviewQueuePage = lazy(() => import("./pages/ReviewQueuePage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
 const TransitionStateEntryPage = lazy(() => import("./pages/TransitionStateEntryPage"))
@@ -163,6 +164,7 @@ function App() {
                 router-level guard collapses the last two into one redirect. */}
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/curator-queue" element={<CuratorQueuePage />} />
+            <Route path="/review-queue" element={<ReviewQueuePage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
           <Route

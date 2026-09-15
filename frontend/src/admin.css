@@ -225,3 +225,46 @@
     color: var(--muted);
     font: var(--type-note-font);
 }
+
+
+/* ---------------------------------------------------------------------------
+   Record review states
+   ---------------------------------------------------------------------------
+   Five states, two of them coloured.
+
+   `approved` takes `--accent`, not a green: the theme has no success token
+   and `--warning` is its ONLY state colour (see `auth.css`, where a second
+   severity colour was considered and deliberately rejected). Inventing a
+   third would be a palette decision made in passing, by a page, which is
+   how palettes stop being palettes. `--accent` already means "the thing to
+   look at", which is what an approval is on this page.
+
+   `rejected` takes `--warning`, the colour the theme reserves for a state
+   a reader should notice.
+
+   `not_reviewed` is deliberately UNCOLOURED, not muted: it is the normal
+   state of almost every record in the archive, and painting the common
+   case draws the eye to the wrong thing. `under_review` and `deprecated`
+   take `--muted` -- both mean "no judgement stands right now", which is
+   quieter than either verdict. */
+.review-status-approved {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.review-status-rejected {
+    color: var(--warning);
+    font-weight: 600;
+}
+
+.review-status-under-review,
+.review-status-deprecated {
+    color: var(--muted);
+}
+
+
+/* The review queue's paging controls. Sits under the table, spaced like
+   the filter above it so the two read as the same kind of control. */
+.admin-paging {
+    margin: var(--s-4) 0;
+}

@@ -129,6 +129,7 @@ export default function AdminPage() {
             </p>
 
             <nav className="admin-nav" aria-label="Administration sections">
+                <Link to="/review-queue">Review queue</Link>
                 <Link to="/admin/curator-queue">Curator queue</Link>
                 <Link to="/admin/machine-review-inspection">
                     Machine-review inspection

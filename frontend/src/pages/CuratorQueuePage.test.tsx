@@ -159,6 +159,24 @@ function rowButton(ref: string, name: string): HTMLElement {
     return found
 }
 
+/**
+ * A promise the test releases by hand.
+ *
+ * Holding a request open with `setTimeout` makes a test a race between
+ * that delay and however long the rest of the interaction takes. Under
+ * the full parallel suite this file lost that race: "a row still waiting
+ * on its own write is not re-enabled by another row finishing" failed
+ * about two runs in three while passing every time on its own. A gate
+ * the test opens deliberately takes the timing out of the question.
+ */
+function gate(): { held: Promise<void>; release: () => void } {
+    let release: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    return { held, release }
+}
+
 describe("who can open the queue", () => {
     it("a signed-in non-admin is told, and the queue is never fetched", async () => {
         meIs(plainUser)
@@ -637,6 +655,7 @@ describe("a view changed mid-flight is the view that wins", () => {
 
     it("a superseded answer that FAILS does not replace the view that replaced it", async () => {
         meIs(admin)
+        const abandoned = gate()
         let call = 0
         server.use(
             http.get(QUEUE, async ({ request }) => {
@@ -644,7 +663,7 @@ describe("a view changed mid-flight is the view that wins", () => {
                 const state = new URL(request.url).searchParams.get("workflow_state")
                 if (call === 1) {
                     // The abandoned "open" view answers last, and answers 500.
-                    await new Promise((r) => setTimeout(r, 200))
+                    await abandoned.held
                     return HttpResponse.json(
                         { code: "internal_error", detail: "Backend is down." },
                         { status: 500 },
@@ -666,9 +685,10 @@ describe("a view changed mid-flight is the view that wins", () => {
 
         // The failure half of the sequence guard. Without it, a slow 500 on a
         // view nobody is looking at replaces a good table with "Could not
-        // load the curator queue."
-        await new Promise((r) => setTimeout(r, 300))
-        expect(screen.getByText("spc_current")).toBeInTheDocument()
+        // load the curator queue." Released deliberately rather than slept
+        // past, so the assertion cannot run before the damage would land.
+        abandoned.release()
+        await waitFor(() => expect(screen.getByText("spc_current")).toBeInTheDocument())
         expect(screen.queryByText(/Could not load/i)).not.toBeInTheDocument()
     })
 
@@ -902,12 +922,13 @@ describe("everything a row owns stays with that row", () => {
     it("a row still waiting on its own write is not re-enabled by another row finishing", async () => {
         meIs(admin)
         queueIs([task(), otherTask()])
+        const slow = gate()
         let slowHits = 0
         server.use(
             http.post(`${QUEUE}/41/start-review`, () => HttpResponse.json(task())),
             http.post(`${QUEUE}/42/start-review`, async () => {
                 slowHits += 1
-                await new Promise((resolve) => setTimeout(resolve, 150))
+                await slow.held
                 return HttpResponse.json(otherTask({ workflow_state: "in_curator_review" }))
             }),
         )
@@ -924,14 +945,19 @@ describe("everything a row owns stays with that row", () => {
         // and a second click would send a second write.
         await waitFor(() => expect(rowButton(slowRow, "Start review")).toBeDisabled())
         expect(slowHits).toBe(1)
+
+        // Release, so nothing is left in flight when the test ends.
+        slow.release()
+        await waitFor(() => expect(rowButton(slowRow, "Start review")).toBeEnabled())
     })
 
     it("disables a row's own buttons while its write is in flight", async () => {
         meIs(admin)
         queueIs([task()])
+        const write = gate()
         server.use(
             http.post(`${QUEUE}/41/start-review`, async () => {
-                await new Promise((resolve) => setTimeout(resolve, 120))
+                await write.held
                 return HttpResponse.json(task({ workflow_state: "in_curator_review" }))
             }),
         )
@@ -942,6 +968,9 @@ describe("everything a row owns stays with that row", () => {
         const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
         await user.click(rowButton(ref, "Start review"))
         expect(rowButton(ref, "Close…")).toBeDisabled()
+
+        write.release()
+        await waitFor(() => expect(rowButton(ref, "Close…")).toBeEnabled())
     })
 })
 
