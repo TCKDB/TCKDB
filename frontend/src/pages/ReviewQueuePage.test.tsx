@@ -812,6 +812,51 @@ describe("a refusal does not outstay its welcome", () => {
         expect(screen.queryByText(/no longer in this view/i)).not.toBeInTheDocument()
     })
 
+    it("does not follow the curator to another page", async () => {
+        meIs(curator)
+        // The same rule as the filter, through the paging door: a refusal
+        // is about a row in a view, and a different page is a different
+        // view. Without `offset` in the clearing effect the banner rides
+        // along, naming a row from page two as "no longer in this view"
+        // while the curator reads page one.
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            review({ id: 200 + i, record_public_ref: `spc_p1_${i}` }),
+        )
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
+                return HttpResponse.json(
+                    skip === 0
+                        ? fifty
+                        : [review({ id: 900, record_public_ref: "spc_page_two" })],
+                )
+            }),
+            http.patch(`${REVIEWS}/:type/:id`, () =>
+                HttpResponse.json(
+                    { code: "service_unavailable", detail: "Page two refusal." },
+                    { status: 503 },
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await screen.findByText("spc_page_two")
+
+        await user.click(rowButton("spc_page_two", "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "fine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Page two refusal/)
+
+        await user.click(screen.getByRole("button", { name: "Newer" }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Page two refusal/)).not.toBeInTheDocument(),
+        )
+    })
+
     it("does not follow the curator into another view", async () => {
         meIs(curator)
         // A refusal that leaves the row where it is (a 503, say). Change
@@ -871,6 +916,11 @@ describe("paging cannot strand a curator", () => {
             screen.queryByText(/Every record has been looked at/i),
         ).not.toBeInTheDocument()
         expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled()
+        // Older must be dead here. Every other "Older is disabled"
+        // assertion sits at offset 0, so without this one a rule like
+        // `offset === 0 && !full` would let a curator click onward into
+        // nothing, page after page.
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
     })
 
     it("goes back one page at a time, not to the start", async () => {
