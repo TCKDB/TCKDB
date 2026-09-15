@@ -721,10 +721,14 @@ describe("a refusal is still said when its row has gone", () => {
         // button, the row disappeared, and nothing was ever said. The
         // earlier test could not see this because its mock ignored the
         // `status` the page sends.
-        const alert = await screen.findByRole("alert")
-        expect(alert).toHaveTextContent(/is not allowed/)
-        expect(alert).toHaveTextContent(SPECIES)
-        expect(alert).toHaveTextContent(/no longer in this view/i)
+        // Target the BANNER, not "an alert": the in-row message renders
+        // first and contains neither the ref nor this wording, so
+        // `findByRole("alert")` passed only because the re-read happened
+        // to win a scheduler race. That is the same defect as holding a
+        // request open with a timer.
+        const banner = await screen.findByText(/no longer in this view/i)
+        expect(banner).toHaveTextContent(/is not allowed/)
+        expect(banner).toHaveTextContent(SPECIES)
     })
 
     it("names an unnameable record in that message rather than saying nothing", async () => {
@@ -757,9 +761,158 @@ describe("a refusal is still said when its row has gone", () => {
         await user.type(screen.getByLabelText(/Why/), "mine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
-        const alert = await screen.findByRole("alert")
-        expect(alert).toHaveTextContent("applied_energy_correction (unnamed)")
-        expect(alert).toHaveTextContent(/Somebody else got there first/)
+        const banner = await screen.findByText(/no longer in this view/i)
+        expect(banner).toHaveTextContent("applied_energy_correction (unnamed)")
+        expect(banner).toHaveTextContent(/Somebody else got there first/)
+    })
+})
+
+describe("a refusal does not outstay its welcome", () => {
+    it("is gone once the same row succeeds and leaves the view", async () => {
+        meIs(curator)
+        // Refused, then retried successfully. The row leaves the view
+        // because the retry moved it -- and the banner must not then
+        // announce the OLD refusal about a write that has just worked.
+        let attempts = 0
+        queueByStatus(() =>
+            attempts >= 2
+                ? [review({ status: "approved" })]
+                : [review({ status: "not_reviewed" })],
+        )
+        server.use(
+            http.patch(`${REVIEWS}/:type/:id`, () => {
+                attempts += 1
+                if (attempts === 1) {
+                    return HttpResponse.json(
+                        { code: "domain_error", detail: "Someone else has it." },
+                        { status: 400 },
+                    )
+                }
+                return HttpResponse.json(review({ status: "approved" }))
+            }),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton(SPECIES, "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "first")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Someone else has it/)
+
+        // The form stays open after a non-saved refusal, so retry in it --
+        // clicking "Review..." again would close it.
+        await user.clear(screen.getByLabelText(/Why/))
+        await user.type(screen.getByLabelText(/Why/), "second")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Someone else has it/)).not.toBeInTheDocument(),
+        )
+        expect(screen.queryByText(/no longer in this view/i)).not.toBeInTheDocument()
+    })
+
+    it("does not follow the curator into another view", async () => {
+        meIs(curator)
+        // A refusal that leaves the row where it is (a 503, say). Change
+        // filter and the row is absent for a reason that has nothing to do
+        // with the refusal -- announcing "no longer in this view" there is
+        // simply false, and there was no way to dismiss it.
+        queueByStatus(() => [review({ status: "not_reviewed" })])
+        server.use(
+            http.patch(`${REVIEWS}/:type/:id`, () =>
+                HttpResponse.json(
+                    { code: "service_unavailable", detail: "Try again shortly." },
+                    { status: 503 },
+                ),
+            ),
+        )
+        renderPage()
+        await screen.findByRole("table")
+
+        const user = userEvent.setup()
+        await user.click(rowButton(SPECIES, "Review…"))
+        await user.type(screen.getByLabelText(/Why/), "fine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Try again shortly/)
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Try again shortly/)).not.toBeInTheDocument(),
+        )
+    })
+})
+
+describe("paging cannot strand a curator", () => {
+    it("still offers a way back from a page that came back empty", async () => {
+        meIs(curator)
+        // Exactly one full page, so "Older" is offered and the page beyond
+        // it is empty. Inside the rows-present branch the controls went
+        // with the rows, leaving no way back at all.
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
+                return HttpResponse.json(skip === 0 ? fifty : [])
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+
+        expect(await screen.findByText(/Nothing older than this/i)).toBeInTheDocument()
+        // And it must NOT claim the archive is reviewed.
+        expect(
+            screen.queryByText(/Every record has been looked at/i),
+        ).not.toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled()
+    })
+
+    it("goes back one page at a time, not to the start", async () => {
+        meIs(curator)
+        const asked: string[] = []
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(
+            http.get(REVIEWS, ({ request }) => {
+                const skip = new URL(request.url).searchParams.get("skip") ?? "0"
+                asked.push(skip)
+                return HttpResponse.json(fifty)
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByRole("table")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(2))
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(3))
+
+        // From page three, Newer is page two -- not page one.
+        await user.click(screen.getByRole("button", { name: "Newer" }))
+        await waitFor(() => expect(asked).toEqual(["0", "50", "100", "50"]))
+    })
+
+    it("does not call a nearly-full page full", async () => {
+        meIs(curator)
+        // 49 of a 50-row page. A threshold of `>= limit - 1` would offer
+        // "Older" here and strand the curator on the empty page beyond.
+        const rows = Array.from({ length: 49 }, (_, i) =>
+            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
+        )
+        server.use(http.get(REVIEWS, () => HttpResponse.json(rows)))
+        renderPage()
+
+        await screen.findByRole("table")
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+        expect(screen.queryByText(/cannot say how many/i)).not.toBeInTheDocument()
     })
 })
 
@@ -1069,7 +1222,13 @@ describe("what this page can and cannot tell you", () => {
 
         // The route answers with a bare array and no total (task #257), so
         // "50 shown" alone would read as "that is all of them".
-        expect(await screen.findByText(/cannot say how many/i)).toBeInTheDocument()
+        const count = await screen.findByText(/cannot say how many/i)
+        // And it must not overstate in the other direction: a list of
+        // exactly 50 fills the page with nothing beyond it, so "there ARE
+        // more" would be a claim the page cannot support -- and it is what
+        // sends a curator to an empty page looking for rows.
+        expect(count).toHaveTextContent(/may be more/i)
+        expect(count).not.toHaveTextContent(/there are more/i)
     })
 
     it("does not claim there may be more when the page is short", async () => {

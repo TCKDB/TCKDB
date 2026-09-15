@@ -261,3 +261,10 @@
 .review-status-deprecated {
     color: var(--muted);
 }
+
+
+/* The review queue's paging controls. Sits under the table, spaced like
+   the filter above it so the two read as the same kind of control. */
+.admin-paging {
+    margin: var(--s-4) 0;
+}

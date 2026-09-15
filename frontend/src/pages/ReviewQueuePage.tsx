@@ -38,6 +38,12 @@ import {
  *
  * How big the backlog is. The route answers with a bare array and no
  * total, so a full page means "there may be more" and nothing stronger.
+ *
+ * Nor is paging a stable walk: the list is newest-first and paging is by
+ * offset, so reviewing rows on one page shifts the boundary and the next
+ * page skips as many as were moved out of the filter. Nothing is lost --
+ * the skipped rows are still on page one -- but "Older until empty" is
+ * not a way to be sure you have seen everything.
  * Reporting a real count needs a breaking wire change or a second route
  * (task #257). Saying "50 shown" and implying that is all of it would be
  * the worse failure, so the page says explicitly when it is full.
@@ -97,6 +103,14 @@ export default function ReviewQueuePage() {
     useEffect(() => {
         offsetRef.current = offset
     }, [offset])
+
+    // A refusal is about a row in a view. Change the view and it is no
+    // longer about anything the curator is looking at -- left in place it
+    // followed them from filter to filter announcing that a row they never
+    // saw "is no longer in this view", which is both wrong and unclosable.
+    useEffect(() => {
+        setRowErrors(new Map())
+    }, [statusFilter, offset])
 
     const requestSeq = useRef(0)
 
@@ -318,9 +332,11 @@ export default function ReviewQueuePage() {
 
             {load.status === "ready" && load.rows.length === 0 && (
                 <p role="status">
-                    {statusFilter === "not_reviewed"
-                        ? "Nothing is waiting. Every record has been looked at."
-                        : "No records match this filter."}
+                    {offset > 0
+                        ? "Nothing older than this. Go back for the newer rows."
+                        : statusFilter === "not_reviewed"
+                          ? "Nothing is waiting. Every record has been looked at."
+                          : "No records match this filter."}
                 </p>
             )}
 
@@ -330,28 +346,9 @@ export default function ReviewQueuePage() {
                         {load.rows.length} shown
                         {offset > 0 ? `, from ${offset + 1}` : ""}
                         {load.full
-                            ? ", a full page — there are more than this, and this page cannot say how many"
+                            ? ", a full page — there may be more, and this page cannot say how many"
                             : ""}
                     </p>
-                    <div className="admin-paging">
-                        {/* The list is newest-first, so without paging the
-                            oldest deposits -- the actual backlog -- are
-                            unreachable until the newest are cleared. */}
-                        <button
-                            type="button"
-                            disabled={offset === 0}
-                            onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
-                        >
-                            Newer
-                        </button>{" "}
-                        <button
-                            type="button"
-                            disabled={!load.full}
-                            onClick={() => setOffset(offset + PAGE_LIMIT)}
-                        >
-                            Older
-                        </button>
-                    </div>
                     <div className="table-scroll">
                         <table className="data-table" aria-label="Record reviews">
                             <thead>
@@ -387,6 +384,12 @@ export default function ReviewQueuePage() {
                                         options.includes(draft.status)
                                             ? draft.status
                                             : options[0]
+                                    // No status this page can render has an
+                                    // empty transition set, but rendering a
+                                    // form around `undefined` would submit
+                                    // one, so the form is gated on having
+                                    // something to submit.
+                                    const canSubmit = chosen !== undefined
                                     const cls = statusClass(row.status)
                                     return (
                                         <tr key={rowId}>
@@ -446,7 +449,7 @@ export default function ReviewQueuePage() {
                                                         {rowErrors.get(rowId)?.message}
                                                     </p>
                                                 )}
-                                                {draft?.rowId === rowId && (
+                                                {draft?.rowId === rowId && canSubmit && (
                                                     <form
                                                         id={`review-form-${rowId}`}
                                                         className="admin-resolve"
@@ -515,6 +518,31 @@ export default function ReviewQueuePage() {
                         </table>
                     </div>
                 </>
+            )}
+
+            {load.status === "ready" && (load.rows.length > 0 || offset > 0) && (
+                <div className="admin-paging">
+                    {/* Rendered even when the page came back empty. Inside
+                        the rows-present branch, clicking past the end of a
+                        list whose length is a multiple of the page size
+                        left a curator on "Every record has been looked at"
+                        with no control to get back -- the page's own worst
+                        failure, one click away. */}
+                    <button
+                        type="button"
+                        disabled={offset === 0}
+                        onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
+                    >
+                        Newer
+                    </button>{" "}
+                    <button
+                        type="button"
+                        disabled={!load.full}
+                        onClick={() => setOffset(offset + PAGE_LIMIT)}
+                    >
+                        Older
+                    </button>
+                </div>
             )}
         </section>
     )
