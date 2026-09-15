@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import { Link, Navigate } from "react-router-dom"
+import { Navigate } from "react-router-dom"
 import "../auth.css"
 import "../admin.css"
 import { AuthApiError } from "../api/authApi"
@@ -128,13 +128,14 @@ export default function AdminPage() {
                 progress.
             </p>
 
-            <nav className="admin-nav" aria-label="Administration sections">
-                <Link to="/review-queue">Review queue</Link>
-                <Link to="/admin/curator-queue">Curator queue</Link>
-                <Link to="/admin/machine-review-inspection">
-                    Machine-review inspection
-                </Link>
-            </nav>
+            {/* There was an in-page nav here linking to Record review,
+                Machine findings and Machine-review inspection. It is gone:
+                the header's account menu offers all three from every route,
+                and a second copy of the same three links on one of those
+                routes is not navigation, it is a thing to keep in step.
+                Deleted rather than restyled as buttons -- the complaint was
+                the duplication, and making the duplicate louder answers the
+                wrong half of it. */}
 
             <StorageCapacityPanel />
 

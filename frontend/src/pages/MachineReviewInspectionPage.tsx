@@ -1,12 +1,16 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchMachineReviewInspection } from "../api/machineReviewInspection"
 import { AuthApiError } from "../api/authApi"
 import {
     buildCuratorTasksForSubmission,
     CuratorTaskResponseError,
 } from "../api/curatorTasksApi"
+import {
+    MachineReviewRunResponseError,
+    runMachineReviewForSubmission,
+} from "../api/machineReviewRunApi"
 import {
     findingsConsidered,
     type CuratorTaskBuildResult,
@@ -15,6 +19,12 @@ import {
     overallHighestSeverity,
     type MachineReviewStatus,
 } from "../types/machineReviewInspection"
+import {
+    knownRunStatus,
+    reviewDidNotStart,
+    reviewFailed,
+    type MachineReviewRunResult,
+} from "../types/machineReviewRun"
 
 /**
  * Admin-only Submission Machine-Review Inspection panel.
@@ -97,6 +107,252 @@ function dash(value: unknown): string {
 }
 
 /**
+ * Accessible names for this page's four live regions.
+ *
+ * Named constants rather than four literals, because the run pair and the
+ * build pair are otherwise distinguished only by wording a later edit could
+ * quietly make identical, and two identically named status regions are the
+ * same defect as two unnamed ones.
+ */
+const RUN_ALERT_LABEL = "machine review request problem"
+const RUN_STATUS_LABEL = "machine review run outcome"
+const BUILD_ALERT_LABEL = "curator task build problem"
+const BUILD_STATUS_LABEL = "curator task build result"
+
+/**
+ * The react-query key the inspection below is cached under.
+ *
+ * Shared by the reader and by the run control that invalidates it after a
+ * run. Written out twice, the two drift the day the key gains a member, and
+ * the failure is silent: the invalidate matches nothing, the table keeps
+ * showing the state from before the run, and the page looks like a run that
+ * recorded nothing.
+ */
+function inspectionQueryKey(submissionId: number | null) {
+    return ["machine-review-inspection", submissionId] as const
+}
+
+/**
+ * What the run is doing right now.
+ *
+ * Four states rather than a pair of booleans, for the reason spelled out on
+ * `BuildState` below. `done` here means the REQUEST came back with a result;
+ * whether that result is a review that succeeded or one that failed is a
+ * property of the result, not of this state.
+ */
+type RunState =
+    | { kind: "idle" }
+    | { kind: "running" }
+    | { kind: "done"; result: MachineReviewRunResult }
+    | { kind: "failed"; message: string }
+
+/**
+ * What to tell an admin when the RUN REQUEST did not come back with a result.
+ *
+ * Three failures with three different answers, mirroring `failureMessage`
+ * below, and the distinction matters more here because a machine review
+ * costs a provider call: an admin told "it did not run" presses the button
+ * again, and if it did run they have now paid for two.
+ *
+ * Note what is NOT in here. A reply of `status: "machine_review_failed"` is
+ * a 200 and never reaches this function: the review RAN, and its failure is
+ * an outcome the archive recorded. Routing it here would tell an admin their
+ * request broke when what happened is that a reviewer answered.
+ */
+function runFailureMessage(error: unknown): string {
+    if (error instanceof MachineReviewRunResponseError) {
+        // 2xx. It ran; only the result was unreadable. The error already
+        // carries the whole sentence, including where to go and look.
+        return error.message
+    }
+    if (error instanceof AuthApiError) {
+        // The server answered with a refusal, so no review was started.
+        return `The review did not run: ${error.message}`
+    }
+    // No answer: offline, DNS, a dropped connection, a request that never
+    // left. The server may or may not have run a review and written it.
+    const detail = error instanceof Error ? error.message : String(error)
+    return (
+        `The run did not report back: ${detail}. A review may or may not have ` +
+        "happened; inspect this submission again before pressing it again."
+    )
+}
+
+/**
+ * The one control that produces machine-review findings at all.
+ *
+ * Nothing else makes them. The machine-review stack "is not wired into
+ * uploads or any public read", so before this button a deployment could hold
+ * any number of submissions and zero machine reviews, the table above had
+ * nothing to project, and the curator-task builder below it had nothing to
+ * build from. It sits above that builder because that is the order of the
+ * work: produce the findings, read them, then decide whether they deserve a
+ * curator.
+ *
+ * **A result must never outlive its submission**, for exactly the reason
+ * given at `CuratorTaskBuilder`, and through exactly the same mechanism:
+ * `key={submissionId}` at the mount site. Walking to a submission this
+ * session has not fetched, `query.data` goes undefined while it loads and
+ * the parent unmounts the whole results block, so this component's state
+ * dies with or without a key. Walking BACK to one already visited,
+ * react-query answers from cache (`gcTime`, five minutes by default), data
+ * never goes undefined, nothing unmounts, and the key is the only thing
+ * left that drops the stale result. MEASURED both ways, by the tests that
+ * walk 7 -> 9 and 7 -> 9 -> 7.
+ */
+function MachineReviewRunner({ submissionId }: { submissionId: number }) {
+    const [state, setState] = useState<RunState>({ kind: "idle" })
+    const queryClient = useQueryClient()
+
+    async function run() {
+        setState({ kind: "running" })
+        let result: MachineReviewRunResult
+        try {
+            result = await runMachineReviewForSubmission(submissionId)
+        } catch (error) {
+            setState({ kind: "failed", message: runFailureMessage(error) })
+            return
+        }
+        setState({ kind: "done", result })
+
+        // The findings table above is a cached query, so without this the
+        // admin reads the run's own summary over a table still showing the
+        // archive as it was before the run -- most starkly "no records
+        // received mapped machine-review findings" directly beneath a line
+        // saying the run recorded nine. Invalidated even when the review
+        // failed: the request reached the server, and a failed review still
+        // records an audit event the projection reads.
+        //
+        // Outside the try on purpose. In it, a throw from the cache layer
+        // would be caught by the branch above and reported as a request
+        // failure, turning a run that succeeded into a red alert.
+        void queryClient.invalidateQueries({
+            queryKey: inspectionQueryKey(submissionId),
+        })
+    }
+
+    return (
+        <section>
+            <h3>Machine review</h3>
+            <p style={{ color: "#6b7280", marginTop: "-6px" }}>
+                A machine review is <strong>advisory</strong>. Nothing starts one
+                on upload; this control is the only thing that does. It endorses
+                nothing, and it is neither of the two things next to it: human
+                review of a record, and moderation of the submission. Neither
+                moves when this runs. Running it again reviews this submission
+                again and records another result.
+            </p>
+            <button type="button" onClick={run} disabled={state.kind === "running"}>
+                {state.kind === "running"
+                    ? "Running machine review…"
+                    : "Run machine review for this submission"}
+            </button>
+
+            {/* Two permanently mounted, initially empty live regions, for the
+                reason given at the build control below. The split is also the
+                page's honest line between the two kinds of bad news: a request
+                that failed goes in the alert, and a REVIEW that failed is an
+                outcome and goes in the result region with every other
+                outcome. */}
+            <div
+                role="alert"
+                aria-label={RUN_ALERT_LABEL}
+                style={{ color: "#b91c1c" }}
+            >
+                {state.kind === "failed" ? <p>{state.message}</p> : null}
+            </div>
+            <div role="status" aria-label={RUN_STATUS_LABEL}>
+                {state.kind === "done" ? <RunOutcome result={state.result} /> : null}
+            </div>
+        </section>
+    )
+}
+
+/**
+ * What one run recorded, in wording an admin can act on.
+ *
+ * The thing this must not do is read as a request error when the reviewer
+ * failed. `machine_review_failed` arrives on a 200: a review ran, the
+ * reviewer did not manage to produce findings, and the archive wrote that
+ * down. "Failed to run the review" would send an admin looking at the
+ * network and the deployment for a fault that is in the reviewer, and the
+ * `failure_reason` the server sent is the thing that actually says where.
+ */
+function RunOutcome({ result }: { result: MachineReviewRunResult }) {
+    const failed = reviewFailed(result)
+    const known = knownRunStatus(result.status)
+    const count = result.findings_count
+
+    const headline = failed
+        ? "The review ran, and the reviewer failed. That is a failure of the " +
+          "reviewer, not of this submission: no record was judged and nothing " +
+          "about the submission changed."
+        : reviewDidNotStart(result)
+          ? // Zero findings from a reviewer that looked and zero from one
+            // that is switched off are the same number and opposite news.
+            "No review happened. The machine reviewer is switched off in this " +
+            "deployment, so no provider was asked anything and nothing was " +
+            "recorded."
+          : `The review ran and recorded ${count} finding${count === 1 ? "" : "s"}.`
+
+    return (
+        <div
+            // Framed, so the outcome reads as the answer to the button above
+            // it rather than as one more paragraph of this page's furniture.
+            style={{
+                borderLeft: "3px solid #6b7280",
+                paddingLeft: "12px",
+                marginTop: "12px",
+            }}
+        >
+            <p>{headline}</p>
+            <ul>
+                <li>
+                    status:{" "}
+                    {known !== null ? (
+                        <StatusBadge status={known} />
+                    ) : (
+                        // Shown as it arrived rather than mapped onto one of
+                        // the five this build knows, which would hand it
+                        // another status's disclaimer.
+                        <code>{result.status}</code>
+                    )}
+                </li>
+                <li>findings recorded: {count}</li>
+                <li>model: {dash(result.model)}</li>
+                <li>provider: {dash(result.provider)}</li>
+                <li>
+                    {result.audit_event_recorded
+                        ? "written to the audit log, which is what the table above reads"
+                        : "not written to the audit log, so the table above will not show it"}
+                </li>
+            </ul>
+            {failed && (
+                <p>
+                    Reason the reviewer gave:{" "}
+                    {result.failure_reason !== null ? (
+                        result.failure_reason
+                    ) : (
+                        <em>none was given.</em>
+                    )}
+                </p>
+            )}
+            {result.summary !== null && (
+                <>
+                    <h4>reviewer&apos;s summary</h4>
+                    {/* The reviewer's own words, advisory like everything else
+                        it produced. Quoted plainly so it cannot be mistaken
+                        for a statement this page is making. */}
+                    <blockquote style={{ margin: 0, color: "#374151" }}>
+                        {result.summary}
+                    </blockquote>
+                </>
+            )}
+        </div>
+    )
+}
+
+/**
  * What the build is doing right now.
  *
  * Four states rather than a pair of booleans, because the pair admits
@@ -119,7 +375,7 @@ type BuildState =
  * inside one sentence:
  *
  *   "No tasks were built: The build ran, but this page could not read
- *    the tally. Any tasks it made are in the curator queue."
+ *    the tally. Any tasks it made are under Machine findings."
  *
  * Only a refusal that reached the server and came back as an error status
  * supports "nothing was built". A 2xx whose body would not parse means
@@ -142,12 +398,12 @@ function failureMessage(error: unknown): string {
     const detail = error instanceof Error ? error.message : String(error)
     return (
         `The build did not report back: ${detail}. It may or may not have ` +
-        "run; check the curator queue before pressing it again."
+        "run; check Machine findings before pressing it again."
     )
 }
 
 /**
- * The one control that puts work into the curator queue.
+ * The one control that puts work into Machine findings.
  *
  * Curator tasks are built by nothing else. The backend route says so in as
  * many words ("Explicit/admin-triggered only -- never runs on upload"), so
@@ -213,11 +469,21 @@ function CuratorTaskBuilder({ submissionId }: { submissionId: number }) {
                 changes inside them. An unannounced status region is a
                 guard that does nothing, which is the shape of defect this
                 repo files tasks about. Empty divs take no vertical space,
-                so this costs the sighted layout nothing. */}
-            <div role="alert" style={{ color: "#b91c1c" }}>
+                so this costs the sighted layout nothing.
+
+                Each region carries an `aria-label` because this page now
+                mounts two pairs of them, one for the run above and one for
+                the build here. Two unnamed status regions announce as the
+                same anonymous thing, so a screen-reader user hearing a
+                tally has no way to tell which button it answered. */}
+            <div
+                role="alert"
+                aria-label={BUILD_ALERT_LABEL}
+                style={{ color: "#b91c1c" }}
+            >
                 {state.kind === "failed" ? <p>{state.message}</p> : null}
             </div>
-            <div role="status">
+            <div role="status" aria-label={BUILD_STATUS_LABEL}>
                 {state.kind === "done" ? <BuildTally result={state.result} /> : null}
             </div>
         </section>
@@ -238,7 +504,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
     const considered = findingsConsidered(result)
     const headline =
         made > 0
-            ? `${made} new task${made === 1 ? " is" : "s are"} now in the curator queue.`
+            ? `${made} new task${made === 1 ? " is" : "s are"} now under Machine findings.`
             : considered > 0
               ? // "already has one" on its own invites the inference that it
                 // is therefore waiting in the queue, which is false when the
@@ -303,7 +569,7 @@ function BuildTally({ result }: { result: CuratorTaskBuildResult }) {
                     to="/admin/curator-queue"
                     style={{ color: "#1d4ed8", textDecoration: "underline" }}
                 >
-                    Open the curator queue
+                    Open Machine findings
                 </Link>
             </p>
         </div>
@@ -320,7 +586,7 @@ function MachineReviewInspectionPage() {
     const [note, setNote] = useState("")
 
     const query = useQuery({
-        queryKey: ["machine-review-inspection", submissionId],
+        queryKey: inspectionQueryKey(submissionId),
         queryFn: () => fetchMachineReviewInspection(submissionId as number),
         enabled: submissionId !== null,
     })
@@ -475,6 +741,24 @@ function MachineReviewInspectionPage() {
                             ))}
                         </ul>
                     </section>
+
+                    {/* The run comes first: it is what produces the findings
+                        the table above shows and the builder below reads.
+
+                        The key is PREFIXED, and that is not decoration. These
+                        are two children of one fragment, so React reconciles
+                        them as a keyed list, and giving both of them
+                        `key={data.submission_id}` makes two siblings share a
+                        key. MEASURED, not feared: with the bare id, walking
+                        7 -> 9 -> 7 left submission 9's run outcome mounted
+                        beside submission 7's empty one -- two status regions,
+                        the stale one still reading "recorded 3 findings"
+                        under the wrong submission's findings. That is the
+                        exact false report the key was added to prevent. */}
+                    <MachineReviewRunner
+                        key={`run-${data.submission_id}`}
+                        submissionId={data.submission_id}
+                    />
 
                     <CuratorTaskBuilder
                         key={data.submission_id}

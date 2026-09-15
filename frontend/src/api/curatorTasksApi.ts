@@ -187,7 +187,7 @@ export async function buildCuratorTasksForSubmission(
         throw new CuratorTaskResponseError(
             "build-for-submission",
             "The build ran, but this page could not read the tally. " +
-                "Any tasks it made are in the curator queue; open it to see them.",
+                "Any tasks it made are under Machine findings; open it to see them.",
         )
     }
     return parsed.data

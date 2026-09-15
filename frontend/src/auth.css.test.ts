@@ -43,3 +43,49 @@ describe("the API key form's submit button", () => {
         expect(declarationsFor(authCss, ".api-key-create .auth-submit")).toMatch(/align-self:\s*auto/)
     })
 })
+
+/**
+ * The account menu's items must LOOK clickable on their own.
+ *
+ * `index.css` resets every anchor site-wide to `color: inherit;
+ * text-decoration: none`, so an `<a>` that inherits gets no colour, no
+ * underline and no hit area beyond its own text -- which is exactly how
+ * the deleted `/admin` in-page nav looked, and exactly the complaint
+ * ("super gross looks") that started this change. Nothing about rendering
+ * the menu in jsdom would catch the rule going missing: the items would
+ * still be there, still be links, still be announced correctly, and still
+ * be invisible as controls. So the rule itself is asserted.
+ *
+ * Source-level rather than computed-style, for the reason the block above
+ * already gives for `.auth-submit`: what is pinned is that the declaration
+ * exists and points at the right token. `padding` is included deliberately
+ * -- it is what turns each item into a full-width row rather than a word
+ * you have to hit exactly.
+ */
+describe("the account menu carries its own link styling", () => {
+    const item = declarationsFor(authCss, ".account-menu-item")
+
+    it("gives each item a colour, since an inherited one is invisible", () => {
+        expect(item).toMatch(/color:\s*var\(--ink\)/)
+    })
+
+    it("gives each item a row-sized hit area, not just its own text", () => {
+        expect(item).toMatch(/display:\s*block/)
+        expect(item).toMatch(/width:\s*100%/)
+        expect(item).toMatch(/padding:/)
+    })
+
+    it("tints the row on hover and on keyboard focus alike", () => {
+        // A hover-only affordance leaves a keyboard reader with no way to
+        // see which item they are on.
+        expect(declarationsFor(authCss, ".account-menu-item:hover")).toMatch(/background:\s*var\(--accent-50\)/)
+        expect(declarationsFor(authCss, ".account-menu-item:focus-visible")).toMatch(/outline:/)
+    })
+
+    it("caps the popup against the viewport so a phone gets all of it", () => {
+        // 400px-wide screens: a fixed min-width with no max would hang the
+        // menu off the right edge, since it is right-aligned to a trigger
+        // that already sits at the end of the header.
+        expect(declarationsFor(authCss, ".account-menu-popup")).toMatch(/max-width:\s*min\(/)
+    })
+})

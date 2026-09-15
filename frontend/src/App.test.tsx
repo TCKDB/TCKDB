@@ -629,6 +629,40 @@ describe("site nav: the Reactions link is a real page, not a dead end", () => {
     })
 })
 
+describe("the renamed review surfaces keep the addresses they had", () => {
+    /**
+     * "Curator queue" is now "Machine findings" and "Review queue" is now
+     * "Record review". Only the words moved: `/admin/curator-queue` and
+     * `/review-queue` are still the addresses, because a bookmark or a
+     * link already sent to a curator has to keep landing on the page it
+     * named. Asserted through `App` itself, against the real route table
+     * -- rendering either page component directly would pass no matter
+     * what path it was mounted at, and prove nothing about the routes.
+     */
+    const adminMe = {
+        id: 1, username: "calvin", email: "calvin@example.com",
+        full_name: "Calvin Pieters", role: "admin", is_active: true,
+    }
+
+    it("/admin/curator-queue answers, now headed Machine findings", async () => {
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(adminMe)))
+        server.use(http.get("/api/v1/admin/machine-review/curator-tasks", () => HttpResponse.json([])))
+        window.history.replaceState({}, "", "/admin/curator-queue")
+        render(<App />)
+
+        expect(await screen.findByRole("heading", { name: "Machine findings", level: 1 })).toBeVisible()
+    })
+
+    it("/review-queue answers, now headed Record review", async () => {
+        server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(adminMe)))
+        server.use(http.get("/api/v1/record-reviews", () => HttpResponse.json([])))
+        window.history.replaceState({}, "", "/review-queue")
+        render(<App />)
+
+        expect(await screen.findByRole("heading", { name: "Record review", level: 1 })).toBeVisible()
+    })
+})
+
 it("retains the admin machine-review route outside public navigation", async () => {
     window.history.replaceState({}, "", "/admin/machine-review-inspection")
     render(<QueryClientProvider client={new QueryClient()}><App /></QueryClientProvider>)
