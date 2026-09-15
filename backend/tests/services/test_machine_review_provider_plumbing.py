@@ -260,11 +260,11 @@ def _patch_transport(monkeypatch) -> type[_StubTransport]:
 
 
 def _cloud_settings(**overrides) -> Settings:
-    base = dict(
-        ai_review_assistant_mode="cloud",
-        llm_precheck_model="vendor/model",
-        llm_precheck_api_key_env="MR_TEST_KEY",
-    )
+    base = {
+        "ai_review_assistant_mode": "cloud",
+        "llm_precheck_model": "vendor/model",
+        "llm_precheck_api_key_env": "MR_TEST_KEY",
+    }
     base.update(overrides)
     return Settings(**base)
 

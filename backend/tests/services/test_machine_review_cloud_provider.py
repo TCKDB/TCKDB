@@ -21,11 +21,6 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.llm_precheck.schemas import LLMPrecheckContext, LLMRecordRef
-from app.services.machine_review.providers.openai_transport import (
-    ModelOutputTruncatedError,
-    ModelRefusedError,
-    extract_text,
-)
 from app.services.machine_review.providers.cloud import (
     CloudMachineReviewProvider,
     MachineReviewModelClient,
@@ -33,6 +28,11 @@ from app.services.machine_review.providers.cloud import (
 from app.services.machine_review.providers.interface import (
     MachineReviewContext,
     MachineReviewProvider,
+)
+from app.services.machine_review.providers.openai_transport import (
+    ModelOutputTruncatedError,
+    ModelRefusedError,
+    extract_text,
 )
 from app.services.machine_review.providers.prompt import (
     MACHINE_REVIEW_PROMPT_VERSION,
