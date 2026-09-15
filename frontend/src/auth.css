@@ -16,6 +16,12 @@
 /* ---------------------------------------------------------------------
  * Header affordance (`AuthStatus.tsx`, rendered in `AppShell.tsx` next to
  * `ThemeToggle`).
+ *
+ * Two shapes, one slot: a bare "Sign in" link when the visitor has no
+ * session, and the account menu below when they do. `.auth-status` and
+ * `.auth-status-signout` are gone with the flat row of header links they
+ * styled -- everything a signed-in reader used to reach from the bar now
+ * lives inside `.account-menu-popup`.
  * ------------------------------------------------------------------- */
 .auth-status-link {
     color: var(--ink-2);
@@ -25,26 +31,147 @@
 
 .auth-status-link:hover { color: var(--accent); }
 
-.auth-status {
-    display: flex;
-    align-items: center;
-    gap: .7rem;
+/* ---------------------------------------------------------------------
+ * The signed-in account menu (`AuthStatus.tsx`'s `AccountMenu`).
+ *
+ * Every rule here is written assuming NOTHING is inherited: `index.css`
+ * resets every anchor site-wide to `color: inherit; text-decoration:
+ * none`, so an unstyled `<a>` in this popup would render as plain prose
+ * with no hint it can be clicked. That is precisely how the `/admin`
+ * page's in-page nav looked before it was deleted, and it is why each
+ * item below carries its own colour, padding and hover fill rather than
+ * leaning on a link default that does not exist in this app.
+ *
+ * The items are styled as MENU ROWS (a full-width hit area with a tint on
+ * hover), not as underlined links: inside a popup, a row is what a reader
+ * already knows how to use, and the underline treatment is reserved for
+ * links that sit in running prose.
+ * ------------------------------------------------------------------- */
+.account-menu {
+    /* The popup is positioned against this, not against the header, so
+       it stays pinned to the trigger when `.utility-bar-end` wraps onto a
+       second line below 680px. */
+    position: relative;
 }
 
-.auth-status-signout {
-    border: 0;
-    padding: 0;
-    background: none;
-    color: var(--muted);
+.account-menu-trigger {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    max-width: 14rem;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    padding: .3rem .6rem;
+    background: var(--surface-sunken);
+    color: var(--ink-2);
     font: var(--type-ui-font);
     letter-spacing: var(--type-ui-tracking);
-    text-decoration: underline;
-    text-decoration-color: var(--line);
-    text-underline-offset: .15em;
     cursor: pointer;
 }
 
-.auth-status-signout:hover { color: var(--accent); text-decoration-color: currentColor; }
+.account-menu-trigger:hover,
+.account-menu-trigger[aria-expanded="true"] {
+    color: var(--accent);
+    border-color: var(--accent-300);
+}
+
+/* The burger itself: one element for the middle bar, its two pseudo-
+   elements for the others. `currentColor` so the glyph follows the
+   trigger's own hover/open colour without a second rule to keep in step. */
+.account-menu-bars {
+    position: relative;
+    display: block;
+    flex: none;
+    width: .85rem;
+    height: 1px;
+    background: currentColor;
+}
+
+.account-menu-bars::before,
+.account-menu-bars::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 1px;
+    background: currentColor;
+}
+
+.account-menu-bars::before { top: -.28rem; }
+.account-menu-bars::after { top: .28rem; }
+
+/* `full_name` is free text a depositor typed; a long one would widen the
+   header and squeeze the primary navigation on every route. */
+.account-menu-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.account-menu-popup {
+    position: absolute;
+    /* Above `.skip-link`'s z-index 3, the highest thing this app's chrome
+       otherwise stacks, so the popup is never painted under it. */
+    z-index: 4;
+    top: calc(100% + .35rem);
+    /* Right-aligned to the trigger, which sits at the end of the header:
+       a left-aligned popup would hang off the right edge of the viewport
+       on a phone. The `min()` caps it against the viewport as well, so a
+       ~400px screen still gets the whole menu with a gutter to spare. */
+    right: 0;
+    min-width: 13rem;
+    max-width: min(17rem, calc(100vw - 2rem));
+    padding: .25rem;
+    border: 1px solid var(--line);
+    border-radius: .45rem;
+    background: var(--surface);
+    box-shadow: 0 .5rem 1.25rem var(--shadow-color);
+}
+
+/* A hairline between the archive's pages and the reader's own session,
+   drawn only BETWEEN groups so a plain user (who is offered no pages at
+   all) gets a popup with no stray rule across the top of it. */
+.account-menu-group + .account-menu-group {
+    margin-top: .25rem;
+    padding-top: .25rem;
+    border-top: 1px solid var(--line-2);
+}
+
+.account-menu-item {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    border: 0;
+    border-radius: .3rem;
+    padding: .45rem .6rem;
+    background: none;
+    color: var(--ink);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.account-menu-item:hover {
+    background: var(--accent-50);
+    color: var(--accent-700);
+}
+
+/* `outline-offset` is NEGATIVE here, unlike the +3px the rest of the app
+   uses: an outline drawn outside a full-width row would be clipped by the
+   popup's own border and read as a broken box on the first and last
+   items. */
+.account-menu-item:focus-visible {
+    background: var(--accent-50);
+    color: var(--accent-700);
+    outline: 3px solid var(--accent-300);
+    outline-offset: -2px;
+}
+
+/* Sign out is quieter than the pages above it: it is the one entry here
+   that ends something rather than going somewhere. */
+.account-menu-signout { color: var(--muted); }
 
 /* ---------------------------------------------------------------------
  * Login / register page.

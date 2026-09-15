@@ -1,7 +1,7 @@
 /**
  * Where a record's public ref can be opened, if anywhere.
  *
- * A curator queue lists findings against records of many types, and a
+ * Machine findings lists concerns against records of many types, and a
  * curator's first move is always the same: look at the thing. This is the
  * one place that knows which types have a page and what its path is.
  *

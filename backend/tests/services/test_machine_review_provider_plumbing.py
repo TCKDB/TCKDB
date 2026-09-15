@@ -3,7 +3,8 @@
 These cover the producer side only — provider interface, disabled/off provider,
 the test-only fake v2 provider, the factory, config validation, and the
 strict-parse / serialization boundary. No real online/local model calls exist;
-cloud/local modes validate config and then raise ``NotImplementedError``.
+cloud mode validates config and builds the real provider; local still
+validates and raises ``NotImplementedError``.
 
 Config namespace note: ``AI_REVIEW_ASSISTANT_MODE`` + ``LLM_PRECHECK_*`` is the
 implementation/config namespace; ``MachineReviewProviderResultV2`` is the output
@@ -226,17 +227,167 @@ def test_cloud_mode_requires_api_key_env_var_present(monkeypatch):
         build_machine_review_provider(settings)
 
 
-def test_cloud_mode_real_call_not_implemented_yet(monkeypatch):
-    """With valid cloud config, the factory raises NotImplementedError, no API call."""
-    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
-    settings = Settings(
-        ai_review_assistant_mode="cloud",
-        llm_precheck_model="vendor/model",
-        llm_precheck_api_key_env="MR_TEST_KEY",
+class _StubTransport:
+    """Stands in for ``OpenAICompatibleClient``, recording how it was built.
+
+    The real transport reaches for the optional ``llm`` extra, which is
+    deliberately absent from the default install -- so these tests would
+    otherwise be asserting that the extra is installed rather than that the
+    factory wires the configuration through. Patching at the transport class
+    keeps the factory's own code path real: it still resolves the mode,
+    validates, reads the key from the environment, and decides what to pass.
+    """
+
+    last: "_StubTransport | None" = None
+
+    def __init__(self, *, api_key: str, base_url: str | None = None) -> None:
+        self.api_key = api_key
+        self.base_url = base_url
+        type(self).last = self
+
+    def complete(self, **_kwargs: object) -> str:  # pragma: no cover - guard
+        raise AssertionError("building a provider must not call the model")
+
+
+def _patch_transport(monkeypatch) -> type[_StubTransport]:
+    from app.services.machine_review.providers import openai_transport
+
+    _StubTransport.last = None
+    monkeypatch.setattr(
+        openai_transport, "OpenAICompatibleClient", _StubTransport
+    )
+    return _StubTransport
+
+
+def _cloud_settings(**overrides) -> Settings:
+    base = {
+        "ai_review_assistant_mode": "cloud",
+        "llm_precheck_model": "vendor/model",
+        "llm_precheck_api_key_env": "MR_TEST_KEY",
+    }
+    base.update(overrides)
+    return Settings(**base)
+
+
+def test_cloud_mode_builds_a_real_provider(monkeypatch):
+    """Cloud mode returns the real provider (it raised NotImplementedError until 2026-09-14)."""
+    from app.services.machine_review.providers.cloud import (
+        CloudMachineReviewProvider,
     )
 
-    with pytest.raises(NotImplementedError, match="no external model call"):
-        build_machine_review_provider(settings)
+    _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    provider = build_machine_review_provider(_cloud_settings())
+
+    assert isinstance(provider, CloudMachineReviewProvider)
+    # The configured model must reach the provider: a factory that built one on
+    # a default would pass an isinstance check and review with the wrong model.
+    assert provider._model == "vendor/model"
+
+
+def test_every_configured_value_reaches_the_call(monkeypatch):
+    """The settings an operator writes are the settings the model call uses.
+
+    This is the defect the first version of this factory had, and it was worse
+    than a no-op: it passed only the key and the model, and the provider's own
+    defaults DISAGREE with the settings defaults. A deployment that capped
+    output at 1200 tokens got 4096, and one that set a 30-second timeout got
+    120. A ceiling that is 3.4x what the operator wrote is worse than no
+    ceiling, because it reads as obeyed.
+
+    ``base_url`` is the one that makes "any OpenAI-compatible provider" true at
+    all: dropped, cloud mode can only ever reach OpenAI itself.
+    """
+    transport = _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    provider = build_machine_review_provider(
+        _cloud_settings(
+            llm_precheck_base_url="https://gateway.example/v1",
+            llm_precheck_max_output_tokens=1234,
+            llm_precheck_timeout_seconds=17,
+        )
+    )
+
+    assert transport.last is not None
+    assert transport.last.base_url == "https://gateway.example/v1"
+    assert provider._max_output_tokens == 1234
+    assert provider._timeout_seconds == 17.0
+
+
+def test_an_unset_base_url_means_the_default_endpoint(monkeypatch):
+    """``None`` must flow through, not crash and not become the string 'None'.
+
+    ``llm_precheck_base_url`` is ``str | None`` and unset by default, so the
+    factory hands ``None`` straight to the transport, which is the one place
+    that decides what the default endpoint is.
+    """
+    transport = _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    build_machine_review_provider(_cloud_settings())
+
+    assert transport.last is not None
+    assert transport.last.base_url is None
+
+
+def test_building_the_cloud_provider_calls_nothing(monkeypatch):
+    """Construction is inert. The model is reached only when a review is asked for.
+
+    Worth pinning because the factory runs wherever a provider is resolved --
+    including at import or startup in some call paths -- and a transport that
+    dialled out on construction would turn "is cloud mode configured?" into a
+    billable request, or a startup hang behind a firewall.
+
+    The stub transport raises from ``complete``, so a factory that reviewed
+    anything while building fails here rather than somewhere expensive.
+    """
+    _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    build_machine_review_provider(_cloud_settings())
+
+
+def test_the_api_key_never_reaches_the_provider_repr(monkeypatch):
+    """A key in a repr reaches a traceback, and a traceback reaches a log.
+
+    The transport holds the key to send it; nothing else should be able to read
+    it back out casually. The stub holds it on a plain attribute, which is the
+    least favourable case for this assertion -- a default dataclass-ish repr
+    would expose it.
+    """
+    transport = _patch_transport(monkeypatch)
+    monkeypatch.setenv("MR_TEST_KEY", "super-secret-value")
+
+    provider = build_machine_review_provider(_cloud_settings())
+
+    assert transport.last is not None
+    assert transport.last.api_key == "super-secret-value"  # it really has it
+    assert "super-secret-value" not in repr(provider)
+
+
+def test_cloud_mode_without_the_llm_extra_names_the_extra(monkeypatch):
+    """The install-shaped failure says what to install, not ImportError.
+
+    ``openai`` is deliberately absent from the default install. Somebody
+    switching cloud mode on without the extra should learn that from the error,
+    rather than reading a traceback out of the middle of a request.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def refuse_openai(name, *args, **kwargs):
+        if name == "openai" or name.startswith("openai."):
+            raise ModuleNotFoundError("No module named 'openai'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", refuse_openai)
+    monkeypatch.setenv("MR_TEST_KEY", "secret-value")
+
+    with pytest.raises(MachineReviewProviderConfigurationError, match="llm"):
+        build_machine_review_provider(_cloud_settings())
 
 
 def test_local_mode_requires_base_url_and_model_config():
@@ -343,3 +494,99 @@ def test_v2_provider_result_flows_through_audit_adapter():
         is MachineReviewCategory.transition_state_validation
     )
     assert parsed.result.findings[0].recommended_action is not None
+
+
+# --------------------------------------------------------------------------- #
+# Who is entitled to say what happened to the run
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("reserved", ["not_run", "machine_review_failed"])
+def test_a_provider_may_not_claim_a_status_only_the_runner_sets(reserved):
+    """Two of the five statuses are this system's words, not the reviewer's.
+
+    ``MachineReviewStatus`` carries all five because a STORED review uses all
+    five; the prompt asks for three. Nothing enforced that gap, so a model
+    could pick either reserved token and be believed all the way to the
+    surface.
+
+    MEASURED before the guard: a model answering ``{"status": "not_run"}``
+    produced a recorded audit event AND a page telling an admin "the machine
+    reviewer is switched off in this deployment, so no provider was asked
+    anything and nothing was recorded" -- three statements, all false, none of
+    them the model's to make. ``machine_review_failed`` alongside two findings
+    produced "no record was judged" while two had been.
+    """
+    from app.services.machine_review.providers.interface import (
+        ReservedMachineReviewStatusError,
+    )
+
+    payload = _valid_v2_payload()
+    payload["status"] = reserved
+
+    with pytest.raises(ReservedMachineReviewStatusError, match=reserved):
+        parse_machine_review_v2_payload(payload)
+
+
+@pytest.mark.parametrize(
+    "screening",
+    [
+        "machine_screened_pass",
+        "machine_screened_warning",
+        "machine_screened_needs_attention",
+    ],
+)
+def test_the_three_statuses_the_prompt_asks_for_still_parse(screening):
+    """The narrowing must not cost the reviewer its actual vocabulary."""
+    payload = _valid_v2_payload()
+    payload["status"] = screening
+
+    assert parse_machine_review_v2_payload(payload).status.value == screening
+
+
+def test_a_key_pasted_into_the_env_var_name_setting_is_not_echoed(monkeypatch):
+    """``LLM_PRECHECK_API_KEY_ENV`` holds a NAME; people will paste the key.
+
+    That slip reads as though it ought to work, and the error message used to
+    format the value straight in -- reaching a durable
+    ``submission_audit_event`` and an HTTP response body.
+
+    The runner's ``_redact_secrets`` cannot catch this one: it redacts by
+    looking the configured name up in the environment, and when the "name" IS
+    the key that lookup returns ``None``, so there is nothing to match on.
+    Hence a check on shape rather than on a lookup.
+    """
+    secret = "sk-live-0123456789abcdef"
+    monkeypatch.delenv(secret, raising=False)
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env=secret,
+    )
+
+    with pytest.raises(MachineReviewProviderConfigurationError) as caught:
+        build_machine_review_provider(settings)
+
+    assert secret not in str(caught.value)
+    # Not truncated, either: a prefix of a secret is still a piece of one.
+    assert "sk-live" not in str(caught.value)
+
+
+def test_a_real_variable_name_is_still_named_in_the_error(monkeypatch):
+    """The redaction must not cost the diagnostic it exists beside.
+
+    Naming the variable is exactly what an operator needs when the variable is
+    genuinely missing, so a legal POSIX name echoes as before.
+    """
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    settings = Settings(
+        ai_review_assistant_mode="cloud",
+        llm_precheck_model="vendor/model",
+        llm_precheck_api_key_env="OPENAI_API_KEY",
+    )
+
+    with pytest.raises(MachineReviewProviderConfigurationError) as caught:
+        build_machine_review_provider(settings)
+
+    assert "OPENAI_API_KEY" in str(caught.value)
+

@@ -113,3 +113,18 @@ dependencies:
       # Drop-in replacement for the abandoned `isbnlib`; the runtime
       # import path remains `import isbnlib`.
       - isbnlib2==3.11.9
+      # The cloud machine-review transport. Here rather than only in
+      # backend/pyproject.toml's optional `[llm]` extra because the
+      # deployed image installs the backend with `--no-deps`
+      # (backend/Dockerfile) and takes every runtime dependency from this
+      # file -- so an extra declared in pyproject alone reaches the
+      # container as nothing at all. Without this line, setting
+      # AI_REVIEW_ASSISTANT_MODE=cloud on the Pi returns
+      # `machine_review_failed: ... install the backend with the [llm]
+      # extra` on every single run: a graceful failure, and a total one.
+      #
+      # The extra stays in pyproject for contributors installing with pip,
+      # so the two must be kept in step; `openai` is pure Python, so it
+      # adds no compile step to the arm64 image built under QEMU, which is
+      # the usual reason this project keeps dependencies out.
+      - openai>=1.40

@@ -4,9 +4,11 @@ Resolves ``AI_REVIEW_ASSISTANT_MODE`` (+ ``LLM_PRECHECK_*`` config) to a
 provider:
 
 * ``off``   -> :class:`DisabledMachineReviewProvider` (no dependencies).
-* ``cloud`` -> validates required config (model + API-key-env), then raises
-  :class:`NotImplementedError` — the real external call is not implemented in
-  this slice and no API call is made.
+* ``cloud`` -> validates required config (model + API-key-env), then builds a
+  :class:`~app.services.machine_review.providers.cloud.CloudMachineReviewProvider`
+  over the default OpenAI-compatible transport, passing every configured value
+  through (base URL, output ceiling, timeout). Nothing is called at build time;
+  the model call happens when a review is actually requested.
 * ``local`` -> validates required config (model + base URL), then raises
   :class:`NotImplementedError` — no local call is implemented in this slice.
 * ``test``  -> refuses: the fake provider is test-only and is reached via
@@ -24,6 +26,7 @@ service layer converts into an advisory failed result rather than a crash.
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 from app.api.config import settings as app_settings
@@ -34,6 +37,34 @@ from app.services.machine_review.providers.interface import (
     MachineReviewProvider,
     MachineReviewProviderConfigurationError,
 )
+
+#: What a POSIX environment-variable name may contain. Anything else is, by
+#: construction, not a variable name -- and the one thing an operator is most
+#: likely to put in this setting by mistake is the key itself.
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_env_name(value: str) -> str:
+    """Render ``LLM_PRECHECK_API_KEY_ENV`` for an error message, or refuse to.
+
+    ``LLM_PRECHECK_API_KEY_ENV`` holds the NAME of the variable that holds the
+    key. Setting it to the key itself is an easy slip and reads as if it ought
+    to work, and the old message formatted it straight into the error -- which
+    reaches a durable ``submission_audit_event`` and an HTTP response body.
+
+    The runner's ``_redact_secrets`` cannot save this one: it redacts by
+    looking the configured name up in the environment, and when the "name" IS
+    the key that lookup returns ``None``, so there is nothing to match on and
+    the key passes through verbatim. MEASURED with
+    ``LLM_PRECHECK_API_KEY_ENV=sk-live-...``: the secret appeared in full in
+    the recorded event.
+
+    So the check is on shape, not on a lookup. A real variable name echoes
+    normally, because naming it is genuinely useful when diagnosing a missing
+    one. Anything that is not a legal name is replaced wholesale -- not
+    truncated, since a prefix of a secret is still a piece of a secret.
+    """
+    return repr(value) if _ENV_NAME.match(value) else "<not a variable name>"
 
 
 def _validate_cloud_config(settings_obj: Any) -> None:
@@ -51,7 +82,8 @@ def _validate_cloud_config(settings_obj: Any) -> None:
     if not os.environ.get(key_env):
         raise MachineReviewProviderConfigurationError(
             "Cloud mode requires the environment variable named by "
-            f"LLM_PRECHECK_API_KEY_ENV ({key_env!r}) to be set and non-empty."
+            f"LLM_PRECHECK_API_KEY_ENV ({_safe_env_name(key_env)}) to be set "
+            "and non-empty."
         )
 
 
@@ -70,11 +102,13 @@ def _validate_local_config(settings_obj: Any) -> None:
 def build_machine_review_provider(
     settings_obj: Any = app_settings,
 ) -> MachineReviewProvider:
-    """Build the configured machine-review provider without any real model call.
+    """Build the configured machine-review provider. Makes no model call.
 
-    Off returns the disabled provider. Cloud/local validate their required
-    configuration and then raise :class:`NotImplementedError` (the real
-    provider is a later slice). The fake provider is never returned here.
+    Off returns the disabled provider. Cloud validates its configuration and
+    returns a real provider -- constructing one calls nothing; the model is
+    reached only when a review is requested. Local still validates and raises
+    :class:`NotImplementedError`, which is a later slice. The fake provider is
+    never returned here, whatever the mode says.
     """
     mode = settings_obj.ai_review_assistant_mode
 
@@ -83,9 +117,35 @@ def build_machine_review_provider(
 
     if mode == "cloud":
         _validate_cloud_config(settings_obj)
-        raise NotImplementedError(
-            "Cloud machine-review provider is not implemented yet; "
-            "no external model call is made."
+        # Imported here, not at module scope: the transport reaches for the
+        # optional ``llm`` extra, and an install that never turns cloud mode on
+        # should not need it. ``_validate_cloud_config`` has already proved the
+        # key env var is set and non-empty.
+        from app.services.machine_review.providers.cloud import (
+            CloudMachineReviewProvider,
+        )
+        from app.services.machine_review.providers.openai_transport import (
+            OpenAICompatibleClient,
+        )
+
+        # Every configured value is passed through. An earlier version passed
+        # only the key and the model, which left three settings looking
+        # honoured and silently ignored -- and not harmlessly, because the
+        # provider's own defaults DISAGREE with the settings defaults: a
+        # deployment that capped output at 1200 tokens got 4096, and one that
+        # set a 30-second timeout got 120. A spend ceiling that is 3.4x what
+        # the operator wrote is worse than no ceiling, because it reads as
+        # obeyed.
+        return CloudMachineReviewProvider(
+            client=OpenAICompatibleClient(
+                api_key=os.environ[settings_obj.llm_precheck_api_key_env],
+                # ``None`` means the transport's default endpoint; this is the
+                # setting that makes "any OpenAI-compatible provider" true.
+                base_url=settings_obj.llm_precheck_base_url,
+            ),
+            model=settings_obj.llm_precheck_model,
+            max_output_tokens=settings_obj.llm_precheck_max_output_tokens,
+            timeout_seconds=float(settings_obj.llm_precheck_timeout_seconds),
         )
 
     if mode == "local":

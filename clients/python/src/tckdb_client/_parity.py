@@ -822,6 +822,10 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
             "run-fake",
         ),
         (
+            "POST",
+            "/api/v1/admin/machine-review/run-for-submission/{submission_id}",
+        ),
+        (
             "GET",
             "/api/v1/admin/submissions/{submission_id}/machine-review-inspection",
         ),

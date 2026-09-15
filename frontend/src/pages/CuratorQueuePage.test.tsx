@@ -8,7 +8,7 @@ import CuratorQueuePage from "./CuratorQueuePage"
 import { AuthProvider } from "../components/AuthProvider"
 
 /**
- * The curator queue is the first surface in this app where a person acts
+ * Machine findings is the first surface in this app where a person acts
  * on machine-review findings, and the thing it must never do is imply it
  * touched the science. These tests pin four groups of behaviour:
  *
@@ -200,16 +200,39 @@ describe("who can open the queue", () => {
 })
 
 describe("what the page says it is", () => {
+    it("is titled Machine findings, and never by its old name", async () => {
+        /**
+         * The rename is the fix for the actual complaint: the owner could
+         * not tell this page from `/review-queue` because "Curator queue"
+         * and "Review queue" both named an audience rather than a subject.
+         *
+         * Both halves are asserted. The heading alone would still pass with
+         * the old name left lying in the lede or an empty state, and a
+         * half-renamed pair is exactly as unreadable as the original one.
+         */
+        meIs(admin)
+        queueIs([])
+        renderPage()
+
+        expect(await screen.findByRole("heading", { name: "Machine findings", level: 1 })).toBeInTheDocument()
+        expect(screen.queryByText(/curator queue/i)).not.toBeInTheDocument()
+    })
+
     it("states on the page that closing a task approves no science", async () => {
         meIs(admin)
         queueIs([])
         renderPage()
 
         // ADR 0016's separation, said where a curator reads it rather than
-        // only in a doc. A button labelled "Close" on a queue of findings
+        // only in a doc. A button labelled "Close" on a list of findings
         // invites the opposite reading.
         expect(
-            await screen.findByText(/nothing here\s+approves science/i),
+            await screen.findByText(/nothing\s+here endorses any science/i),
+        ).toBeInTheDocument()
+        // And the same sentence has to say what closing one DOES mean,
+        // since "advisory" alone leaves the reader to guess.
+        expect(
+            screen.getByText(/never that the record is good/i),
         ).toBeInTheDocument()
     })
 
@@ -685,7 +708,7 @@ describe("a view changed mid-flight is the view that wins", () => {
 
         // The failure half of the sequence guard. Without it, a slow 500 on a
         // view nobody is looking at replaces a good table with "Could not
-        // load the curator queue." Released deliberately rather than slept
+        // load the machine findings." Released deliberately rather than slept
         // past, so the assertion cannot run before the damage would land.
         abandoned.release()
         await waitFor(() => expect(screen.getByText("spc_current")).toBeInTheDocument())

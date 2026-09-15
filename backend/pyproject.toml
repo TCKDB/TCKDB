@@ -123,6 +123,23 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+# The cloud machine-review transport. Optional for the same reason RDKit is:
+# only a deployment that sets AI_REVIEW_ASSISTANT_MODE=cloud needs it. The
+# transport imports it inside its constructor and raises a configuration error
+# naming this extra if it is absent, so an install without it fails at the
+# moment cloud mode is switched on rather than at import.
+#
+# The usual objection to a vendor package here is build weight -- the backend
+# ships as an arm64 image built under QEMU, where a wheel that needs compiling
+# costs real minutes. ``openai`` is pure Python, so it costs none of that, and
+# what it buys is typed errors, connection reuse, and a request shape that
+# tracks the API rather than this repository tracking it. It is not a lock-in:
+# the transport speaks the OpenAI-compatible ``/chat/completions`` shape, which
+# every major hosted and self-hosted endpoint accepts, so the supplier is a
+# base-URL setting.
+llm = [
+    "openai>=1.40",
+]
 # RDKit is intentionally optional and split out:
 #   - Conda/mamba developers get the conda-forge build via
 #     environment.yml — they do NOT need to install this extra.

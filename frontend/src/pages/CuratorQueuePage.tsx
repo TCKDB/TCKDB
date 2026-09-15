@@ -24,7 +24,21 @@ import {
 } from "../types/curatorTask"
 
 /**
- * The curator queue: machine-review findings waiting on a person.
+ * Machine findings: machine-review findings waiting on a person.
+ *
+ * Named "Machine findings" on screen, not "Curator queue". The old pair
+ * of names ("Curator queue" and "Review queue") described who was
+ * expected to open each page, which is the one thing the two have in
+ * common -- so the owner could not tell them apart, and said so. The
+ * names now describe what each page is ABOUT: findings a machine raised
+ * here, records a human judged on `/review-queue` ("Record review").
+ *
+ * The route is still `/admin/curator-queue`, and the file, component and
+ * query keys still say "curator task" throughout. That is deliberate:
+ * this was a wording defect, and changing a URL breaks every bookmark
+ * and every link already sent to somebody. `curator_task` is also the
+ * backend's own table name, so the internal spelling still matches the
+ * thing it names.
  *
  * Eight backend routes have served this queue since before there was
  * anywhere to see it. This is that place.
@@ -142,7 +156,7 @@ export default function CuratorQueuePage() {
                 message:
                     caught instanceof AuthApiError
                         ? caught.message
-                        : "Could not load the curator queue.",
+                        : "Could not load the machine findings.",
             })
         }
     }, [])
@@ -154,7 +168,7 @@ export default function CuratorQueuePage() {
     if (state.status === "loading") {
         return (
             <section className="admin-page">
-                <h1>Curator queue</h1>
+                <h1>Machine findings</h1>
                 <p role="status">Checking your account…</p>
             </section>
         )
@@ -162,7 +176,7 @@ export default function CuratorQueuePage() {
     if (state.status === "unreachable") {
         return (
             <section className="admin-page">
-                <h1>Curator queue</h1>
+                <h1>Machine findings</h1>
                 <p className="auth-error" role="alert">
                     The archive could not be reached, so your account could not be
                     checked. This is not a sign that you are signed out.
@@ -174,7 +188,7 @@ export default function CuratorQueuePage() {
     if (!isAdmin) {
         return (
             <section className="admin-page">
-                <h1>Curator queue</h1>
+                <h1>Machine findings</h1>
                 <p className="auth-error" role="alert">
                     This queue is for administrators.
                 </p>
@@ -263,13 +277,15 @@ export default function CuratorQueuePage() {
 
     return (
         <section className="admin-page">
-            <h1>Curator queue</h1>
+            <h1>Machine findings</h1>
             <p className="admin-lede">
-                Findings a machine review raised against deposited records, waiting
-                for a person. These are <strong>advisory</strong>: nothing here
-                approves science, changes what a reader is told to trust, or edits
-                any record. Closing a task records that somebody dealt with the
-                finding.
+                Concerns an automated reviewer raised against deposited records,
+                waiting for a person. These are <strong>advisory</strong>: nothing
+                here endorses any science, changes what a reader is told to trust,
+                or edits any record. Closing one means somebody dealt with the
+                finding, never that the record is good. That judgement is{" "}
+                <Link to="/review-queue">Record review</Link>, and it is made
+                separately.
             </p>
 
             <div className="admin-filter">

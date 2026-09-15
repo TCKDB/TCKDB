@@ -352,9 +352,16 @@ def record_machine_review_v2_audit_event(
     the v1 helper it writes only ``submission_audit_event`` —
     ``actor_kind=llm``, ``event_kind=llm_precheck_recorded`` — and never mutates
     submission status, moderation, summary columns, record-review rows, or
-    scientific records. It is **not** wired into the upload/precheck flow; it is
-    an explicit, caller-driven recorder. Commit control stays with the caller
-    (this only flushes, via :func:`append_audit_event`).
+    scientific records.
+
+    Its one caller in ``app/`` is
+    :func:`~app.services.machine_review.run.run_machine_review_for_submission`,
+    which is reached only from the admin-triggered
+    ``POST /api/v1/admin/machine-review/run-for-submission/{submission_id}``.
+    It remains an explicit, caller-driven recorder: nothing on the upload or
+    precheck path calls it, and uploading never produces one of these events.
+    Commit control stays with the caller (this only flushes, via
+    :func:`append_audit_event`).
     """
     from app.services.machine_review.providers.interface import (
         machine_review_v2_result_to_details_json,

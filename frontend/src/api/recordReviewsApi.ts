@@ -77,7 +77,7 @@ export async function listRecordReviews(options: {
     if (!Array.isArray(payload)) throw new RecordReviewResponseError()
 
     // Row by row: one row this build cannot read costs that row, not the
-    // whole queue. A review queue that renders nothing is the worst
+    // whole queue. A record review list that renders nothing is the worst
     // possible answer to "what still needs looking at".
     const items: RecordReview[] = []
     let unreadable = 0

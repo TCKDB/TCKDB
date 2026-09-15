@@ -412,6 +412,80 @@
         "title": "AdminMachineReviewRecordInspection",
         "type": "object"
       },
+      "AdminMachineReviewRunResponse": {
+        "additionalProperties": false,
+        "description": "Result of one explicit machine-review run (advisory; endorses nothing).\n\n``extra=\"forbid\"`` so it can carry no mutation instruction. It deliberately\ndoes **not** expose the id of the audit event that was written (DR-0028\nRequirement 2): whether the run was journalled is actionable,\nwhich internal row it landed in is not.\n\n``failure_reason`` is non-``null`` only when ``status`` is\n``machine_review_failed``, and then it names what went wrong -- a missing\nconfiguration, a transport failure, a truncated or refused answer, a\ncontract violation. On that path it repeats ``summary``, because the\nrecorded v2 payload has no error field and the reason must live in\n``summary`` to be persisted at all.",
+        "properties": {
+          "audit_event_recorded": {
+            "title": "Audit Event Recorded",
+            "type": "boolean"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "findings_count": {
+            "title": "Findings Count",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submission_id": {
+            "title": "Submission Id",
+            "type": "integer"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "required": [
+          "submission_id",
+          "status",
+          "findings_count",
+          "audit_event_recorded"
+        ],
+        "title": "AdminMachineReviewRunResponse",
+        "type": "object"
+      },
       "AdminRunFakeMachineReviewResponse": {
         "additionalProperties": false,
         "description": "Admin-only response for an explicitly invoked fake machine-review run.\n\nMirrors :class:`~app.services.machine_review.MachineReviewOrchestrationResult`\none-for-one. ``extra=\"forbid\"`` so it can carry no mutation instruction; it\nreports an outcome, it does not perform one. No public ``trust.machine_review``.",
@@ -52573,6 +52647,113 @@
           }
         },
         "summary": "Run Fake Machine Review For Record",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/machine-review/run-for-submission/{submission_id}": {
+      "post": {
+        "description": "Explicitly run machine review for one submission (admin only).\n\nLoads the submission (404 if missing), builds the review context, asks the\nconfigured provider for an advisory review, and records exactly one\n``submission_audit_event`` carrying the validated v2 payload. In off mode\nthe disabled provider returns ``not_run`` and no event is written.\n\nExplicit/admin-triggered only -- this never runs on upload, and no\nbackground worker calls it. Writes only the audit event:\n``submission.status``, the moderation columns, ``record_review`` (human\ntrust) and curator tasks are all untouched. The result is advisory and\nendorses nothing; turning findings into curator tasks is the separate\n``curator-tasks/build-for-submission`` call.\n\nA provider failure is reported as a 200 with\n``status=\"machine_review_failed\"`` and a ``failure_reason``, not as a 5xx.",
+        "operationId": "run_machine_review_for_submission_endpoint_api_v1_admin_machine_review_run_for_submission__submission_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminMachineReviewRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Machine Review For Submission Endpoint",
         "tags": [
           "admin"
         ]

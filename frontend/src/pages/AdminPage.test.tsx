@@ -175,4 +175,29 @@ describe("what the page does not show", () => {
         expect(within(table).queryByText(/noah@example\.com/)).not.toBeInTheDocument()
         expect(document.body.textContent).not.toContain("noah@example.com")
     })
+
+    it("carries no in-page nav duplicating the header menu", async () => {
+        /**
+         * There used to be a `<nav className="admin-nav">` here with links
+         * to Record review, Machine findings and Machine-review inspection.
+         * The header's account menu offers all three from every route, so
+         * the block was a second copy of the same navigation on one of the
+         * routes it pointed at -- two things to keep in step, and the owner
+         * read the duplication as the defect rather than the styling.
+         *
+         * Asserted as "no link to those three paths ANYWHERE on this page",
+         * not "no element with that class": re-adding the block under a new
+         * class name would be the same defect, and a class-name assertion
+         * would sail past it.
+         */
+        meIs(admin)
+        usersAre([userRow()])
+        renderPage()
+        await screen.findByRole("combobox", { name: "Role for noah" })
+
+        const hrefs = screen.queryAllByRole("link").map((a) => a.getAttribute("href"))
+        for (const path of ["/review-queue", "/admin/curator-queue", "/admin/machine-review-inspection"]) {
+            expect(hrefs).not.toContain(path)
+        }
+    })
 })

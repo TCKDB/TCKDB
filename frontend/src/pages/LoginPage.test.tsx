@@ -56,7 +56,7 @@ describe("LoginPage", () => {
         await user.click(screen.getByRole("button", { name: "Sign in" }))
 
         expect(await screen.findByText("Account landing")).toBeInTheDocument()
-        expect(await screen.findByRole("link", { name: "Calvin Pieters" })).toBeInTheDocument()
+        expect(await screen.findByRole("button", { name: "Calvin Pieters" })).toBeInTheDocument()
     })
 
     it("shows the server's message and leaves the user signed out on a failed login", async () => {

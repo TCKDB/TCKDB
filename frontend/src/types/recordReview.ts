@@ -120,7 +120,7 @@ export function statusLabel(status: RecordReviewStatus): string {
 /**
  * What each status asserts about the science, shown where one is chosen.
  *
- * Unlike the curator queue's wording, these sentences are about the
+ * Unlike Machine findings' wording, these sentences are about the
  * record itself: this is the axis that does change what a reader is told
  * to trust, and a curator should be looking at that fact when they pick.
  */

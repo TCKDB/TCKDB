@@ -7,6 +7,11 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import MachineReviewInspectionPage from "./MachineReviewInspectionPage"
 import { CuratorTaskBuildResultSchema } from "../types/curatorTask"
+import {
+    knownRunStatus,
+    MachineReviewRunResultSchema,
+    reviewFailed,
+} from "../types/machineReviewRun"
 
 /**
  * The record-summaries table used to carry a column headed `record_ref` whose
@@ -54,8 +59,8 @@ function serve(record: Record<string, unknown>) {
 /**
  * Render and inspect one submission; returns the `user` for further acts.
  *
- * `MemoryRouter` is here because the build tally offers a link into the
- * curator queue, and a `<Link>` outside a router throws. The page itself
+ * `MemoryRouter` is here because the build tally offers a link into
+ * Machine findings, and a `<Link>` outside a router throws. The page itself
  * is mounted outside the app's `Layout` route (see `App.tsx`) but still
  * inside `BrowserRouter`, so this matches how it really renders.
  */
@@ -209,24 +214,59 @@ function showing(id: string): Promise<HTMLElement> {
 }
 
 /**
- * The tally region, once it has something in it.
+ * The page's four live regions, by accessible name.
  *
- * `role="status"` is now a permanently mounted, initially EMPTY container
- * (see the component), so its mere presence proves nothing and
- * `findByRole("status")` resolves instantly whether a build has run or
- * not. Emptiness is the signal.
+ * There used to be two, and these helpers could say `getByRole("status")`.
+ * The run control added a second pair, so an unqualified query now matches
+ * two elements and throws -- which is the test suite noticing, correctly,
+ * that "the status region" had stopped naming one thing. The regions carry
+ * `aria-label`s for the same reason a screen-reader user needs them: to
+ * tell which button a result answered.
  */
-async function tallyShown(): Promise<HTMLElement> {
-    const region = screen.getByRole("status")
+const BUILD_ALERT = "curator task build problem"
+const BUILD_STATUS = "curator task build result"
+const RUN_ALERT = "machine review request problem"
+const RUN_STATUS = "machine review run outcome"
+
+function liveRegion(role: "status" | "alert", name: string): HTMLElement {
+    return screen.getByRole(role, { name })
+}
+
+/**
+ * Wait until a live region has something in it.
+ *
+ * Every one of them is permanently mounted and initially EMPTY (see the
+ * component), so its mere presence proves nothing and `findByRole` resolves
+ * instantly whether anything has run or not. Emptiness is the signal.
+ */
+async function regionFills(region: HTMLElement): Promise<HTMLElement> {
     await waitFor(() => expect(region).not.toBeEmptyDOMElement())
     return region
 }
 
-/** The alert region's text, once it has some. */
-async function alertSays(pattern: RegExp): Promise<HTMLElement> {
-    const region = screen.getByRole("alert")
+async function regionSays(region: HTMLElement, pattern: RegExp): Promise<HTMLElement> {
     await waitFor(() => expect(region).toHaveTextContent(pattern))
     return region
+}
+
+/** The curator-task tally region, once it has something in it. */
+function tallyShown(): Promise<HTMLElement> {
+    return regionFills(liveRegion("status", BUILD_STATUS))
+}
+
+/** The curator-task alert region's text, once it has some. */
+function alertSays(pattern: RegExp): Promise<HTMLElement> {
+    return regionSays(liveRegion("alert", BUILD_ALERT), pattern)
+}
+
+/** The machine-review run outcome region, once it has something in it. */
+function runShown(): Promise<HTMLElement> {
+    return regionFills(liveRegion("status", RUN_STATUS))
+}
+
+/** The machine-review run alert region's text, once it has some. */
+function runAlertSays(pattern: RegExp): Promise<HTMLElement> {
+    return regionSays(liveRegion("alert", RUN_ALERT), pattern)
 }
 
 type Tally = {
@@ -359,12 +399,12 @@ describe("building curator tasks for a submission", () => {
             "unmapped findings, which are about no record: 6",
         )
         expect(
-            within(status).getByText(/3 new tasks are now in the curator queue/),
+            within(status).getByText(/3 new tasks are now under Machine findings/),
         ).toBeInTheDocument()
 
         // And somewhere to go and look at them. A tally with no way through
         // to the queue leaves the admin to remember the URL.
-        expect(within(status).getByRole("link", { name: /curator queue/i })).toHaveAttribute(
+        expect(within(status).getByRole("link", { name: "Open Machine findings" })).toHaveAttribute(
             "href",
             "/admin/curator-queue",
         )
@@ -379,10 +419,16 @@ describe("building curator tasks for a submission", () => {
          */
         serveAnyInspection()
         await inspect()
-        await screen.findByRole("button", { name: BUILD_BUTTON })
+        const button = await screen.findByRole("button", { name: BUILD_BUTTON })
+        // Scoped to this control's own section. The run control above it
+        // makes the same promise about machine review, in nearly the same
+        // words, so an unscoped `getByText(/endorses nothing/i)` now matches
+        // two paragraphs -- and would have gone on passing while this
+        // paragraph said nothing of the kind, satisfied by the other one.
+        const section = button.closest("section")!
 
-        expect(screen.getByText(/created on upload/i)).toBeInTheDocument()
-        expect(screen.getByText(/endorses nothing/i)).toBeInTheDocument()
+        expect(within(section).getByText(/created on upload/i)).toBeInTheDocument()
+        expect(within(section).getByText(/endorses nothing/i)).toBeInTheDocument()
     })
 
     it("counts one task in the singular", async () => {
@@ -395,7 +441,7 @@ describe("building curator tasks for a submission", () => {
 
         const status = await tallyShown()
         expect(
-            within(status).getByText(/1 new task is now in the curator queue/),
+            within(status).getByText(/1 new task is now under Machine findings/),
         ).toBeInTheDocument()
     })
 
@@ -553,7 +599,7 @@ describe("building curator tasks for a submission", () => {
         await alertSays(/No tasks were built: Submission not found/)
         // No tally: a refused build must not leave a row of zeroes looking
         // like a run that happened and found nothing.
-        expect(screen.getByRole("status")).toBeEmptyDOMElement()
+        expect(liveRegion("status", BUILD_STATUS)).toBeEmptyDOMElement()
         expect(screen.getByRole("button", { name: BUILD_BUTTON })).toBeEnabled()
     })
 
@@ -565,7 +611,7 @@ describe("building curator tasks for a submission", () => {
          * its opposite in a single sentence:
          *
          *   "No tasks were built: The build ran, but this page could not
-         *    read the tally. Any tasks it made are in the curator queue."
+         *    read the tally. Any tasks it made are under Machine findings."
          */
         serveAnyInspection()
         serveBuild({ this_is: "not a tally" })
@@ -575,7 +621,7 @@ describe("building curator tasks for a submission", () => {
         const alert = await alertSays(/could not read the tally/)
         expect(alert).not.toHaveTextContent(/No tasks were built/)
         // And it must point at the one place the truth can be found.
-        expect(alert).toHaveTextContent(/curator queue/)
+        expect(alert).toHaveTextContent(/Machine findings/)
     })
 
     it("admits it does not know when the request got no answer", async () => {
@@ -633,7 +679,7 @@ describe("building curator tasks for a submission", () => {
 
         // Submission 9's findings with submission 7's tally under them is a
         // false report, and the more convincing for being partly true.
-        expect(screen.getByRole("status")).toBeEmptyDOMElement()
+        expect(liveRegion("status", BUILD_STATUS)).toBeEmptyDOMElement()
     })
 
     it("does not follow the admin BACK to a submission already seen", async () => {
@@ -662,6 +708,535 @@ describe("building curator tasks for a submission", () => {
 
         await reinspect(user, "7")
         await showing("7")
-        expect(screen.getByRole("status")).toBeEmptyDOMElement()
+        expect(liveRegion("status", BUILD_STATUS)).toBeEmptyDOMElement()
+    })
+})
+
+/* ------------------------------------------------------------------ *
+ * Running machine review (task #482)
+ *
+ * The other half of the same hole. The builder above turns machine-review
+ * findings into work for a person, and until this control existed nothing
+ * in the product could produce a finding to turn: the machine-review stack
+ * is not wired into uploads, so the live deployment held 44 submissions
+ * and zero machine reviews, and every screen built on top of them had
+ * nothing to show.
+ * ------------------------------------------------------------------ */
+
+const INSPECTION = "/api/v1/admin/submissions/:submissionId/machine-review-inspection"
+
+const RUN = "/api/v1/admin/machine-review/run-for-submission/:submissionId"
+
+const RUN_BUTTON = "Run machine review for this submission"
+
+/** One inspection payload, with whichever record summaries a test wants. */
+function inspectionBody(submissionId: unknown, records: Record<string, unknown>[]) {
+    return {
+        submission_id: Number(submissionId),
+        record_summaries: records,
+        unmapped_findings_count: 0,
+        mapping_warnings: [],
+        parse_warnings: [],
+        source_audit_event_ids: [11],
+    }
+}
+
+/** A record summary naming where it came from, so a wait can assert on it. */
+function record(publicRef: string): Record<string, unknown> {
+    return {
+        record_type: "species",
+        record_public_ref: publicRef,
+        record_id: 431,
+        latest_summary: SUMMARY,
+        all_record_reviews_count: 1,
+    }
+}
+
+type RunReply = {
+    submission_id?: number
+    status?: string
+    findings_count?: number
+    summary?: string | null
+    model?: string | null
+    provider?: string | null
+    audit_event_recorded?: boolean
+    failure_reason?: string | null
+    audit_event_id?: number
+}
+
+/** A run reply with every contract field present, overridable one at a time. */
+function runReply(over: RunReply = {}): Record<string, unknown> {
+    return {
+        submission_id: 7,
+        status: "machine_screened_warning",
+        findings_count: 0,
+        summary: null,
+        model: "anthropic/claude-x",
+        provider: "CloudMachineReviewProvider",
+        audit_event_recorded: true,
+        failure_reason: null,
+        ...over,
+    }
+}
+
+/**
+ * Serve the run route. The returned array collects the submission ids it was
+ * actually called with, which is how "ran for the one on screen" is asserted
+ * rather than assumed.
+ */
+function serveRun(
+    body: Record<string, unknown>,
+    init?: { status: number },
+): { calledFor: number[] } {
+    const calledFor: number[] = []
+    server.use(
+        http.post(RUN, ({ params }) => {
+            calledFor.push(Number(params.submissionId))
+            return HttpResponse.json(body, init)
+        }),
+    )
+    return { calledFor }
+}
+
+describe("the schema behind a machine-review run", () => {
+    it("drops keys the contract does not list, so no page can print one", () => {
+        /**
+         * The contract carries no row id on purpose: `audit_event_recorded`
+         * says WHETHER a run was written to the audit log, never which row it
+         * became. This pins the mechanism that keeps it that way if the
+         * server ever sends one anyway. zod strips what the schema does not
+         * declare, so the id never reaches the object the page renders from.
+         * DR-0028 Req 2.
+         */
+        const parsed = MachineReviewRunResultSchema.parse(
+            runReply({ findings_count: 2, audit_event_id: 9911 }),
+        )
+        expect("audit_event_id" in parsed).toBe(false)
+        expect(parsed.findings_count).toBe(2)
+    })
+
+    it("reads a status this build has never heard of rather than failing", () => {
+        /**
+         * The reply is ONE object, so a strict `z.enum` on `status` would
+         * throw the whole result away over a token nothing branches on,
+         * losing `findings_count`, `summary`, `model` and `failure_reason`,
+         * every one of which is readable and is what the admin came for. The
+         * page's single branch is a positive test for `machine_review_failed`,
+         * so an unfamiliar token is honestly "not that".
+         */
+        const parsed = MachineReviewRunResultSchema.parse(
+            runReply({ status: "machine_screened_something_new" }),
+        )
+        expect(parsed.status).toBe("machine_screened_something_new")
+        expect(reviewFailed(parsed)).toBe(false)
+        // ...and it is not dressed up as one of the five this build knows.
+        expect(knownRunStatus(parsed.status)).toBeNull()
+    })
+})
+
+describe("running machine review for a submission", () => {
+    it("is not offered before a submission has been inspected", () => {
+        render(
+            <MemoryRouter>
+                <QueryClientProvider client={new QueryClient()}>
+                    <MachineReviewInspectionPage />
+                </QueryClientProvider>
+            </MemoryRouter>,
+        )
+        expect(screen.queryByRole("button", { name: RUN_BUTTON })).toBeNull()
+    })
+
+    it("runs for the submission on screen, not some other one", async () => {
+        serveAnyInspection()
+        const run = serveRun(runReply({ submission_id: 9, findings_count: 1 }))
+        const user = await inspect("9")
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        // The id is in the URL path, so a page that ran for a constant, or
+        // for whatever was typed first, would still show a plausible result.
+        expect(run.calledFor).toEqual([9])
+    })
+
+    it("sends the admin session cookie, and no request body", async () => {
+        /**
+         * Two halves of the same contract. Without `credentials: "include"`
+         * the browser attaches no `tckdb_session`, so a logged-in admin
+         * reaches an admin-only route anonymously and is refused -- a failure
+         * that looks like a permissions problem and is not one. And the route
+         * takes no body, so sending one is the page inventing parameters the
+         * contract has not got.
+         */
+        serveAnyInspection()
+        const seen: { credentials?: string; body?: string | null }[] = []
+        server.use(
+            http.post(RUN, async ({ request }) => {
+                seen.push({
+                    credentials: request.credentials,
+                    body: await request.text(),
+                })
+                return HttpResponse.json(runReply())
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        expect(seen).toHaveLength(1)
+        expect(seen[0].credentials).toBe("include")
+        expect(seen[0].body).toBe("")
+    })
+
+    it("reports what the run recorded", async () => {
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                findings_count: 3,
+                model: "anthropic/claude-x",
+                provider: "CloudMachineReviewProvider",
+                summary: "Two geometries lack a frequency calculation.",
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        const lines = within(outcome)
+            .getAllByRole("listitem")
+            .map((li) => (li.textContent ?? "").replace(/\s+/g, " ").trim())
+
+        expect(lines).toContain("findings recorded: 3")
+        expect(lines).toContain("model: anthropic/claude-x")
+        expect(lines).toContain("provider: CloudMachineReviewProvider")
+        expect(outcome).toHaveTextContent(/recorded 3 findings/)
+        expect(outcome).toHaveTextContent(
+            /Two geometries lack a frequency calculation/,
+        )
+        // The status badge, which carries the "not human-approved" wording.
+        expect(outcome).toHaveTextContent(/screened: warning/)
+    })
+
+    it("counts one finding in the singular", async () => {
+        serveAnyInspection()
+        serveRun(runReply({ findings_count: 1 }))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/recorded 1 finding\./)
+        expect(outcome).not.toHaveTextContent(/recorded 1 findings/)
+    })
+
+    it("does not call an off switch a review that found nothing", async () => {
+        /**
+         * `not_run` is the one outcome with nothing behind it: the route's
+         * service returns it "without calling anything" when the reviewer is
+         * disabled, and writes no audit event. Reporting it as "the review ran
+         * and recorded 0 findings" tells an admin the submission was looked at
+         * and is clean. Zero findings from a reviewer that looked and zero
+         * from one that is switched off are the same number and opposite news.
+         */
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                status: "not_run",
+                findings_count: 0,
+                summary: null,
+                model: null,
+                provider: null,
+                audit_event_recorded: false,
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/No review happened/)
+        expect(outcome).toHaveTextContent(/switched off/i)
+        expect(outcome).not.toHaveTextContent(/The review ran/)
+        expect(outcome).not.toHaveTextContent(/recorded 0 findings/)
+        // And it says the absence of a journal entry, which is the archive's
+        // own record that nothing happened.
+        expect(outcome).toHaveTextContent(/not written to the audit log/)
+    })
+
+    it("presents a failed review as a review that ran, not a failed request", async () => {
+        /**
+         * The whole point of the route answering 200 here. Machine review is
+         * advisory, so a reviewer that failed is an OUTCOME the archive
+         * recorded, not a broken request, and the two send an admin to
+         * different places. "The request failed" points at the network and
+         * the deployment; the truth is that a review happened and the
+         * reviewer did not manage to produce findings, which is what
+         * `failure_reason` explains.
+         */
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                status: "machine_review_failed",
+                findings_count: 0,
+                failure_reason: "provider returned no usable JSON after 3 tries",
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/did not produce a usable result/i)
+        expect(outcome).toHaveTextContent(/Why the run failed/i)
+        expect(outcome).toHaveTextContent(
+            /provider returned no usable JSON after 3 tries/,
+        )
+        // Not this page's three request-failure sentences, any of which would
+        // be a false report about a request that in fact succeeded.
+        expect(outcome).not.toHaveTextContent(/did not run/i)
+        expect(outcome).not.toHaveTextContent(/did not report back/i)
+        expect(outcome).not.toHaveTextContent(/could not read/i)
+        // And structurally, not in the region this page keeps for requests
+        // that went wrong. A reviewer that failed is not one of those.
+        expect(liveRegion("alert", RUN_ALERT)).toBeEmptyDOMElement()
+    })
+
+    it("does not blame the submission for the reviewer failing", async () => {
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                status: "machine_review_failed",
+                failure_reason: "rate limited",
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/not a finding about this submission/i)
+    })
+
+    it("does not put a local configuration failure in the reviewer's mouth", async () => {
+        /**
+         * Not every failure on this path reached a reviewer. A missing API
+         * key or an unreachable endpoint fails inside this application, and
+         * the runner records exactly that sentence.
+         *
+         * The page used to label it "Reason the reviewer gave" and headline
+         * it "the reviewer failed" -- which points an admin at the model when
+         * the fault is their own configuration, and blurs the axis between a
+         * machine reviewer's judgement and this system's plumbing. Those are
+         * the three axes this page is careful about everywhere else.
+         */
+        serveAnyInspection()
+        serveRun(
+            runReply({
+                status: "machine_review_failed",
+                failure_reason:
+                    "Machine review could not be configured: Cloud mode requires " +
+                    "LLM_PRECHECK_MODEL to be set.",
+                summary:
+                    "Machine review could not be configured: Cloud mode requires " +
+                    "LLM_PRECHECK_MODEL to be set.",
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const outcome = await runShown()
+        expect(outcome).toHaveTextContent(/Why the run failed/i)
+        expect(outcome).not.toHaveTextContent(/reason the reviewer gave/i)
+        expect(outcome).not.toHaveTextContent(/the reviewer failed/i)
+
+        // And the same sentence must not also appear as the reviewer's own
+        // summary. The runner sets `summary` and `failure_reason` to the same
+        // text on every failure, so an unguarded page printed a configuration
+        // error twice -- once as the reviewer's words, which it never was.
+        expect(outcome).not.toHaveTextContent(/reviewer.s summary/i)
+        const shown = (outcome.textContent ?? "").match(
+            /Cloud mode requires LLM_PRECHECK_MODEL to be set/g,
+        )
+        expect(shown).toHaveLength(1)
+    })
+
+    it("shows the findings the run just produced, without a second inspect", async () => {
+        /**
+         * The findings table is a cached react-query read taken before the
+         * run. Without invalidating it the admin is shown the run's own
+         * "recorded 1 finding" directly above a table still saying no record
+         * received any: the page contradicting itself about work it just
+         * did, and an admin's reasonable conclusion is that the run failed.
+         */
+        const archive = { reviewed: false }
+        server.use(
+            http.get(INSPECTION, ({ params }) =>
+                HttpResponse.json(
+                    inspectionBody(
+                        params.submissionId,
+                        archive.reviewed ? [record("spc_found_by_the_run")] : [],
+                    ),
+                ),
+            ),
+            http.post(RUN, () => {
+                archive.reviewed = true
+                return HttpResponse.json(runReply({ findings_count: 1 }))
+            }),
+        )
+
+        const user = await inspect()
+        // Before: the table says the archive holds nothing for this
+        // submission, which is the state 44 of 44 submissions were in.
+        await screen.findByText(/No records received mapped machine-review findings/)
+
+        await user.click(screen.getByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        expect(await screen.findByText("spc_found_by_the_run")).toBeInTheDocument()
+    })
+
+    it("cannot be pressed twice while one run is in flight", async () => {
+        serveAnyInspection()
+        const held = gate()
+        server.use(
+            http.post(RUN, async () => {
+                await held.held
+                return HttpResponse.json(runReply({ findings_count: 1 }))
+            }),
+        )
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        // A run calls a paid provider and writes rows. A second press before
+        // the first answers buys a second review of the same submission, and
+        // the admin has no way to know which result they end up reading.
+        const busy = await screen.findByRole("button", {
+            name: /Running machine review/,
+        })
+        expect(busy).toBeDisabled()
+
+        held.release()
+        await runShown()
+    })
+
+    it("says the review did not run when the server refused", async () => {
+        serveAnyInspection()
+        serveRun({ detail: "Submission not found." }, { status: 404 })
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        await runAlertSays(/The review did not run: Submission not found/)
+        // No outcome: a refused request must not leave a row of zeroes
+        // looking like a review that happened and found nothing.
+        expect(liveRegion("status", RUN_STATUS)).toBeEmptyDOMElement()
+        expect(screen.getByRole("button", { name: RUN_BUTTON })).toBeEnabled()
+    })
+
+    it("does NOT say the review did not run when the reply was unreadable", async () => {
+        /**
+         * The 2xx-with-an-unparseable-body case. A review HAS run, the
+         * provider has been paid and rows are written; only the reply could
+         * not be read. Telling the admin it did not run invites them to press
+         * again and buy a second one.
+         */
+        serveAnyInspection()
+        serveRun({ this_is: "not a run result" })
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const alert = await runAlertSays(/could not read its result/)
+        expect(alert).not.toHaveTextContent(/did not run/i)
+        // And it must point at the one place the truth can be found.
+        expect(alert).toHaveTextContent(/Inspect this submission again/)
+    })
+
+    it("admits it does not know when the request got no answer", async () => {
+        // Offline, DNS, a dropped connection. A review may or may not have
+        // happened, and guessing either way is a false report.
+        serveAnyInspection()
+        server.use(http.post(RUN, () => HttpResponse.error()))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+
+        const alert = await runAlertSays(/may or may not have happened/)
+        expect(alert).not.toHaveTextContent(/did not run/i)
+    })
+
+    it("says on the page that a machine review is advisory", async () => {
+        /**
+         * Three separate axes, and this paragraph is where the page keeps
+         * them apart: machine review is not human review of a record, and
+         * neither is moderation of the submission. An admin who reads a
+         * screened-pass badge as an endorsement has been misled by this page,
+         * not by the reviewer.
+         */
+        serveAnyInspection()
+        await inspect()
+        const button = await screen.findByRole("button", { name: RUN_BUTTON })
+        const section = button.closest("section")!
+
+        expect(within(section).getByText(/advisory/i)).toBeInTheDocument()
+        expect(within(section).getByText(/endorses\s+nothing/i)).toBeInTheDocument()
+        expect(within(section).getByText(/human\s+review/i)).toBeInTheDocument()
+        expect(within(section).getByText(/moderation/i)).toBeInTheDocument()
+        // And that nothing produces these by itself, which is why an archive
+        // with no machine reviews means "nobody has run one", not "clean".
+        expect(within(section).getByText(/on upload/i)).toBeInTheDocument()
+    })
+
+    it("never prints a row id the server sent anyway", async () => {
+        serveAnyInspection()
+        serveRun(runReply({ findings_count: 2, audit_event_id: 9911 }))
+        const user = await inspect()
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        // `textContent` covers the rendered words; `outerHTML` covers the
+        // places an id can hide from it: a `title`, a `data-` attribute, an
+        // `aria-label`. DR-0028 Req 2.
+        expect(document.body.textContent ?? "").not.toContain("9911")
+        expect(document.body.outerHTML).not.toContain("9911")
+        expect(document.body.textContent ?? "").toContain("findings recorded: 2")
+    })
+
+    it("does not follow the admin to another submission", async () => {
+        /**
+         * Submission 9's findings under submission 7's run result is a false
+         * report, and the more convincing for being partly true. Today the
+         * result is dropped because the parent unmounts the whole results
+         * block while the next inspection loads; the `key={submissionId}`
+         * beside it catches the case where that stops being true.
+         */
+        serveAnyInspection()
+        serveRun(runReply({ findings_count: 3 }))
+        const user = await inspect("7")
+        await user.click(await screen.findByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        await reinspect(user, "9")
+        await showing("9")
+
+        expect(liveRegion("status", RUN_STATUS)).toBeEmptyDOMElement()
+    })
+
+    it("does not follow the admin BACK to a submission already seen", async () => {
+        /**
+         * The same rule through the cached door, and the only one of the two
+         * the `key` is load-bearing for. Walking to a submission this session
+         * has not fetched, `query.data` goes undefined while it loads and the
+         * parent unmounts the whole results block, so the result dies whether
+         * or not the component carries a key. Walking BACK, react-query
+         * answers from its cache (`gcTime`, five minutes by default): data
+         * never goes undefined, nothing unmounts, and the key is the only
+         * thing left that drops the stale result.
+         */
+        serveAnyInspection()
+        serveRun(runReply({ findings_count: 3 }))
+        const user = await inspect("7")
+        await showing("7")
+
+        await reinspect(user, "9")
+        await showing("9")
+        await user.click(screen.getByRole("button", { name: RUN_BUTTON }))
+        await runShown()
+
+        await reinspect(user, "7")
+        await showing("7")
+        expect(liveRegion("status", RUN_STATUS)).toBeEmptyDOMElement()
     })
 })

@@ -25,11 +25,25 @@ function renderStatus() {
     )
 }
 
+/**
+ * Sign out now lives inside the header's account menu (`AccountMenu` in
+ * `AuthStatus.tsx`) rather than beside the name in the bar, so reaching
+ * it costs one more click. Pulled into a helper so each test below still
+ * reads as being about the thing it is about -- the logout request, the
+ * state it clears, the flag it sets -- and not about menu mechanics,
+ * which `AuthStatus.menu.test.tsx` covers on its own.
+ */
+async function clickSignOut(displayName = "Calvin Pieters") {
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole("button", { name: displayName }))
+    await user.click(await screen.findByRole("menuitem", { name: "Sign out" }))
+}
+
 describe("AuthProvider seeding", () => {
     it("a live session cookie (GET /auth/me -> 200) yields signed-in state on load", async () => {
         server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(meResponse)))
         renderStatus()
-        expect(await screen.findByRole("link", { name: "Calvin Pieters" })).toBeInTheDocument()
+        expect(await screen.findByRole("button", { name: "Calvin Pieters" })).toBeInTheDocument()
     })
 
     it("a 401 yields signed-out state and shows no error", async () => {
@@ -60,7 +74,7 @@ describe("AuthProvider seeding", () => {
 
         // Nothing is asserted about the session, either way.
         await expect(screen.findByRole("link", { name: "Sign in" }, { timeout: 300 })).rejects.toThrow()
-        expect(screen.queryByRole("link", { name: "Calvin Pieters" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Calvin Pieters" })).not.toBeInTheDocument()
     })
 })
 
@@ -74,18 +88,17 @@ describe("logout", () => {
             return new HttpResponse(null, { status: 204 })
         }))
 
-        const user = userEvent.setup()
         renderStatus()
-        await screen.findByRole("link", { name: "Calvin Pieters" })
+        await screen.findByRole("button", { name: "Calvin Pieters" })
 
-        await user.click(screen.getByRole("button", { name: "Sign out" }))
+        await clickSignOut()
 
         // Both halves of the red-first criterion, in one place: the
         // endpoint was actually reached, AND the client's own state
         // reverted to signed-out (not just "no error was thrown").
         expect(logoutCalls).toBe(1)
         expect(await screen.findByRole("link", { name: "Sign in" })).toBeInTheDocument()
-        expect(screen.queryByRole("link", { name: "Calvin Pieters" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Calvin Pieters" })).not.toBeInTheDocument()
     })
 })
 
@@ -121,8 +134,7 @@ describe("a sign-out that never reached the server", () => {
             </AuthProvider>,
         )
 
-        await screen.findByRole("button", { name: "Sign out" })
-        await userEvent.click(screen.getByRole("button", { name: "Sign out" }))
+        await clickSignOut()
 
         // Cleared regardless: the name is gone.
         expect(await screen.findByRole("link", { name: "Sign in" })).toBeInTheDocument()
@@ -150,8 +162,7 @@ describe("a sign-out that never reached the server", () => {
             </AuthProvider>,
         )
 
-        await screen.findByRole("button", { name: "Sign out" })
-        await userEvent.click(screen.getByRole("button", { name: "Sign out" }))
+        await clickSignOut()
         await screen.findByRole("link", { name: "Sign in" })
 
         // A flag that is always true is decoration.
@@ -173,8 +184,7 @@ describe("the sign-out request survives the page going away", () => {
                 <MemoryRouter><AuthStatus /></MemoryRouter>
             </AuthProvider>,
         )
-        await screen.findByRole("button", { name: "Sign out" })
-        await userEvent.click(screen.getByRole("button", { name: "Sign out" }))
+        await clickSignOut()
         await screen.findByRole("link", { name: "Sign in" })
 
         expect(keepalive).toBe(true)
