@@ -873,6 +873,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("bac_total_requires_components", 422, Surface.coded_exception,
+            "backend/app/services/energy_correction_resolution.py",
+            shape=Shape.relationship,
+            note=(
+                "Task #264. A bac_total correction with no component "
+                "breakdown, on a target where 'no bonds were summed' "
+                "cannot be established: a transition state entry always "
+                "(no bond assignment exists for a saddle point), or a "
+                "species entry whose SMILES carries at least one bond. "
+                "Scoped to bac_petersson -- a bac_melius total does not "
+                "decompose into a stable per-component breakdown even "
+                "for a bonded species, so a componentless Melius total "
+                "is left alone on either kind of target."
+            )),
     ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_geometry_composition.py",
             shape=Shape.relationship,

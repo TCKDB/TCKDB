@@ -2938,14 +2938,23 @@ def test_bundle_payload_rejects_db_ids() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _ac_with_scheme(scheme: dict, *, application_role: str, value: float) -> dict:
-    return {
+def _ac_with_scheme(
+    scheme: dict,
+    *,
+    application_role: str,
+    value: float,
+    components: list[dict] | None = None,
+) -> dict:
+    payload = {
         "scheme": scheme,
         "application_role": application_role,
         "value": value,
         "value_unit": "hartree",
         "source_calculation_key": "sp0",
     }
+    if components is not None:
+        payload["components"] = components
+    return payload
 
 
 def test_aec_scheme_atom_params_persist(db_conn) -> None:
@@ -3006,6 +3015,15 @@ def test_pbac_scheme_bond_params_persist(db_conn) -> None:
                     ),
                     application_role="bac_total",
                     value=-0.42,
+                    components=[
+                        {
+                            "component_kind": "bond",
+                            "key": "C-N",
+                            "multiplicity": 1,
+                            "parameter_value": -0.27,
+                            "contribution_value": -0.27,
+                        }
+                    ],
                 )
             ],
         )
@@ -3178,6 +3196,15 @@ def test_conflicting_bond_param_value_raises(db_conn) -> None:
                         ),
                         application_role="bac_total",
                         value=-0.1,
+                        components=[
+                            {
+                                "component_kind": "bond",
+                                "key": "C-H",
+                                "multiplicity": 1,
+                                "parameter_value": -0.11,
+                                "contribution_value": -0.1,
+                            }
+                        ],
                     )
                 ],
             )
@@ -3196,6 +3223,15 @@ def test_conflicting_bond_param_value_raises(db_conn) -> None:
                         ),
                         application_role="bac_total",
                         value=-0.1,
+                        components=[
+                            {
+                                "component_kind": "bond",
+                                "key": "C-H",
+                                "multiplicity": 1,
+                                "parameter_value": -0.22,
+                                "contribution_value": -0.1,
+                            }
+                        ],
                     )
                 ],
             )
@@ -3346,6 +3382,15 @@ def test_existing_paramless_scheme_can_be_backfilled_with_bond_params(db_conn) -
                         _bac_petersson_scheme_ref(name=name),
                         application_role="bac_total",
                         value=-0.05,
+                        components=[
+                            {
+                                "component_kind": "other",
+                                "key": "unspecified",
+                                "multiplicity": 1,
+                                "parameter_value": -0.05,
+                                "contribution_value": -0.05,
+                            }
+                        ],
                     )
                 ],
             )
@@ -3372,6 +3417,15 @@ def test_existing_paramless_scheme_can_be_backfilled_with_bond_params(db_conn) -
                         ),
                         application_role="bac_total",
                         value=-0.05,
+                        components=[
+                            {
+                                "component_kind": "bond",
+                                "key": "C-H",
+                                "multiplicity": 1,
+                                "parameter_value": -0.11,
+                                "contribution_value": -0.05,
+                            }
+                        ],
                     )
                 ],
             )
@@ -3458,6 +3512,15 @@ def test_repeated_bond_param_upload_is_idempotent(db_conn) -> None:
     """Re-uploading the same scheme + same bond params keeps a single row set."""
     name = "PBAC idempotency"
     bond_params = [{"bond_key": "C-H", "value": -0.11}, {"bond_key": "C-C", "value": -0.13}]
+    components = [
+        {
+            "component_kind": "bond",
+            "key": "C-H",
+            "multiplicity": 1,
+            "parameter_value": -0.11,
+            "contribution_value": -0.05,
+        }
+    ]
     with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
@@ -3467,6 +3530,7 @@ def test_repeated_bond_param_upload_is_idempotent(db_conn) -> None:
                         _bac_petersson_scheme_ref(name=name, bond_params=bond_params),
                         application_role="bac_total",
                         value=-0.05,
+                        components=components,
                     )
                 ],
             )
@@ -3487,6 +3551,7 @@ def test_repeated_bond_param_upload_is_idempotent(db_conn) -> None:
                         _bac_petersson_scheme_ref(name=name, bond_params=bond_params),
                         application_role="bac_total",
                         value=-0.05,
+                        components=components,
                     )
                 ],
             )

@@ -89,6 +89,7 @@ from app.services.conformer_anchoring import (
 )
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
+    assert_bac_total_has_required_components,
     create_applied_energy_correction,
     resolve_applied_correction_source_key,
     resolve_or_create_freq_scale_factor_ref,
@@ -927,6 +928,12 @@ def persist_computed_reaction_upload(
                     "another's structure."
                 ),
             )
+            assert_bac_total_has_required_components(
+                session,
+                ac,
+                field=f"species[{sp.key!r}].applied_energy_corrections[{i}]",
+                target_species_entry_id=species_entry.id,
+            )
             applied = create_applied_energy_correction(
                 session,
                 ac,
@@ -984,6 +991,12 @@ def persist_computed_reaction_upload(
                     "under a species; its transition state has none, so a "
                     "TS-side correction cannot name one."
                 ),
+            )
+            assert_bac_total_has_required_components(
+                session,
+                ac,
+                field=f"transition_state.applied_energy_corrections[{i}]",
+                target_transition_state_entry_id=ts_entry.id,
             )
             applied = create_applied_energy_correction(
                 session,

@@ -2802,6 +2802,15 @@ def test_species_bac_total_persists(db_conn) -> None:
             "value": -0.05,
             "value_unit": "hartree",
             "source_calculation_key": "ch3-sp",
+            "components": [
+                {
+                    "component_kind": "other",
+                    "key": "unspecified",
+                    "multiplicity": 1,
+                    "parameter_value": -0.05,
+                    "contribution_value": -0.05,
+                }
+            ],
         }
     ]
 
@@ -3197,6 +3206,15 @@ def test_ts_bac_total_persists_targeting_transition_state_entry(db_conn) -> None
             "value": -0.05,
             "value_unit": "hartree",
             "source_calculation_key": "ts-sp",
+            "components": [
+                {
+                    "component_kind": "other",
+                    "key": "unspecified",
+                    "multiplicity": 1,
+                    "parameter_value": -0.05,
+                    "contribution_value": -0.05,
+                }
+            ],
         }
     ]
 
@@ -3449,6 +3467,15 @@ def test_ts_side_scheme_bond_params_persist(db_conn) -> None:
             "value": -0.05,
             "value_unit": "hartree",
             "source_calculation_key": "ts-sp",
+            "components": [
+                {
+                    "component_kind": "bond",
+                    "key": "C-H",
+                    "multiplicity": 1,
+                    "parameter_value": -0.11,
+                    "contribution_value": -0.05,
+                }
+            ],
         }
     ]
 
