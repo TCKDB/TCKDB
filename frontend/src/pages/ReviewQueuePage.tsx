@@ -332,6 +332,19 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // this queue opens in a new tab (see the module docstring on
         // why), and a per-participant in-page navigation link here would
         // be the one exception to that rule.
+        //
+        // `formulaOnly` -- review #492 caught the component's DEFAULT
+        // rendering ("[CH3] (CH3) + [H] (H) ⇌ C (CH4)") printing every
+        // participant twice, once as SMILES and once as formula, right
+        // below species subject headings that already show formula
+        // alone. See `SpeciesFace`'s own docstring (`components/
+        // Formula.tsx`) for why this is a scoped, additive prop rather
+        // than a fork of the shared component, and for the one case this
+        // page's use of it deliberately does NOT reopen (two structurally
+        // different participants sharing one formula reading as a
+        // species reacting to itself) -- unlikely to matter on a triage
+        // surface that already prints the reaction's own ref to click
+        // through, but worth someone's eyes if it ever does.
         return (
             <h2 className="review-subject-heading">
                 <ReactionEquation
@@ -339,6 +352,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                     products={subject.reaction.products}
                     reversible={subject.reaction.reversible}
                     linkParticipants={false}
+                    formulaOnly
                 />
             </h2>
         )

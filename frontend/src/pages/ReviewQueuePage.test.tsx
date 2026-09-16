@@ -553,6 +553,50 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(heading).not.toHaveTextContent(/^Reaction entry/)
     })
 
+    it("shows each participant's formula ONCE, not its SMILES and formula both (review #492 follow-up)", async () => {
+        // The default <ReactionEquation> rendering shows BOTH -- "[CH3]
+        // (CH3) + [H] (H) ⇌ C (CH4)" -- which review of #492 caught as
+        // noise here: a bare "C" next to "(CH4)" reads as a typo, and the
+        // species blocks above this one already show formula alone. This
+        // page must pass `formulaOnly` so exactly one notation appears.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_formula_only" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_formula_only",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }),
+                            reactionParticipant({ species_entry_ref: "spe_h", smiles: "[H]", formula: "H", participant_index: 2 }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_ch4", smiles: "C", formula: "CH4" }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_formula_only")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // No SMILES text anywhere in the heading -- not as its own run,
+        // and not the bare "C" that made this defect visible.
+        expect(within(heading).queryByText("[CH3]")).not.toBeInTheDocument()
+        expect(within(heading).queryByText("[H]")).not.toBeInTheDocument()
+        expect(within(heading).queryByText("C")).not.toBeInTheDocument()
+        // No parenthesised formula either -- formula is the WHOLE
+        // notation here, not an aside after the SMILES.
+        expect(heading.textContent).not.toContain("(CH4)")
+        expect(heading.textContent).not.toContain("(CH3)")
+    })
+
     it("falls back to the plain type label when a reaction_entry subject has no resolvable equation", async () => {
         meIs(curator)
         queueIs([

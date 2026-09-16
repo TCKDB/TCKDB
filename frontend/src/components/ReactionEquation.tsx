@@ -63,28 +63,45 @@ const NBSP = " "
  * link), which is the exact defect this prop exists to let a browse row
  * opt out of.
  */
-export function ReactionEquation({ reactants, products, reversible, linkParticipants = true }: {
+export function ReactionEquation({
+    reactants,
+    products,
+    reversible,
+    linkParticipants = true,
+    formulaOnly = false,
+}: {
     reactants: EquationParticipantInput[]
     products: EquationParticipantInput[]
     reversible: boolean
     linkParticipants?: boolean
+    /** See `SpeciesFace`'s own docstring (`./Formula.tsx`) -- default
+     *  `false`, so every existing caller of this component (the reaction
+     *  entry page, the reaction chooser, the browse row) is unaffected.
+     *  The one caller that passes `true`: the record review queue's
+     *  reaction_entry subject heading. */
+    formulaOnly?: boolean
 }) {
     const { reactants: reactantSide, products: productSide } = buildEquationSides(reactants, products)
     return (
         <>
-            {renderSide(reactantSide, "reactant", linkParticipants)}
+            {renderSide(reactantSide, "reactant", linkParticipants, formulaOnly)}
             {NBSP}
             <span aria-label={reversible ? "reacts reversibly with" : "reacts to form"}>
                 {reversible ? "⇌" : "→"}
             </span>
             <wbr />
             {" "}
-            {renderSide(productSide, "product", linkParticipants)}
+            {renderSide(productSide, "product", linkParticipants, formulaOnly)}
         </>
     )
 }
 
-function renderSide(participants: EquationParticipant[], keyPrefix: string, linkParticipants: boolean): ReactNode[] {
+function renderSide(
+    participants: EquationParticipant[],
+    keyPrefix: string,
+    linkParticipants: boolean,
+    formulaOnly: boolean,
+): ReactNode[] {
     const nodes: ReactNode[] = []
     participants.forEach((participant, index) => {
         if (index > 0) {
@@ -99,14 +116,29 @@ function renderSide(participants: EquationParticipant[], keyPrefix: string, link
                 key={participant.speciesEntryRef}
                 participant={participant}
                 linked={linkParticipants}
+                formulaOnly={formulaOnly}
             />,
         )
     })
     return nodes
 }
 
-function EquationParticipantFace({ participant, linked }: { participant: EquationParticipant; linked: boolean }) {
-    const face = <SpeciesFace smiles={participant.smiles} formula={participant.formula} />
+function EquationParticipantFace({
+    participant,
+    linked,
+    formulaOnly,
+}: {
+    participant: EquationParticipant
+    linked: boolean
+    formulaOnly: boolean
+}) {
+    const face = (
+        <SpeciesFace
+            smiles={participant.smiles}
+            formula={participant.formula}
+            formulaOnly={formulaOnly}
+        />
+    )
     const chip = participant.speciesEntryLabel && (
         <span className="reaction-equation-chip"> · {stereoChip(participant.speciesEntryLabel)}</span>
     )
