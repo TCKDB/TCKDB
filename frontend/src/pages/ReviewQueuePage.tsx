@@ -26,6 +26,7 @@ import {
     statusMeaning,
     type RecordReview,
     type RecordReviewStatus,
+    type ReviewQueueReactionEquation,
     type ReviewQueueSubject,
 } from "../types/recordReview"
 
@@ -176,6 +177,36 @@ function subjectKeyOf(subject: ReviewQueueSubject, index: number): string {
  */
 function NewTabNote() {
     return <span className="admin-visually-hidden"> (opens in a new tab)</span>
+}
+
+/**
+ * Whether formula-only rendering would make two DIFFERENT participants of
+ * ONE equation print identically -- the case `formulaOnly` must not be
+ * used for, since it would render an isomerisation as `C9H8 ⇌ C9H8`, a
+ * species reacting to itself. See `SubjectHeading`'s reaction_entry
+ * branch for why this decision lives here (a property of the whole
+ * equation) rather than inside `SpeciesFace` (which renders one
+ * participant and cannot see its siblings).
+ *
+ * Two participants "collide" when they share a non-null formula AND are
+ * NOT the same species (different `species_entry_ref`) -- the same
+ * species appearing on both sides of its own equation (a catalyst, say)
+ * is not ambiguous; it is correctly the same ref rendering the same way
+ * twice. Checked across BOTH sides together, not per side: an
+ * isomerisation reactant and product are on opposite sides and would
+ * still read as one reacting to itself.
+ */
+function equationHasFormulaCollision(reaction: ReviewQueueReactionEquation): boolean {
+    const refByFormula = new Map<string, string>()
+    for (const participant of [...reaction.reactants, ...reaction.products]) {
+        if (!participant.formula) continue
+        const existingRef = refByFormula.get(participant.formula)
+        if (existingRef !== undefined && existingRef !== participant.species_entry_ref) {
+            return true
+        }
+        refByFormula.set(participant.formula, participant.species_entry_ref)
+    }
+    return false
 }
 
 /**
@@ -338,13 +369,27 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         // participant twice, once as SMILES and once as formula, right
         // below species subject headings that already show formula
         // alone. See `SpeciesFace`'s own docstring (`components/
-        // Formula.tsx`) for why this is a scoped, additive prop rather
-        // than a fork of the shared component, and for the one case this
-        // page's use of it deliberately does NOT reopen (two structurally
-        // different participants sharing one formula reading as a
-        // species reacting to itself) -- unlikely to matter on a triage
-        // surface that already prints the reaction's own ref to click
-        // through, but worth someone's eyes if it ever does.
+        // Formula.tsx`) for the additive prop this uses instead of
+        // forking either component.
+        //
+        // NOT unconditional, on the same review's follow-up: formula
+        // alone can print `C9H8 ⇌ C9H8` for a genuine isomerisation --
+        // two structurally different participants sharing one formula --
+        // which is the exact defect `SpeciesFace`'s SMILES-leading
+        // design exists to prevent (filed against
+        // rxn_fktlilofmrdaylunqva2hbltpq, "CH3OS <=> CH3OS"). A reviewer
+        // who sees a species reacting to itself will not reach for the
+        // ref to work out why; this page does not get to reopen that.
+        // `equationHasFormulaCollision` below decides PER EQUATION,
+        // because the ambiguity is a property of the whole equation (do
+        // any two of ITS participants collide), not of one participant in
+        // isolation -- `SpeciesFace` renders one participant and cannot
+        // see its siblings, so the decision cannot live there. The common
+        // case (every formula distinct) stays clean; an equation that
+        // collides falls back to the existing SMILES-leading form, for
+        // ALL its participants, not just the colliding pair -- a mix of
+        // notations on one line would be its own confusion.
+        const formulaOnly = !equationHasFormulaCollision(subject.reaction)
         return (
             <h2 className="review-subject-heading">
                 <ReactionEquation
@@ -352,7 +397,7 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                     products={subject.reaction.products}
                     reversible={subject.reaction.reversible}
                     linkParticipants={false}
-                    formulaOnly
+                    formulaOnly={formulaOnly}
                 />
             </h2>
         )

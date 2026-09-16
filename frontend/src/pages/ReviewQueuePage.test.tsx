@@ -597,6 +597,93 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(heading.textContent).not.toContain("(CH3)")
     })
 
+    it("falls back to SMILES-leading form for an isomerisation, so it never renders X <=> X", async () => {
+        // The coordinator's own catch: formula-only would render this
+        // reactant/product pair (same formula C9H8, different structures)
+        // as "C9H8 <=> C9H8" -- the exact species-reacting-with-itself
+        // defect `SpeciesFace`'s SMILES-leading design exists to prevent
+        // (rxn_fktlilofmrdaylunqva2hbltpq). This equation must fall back
+        // to the ordinary SMILES+formula rendering for ALL its
+        // participants, not silently print the ambiguous pair.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_isomerisation" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_isomerisation",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_indene",
+                                smiles: "C1=CC2=CC=CC=C2C1",
+                                formula: "C9H8",
+                            }),
+                        ],
+                        products: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_indene_isomer",
+                                smiles: "C1=CC2=CC=CC=C2C=1",
+                                formula: "C9H8",
+                            }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_isomerisation")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // The SMILES are back -- proof this equation did NOT take the
+        // formula-only path.
+        expect(within(heading).getByText("C1=CC2=CC=CC=C2C1")).toBeInTheDocument()
+        expect(within(heading).getByText("C1=CC2=CC=CC=C2C=1")).toBeInTheDocument()
+        // And the formula still follows each one, in parentheses, exactly
+        // as the ordinary (non-formulaOnly) SpeciesFace rendering does --
+        // this is the fallback, not a third notation.
+        expect(heading.textContent).toContain("(C9H8)")
+    })
+
+    it("does NOT fall back when the same species appears on both sides of its own equation", async () => {
+        // A catalyst-shaped equation: one species, same ref, on both
+        // sides. That is correctly the same molecule rendering the same
+        // way twice -- not the ambiguity the fallback exists for.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_catalyst" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_catalyst",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: false,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_cat", smiles: "[Pt]", formula: "Pt", participant_index: 1 }),
+                            reactionParticipant({ species_entry_ref: "spe_h2", smiles: "[H][H]", formula: "H2", participant_index: 2 }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_cat", smiles: "[Pt]", formula: "Pt", participant_index: 1 }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_catalyst")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(within(heading).queryByText("[Pt]")).not.toBeInTheDocument()
+        expect(heading.textContent).not.toContain("(Pt)")
+    })
+
     it("falls back to the plain type label when a reaction_entry subject has no resolvable equation", async () => {
         meIs(curator)
         queueIs([
