@@ -166,11 +166,19 @@ function RecordCell({ location }: { location: RecordLocation }) {
                 </>
             )
         case "no-page":
+            // Not a dead branch: a deferred-FK trick isn't the only way here.
+            // `listCuratorTasks` reads `record_public_ref` and
+            // `container_type`/`container_ref` from two separate grouped
+            // SELECTs in one request. Under READ COMMITTED, a record deleted
+            // between those two reads is named by the first (it still
+            // existed) and ownerless in the second (it no longer does) --
+            // ordinary concurrent deletion reaches this outcome with no
+            // constraint bypass required.
             return (
                 <>
                     <span className="data">{location.ref}</span>{" "}
                     <span className="admin-absent">
-                        no page for this record type, and no container to show it
+                        no page for this record type, and nothing it is shown on
                         either
                     </span>
                 </>

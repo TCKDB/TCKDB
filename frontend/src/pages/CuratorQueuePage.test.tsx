@@ -346,6 +346,10 @@ describe("how a row names the record it concerns", () => {
         meIs(admin)
         // Includes the row that cannot be named: that is where a row id is
         // most tempting as a fallback, and where #479 put one last time.
+        // Also includes a container-shaped row (#493): the sweep otherwise
+        // only ever exercises the pre-#493 shape, which is the exact
+        // seed-omission pattern that let #492's original complaint ship
+        // twice.
         queueIs([
             task(),
             otherTask(),
@@ -353,6 +357,14 @@ describe("how a row names the record it concerns", () => {
                 id: 43,
                 record_type: "applied_energy_correction",
                 record_public_ref: null,
+                record_id: 987654,
+            }),
+            task({
+                id: 44,
+                record_type: "kinetics",
+                record_public_ref: null,
+                container_type: "reaction_entry",
+                container_ref: "rxe_screenshot",
                 record_id: 987654,
             }),
         ])
@@ -367,7 +379,7 @@ describe("how a row names the record it concerns", () => {
         expect(markup).not.toContain("123456") // submission_id, also a row id
     })
 
-    it("shows the ref as plain text for a type with no page", async () => {
+    it("shows the ref as plain text for a type with no page, and no container either", async () => {
         meIs(admin)
         queueIs([task({ record_type: "thermo", record_public_ref: "thm_abc" })])
         renderPage()
@@ -376,6 +388,15 @@ describe("how a row names the record it concerns", () => {
         // A guessed link that 404s is worse than no link: a curator who
         // lands nowhere learns to stop clicking.
         expect(screen.queryByRole("link", { name: "thm_abc" })).not.toBeInTheDocument()
+        // The sentence itself, not just its absence of a link: "container"
+        // is this codebase's word for the resolver, not a chemist's word
+        // for anything, and it must not leak into user-facing copy.
+        expect(
+            await screen.findByText(
+                /no page for this record type, and nothing it is shown on either/i,
+            ),
+        ).toBeInTheDocument()
+        expect(screen.queryByText(/\bcontainer\b/i)).not.toBeInTheDocument()
     })
 
     it("says so when the backend could not name the record, without saying \"cannot be named\"", async () => {
@@ -409,6 +430,11 @@ describe("how a row names the record it concerns", () => {
         const link = await screen.findByRole("link", { name: /spe_xyz/ })
         expect(link).toHaveAttribute("href", "/species-entries/spe_xyz")
         expect(link).toHaveAttribute("target", "_blank")
+        // Same guarantee as the own-page link: `rel="noopener noreferrer"`
+        // stops the new tab from getting a handle back to this one. Unpinned
+        // here previously -- removing `rel` from the container link left
+        // every other assertion in this file passing.
+        expect(link).toHaveAttribute("rel", "noopener noreferrer")
         expect(link).toHaveTextContent(/shown on species entry/i)
     })
 
