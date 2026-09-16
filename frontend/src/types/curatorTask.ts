@@ -76,6 +76,17 @@ export type KnownSeverity = (typeof KNOWN_SEVERITIES)[number]
  * record may have been deleted since the task was raised. `record_id` is
  * an internal row id, carried because this surface is admin-only, and is
  * never the thing a curator is asked to act on.
+ *
+ * `container_type` / `container_ref` name the record this one is rendered
+ * inside, resolved by `app.services.record_containers` the same way
+ * `RecordReview.container_type` / `.container_ref` are (`types/recordReview.ts`).
+ * Six of the seventeen record types have no page of their own -- thermo and
+ * statmech are tabs on a species entry, kinetics and transition states are
+ * sections on a reaction entry -- so a task against one of those used to
+ * render as text nobody could open. `resolveRecordLocation` in
+ * `domain/recordRoute.ts` is what turns this pair, plus `record_type` /
+ * `record_public_ref`, into somewhere to click. `.default(null)` on both so
+ * a server that predates this field still parses.
  */
 export const CuratorTaskSchema = z.object({
     id: z.number().int(),
@@ -83,6 +94,8 @@ export const CuratorTaskSchema = z.object({
     record_type: z.string(),
     record_public_ref: z.string().nullable().default(null),
     record_id: z.number().int(),
+    container_type: z.string().nullable().default(null),
+    container_ref: z.string().nullable().default(null),
     finding_fingerprint: z.string(),
     workflow_state: CuratorTaskStateSchema,
     machine_review_status: z.string(),

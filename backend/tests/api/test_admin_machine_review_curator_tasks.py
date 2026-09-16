@@ -19,7 +19,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
@@ -50,7 +50,13 @@ from app.services.trust.models import (
     EvidenceEvaluation,
     EvidenceOutcome,
 )
-from tests.services.scientific_read._factories import make_species
+from tests.services.scientific_read._factories import (
+    make_applied_energy_correction,
+    make_energy_correction_scheme,
+    make_species,
+    make_species_entry,
+    make_thermo_scalar,
+)
 
 _BASE = "/api/v1/admin/machine-review/curator-tasks"
 
@@ -730,3 +736,253 @@ def test_the_write_routes_carry_the_ref_too(
     reopened = client.post(f"{_BASE}/{task.id}/reopen", json={})
     assert reopened.status_code == 200
     assert reopened.json()["record_public_ref"] == species.public_ref
+
+
+# --------------------------------------------------------------------------- #
+# Containers (task #267)
+# --------------------------------------------------------------------------- #
+#
+# Six of the seventeen ``SubmissionRecordType`` members name a table with no
+# page of its own -- ``thermo`` is one. Before this slice a task against a
+# thermo row carried nothing that let a client find it: ``record_public_ref``
+# addresses no route (thermo has no page), and the response had no
+# ``container_type`` / ``container_ref`` field at all. That is the same
+# defect PR #488 fixed on ``/api/v1/record-reviews``; these tests pin its
+# repair on this route, resolved by the same
+# ``app.services.record_containers`` this route now reuses rather than a
+# second mapping.
+
+
+def test_get_task_carries_a_container_for_a_containerless_record_type(
+    client, db_session, login_as, _api_admin_user
+):
+    """Reproduces the curator-queue defect: a thermo task named nowhere to go.
+
+    ``thermo`` has its own ``public_ref`` (``thm_...``), but no page of its
+    own -- the frontend has no route for it (``recordRoute`` in
+    ``domain/recordRoute.ts`` does not know ``thermo``), because it is
+    rendered only as a tab on its species entry. Before the fix this
+    assertion fails with a ``KeyError``: the response body carries no
+    ``container_type`` / ``container_ref`` keys at all, so a client had no
+    way to route to the one page that actually shows this record.
+    """
+    entry = make_species_entry(db_session, make_species(db_session))
+    thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-120.0)
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+    )
+    login_as(_api_admin_user)
+
+    body = client.get(f"{_BASE}/{task.id}").json()
+
+    assert body["record_public_ref"] == thermo.public_ref
+    # Located via the species entry it is a tab on.
+    assert body["container_type"] == "species_entry"
+    assert body["container_ref"] == entry.public_ref
+
+
+def test_a_correction_with_no_ref_of_its_own_still_names_its_container(
+    client, db_session, login_as, _api_admin_user
+):
+    """``applied_energy_correction`` has no ``public_ref`` column at all.
+
+    Both null causes stay distinguishable: the record's own ref is null
+    (it has none, not a lookup failure), while the container still resolves.
+    """
+    entry = make_species_entry(db_session, make_species(db_session))
+    correction = make_applied_energy_correction(
+        db_session,
+        target_species_entry=entry,
+        scheme=make_energy_correction_scheme(db_session, name="curator_task_container"),
+    )
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.applied_energy_correction,
+        record_id=correction.id,
+    )
+    login_as(_api_admin_user)
+
+    body = client.get(f"{_BASE}/{task.id}").json()
+
+    assert body["record_public_ref"] is None
+    assert body["container_type"] == "species_entry"
+    assert body["container_ref"] == entry.public_ref
+
+
+def test_a_root_record_type_has_no_container(
+    client, db_session, login_as, _api_admin_user
+):
+    """``species`` is a root: no owning parent, and that is a normal answer."""
+    species = make_species(db_session)
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.species,
+        record_id=species.id,
+    )
+    login_as(_api_admin_user)
+
+    body = client.get(f"{_BASE}/{task.id}").json()
+
+    assert body["record_public_ref"] == species.public_ref
+    assert body["container_type"] is None
+    assert body["container_ref"] is None
+
+
+def test_list_gives_each_task_its_own_container(
+    client, db_session, login_as, _api_admin_user
+):
+    """Two thermo tasks on two different species entries, on one page.
+
+    A mapper that resolved one container and reused it for the page, or that
+    paired containers to rows positionally, would pass a check that only
+    asserted non-null -- and would send a curator to the wrong record.
+    """
+    first_entry = make_species_entry(db_session, make_species(db_session))
+    first_thermo = make_thermo_scalar(
+        db_session, species_entry=first_entry, h298_kj_mol=-10.0
+    )
+    second_entry = make_species_entry(db_session, make_species(db_session))
+    second_thermo = make_thermo_scalar(
+        db_session, species_entry=second_entry, h298_kj_mol=-20.0
+    )
+    submission = _new_submission(db_session, _api_admin_user)
+    first_task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.thermo,
+        record_id=first_thermo.id,
+        fingerprint="d" * 64,
+    )
+    second_task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.thermo,
+        record_id=second_thermo.id,
+        fingerprint="e" * 64,
+    )
+    login_as(_api_admin_user)
+
+    items = client.get(f"{_BASE}?submission_id={submission.id}").json()["items"]
+    by_id = {item["id"]: item for item in items}
+
+    assert by_id[first_task.id]["container_ref"] == first_entry.public_ref
+    assert by_id[second_task.id]["container_ref"] == second_entry.public_ref
+    assert (
+        by_id[first_task.id]["container_ref"]
+        != by_id[second_task.id]["container_ref"]
+    )
+
+
+def test_the_write_routes_carry_the_container_too(
+    client, db_session, login_as, _api_admin_user
+):
+    """Assign / start-review / resolve / reopen answer with the container too."""
+    entry = make_species_entry(db_session, make_species(db_session))
+    thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-30.0)
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(
+        db_session,
+        submission.id,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+    )
+    login_as(_api_admin_user)
+
+    assigned = client.post(
+        f"{_BASE}/{task.id}/assign", json={"assignee_id": _api_admin_user}
+    )
+    assert assigned.json()["container_ref"] == entry.public_ref
+
+    started = client.post(f"{_BASE}/{task.id}/start-review", json={})
+    assert started.json()["container_ref"] == entry.public_ref
+
+    resolved = client.post(
+        f"{_BASE}/{task.id}/resolve",
+        json={
+            "resolution_state": "dismissed_machine_finding",
+            "resolution_note": "Checked; the record is fine.",
+        },
+    )
+    assert resolved.json()["container_ref"] == entry.public_ref
+
+    reopened = client.post(f"{_BASE}/{task.id}/reopen", json={})
+    assert reopened.json()["container_ref"] == entry.public_ref
+
+
+def test_a_longer_page_of_distinct_containers_does_not_cost_more_queries(
+    client, db_session, login_as, _api_admin_user
+):
+    """The bulk container resolve, measured at the route, on DISTINCT parents.
+
+    Every row in this page sits on its OWN species entry -- not one shared
+    parent. A page whose rows all share a parent cannot tell a grouped
+    resolver from a per-parent loop, because with one distinct container
+    they cost the same (this is the pin #488 got wrong first time; see
+    ``app/services/record_containers.py``). So the fixture asserts the
+    parents really are distinct before measuring, and the query count must
+    not move between a 2-row and a 10-row page.
+    """
+    submission = _new_submission(db_session, _api_admin_user)
+
+    def _seed(n: int, start_fingerprint: int) -> list[int]:
+        task_ids = []
+        for i in range(n):
+            entry = make_species_entry(db_session, make_species(db_session))
+            thermo = make_thermo_scalar(
+                db_session, species_entry=entry, h298_kj_mol=-1.0 - i
+            )
+            task = _make_task(
+                db_session,
+                submission.id,
+                record_type=SubmissionRecordType.thermo,
+                record_id=thermo.id,
+                fingerprint=f"{start_fingerprint + i:064d}",
+            )
+            task_ids.append(task.id)
+        return task_ids
+
+    def _count() -> int:
+        statements = 0
+        engine = db_session.connection().engine
+
+        def _before(conn, cursor, statement, parameters, context, executemany):
+            nonlocal statements
+            statements += 1
+
+        event.listen(engine, "before_cursor_execute", _before)
+        try:
+            resp = client.get(f"{_BASE}?submission_id={submission.id}&limit=200")
+            assert resp.status_code == 200
+        finally:
+            event.remove(engine, "before_cursor_execute", _before)
+        return resp, statements
+
+    login_as(_api_admin_user)
+
+    _seed(2, 100)
+    two_resp, two_queries = _count()
+    two_containers = {
+        item["container_ref"] for item in two_resp.json()["items"]
+    }
+    # The parents really are distinct -- otherwise this test degrades into a
+    # single-shared-parent test and silently stops measuring anything.
+    assert len(two_containers) == 2, "fixture failed to build distinct parents"
+
+    _seed(8, 200)
+    ten_resp, ten_queries = _count()
+    ten_containers = {item["container_ref"] for item in ten_resp.json()["items"]}
+    assert len(ten_containers) == 10, "fixture failed to build distinct parents"
+
+    assert ten_queries == two_queries, (
+        f"the page cost {two_queries} queries for 2 rows on 2 distinct "
+        f"parents and {ten_queries} for 10 rows on 10 distinct parents -- "
+        "the container resolve is running per row or per parent"
+    )
