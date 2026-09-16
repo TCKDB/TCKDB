@@ -32641,6 +32641,89 @@
         "title": "ReviewQueuePageRead",
         "type": "object"
       },
+      "ReviewQueueReactionEquation": {
+        "additionalProperties": false,
+        "description": "A reaction_entry subject's own chemistry: the equation itself.\n\nA reaction_entry has no formula -- it is not one molecule -- so this\nis what fills the role `chemistry` plays for a species_entry or\ntransition_state_entry subject. Field names match\n`frontend/src/domain/reactionEquation.ts`'s `EquationParticipantInput`\nexactly so the client's existing `<ReactionEquation>` component (the\nsame one the reaction entry page renders) draws this one directly,\nrather than a second reaction-equation vocabulary being invented here.",
+        "properties": {
+          "products": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueReactionParticipant"
+            },
+            "title": "Products",
+            "type": "array"
+          },
+          "reactants": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueReactionParticipant"
+            },
+            "title": "Reactants",
+            "type": "array"
+          },
+          "reversible": {
+            "title": "Reversible",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "reversible",
+          "reactants",
+          "products"
+        ],
+        "title": "ReviewQueueReactionEquation",
+        "type": "object"
+      },
+      "ReviewQueueReactionParticipant": {
+        "additionalProperties": false,
+        "description": "One participant in a reaction_entry subject's own equation.",
+        "properties": {
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "participant_index": {
+            "title": "Participant Index",
+            "type": "integer"
+          },
+          "smiles": {
+            "title": "Smiles",
+            "type": "string"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "stoichiometry": {
+            "title": "Stoichiometry",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "species_entry_ref",
+          "smiles",
+          "stoichiometry",
+          "participant_index"
+        ],
+        "title": "ReviewQueueReactionParticipant",
+        "type": "object"
+      },
       "ReviewQueueSubjectChemistry": {
         "additionalProperties": false,
         "description": "Best-effort chemistry context for a review-queue subject block.\n\nEvery field is independently optional. A ``None`` here is never a\nfailure to compute -- it is one of two honest facts: this subject type\ncarries no such axis at all (a conformer group has no stereo label to\nreport, ever), or the value genuinely was never recorded (a\ntransition-state entry's ``unmapped_smiles`` is optional and often\nabsent). See :mod:`app.services.review_queue` for which subject types\npopulate which fields and why.",
@@ -32732,6 +32815,18 @@
               }
             ],
             "title": "Term Symbol"
+          },
+          "unmapped_smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The transition-state entry's OWN structural SMILES, as deposited -- never null merely because `formula` is null. The two can disagree: a depositor can record a reaction-shaped string (e.g. '[CH3].[H]>>C') that the RDKit single-molecule parser rejects, which leaves `formula` null while this field is set. A client should use this to tell 'nothing was ever recorded' (both null) apart from 'recorded, but no formula could be derived from it' (this set, formula null) -- the two are different facts and read as different sentences. Always null for a species_entry subject, which has no analogous raw-text fallback.",
+            "title": "Unmapped Smiles"
           }
         },
         "title": "ReviewQueueSubjectChemistry",
@@ -32739,10 +32834,20 @@
       },
       "ReviewQueueSubjectRead": {
         "additionalProperties": false,
-        "description": "One subject block: the record a reviewer judges as one unit, and\nevery review row nested under it.\n\n``subject_type``/``subject_ref`` are always null or non-null together,\nsame contract as ``container_type``/``container_ref`` on\n:class:`RecordReviewRead`. Both null is the orphan case: a record with\nno public ref of its own whose container also could not be resolved\n(see :mod:`app.services.review_queue`'s ``SubjectKey`` docstring) --\nstill one block, just one this page cannot link anywhere.",
+        "description": "One subject block: the record a reviewer judges as one unit, and\nevery review row nested under it.\n\n``subject_type``/``subject_ref`` are NOT the same null contract as\n``container_type``/``container_ref`` on :class:`RecordReviewRead` --\nan earlier draft of this docstring claimed they were, which was wrong\nand caught in review. Three shapes, not two:\n\n* both set -- the ordinary case, a named, addressable subject;\n* both null -- the orphan case: a record with no public ref of its\n  own whose container also could not be resolved (see\n  :mod:`app.services.review_queue`'s ``SubjectKey`` docstring) --\n  still one block, just one this page cannot link anywhere;\n* ``subject_type`` set, ``subject_ref`` null -- a ``species_entry``\n  or ``transition_state_entry`` review row whose OWN record has since\n  been deleted. Both types are their own subject unconditionally (see\n  :mod:`app.services.review_queue`'s module docstring on the\n  container-is-the-subject exception), so losing the record loses\n  the ref but not the type -- there is nowhere else for that row's\n  subject identity to fall back to.\n\nA client must therefore treat ``subject_ref is None`` as \"cannot\nlink\", exactly as for the orphan case, but must not infer from a null\nref that ``subject_type`` is null too.",
         "properties": {
           "chemistry": {
             "$ref": "#/components/schemas/ReviewQueueSubjectChemistry"
+          },
+          "reaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewQueueReactionEquation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "records": {
             "items": {

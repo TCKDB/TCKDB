@@ -27,6 +27,8 @@ from app.schemas.entities.record_review import (
     RecordReviewRead,
     RecordReviewSetStatusRequest,
     ReviewQueuePageRead,
+    ReviewQueueReactionEquation,
+    ReviewQueueReactionParticipant,
     ReviewQueueSubjectChemistry,
     ReviewQueueSubjectRead,
 )
@@ -165,6 +167,36 @@ def list_review_queue_page(
                 term_symbol=subject.chemistry.term_symbol,
                 stereo_label=subject.chemistry.stereo_label,
                 isotope_key=subject.chemistry.isotope_key,
+                unmapped_smiles=subject.chemistry.unmapped_smiles,
+            ),
+            reaction=(
+                ReviewQueueReactionEquation(
+                    reversible=subject.reaction.reversible,
+                    reactants=[
+                        ReviewQueueReactionParticipant(
+                            species_entry_ref=p.species_entry_ref,
+                            species_entry_label=p.species_entry_label,
+                            smiles=p.smiles,
+                            formula=p.formula,
+                            stoichiometry=p.stoichiometry,
+                            participant_index=p.participant_index,
+                        )
+                        for p in subject.reaction.reactants
+                    ],
+                    products=[
+                        ReviewQueueReactionParticipant(
+                            species_entry_ref=p.species_entry_ref,
+                            species_entry_label=p.species_entry_label,
+                            smiles=p.smiles,
+                            formula=p.formula,
+                            stoichiometry=p.stoichiometry,
+                            participant_index=p.participant_index,
+                        )
+                        for p in subject.reaction.products
+                    ],
+                )
+                if subject.reaction is not None
+                else None
             ),
             records=[
                 _read(

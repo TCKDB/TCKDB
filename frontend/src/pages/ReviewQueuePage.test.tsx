@@ -74,6 +74,29 @@ function chemistry(over: Record<string, unknown> = {}) {
         term_symbol: null,
         stereo_label: null,
         isotope_key: null,
+        unmapped_smiles: null,
+        ...over,
+    }
+}
+
+/** A reaction_entry subject's own equation, in the shape `/queue` serves. */
+function reactionEquation(over: Record<string, unknown> = {}) {
+    return {
+        reversible: true,
+        reactants: [],
+        products: [],
+        ...over,
+    }
+}
+
+function reactionParticipant(over: Record<string, unknown> = {}) {
+    return {
+        species_entry_ref: "spe_participant",
+        species_entry_label: null,
+        smiles: "C",
+        formula: "CH4",
+        stoichiometry: 1,
+        participant_index: 1,
         ...over,
     }
 }
@@ -298,6 +321,69 @@ describe("the page says which review this is", () => {
 })
 
 describe("what a subject block shows (task #269, defect #4: nothing said what the chemistry was)", () => {
+    it("does not print a species entry's own ref twice inside its own block (defect #1)", async () => {
+        // Review #492, finding 1 -- the MUST-fix, and the owner's original
+        // complaint back on the page: a species deposit gets a
+        // species_entry review row, that row is its own subject, and it
+        // used to render its OWN ref a second time inside the block whose
+        // heading already shows it:
+        //
+        //   H2O ...   spe_h2o (opens in a new tab)
+        //     Thermochemistry              Review...
+        //     Species entry  spe_h2o (opens in a new tab)   Review...
+        meIs(curator)
+        queueIs([
+            subject(
+                [
+                    record({ id: 1, record_type: "thermo", record_id: 101 }),
+                    // The species_entry's OWN review row -- same type and
+                    // ref as the subject itself.
+                    record({
+                        id: 2,
+                        record_type: "species_entry",
+                        record_id: 202,
+                        record_public_ref: "spe_h2o",
+                        container_type: null,
+                        container_ref: null,
+                    }),
+                ],
+                { subject_ref: "spe_h2o" },
+            ),
+        ])
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        // The ref appears exactly once: in the block's own ref line.
+        expect(within(section).getAllByText("spe_h2o")).toHaveLength(1)
+        // The species_entry row itself is still there, still actionable --
+        // it is the link that must not repeat, not the row.
+        expect(within(section).getByText("Species entry")).toBeInTheDocument()
+    })
+
+    it("does not print a transition-state entry's own ref twice inside its own block either", async () => {
+        meIs(curator)
+        queueIs([
+            subject(
+                [
+                    record({ id: 1, record_type: "statmech", record_id: 101, container_type: "transition_state_entry", container_ref: "tse_dup" }),
+                    record({
+                        id: 2,
+                        record_type: "transition_state_entry",
+                        record_id: 202,
+                        record_public_ref: "tse_dup",
+                        container_type: null,
+                        container_ref: null,
+                    }),
+                ],
+                { subject_type: "transition_state_entry", subject_ref: "tse_dup", chemistry: chemistry({ multiplicity: 2 }) },
+            ),
+        ])
+        renderPage()
+
+        const section = await subjectFor("tse_dup")
+        expect(within(section).getAllByText("tse_dup")).toHaveLength(1)
+    })
+
     it("shows a species entry's formula, spin word, and disambiguating facets", async () => {
         meIs(curator)
         queueIs([
@@ -353,7 +439,7 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         renderPage()
 
         const section = await screen.findByText("tse_2").then((el) => el.closest(".review-subject") as HTMLElement)
-        expect(within(section).getByText(/no reaction smiles recorded/i)).toBeInTheDocument()
+        expect(within(section).getByText(/no smiles recorded/i)).toBeInTheDocument()
     })
 
     it("puts a NAME in the heading even with no formula -- the apology is a caveat, never the name itself", async () => {
@@ -374,9 +460,30 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         const section = await screen.findByText("tse_3").then((el) => el.closest(".review-subject") as HTMLElement)
         const heading = within(section).getByRole("heading", { level: 2 })
         expect(heading).toHaveTextContent(/^Transition state/)
-        expect(heading).not.toHaveTextContent(/no reaction smiles recorded/i)
+        expect(heading).not.toHaveTextContent(/no smiles recorded/i)
         // The caveat still appears -- just outside the heading.
-        expect(within(section).getByText(/no reaction smiles recorded/i)).toBeInTheDocument()
+        expect(within(section).getByText(/no smiles recorded/i)).toBeInTheDocument()
+    })
+
+    it("tells 'recorded but no formula could be derived' apart from 'never recorded'", async () => {
+        // A reaction-shaped SMILES ("[CH3].[H]>>C") is a real, recorded
+        // value that the single-molecule formula parser rejects -- the
+        // caveat must say THAT, not the same sentence a genuinely blank
+        // field gets, which would simply be false here.
+        meIs(curator)
+        queueIs([
+            subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_4" })], {
+                subject_type: "transition_state_entry",
+                subject_ref: "tse_4",
+                chemistry: chemistry({ multiplicity: 2, unmapped_smiles: "[CH3].[H]>>C" }),
+            }),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_4").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).queryByText(/no smiles recorded for this candidate/i)).not.toBeInTheDocument()
+        expect(within(section).getByText(/no formula could be derived/i)).toBeInTheDocument()
+        expect(within(section).getByText("[CH3].[H]>>C")).toBeInTheDocument()
     })
 
     it("names a subject with no chemistry of its own by its record type, honestly", async () => {
@@ -411,6 +518,91 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         await screen.findByText("spe_h2o")
         expect(screen.queryByText(/cannot be named/i)).not.toBeInTheDocument()
         expect(await screen.findByText(/no record could be found for this review row/i)).toBeInTheDocument()
+    })
+
+    it("names a reaction_entry subject by its own equation, not a bare ref (defect #6)", async () => {
+        // Review #492, finding 6: a kinetics reviewer used to see "Reaction
+        // entry rxe_..." and nothing else -- the species side of this page
+        // named subjects well and the reaction side named nothing.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_ab12" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_ab12",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_ch4", smiles: "C", formula: "CH4" }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("rxe_ab12").then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(heading).toHaveTextContent(/CH3/)
+        expect(heading).toHaveTextContent(/CH4/)
+        expect(heading).not.toHaveTextContent(/^Reaction entry/)
+    })
+
+    it("falls back to the plain type label when a reaction_entry subject has no resolvable equation", async () => {
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_cd34" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_cd34",
+                    chemistry: chemistry(),
+                    reaction: null,
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("rxe_cd34").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).getByRole("heading", { name: "Reaction entry" })).toBeInTheDocument()
+    })
+
+    it("drops the redundant 'minimum ground state' chips for an ordinary species (defect #8)", async () => {
+        // Review #492, finding 8: "minimum · ground state" on nearly
+        // every ordinary molecule carries no information there.
+        meIs(curator)
+        queueIs([H2O])
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).queryByText("minimum")).not.toBeInTheDocument()
+        expect(within(section).queryByText("ground state")).not.toBeInTheDocument()
+        // Real information -- the spin word -- still shows.
+        expect(within(section).getByText("singlet")).toBeInTheDocument()
+    })
+
+    it("keeps the kind chip when it is NOT the ordinary default", async () => {
+        meIs(curator)
+        queueIs([
+            subject([record()], {
+                subject_ref: "spe_vdw",
+                chemistry: chemistry({
+                    formula: "H2O",
+                    multiplicity: 1,
+                    species_entry_kind: "vdw_complex",
+                    electronic_state_kind: "ground",
+                }),
+            }),
+        ])
+        renderPage()
+
+        const section = await subjectFor("spe_vdw")
+        expect(within(section).getByText("van der Waals complex")).toBeInTheDocument()
     })
 })
 
@@ -1103,5 +1295,277 @@ describe("paging counts subjects, never records", () => {
         await user.selectOptions(screen.getByLabelText("Showing"), "approved")
 
         await waitFor(() => expect(asked.at(-1)).toBe("approved@0"))
+    })
+})
+
+/**
+ * Review #492, finding 4: this file was rewritten wholesale for the new
+ * `/queue` wire shape and markup, and several guarantees the OLD suite
+ * pinned were never carried over -- not because the behaviour changed, but
+ * because nothing re-asserted it against the new DOM. The first two below
+ * are #488's own guarantees and are explicitly not negotiable; the rest are
+ * the redesign's own regressions-to-avoid, ported to subject/record
+ * fixtures instead of the old flat rows.
+ */
+describe("guarantees carried over from the flat queue (review #492, finding 4)", () => {
+    it("opens every queue link in a new tab, safely (rel carries both noopener and noreferrer)", async () => {
+        // Scoped to the subject list, not the whole page: the lede's own
+        // "Machine findings" link is deliberate ordinary in-app
+        // navigation (see the module docstring), not one of the
+        // stateful queue links this guarantee is about.
+        meIs(curator)
+        queueIs([H2O, CH4_CALC])
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        const sections = document.querySelectorAll(".review-subject")
+        expect(sections.length).toBeGreaterThan(0)
+        const links = Array.from(sections).flatMap((section) =>
+            Array.from(section.querySelectorAll("a")),
+        )
+        expect(links.length).toBeGreaterThan(0)
+        for (const link of links) {
+            expect(link).toHaveAttribute("target", "_blank")
+            const rel = link.getAttribute("rel") ?? ""
+            expect(rel).toMatch(/noopener/)
+            expect(rel).toMatch(/noreferrer/)
+        }
+    })
+
+    it("puts no internal row id anywhere in the page", async () => {
+        meIs(curator)
+        queueIs([
+            subject([record({ id: 777, record_id: 888111 })]),
+            subject(
+                [
+                    record({
+                        id: 778,
+                        record_type: "calculation",
+                        record_id: 999222,
+                        record_public_ref: "calc_hidden_id_check",
+                    }),
+                ],
+                { subject_ref: "spe_second" },
+            ),
+        ])
+        const { container } = renderPage()
+        await screen.findByText("spe_h2o")
+        await screen.findByText("spe_second")
+
+        expect(container.innerHTML).not.toContain("888111")
+        expect(container.innerHTML).not.toContain("999222")
+    })
+
+    it("still offers a way back from a page that came back empty", async () => {
+        // A page can come back empty even though "Older" was enabled: the
+        // total this page reports is honest AS OF each request, not a
+        // snapshot, so a subject reviewed by someone else between the two
+        // page loads can shrink the true count from underneath a curator
+        // already mid-page -- see `list_review_queue`'s own "offset drift"
+        // documentation. Page 1 truthfully reports 51 (Older enabled);
+        // by the time page 2 is requested only 50 remain, and page 2 --
+        // subjects 51-51 -- is honestly empty.
+        meIs(curator)
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            subject([record({ id: 100 + i, record_id: 100 + i })], { subject_ref: `spe_p_${i}` }),
+        )
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
+                return HttpResponse.json(
+                    skip === 0
+                        ? queuePageBody(fifty, { subject_total: 51 })
+                        : queuePageBody([], { subject_total: 50, offset: skip }),
+                )
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_p_0")
+        expect(screen.getByRole("button", { name: "Older" })).toBeEnabled()
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+
+        expect(await screen.findByText(/Nothing older than this/i)).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled()
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+    })
+
+    it("goes back one page at a time, not to the start", async () => {
+        meIs(curator)
+        const asked: string[] = []
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            subject([record({ id: 100 + i, record_id: 100 + i })], { subject_ref: `spe_q_${i}` }),
+        )
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const skip = new URL(request.url).searchParams.get("skip") ?? "0"
+                asked.push(skip)
+                return HttpResponse.json(queuePageBody(fifty, { subject_total: 200 }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_q_0")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(2))
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(3))
+        await user.click(screen.getByRole("button", { name: "Newer" }))
+        await waitFor(() => expect(asked).toEqual(["0", "50", "100", "50"]))
+    })
+
+    it("does not offer rejected -> approved either", async () => {
+        meIs(curator)
+        queueIs([subject([record({ status: "rejected" })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+        expect(options).toEqual(["under review", "deprecated"])
+        expect(options).not.toContain("approved")
+    })
+
+    it("re-derives the choice when a re-read makes it impossible", async () => {
+        meIs(curator)
+        // not_reviewed offers rejected; approved does not. A re-read that
+        // moves the row to approved leaves "rejected" held in a draft that
+        // no option matches -- a controlled <select> whose value matches
+        // nothing displays the FIRST option, silently.
+        let moved = false
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: moved ? "approved" : "not_reviewed" })]),
+                    ]),
+                ),
+            ),
+            http.patch(`${PATCH_BASE}/:type/:id`, async () => {
+                if (!moved) {
+                    moved = true
+                    return HttpResponse.json(
+                        { code: "domain_error", detail: "Not allowed." },
+                        { status: 400 },
+                    )
+                }
+                return HttpResponse.json(record({ status: "under_review" }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "first try")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await waitFor(() => expect(within(section).getByText("approved")).toBeInTheDocument())
+        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
+        expect(["under_review", "deprecated"]).toContain(select.value)
+        expect(screen.queryByText(/judged this record wrong/i)).not.toBeInTheDocument()
+    })
+
+    it("does not close another row's open form when a write succeeds", async () => {
+        meIs(curator)
+        queueIs([H2O, CH4_CALC])
+        const write = gate()
+        server.use(
+            http.patch(`${PATCH_BASE}/thermo/987654`, async () => {
+                await write.held
+                return HttpResponse.json(record({ status: "under_review" }))
+            }),
+        )
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        await user.type(screen.getByLabelText(/Why/), "species reason")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await user.click(reviewButtonIn(await subjectFor("spe_ch4")))
+        await user.type(screen.getByLabelText(/Why/), "calculation reason")
+
+        write.release()
+
+        await waitFor(() => expect(reviewButtonIn(screen.getByText("spe_h2o").closest(".review-subject") as HTMLElement)).toBeEnabled())
+        expect(screen.getByLabelText(/Why/)).toHaveValue("calculation reason")
+    })
+
+    it("shows each row's own state, not a neighbour's", async () => {
+        meIs(curator)
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: "approved" })]),
+                        CH4_CALC,
+                    ]),
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+
+        const h2oSection = await subjectFor("spe_h2o")
+        const ch4Section = await subjectFor("spe_ch4")
+        expect(within(h2oSection).getByText("approved")).toBeInTheDocument()
+        expect(within(ch4Section).getByText("not reviewed")).toBeInTheDocument()
+        expect(within(ch4Section).queryByText("approved")).not.toBeInTheDocument()
+    })
+
+    it("shows the reason recorded on a judged record", async () => {
+        meIs(curator)
+        queueIs([subject([record({ status: "approved", note: "frequencies check out by hand" })])])
+        renderPage()
+
+        expect(await screen.findByText("frequencies check out by hand")).toBeInTheDocument()
+    })
+
+    it("reads a row from a server that has never heard of containers", async () => {
+        // An older backend sends neither container_type nor container_ref
+        // on a nested record. Dropping the whole page would be the worst
+        // possible answer to "what still needs review" -- the schema
+        // defaults both to null and the record still renders.
+        meIs(curator)
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json({
+                    subjects: [
+                        {
+                            subject_type: "species_entry",
+                            subject_ref: "spe_h2o",
+                            chemistry: chemistry({ formula: "H2O" }),
+                            records: [
+                                {
+                                    id: 11,
+                                    record_type: "thermo",
+                                    record_id: 987654,
+                                    status: "not_reviewed",
+                                    created_at: "2026-09-14T10:00:00Z",
+                                    // container_type/container_ref omitted entirely.
+                                },
+                            ],
+                        },
+                    ],
+                    subject_total: 1,
+                    record_total: 1,
+                    offset: 0,
+                    limit: 50,
+                }),
+            ),
+        )
+        renderPage()
+
+        expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
+        expect(screen.getByText("Thermochemistry")).toBeInTheDocument()
     })
 })

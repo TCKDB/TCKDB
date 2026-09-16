@@ -11,8 +11,11 @@ exceptions (``species_entry``, ``transition_state_entry``).
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import event
 
+import app.services.review_queue as review_queue
+from app.api.error_contract import CodedValueError
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -26,6 +29,7 @@ from tests.services.scientific_read._factories import (
     make_conformer_group,
     make_conformer_observation,
     make_energy_correction_scheme,
+    make_kinetics,
     make_reaction_entry,
     make_species,
     make_species_entry,
@@ -217,6 +221,111 @@ class TestSubjectChemistry:
             s for s in result.subjects if s.subject_ref == ts_entry.public_ref
         )
         assert subject.chemistry.formula is None
+        assert subject.chemistry.unmapped_smiles is None
+
+    def test_a_recorded_but_unparseable_smiles_is_distinguishable_from_never_recorded(
+        self, db_session
+    ):
+        """Review #492, finding 7: `unmapped_smiles` is the candidate's OWN
+        structural SMILES, not a reaction SMILES, and it can be set while
+        `formula` is still null -- a reaction-shaped string
+        (``"[CH3].[H]>>C"``) is not one molecule RDKit's single-molecule
+        parser will accept. The service must carry the raw value through so
+        a caller can tell "recorded, but no formula could be derived" apart
+        from "never recorded" -- the previous version collapsed both into
+        one null `formula` field with nothing to distinguish them.
+        """
+        reactant = make_species(db_session, smiles="[F]")
+        product = make_species(db_session, smiles="[Cl]")
+        reaction = make_chem_reaction(
+            db_session, reactants=[reactant], products=[product]
+        )
+        reaction_entry = make_reaction_entry(
+            db_session,
+            reaction=reaction,
+            reactant_entries=[make_species_entry(db_session, reactant)],
+            product_entries=[make_species_entry(db_session, product)],
+        )
+        ts = make_transition_state(db_session, reaction_entry=reaction_entry)
+        ts_entry = make_transition_state_entry(
+            db_session, transition_state=ts, unmapped_smiles="[CH3].[H]>>C"
+        )
+        _review(
+            db_session,
+            record_type=SubmissionRecordType.transition_state_entry,
+            record_id=ts_entry.id,
+        )
+
+        result = list_review_queue(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+        )
+        subject = next(
+            s for s in result.subjects if s.subject_ref == ts_entry.public_ref
+        )
+        assert subject.chemistry.formula is None
+        assert subject.chemistry.unmapped_smiles == "[CH3].[H]>>C"
+
+
+class TestReactionEntrySubjectCarriesItsEquation:
+    """Review #492, finding 6: a kinetics reviewer saw "Reaction entry
+    rxe_..." and nothing else -- the species side of this module named
+    subjects well and the reaction side named nothing, same defect seen
+    from the other direction.
+    """
+
+    def test_kinetics_groups_under_a_reaction_entry_with_its_own_equation(
+        self, db_session
+    ):
+        reactant = make_species(db_session, smiles="[CH3]")
+        product = make_species(db_session, smiles="C")
+        reaction = make_chem_reaction(
+            db_session, reactants=[reactant], products=[product], reversible=True
+        )
+        reactant_entry = make_species_entry(db_session, reactant)
+        product_entry = make_species_entry(db_session, product)
+        reaction_entry = make_reaction_entry(
+            db_session,
+            reaction=reaction,
+            reactant_entries=[reactant_entry],
+            product_entries=[product_entry],
+        )
+        kinetics = make_kinetics(db_session, reaction_entry=reaction_entry)
+        _review(
+            db_session, record_type=SubmissionRecordType.kinetics, record_id=kinetics.id
+        )
+
+        result = list_review_queue(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+        )
+        subject = next(
+            s for s in result.subjects if s.subject_ref == reaction_entry.public_ref
+        )
+        assert subject.subject_type is SubmissionRecordType.reaction_entry
+        assert subject.reaction is not None
+        assert subject.reaction.reversible is True
+        assert [p.species_entry_ref for p in subject.reaction.reactants] == [
+            reactant_entry.public_ref
+        ]
+        assert [p.species_entry_ref for p in subject.reaction.products] == [
+            product_entry.public_ref
+        ]
+        assert subject.reaction.reactants[0].formula == "CH3"
+        assert subject.reaction.products[0].formula == "CH4"
+
+    def test_a_subject_with_no_reaction_data_carries_no_reaction_field(
+        self, db_session
+    ):
+        entry = make_species_entry(db_session, make_species(db_session))
+        thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=1.0)
+        _review(
+            db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+        )
+
+        result = list_review_queue(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+        )
+        subject = next(s for s in result.subjects if s.subject_ref == entry.public_ref)
+        assert subject.reaction is None
 
 
 class TestCalculationAndConformerObservationGroupUnderTheirContainer:
@@ -400,3 +509,55 @@ class TestQueryCost:
             f"cost grew from {few} statements to {many} as rows grew -- "
             "something in the grouped resolve is running per row"
         )
+
+
+class TestRowResolutionCap:
+    """Review of #492, mutation 3: ``if False:`` on the cap check passed
+    all 15 previously-shipped tests -- ``TestQueryCost`` above pins a
+    DIFFERENT property (query count does not grow with row count) and
+    never seeds enough rows to cross any cap, so it cannot see the cap
+    being disabled entirely. Monkeypatching the module's cap constant
+    down to a size a test can actually seed is what makes this path
+    reachable without seeding 5000+ real rows.
+    """
+
+    def test_more_rows_than_the_cap_refuses_rather_than_grouping_them(
+        self, db_session, monkeypatch
+    ):
+        monkeypatch.setattr(review_queue, "_ROW_RESOLUTION_CAP", 2)
+
+        for i in range(3):
+            entry = make_species_entry(db_session, make_species(db_session))
+            thermo = make_thermo_scalar(
+                db_session, species_entry=entry, h298_kj_mol=float(i)
+            )
+            _review(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+
+        with pytest.raises(CodedValueError) as excinfo:
+            list_review_queue(
+                db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+            )
+        assert excinfo.value.code == "composed_search_candidate_limit_exceeded"
+        # The message must not tell a curator to do the thing they already
+        # did (narrow by status, when status is exactly what was asked
+        # for) -- see the route's own comment on why the wording changed.
+        assert "filter by status to narrow" not in str(excinfo.value)
+
+    def test_at_or_under_the_cap_still_groups_normally(self, db_session, monkeypatch):
+        monkeypatch.setattr(review_queue, "_ROW_RESOLUTION_CAP", 2)
+
+        for i in range(2):
+            entry = make_species_entry(db_session, make_species(db_session))
+            thermo = make_thermo_scalar(
+                db_session, species_entry=entry, h298_kj_mol=float(i)
+            )
+            _review(
+                db_session, record_type=SubmissionRecordType.thermo, record_id=thermo.id
+            )
+
+        result = list_review_queue(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+        )
+        assert result.subject_total == 2

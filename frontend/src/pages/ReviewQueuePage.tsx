@@ -10,6 +10,7 @@ import {
 } from "../api/recordReviewsApi"
 import { spinWord } from "../domain/chemistryFormat"
 import { Formula } from "../components/Formula"
+import { ReactionEquation } from "../components/ReactionEquation"
 import { facetChips } from "../domain/recordFacets"
 import {
     recordRoute,
@@ -93,6 +94,16 @@ import {
  * "there may be more, and this page cannot say how many" hedge is gone
  * because the new route does not need it.
  *
+ * Within one response, a subject's records are never split across a page
+ * boundary. Across separate requests that is NOT a promise that paging is
+ * a stable walk: the server recomputes the subject order fresh each call,
+ * with no cursor held between them, so a record leaving the filter (being
+ * judged) between reading page 1 and asking for page 2 can shift every
+ * later subject's position and skip one at the boundary -- the same
+ * offset-pagination cost the flat list this replaces already carried, now
+ * over subjects instead of rows. See `list_review_queue`'s own docstring.
+ *
+
  * The review ACTION is unchanged: still per record, still routed through
  * `setRecordReviewStatus(recordType, recordId, ...)`. Grouping is a
  * presentation of the same rows, not a new kind of approval -- a
@@ -198,14 +209,37 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
     }
 
     if (subject.subject_type === "species_entry") {
-        const chips = facetChips({
-            species_entry_kind: subject.chemistry.species_entry_kind ?? "minimum",
-            electronic_state_kind: subject.chemistry.electronic_state_kind ?? "ground",
-            electronic_state_label: subject.chemistry.electronic_state_label,
-            term_symbol: subject.chemistry.term_symbol,
-            stereo_label: subject.chemistry.stereo_label,
-            isotope_key: subject.chemistry.isotope_key,
-        })
+        const effectiveKind = subject.chemistry.species_entry_kind ?? "minimum"
+        // `includeState: false` drops the bare "ground state"/"excited
+        // state" phrase -- the same opt-out `SpeciesOverviewPage.tsx`'s
+        // `EntryCard` already uses for the identical reason: "singlet"
+        // (from `spin` below) already says the electronic state is the
+        // unremarkable default for nearly every species in the archive,
+        // so restating "ground state" next to it on almost every block
+        // was noise review #492 measured, not information. Any REAL
+        // extra (an excited-state label, a term symbol) still survives
+        // `includeState: false` -- see `facetChips`'s own docstring.
+        //
+        // `facetChips` always leads with a kind chip ("minimum"/"van der
+        // Waals complex") -- there is no flag to omit it, because for a
+        // van der Waals complex it is real information a reviewer needs.
+        // For the ordinary "minimum" case, which is nearly every species,
+        // it is exactly the same kind of noise "ground state" was, so it
+        // is dropped here at the call site rather than in the shared
+        // helper: the first chip is deterministically the kind chip,
+        // dropped only when the kind is the unremarkable default.
+        const rawChips = facetChips(
+            {
+                species_entry_kind: effectiveKind,
+                electronic_state_kind: subject.chemistry.electronic_state_kind ?? "ground",
+                electronic_state_label: subject.chemistry.electronic_state_label,
+                term_symbol: subject.chemistry.term_symbol,
+                stereo_label: subject.chemistry.stereo_label,
+                isotope_key: subject.chemistry.isotope_key,
+            },
+            { includeState: false },
+        )
+        const chips = effectiveKind === "minimum" ? rawChips.slice(1) : rawChips
         const spin = spinWord(subject.chemistry.multiplicity)
         return (
             <>
@@ -238,20 +272,29 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
 
     if (subject.subject_type === "transition_state_entry") {
         const spin = spinWord(subject.chemistry.multiplicity)
+        // Two DIFFERENT absences, told apart honestly rather than
+        // collapsed into one sentence (review #492 caught the collapse):
+        // `unmapped_smiles` is the candidate's OWN saddle-point SMILES,
+        // never a "reaction SMILES" -- that word was simply wrong, not
+        // just terse -- and it can be present while `formula` is still
+        // null, because it can be a reaction-shaped string
+        // (`"[CH3].[H]>>C"`) that a single-molecule parser rejects. That
+        // is "recorded, but no formula could be derived from it", a
+        // different fact from "nothing was ever recorded", and showing
+        // the same "not recorded" sentence for both would be false in
+        // the first case, not merely unhelpful.
+        const smilesRecordedButUnparsed =
+            !subject.chemistry.formula && subject.chemistry.unmapped_smiles
         return (
             <>
                 <h2 className="review-subject-heading">
-                    {/* A transition-state entry's `unmapped_smiles` is
-                        optional and often absent -- this is the common
-                        case, not an edge case, which is exactly why it
-                        must never fall into the name slot: an apology
-                        ("no reaction SMILES recorded...") standing where
-                        every other subject's name stands is the "cannot
-                        be named" defect happening again, in a new place.
-                        The name slot always holds a name -- the record
+                    {/* The name slot always holds a name -- the record
                         type, when there is no formula to show instead --
-                        and the caveat moves to its own quiet line below,
-                        the way the facet chips sit. */}
+                        never the caveat. See the species_entry branch
+                        above and this component's own module comment for
+                        why: an apology standing where every other
+                        subject's name stands is the "cannot be named"
+                        defect happening again, in a new place. */}
                     {subject.chemistry.formula ? (
                         <Formula value={subject.chemistry.formula} />
                     ) : (
@@ -259,12 +302,45 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
                     )}
                     {spin && <span className="review-subject-chip">{spin}</span>}
                 </h2>
-                {!subject.chemistry.formula && (
-                    <p className="review-subject-caveat admin-absent">
-                        no reaction SMILES recorded for this candidate
-                    </p>
-                )}
+                {!subject.chemistry.formula &&
+                    (smilesRecordedButUnparsed ? (
+                        <p className="review-subject-caveat admin-absent">
+                            no formula could be derived from this candidate's
+                            own SMILES:{" "}
+                            <code className="data">
+                                {subject.chemistry.unmapped_smiles}
+                            </code>
+                        </p>
+                    ) : (
+                        <p className="review-subject-caveat admin-absent">
+                            no SMILES recorded for this candidate
+                        </p>
+                    ))}
             </>
+        )
+    }
+
+    if (subject.subject_type === "reaction_entry" && subject.reaction) {
+        // A reaction_entry is not one molecule, so it has no formula --
+        // but it has the fact a reviewer actually wants, the equation
+        // itself. Review #492, finding 6: a kinetics reviewer used to see
+        // "Reaction entry rxe_..." and nothing else, the species-only
+        // half of this page's own naming problem seen from the other
+        // side. `<ReactionEquation>` is the SAME component the reaction
+        // entry page renders -- reused, not a second implementation --
+        // and `linkParticipants={false}` because every other link in
+        // this queue opens in a new tab (see the module docstring on
+        // why), and a per-participant in-page navigation link here would
+        // be the one exception to that rule.
+        return (
+            <h2 className="review-subject-heading">
+                <ReactionEquation
+                    reactants={subject.reaction.reactants}
+                    products={subject.reaction.products}
+                    reversible={subject.reaction.reversible}
+                    linkParticipants={false}
+                />
+            </h2>
         )
     }
 
@@ -311,8 +387,29 @@ function SubjectRefLine({ subject }: { subject: ReviewQueueSubject }) {
  * own link already covers "go and look at this", and repeating "cannot be
  * named" or "shown on ..." for every such row is exactly the noise this
  * redesign removes.
+ *
+ * The one case that looks identical but is not: a `species_entry` or
+ * `transition_state_entry` review row is its OWN subject (see
+ * `app/services/review_queue.py`), so it is nested inside the very block
+ * whose heading already names it. Rendering this link there repeated the
+ * exact ref the block's own header and ref line already show, on nearly
+ * every species in the queue --
+ *
+ *     H2O ...   spe_h2o (opens in a new tab)
+ *       Thermochemistry           Review...
+ *       Species entry  spe_h2o (opens in a new tab)   Review...
+ *
+ * -- which is the SAME complaint the subject grouping exists to fix,
+ * reappearing one level down. `subject` is passed in so this can compare
+ * the row against the block it is already inside, rather than only
+ * knowing about the row.
  */
-function RecordOwnLink({ row }: { row: RecordReview }) {
+function RecordOwnLink({ row, subject }: { row: RecordReview; subject: ReviewQueueSubject }) {
+    const isTheSubjectItself =
+        row.record_type === subject.subject_type &&
+        row.record_public_ref !== null &&
+        row.record_public_ref === subject.subject_ref
+    if (isTheSubjectItself) return null
     if (!recordTypeHasPage(row.record_type) || !row.record_public_ref) return null
     const href = recordRoute(row.record_type, row.record_public_ref)
     if (href === null) return null
@@ -544,7 +641,7 @@ export default function ReviewQueuePage() {
     }
 
     /** One record's status + action, whether shown alone or inside an expanded group. */
-    function renderRecordRow(row: RecordReview) {
+    function renderRecordRow(row: RecordReview, subject: ReviewQueueSubject) {
         const rowId = keyOf(row)
         const rowBusy = busy.has(rowId)
         const options = offeredTransitions(row)
@@ -568,7 +665,7 @@ export default function ReviewQueuePage() {
                         <span className="review-record-type">
                             {recordTypeGroupLabel(row.record_type, 1)}
                         </span>
-                        <RecordOwnLink row={row} />
+                        <RecordOwnLink row={row} subject={subject} />
                         {row.note && (
                             <span className="review-record-note">{row.note}</span>
                         )}
@@ -663,8 +760,9 @@ export default function ReviewQueuePage() {
         groupKey: string,
         recordType: string,
         rows: RecordReview[],
+        subject: ReviewQueueSubject,
     ) {
-        if (rows.length === 1) return renderRecordRow(rows[0])
+        if (rows.length === 1) return renderRecordRow(rows[0], subject)
 
         const statuses = new Set(rows.map((r) => r.status))
         const uniformStatus = statuses.size === 1 ? [...statuses][0] : null
@@ -699,7 +797,7 @@ export default function ReviewQueuePage() {
                 </div>
                 {isExpanded && (
                     <ul className="review-record-group-detail">
-                        {rows.map((row) => renderRecordRow(row))}
+                        {rows.map((row) => renderRecordRow(row, subject))}
                     </ul>
                 )}
             </li>
@@ -722,7 +820,7 @@ export default function ReviewQueuePage() {
                 <SubjectRefLine subject={subject} />
                 <ul className="review-subject-records">
                     {[...groups.entries()].map(([recordType, rows]) =>
-                        renderRecordGroup(`${subjectKey}:${recordType}`, recordType, rows),
+                        renderRecordGroup(`${subjectKey}:${recordType}`, recordType, rows, subject),
                     )}
                 </ul>
             </section>

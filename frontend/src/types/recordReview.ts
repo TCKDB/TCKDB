@@ -186,15 +186,47 @@ export const ReviewQueueSubjectChemistrySchema = z.object({
     term_symbol: z.string().nullable().default(null),
     stereo_label: z.string().nullable().default(null),
     isotope_key: z.string().nullable().default(null),
+    // The transition-state entry's OWN raw SMILES, kept separate from
+    // `formula`: the two can disagree (a reaction-shaped string the
+    // single-molecule formula parser rejects), and a reviewer needs to
+    // tell "never recorded" apart from "recorded, but no formula could
+    // be derived from it" -- see `ReviewQueuePage.tsx`'s TS heading.
+    unmapped_smiles: z.string().nullable().default(null),
 })
 export type ReviewQueueSubjectChemistry = z.infer<
     typeof ReviewQueueSubjectChemistrySchema
+>
+
+/**
+ * A reaction_entry subject's own chemistry: the equation itself, not a
+ * species-shaped fact. Field names match `domain/reactionEquation.ts`'s
+ * `EquationParticipantInput` deliberately, so the existing
+ * `<ReactionEquation>` component (the one the reaction entry page already
+ * renders) can draw this directly -- no second reaction-equation
+ * vocabulary invented for this page.
+ */
+export const ReviewQueueReactionParticipantSchema = z.object({
+    species_entry_ref: z.string(),
+    species_entry_label: z.string().nullable().default(null),
+    smiles: z.string(),
+    formula: z.string().nullable().default(null),
+    stoichiometry: z.number().int(),
+    participant_index: z.number().int(),
+})
+export const ReviewQueueReactionEquationSchema = z.object({
+    reversible: z.boolean(),
+    reactants: z.array(ReviewQueueReactionParticipantSchema),
+    products: z.array(ReviewQueueReactionParticipantSchema),
+})
+export type ReviewQueueReactionEquation = z.infer<
+    typeof ReviewQueueReactionEquationSchema
 >
 
 export const ReviewQueueSubjectSchema = z.object({
     subject_type: z.string().nullable().default(null),
     subject_ref: z.string().nullable().default(null),
     chemistry: ReviewQueueSubjectChemistrySchema,
+    reaction: ReviewQueueReactionEquationSchema.nullable().default(null),
     records: z.array(RecordReviewSchema),
 })
 export type ReviewQueueSubject = z.infer<typeof ReviewQueueSubjectSchema>
