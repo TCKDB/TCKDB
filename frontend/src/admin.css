@@ -314,9 +314,10 @@
 }
 
 /* Present in the accessibility tree, invisible on screen. Carries the
-   "(opens in a new tab)" warning on every link out of the record review
-   queue -- those links are `target="_blank"` on purpose (see
-   `ReviewQueuePage.tsx`), and a screen reader user given no warning simply
+   "(opens in a new tab)" warning on every link out of Record review or
+   Machine findings -- those links are `target="_blank"` on purpose (see
+   `ReviewQueuePage.tsx` and `CuratorQueuePage.tsx`, which each keep their
+   own `NewTabNote`), and a screen reader user given no warning simply
    finds themselves in a window they did not ask for, with Back doing
    nothing.
 

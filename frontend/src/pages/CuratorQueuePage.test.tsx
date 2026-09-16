@@ -326,21 +326,30 @@ describe("what the page says it is", () => {
 })
 
 describe("how a row names the record it concerns", () => {
-    it("links a linkable type to its page, by public ref", async () => {
+    it("links a linkable type to its page, by public ref, in a new tab", async () => {
         meIs(admin)
         queueIs([task()])
         renderPage()
 
         const link = await screen.findByRole("link", {
-            name: "spc_vu7cuk4s37szxaudjpf355tqda",
+            name: /spc_vu7cuk4s37szxaudjpf355tqda/,
         })
         expect(link).toHaveAttribute("href", "/species/spc_vu7cuk4s37szxaudjpf355tqda")
+        // The queue holds a filter, an offset and a half-typed reason that
+        // no URL captures, so every link out of it opens in a new tab
+        // rather than navigating away from all three.
+        expect(link).toHaveAttribute("target", "_blank")
+        expect(link).toHaveAttribute("rel", "noopener noreferrer")
     })
 
     it("puts no internal row id anywhere in the table", async () => {
         meIs(admin)
         // Includes the row that cannot be named: that is where a row id is
         // most tempting as a fallback, and where #479 put one last time.
+        // Also includes a container-shaped row (#493): the sweep otherwise
+        // only ever exercises the pre-#493 shape, which is the exact
+        // seed-omission pattern that let #492's original complaint ship
+        // twice.
         queueIs([
             task(),
             otherTask(),
@@ -348,6 +357,14 @@ describe("how a row names the record it concerns", () => {
                 id: 43,
                 record_type: "applied_energy_correction",
                 record_public_ref: null,
+                record_id: 987654,
+            }),
+            task({
+                id: 44,
+                record_type: "kinetics",
+                record_public_ref: null,
+                container_type: "reaction_entry",
+                container_ref: "rxe_screenshot",
                 record_id: 987654,
             }),
         ])
@@ -362,7 +379,7 @@ describe("how a row names the record it concerns", () => {
         expect(markup).not.toContain("123456") // submission_id, also a row id
     })
 
-    it("shows the ref as plain text for a type with no page", async () => {
+    it("shows the ref as plain text for a type with no page, and no container either", async () => {
         meIs(admin)
         queueIs([task({ record_type: "thermo", record_public_ref: "thm_abc" })])
         renderPage()
@@ -371,14 +388,71 @@ describe("how a row names the record it concerns", () => {
         // A guessed link that 404s is worse than no link: a curator who
         // lands nowhere learns to stop clicking.
         expect(screen.queryByRole("link", { name: "thm_abc" })).not.toBeInTheDocument()
+        // The sentence itself, not just its absence of a link: "container"
+        // is this codebase's word for the resolver, not a chemist's word
+        // for anything, and it must not leak into user-facing copy.
+        expect(
+            await screen.findByText(
+                /no page for this record type, and nothing it is shown on either/i,
+            ),
+        ).toBeInTheDocument()
+        expect(screen.queryByText(/\bcontainer\b/i)).not.toBeInTheDocument()
     })
 
-    it("says so when the backend could not name the record", async () => {
+    it("says so when the backend could not name the record, without saying \"cannot be named\"", async () => {
+        // #488 shipped "cannot be named" for exactly this case and the
+        // owner called it rubbish; it must not reappear on this page.
         meIs(admin)
         queueIs([task({ record_type: "applied_energy_correction", record_public_ref: null })])
         renderPage()
 
-        expect(await screen.findByText(/cannot be named/i)).toBeInTheDocument()
+        expect(
+            await screen.findByText(/no reference for this record/i),
+        ).toBeInTheDocument()
+        expect(screen.queryByText(/cannot be named/i)).not.toBeInTheDocument()
+    })
+
+    it("opens the container when the record's own type has no page but its container does", async () => {
+        meIs(admin)
+        queueIs([
+            task({
+                record_type: "thermo",
+                record_public_ref: "thm_abc",
+                container_type: "species_entry",
+                container_ref: "spe_xyz",
+            }),
+        ])
+        renderPage()
+
+        // The record's own ref is still shown, distinguishable from the
+        // container it is opened through.
+        expect(await screen.findByText("thm_abc")).toBeInTheDocument()
+        const link = await screen.findByRole("link", { name: /spe_xyz/ })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_xyz")
+        expect(link).toHaveAttribute("target", "_blank")
+        // Same guarantee as the own-page link: `rel="noopener noreferrer"`
+        // stops the new tab from getting a handle back to this one. Unpinned
+        // here previously -- removing `rel` from the container link left
+        // every other assertion in this file passing.
+        expect(link).toHaveAttribute("rel", "noopener noreferrer")
+        expect(link).toHaveTextContent(/shown on species entry/i)
+    })
+
+    it("says a correction has no reference of its own, but still names its container", async () => {
+        meIs(admin)
+        queueIs([
+            task({
+                record_type: "applied_energy_correction",
+                record_public_ref: null,
+                container_type: "species_entry",
+                container_ref: "spe_xyz",
+            }),
+        ])
+        renderPage()
+
+        expect(await screen.findByText(/no reference of its own/i)).toBeInTheDocument()
+        const link = await screen.findByRole("link", { name: /spe_xyz/ })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_xyz")
     })
 
     it("carries severity and finding count, which is what the queue is scanned for", async () => {

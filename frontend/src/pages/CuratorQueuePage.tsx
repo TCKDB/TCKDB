@@ -10,7 +10,7 @@ import {
     resolveCuratorTask,
     startCuratorTaskReview,
 } from "../api/curatorTasksApi"
-import { recordRoute } from "../domain/recordRoute"
+import { recordTypeWords, resolveRecordLocation, type RecordLocation } from "../domain/recordRoute"
 import { useAuth } from "../hooks/useAuth"
 import {
     OPEN_STATES,
@@ -94,6 +94,103 @@ type LoadState =
 type ResolveDraft = { taskId: number; state: CuratorTaskState; note: string }
 
 const PAGE_LIMIT = 50
+
+/**
+ * Screen-reader-only warning that a link opens in a new tab.
+ *
+ * Every link out of this queue is `target="_blank"`: the queue holds a
+ * filter, an offset and a half-typed resolution note that no URL captures,
+ * so following a link in place would drop all three. A sighted user sees
+ * the new tab open; a screen reader user gets no such cue without this.
+ *
+ * Kept local rather than imported from `ReviewQueuePage.tsx`, which is not
+ * this task's to touch (PR #492 is rewriting that page concurrently) and
+ * does not export it. Small enough to duplicate rather than extract a
+ * shared component for one four-line function.
+ */
+function NewTabNote() {
+    return <span className="admin-visually-hidden"> (opens in a new tab)</span>
+}
+
+/**
+ * What a row shows in its Record column: the record, and where to see it.
+ *
+ * Four outcomes, kept apart -- see `resolveRecordLocation` in
+ * `domain/recordRoute.ts`. The wording here is this page's own, not
+ * `ReviewQueuePage.tsx`'s: that page still says "this record cannot be
+ * named" for the fourth outcome (PR #492 is removing it there), and the
+ * owner has already called that phrase rubbish once. It does not appear
+ * here.
+ */
+function RecordCell({ location }: { location: RecordLocation }) {
+    switch (location.kind) {
+        case "record":
+            return (
+                <Link
+                    to={location.href}
+                    className="data"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    {location.ref}
+                    <NewTabNote />
+                </Link>
+            )
+        case "container":
+            return (
+                <>
+                    {/* The record's own name first, when it has one, so the
+                        record stays distinguishable from the thing it is
+                        shown inside. */}
+                    {location.ref !== null ? (
+                        <span className="data">{location.ref}</span>
+                    ) : (
+                        // A chemist-legible fact rather than a verdict: some
+                        // tables (applied_energy_correction) simply carry no
+                        // reference column of their own. The comma keeps this
+                        // reading as a separate clause from "shown on ...".
+                        <>
+                            <span className="admin-absent">no reference of its own</span>,
+                        </>
+                    )}{" "}
+                    <Link
+                        to={location.href}
+                        className="review-container-link"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        shown on {recordTypeWords(location.containerType)}{" "}
+                        <span className="data">{location.containerRef}</span>
+                        <NewTabNote />
+                    </Link>
+                </>
+            )
+        case "no-page":
+            // Not a dead branch: a deferred-FK trick isn't the only way here.
+            // `listCuratorTasks` reads `record_public_ref` and
+            // `container_type`/`container_ref` from two separate grouped
+            // SELECTs in one request. Under READ COMMITTED, a record deleted
+            // between those two reads is named by the first (it still
+            // existed) and ownerless in the second (it no longer does) --
+            // ordinary concurrent deletion reaches this outcome with no
+            // constraint bypass required.
+            return (
+                <>
+                    <span className="data">{location.ref}</span>{" "}
+                    <span className="admin-absent">
+                        no page for this record type, and nothing it is shown on
+                        either
+                    </span>
+                </>
+            )
+        case "unnamed":
+            return (
+                <span className="admin-absent">
+                    the archive has no reference for this record
+                </span>
+            )
+    }
+}
 
 export default function CuratorQueuePage() {
     const { state } = useAuth()
@@ -357,24 +454,19 @@ export default function CuratorQueuePage() {
                             </thead>
                             <tbody>
                                 {load.tasks.map((task) => {
-                                    const href = recordRoute(task.record_type, task.record_public_ref)
+                                    const location = resolveRecordLocation(
+                                        task.record_type,
+                                        task.record_public_ref,
+                                        task.container_type,
+                                        task.container_ref,
+                                    )
                                     const rowBusy = busy.has(task.id)
                                     const severity = severityClass(task.highest_severity)
                                     return (
                                         <tr key={task.id}>
                                             <td>
                                                 <span className="admin-record-type">{task.record_type}</span>{" "}
-                                                {href !== null ? (
-                                                    <Link to={href} className="data">
-                                                        {task.record_public_ref}
-                                                    </Link>
-                                                ) : task.record_public_ref !== null ? (
-                                                    <span className="data">{task.record_public_ref}</span>
-                                                ) : (
-                                                    <span className="admin-absent">
-                                                        cannot be named
-                                                    </span>
-                                                )}
+                                                <RecordCell location={location} />
                                             </td>
                                             <td>
                                                 <span className={severity ?? undefined}>

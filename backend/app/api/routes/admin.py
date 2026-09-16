@@ -57,6 +57,11 @@ from app.services.machine_review import (
     start_curator_task_review,
 )
 from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.record_containers import (
+    RecordContainer,
+    resolve_record_container,
+    resolve_record_containers,
+)
 from app.services.record_refs import (
     resolve_record_public_ref,
     resolve_record_public_refs,
@@ -532,6 +537,18 @@ class AdminCuratorTaskResponse(BaseModel):
     under one name on one router -- which is how a UI ends up rendering a row
     id as a link. ``record_public_ref`` cannot be read either way, and stays
     correct whichever way that outlier is eventually reconciled.
+
+    ``container_type`` / ``container_ref`` are the same fields
+    ``RecordReviewRead`` carries and are resolved the same way, via
+    :func:`app.services.record_containers.resolve_record_containers`. Six of
+    the seventeen ``SubmissionRecordType`` members (``thermo``, ``statmech``,
+    ``kinetics``, ``transition_state``, ``network_solve``,
+    ``applied_energy_correction``) name a table with no page of its own; a
+    curator task against one of those used to render as inert text, exactly
+    the defect PR #488 fixed on the record-review queue. Both are ``null``
+    together, for the same four reasons documented on
+    :func:`~app.services.record_containers.resolve_record_containers` --
+    never a partial pair a client could not address.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -541,6 +558,8 @@ class AdminCuratorTaskResponse(BaseModel):
     record_type: SubmissionRecordType
     record_id: int
     record_public_ref: str | None = None
+    container_type: SubmissionRecordType | None = None
+    container_ref: str | None = None
     finding_fingerprint: str
     workflow_state: MachineReviewCuratorTaskState
     machine_review_status: MachineReviewStatus
@@ -606,11 +625,14 @@ class AdminCuratorTaskReopenRequest(BaseModel):
 def _to_curator_task_response(
     task: MachineReviewCuratorTask,
     record_public_ref: str | None,
+    container: RecordContainer | None,
 ) -> AdminCuratorTaskResponse:
-    """Pure mapper: the ref is supplied, never looked up here.
+    """Pure mapper: the ref and the container are supplied, never looked up here.
 
-    Keeping the lookup out means the list route can resolve a whole page in
-    one query per record type instead of one query per task.
+    Keeping the lookups out means the list route can resolve a whole page in
+    a handful of grouped queries instead of one (or several) per task.
+    ``container`` carries its type and ref as one value, so this mapper
+    cannot emit half a pair.
     """
     return AdminCuratorTaskResponse(
         id=task.id,
@@ -618,6 +640,8 @@ def _to_curator_task_response(
         record_type=task.record_type,
         record_id=task.record_id,
         record_public_ref=record_public_ref,
+        container_type=container.container_type if container else None,
+        container_ref=container.container_ref if container else None,
         finding_fingerprint=task.finding_fingerprint,
         workflow_state=task.workflow_state,
         machine_review_status=task.machine_review_status,
@@ -637,10 +661,13 @@ def _curator_task_response(
     session: Session,
     task: MachineReviewCuratorTask,
 ) -> AdminCuratorTaskResponse:
-    """The single-task form: resolve this one record's ref, then map."""
+    """The single-task form: resolve this one record's ref and container, then map."""
     return _to_curator_task_response(
         task,
         resolve_record_public_ref(
+            session, record_type=task.record_type, record_id=task.record_id
+        ),
+        resolve_record_container(
             session, record_type=task.record_type, record_id=task.record_id
         ),
     )
@@ -710,14 +737,18 @@ def list_curator_tasks(
         .limit(limit)
     )
     tasks = session.scalars(stmt).all()
-    # One query per record type present on the page, not one per task.
-    public_refs = resolve_record_public_refs(
-        session, ((t.record_type, t.record_id) for t in tasks)
-    )
+    # Bulk, grouped resolves -- one query per record type present on the page
+    # for the refs, plus one per distinct record type and one per distinct
+    # container type for the containers. Never one query per task.
+    keys = [(t.record_type, t.record_id) for t in tasks]
+    public_refs = resolve_record_public_refs(session, keys)
+    containers = resolve_record_containers(session, keys)
     return PaginatedResponse(
         items=[
             _to_curator_task_response(
-                t, public_refs.get((t.record_type, t.record_id))
+                t,
+                public_refs.get((t.record_type, t.record_id)),
+                containers.get((t.record_type, t.record_id)),
             )
             for t in tasks
         ],

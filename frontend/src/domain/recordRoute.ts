@@ -111,6 +111,15 @@ export const LINKABLE_RECORD_TYPES: readonly string[] = Object.keys(
  * has no page, and nothing else could be opened either. It used to read "no
  * page for this record type yet", which named the missing page as the sole
  * reason and would have been actively misleading in that case.
+ *
+ * **One more gap the `unnamed` bullet above does not cover.** "The row is
+ * gone" does not always land in `unnamed`. The list route runs
+ * `resolve_record_public_refs` and `resolve_record_containers` as two
+ * separate grouped SELECTs in one request; under READ COMMITTED, a record
+ * deleted between them is named by the first read and ownerless in the
+ * second, landing in `no-page` instead -- an ordinary concurrent delete,
+ * not the deferred-constraint case above. See the `no-page` case in
+ * `CuratorQueuePage.tsx`'s `RecordCell`.
  */
 export type RecordLocation =
     /** The record's own page. */
