@@ -857,6 +857,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ),
         ("POST", "/api/v1/curation/scientific-record-supersessions"),
         ("GET", "/api/v1/record-reviews"),
+        ("GET", "/api/v1/record-reviews/queue"),
         ("GET", "/api/v1/record-reviews/{record_type}/{record_id}"),
         ("PATCH", "/api/v1/record-reviews/{record_type}/{record_id}"),
         ("GET", "/api/v1/species-entries/{species_entry_id}/reviews"),

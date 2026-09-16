@@ -37,8 +37,39 @@ export function Formula({ value }: { value: string }) {
  * (no SMILES to lead with) or nothing at all are the only other shapes --
  * never a bare formula standing in for a species that could share it with
  * something structurally different.
+ *
+ * `formulaOnly` (default `false`, so every existing caller is byte-for-byte
+ * unaffected) opts OUT of the SMILES-leads rule above, for exactly one
+ * caller: the record review queue's reaction_entry subject heading
+ * (`ReviewQueuePage.tsx`), which sits directly under species subject
+ * headings that already show formula alone -- review #492 caught
+ * `<ReactionEquation>`'s default rendering ("[CH3] (CH3) + [H] (H) ⇌ C
+ * (CH4)") as exactly the notation-switch and per-participant duplication
+ * that page's own species blocks do not have. This is a narrower claim
+ * than the isomerisation ruling above, not a reversal of it: the review
+ * queue is a triage/summary surface with a click-through ref already
+ * printed beside every subject (unlike the reaction page itself, whose
+ * whole job is to state a reaction precisely), and it already accepts
+ * formula-only species identification one level up for exactly that
+ * reason. `formula` still wins only when present; a species with no
+ * computed formula falls back to its SMILES rather than rendering
+ * nothing, the same "never blank when there is real data" rule the
+ * non-`formulaOnly` branch already follows.
  */
-export function SpeciesFace({ smiles, formula }: { smiles?: string | null; formula?: string | null }) {
+export function SpeciesFace({
+    smiles,
+    formula,
+    formulaOnly = false,
+}: {
+    smiles?: string | null
+    formula?: string | null
+    formulaOnly?: boolean
+}) {
+    if (formulaOnly) {
+        if (formula) return <Formula value={formula} />
+        if (smiles) return <code className="data species-face-smiles">{smiles}</code>
+        return null
+    }
     if (smiles) {
         return (
             <>

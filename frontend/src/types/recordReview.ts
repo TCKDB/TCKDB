@@ -160,3 +160,84 @@ export function statusClass(status: string): string | null {
         ? `review-status-${status.replace(/_/g, "-")}`
         : null
 }
+
+/**
+ * The subject-grouped queue (task #269): `GET /api/v1/record-reviews/queue`.
+ *
+ * Source of truth: `backend/app/schemas/entities/record_review.py`'s
+ * `ReviewQueuePageRead`/`ReviewQueueSubjectRead`/
+ * `ReviewQueueSubjectChemistry`, built by
+ * `backend/app/services/review_queue.py`.
+ *
+ * `subject_type`/`subject_ref` are null together only for the orphan case
+ * (a review row that names nothing -- see that module's `SubjectKey`
+ * docstring). Every field of `chemistry` is independently optional: a
+ * subject type with no such axis (e.g. a conformer group has no formula)
+ * and a value that was genuinely never recorded (a transition-state
+ * entry's `unmapped_smiles`) both read as `null` here, and both are
+ * honest, not failures.
+ */
+export const ReviewQueueSubjectChemistrySchema = z.object({
+    formula: z.string().nullable().default(null),
+    multiplicity: z.number().int().nullable().default(null),
+    species_entry_kind: z.string().nullable().default(null),
+    electronic_state_kind: z.string().nullable().default(null),
+    electronic_state_label: z.string().nullable().default(null),
+    term_symbol: z.string().nullable().default(null),
+    stereo_label: z.string().nullable().default(null),
+    isotope_key: z.string().nullable().default(null),
+    // The transition-state entry's OWN raw SMILES, kept separate from
+    // `formula`: the two can disagree (a reaction-shaped string the
+    // single-molecule formula parser rejects), and a reviewer needs to
+    // tell "never recorded" apart from "recorded, but no formula could
+    // be derived from it" -- see `ReviewQueuePage.tsx`'s TS heading.
+    unmapped_smiles: z.string().nullable().default(null),
+})
+export type ReviewQueueSubjectChemistry = z.infer<
+    typeof ReviewQueueSubjectChemistrySchema
+>
+
+/**
+ * A reaction_entry subject's own chemistry: the equation itself, not a
+ * species-shaped fact. Field names match `domain/reactionEquation.ts`'s
+ * `EquationParticipantInput` deliberately, so the existing
+ * `<ReactionEquation>` component (the one the reaction entry page already
+ * renders) can draw this directly -- no second reaction-equation
+ * vocabulary invented for this page.
+ */
+export const ReviewQueueReactionParticipantSchema = z.object({
+    species_entry_ref: z.string(),
+    species_entry_label: z.string().nullable().default(null),
+    smiles: z.string(),
+    formula: z.string().nullable().default(null),
+    stoichiometry: z.number().int(),
+    participant_index: z.number().int(),
+})
+export const ReviewQueueReactionEquationSchema = z.object({
+    reversible: z.boolean(),
+    reactants: z.array(ReviewQueueReactionParticipantSchema),
+    products: z.array(ReviewQueueReactionParticipantSchema),
+})
+export type ReviewQueueReactionEquation = z.infer<
+    typeof ReviewQueueReactionEquationSchema
+>
+
+export const ReviewQueueSubjectSchema = z.object({
+    subject_type: z.string().nullable().default(null),
+    subject_ref: z.string().nullable().default(null),
+    chemistry: ReviewQueueSubjectChemistrySchema,
+    reaction: ReviewQueueReactionEquationSchema.nullable().default(null),
+    records: z.array(RecordReviewSchema),
+})
+export type ReviewQueueSubject = z.infer<typeof ReviewQueueSubjectSchema>
+
+export const ReviewQueuePageSchema = z.object({
+    subjects: z.array(ReviewQueueSubjectSchema),
+    // Computed over every row matching the filter, not just this page --
+    // see `list_review_queue`'s docstring. Honest counts, never estimates.
+    subject_total: z.number().int(),
+    record_total: z.number().int(),
+    offset: z.number().int(),
+    limit: z.number().int(),
+})
+export type ReviewQueuePage = z.infer<typeof ReviewQueuePageSchema>

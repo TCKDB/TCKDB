@@ -39,9 +39,11 @@ from app.db.models.submission import (
 from app.db.models.thermo import Thermo
 from tests.services.scientific_read._factories import (
     make_applied_energy_correction,
+    make_calculation,
     make_energy_correction_scheme,
     make_species,
     make_species_entry,
+    make_statmech,
     make_thermo_scalar,
 )
 
@@ -810,3 +812,277 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
             f"the page cost {two_rows} queries for 2 rows and {ten_rows} for "
             "10 -- the ref or container resolve is running per row"
         )
+
+
+class TestReviewQueueSubjectsApi:
+    """``GET /api/v1/record-reviews/queue`` (task #269).
+
+    The flat ``GET /api/v1/record-reviews`` list is unchanged and still
+    tested above; this is the new subject-grouped read the redesigned
+    queue page consumes. See ``app/services/review_queue.py`` for the
+    grouping rule these assertions pin at the wire.
+    """
+
+    def test_two_corrections_on_one_species_render_as_one_subject_with_a_count(
+        self, client, db_session
+    ):
+        entry = make_species_entry(db_session, make_species(db_session))
+        atom = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_atom"),
+        )
+        bond = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_bond"),
+        )
+        db_session.add_all(
+            [
+                RecordReview(
+                    record_type=SubmissionRecordType.applied_energy_correction,
+                    record_id=atom.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.applied_energy_correction,
+                    record_id=bond.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+
+        matching = [
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        ]
+        assert len(matching) == 1, "one species rendered as more than one subject"
+        assert len(matching[0]["records"]) == 2
+        record_types = {r["record_type"] for r in matching[0]["records"]}
+        assert record_types == {"applied_energy_correction"}
+        # Each nested record still carries everything the per-record Review
+        # action needs -- the redesign is presentation-only.
+        for record in matching[0]["records"]:
+            assert record["record_id"] in {atom.id, bond.id}
+            assert record["status"] == "not_reviewed"
+
+    def test_species_entry_subject_carries_formula_and_never_says_cannot_be_named(
+        self, client, db_session
+    ):
+        species = make_species(db_session, smiles="O", multiplicity=1)
+        entry = make_species_entry(db_session, species)
+        correction = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_formula"),
+        )
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.applied_energy_correction,
+                record_id=correction.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        subject = next(
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        )
+        assert subject["chemistry"]["formula"] == "H2O"
+        # NOT `assert "cannot be named" not in json.dumps(body)` -- review
+        # of #492 caught that assertion as vacuous: that phrase was never
+        # emitted by any backend response (it is frontend copy, deleted
+        # from `ReviewQueuePage.tsx` in the same PR), so the assertion
+        # passed against main, unmodified, before this endpoint existed.
+        # An assertion that cannot fail asserts nothing; the formula check
+        # above is the real content of this test.
+
+    def test_the_header_totals_are_honest_counts_not_estimates(
+        self, client, db_session
+    ):
+        """`subject_total`/`record_total` are the server's OWN count over the
+        whole filtered backlog -- not derived from what is shown on this page.
+
+        Review of #492 caught the previous version of this test as unable to
+        fail: it only asserted ``total >= len(page)``, which
+        ``total = len(page)`` (a route that quietly forgot the whole-backlog
+        count and fell back to counting what it happened to return) also
+        satisfies. This version seeds MORE subjects and records than the
+        page's `limit` returns and asserts the totals EQUAL the true seeded
+        counts -- a route computing `len(subjects_on_this_page)` instead
+        would report 1, not 3.
+        """
+        first_entry = make_species_entry(db_session, make_species(db_session))
+        first_thermo = make_thermo_scalar(
+            db_session, species_entry=first_entry, h298_kj_mol=1.0
+        )
+        second_entry = make_species_entry(db_session, make_species(db_session))
+        second_thermo = make_thermo_scalar(
+            db_session, species_entry=second_entry, h298_kj_mol=2.0
+        )
+        second_statmech = make_statmech(db_session, species_entry=second_entry)
+        third_entry = make_species_entry(db_session, make_species(db_session))
+        third_thermo = make_thermo_scalar(
+            db_session, species_entry=third_entry, h298_kj_mol=3.0
+        )
+        db_session.add_all(
+            [
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=first_thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=second_thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.statmech,
+                    record_id=second_statmech.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=third_thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        # limit=1: the page shows exactly ONE subject and its records, but
+        # the totals must still describe the whole 3-subject, 4-record set.
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 1},
+        )
+        body = resp.json()
+        assert len(body["subjects"]) == 1
+        assert body["subject_total"] == 3
+        assert body["record_total"] == 4
+
+    def test_paging_counts_subjects_never_splits_one(self, client, db_session):
+        entry = make_species_entry(db_session, make_species(db_session))
+        thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=5.0)
+        statmech = make_statmech(db_session, species_entry=entry)
+        db_session.add_all(
+            [
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.statmech,
+                    record_id=statmech.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 1},
+        )
+        body = resp.json()
+        assert len(body["subjects"]) == 1
+        matching = next(
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        )
+        assert len(matching["records"]) == 2, (
+            "a one-subject page dropped one of that subject's own records"
+        )
+
+    def test_a_nested_records_own_ref_and_container_reach_the_wire(
+        self, client, db_session
+    ):
+        """Review of #492, mutation 2: a build that served ``refs={}``/
+        ``containers={}`` for the page's own rows -- so every nested record's
+        own ``record_public_ref``/``container_ref`` silently went null --
+        passed all 15 previously-shipped tests, because none of them read
+        those two fields off a ``/queue`` record. A calculation nested under
+        a species_entry subject is exactly the case that build broke: it has
+        its own page and its own ref (``calc_...``), and losing it falls
+        back to the "(unnamed)" wording #488 exists to prevent.
+        """
+        entry = make_species_entry(db_session, make_species(db_session))
+        calc = make_calculation(db_session, species_entry_id=entry.id)
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.calculation,
+                record_id=calc.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        body = resp.json()
+        subject = next(
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        )
+        record = next(
+            r for r in subject["records"] if r["record_type"] == "calculation"
+        )
+        assert record["record_public_ref"] == calc.public_ref
+        assert record["container_type"] == "species_entry"
+        assert record["container_ref"] == entry.public_ref
+
+    def test_offset_actually_advances_the_page(self, client, db_session):
+        """Review of #492, mutation 1: ``page_keys = list(groups.keys())
+        [:limit]`` (offset silently ignored) passed all 15 previously-shipped
+        tests, because every one of them requested offset 0. Page 2 would
+        have silently repeated page 1 while the header claimed "subjects
+        51-100". Three subjects, limit=1: offset 0, 1 and 2 must each show a
+        DIFFERENT subject, in the server's own newest-first order.
+        """
+        refs_in_order = []
+        for i in range(3):
+            entry = make_species_entry(db_session, make_species(db_session))
+            thermo = make_thermo_scalar(
+                db_session, species_entry=entry, h298_kj_mol=float(i)
+            )
+            db_session.add(
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                )
+            )
+            db_session.flush()
+            refs_in_order.append(entry.public_ref)
+        # Newest-first: the last one seeded is first on the page.
+        expected = list(reversed(refs_in_order))
+
+        seen = []
+        for offset in range(3):
+            resp = client.get(
+                "/api/v1/record-reviews/queue",
+                params={"status": "not_reviewed", "limit": 1, "skip": offset},
+            )
+            body = resp.json()
+            assert len(body["subjects"]) == 1
+            seen.append(body["subjects"][0]["subject_ref"])
+
+        assert seen == expected, (
+            f"offset did not advance the page: got {seen}, expected {expected}"
+        )
+        assert len(set(seen)) == 3, "two different offsets returned the same subject"

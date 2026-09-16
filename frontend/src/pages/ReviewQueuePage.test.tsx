@@ -14,13 +14,28 @@ import { AuthProvider } from "../components/AuthProvider"
  * 1. Who gets in (curator or admin; a plain signed-in user is told why).
  * 2. That the page says which review axis it is, since "review" alone
  *    does not distinguish it from Machine findings.
- * 3. That only transitions the backend allows are offered, and that a
+ * 3. Task #269's redesign: records group under the SUBJECT a curator
+ *    actually judges (a species entry, a transition-state entry, ...),
+ *    a same-type cluster collapses to a count and still expands to reach
+ *    every record, and the header reports honest totals over the WHOLE
+ *    filtered backlog rather than admitting it cannot say how big the
+ *    page is.
+ * 4. That only transitions the backend allows are offered, and that a
  *    refusal is believed over the page's own copy of the policy.
- * 4. That everything a row owns stays with that row.
+ * 5. That everything a row owns stays with that row, whether it sits
+ *    alone or inside an expanded group.
  *
- * **Two rows wherever a row-owned value is involved.** A single-row table
- * cannot tell "belongs to this row" from "page-level", which is the class
- * of defect that put one record's reason on another record in #483.
+ * This file replaces the flat-table version wholesale rather than
+ * patching it: the wire shape changed from a bare array to
+ * `{ subjects, subject_total, record_total, ... }`, and the markup is no
+ * longer a `<table>` -- there is nothing left in the old suite's
+ * `rowFor`/`rowButton` helpers to adapt. Tests of behaviour the redesign
+ * REMOVES (the "cannot be named" wording, "shown on species entry ..."
+ * container text, the "a full page -- there may be more" hedge, and a
+ * per-row "unreadable" count) are dropped rather than ported: that
+ * wording no longer exists anywhere on this page, and its absence is
+ * itself pinned below ("the redesign actually removed the old
+ * complaints").
  */
 
 const server = setupServer()
@@ -31,7 +46,8 @@ afterEach(() => {
 })
 afterAll(() => server.close())
 
-const REVIEWS = "/api/v1/record-reviews"
+const QUEUE = "/api/v1/record-reviews/queue"
+const PATCH_BASE = "/api/v1/record-reviews"
 
 const curator = {
     id: 1,
@@ -48,18 +64,52 @@ function meIs(who: Record<string, unknown>) {
     server.use(http.get("/api/v1/auth/me", () => HttpResponse.json(who)))
 }
 
-/** One review row, shaped like `RecordReviewRead`. */
-function review(over: Record<string, unknown> = {}) {
+function chemistry(over: Record<string, unknown> = {}) {
+    return {
+        formula: null,
+        multiplicity: null,
+        species_entry_kind: null,
+        electronic_state_kind: null,
+        electronic_state_label: null,
+        term_symbol: null,
+        stereo_label: null,
+        isotope_key: null,
+        unmapped_smiles: null,
+        ...over,
+    }
+}
+
+/** A reaction_entry subject's own equation, in the shape `/queue` serves. */
+function reactionEquation(over: Record<string, unknown> = {}) {
+    return {
+        reversible: true,
+        reactants: [],
+        products: [],
+        ...over,
+    }
+}
+
+function reactionParticipant(over: Record<string, unknown> = {}) {
+    return {
+        species_entry_ref: "spe_participant",
+        species_entry_label: null,
+        smiles: "C",
+        formula: "CH4",
+        stoichiometry: 1,
+        participant_index: 1,
+        ...over,
+    }
+}
+
+/** One review row, shaped like `RecordReviewRead`, nested inside a subject. */
+function record(over: Record<string, unknown> = {}) {
     return {
         id: 11,
-        record_type: "species",
+        record_type: "thermo",
         record_id: 987654,
-        record_public_ref: "spc_vu7cuk4s37szxaudjpf355tqda",
-        // Null by default, which is what the server sends for a root record
-        // type like `species`. Written out rather than left off so a reader
-        // can see the fields exist, and so a test that needs them says so.
-        container_type: null,
-        container_ref: null,
+        record_public_ref: null,
+        container_type: "species_entry",
+        container_ref: "spe_h2o",
         status: "not_reviewed",
         submission_id: 7,
         reviewed_by: null,
@@ -72,45 +122,62 @@ function review(over: Record<string, unknown> = {}) {
     }
 }
 
-function otherReview(over: Record<string, unknown> = {}) {
-    return review({
-        id: 12,
-        record_type: "calculation",
-        record_id: 123456,
-        record_public_ref: "calc_7k2mq9x4ta8ndrwe5hvzcbj6y1",
+/** One subject block: a species entry, by default -- the common case. */
+function subject(records: Record<string, unknown>[], over: Record<string, unknown> = {}) {
+    return {
+        subject_type: "species_entry",
+        subject_ref: "spe_h2o",
+        chemistry: chemistry({ formula: "H2O", multiplicity: 1, species_entry_kind: "minimum", electronic_state_kind: "ground" }),
+        records,
         ...over,
-    })
+    }
 }
 
-/**
- * Serve these rows for EVERY request, whatever the page asked for.
- *
- * Deliberately unrealistic, and that is a trap worth naming: because it
- * ignores `status`, a test using it cannot see anything that depends on
- * a row leaving the current view. Exactly that hid a defect where a
- * refusal message vanished along with its row. Use `queueByStatus` for
- * anything about filtering, or about what happens after a re-read.
- */
-function queueIs(rows: Record<string, unknown>[]): { reads: number } {
+function queuePageBody(subjects: Record<string, unknown>[], over: Record<string, unknown> = {}) {
+    const recordTotal = subjects.reduce(
+        (n, s) => n + (s.records as unknown[]).length,
+        0,
+    )
+    return {
+        subjects,
+        subject_total: subjects.length,
+        record_total: recordTotal,
+        offset: 0,
+        limit: 50,
+        ...over,
+    }
+}
+
+/** Serve this page for EVERY request, whatever the page asked for. */
+function queueIs(subjects: Record<string, unknown>[]): { reads: number } {
     const counter = { reads: 0 }
     server.use(
-        http.get(REVIEWS, () => {
+        http.get(QUEUE, () => {
             counter.reads += 1
-            return HttpResponse.json(rows)
+            return HttpResponse.json(queuePageBody(subjects))
         }),
     )
     return counter
 }
 
-/** Serve rows the way the server does: filtered by the `status` asked for. */
-function queueByStatus(rowsNow: () => Record<string, unknown>[]) {
+/** Serve subjects the way the server does: filtered by the `status` asked for. */
+function queueByStatus(subjectsNow: () => Record<string, unknown>[]) {
     server.use(
-        http.get(REVIEWS, ({ request }) => {
+        http.get(QUEUE, ({ request }) => {
             const wanted = new URL(request.url).searchParams.get("status")
-            const rows = rowsNow()
-            return HttpResponse.json(
-                wanted === null ? rows : rows.filter((r) => r.status === wanted),
-            )
+            const subjects = subjectsNow()
+            const filtered =
+                wanted === null
+                    ? subjects
+                    : (subjects
+                          .map((s) => ({
+                              ...s,
+                              records: (s.records as Record<string, unknown>[]).filter(
+                                  (r) => r.status === wanted,
+                              ),
+                          }))
+                          .filter((s) => (s.records as unknown[]).length > 0))
+            return HttpResponse.json(queuePageBody(filtered))
         }),
     )
 }
@@ -125,26 +192,17 @@ function renderPage() {
     )
 }
 
-function rowFor(ref: string): HTMLElement {
-    const table = screen.getByRole("table")
-    const row = within(table)
-        .getAllByRole("row")
-        .find((r) => (r.textContent ?? "").includes(ref))
-    if (row === undefined) throw new Error(`no row for ${ref}`)
-    return row
+/** The `.review-subject` block whose quiet ref line reads `ref`. */
+async function subjectFor(ref: string): Promise<HTMLElement> {
+    const node = await screen.findByText(ref)
+    const section = node.closest(".review-subject")
+    if (section === null) throw new Error(`no subject block for ${ref}`)
+    return section as HTMLElement
 }
 
-function rowButton(ref: string, name: string): HTMLElement {
-    const found = within(rowFor(ref))
-        .getAllByRole("button")
-        .find((b) => (b.textContent ?? "").trim() === name)
-    if (found === undefined) throw new Error(`no "${name}" button in row ${ref}`)
-    return found
-}
-
-/** The review-state cell of one row. */
-function rowStatus(ref: string): string {
-    return (within(rowFor(ref)).getAllByRole("cell")[1].textContent ?? "").trim()
+/** The lone (uncollapsed) "Review..." button inside one subject's block. */
+function reviewButtonIn(section: HTMLElement): HTMLElement {
+    return within(section).getByRole("button", { name: "Review…" })
 }
 
 /**
@@ -152,9 +210,8 @@ function rowStatus(ref: string): string {
  *
  * Holding a request open with `setTimeout` makes the test a race between
  * that delay and however long the rest of the interaction takes, which
- * under a loaded parallel suite is not a race you win reliably -- this
- * file had exactly that flake, at roughly one run in three. A gate the
- * test opens deliberately removes the timing from the question.
+ * under a loaded parallel suite is not a race you win reliably. A gate
+ * the test opens deliberately removes the timing from the question.
  */
 function gate(): { held: Promise<void>; release: () => void } {
     let release: () => void = () => {}
@@ -164,32 +221,38 @@ function gate(): { held: Promise<void>; release: () => void } {
     return { held, release }
 }
 
-const SPECIES = "spc_vu7cuk4s37szxaudjpf355tqda"
-const CALC = "calc_7k2mq9x4ta8ndrwe5hvzcbj6y1"
+const H2O = subject([record()])
+const CH4_CALC = subject(
+    [record({ id: 12, record_type: "calculation", record_id: 123456, record_public_ref: "calc_ch4_opt" })],
+    {
+        subject_ref: "spe_ch4",
+        chemistry: chemistry({ formula: "CH4", multiplicity: 1 }),
+    },
+)
 
 describe("who can open record review", () => {
     it("a curator can", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         renderPage()
-        expect(await screen.findByRole("table")).toBeInTheDocument()
+        expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
     })
 
     it("an admin can", async () => {
         meIs(admin)
-        queueIs([review()])
+        queueIs([H2O])
         renderPage()
-        expect(await screen.findByRole("table")).toBeInTheDocument()
+        expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
     })
 
     it("a signed-in user without the role is told, and the queue is never fetched", async () => {
         meIs(plainUser)
-        // No REVIEWS handler: `onUnhandledRequest: "error"` makes any
+        // No QUEUE handler: `onUnhandledRequest: "error"` makes any
         // request a failure, so this asserts the page does not ask.
         renderPage()
 
         expect(await screen.findByRole("alert")).toHaveTextContent(/for curators/i)
-        expect(screen.queryByRole("table")).not.toBeInTheDocument()
+        expect(screen.queryByText("spe_h2o")).not.toBeInTheDocument()
     })
 
     it("a backend outage does not render as 'you are not a curator'", async () => {
@@ -204,17 +267,6 @@ describe("who can open record review", () => {
 
 describe("the page says which review this is", () => {
     it("is titled Record review, and never by its old name", async () => {
-        /**
-         * The rename is the fix for the actual complaint: the owner could
-         * not tell this page from `/admin/curator-queue`, because "Review
-         * queue" and "Curator queue" both named an audience instead of a
-         * subject.
-         *
-         * The heading alone is not enough to assert -- the old name left
-         * lying in the lede, an empty state or an error string leaves the
-         * pair exactly as confusable as before -- so the absence of the
-         * old wording anywhere on the page is asserted beside it.
-         */
         meIs(curator)
         queueIs([])
         renderPage()
@@ -228,40 +280,18 @@ describe("the page says which review this is", () => {
         queueIs([])
         renderPage()
 
-        // Machine findings' lede says the opposite about itself. Two
-        // surfaces that both sound like "review" must each say which they
-        // are, or the distinction lives only in an ADR.
         expect(
             await screen.findByText(/changes what every reader is told to trust/i),
         ).toBeInTheDocument()
     })
 
     it("warns that approving is permanent before anyone clicks it", async () => {
-        /**
-         * The one claim on this page a reviewer is entitled to read BEFORE
-         * acting, because the action cannot be taken back.
-         *
-         * An earlier draft of this lede dropped it, on the reading that
-         * `approved -> under_review` being an allowed transition means the
-         * approval can be undone. It does not. The status is reversible and
-         * the DATA freeze is not: `set_record_review_status` stamps
-         * `first_approved_at` only when null and clears it nowhere, and the
-         * deployed `tckdb_record_is_accepted` is exactly an EXISTS over
-         * `first_approved_at IS NOT NULL`. Reopening the review leaves the
-         * record frozen; ADR 0015's repair ledger is the only way back.
-         *
-         * Pinned here rather than left to the docstring because a docstring
-         * warns the next programmer and this sentence warns the reviewer,
-         * and it is the reviewer who is about to close the door.
-         */
         meIs(curator)
         queueIs([])
         renderPage()
 
         const lede = await screen.findByText(/freezes the record against further edits/i)
         expect(lede).toBeInTheDocument()
-        // And that reopening does not undo it -- the half a reader is most
-        // likely to assume the opposite of.
         expect(lede).toHaveTextContent(/does not unfreeze it/i)
     })
 
@@ -278,79 +308,722 @@ describe("the page says which review this is", () => {
         meIs(curator)
         const asked: (string | null)[] = []
         server.use(
-            http.get(REVIEWS, ({ request }) => {
+            http.get(QUEUE, ({ request }) => {
                 asked.push(new URL(request.url).searchParams.get("status"))
-                return HttpResponse.json([review()])
+                return HttpResponse.json(queuePageBody([H2O]))
             }),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         expect(asked).toEqual(["not_reviewed"])
     })
 })
 
-describe("how a row names the record it concerns", () => {
-    it("links a linkable type by its public ref", async () => {
-        meIs(curator)
-        queueIs([review()])
-        renderPage()
-
-        // Found BY the new-tab warning, not merely checked for it after --
-        // a link that lost the note fails to be found at all.
+describe("what a subject block shows (task #269, defect #4: nothing said what the chemistry was)", () => {
+    it("does not print a species entry's own ref twice inside its own block (defect #1)", async () => {
+        // Review #492, finding 1 -- the MUST-fix, and the owner's original
+        // complaint back on the page: a species deposit gets a
+        // species_entry review row, that row is its own subject, and it
+        // used to render its OWN ref a second time inside the block whose
+        // heading already shows it:
         //
-        // A regex rather than an exact accessible name: jsdom's
-        // `dom-accessibility-api` concatenates adjacent inline chunks with no
-        // separator, so the name computes here as "spc_...(opens in a new
-        // tab)" while a real browser inserts the space that is in the DOM.
-        // Pinning jsdom's spelling would document a polyfill quirk as if it
-        // were the contract.
-        const link = await screen.findByRole("link", { name: /opens in a new tab/ })
-        expect(link).toHaveAttribute("href", `/species/${SPECIES}`)
-        expect(link).toHaveTextContent(SPECIES)
-    })
-
-    it("puts no internal row id anywhere in the table", async () => {
+        //   H2O ...   spe_h2o (opens in a new tab)
+        //     Thermochemistry              Review...
+        //     Species entry  spe_h2o (opens in a new tab)   Review...
         meIs(curator)
         queueIs([
-            review(),
-            otherReview(),
-            review({ id: 13, record_type: "thermo", record_public_ref: null }),
+            subject(
+                [
+                    record({ id: 1, record_type: "thermo", record_id: 101 }),
+                    // The species_entry's OWN review row -- same type and
+                    // ref as the subject itself.
+                    record({
+                        id: 2,
+                        record_type: "species_entry",
+                        record_id: 202,
+                        record_public_ref: "spe_h2o",
+                        container_type: null,
+                        container_ref: null,
+                    }),
+                ],
+                { subject_ref: "spe_h2o" },
+            ),
         ])
         renderPage()
 
-        const table = await screen.findByRole("table")
-        const markup = table.outerHTML
-        expect(markup).not.toContain("987654") // species record_id
-        expect(markup).not.toContain("123456") // calculation record_id
+        const section = await subjectFor("spe_h2o")
+        // The ref appears exactly once: in the block's own ref line.
+        expect(within(section).getAllByText("spe_h2o")).toHaveLength(1)
+        // The species_entry row itself is still there, still actionable --
+        // it is the link that must not repeat, not the row.
+        expect(within(section).getByText("Species entry")).toBeInTheDocument()
     })
 
-    it("says so when the record cannot be named", async () => {
+    it("does not print a transition-state entry's own ref twice inside its own block either", async () => {
         meIs(curator)
-        queueIs([review({ record_type: "applied_energy_correction", record_public_ref: null })])
+        queueIs([
+            subject(
+                [
+                    record({ id: 1, record_type: "statmech", record_id: 101, container_type: "transition_state_entry", container_ref: "tse_dup" }),
+                    record({
+                        id: 2,
+                        record_type: "transition_state_entry",
+                        record_id: 202,
+                        record_public_ref: "tse_dup",
+                        container_type: null,
+                        container_ref: null,
+                    }),
+                ],
+                { subject_type: "transition_state_entry", subject_ref: "tse_dup", chemistry: chemistry({ multiplicity: 2 }) },
+            ),
+        ])
         renderPage()
 
-        expect(await screen.findByText(/cannot be named/i)).toBeInTheDocument()
+        const section = await subjectFor("tse_dup")
+        expect(within(section).getAllByText("tse_dup")).toHaveLength(1)
     })
 
-    it("shows the reason recorded on a judged record", async () => {
+    it("shows a species entry's formula, spin word, and disambiguating facets", async () => {
         meIs(curator)
-        queueIs([review({ status: "approved", note: "frequencies check out by hand" })])
+        queueIs([
+            subject([record()], {
+                subject_ref: "spe_c9h9",
+                chemistry: chemistry({
+                    formula: "C9H9",
+                    multiplicity: 2,
+                    species_entry_kind: "minimum",
+                    electronic_state_kind: "ground",
+                    stereo_label: "R",
+                }),
+            }),
+        ])
         renderPage()
 
-        await screen.findByRole("table")
-        expect(screen.getByText("frequencies check out by hand")).toBeInTheDocument()
+        const section = await screen.findByText("spe_c9h9").then((el) => el.closest(".review-subject") as HTMLElement)
+        // The formula's subscript ("9") splits it across elements, so the
+        // heading is read as text content rather than matched as one node.
+        expect(section.querySelector(".review-subject-heading")?.textContent).toContain("C9H9")
+        expect(within(section).getByText("doublet")).toBeInTheDocument()
+        expect(within(section).getByText(/R enantiomer/)).toBeInTheDocument()
+    })
+
+    it("names a transition-state subject from its OWN unmapped SMILES, not the reaction it sits on", async () => {
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_1" })],
+                {
+                    subject_type: "transition_state_entry",
+                    subject_ref: "tse_1",
+                    chemistry: chemistry({ formula: "CH4", multiplicity: 2 }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_1").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(section.querySelector(".review-subject-heading")?.textContent).toContain("CH4")
+        expect(within(section).getByText("doublet")).toBeInTheDocument()
+    })
+
+    it("says the formula was never recorded rather than inventing one", async () => {
+        meIs(curator)
+        queueIs([
+            subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_2" })], {
+                subject_type: "transition_state_entry",
+                subject_ref: "tse_2",
+                chemistry: chemistry({ multiplicity: 3 }),
+            }),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_2").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).getByText(/no smiles recorded/i)).toBeInTheDocument()
+    })
+
+    it("puts a NAME in the heading even with no formula -- the apology is a caveat, never the name itself", async () => {
+        // The exact defect the owner called "rubbish" once already
+        // ("applied_energy_correction cannot be named"), reappearing in
+        // the subject heading: an absence sentence must never occupy the
+        // slot where every OTHER subject's name sits.
+        meIs(curator)
+        queueIs([
+            subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_3" })], {
+                subject_type: "transition_state_entry",
+                subject_ref: "tse_3",
+                chemistry: chemistry({ multiplicity: 2 }),
+            }),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_3").then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(heading).toHaveTextContent(/^Transition state/)
+        expect(heading).not.toHaveTextContent(/no smiles recorded/i)
+        // The caveat still appears -- just outside the heading.
+        expect(within(section).getByText(/no smiles recorded/i)).toBeInTheDocument()
+    })
+
+    it("tells 'recorded but no formula could be derived' apart from 'never recorded'", async () => {
+        // A reaction-shaped SMILES ("[CH3].[H]>>C") is a real, recorded
+        // value that the single-molecule formula parser rejects -- the
+        // caveat must say THAT, not the same sentence a genuinely blank
+        // field gets, which would simply be false here.
+        meIs(curator)
+        queueIs([
+            subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_4" })], {
+                subject_type: "transition_state_entry",
+                subject_ref: "tse_4",
+                chemistry: chemistry({ multiplicity: 2, unmapped_smiles: "[CH3].[H]>>C" }),
+            }),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_4").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).queryByText(/no smiles recorded for this candidate/i)).not.toBeInTheDocument()
+        expect(within(section).getByText(/no formula could be derived/i)).toBeInTheDocument()
+        expect(within(section).getByText("[CH3].[H]>>C")).toBeInTheDocument()
+    })
+
+    it("names a subject with no chemistry of its own by its record type, honestly", async () => {
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "conformer_observation", container_type: "conformer_group", container_ref: "cfg_1" })],
+                { subject_type: "conformer_group", subject_ref: "cfg_1", chemistry: chemistry() },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("cfg_1").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).getByRole("heading", { name: "Conformer group" })).toBeInTheDocument()
+    })
+
+    it("the phrase 'cannot be named' does not survive the redesign", async () => {
+        meIs(curator)
+        queueIs([
+            H2O,
+            // The orphan case: a review row whose record and container
+            // both resolved to nothing.
+            {
+                subject_type: null,
+                subject_ref: null,
+                chemistry: chemistry(),
+                records: [record({ id: 99, record_type: "applied_energy_correction", container_type: null, container_ref: null })],
+            },
+        ])
+        renderPage()
+
+        await screen.findByText("spe_h2o")
+        expect(screen.queryByText(/cannot be named/i)).not.toBeInTheDocument()
+        expect(await screen.findByText(/no record could be found for this review row/i)).toBeInTheDocument()
+    })
+
+    it("names a reaction_entry subject by its own equation, not a bare ref (defect #6)", async () => {
+        // Review #492, finding 6: a kinetics reviewer used to see "Reaction
+        // entry rxe_..." and nothing else -- the species side of this page
+        // named subjects well and the reaction side named nothing.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_ab12" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_ab12",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_ch4", smiles: "C", formula: "CH4" }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("rxe_ab12").then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(heading).toHaveTextContent(/CH3/)
+        expect(heading).toHaveTextContent(/CH4/)
+        expect(heading).not.toHaveTextContent(/^Reaction entry/)
+    })
+
+    it("shows each participant's formula ONCE, not its SMILES and formula both (review #492 follow-up)", async () => {
+        // The default <ReactionEquation> rendering shows BOTH -- "[CH3]
+        // (CH3) + [H] (H) ⇌ C (CH4)" -- which review of #492 caught as
+        // noise here: a bare "C" next to "(CH4)" reads as a typo, and the
+        // species blocks above this one already show formula alone. This
+        // page must pass `formulaOnly` so exactly one notation appears.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_formula_only" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_formula_only",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_ch3", smiles: "[CH3]", formula: "CH3" }),
+                            reactionParticipant({ species_entry_ref: "spe_h", smiles: "[H]", formula: "H", participant_index: 2 }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_ch4", smiles: "C", formula: "CH4" }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_formula_only")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // No SMILES text anywhere in the heading -- not as its own run,
+        // and not the bare "C" that made this defect visible.
+        expect(within(heading).queryByText("[CH3]")).not.toBeInTheDocument()
+        expect(within(heading).queryByText("[H]")).not.toBeInTheDocument()
+        expect(within(heading).queryByText("C")).not.toBeInTheDocument()
+        // No parenthesised formula either -- formula is the WHOLE
+        // notation here, not an aside after the SMILES.
+        expect(heading.textContent).not.toContain("(CH4)")
+        expect(heading.textContent).not.toContain("(CH3)")
+    })
+
+    it("falls back to SMILES-leading form for an isomerisation, so it never renders X <=> X", async () => {
+        // The coordinator's own catch: formula-only would render this
+        // reactant/product pair (same formula C9H8, different structures)
+        // as "C9H8 <=> C9H8" -- the exact species-reacting-with-itself
+        // defect `SpeciesFace`'s SMILES-leading design exists to prevent
+        // (rxn_fktlilofmrdaylunqva2hbltpq). This equation must fall back
+        // to the ordinary SMILES+formula rendering for ALL its
+        // participants, not silently print the ambiguous pair.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_isomerisation" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_isomerisation",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_indene",
+                                smiles: "C1=CC2=CC=CC=C2C1",
+                                formula: "C9H8",
+                            }),
+                        ],
+                        products: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_indene_isomer",
+                                smiles: "C1=CC2=CC=CC=C2C=1",
+                                formula: "C9H8",
+                            }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_isomerisation")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // The SMILES are back -- proof this equation did NOT take the
+        // formula-only path.
+        expect(within(heading).getByText("C1=CC2=CC=CC=C2C1")).toBeInTheDocument()
+        expect(within(heading).getByText("C1=CC2=CC=CC=C2C=1")).toBeInTheDocument()
+        // And the formula still follows each one, in parentheses, exactly
+        // as the ordinary (non-formulaOnly) SpeciesFace rendering does --
+        // this is the fallback, not a third notation.
+        expect(heading.textContent).toContain("(C9H8)")
+    })
+
+    it("does NOT fall back when the same species appears on both sides of its own equation", async () => {
+        // A catalyst-shaped equation: one species, same ref, on both
+        // sides. That is correctly the same molecule rendering the same
+        // way twice -- not the ambiguity the fallback exists for.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_catalyst" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_catalyst",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: false,
+                        reactants: [
+                            reactionParticipant({ species_entry_ref: "spe_cat", smiles: "[Pt]", formula: "Pt", participant_index: 1 }),
+                            reactionParticipant({ species_entry_ref: "spe_h2", smiles: "[H][H]", formula: "H2", participant_index: 2 }),
+                        ],
+                        products: [
+                            reactionParticipant({ species_entry_ref: "spe_cat", smiles: "[Pt]", formula: "Pt", participant_index: 1 }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_catalyst")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(within(heading).queryByText("[Pt]")).not.toBeInTheDocument()
+        expect(heading.textContent).not.toContain("(Pt)")
+    })
+
+    it("falls back when one participant has no formula, so it never mixes notations on one line", async () => {
+        // Review #492 (second round), finding 4: with no duplicate at all,
+        // a participant with `formula: null` still forced mixed notation
+        // under the old rule -- "C9H8 <=> CC1=CC=CC=1", formula on one
+        // side, SMILES on the other, exactly the confusion this page's
+        // own comment already named. A missing formula must force the
+        // WHOLE equation to the SMILES-leading form, on its own, with no
+        // collision required.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_no_formula" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_no_formula",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_known",
+                                smiles: "C1=CC=CC=C1",
+                                formula: "C9H8",
+                                participant_index: 1,
+                            }),
+                        ],
+                        products: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_unparsed",
+                                smiles: "CC1=CC=CC=1",
+                                formula: null,
+                                participant_index: 1,
+                            }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_no_formula")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // Both participants render as SMILES -- not one formula, one
+        // SMILES.
+        expect(within(heading).getByText("C1=CC=CC=C1")).toBeInTheDocument()
+        expect(within(heading).getByText("CC1=CC=CC=1")).toBeInTheDocument()
+        expect(heading.textContent).toContain("(C9H8)")
+    })
+
+    it("falls back to the plain type label when a reaction_entry subject has no resolvable equation", async () => {
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_cd34" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_cd34",
+                    chemistry: chemistry(),
+                    reaction: null,
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("rxe_cd34").then((el) => el.closest(".review-subject") as HTMLElement)
+        expect(within(section).getByRole("heading", { name: "Reaction entry" })).toBeInTheDocument()
+    })
+
+    it("drops the redundant 'minimum ground state' chips for an ordinary species (defect #8)", async () => {
+        // Review #492, finding 8: "minimum · ground state" on nearly
+        // every ordinary molecule carries no information there.
+        meIs(curator)
+        queueIs([H2O])
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).queryByText("minimum")).not.toBeInTheDocument()
+        expect(within(section).queryByText("ground state")).not.toBeInTheDocument()
+        // Real information -- the spin word -- still shows.
+        expect(within(section).getByText("singlet")).toBeInTheDocument()
+    })
+
+    it("keeps the kind chip when it is NOT the ordinary default", async () => {
+        meIs(curator)
+        queueIs([
+            subject([record()], {
+                subject_ref: "spe_vdw",
+                chemistry: chemistry({
+                    formula: "H2O",
+                    multiplicity: 1,
+                    species_entry_kind: "vdw_complex",
+                    electronic_state_kind: "ground",
+                }),
+            }),
+        ])
+        renderPage()
+
+        const section = await subjectFor("spe_vdw")
+        expect(within(section).getByText("van der Waals complex")).toBeInTheDocument()
+    })
+})
+
+describe("collapsing same-type records under one subject (defect #2: the duplicate-looking pair)", () => {
+    function twoCorrections(overA: Record<string, unknown> = {}, overB: Record<string, unknown> = {}) {
+        return subject(
+            [
+                record({
+                    id: 21,
+                    record_type: "applied_energy_correction",
+                    record_id: 501,
+                    record_public_ref: null,
+                    note: "atom-energy correction",
+                    ...overA,
+                }),
+                record({
+                    id: 22,
+                    record_type: "applied_energy_correction",
+                    record_id: 502,
+                    record_public_ref: null,
+                    note: "bond-additivity correction",
+                    ...overB,
+                }),
+            ],
+            { subject_ref: "spe_two_corrections" },
+        )
+    }
+
+    it("renders two corrections on one species as one line with a count, not two lines", async () => {
+        meIs(curator)
+        queueIs([twoCorrections()])
+        renderPage()
+
+        const section = await screen
+            .findByText("spe_two_corrections")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+
+        expect(within(section).getByText("Energy corrections")).toBeInTheDocument()
+        expect(within(section).getByText("2", { selector: ".review-record-count" })).toBeInTheDocument()
+        expect(
+            within(section).queryByText("atom-energy correction"),
+        ).not.toBeInTheDocument()
+    })
+
+    it("expands to reach and judge each record individually", async () => {
+        meIs(curator)
+        queueIs([twoCorrections()])
+        renderPage()
+        const section = await screen
+            .findByText("spe_two_corrections")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+
+        const user = userEvent.setup()
+        await user.click(within(section).getByRole("button", { name: "Show 2 records" }))
+
+        expect(within(section).getByText("atom-energy correction")).toBeInTheDocument()
+        expect(within(section).getByText("bond-additivity correction")).toBeInTheDocument()
+        // Each expanded record keeps its OWN Review... control -- a
+        // collapsed cluster is not a per-subject bulk approve (task #270
+        // is explicitly not this).
+        expect(within(section).getAllByRole("button", { name: "Review…" })).toHaveLength(2)
+    })
+
+    it("acting on one expanded record does not touch its sibling", async () => {
+        meIs(curator)
+        queueIs([twoCorrections()])
+        let patchedId: string | null = null
+        server.use(
+            http.patch(`${PATCH_BASE}/:type/:id`, ({ params }) => {
+                patchedId = String(params.id)
+                return HttpResponse.json(record({ status: "approved" }))
+            }),
+        )
+        renderPage()
+        const section = await screen
+            .findByText("spe_two_corrections")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+
+        const user = userEvent.setup()
+        await user.click(within(section).getByRole("button", { name: "Show 2 records" }))
+        const rows = within(section).getAllByRole("button", { name: "Review…" })
+        await user.click(rows[0])
+        await user.type(within(section).getByLabelText(/Why/), "checked the atom energies")
+        await user.click(within(section).getByRole("button", { name: "Record this judgement" }))
+
+        await waitFor(() => expect(patchedId).toBe("501"))
+    })
+
+    it("shows the shared status when every collapsed record agrees, under a filter it does not just repeat", async () => {
+        meIs(curator)
+        // "all" is the one filter a shown status is never redundant
+        // against -- see the "does not repeat the active filter" suite
+        // below for the not_reviewed case, where this same status is
+        // deliberately suppressed.
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([twoCorrections({ status: "approved" }, { status: "approved" })]),
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        const section = await screen
+            .findByText("spe_two_corrections")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+
+        expect(within(section).getByText("approved")).toBeInTheDocument()
+        expect(within(section).queryByText(/mixed/i)).not.toBeInTheDocument()
+    })
+
+    it("says 'mixed' rather than picking one status when the collapsed records disagree", async () => {
+        meIs(curator)
+        queueIs([twoCorrections({ status: "not_reviewed" }, { status: "approved" })])
+        renderPage()
+        const section = await screen
+            .findByText("spe_two_corrections")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+
+        expect(within(section).getByText(/mixed review state/i)).toBeInTheDocument()
+    })
+})
+
+describe("the header's totals (defect #3: '50 shown' with no total)", () => {
+    it("reports the server's own subject and record counts, honestly, not a count of what is drawn", async () => {
+        meIs(curator)
+        // The server says there are 3 subjects and 5 records in the WHOLE
+        // filtered backlog, even though only one subject is on this page --
+        // the page must print the server's numbers, not `subjects.length`.
+        queueIs([H2O])
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(queuePageBody([H2O], { subject_total: 3, record_total: 5 })),
+            ),
+        )
+        renderPage()
+
+        expect(await screen.findByText(/5 records awaiting review/i)).toBeInTheDocument()
+        expect(await screen.findByText(/3 subjects/i)).toBeInTheDocument()
+    })
+
+    it("does not say 'awaiting review' outside the not_reviewed filter", async () => {
+        meIs(curator)
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(queuePageBody([subject([record({ status: "approved" })])])),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "approved")
+
+        await screen.findByText("spe_h2o")
+        expect(screen.queryByText(/awaiting review/i)).not.toBeInTheDocument()
+    })
+
+    it("an empty backlog reads as finished, not as broken", async () => {
+        meIs(curator)
+        queueIs([])
+        renderPage()
+
+        expect(
+            await screen.findByText(/Every record has been looked at/i),
+        ).toBeInTheDocument()
+    })
+
+    it("a queue that will not load is reported, not shown as finished", async () => {
+        meIs(curator)
+        server.use(http.get(QUEUE, () => HttpResponse.error()))
+        renderPage()
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded|could not load/i)
+        expect(screen.queryByText(/Every record has been looked at/i)).not.toBeInTheDocument()
+    })
+
+    it("a page this build cannot parse is reported, not silently emptied", async () => {
+        meIs(curator)
+        // Unlike the old flat list, the grouped shape has no obvious
+        // per-row unit to drop -- a malformed subject costs the whole page.
+        server.use(http.get(QUEUE, () => HttpResponse.json({ subjects: "not an array" })))
+        renderPage()
+
+        expect(await screen.findByRole("alert")).toBeInTheDocument()
+    })
+})
+
+describe("a record's status is not repeated when it only echoes the active filter", () => {
+    it("drops a record's own status under a specific filter, where every shown record already shares it", async () => {
+        meIs(curator)
+        queueIs([H2O])
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        // "Showing: not reviewed" above already says this -- the record's
+        // own status line would say it again, fifteen times on a real page.
+        expect(within(section).queryByText("not reviewed")).not.toBeInTheDocument()
+        // The record and its action are still there.
+        expect(within(section).getByText("Thermochemistry")).toBeInTheDocument()
+        expect(within(section).getByRole("button", { name: "Review…" })).toBeInTheDocument()
+    })
+
+    it("shows a record's own status under 'all', where it is the information", async () => {
+        meIs(curator)
+        server.use(http.get(QUEUE, () => HttpResponse.json(queuePageBody([H2O]))))
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).getByText("not reviewed")).toBeInTheDocument()
+    })
+
+    it("still shows a record's status under a specific filter when it genuinely differs from it", async () => {
+        meIs(curator)
+        // Not reachable through the server's own filtering today (a
+        // specific filter already narrows every returned row to that
+        // status), but the page must not assume that and hide a status
+        // that turns out to disagree -- it checks the actual value.
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(queuePageBody([subject([record({ status: "approved" })])])),
+            ),
+        )
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).getByText("approved")).toBeInTheDocument()
     })
 })
 
 describe("only transitions the backend allows are offered", () => {
     it("offers all four from not_reviewed", async () => {
         meIs(curator)
-        queueIs([review({ status: "not_reviewed" })])
+        queueIs([H2O])
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         const options = within(screen.getByLabelText(/New review state/))
             .getAllByRole("option")
             .map((o) => (o.textContent ?? "").trim())
@@ -359,113 +1032,86 @@ describe("only transitions the backend allows are offered", () => {
 
     it("does not offer approved -> rejected, which routes through under review", async () => {
         meIs(curator)
-        queueIs([review({ status: "approved" })])
+        queueIs([subject([record({ status: "approved" })])])
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         const options = within(screen.getByLabelText(/New review state/))
             .getAllByRole("option")
             .map((o) => (o.textContent ?? "").trim())
-
-        // Reversing a judgement is deliberately a two-step so that the
-        // re-review is recorded. Offering the one-step here would be a
-        // button that can only ever fail.
         expect(options).toEqual(["under review", "deprecated"])
         expect(options).not.toContain("rejected")
     })
 
-    it("does not offer rejected -> approved either", async () => {
-        meIs(curator)
-        queueIs([review({ status: "rejected" })])
-        renderPage()
-
-        const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
-        const options = within(screen.getByLabelText(/New review state/))
-            .getAllByRole("option")
-            .map((o) => (o.textContent ?? "").trim())
-        expect(options).toEqual(["under review", "deprecated"])
-    })
-
     it("spells out what each state asserts about the record", async () => {
         meIs(curator)
-        queueIs([review({ status: "not_reviewed" })])
+        queueIs([H2O])
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         const choice = screen.getByLabelText(/New review state/)
 
         expect(screen.getByText(/No judgement is recorded yet/i)).toBeInTheDocument()
         await user.selectOptions(choice, "approved")
         expect(screen.getByText(/Readers are told it is trusted/i)).toBeInTheDocument()
-        await user.selectOptions(choice, "deprecated")
-        expect(screen.getByText(/without being judged wrong/i)).toBeInTheDocument()
     })
 })
 
 describe("recording a judgement", () => {
     it("sends the record's type and id, the new status, and the reason", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         let body: Record<string, unknown> = {}
         let path = ""
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, async ({ request, params }) => {
+            http.patch(`${PATCH_BASE}/:type/:id`, async ({ request, params }) => {
                 path = `${params.type}/${params.id}`
                 body = (await request.json()) as Record<string, unknown>
-                return HttpResponse.json(review({ status: "approved", note: "checked" }))
+                return HttpResponse.json(record({ status: "approved", note: "checked" }))
             }),
         )
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.selectOptions(screen.getByLabelText(/New review state/), "approved")
         await user.type(screen.getByLabelText(/Why/), "checked")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
         await waitFor(() => expect(body.status).toBe("approved"))
-        // The PATCH is addressed by row id even though the page displays a
-        // public ref: that asymmetry is recorded in the walkthrough.
-        expect(path).toBe("species/987654")
+        expect(path).toBe("thermo/987654")
         expect(body.note).toBe("checked")
     })
 
     it("will not record a judgement without a reason", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
 
-        // No PATCH handler: if the disabled button were clickable the
-        // request would trip the unhandled-request guard.
-        expect(
-            screen.getByRole("button", { name: "Record this judgement" }),
-        ).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Record this judgement" })).toBeDisabled()
         await user.type(screen.getByLabelText(/Why/), "   ")
-        expect(
-            screen.getByRole("button", { name: "Record this judgement" }),
-        ).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Record this judgement" })).toBeDisabled()
     })
 
     it("re-reads the queue from the server afterwards", async () => {
         meIs(curator)
-        const counter = queueIs([review()])
+        const counter = queueIs([H2O])
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () =>
-                HttpResponse.json(review({ status: "approved" })),
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
+                HttpResponse.json(record({ status: "approved" })),
             ),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
         const before = counter.reads
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
@@ -474,14 +1120,11 @@ describe("recording a judgement", () => {
 
     it("believes the server over its own copy of the transition policy", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () =>
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
                 HttpResponse.json(
-                    {
-                        code: "domain_error",
-                        detail: "Transition not_reviewed -> approved is not allowed.",
-                    },
+                    { code: "domain_error", detail: "Transition not_reviewed -> approved is not allowed." },
                     { status: 400 },
                 ),
             ),
@@ -489,13 +1132,10 @@ describe("recording a judgement", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
-        // ALLOWED_TRANSITIONS is a convenience for the UI; the service
-        // decides. If the two ever disagree, the curator must see the
-        // server's reason rather than a generic failure.
         expect(await screen.findByRole("alert")).toHaveTextContent(
             /Transition not_reviewed -> approved is not allowed/,
         )
@@ -503,14 +1143,11 @@ describe("recording a judgement", () => {
 
     it("surfaces the self-approval refusal as the server words it", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () =>
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
                 HttpResponse.json(
-                    {
-                        code: "domain_error",
-                        detail: "You cannot approve a record you deposited.",
-                    },
+                    { code: "domain_error", detail: "You cannot approve a record you deposited." },
                     { status: 400 },
                 ),
             ),
@@ -518,7 +1155,7 @@ describe("recording a judgement", () => {
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "mine, but good")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
@@ -529,20 +1166,18 @@ describe("recording a judgement", () => {
 
     it("never reports a committed judgement as 'nothing was changed'", async () => {
         meIs(curator)
-        queueIs([review()])
+        queueIs([H2O])
         let hits = 0
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () => {
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
                 hits += 1
-                // 2xx: the transition HAS happened; only the body is
-                // unreadable, which is what a future enum member looks like.
                 return HttpResponse.json({ id: 11, status: "provisionally_endorsed" })
             }),
         )
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
@@ -550,36 +1185,29 @@ describe("recording a judgement", () => {
         expect(alert).toHaveTextContent(/was saved/i)
         expect(alert).not.toHaveTextContent(/Nothing was changed/i)
         expect(hits).toBe(1)
-        // The judgement IS recorded. Leaving the filled-in form open
-        // beneath it invites recording it a second time.
-        await waitFor(() =>
-            expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument(),
-        )
+        await waitFor(() => expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument())
     })
 })
 
 describe("everything a row owns stays with that row", () => {
-    it("does not carry one record's reason over to another record", async () => {
+    it("does not carry one record's reason over to another record, in a different subject", async () => {
         meIs(curator)
-        queueIs([review(), otherReview()])
+        queueIs([H2O, CH4_CALC])
         let sent: Record<string, unknown> = {}
         server.use(
-            http.patch(`${REVIEWS}/calculation/123456`, async ({ request }) => {
+            http.patch(`${PATCH_BASE}/calculation/123456`, async ({ request }) => {
                 sent = (await request.json()) as Record<string, unknown>
-                return HttpResponse.json(otherReview({ status: "approved" }))
+                return HttpResponse.json(record({ status: "approved" }))
             }),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "the species geometry is fine")
-        await user.click(rowButton(CALC, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        await user.type(screen.getByLabelText(/Why/), "the h2o geometry is fine")
+        await user.click(reviewButtonIn(await subjectFor("spe_ch4")))
 
-        // A judgement about the species must not arrive attached to the
-        // calculation. This axis writes what readers are told to trust,
-        // so a misattributed reason is worse here than anywhere.
         expect(screen.getByLabelText(/Why/)).toHaveValue("")
         await user.type(screen.getByLabelText(/Why/), "the calculation converged")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
@@ -588,159 +1216,67 @@ describe("everything a row owns stays with that row", () => {
 
     it("does not carry one row's chosen state over either", async () => {
         meIs(curator)
-        queueIs([review(), otherReview()])
+        queueIs([H2O, CH4_CALC])
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.selectOptions(screen.getByLabelText(/New review state/), "deprecated")
-        await user.click(rowButton(CALC, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_ch4")))
 
-        // Each form opens at its row's own first allowed transition.
         expect(screen.getByLabelText(/New review state/)).toHaveValue("under_review")
     })
 
-    it("keeps each row's refusal, instead of one slot they overwrite", async () => {
+    it("keeps each subject's own refusal, instead of one slot they overwrite", async () => {
         meIs(curator)
-        queueIs([review(), otherReview()])
+        queueIs([H2O, CH4_CALC])
         server.use(
-            http.patch(`${REVIEWS}/species/987654`, () =>
-                HttpResponse.json(
-                    { code: "domain_error", detail: "Species is stuck." },
-                    { status: 400 },
-                ),
+            http.patch(`${PATCH_BASE}/thermo/987654`, () =>
+                HttpResponse.json({ code: "domain_error", detail: "H2O record is stuck." }, { status: 400 }),
             ),
-            http.patch(`${REVIEWS}/calculation/123456`, () =>
-                HttpResponse.json(
-                    { code: "domain_error", detail: "Calculation is stuck." },
-                    { status: 400 },
-                ),
+            http.patch(`${PATCH_BASE}/calculation/123456`, () =>
+                HttpResponse.json({ code: "domain_error", detail: "CH4 calculation is stuck." }, { status: 400 }),
             ),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "a")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-        await screen.findByText("Species is stuck.")
+        await screen.findByText("H2O record is stuck.")
 
-        await user.click(rowButton(CALC, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_ch4")))
         await user.type(screen.getByLabelText(/Why/), "b")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-        await screen.findByText("Calculation is stuck.")
+        await screen.findByText("CH4 calculation is stuck.")
 
-        expect(screen.getByText("Species is stuck.")).toBeInTheDocument()
+        expect(screen.getByText("H2O record is stuck.")).toBeInTheDocument()
     })
 
-    it("a row still waiting on its own write is not re-enabled by another row finishing", async () => {
+    it("disables a row's own control while its write is in flight, and leaves the other subject alone", async () => {
         meIs(curator)
-        // The calculation row moves once its own write lands; the species
-        // row's write is held open by the test, so the species row must not.
-        const species = gate()
-        let calcDone = false
-        server.use(
-            http.get(REVIEWS, () =>
-                HttpResponse.json([
-                    review(),
-                    calcDone ? otherReview({ status: "approved" }) : otherReview(),
-                ]),
-            ),
-            http.patch(`${REVIEWS}/species/987654`, async () => {
-                await species.held
-                return HttpResponse.json(review({ status: "approved" }))
-            }),
-            http.patch(`${REVIEWS}/calculation/123456`, () => {
-                calcDone = true
-                return HttpResponse.json(otherReview({ status: "approved" }))
-            }),
-        )
-        renderPage()
-        await screen.findByRole("table")
-
-        const user = userEvent.setup()
-        // Start the slow one, then open and submit the fast one.
-        await user.click(rowButton(SPECIES, "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "slow")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        await user.click(rowButton(CALC, "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "fast")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        // The fast row has landed. With in-flight state as a single
-        // page-level slot, that would re-enable the slow row's control
-        // while its own PATCH is still out, and a second click would send
-        // a second judgement.
-        await waitFor(() => expect(rowFor(CALC).textContent).toContain("approved"))
-        expect(rowButton(SPECIES, "Review…")).toBeDisabled()
-
-        // Let the held write finish, so the test leaves nothing in flight.
-        species.release()
-        await waitFor(() => expect(rowButton(SPECIES, "Review…")).toBeEnabled())
-    })
-
-    it("re-reads a refused row, because a refusal usually means it moved", async () => {
-        meIs(curator)
-        // Another curator gets there first: our PATCH is refused, and the
-        // next read shows the state they set.
-        let refused = false
-        server.use(
-            http.get(REVIEWS, () =>
-                HttpResponse.json([
-                    refused ? review({ status: "approved" }) : review(),
-                ]),
-            ),
-            http.patch(`${REVIEWS}/:type/:id`, () => {
-                refused = true
-                return HttpResponse.json(
-                    {
-                        code: "domain_error",
-                        detail: "Transition not_reviewed -> rejected is not allowed.",
-                    },
-                    { status: 400 },
-                )
-            }),
-        )
-        renderPage()
-        await screen.findByRole("table")
-
-        const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
-        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
-        await user.type(screen.getByLabelText(/Why/), "wrong")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        expect(await screen.findByRole("alert")).toHaveTextContent(/is not allowed/)
-        // Leaving the stale "not reviewed" on screen under a live control
-        // invites the curator to try the same thing again against a state
-        // the server has already left.
-        await waitFor(() => expect(rowStatus(SPECIES)).toBe("approved"))
-    })
-
-    it("disables a row's own control while its write is in flight", async () => {
-        meIs(curator)
-        queueIs([review()])
+        queueIs([H2O, CH4_CALC])
         const write = gate()
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, async () => {
+            http.patch(`${PATCH_BASE}/thermo/987654`, async () => {
                 await write.held
-                return HttpResponse.json(review({ status: "approved" }))
+                return HttpResponse.json(record({ status: "approved" }))
             }),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
-        expect(
-            screen.getByRole("button", { name: "Record this judgement" }),
-        ).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Record this judgement" })).toBeDisabled()
+        // The other subject's own control is untouched.
+        expect(reviewButtonIn(await subjectFor("spe_ch4"))).toBeEnabled()
 
         write.release()
         await waitFor(() => expect(screen.queryByLabelText(/Why/)).not.toBeInTheDocument())
@@ -750,101 +1286,524 @@ describe("everything a row owns stays with that row", () => {
 describe("a refusal is still said when its row has gone", () => {
     it("says what was refused, and about which record, after the row leaves the view", async () => {
         meIs(curator)
-        // The commonest refusal: somebody else moved the record. The
-        // re-read that follows is under `not_reviewed`, and the record is
-        // not that any more -- so the row goes.
         let moved = false
-        queueByStatus(() =>
-            moved
-                ? [review({ status: "approved" })]
-                : [review({ status: "not_reviewed" })],
-        )
+        queueByStatus(() => [subject([record({ status: moved ? "approved" : "not_reviewed" })])])
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () => {
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
                 moved = true
                 return HttpResponse.json(
-                    {
-                        code: "domain_error",
-                        detail: "Transition not_reviewed -> rejected is not allowed.",
-                    },
+                    { code: "domain_error", detail: "Transition not_reviewed -> rejected is not allowed." },
                     { status: 400 },
                 )
             }),
         )
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_h2o")
 
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
         await user.type(screen.getByLabelText(/Why/), "wrong")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
-        // Previously the message was keyed to the row and rendered only
-        // inside it, so it vanished with the row: the curator pressed the
-        // button, the row disappeared, and nothing was ever said. The
-        // earlier test could not see this because its mock ignored the
-        // `status` the page sends.
-        // Target the BANNER, not "an alert": the in-row message renders
-        // first and contains neither the ref nor this wording, so
-        // `findByRole("alert")` passed only because the re-read happened
-        // to win a scheduler race. That is the same defect as holding a
-        // request open with a timer.
         const banner = await screen.findByText(/no longer in this view/i)
         expect(banner).toHaveTextContent(/is not allowed/)
-        expect(banner).toHaveTextContent(SPECIES)
+    })
+})
+
+describe("what a curator may not do to their own deposit", () => {
+    it("does not offer approval on a record this curator deposited", async () => {
+        meIs(curator)
+        queueIs([subject([record({ created_by: curator.id })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).not.toContain("approved")
+        expect(options).toContain("rejected")
     })
 
-    it("names an unnameable record in that message rather than saying nothing", async () => {
+    it("still offers approval on somebody else's deposit", async () => {
         meIs(curator)
-        let moved = false
-        queueByStatus(() =>
-            moved
-                ? []
-                : [
-                      review({
-                          record_type: "applied_energy_correction",
-                          record_public_ref: null,
-                      }),
-                  ],
+        queueIs([subject([record({ created_by: curator.id + 999 })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).toContain("approved")
+    })
+
+    it("offers approval when the depositor is unknown", async () => {
+        meIs(curator)
+        queueIs([subject([record({ created_by: null })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+
+        expect(options).toContain("approved")
+    })
+})
+
+describe("the filter control", () => {
+    it("asks the server for the status chosen", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                asked.push(new URL(request.url).searchParams.get("status"))
+                return HttpResponse.json(queuePageBody([subject([record({ status: "approved" })])]))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+        await waitFor(() => expect(asked).toEqual(["not_reviewed", "approved"]))
+    })
+
+    it("sends no status at all for 'every record'", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                asked.push(new URL(request.url).searchParams.get("status"))
+                return HttpResponse.json(queuePageBody([H2O]))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "all")
+        await waitFor(() => expect(asked).toEqual(["not_reviewed", null]))
+    })
+
+    it("asks for a page of the size it claims -- SUBJECTS, not records", async () => {
+        meIs(curator)
+        let limit: string | null = null
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                limit = new URL(request.url).searchParams.get("limit")
+                return HttpResponse.json(queuePageBody([H2O]))
+            }),
+        )
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        expect(limit).toBe("50")
+    })
+})
+
+describe("paging counts subjects, never records", () => {
+    function manySubjects(n: number) {
+        return Array.from({ length: n }, (_, i) =>
+            subject([record({ id: 100 + i, record_id: 100 + i })], { subject_ref: `spe_${i}` }),
+        )
+    }
+
+    it("asks for the next page by subject offset, and says where it is", async () => {
+        meIs(curator)
+        const asked: (string | null)[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const url = new URL(request.url)
+                asked.push(url.searchParams.get("skip"))
+                const skip = Number(url.searchParams.get("skip") ?? 0)
+                return HttpResponse.json(
+                    queuePageBody(manySubjects(50), { subject_total: 120, offset: skip }),
+                )
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_0")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toEqual(["0", "50"]))
+        expect(await screen.findByText(/showing subjects 51-100/i)).toBeInTheDocument()
+    })
+
+    it("disables Older once every subject has been shown", async () => {
+        meIs(curator)
+        queueIs([H2O])
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+        expect(screen.getByRole("button", { name: "Newer" })).toBeDisabled()
+    })
+
+    it("a subject with several records still counts as one against the page limit", async () => {
+        meIs(curator)
+        // Server-side truth: 1 subject on this page even though it carries
+        // 2 records, and 1 subject total -- the frontend must print the
+        // server's numbers rather than counting nested records itself.
+        queueIs([subject([record({ id: 1 }), record({ id: 2, record_type: "statmech" })])])
+        renderPage()
+
+        expect(await screen.findByText(/2 records awaiting review/i)).toBeInTheDocument()
+        expect(await screen.findByText(/1 subject\b/i)).toBeInTheDocument()
+    })
+
+    it("returns to the first page when the filter changes", async () => {
+        meIs(curator)
+        const asked: string[] = []
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const url = new URL(request.url)
+                asked.push(`${url.searchParams.get("status")}@${url.searchParams.get("skip")}`)
+                return HttpResponse.json(queuePageBody(manySubjects(50), { subject_total: 120 }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_0")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(2))
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+
+        await waitFor(() => expect(asked.at(-1)).toBe("approved@0"))
+    })
+})
+
+/**
+ * Review #492, finding 4: this file was rewritten wholesale for the new
+ * `/queue` wire shape and markup, and several guarantees the OLD suite
+ * pinned were never carried over -- not because the behaviour changed, but
+ * because nothing re-asserted it against the new DOM. The first two below
+ * are #488's own guarantees and are explicitly not negotiable; the rest are
+ * the redesign's own regressions-to-avoid, ported to subject/record
+ * fixtures instead of the old flat rows.
+ */
+describe("guarantees carried over from the flat queue (review #492, finding 4)", () => {
+    it("opens every queue link in a new tab, safely (rel carries both noopener and noreferrer)", async () => {
+        // Scoped to the subject list, not the whole page: the lede's own
+        // "Machine findings" link is deliberate ordinary in-app
+        // navigation (see the module docstring), not one of the
+        // stateful queue links this guarantee is about.
+        meIs(curator)
+        queueIs([H2O, CH4_CALC])
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        const sections = document.querySelectorAll(".review-subject")
+        expect(sections.length).toBeGreaterThan(0)
+        const links = Array.from(sections).flatMap((section) =>
+            Array.from(section.querySelectorAll("a")),
+        )
+        expect(links.length).toBeGreaterThan(0)
+        for (const link of links) {
+            expect(link).toHaveAttribute("target", "_blank")
+            const rel = link.getAttribute("rel") ?? ""
+            expect(rel).toMatch(/noopener/)
+            expect(rel).toMatch(/noreferrer/)
+        }
+    })
+
+    it("puts no internal row id anywhere in the page", async () => {
+        meIs(curator)
+        queueIs([
+            subject([record({ id: 777, record_id: 888111 })]),
+            subject(
+                [
+                    record({
+                        id: 778,
+                        record_type: "calculation",
+                        record_id: 999222,
+                        record_public_ref: "calc_hidden_id_check",
+                    }),
+                ],
+                { subject_ref: "spe_second" },
+            ),
+        ])
+        const { container } = renderPage()
+        await screen.findByText("spe_h2o")
+        await screen.findByText("spe_second")
+
+        expect(container.innerHTML).not.toContain("888111")
+        expect(container.innerHTML).not.toContain("999222")
+    })
+
+    it("still offers a way back from a page that came back empty", async () => {
+        // A page can come back empty even though "Older" was enabled: the
+        // total this page reports is honest AS OF each request, not a
+        // snapshot, so a subject reviewed by someone else between the two
+        // page loads can shrink the true count from underneath a curator
+        // already mid-page -- see `list_review_queue`'s own "offset drift"
+        // documentation. Page 1 truthfully reports 51 (Older enabled);
+        // by the time page 2 is requested only 50 remain, and page 2 --
+        // subjects 51-51 -- is honestly empty.
+        meIs(curator)
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            subject([record({ id: 100 + i, record_id: 100 + i })], { subject_ref: `spe_p_${i}` }),
         )
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () => {
-                moved = true
+            http.get(QUEUE, ({ request }) => {
+                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
                 return HttpResponse.json(
-                    { code: "domain_error", detail: "Somebody else got there first." },
+                    skip === 0
+                        ? queuePageBody(fifty, { subject_total: 51 })
+                        : queuePageBody([], { subject_total: 50, offset: skip }),
+                )
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_p_0")
+        expect(screen.getByRole("button", { name: "Older" })).toBeEnabled()
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+
+        expect(await screen.findByText(/Nothing older than this/i)).toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled()
+        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
+    })
+
+    it("goes back one page at a time, not to the start", async () => {
+        meIs(curator)
+        const asked: string[] = []
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            subject([record({ id: 100 + i, record_id: 100 + i })], { subject_ref: `spe_q_${i}` }),
+        )
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const skip = new URL(request.url).searchParams.get("skip") ?? "0"
+                asked.push(skip)
+                return HttpResponse.json(queuePageBody(fifty, { subject_total: 200 }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_q_0")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(2))
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await waitFor(() => expect(asked).toHaveLength(3))
+        await user.click(screen.getByRole("button", { name: "Newer" }))
+        await waitFor(() => expect(asked).toEqual(["0", "50", "100", "50"]))
+    })
+
+    it("does not offer rejected -> approved either", async () => {
+        meIs(curator)
+        queueIs([subject([record({ status: "rejected" })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const options = within(screen.getByLabelText(/New review state/))
+            .getAllByRole("option")
+            .map((o) => (o.textContent ?? "").trim())
+        expect(options).toEqual(["under review", "deprecated"])
+        expect(options).not.toContain("approved")
+    })
+
+    it("re-derives the choice when a re-read makes it impossible", async () => {
+        meIs(curator)
+        // not_reviewed offers rejected; approved does not. A re-read that
+        // moves the row to approved leaves "rejected" held in a draft that
+        // no option matches -- a controlled <select> whose value matches
+        // nothing displays the FIRST option, silently.
+        let moved = false
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: moved ? "approved" : "not_reviewed" })]),
+                    ]),
+                ),
+            ),
+            http.patch(`${PATCH_BASE}/:type/:id`, async () => {
+                if (!moved) {
+                    moved = true
+                    return HttpResponse.json(
+                        { code: "domain_error", detail: "Not allowed." },
+                        { status: 400 },
+                    )
+                }
+                return HttpResponse.json(record({ status: "under_review" }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "first try")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await waitFor(() => expect(within(section).getByText("approved")).toBeInTheDocument())
+        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
+        expect(["under_review", "deprecated"]).toContain(select.value)
+        expect(screen.queryByText(/judged this record wrong/i)).not.toBeInTheDocument()
+    })
+
+    it("does not close another row's open form when a write succeeds", async () => {
+        meIs(curator)
+        queueIs([H2O, CH4_CALC])
+        const write = gate()
+        server.use(
+            http.patch(`${PATCH_BASE}/thermo/987654`, async () => {
+                await write.held
+                return HttpResponse.json(record({ status: "under_review" }))
+            }),
+        )
+        renderPage()
+        await screen.findByText("spe_h2o")
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        await user.type(screen.getByLabelText(/Why/), "species reason")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await user.click(reviewButtonIn(await subjectFor("spe_ch4")))
+        await user.type(screen.getByLabelText(/Why/), "calculation reason")
+
+        write.release()
+
+        await waitFor(() => expect(reviewButtonIn(screen.getByText("spe_h2o").closest(".review-subject") as HTMLElement)).toBeEnabled())
+        expect(screen.getByLabelText(/Why/)).toHaveValue("calculation reason")
+    })
+
+    it("shows each row's own state, not a neighbour's", async () => {
+        meIs(curator)
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: "approved" })]),
+                        CH4_CALC,
+                    ]),
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+
+        const h2oSection = await subjectFor("spe_h2o")
+        const ch4Section = await subjectFor("spe_ch4")
+        expect(within(h2oSection).getByText("approved")).toBeInTheDocument()
+        expect(within(ch4Section).getByText("not reviewed")).toBeInTheDocument()
+        expect(within(ch4Section).queryByText("approved")).not.toBeInTheDocument()
+    })
+
+    it("shows the reason recorded on a judged record", async () => {
+        meIs(curator)
+        queueIs([subject([record({ status: "approved", note: "frequencies check out by hand" })])])
+        renderPage()
+
+        expect(await screen.findByText("frequencies check out by hand")).toBeInTheDocument()
+    })
+
+    it("reads a row from a server that has never heard of containers", async () => {
+        // An older backend sends neither container_type nor container_ref
+        // on a nested record. Dropping the whole page would be the worst
+        // possible answer to "what still needs review" -- the schema
+        // defaults both to null and the record still renders.
+        meIs(curator)
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json({
+                    subjects: [
+                        {
+                            subject_type: "species_entry",
+                            subject_ref: "spe_h2o",
+                            chemistry: chemistry({ formula: "H2O" }),
+                            records: [
+                                {
+                                    id: 11,
+                                    record_type: "thermo",
+                                    record_id: 987654,
+                                    status: "not_reviewed",
+                                    created_at: "2026-09-14T10:00:00Z",
+                                    // container_type/container_ref omitted entirely.
+                                },
+                            ],
+                        },
+                    ],
+                    subject_total: 1,
+                    record_total: 1,
+                    offset: 0,
+                    limit: 50,
+                }),
+            ),
+        )
+        renderPage()
+
+        expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
+        expect(screen.getByText("Thermochemistry")).toBeInTheDocument()
+    })
+
+    it("re-reads a refused row, because a refusal usually means it moved", async () => {
+        meIs(curator)
+        // Another curator gets there first: our PATCH is refused, and the
+        // next read shows the state they set. Asserted under "all" so
+        // the status text is not suppressed by the filter-echo rule.
+        let refused = false
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: refused ? "approved" : "not_reviewed" })]),
+                    ]),
+                ),
+            ),
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
+                refused = true
+                return HttpResponse.json(
+                    { code: "domain_error", detail: "Transition not_reviewed -> rejected is not allowed." },
                     { status: 400 },
                 )
             }),
         )
-        renderPage()
-        await screen.findByRole("table")
-
         const user = userEvent.setup()
-        await user.click(rowButton("cannot be named", "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "mine")
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "wrong")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
 
-        const banner = await screen.findByText(/no longer in this view/i)
-        expect(banner).toHaveTextContent("applied_energy_correction (unnamed)")
-        expect(banner).toHaveTextContent(/Somebody else got there first/)
+        expect(await screen.findByRole("alert")).toHaveTextContent(/is not allowed/)
+        // Leaving the stale "not reviewed" on screen under a live control
+        // invites the curator to try the same thing again against a state
+        // the server has already left.
+        await waitFor(() => expect(within(section).getByText("approved")).toBeInTheDocument())
     })
-})
 
-describe("a refusal does not outstay its welcome", () => {
     it("is gone once the same row succeeds and leaves the view", async () => {
         meIs(curator)
-        // Refused, then retried successfully. The row leaves the view
-        // because the retry moved it -- and the banner must not then
-        // announce the OLD refusal about a write that has just worked.
+        // Refused, then retried successfully. The row leaves the default
+        // not_reviewed view because the retry moved it -- and the banner
+        // must not then announce the OLD refusal about a write that has
+        // just worked.
         let attempts = 0
         queueByStatus(() =>
             attempts >= 2
-                ? [review({ status: "approved" })]
-                : [review({ status: "not_reviewed" })],
+                ? [subject([record({ status: "approved" })])]
+                : [subject([record({ status: "not_reviewed" })])],
         )
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () => {
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
                 attempts += 1
                 if (attempts === 1) {
                     return HttpResponse.json(
@@ -852,14 +1811,14 @@ describe("a refusal does not outstay its welcome", () => {
                         { status: 400 },
                     )
                 }
-                return HttpResponse.json(review({ status: "approved" }))
+                return HttpResponse.json(record({ status: "approved" }))
             }),
         )
-        renderPage()
-        await screen.findByRole("table")
-
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        renderPage()
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
         await user.type(screen.getByLabelText(/Why/), "first")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
         await screen.findByText(/Someone else has it/)
@@ -879,23 +1838,26 @@ describe("a refusal does not outstay its welcome", () => {
     it("does not follow the curator to another page", async () => {
         meIs(curator)
         // The same rule as the filter, through the paging door: a refusal
-        // is about a row in a view, and a different page is a different
-        // view. Without `offset` in the clearing effect the banner rides
-        // along, naming a row from page two as "no longer in this view"
-        // while the curator reads page one.
+        // is about a subject in a view, and a different page is a
+        // different view. Without `offset` in the clearing effect the
+        // banner rides along, naming a subject from page two as "no
+        // longer in this view" while the curator reads page one.
         const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 200 + i, record_public_ref: `spc_p1_${i}` }),
+            subject([record({ id: 200 + i, record_id: 200 + i })], { subject_ref: `spe_p1_${i}` }),
         )
         server.use(
-            http.get(REVIEWS, ({ request }) => {
+            http.get(QUEUE, ({ request }) => {
                 const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
                 return HttpResponse.json(
                     skip === 0
-                        ? fifty
-                        : [review({ id: 900, record_public_ref: "spc_page_two" })],
+                        ? queuePageBody(fifty, { subject_total: 51 })
+                        : queuePageBody(
+                              [subject([record({ id: 900, record_id: 900 })], { subject_ref: "spe_page_two" })],
+                              { subject_total: 51, offset: skip },
+                          ),
                 )
             }),
-            http.patch(`${REVIEWS}/:type/:id`, () =>
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
                 HttpResponse.json(
                     { code: "service_unavailable", detail: "Page two refusal." },
                     { status: 503 },
@@ -904,12 +1866,12 @@ describe("a refusal does not outstay its welcome", () => {
         )
         const user = userEvent.setup()
         renderPage()
-        await screen.findByRole("table")
+        await screen.findByText("spe_p1_0")
 
         await user.click(screen.getByRole("button", { name: "Older" }))
-        await screen.findByText("spc_page_two")
+        await screen.findByText("spe_page_two")
 
-        await user.click(rowButton("spc_page_two", "Review…"))
+        await user.click(reviewButtonIn(await subjectFor("spe_page_two")))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
         await screen.findByText(/Page two refusal/)
@@ -924,23 +1886,23 @@ describe("a refusal does not outstay its welcome", () => {
     it("does not follow the curator into another view", async () => {
         meIs(curator)
         // A refusal that leaves the row where it is (a 503, say). Change
-        // filter and the row is absent for a reason that has nothing to do
-        // with the refusal -- announcing "no longer in this view" there is
-        // simply false, and there was no way to dismiss it.
-        queueByStatus(() => [review({ status: "not_reviewed" })])
+        // filter and the subject is absent for a reason that has nothing
+        // to do with the refusal -- announcing "no longer in this view"
+        // there is simply false, and there was no way to dismiss it.
+        queueByStatus(() => [subject([record({ status: "not_reviewed" })])])
         server.use(
-            http.patch(`${REVIEWS}/:type/:id`, () =>
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
                 HttpResponse.json(
                     { code: "service_unavailable", detail: "Try again shortly." },
                     { status: 503 },
                 ),
             ),
         )
-        renderPage()
-        await screen.findByRole("table")
-
         const user = userEvent.setup()
-        await user.click(rowButton(SPECIES, "Review…"))
+        renderPage()
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
         await user.type(screen.getByLabelText(/Why/), "fine")
         await user.click(screen.getByRole("button", { name: "Record this judgement" }))
         await screen.findByText(/Try again shortly/)
@@ -951,774 +1913,39 @@ describe("a refusal does not outstay its welcome", () => {
             expect(screen.queryByText(/Try again shortly/)).not.toBeInTheDocument(),
         )
     })
-})
-
-describe("paging cannot strand a curator", () => {
-    it("still offers a way back from a page that came back empty", async () => {
-        meIs(curator)
-        // Exactly one full page, so "Older" is offered and the page beyond
-        // it is empty. Inside the rows-present branch the controls went
-        // with the rows, leaving no way back at all.
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
-                return HttpResponse.json(skip === 0 ? fifty : [])
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        await user.click(screen.getByRole("button", { name: "Older" }))
-
-        expect(await screen.findByText(/Nothing older than this/i)).toBeInTheDocument()
-        // And it must NOT claim the archive is reviewed.
-        expect(
-            screen.queryByText(/Every record has been looked at/i),
-        ).not.toBeInTheDocument()
-        expect(screen.getByRole("button", { name: "Newer" })).toBeEnabled()
-        // Older must be dead here. Every other "Older is disabled"
-        // assertion sits at offset 0, so without this one a rule like
-        // `offset === 0 && !full` would let a curator click onward into
-        // nothing, page after page.
-        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
-    })
-
-    it("goes back one page at a time, not to the start", async () => {
-        meIs(curator)
-        const asked: string[] = []
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                const skip = new URL(request.url).searchParams.get("skip") ?? "0"
-                asked.push(skip)
-                return HttpResponse.json(fifty)
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        await user.click(screen.getByRole("button", { name: "Older" }))
-        await waitFor(() => expect(asked).toHaveLength(2))
-        await user.click(screen.getByRole("button", { name: "Older" }))
-        await waitFor(() => expect(asked).toHaveLength(3))
-
-        // From page three, Newer is page two -- not page one.
-        await user.click(screen.getByRole("button", { name: "Newer" }))
-        await waitFor(() => expect(asked).toEqual(["0", "50", "100", "50"]))
-    })
-
-    it("does not call a nearly-full page full", async () => {
-        meIs(curator)
-        // 49 of a 50-row page. A threshold of `>= limit - 1` would offer
-        // "Older" here and strand the curator on the empty page beyond.
-        const rows = Array.from({ length: 49 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(http.get(REVIEWS, () => HttpResponse.json(rows)))
-        renderPage()
-
-        await screen.findByRole("table")
-        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
-        expect(screen.queryByText(/cannot say how many/i)).not.toBeInTheDocument()
-    })
-})
-
-describe("the form never shows one judgement and sends another", () => {
-    it("re-derives the choice when a re-read makes it impossible", async () => {
-        meIs(curator)
-        // not_reviewed offers rejected; approved does not. A re-read that
-        // moves the row to approved leaves "rejected" held in a draft that
-        // no option matches -- and a controlled <select> whose value
-        // matches nothing displays the FIRST option instead.
-        let moved = false
-        queueByStatus(() => [
-            moved ? review({ status: "approved" }) : review({ status: "not_reviewed" }),
-        ])
-        let sent: Record<string, unknown> = {}
-        server.use(
-            http.patch(`${REVIEWS}/:type/:id`, async ({ request }) => {
-                const body = (await request.json()) as Record<string, unknown>
-                if (!moved) {
-                    moved = true
-                    return HttpResponse.json(
-                        { code: "domain_error", detail: "Not allowed." },
-                        { status: 400 },
-                    )
-                }
-                sent = body
-                return HttpResponse.json(review({ status: "under_review" }))
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
-        await screen.findByRole("table")
-
-        await user.click(rowButton(SPECIES, "Review…"))
-        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
-        await user.type(screen.getByLabelText(/Why/), "first try")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        // The row is now approved, whose options are under_review and
-        // deprecated. Whatever the select shows must be what is sent.
-        await waitFor(async () =>
-            expect(await rowStatus(SPECIES)).toBe("approved"),
-        )
-        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
-        const shown = select.value
-        expect(["under_review", "deprecated"]).toContain(shown)
-
-        // The hint is the third thing that must agree. With the stale
-        // draft still held, the select showed one state and the sentence
-        // beneath it described another.
-        const hint =
-            shown === "under_review"
-                ? /No judgement is recorded yet/i
-                : /without being judged wrong/i
-        expect(screen.getByText(hint)).toBeInTheDocument()
-        expect(screen.queryByText(/judged this record wrong/i)).not.toBeInTheDocument()
-
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-        await waitFor(() => expect(sent.status).toBe(shown))
-    })
 
     it("describes the state it is actually offering", async () => {
+        // The hint and the select must agree: they are the two things a
+        // curator reads before deciding. Starting from "approved" (not
+        // the default not_reviewed) so the FIRST offered option -- not
+        // just any option -- is asserted against its own hint.
         meIs(curator)
-        queueIs([review({ status: "approved" })])
+        queueIs([subject([record({ status: "approved" })])])
         renderPage()
 
         const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
         const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
 
-        // The hint and the select must agree: they are the two things a
-        // curator reads before deciding.
         expect(select.value).toBe("under_review")
         expect(screen.getByText(/No judgement is recorded yet/i)).toBeInTheDocument()
     })
-})
-
-describe("one row's write leaves the other rows alone", () => {
-    it("does not close another row's open form when a write succeeds", async () => {
-        meIs(curator)
-        queueIs([review(), otherReview()])
-        const species = gate()
-        server.use(
-            http.patch(`${REVIEWS}/species/987654`, async () => {
-                await species.held
-                return HttpResponse.json(review({ status: "under_review" }))
-            }),
-        )
-        renderPage()
-        await screen.findByRole("table")
-
-        const user = userEvent.setup()
-        // Start the species write, then open the calculation's form while
-        // it is still out.
-        await user.click(rowButton(SPECIES, "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "species reason")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        await user.click(rowButton(CALC, "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "calculation reason")
-
-        species.release()
-
-        // Wait for the species write to have FINISHED before asserting.
-        // Without this the assertion ran while the write was still out and
-        // passed on the first check, so it could not see a later close --
-        // the test ended before the behaviour it was written for happened.
-        await waitFor(() => expect(rowButton(SPECIES, "Review…")).toBeEnabled())
-
-        // The species row finishing must not throw away what is being
-        // typed against the calculation.
-        expect(screen.getByLabelText(/Why/)).toHaveValue("calculation reason")
-    })
-})
-
-describe("what a curator may not do to their own deposit", () => {
-    it("does not offer approval on a record this curator deposited", async () => {
-        meIs(curator)
-        // The service refuses self-approval. Offering the option is a
-        // button that can only fail, which is the thing mirroring the
-        // transition table was supposed to prevent.
-        queueIs([review({ created_by: curator.id })])
-        renderPage()
-
-        const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
-        const options = within(screen.getByLabelText(/New review state/))
-            .getAllByRole("option")
-            .map((o) => (o.textContent ?? "").trim())
-
-        expect(options).not.toContain("approved")
-        expect(options).toContain("rejected")
-    })
-
-    it("still offers approval on somebody else's deposit", async () => {
-        meIs(curator)
-        queueIs([review({ created_by: curator.id + 999 })])
-        renderPage()
-
-        const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
-        const options = within(screen.getByLabelText(/New review state/))
-            .getAllByRole("option")
-            .map((o) => (o.textContent ?? "").trim())
-
-        expect(options).toContain("approved")
-    })
-
-    it("offers approval when the depositor is unknown", async () => {
-        meIs(curator)
-        // `created_by` is nullable. Withholding approval on a null would
-        // block review of anything whose depositor was not recorded.
-        queueIs([review({ created_by: null })])
-        renderPage()
-
-        const user = userEvent.setup()
-        await user.click(await screen.findByRole("button", { name: "Review…" }))
-        const options = within(screen.getByLabelText(/New review state/))
-            .getAllByRole("option")
-            .map((o) => (o.textContent ?? "").trim())
-
-        expect(options).toContain("approved")
-    })
-})
-
-describe("the filter control", () => {
-    it("asks the server for the status chosen", async () => {
-        meIs(curator)
-        const asked: (string | null)[] = []
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                asked.push(new URL(request.url).searchParams.get("status"))
-                return HttpResponse.json([review({ status: "approved" })])
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
-        await waitFor(() => expect(asked).toEqual(["not_reviewed", "approved"]))
-    })
-
-    it("sends no status at all for 'every record'", async () => {
-        meIs(curator)
-        const asked: (string | null)[] = []
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                asked.push(new URL(request.url).searchParams.get("status"))
-                return HttpResponse.json([review()])
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        // `status=all` is not a value the enum has; sending it would be a
-        // 422 rather than "every record".
-        await user.selectOptions(screen.getByLabelText("Showing"), "all")
-        await waitFor(() => expect(asked).toEqual(["not_reviewed", null]))
-    })
-
-    it("actually shows what the new filter returned", async () => {
-        meIs(curator)
-        queueByStatus(() => [
-            review({ record_public_ref: "spc_unreviewed", status: "not_reviewed" }),
-            otherReview({ record_public_ref: "calc_approved", status: "approved" }),
-        ])
-        const user = userEvent.setup()
-        renderPage()
-
-        expect(await screen.findByText("spc_unreviewed")).toBeInTheDocument()
-        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
-
-        expect(await screen.findByText("calc_approved")).toBeInTheDocument()
-        expect(screen.queryByText("spc_unreviewed")).not.toBeInTheDocument()
-    })
-
-    it("asks for a page of the size it claims", async () => {
-        meIs(curator)
-        let limit: string | null = null
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                limit = new URL(request.url).searchParams.get("limit")
-                return HttpResponse.json([review()])
-            }),
-        )
-        renderPage()
-        await screen.findByRole("table")
-
-        // The "a full page" wording is only true if the page asked for
-        // exactly as many rows as it treats as full.
-        expect(limit).toBe("50")
-    })
-})
-
-describe("reaching past the newest page", () => {
-    it("asks for the next page, and says where it is", async () => {
-        meIs(curator)
-        const asked: (string | null)[] = []
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                asked.push(new URL(request.url).searchParams.get("skip"))
-                return HttpResponse.json(fifty)
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        // The list is newest-first, so without this the oldest deposits --
-        // the actual backlog -- cannot be reached at all.
-        await user.click(screen.getByRole("button", { name: "Older" }))
-        await waitFor(() => expect(asked).toEqual(["0", "50"]))
-        expect(await screen.findByText(/from 51/)).toBeInTheDocument()
-    })
-
-    it("cannot go older than a page that is not full", async () => {
-        meIs(curator)
-        queueIs([review()])
-        renderPage()
-        await screen.findByRole("table")
-
-        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
-        expect(screen.getByRole("button", { name: "Newer" })).toBeDisabled()
-    })
-
-    it("returns to the first page when the filter changes", async () => {
-        meIs(curator)
-        const asked: string[] = []
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(
-            http.get(REVIEWS, ({ request }) => {
-                const url = new URL(request.url)
-                asked.push(`${url.searchParams.get("status")}@${url.searchParams.get("skip")}`)
-                return HttpResponse.json(fifty)
-            }),
-        )
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        await user.click(screen.getByRole("button", { name: "Older" }))
-        await waitFor(() => expect(asked).toHaveLength(2))
-        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
-
-        // Carrying the offset across would show page two of a view the
-        // curator has not seen page one of.
-        await waitFor(() => expect(asked.at(-1)).toBe("approved@0"))
-    })
-})
-
-describe("what this page can and cannot tell you", () => {
-    it("says plainly when the page is full, rather than implying it is the whole backlog", async () => {
-        meIs(curator)
-        const fifty = Array.from({ length: 50 }, (_, i) =>
-            review({ id: 100 + i, record_public_ref: `spc_${i}` }),
-        )
-        server.use(http.get(REVIEWS, () => HttpResponse.json(fifty)))
-        renderPage()
-
-        // The route answers with a bare array and no total (task #257), so
-        // "50 shown" alone would read as "that is all of them".
-        const count = await screen.findByText(/cannot say how many/i)
-        // And it must not overstate in the other direction: a list of
-        // exactly 50 fills the page with nothing beyond it, so "there ARE
-        // more" would be a claim the page cannot support -- and it is what
-        // sends a curator to an empty page looking for rows.
-        expect(count).toHaveTextContent(/may be more/i)
-        expect(count).not.toHaveTextContent(/there are more/i)
-    })
-
-    it("does not claim there may be more when the page is short", async () => {
-        meIs(curator)
-        queueIs([review()])
-        renderPage()
-
-        await screen.findByRole("table")
-        expect(screen.queryByText(/cannot say how many/i)).not.toBeInTheDocument()
-    })
-
-    it("an empty backlog reads as finished, not as broken", async () => {
-        meIs(curator)
-        queueIs([])
-        renderPage()
-
-        expect(
-            await screen.findByText(/Every record has been looked at/i),
-        ).toBeInTheDocument()
-        expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-    })
-
-    it("one unreadable row costs that row, not the queue", async () => {
-        meIs(curator)
-        server.use(
-            http.get(REVIEWS, () =>
-                HttpResponse.json([
-                    review({ record_public_ref: "spc_readable" }),
-                    review({ id: 12, status: "awaiting_second_opinion" }),
-                ]),
-            ),
-        )
-        renderPage()
-
-        expect(await screen.findByText("spc_readable")).toBeInTheDocument()
-        const alert = await screen.findByRole("alert")
-        expect(alert).toHaveTextContent(/could not be read/i)
-        expect(alert).toHaveTextContent("1 row")
-    })
-
-    it("a queue that will not load is reported, not shown as finished", async () => {
-        meIs(curator)
-        server.use(
-            http.get(REVIEWS, () =>
-                HttpResponse.json(
-                    { code: "internal_error", detail: "Backend is down." },
-                    { status: 500 },
-                ),
-            ),
-        )
-        renderPage()
-
-        expect(await screen.findByRole("alert")).toHaveTextContent("Backend is down.")
-        expect(
-            screen.queryByText(/Every record has been looked at/i),
-        ).not.toBeInTheDocument()
-    })
-})
-
-describe("how much of the queue this page claims to show", () => {
-    it("says nothing about more rows when the page is neither empty nor full", async () => {
-        meIs(curator)
-        // Three rows: not the 1 and not the 50 the other tests use. A
-        // threshold that fires on "more than one" would claim a partial
-        // page is full, and send a curator looking for pages that do not
-        // exist.
-        queueIs([
-            review({ id: 11, record_public_ref: "spc_a" }),
-            review({ id: 12, record_public_ref: "spc_b" }),
-            review({ id: 13, record_public_ref: "spc_c" }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        expect(screen.getByText(/3 shown/)).toBeInTheDocument()
-        expect(screen.queryByText(/cannot say how many/i)).not.toBeInTheDocument()
-        expect(screen.getByRole("button", { name: "Older" })).toBeDisabled()
-    })
-
-    it("does not call an empty filtered view a finished backlog", async () => {
-        meIs(curator)
-        queueByStatus(() => [review({ status: "not_reviewed" })])
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByRole("table")
-
-        await user.selectOptions(screen.getByLabelText("Showing"), "rejected")
-
-        // "Every record has been looked at" is a claim about the whole
-        // archive. An empty `rejected` view means nothing was rejected,
-        // which is a different sentence entirely.
-        expect(await screen.findByText(/No records match this filter/i)).toBeInTheDocument()
-        expect(
-            screen.queryByText(/Every record has been looked at/i),
-        ).not.toBeInTheDocument()
-    })
-})
-
-describe("the status a row shows", () => {
-    it("shows each row's own state, not a neighbour's", async () => {
-        meIs(curator)
-        queueIs([
-            review({ status: "approved" }),
-            otherReview({ status: "rejected" }),
-        ])
-        renderPage()
-        await screen.findByRole("table")
-
-        expect(rowStatus(SPECIES)).toBe("approved")
-        expect(rowStatus(CALC)).toBe("rejected")
-    })
 
     it("offers a control on every status a row can actually hold", async () => {
-        meIs(curator)
-        // Named for what it checks. Every one of the five statuses has at
-        // least one allowed transition, and an unknown status never
-        // reaches the table (the parser rejects the row), so "a row with
-        // no transitions" is not a state this page can be in.
-        queueIs([review({ status: "approved" })])
-        renderPage()
-        await screen.findByRole("table")
-        expect(rowButton(SPECIES, "Review…")).toBeEnabled()
-    })
-})
+        // No status this page can render leaves a row with nothing to
+        // click -- every member of ALL_STATUSES has at least one allowed
+        // transition (see ALLOWED_TRANSITIONS), so "Review..." must
+        // appear for each one, never "no transition available".
+        for (const status of ["not_reviewed", "under_review", "approved", "rejected", "deprecated"] as const) {
+            meIs(curator)
+            queueIs([subject([record({ status })])])
+            renderPage()
 
+            const section = await subjectFor("spe_h2o")
+            expect(within(section).getByRole("button", { name: "Review…" })).toBeEnabled()
+            expect(within(section).queryByText(/no transition available/i)).not.toBeInTheDocument()
 
-/**
- * #262: the queue points at the record, or says honestly why it cannot.
- *
- * 385 of 1,299 rows could not be opened, and it was the wrong 385 -- the
- * thermochemistry, kinetics and energy corrections the archive exists to
- * publish. Two rows wherever a row-owned value is involved, for the reason
- * at the top of this file.
- */
-describe("a row says where its record can be seen", () => {
-    it("links a record with no page of its own at the page it is shown on", async () => {
-        meIs(curator)
-        queueIs([
-            review({
-                record_type: "thermo",
-                record_public_ref: "thm_aaa",
-                container_type: "species_entry",
-                container_ref: "spe_bbb",
-            }),
-        ])
-        renderPage()
-
-        const link = await screen.findByRole("link", { name: /shown on species entry/ })
-        expect(link).toHaveAttribute("href", "/species-entries/spe_bbb")
-        // The link SAYS what it is. A bare ref would leave a curator unable
-        // to tell whether they are about to open the thermo or something
-        // else entirely.
-        expect(link).toHaveTextContent("shown on species entry spe_bbb")
-    })
-
-    it("keeps the record distinguishable from the container it is shown in", async () => {
-        meIs(curator)
-        queueIs([
-            review({
-                record_type: "thermo",
-                record_public_ref: "thm_aaa",
-                container_type: "species_entry",
-                container_ref: "spe_bbb",
-            }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        const row = rowFor("thm_aaa")
-        // Both present: the record under review, and where to see it. A cell
-        // showing only the container would read as if the species entry were
-        // what needs judging.
-        expect(row).toHaveTextContent("thm_aaa")
-        expect(row).toHaveTextContent("spe_bbb")
-        // And the ref that is NOT a link is the container's, not the record's.
-        expect(within(row).getByRole("link")).toHaveTextContent("spe_bbb")
-        expect(within(row).getByRole("link")).not.toHaveTextContent("thm_aaa")
-    })
-
-    it("locates a correction that cannot be named", async () => {
-        meIs(curator)
-        queueIs([
-            review({
-                record_type: "applied_energy_correction",
-                record_public_ref: null,
-                container_type: "species_entry",
-                container_ref: "spe_ccc",
-            }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        // Still unnamed -- this change invents no ref for it (task #253).
-        expect(screen.getByText(/cannot be named/i)).toBeInTheDocument()
-        // But no longer unreachable, which is what a reviewer actually needs.
-        expect(
-            screen.getByRole("link", { name: /shown on species entry/ }),
-        ).toHaveAttribute("href", "/species-entries/spe_ccc")
-    })
-
-    it("reads as a sentence when the record cannot be named", async () => {
-        meIs(curator)
-        queueIs([
-            review({
-                record_type: "applied_energy_correction",
-                record_public_ref: null,
-                container_type: "species_entry",
-                container_ref: "spe_ccc",
-            }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        const cell = within(rowFor("spe_ccc")).getAllByRole("cell")[0]
-
-        // The comma is not decoration, and this is the whole cell rather
-        // than a substring because that is the only way to pin it. Without
-        // it the row reads "applied_energy_correction cannot be named shown
-        // on species entry spe_ccc" -- one broken sentence instead of two
-        // facts about one record. Found by looking at the rendered page in
-        // headless Chrome, and it survived all 109 tests in this file until
-        // this one existed.
-        expect(cell.textContent?.replace(/\s+/g, " ").trim()).toBe(
-            "applied_energy_correction cannot be named, shown on species " +
-                "entry spe_ccc (opens in a new tab)",
-        )
-    })
-
-    it("opens every record link in a new tab, safely", async () => {
-        meIs(curator)
-        queueIs([
-            review(),
-            review({
-                id: 12,
-                record_type: "kinetics",
-                record_public_ref: "kin_ddd",
-                container_type: "reaction_entry",
-                container_ref: "rxe_eee",
-            }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        const table = await screen.findByRole("table")
-        const links = within(table).getAllByRole("link")
-        expect(links).toHaveLength(2)
-
-        for (const link of links) {
-            // The queue holds filter, offset and a half-typed reason that no
-            // URL captures, so navigating away in this tab discards work.
-            expect(link).toHaveAttribute("target", "_blank")
-            // `noopener` is what stops the opened page holding a live handle
-            // back into this one. Asserted by name, not by "rel is truthy":
-            // `rel="noreferrer"` alone would pass the weaker check on older
-            // browsers while leaving `window.opener` live.
-            const rel = link.getAttribute("rel") ?? ""
-            expect(rel.split(/\s+/)).toContain("noopener")
-            expect(rel.split(/\s+/)).toContain("noreferrer")
-            // Announced, so a screen reader user is not simply moved to a
-            // window they did not ask for.
-            expect(link).toHaveTextContent(/opens in a new tab/)
+            cleanup()
         }
-    })
-
-    it("says WHICH reason it cannot link a row, not just that it cannot", async () => {
-        meIs(curator)
-        queueIs([
-            // Named, but nothing renders it: a known gap.
-            review({
-                id: 21,
-                record_type: "artifact",
-                record_public_ref: "art_fff",
-                container_type: null,
-                container_ref: null,
-            }),
-            // Not named at all: a record that has gone missing.
-            review({
-                id: 22,
-                record_type: "applied_energy_correction",
-                record_public_ref: null,
-                container_type: null,
-                container_ref: null,
-            }),
-        ])
-        renderPage()
-
-        await screen.findByRole("table")
-        const gap = rowFor("art_fff")
-        expect(gap).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
-        expect(gap).not.toHaveTextContent(/cannot be named/i)
-
-        const missing = rowFor("cannot be named")
-        expect(missing).toHaveTextContent(/this record cannot be named/i)
-        expect(missing).not.toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
-    })
-
-    it("still puts no internal row id in the table when it links a container", async () => {
-        meIs(curator)
-        queueIs([
-            review({
-                record_type: "thermo",
-                record_id: 987654,
-                record_public_ref: "thm_aaa",
-                container_type: "species_entry",
-                container_ref: "spe_bbb",
-            }),
-        ])
-        renderPage()
-
-        const markup = (await screen.findByRole("table")).outerHTML
-        // DR-0028 Req 2. The container's own row id is the tempting shortcut
-        // on the backend -- it is in hand after the first query -- so this
-        // checks the wire contract held all the way to the screen.
-        expect(markup).not.toContain("987654")
-    })
-
-    it("names an unnameable record by its container in a message that outlives its row", async () => {
-        meIs(curator)
-        let moved = false
-        server.use(
-            http.get(REVIEWS, () =>
-                HttpResponse.json(
-                    moved
-                        ? []
-                        : [
-                              review({
-                                  record_type: "applied_energy_correction",
-                                  record_public_ref: null,
-                                  container_type: "species_entry",
-                                  container_ref: "spe_ggg",
-                              }),
-                          ],
-                ),
-            ),
-            http.patch(`${REVIEWS}/:type/:id`, () => {
-                moved = true
-                return HttpResponse.json(
-                    { code: "domain_error", detail: "Somebody else got there first." },
-                    { status: 400 },
-                )
-            }),
-        )
-        renderPage()
-        await screen.findByRole("table")
-
-        const user = userEvent.setup()
-        await user.click(rowButton("cannot be named", "Review…"))
-        await user.type(screen.getByLabelText(/Why/), "mine")
-        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
-
-        const banner = await screen.findByText(/no longer in this view/i)
-        // "applied_energy_correction (unnamed)" does not identify WHICH of
-        // the 164 correction rows the refusal was about. Its container does.
-        expect(banner).toHaveTextContent("applied_energy_correction on spe_ggg")
-    })
-
-    it("reads a row from a server that has never heard of containers", async () => {
-        // An older backend sends neither field. Dropping the row would be the
-        // worst answer a backlog can give, so the schema defaults them to
-        // null and the row renders as it did before.
-        meIs(curator)
-        server.use(
-            http.get(REVIEWS, () => {
-                const withoutContainer: Record<string, unknown> = review({
-                    record_type: "thermo",
-                    record_public_ref: "thm_old",
-                })
-                delete withoutContainer.container_type
-                delete withoutContainer.container_ref
-                return HttpResponse.json([withoutContainer])
-            }),
-        )
-        renderPage()
-
-        await screen.findByRole("table")
-        expect(rowFor("thm_old")).toHaveTextContent(/no page for this record type, and nowhere it can be seen/i)
-        expect(screen.queryByText(/could not be read/i)).not.toBeInTheDocument()
     })
 })

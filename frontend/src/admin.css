@@ -335,3 +335,159 @@
     white-space: nowrap;
     border: 0;
 }
+
+/* ---------------------------------------------------------------------------
+ * Record review: subject grouping (task 269)
+ * ---------------------------------------------------------------------------
+ * One block per subject (a species entry, a transition-state entry, or
+ * whatever the record's container resolves to), records nested underneath.
+ * Composes `.card` from `design-system.css` for the block itself, which is
+ * also what gives every link inside it (the subject's own ref, a nested
+ * calculation/conformer-group ref) the house link treatment via `.card a` --
+ * this page no longer builds its own link rule the way `.review-container-
+ * link` used to, because nothing here sits inside a `.data-table` any more.
+ * --------------------------------------------------------------------- */
+
+.review-subject {
+    margin: 0 0 var(--s-5);
+}
+
+.review-subject-heading {
+    margin: 0;
+    color: var(--ink);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
+}
+
+/* A chip after the formula -- spin word, then any facet that makes this
+   entry different from its siblings (stereo label, isotopologue, excited
+   state). Quiet by design: the formula is what a reviewer scans for, these
+   are context once they have found the right block. */
+.review-subject-chip {
+    font: var(--type-note-font);
+    color: var(--muted);
+}
+
+.review-subject-chip::before {
+    content: " \00B7 ";
+}
+
+/* The subject's own public ref -- visible, because it is what a reviewer
+   cites, but deliberately quieter than the heading: it is not what the eye
+   should scan the page for. See the brief: "for citation, not for
+   scanning". */
+/* A caveat about missing data (no formula, no reaction SMILES) -- NEVER
+   rendered in the heading itself. It sits in its own quiet line, the same
+   register as the facet chips, directly under the heading and above the
+   ref. The heading always holds a NAME (the formula, or failing that the
+   record type); this is where the honest "we don't have it" goes instead. */
+.review-subject-caveat {
+    margin: 0 0 var(--s-1);
+}
+
+.review-subject-ref {
+    margin: var(--s-1) 0 var(--s-3);
+    font: var(--type-note-font);
+}
+
+.review-subject-records {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+}
+
+.review-record-row,
+.review-record-group {
+    padding-top: var(--s-3);
+    border-top: 1px solid var(--line-2);
+}
+
+.review-subject-records > :first-child {
+    padding-top: 0;
+    border-top: none;
+}
+
+.review-record-group-summary {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+}
+
+/* A single record's line: the record on the left, its status and Review
+   action on the right -- the mockup's layout, and the reason for it is
+   concrete, not aesthetic. Stacking the action under the record (the
+   previous layout) roughly doubled every record's rendered height and
+   left a ragged column of buttons down the left edge; on a 41-subject,
+   147-record backlog that is most of the page's height spent on
+   whitespace between a label and its own button.
+
+   `flex-wrap: wrap` does the responsive work with no separate breakpoint:
+   at phone width the two sides no longer fit one line, so
+   `.review-record-row-right` wraps onto its own line below and, being
+   alone on that line, `justify-content: space-between` places it at the
+   START -- which is exactly the stacked, left-aligned layout this had
+   before. Nothing here has to know where that width is; the content
+   finds it. */
+.review-record-row-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+}
+
+.review-record-row-left {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+    min-width: 0;
+}
+
+.review-record-row-right {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+}
+
+.review-record-type {
+    color: var(--ink-2);
+    font: var(--type-value-font);
+}
+
+.review-record-own-link {
+    font: var(--type-data-font);
+}
+
+.review-record-note {
+    color: var(--muted);
+    font: var(--type-note-font);
+}
+
+/* The count on a collapsed group ("Energy corrections  2") -- a plain
+   number, not a pill: a pill here would read as a status badge, and the
+   count is not a judgement, just an arithmetic fact. */
+.review-record-count {
+    color: var(--muted);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+}
+
+.review-record-group-detail {
+    list-style: none;
+    margin: var(--s-3) 0 0;
+    padding: var(--s-3) 0 0 var(--s-4);
+    border-top: 1px dashed var(--line-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+}
+
+.review-record-group-detail .review-record-row {
+    padding-top: 0;
+    border-top: none;
+}
