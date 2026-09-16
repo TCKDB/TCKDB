@@ -180,26 +180,34 @@ function NewTabNote() {
 }
 
 /**
- * Whether formula-only rendering would make two DIFFERENT participants of
- * ONE equation print identically -- the case `formulaOnly` must not be
- * used for, since it would render an isomerisation as `C9H8 ⇌ C9H8`, a
- * species reacting to itself. See `SubjectHeading`'s reaction_entry
- * branch for why this decision lives here (a property of the whole
- * equation) rather than inside `SpeciesFace` (which renders one
- * participant and cannot see its siblings).
+ * Whether formula-only rendering would be wrong or confusing for THIS
+ * equation -- the case `formulaOnly` must not be used for. See
+ * `SubjectHeading`'s reaction_entry branch for why this decision lives
+ * here (a property of the whole equation) rather than inside
+ * `SpeciesFace` (which renders one participant and cannot see its
+ * siblings). Two reasons, both closed here:
  *
- * Two participants "collide" when they share a non-null formula AND are
- * NOT the same species (different `species_entry_ref`) -- the same
- * species appearing on both sides of its own equation (a catalyst, say)
- * is not ambiguous; it is correctly the same ref rendering the same way
- * twice. Checked across BOTH sides together, not per side: an
+ * - Two DIFFERENT participants share a non-null formula -- an
+ *   isomerisation would render as `C9H8 ⇌ C9H8`, a species reacting to
+ *   itself, the exact defect `SpeciesFace`'s SMILES-leading design
+ *   exists to prevent. The same species appearing on both sides of its
+ *   own equation (a catalyst, say) is not this case: same ref, same
+ *   formula, correctly the same molecule rendering the same way twice.
+ * - Any participant has NO formula at all. Rendering its SMILES next to
+ *   every other participant's bare formula is a mixed notation on one
+ *   line -- `C9H8 ⇌ CC1=CC=CC=1` -- which is its own confusion even
+ *   with no isomer to collide against. Near-unreachable (a species
+ *   without a computed formula is rare), but one condition closes it, so
+ *   there is no reason to leave the gap open.
+ *
+ * Both checks run across BOTH sides together, not per side: an
  * isomerisation reactant and product are on opposite sides and would
  * still read as one reacting to itself.
  */
 function equationHasFormulaCollision(reaction: ReviewQueueReactionEquation): boolean {
     const refByFormula = new Map<string, string>()
     for (const participant of [...reaction.reactants, ...reaction.products]) {
-        if (!participant.formula) continue
+        if (!participant.formula) return true
         const existingRef = refByFormula.get(participant.formula)
         if (existingRef !== undefined && existingRef !== participant.species_entry_ref) {
             return true

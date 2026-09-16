@@ -312,6 +312,62 @@ class TestReactionEntrySubjectCarriesItsEquation:
         assert subject.reaction.reactants[0].formula == "CH3"
         assert subject.reaction.products[0].formula == "CH4"
 
+    def test_the_reaction_entrys_own_review_row_folds_into_the_same_subject_as_its_kinetics(
+        self, db_session
+    ):
+        """Review #492 (second round), finding 1: every reaction workflow
+        also writes a review row for the reaction_entry ITSELF (two
+        `RecordRef(reaction_entry)` sites in `app/workflows`), which used
+        to group under `reaction` -- a second, nameless block ("Reaction
+        rxn_...") repeating the SAME `rxe_...` ref the kinetics block
+        already showed. `reaction_entry` is now in `_SELF_SUBJECT_TYPES`,
+        so both review rows must land in ONE subject.
+        """
+        reactant = make_species(db_session, smiles="[OH]")
+        product = make_species(db_session, smiles="O", multiplicity=1)
+        reaction = make_chem_reaction(
+            db_session, reactants=[reactant], products=[product], reversible=False
+        )
+        reactant_entry = make_species_entry(db_session, reactant)
+        product_entry = make_species_entry(db_session, product)
+        reaction_entry = make_reaction_entry(
+            db_session,
+            reaction=reaction,
+            reactant_entries=[reactant_entry],
+            product_entries=[product_entry],
+        )
+        kinetics = make_kinetics(db_session, reaction_entry=reaction_entry)
+        _review(
+            db_session,
+            record_type=SubmissionRecordType.reaction_entry,
+            record_id=reaction_entry.id,
+        )
+        _review(
+            db_session, record_type=SubmissionRecordType.kinetics, record_id=kinetics.id
+        )
+
+        result = list_review_queue(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50, offset=0
+        )
+
+        matching = [
+            s for s in result.subjects if s.subject_ref == reaction_entry.public_ref
+        ]
+        assert len(matching) == 1, "one reaction rendered as two subjects"
+        subject = matching[0]
+        assert subject.subject_type is SubmissionRecordType.reaction_entry
+        # Both review rows are here -- the reaction_entry's own, and the
+        # kinetics record's.
+        record_types = {row.record_type for row in subject.rows}
+        assert record_types == {
+            SubmissionRecordType.reaction_entry,
+            SubmissionRecordType.kinetics,
+        }
+        # And it still carries its equation -- the fold-in did not cost
+        # the chemistry this class's other test already covers.
+        assert subject.reaction is not None
+        assert result.subject_total == 1
+
     def test_a_subject_with_no_reaction_data_carries_no_reaction_field(
         self, db_session
     ):

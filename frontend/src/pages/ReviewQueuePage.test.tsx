@@ -684,6 +684,57 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(heading.textContent).not.toContain("(Pt)")
     })
 
+    it("falls back when one participant has no formula, so it never mixes notations on one line", async () => {
+        // Review #492 (second round), finding 4: with no duplicate at all,
+        // a participant with `formula: null` still forced mixed notation
+        // under the old rule -- "C9H8 <=> CC1=CC=CC=1", formula on one
+        // side, SMILES on the other, exactly the confusion this page's
+        // own comment already named. A missing formula must force the
+        // WHOLE equation to the SMILES-leading form, on its own, with no
+        // collision required.
+        meIs(curator)
+        queueIs([
+            subject(
+                [record({ record_type: "kinetics", container_type: "reaction_entry", container_ref: "rxe_no_formula" })],
+                {
+                    subject_type: "reaction_entry",
+                    subject_ref: "rxe_no_formula",
+                    chemistry: chemistry(),
+                    reaction: reactionEquation({
+                        reversible: true,
+                        reactants: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_known",
+                                smiles: "C1=CC=CC=C1",
+                                formula: "C9H8",
+                                participant_index: 1,
+                            }),
+                        ],
+                        products: [
+                            reactionParticipant({
+                                species_entry_ref: "spe_unparsed",
+                                smiles: "CC1=CC=CC=1",
+                                formula: null,
+                                participant_index: 1,
+                            }),
+                        ],
+                    }),
+                },
+            ),
+        ])
+        renderPage()
+
+        const section = await screen
+            .findByText("rxe_no_formula")
+            .then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        // Both participants render as SMILES -- not one formula, one
+        // SMILES.
+        expect(within(heading).getByText("C1=CC=CC=C1")).toBeInTheDocument()
+        expect(within(heading).getByText("CC1=CC=CC=1")).toBeInTheDocument()
+        expect(heading.textContent).toContain("(C9H8)")
+    })
+
     it("falls back to the plain type label when a reaction_entry subject has no resolvable equation", async () => {
         meIs(curator)
         queueIs([
@@ -1698,5 +1749,203 @@ describe("guarantees carried over from the flat queue (review #492, finding 4)",
 
         expect(await screen.findByText("spe_h2o")).toBeInTheDocument()
         expect(screen.getByText("Thermochemistry")).toBeInTheDocument()
+    })
+
+    it("re-reads a refused row, because a refusal usually means it moved", async () => {
+        meIs(curator)
+        // Another curator gets there first: our PATCH is refused, and the
+        // next read shows the state they set. Asserted under "all" so
+        // the status text is not suppressed by the filter-echo rule.
+        let refused = false
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([
+                        subject([record({ status: refused ? "approved" : "not_reviewed" })]),
+                    ]),
+                ),
+            ),
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
+                refused = true
+                return HttpResponse.json(
+                    { code: "domain_error", detail: "Transition not_reviewed -> rejected is not allowed." },
+                    { status: 400 },
+                )
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.selectOptions(screen.getByLabelText(/New review state/), "rejected")
+        await user.type(screen.getByLabelText(/Why/), "wrong")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        expect(await screen.findByRole("alert")).toHaveTextContent(/is not allowed/)
+        // Leaving the stale "not reviewed" on screen under a live control
+        // invites the curator to try the same thing again against a state
+        // the server has already left.
+        await waitFor(() => expect(within(section).getByText("approved")).toBeInTheDocument())
+    })
+
+    it("is gone once the same row succeeds and leaves the view", async () => {
+        meIs(curator)
+        // Refused, then retried successfully. The row leaves the default
+        // not_reviewed view because the retry moved it -- and the banner
+        // must not then announce the OLD refusal about a write that has
+        // just worked.
+        let attempts = 0
+        queueByStatus(() =>
+            attempts >= 2
+                ? [subject([record({ status: "approved" })])]
+                : [subject([record({ status: "not_reviewed" })])],
+        )
+        server.use(
+            http.patch(`${PATCH_BASE}/:type/:id`, () => {
+                attempts += 1
+                if (attempts === 1) {
+                    return HttpResponse.json(
+                        { code: "domain_error", detail: "Someone else has it." },
+                        { status: 400 },
+                    )
+                }
+                return HttpResponse.json(record({ status: "approved" }))
+            }),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.type(screen.getByLabelText(/Why/), "first")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Someone else has it/)
+
+        // The form stays open after a non-saved refusal, so retry in it --
+        // clicking "Review..." again would close it.
+        await user.clear(screen.getByLabelText(/Why/))
+        await user.type(screen.getByLabelText(/Why/), "second")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Someone else has it/)).not.toBeInTheDocument(),
+        )
+        expect(screen.queryByText(/no longer in this view/i)).not.toBeInTheDocument()
+    })
+
+    it("does not follow the curator to another page", async () => {
+        meIs(curator)
+        // The same rule as the filter, through the paging door: a refusal
+        // is about a subject in a view, and a different page is a
+        // different view. Without `offset` in the clearing effect the
+        // banner rides along, naming a subject from page two as "no
+        // longer in this view" while the curator reads page one.
+        const fifty = Array.from({ length: 50 }, (_, i) =>
+            subject([record({ id: 200 + i, record_id: 200 + i })], { subject_ref: `spe_p1_${i}` }),
+        )
+        server.use(
+            http.get(QUEUE, ({ request }) => {
+                const skip = Number(new URL(request.url).searchParams.get("skip") ?? 0)
+                return HttpResponse.json(
+                    skip === 0
+                        ? queuePageBody(fifty, { subject_total: 51 })
+                        : queuePageBody(
+                              [subject([record({ id: 900, record_id: 900 })], { subject_ref: "spe_page_two" })],
+                              { subject_total: 51, offset: skip },
+                          ),
+                )
+            }),
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
+                HttpResponse.json(
+                    { code: "service_unavailable", detail: "Page two refusal." },
+                    { status: 503 },
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText("spe_p1_0")
+
+        await user.click(screen.getByRole("button", { name: "Older" }))
+        await screen.findByText("spe_page_two")
+
+        await user.click(reviewButtonIn(await subjectFor("spe_page_two")))
+        await user.type(screen.getByLabelText(/Why/), "fine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Page two refusal/)
+
+        await user.click(screen.getByRole("button", { name: "Newer" }))
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Page two refusal/)).not.toBeInTheDocument(),
+        )
+    })
+
+    it("does not follow the curator into another view", async () => {
+        meIs(curator)
+        // A refusal that leaves the row where it is (a 503, say). Change
+        // filter and the subject is absent for a reason that has nothing
+        // to do with the refusal -- announcing "no longer in this view"
+        // there is simply false, and there was no way to dismiss it.
+        queueByStatus(() => [subject([record({ status: "not_reviewed" })])])
+        server.use(
+            http.patch(`${PATCH_BASE}/:type/:id`, () =>
+                HttpResponse.json(
+                    { code: "service_unavailable", detail: "Try again shortly." },
+                    { status: 503 },
+                ),
+            ),
+        )
+        const user = userEvent.setup()
+        renderPage()
+        const section = await subjectFor("spe_h2o")
+
+        await user.click(reviewButtonIn(section))
+        await user.type(screen.getByLabelText(/Why/), "fine")
+        await user.click(screen.getByRole("button", { name: "Record this judgement" }))
+        await screen.findByText(/Try again shortly/)
+
+        await user.selectOptions(screen.getByLabelText("Showing"), "approved")
+
+        await waitFor(() =>
+            expect(screen.queryByText(/Try again shortly/)).not.toBeInTheDocument(),
+        )
+    })
+
+    it("describes the state it is actually offering", async () => {
+        // The hint and the select must agree: they are the two things a
+        // curator reads before deciding. Starting from "approved" (not
+        // the default not_reviewed) so the FIRST offered option -- not
+        // just any option -- is asserted against its own hint.
+        meIs(curator)
+        queueIs([subject([record({ status: "approved" })])])
+        renderPage()
+
+        const user = userEvent.setup()
+        await user.click(reviewButtonIn(await subjectFor("spe_h2o")))
+        const select = screen.getByLabelText(/New review state/) as HTMLSelectElement
+
+        expect(select.value).toBe("under_review")
+        expect(screen.getByText(/No judgement is recorded yet/i)).toBeInTheDocument()
+    })
+
+    it("offers a control on every status a row can actually hold", async () => {
+        // No status this page can render leaves a row with nothing to
+        // click -- every member of ALL_STATUSES has at least one allowed
+        // transition (see ALLOWED_TRANSITIONS), so "Review..." must
+        // appear for each one, never "no transition available".
+        for (const status of ["not_reviewed", "under_review", "approved", "rejected", "deprecated"] as const) {
+            meIs(curator)
+            queueIs([subject([record({ status })])])
+            renderPage()
+
+            const section = await subjectFor("spe_h2o")
+            expect(within(section).getByRole("button", { name: "Review…" })).toBeEnabled()
+            expect(within(section).queryByText(/no transition available/i)).not.toBeInTheDocument()
+
+            cleanup()
+        }
     })
 })

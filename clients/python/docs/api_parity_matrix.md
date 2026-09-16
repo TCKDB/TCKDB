@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 104 |
 | raw_only | 106 |
-| not_applicable | 42 |
-| **total** | **252** |
+| not_applicable | 43 |
+| **total** | **253** |
 
 ## Typed coverage
 
@@ -346,6 +346,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/latest` | yes | — | — | — | — |
 | `POST /api/v1/curation/scientific-record-supersessions` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews` | yes | — | — | — | — |
+| `GET /api/v1/record-reviews/queue` | yes | — | — | — | — |
 | `GET /api/v1/record-reviews/{record_type}/{record_id}` | yes | — | — | — | — |
 | `PATCH /api/v1/record-reviews/{record_type}/{record_id}` | yes | — | — | — | — |
 | `POST /api/v1/releases` | yes | — | — | — | — |
