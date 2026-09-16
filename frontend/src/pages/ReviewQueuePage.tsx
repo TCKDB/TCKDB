@@ -5,13 +5,16 @@ import "../admin.css"
 import { AuthApiError } from "../api/authApi"
 import {
     RecordReviewResponseError,
-    listRecordReviews,
+    listReviewQueue,
     setRecordReviewStatus,
 } from "../api/recordReviewsApi"
+import { spinWord } from "../domain/chemistryFormat"
+import { Formula } from "../components/Formula"
+import { facetChips } from "../domain/recordFacets"
 import {
-    recordTypeWords,
-    resolveRecordLocation,
-    type RecordLocation,
+    recordRoute,
+    recordTypeGroupLabel,
+    recordTypeHasPage,
 } from "../domain/recordRoute"
 import { useAuth } from "../hooks/useAuth"
 import {
@@ -22,6 +25,7 @@ import {
     statusMeaning,
     type RecordReview,
     type RecordReviewStatus,
+    type ReviewQueueSubject,
 } from "../types/recordReview"
 
 /**
@@ -70,25 +74,44 @@ import {
  * write that ends every upload, starting at `not_reviewed`. The default
  * filter is therefore the backlog: everything nobody has looked at.
  *
- * ## What this page cannot tell you
+ * ## Task #269: subject grouping
  *
- * How big the backlog is. The route answers with a bare array and no
- * total, so a full page means "there may be more" and nothing stronger.
+ * The owner rejected the flat, one-row-per-record table outright: two
+ * corrections on one species rendered as two lines with nothing telling
+ * them apart, a correction's missing public ref leaked as "cannot be
+ * named", nothing on screen said what the chemistry WAS, and a bare "50
+ * shown" admitted the page could not say how big the backlog is.
  *
- * Nor is paging a stable walk: the list is newest-first and paging is by
- * offset, so reviewing rows on one page shifts the boundary and the next
- * page skips as many as were moved out of the filter. Nothing is lost --
- * the skipped rows are still on page one -- but "Older until empty" is
- * not a way to be sure you have seen everything.
- * Reporting a real count needs a breaking wire change or a second route
- * (task #257). Saying "50 shown" and implying that is all of it would be
- * the worse failure, so the page says explicitly when it is full.
+ * This page now reads `GET /api/v1/record-reviews/queue`
+ * (`listReviewQueue`), which groups every record under the SUBJECT it
+ * belongs to -- the species entry or transition-state entry a curator
+ * actually judges as one unit, resolved server-side by
+ * `app/services/review_queue.py`. Paging counts SUBJECTS, never records,
+ * so a page boundary can never fall inside one subject's records. The
+ * header reports honest, computed totals (`subject_total`/`record_total`)
+ * over the WHOLE filtered backlog, not just the page shown -- the old
+ * "there may be more, and this page cannot say how many" hedge is gone
+ * because the new route does not need it.
+ *
+ * The review ACTION is unchanged: still per record, still routed through
+ * `setRecordReviewStatus(recordType, recordId, ...)`. Grouping is a
+ * presentation of the same rows, not a new kind of approval -- a
+ * collapsed cluster of same-type records (two corrections on one
+ * species) expands so each one is still reached and judged individually.
+ * A per-subject bulk approve is a deliberately separate, later change
+ * (task #270): it interacts with permanent data freezing and needs its
+ * own design, and nothing here offers it.
  */
 
 type LoadState =
     | { status: "loading" }
     | { status: "error"; message: string }
-    | { status: "ready"; rows: RecordReview[]; unreadable: number; full: boolean }
+    | {
+          status: "ready"
+          subjects: ReviewQueueSubject[]
+          subjectTotal: number
+          recordTotal: number
+      }
 
 /** The open transition form, for the one row it belongs to. */
 type Draft = { rowId: number; status: RecordReviewStatus; note: string }
@@ -112,17 +135,25 @@ function keyOf(row: RecordReview): number {
     return row.id
 }
 
+/** A stable key for a subject: type+ref together, since either alone can repeat. */
+function subjectKeyOf(subject: ReviewQueueSubject, index: number): string {
+    return subject.subject_type && subject.subject_ref
+        ? `${subject.subject_type}:${subject.subject_ref}`
+        : `orphan:${index}`
+}
+
 /**
  * Every link out of this queue opens in a new tab.
  *
  * This is deliberately against the usual advice, which is that a page
  * should not decide how a link opens. It is made here because the queue is
  * **stateful in a way the URL does not capture**: the status filter, the
- * page offset, which rows have an open form, and -- the one that actually
- * costs work -- a half-typed reason in one of them. Every transition here
- * requires a written reason, so navigating away in the same tab can
- * discard several sentences a curator has just composed, and the browser
- * Back button restores the route without restoring any of it.
+ * page offset, which rows have an open form, which subject blocks are
+ * expanded, and -- the one that actually costs work -- a half-typed reason
+ * in one of them. Every transition here requires a written reason, so
+ * navigating away in the same tab can discard several sentences a curator
+ * has just composed, and the browser Back button restores the route
+ * without restoring any of it.
  *
  * `rel="noopener noreferrer"` is not optional with `target="_blank"`:
  * without `noopener` the opened page gets a live `window.opener` handle
@@ -137,86 +168,132 @@ function NewTabNote() {
 }
 
 /**
- * What a row shows in its Record column: the record, and where to see it.
+ * The subject block's heading: what the chemistry IS, not what it is
+ * called. Defect #4 -- nothing on screen said a species entry was a
+ * hydrogen atom, C9H8, or a C9H9 radical with stereo label R.
  *
- * Four outcomes, and the two that cannot be linked are kept apart on
- * purpose -- see `resolveRecordLocation`. Eight identical "cannot be named"
- * lines is what this column used to render for every applied energy
- * correction, and it told a curator nothing about whether they were looking
- * at a bug (a record that has gone missing) or a known gap (a type with no
- * page yet). Those call for different actions, so they get different words.
+ * Three shapes:
+ * - `species_entry`: formula (from `species.smiles`, via the RDKit
+ *   cartridge) plus spin word plus the SAME facet chips
+ *   (`domain/recordFacets.ts`) every other species surface renders --
+ *   reused, not reinvented, per the brief.
+ * - `transition_state_entry`: formula from the entry's OWN
+ *   `unmapped_smiles` (never the reaction it sits on -- see
+ *   `app/services/review_queue.py`'s "naming a transition-state subject")
+ *   plus spin word. No facet chips: a transition state carries none of
+ *   those axes.
+ * - anything else (a conformer group, a reaction entry, an orphaned row):
+ *   no formula is available without a second container hop this surface
+ *   deliberately does not take (see that module's docstring) -- the
+ *   heading says plainly what KIND of record this is instead of guessing.
  */
-function RecordCell({ location }: { location: RecordLocation }) {
-    switch (location.kind) {
-        case "record":
-            return (
+function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
+    if (subject.subject_type === null || subject.subject_ref === null) {
+        return (
+            <p className="review-subject-heading admin-absent">
+                No record could be found for this review row. It may have
+                been deleted after it was queued.
+            </p>
+        )
+    }
+
+    if (subject.subject_type === "species_entry") {
+        const chips = facetChips({
+            species_entry_kind: subject.chemistry.species_entry_kind ?? "minimum",
+            electronic_state_kind: subject.chemistry.electronic_state_kind ?? "ground",
+            electronic_state_label: subject.chemistry.electronic_state_label,
+            term_symbol: subject.chemistry.term_symbol,
+            stereo_label: subject.chemistry.stereo_label,
+            isotope_key: subject.chemistry.isotope_key,
+        })
+        const spin = spinWord(subject.chemistry.multiplicity)
+        return (
+            <h2 className="review-subject-heading">
+                {subject.chemistry.formula ? (
+                    <Formula value={subject.chemistry.formula} />
+                ) : (
+                    <span className="admin-absent">formula not available</span>
+                )}
+                {spin && <span className="review-subject-chip">{spin}</span>}
+                {chips.map((chip) => (
+                    <span key={chip} className="review-subject-chip">
+                        {chip}
+                    </span>
+                ))}
+            </h2>
+        )
+    }
+
+    if (subject.subject_type === "transition_state_entry") {
+        const spin = spinWord(subject.chemistry.multiplicity)
+        return (
+            <h2 className="review-subject-heading">
+                {subject.chemistry.formula ? (
+                    <Formula value={subject.chemistry.formula} />
+                ) : (
+                    <span className="admin-absent">
+                        no reaction SMILES recorded for this candidate
+                    </span>
+                )}
+                {spin && <span className="review-subject-chip">{spin}</span>}
+            </h2>
+        )
+    }
+
+    return (
+        <h2 className="review-subject-heading">
+            {recordTypeGroupLabel(subject.subject_type, 1)}
+        </h2>
+    )
+}
+
+/** The subject's own ref, shown quietly -- for citation, not for scanning. */
+function SubjectRefLine({ subject }: { subject: ReviewQueueSubject }) {
+    if (subject.subject_type === null || subject.subject_ref === null) return null
+    const href = recordRoute(subject.subject_type, subject.subject_ref)
+    return (
+        <p className="review-subject-ref">
+            {href ? (
                 <Link
-                    to={location.href}
+                    to={href}
                     className="data"
                     target="_blank"
                     rel="noopener noreferrer"
                 >
-                    {location.ref}
+                    {subject.subject_ref}
                     <NewTabNote />
                 </Link>
-            )
-        case "container":
-            return (
+            ) : (
                 <>
-                    {/* The record's own name first, when it has one, so the
-                        record stays distinguishable from the thing it is
-                        shown inside. Without it the row would read as if the
-                        container itself were what needs reviewing. */}
-                    {location.ref !== null ? (
-                        <span className="data">{location.ref}</span>
-                    ) : (
-                        // The comma is load-bearing, and only here. A ref
-                        // followed by "shown on ..." reads as two facts about
-                        // one record; "cannot be named shown on ..." with
-                        // nothing between them reads as one broken sentence.
-                        // Seen on the rendered page, not reasoned about.
-                        <>
-                            <span className="admin-absent">cannot be named</span>,
-                        </>
-                    )}{" "}
-                    <Link
-                        to={location.href}
-                        className="review-container-link"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                    >
-                        shown on {recordTypeWords(location.containerType)}{" "}
-                        <span className="data">{location.containerRef}</span>
-                        <NewTabNote />
-                    </Link>
-                </>
-            )
-        case "no-page":
-            return (
-                <>
-                    <span className="data">{location.ref}</span>{" "}
-                    {/* Two facts, both certainly true here, and no claim
-                        about WHICH of them is the operative one -- see
-                        `resolveRecordLocation`. The earlier wording, "no
-                        page for this record type yet", named the missing
-                        page as the sole reason, which is wrong whenever the
-                        container was the thing that could not be named. */}
+                    <span className="data">{subject.subject_ref}</span>{" "}
                     <span className="admin-absent">
-                        no page for this record type, and nowhere it can be seen
+                        no page for this record type yet
                     </span>
                 </>
-            )
-        case "unnamed":
-            // Kept word-for-word as the phrase this column has always used
-            // for an unnameable record. What changed is that it is no longer
-            // the ONLY thing an unlinkable row can say: "no page for this
-            // record type yet" above is a different sentence for a different
-            // situation, which is the whole point -- one is a record that has
-            // gone missing, the other a page nobody has built.
-            return (
-                <span className="admin-absent">this record cannot be named</span>
-            )
-    }
+            )}
+        </p>
+    )
+}
+
+/**
+ * One record's own link, when its type has a page independent of the
+ * subject it is nested under (a calculation, a conformer group nested
+ * under a species entry, a reaction entry nested under a reaction). Types
+ * with no page of their own render no link here -- the subject block's
+ * own link already covers "go and look at this", and repeating "cannot be
+ * named" or "shown on ..." for every such row is exactly the noise this
+ * redesign removes.
+ */
+function RecordOwnLink({ row }: { row: RecordReview }) {
+    if (!recordTypeHasPage(row.record_type) || !row.record_public_ref) return null
+    const href = recordRoute(row.record_type, row.record_public_ref)
+    if (href === null) return null
+    return (
+        <Link to={href} className="data review-record-own-link" target="_blank" rel="noopener noreferrer">
+            {row.record_public_ref}
+            <NewTabNote />
+        </Link>
+    )
 }
 
 export default function ReviewQueuePage() {
@@ -229,6 +306,7 @@ export default function ReviewQueuePage() {
     const [busy, setBusy] = useState<ReadonlySet<number>>(new Set())
     const [rowErrors, setRowErrors] = useState<ReadonlyMap<number, RowError>>(new Map())
     const [draft, setDraft] = useState<Draft | null>(null)
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
 
     const role = state.status === "signed-in" ? state.user.role : null
     const canReview = role === "curator" || role === "admin"
@@ -257,12 +335,12 @@ export default function ReviewQueuePage() {
 
     const requestSeq = useRef(0)
 
-    const refresh = useCallback(async (options?: { keepRows?: boolean }) => {
-        if (!options?.keepRows) setLoad({ status: "loading" })
+    const refresh = useCallback(async () => {
+        setLoad({ status: "loading" })
         const seq = (requestSeq.current += 1)
         const current = filterRef.current
         try {
-            const page = await listRecordReviews({
+            const page = await listReviewQueue({
                 ...(current === "all" ? {} : { status: current }),
                 limit: PAGE_LIMIT,
                 offset: offsetRef.current,
@@ -270,9 +348,9 @@ export default function ReviewQueuePage() {
             if (seq !== requestSeq.current) return
             setLoad({
                 status: "ready",
-                rows: page.items,
-                unreadable: page.unreadable,
-                full: page.full,
+                subjects: page.subjects,
+                subjectTotal: page.subject_total,
+                recordTotal: page.record_total,
             })
         } catch (caught) {
             if (seq !== requestSeq.current) return
@@ -375,6 +453,15 @@ export default function ReviewQueuePage() {
         )
     }
 
+    function toggleExpanded(groupKey: string) {
+        setExpanded((current) => {
+            const next = new Set(current)
+            if (next.has(groupKey)) next.delete(groupKey)
+            else next.add(groupKey)
+            return next
+        })
+    }
+
     async function submit(row: RecordReview, draftNow: Draft) {
         const rowId = keyOf(row)
         setBusy((current) => new Set(current).add(rowId))
@@ -387,7 +474,7 @@ export default function ReviewQueuePage() {
                 note: draftNow.note.trim() || undefined,
             })
             setDraft((current) => (current?.rowId === rowId ? null : current))
-            await refresh({ keepRows: true })
+            await refresh()
         } catch (caught) {
             const saved = caught instanceof RecordReviewResponseError
             setRowError(rowId, {
@@ -404,7 +491,7 @@ export default function ReviewQueuePage() {
             // self-approval block, both of which mean the row on screen
             // may already disagree with the server. Re-read rather than
             // leave a stale status under a live control.
-            await refresh({ keepRows: true })
+            await refresh()
         } finally {
             setBusy((current) => {
                 const next = new Set(current)
@@ -412,6 +499,174 @@ export default function ReviewQueuePage() {
                 return next
             })
         }
+    }
+
+    /** One record's status + action, whether shown alone or inside an expanded group. */
+    function renderRecordRow(row: RecordReview) {
+        const rowId = keyOf(row)
+        const rowBusy = busy.has(rowId)
+        const options = offeredTransitions(row)
+        // What the form will actually send. A re-read can change a row's
+        // status under an open form, leaving the held choice no longer
+        // among the options -- and a controlled <select> whose value
+        // matches nothing displays the FIRST option. The select then
+        // showed one state, the hint described it, and submitting sent a
+        // third. Deriving all three from one value removes the
+        // disagreement rather than papering it.
+        const chosen =
+            draft?.rowId === rowId && options.includes(draft.status)
+                ? draft.status
+                : options[0]
+        const canSubmit = chosen !== undefined
+        const cls = statusClass(row.status)
+        return (
+            <li key={rowId} className="review-record-row">
+                <div className="review-record-row-main">
+                    <span className="review-record-type">
+                        {recordTypeGroupLabel(row.record_type, 1)}
+                    </span>
+                    <RecordOwnLink row={row} />
+                    <span className={cls ?? undefined}>{statusLabel(row.status)}</span>
+                    {row.note && <span className="review-record-note">{row.note}</span>}
+                </div>
+                <div className="review-record-row-action">
+                    {options.length > 0 ? (
+                        <button
+                            type="button"
+                            disabled={rowBusy}
+                            aria-expanded={draft?.rowId === rowId}
+                            aria-controls={`review-form-${rowId}`}
+                            onClick={() => toggleDraft(row)}
+                        >
+                            Review…
+                        </button>
+                    ) : (
+                        <span className="admin-absent">no transition available</span>
+                    )}
+                    {rowErrors.has(rowId) && (
+                        <p className="auth-error admin-row-error" role="alert">
+                            {rowErrors.get(rowId)?.message}
+                        </p>
+                    )}
+                    {draft?.rowId === rowId && canSubmit && (
+                        <form
+                            id={`review-form-${rowId}`}
+                            className="admin-resolve"
+                            onSubmit={(e) => {
+                                e.preventDefault()
+                                void submit(row, { ...draft, status: chosen })
+                            }}
+                        >
+                            <label htmlFor={`st-${rowId}`}>New review state</label>
+                            <select
+                                id={`st-${rowId}`}
+                                className="admin-role-select"
+                                value={chosen}
+                                onChange={(e) =>
+                                    setDraft({
+                                        ...draft,
+                                        status: e.target.value as RecordReviewStatus,
+                                    })
+                                }
+                            >
+                                {options.map((s) => (
+                                    <option key={s} value={s}>
+                                        {statusLabel(s)}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="admin-hint">{statusMeaning(chosen)}</p>
+                            <label htmlFor={`note-${rowId}`}>Why (required)</label>
+                            <textarea
+                                id={`note-${rowId}`}
+                                value={draft.note}
+                                rows={2}
+                                onChange={(e) =>
+                                    setDraft({ ...draft, note: e.target.value })
+                                }
+                            />
+                            <button
+                                type="submit"
+                                disabled={draft.note.trim().length === 0 || rowBusy}
+                            >
+                                Record this judgement
+                            </button>
+                        </form>
+                    )}
+                </div>
+            </li>
+        )
+    }
+
+    /**
+     * Records of one type under one subject, collapsed to a count when
+     * there is more than one (defect #2: two corrections on one species
+     * rendering as an unexplained duplicate). The collapsed line still
+     * expands to every individual record's own status and Review action
+     * -- a per-subject bulk approve is explicitly NOT this (task #270).
+     */
+    function renderRecordGroup(
+        groupKey: string,
+        recordType: string,
+        rows: RecordReview[],
+    ) {
+        if (rows.length === 1) return renderRecordRow(rows[0])
+
+        const statuses = new Set(rows.map((r) => r.status))
+        const uniformStatus = statuses.size === 1 ? [...statuses][0] : null
+        const isExpanded = expanded.has(groupKey)
+        return (
+            <li key={groupKey} className="review-record-group">
+                <div className="review-record-group-summary">
+                    <span className="review-record-type">
+                        {recordTypeGroupLabel(recordType, rows.length)}
+                    </span>
+                    <span className="review-record-count">{rows.length}</span>
+                    {uniformStatus ? (
+                        <span className={statusClass(uniformStatus) ?? undefined}>
+                            {statusLabel(uniformStatus)}
+                        </span>
+                    ) : (
+                        <span className="admin-absent">mixed review state</span>
+                    )}
+                    <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleExpanded(groupKey)}
+                    >
+                        {isExpanded ? "Hide records" : `Show ${rows.length} records`}
+                    </button>
+                </div>
+                {isExpanded && (
+                    <ul className="review-record-group-detail">
+                        {rows.map((row) => renderRecordRow(row))}
+                    </ul>
+                )}
+            </li>
+        )
+    }
+
+    function renderSubject(subject: ReviewQueueSubject, index: number) {
+        const subjectKey = subjectKeyOf(subject, index)
+        // Group this subject's own records by type, preserving the order
+        // the server returned them in (newest-first).
+        const groups = new Map<string, RecordReview[]>()
+        for (const row of subject.records) {
+            const existing = groups.get(row.record_type)
+            if (existing) existing.push(row)
+            else groups.set(row.record_type, [row])
+        }
+        return (
+            <section key={subjectKey} className="card review-subject">
+                <SubjectHeading subject={subject} />
+                <SubjectRefLine subject={subject} />
+                <ul className="review-subject-records">
+                    {[...groups.entries()].map(([recordType, rows]) =>
+                        renderRecordGroup(`${subjectKey}:${recordType}`, recordType, rows),
+                    )}
+                </ul>
+            </section>
+        )
     }
 
     return (
@@ -427,6 +682,8 @@ export default function ReviewQueuePage() {
                 afterwards does not unfreeze it. That is what{" "}
                 <Link to="/admin/curator-queue">Machine findings</Link> is not: it
                 triages what an automated reviewer raised, and endorses nothing.
+                Records are grouped below by the species or transition state they
+                belong to; reviewing still happens one record at a time.
             </p>
 
             <div className="admin-filter">
@@ -462,7 +719,12 @@ export default function ReviewQueuePage() {
 
             {load.status === "ready" &&
                 [...rowErrors.entries()]
-                    .filter(([rowId]) => !load.rows.some((r) => keyOf(r) === rowId))
+                    .filter(
+                        ([rowId]) =>
+                            !load.subjects.some((s) =>
+                                s.records.some((r) => keyOf(r) === rowId),
+                            ),
+                    )
                     .map(([rowId, error]) => (
                         // The row this refusal was about is no longer in
                         // view -- almost always because the re-read that
@@ -476,219 +738,53 @@ export default function ReviewQueuePage() {
                         </p>
                     ))}
 
-            {load.status === "ready" && load.unreadable > 0 && (
-                <p className="auth-error" role="alert">
-                    {load.unreadable} row{load.unreadable === 1 ? "" : "s"} on this
-                    page could not be read and {load.unreadable === 1 ? "is" : "are"}{" "}
-                    not shown. This page is likely older than the archive it is
-                    talking to.
-                </p>
-            )}
-
-            {load.status === "ready" && load.rows.length === 0 && (
+            {load.status === "ready" && load.subjects.length === 0 && (
                 <p role="status">
                     {offset > 0
-                        ? "Nothing older than this. Go back for the newer rows."
+                        ? "Nothing older than this. Go back for the newer subjects."
                         : statusFilter === "not_reviewed"
                           ? "Nothing is waiting. Every record has been looked at."
                           : "No records match this filter."}
                 </p>
             )}
 
-            {load.status === "ready" && load.rows.length > 0 && (
+            {load.status === "ready" && load.subjects.length > 0 && (
                 <>
                     <p className="admin-count" role="status">
-                        {load.rows.length} shown
-                        {offset > 0 ? `, from ${offset + 1}` : ""}
-                        {load.full
-                            ? ", a full page — there may be more, and this page cannot say how many"
+                        {load.recordTotal} record{load.recordTotal === 1 ? "" : "s"}
+                        {statusFilter === "not_reviewed" ? " awaiting review" : ""}
+                        {", "}
+                        {load.subjectTotal} subject
+                        {load.subjectTotal === 1 ? "" : "s"}
+                        {offset > 0
+                            ? ` (showing subjects ${offset + 1}-${
+                                  offset + load.subjects.length
+                              })`
                             : ""}
                     </p>
-                    <div className="table-scroll">
-                        <table className="data-table" aria-label="Record reviews">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Record</th>
-                                    <th scope="col">Review state</th>
-                                    <th scope="col">Reason given</th>
-                                    <th scope="col">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {load.rows.map((row) => {
-                                    const rowId = keyOf(row)
-                                    const location = resolveRecordLocation(
-                                        row.record_type,
-                                        row.record_public_ref,
-                                        row.container_type,
-                                        row.container_ref,
-                                    )
-                                    const rowBusy = busy.has(rowId)
-                                    const options = offeredTransitions(row)
-                                    // What the form will actually send. A
-                                    // re-read can change a row's status
-                                    // under an open form, leaving the held
-                                    // choice no longer among the options --
-                                    // and a controlled <select> whose value
-                                    // matches nothing displays the FIRST
-                                    // option. The select then showed one
-                                    // state, the hint described it, and
-                                    // submitting sent a third. Deriving all
-                                    // three from one value removes the
-                                    // disagreement rather than papering it.
-                                    const chosen =
-                                        draft?.rowId === rowId &&
-                                        options.includes(draft.status)
-                                            ? draft.status
-                                            : options[0]
-                                    // No status this page can render has an
-                                    // empty transition set, but rendering a
-                                    // form around `undefined` would submit
-                                    // one, so the form is gated on having
-                                    // something to submit.
-                                    const canSubmit = chosen !== undefined
-                                    const cls = statusClass(row.status)
-                                    return (
-                                        <tr key={rowId}>
-                                            <td>
-                                                <span className="admin-record-type">
-                                                    {row.record_type}
-                                                </span>{" "}
-                                                <RecordCell location={location} />
-                                            </td>
-                                            <td>
-                                                <span className={cls ?? undefined}>
-                                                    {statusLabel(row.status)}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {row.note ? (
-                                                    row.note
-                                                ) : (
-                                                    <span className="admin-absent">
-                                                        none
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td>
-                                                {options.length > 0 ? (
-                                                    <button
-                                                        type="button"
-                                                        disabled={rowBusy}
-                                                        aria-expanded={draft?.rowId === rowId}
-                                                        aria-controls={`review-form-${rowId}`}
-                                                        onClick={() => toggleDraft(row)}
-                                                    >
-                                                        Review…
-                                                    </button>
-                                                ) : (
-                                                    <span className="admin-absent">
-                                                        no transition available
-                                                    </span>
-                                                )}
-                                                {rowErrors.has(rowId) && (
-                                                    <p
-                                                        className="auth-error admin-row-error"
-                                                        role="alert"
-                                                    >
-                                                        {rowErrors.get(rowId)?.message}
-                                                    </p>
-                                                )}
-                                                {draft?.rowId === rowId && canSubmit && (
-                                                    <form
-                                                        id={`review-form-${rowId}`}
-                                                        className="admin-resolve"
-                                                        onSubmit={(e) => {
-                                                            e.preventDefault()
-                                                            void submit(row, {
-                                                                ...draft,
-                                                                status: chosen,
-                                                            })
-                                                        }}
-                                                    >
-                                                        <label htmlFor={`st-${rowId}`}>
-                                                            New review state
-                                                        </label>
-                                                        <select
-                                                            id={`st-${rowId}`}
-                                                            className="admin-role-select"
-                                                            value={chosen}
-                                                            onChange={(e) =>
-                                                                setDraft({
-                                                                    ...draft,
-                                                                    status: e.target
-                                                                        .value as RecordReviewStatus,
-                                                                })
-                                                            }
-                                                        >
-                                                            {options.map((s) => (
-                                                                <option key={s} value={s}>
-                                                                    {statusLabel(s)}
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <p className="admin-hint">
-                                                            {statusMeaning(chosen)}
-                                                        </p>
-                                                        <label htmlFor={`note-${rowId}`}>
-                                                            Why (required)
-                                                        </label>
-                                                        <textarea
-                                                            id={`note-${rowId}`}
-                                                            value={draft.note}
-                                                            rows={2}
-                                                            onChange={(e) =>
-                                                                setDraft({
-                                                                    ...draft,
-                                                                    note: e.target.value,
-                                                                })
-                                                            }
-                                                        />
-                                                        <button
-                                                            type="submit"
-                                                            disabled={
-                                                                draft.note.trim().length === 0 ||
-                                                                rowBusy
-                                                            }
-                                                        >
-                                                            Record this judgement
-                                                        </button>
-                                                    </form>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                    {load.subjects.map((subject, index) => renderSubject(subject, index))}
                 </>
             )}
 
-            {load.status === "ready" && (load.rows.length > 0 || offset > 0) && (
-                <div className="admin-paging">
-                    {/* Rendered even when the page came back empty. Inside
-                        the rows-present branch, clicking past the end of a
-                        list whose length is a multiple of the page size
-                        left a curator on "Every record has been looked at"
-                        with no control to get back -- the page's own worst
-                        failure, one click away. */}
-                    <button
-                        type="button"
-                        disabled={offset === 0}
-                        onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
-                    >
-                        Newer
-                    </button>{" "}
-                    <button
-                        type="button"
-                        disabled={!load.full}
-                        onClick={() => setOffset(offset + PAGE_LIMIT)}
-                    >
-                        Older
-                    </button>
-                </div>
-            )}
+            {load.status === "ready" &&
+                (load.subjects.length > 0 || offset > 0) && (
+                    <div className="admin-paging">
+                        <button
+                            type="button"
+                            disabled={offset === 0}
+                            onClick={() => setOffset(Math.max(0, offset - PAGE_LIMIT))}
+                        >
+                            Newer
+                        </button>{" "}
+                        <button
+                            type="button"
+                            disabled={offset + PAGE_LIMIT >= load.subjectTotal}
+                            onClick={() => setOffset(offset + PAGE_LIMIT)}
+                        >
+                            Older
+                        </button>
+                    </div>
+                )}
         </section>
     )
 }

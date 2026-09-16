@@ -26,6 +26,9 @@ from app.db.models.record_review import RecordReview
 from app.schemas.entities.record_review import (
     RecordReviewRead,
     RecordReviewSetStatusRequest,
+    ReviewQueuePageRead,
+    ReviewQueueSubjectChemistry,
+    ReviewQueueSubjectRead,
 )
 from app.services.record_containers import (
     RecordContainer,
@@ -41,6 +44,7 @@ from app.services.record_review import (
     list_record_reviews,
     set_record_review_status,
 )
+from app.services.review_queue import list_review_queue
 
 router = APIRouter()
 
@@ -125,6 +129,61 @@ def list_reviews(
         offset=pagination.skip,
     )
     return _read_many(session, rows)
+
+
+@router.get("/queue", response_model=ReviewQueuePageRead)
+def list_review_queue_page(
+    status: RecordReviewStatus | None = Query(default=None),
+    pagination: PaginationParams = Depends(),
+    session: Session = Depends(get_db),
+    _user: AppUser = Depends(get_current_user),
+) -> ReviewQueuePageRead:
+    """The review queue grouped by subject: one block per record a curator
+    judges as one unit, every review row nested under it.
+
+    ``skip``/``limit`` (``pagination``) count SUBJECTS, not records -- a
+    page never splits one subject's records across a boundary. See
+    :func:`app.services.review_queue.list_review_queue` for how subjects
+    are resolved and why this costs what it costs.
+    """
+    result = list_review_queue(
+        session,
+        status=status,
+        limit=pagination.limit,
+        offset=pagination.skip,
+    )
+    subjects = [
+        ReviewQueueSubjectRead(
+            subject_type=subject.subject_type,
+            subject_ref=subject.subject_ref,
+            chemistry=ReviewQueueSubjectChemistry(
+                formula=subject.chemistry.formula,
+                multiplicity=subject.chemistry.multiplicity,
+                species_entry_kind=subject.chemistry.species_entry_kind,
+                electronic_state_kind=subject.chemistry.electronic_state_kind,
+                electronic_state_label=subject.chemistry.electronic_state_label,
+                term_symbol=subject.chemistry.term_symbol,
+                stereo_label=subject.chemistry.stereo_label,
+                isotope_key=subject.chemistry.isotope_key,
+            ),
+            records=[
+                _read(
+                    row,
+                    result.refs.get((row.record_type, row.record_id)),
+                    result.containers.get((row.record_type, row.record_id)),
+                )
+                for row in subject.rows
+            ],
+        )
+        for subject in result.subjects
+    ]
+    return ReviewQueuePageRead(
+        subjects=subjects,
+        subject_total=result.subject_total,
+        record_total=result.record_total,
+        offset=pagination.skip,
+        limit=pagination.limit,
+    )
 
 
 @router.get(

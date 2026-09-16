@@ -42,6 +42,7 @@ from tests.services.scientific_read._factories import (
     make_energy_correction_scheme,
     make_species,
     make_species_entry,
+    make_statmech,
     make_thermo_scalar,
 )
 
@@ -809,4 +810,156 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
         assert ten_rows == two_rows, (
             f"the page cost {two_rows} queries for 2 rows and {ten_rows} for "
             "10 -- the ref or container resolve is running per row"
+        )
+
+
+class TestReviewQueueSubjectsApi:
+    """``GET /api/v1/record-reviews/queue`` (task #269).
+
+    The flat ``GET /api/v1/record-reviews`` list is unchanged and still
+    tested above; this is the new subject-grouped read the redesigned
+    queue page consumes. See ``app/services/review_queue.py`` for the
+    grouping rule these assertions pin at the wire.
+    """
+
+    def test_two_corrections_on_one_species_render_as_one_subject_with_a_count(
+        self, client, db_session
+    ):
+        entry = make_species_entry(db_session, make_species(db_session))
+        atom = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_atom"),
+        )
+        bond = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_bond"),
+        )
+        db_session.add_all(
+            [
+                RecordReview(
+                    record_type=SubmissionRecordType.applied_energy_correction,
+                    record_id=atom.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.applied_energy_correction,
+                    record_id=bond.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+
+        matching = [
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        ]
+        assert len(matching) == 1, "one species rendered as more than one subject"
+        assert len(matching[0]["records"]) == 2
+        record_types = {r["record_type"] for r in matching[0]["records"]}
+        assert record_types == {"applied_energy_correction"}
+        # Each nested record still carries everything the per-record Review
+        # action needs -- the redesign is presentation-only.
+        for record in matching[0]["records"]:
+            assert record["record_id"] in {atom.id, bond.id}
+            assert record["status"] == "not_reviewed"
+
+    def test_species_entry_subject_carries_formula_and_never_says_cannot_be_named(
+        self, client, db_session
+    ):
+        species = make_species(db_session, smiles="O", multiplicity=1)
+        entry = make_species_entry(db_session, species)
+        correction = make_applied_energy_correction(
+            db_session,
+            target_species_entry=entry,
+            scheme=make_energy_correction_scheme(db_session, name="wire_formula"),
+        )
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.applied_energy_correction,
+                record_id=correction.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        subject = next(
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        )
+        assert subject["chemistry"]["formula"] == "H2O"
+        assert "cannot be named" not in json.dumps(body)
+
+    def test_the_header_totals_are_honest_counts_not_estimates(
+        self, client, db_session
+    ):
+        entry = make_species_entry(db_session, make_species(db_session))
+        thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=1.0)
+        db_session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.thermo,
+                record_id=thermo.id,
+                status=RecordReviewStatus.not_reviewed,
+            )
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 200},
+        )
+        body = resp.json()
+        # Both totals are computed over the WHOLE filtered set, not just
+        # this page -- they must be at least as large as what is shown.
+        assert body["subject_total"] >= len(body["subjects"])
+        assert body["record_total"] >= sum(
+            len(s["records"]) for s in body["subjects"]
+        )
+        assert body["subject_total"] >= 1
+        assert body["record_total"] >= 1
+
+    def test_paging_counts_subjects_never_splits_one(self, client, db_session):
+        entry = make_species_entry(db_session, make_species(db_session))
+        thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=5.0)
+        statmech = make_statmech(db_session, species_entry=entry)
+        db_session.add_all(
+            [
+                RecordReview(
+                    record_type=SubmissionRecordType.thermo,
+                    record_id=thermo.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+                RecordReview(
+                    record_type=SubmissionRecordType.statmech,
+                    record_id=statmech.id,
+                    status=RecordReviewStatus.not_reviewed,
+                ),
+            ]
+        )
+        db_session.flush()
+
+        resp = client.get(
+            "/api/v1/record-reviews/queue",
+            params={"status": "not_reviewed", "limit": 1},
+        )
+        body = resp.json()
+        assert len(body["subjects"]) == 1
+        matching = next(
+            s for s in body["subjects"] if s["subject_ref"] == entry.public_ref
+        )
+        assert len(matching["records"]) == 2, (
+            "a one-subject page dropped one of that subject's own records"
         )

@@ -179,3 +179,56 @@ export function resolveRecordLocation(
 export function recordTypeWords(recordType: string): string {
     return recordType.replace(/_/g, " ")
 }
+
+/**
+ * A record type's display name for a reviewer, singular or plural.
+ *
+ * `recordTypeWords` above is deliberately literal -- it is built to be
+ * combined into a sentence alongside a ref ("shown on species entry
+ * spc_..."), and drifting from the backend's own vocabulary there would
+ * be confusing. This is a different job: a heading over a group of
+ * records in the review queue (task #269), where "statmech" and
+ * "kinetics" read as jargon and "applied_energy_correction" reads as
+ * a table name, not a sentence fragment. Unmapped types fall back to
+ * `recordTypeWords`, capitalized -- never blank, and never invented
+ * chemistry, just plainer English for the same word.
+ */
+const _GROUP_LABELS: Readonly<Record<string, { one: string; many: string }>> = {
+    species: { one: "Species", many: "Species" },
+    species_entry: { one: "Species entry", many: "Species entries" },
+    conformer_group: { one: "Conformer group", many: "Conformer groups" },
+    conformer_observation: {
+        one: "Conformer observation",
+        many: "Conformer observations",
+    },
+    reaction: { one: "Reaction", many: "Reactions" },
+    reaction_entry: { one: "Reaction entry", many: "Reaction entries" },
+    transition_state: { one: "Transition state", many: "Transition states" },
+    transition_state_entry: {
+        one: "Transition state entry",
+        many: "Transition state entries",
+    },
+    calculation: { one: "Calculation", many: "Calculations" },
+    statmech: { one: "Statistical mechanics", many: "Statistical mechanics" },
+    thermo: { one: "Thermochemistry", many: "Thermochemistry" },
+    kinetics: { one: "Kinetics", many: "Kinetics" },
+    transport: { one: "Transport", many: "Transport" },
+    network: { one: "Network", many: "Networks" },
+    network_solve: { one: "Network solve", many: "Network solves" },
+    applied_energy_correction: {
+        one: "Energy correction",
+        many: "Energy corrections",
+    },
+    artifact: { one: "Artifact", many: "Artifacts" },
+}
+
+function _capitalize(words: string): string {
+    return words.length === 0 ? words : words[0].toUpperCase() + words.slice(1)
+}
+
+/** "Energy correction" (count 1) / "Energy corrections" (count != 1). */
+export function recordTypeGroupLabel(recordType: string, count: number): string {
+    const mapped = _GROUP_LABELS[recordType]
+    if (mapped) return count === 1 ? mapped.one : mapped.many
+    return _capitalize(recordTypeWords(recordType))
+}

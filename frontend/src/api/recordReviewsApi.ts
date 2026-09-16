@@ -1,8 +1,10 @@
 import { throwForFailedResponse } from "./authApi"
 import {
     RecordReviewSchema,
+    ReviewQueuePageSchema,
     type RecordReview,
     type RecordReviewStatus,
+    type ReviewQueuePage,
 } from "../types/recordReview"
 
 /**
@@ -87,6 +89,45 @@ export async function listRecordReviews(options: {
         else unreadable += 1
     }
     return { items, unreadable, full: payload.length >= options.limit }
+}
+
+/**
+ * Fetch one page of the subject-grouped queue (task #269):
+ * `GET /api/v1/record-reviews/queue`.
+ *
+ * `options.limit`/`options.offset` count SUBJECTS, not records -- the
+ * server never splits one subject's records across a page boundary, so a
+ * page can hold anywhere from `limit` to many times `limit` records.
+ *
+ * Unlike `listRecordReviews`, a row this build cannot parse costs the
+ * WHOLE page: the grouped shape does not have an obvious per-row unit to
+ * drop the way the flat list does (a malformed subject or a malformed
+ * record nested inside an otherwise-good subject both make the page as a
+ * whole unparseable). That is an acceptable trade here because this
+ * response also carries `subject_total`/`record_total`, so a caller that
+ * gets nothing still knows something is there, unlike the flat list's
+ * bare array.
+ */
+export async function listReviewQueue(options: {
+    status?: RecordReviewStatus
+    limit: number
+    offset?: number
+}): Promise<ReviewQueuePage> {
+    const params = new URLSearchParams()
+    if (options.status) params.set("status", options.status)
+    params.set("limit", String(options.limit))
+    if (options.offset !== undefined) params.set("skip", String(options.offset))
+
+    const response = await fetch(`${BASE}/queue?${params.toString()}`, {
+        method: "GET",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+    })
+    if (!response.ok) return throwForFailedResponse(response)
+
+    const parsed = ReviewQueuePageSchema.safeParse(await response.json())
+    if (!parsed.success) throw new RecordReviewResponseError()
+    return parsed.data
 }
 
 /**

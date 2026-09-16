@@ -32603,6 +32603,183 @@
         "title": "ReviewDetail",
         "type": "string"
       },
+      "ReviewQueuePageRead": {
+        "additionalProperties": false,
+        "description": "One page of the subject-grouped review queue.\n\n``offset``/``limit`` count SUBJECTS. ``subject_total`` and\n``record_total`` are computed over every row matching the filter, not\njust this page -- both are honest counts, never estimates, because\nbuilding this page required reading every matching row to know where\nthe subject boundaries fall. See :func:`app.services.review_queue.\nlist_review_queue`.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "record_total": {
+            "title": "Record Total",
+            "type": "integer"
+          },
+          "subject_total": {
+            "title": "Subject Total",
+            "type": "integer"
+          },
+          "subjects": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewQueueSubjectRead"
+            },
+            "title": "Subjects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subjects",
+          "subject_total",
+          "record_total",
+          "offset",
+          "limit"
+        ],
+        "title": "ReviewQueuePageRead",
+        "type": "object"
+      },
+      "ReviewQueueSubjectChemistry": {
+        "additionalProperties": false,
+        "description": "Best-effort chemistry context for a review-queue subject block.\n\nEvery field is independently optional. A ``None`` here is never a\nfailure to compute -- it is one of two honest facts: this subject type\ncarries no such axis at all (a conformer group has no stereo label to\nreport, ever), or the value genuinely was never recorded (a\ntransition-state entry's ``unmapped_smiles`` is optional and often\nabsent). See :mod:`app.services.review_queue` for which subject types\npopulate which fields and why.",
+        "properties": {
+          "electronic_state_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpeciesEntryStateKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Hill-notation molecular formula, derived by the RDKit cartridge from the subject's own identity SMILES -- species.smiles for a species_entry subject, transition_state_entry.unmapped_smiles for a transition_state_entry subject. Null when the subject type has no such column, the SMILES was never recorded, or it failed to parse.",
+            "title": "Formula"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
+          },
+          "multiplicity": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Spin multiplicity (2S+1) of the subject, when it has one.",
+            "title": "Multiplicity"
+          },
+          "species_entry_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StationaryPointKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
+          }
+        },
+        "title": "ReviewQueueSubjectChemistry",
+        "type": "object"
+      },
+      "ReviewQueueSubjectRead": {
+        "additionalProperties": false,
+        "description": "One subject block: the record a reviewer judges as one unit, and\nevery review row nested under it.\n\n``subject_type``/``subject_ref`` are always null or non-null together,\nsame contract as ``container_type``/``container_ref`` on\n:class:`RecordReviewRead`. Both null is the orphan case: a record with\nno public ref of its own whose container also could not be resolved\n(see :mod:`app.services.review_queue`'s ``SubjectKey`` docstring) --\nstill one block, just one this page cannot link anywhere.",
+        "properties": {
+          "chemistry": {
+            "$ref": "#/components/schemas/ReviewQueueSubjectChemistry"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/RecordReviewRead"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "subject_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Ref"
+          },
+          "subject_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubmissionRecordType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "chemistry",
+          "records"
+        ],
+        "title": "ReviewQueueSubjectRead",
+        "type": "object"
+      },
       "ReviewRecordEntry": {
         "description": "Audit-array entry returned only when ``include_review=full``.",
         "properties": {
@@ -61363,6 +61540,111 @@
           }
         },
         "summary": "List Reviews",
+        "tags": [
+          "record-reviews"
+        ]
+      }
+    },
+    "/api/v1/record-reviews/queue": {
+      "get": {
+        "description": "The review queue grouped by subject: one block per record a curator\njudges as one unit, every review row nested under it.\n\n``skip``/``limit`` (``pagination``) count SUBJECTS, not records -- a\npage never splits one subject's records across a boundary. See\n:func:`app.services.review_queue.list_review_queue` for how subjects\nare resolved and why this costs what it costs.",
+        "operationId": "list_review_queue_page_api_v1_record_reviews_queue_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueuePageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Review Queue Page",
         "tags": [
           "record-reviews"
         ]

@@ -6,7 +6,12 @@ from datetime import datetime
 
 from pydantic import Field
 
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    RecordReviewStatus,
+    SpeciesEntryStateKind,
+    StationaryPointKind,
+    SubmissionRecordType,
+)
 from app.schemas.common import (
     SchemaBase,
     TimestampedCreatedByReadSchema,
@@ -114,3 +119,75 @@ class RecordReviewSetStatusRequest(SchemaBase):
     status: RecordReviewStatus
     submission_id: int | None = None
     note: str | None = Field(default=None)
+
+
+class ReviewQueueSubjectChemistry(SchemaBase):
+    """Best-effort chemistry context for a review-queue subject block.
+
+    Every field is independently optional. A ``None`` here is never a
+    failure to compute -- it is one of two honest facts: this subject type
+    carries no such axis at all (a conformer group has no stereo label to
+    report, ever), or the value genuinely was never recorded (a
+    transition-state entry's ``unmapped_smiles`` is optional and often
+    absent). See :mod:`app.services.review_queue` for which subject types
+    populate which fields and why.
+    """
+
+    formula: str | None = Field(
+        default=None,
+        description=(
+            "Hill-notation molecular formula, derived by the RDKit "
+            "cartridge from the subject's own identity SMILES -- "
+            "species.smiles for a species_entry subject, "
+            "transition_state_entry.unmapped_smiles for a "
+            "transition_state_entry subject. Null when the subject type "
+            "has no such column, the SMILES was never recorded, or it "
+            "failed to parse."
+        ),
+    )
+    multiplicity: int | None = Field(
+        default=None,
+        description="Spin multiplicity (2S+1) of the subject, when it has one.",
+    )
+    species_entry_kind: StationaryPointKind | None = None
+    electronic_state_kind: SpeciesEntryStateKind | None = None
+    electronic_state_label: str | None = None
+    term_symbol: str | None = None
+    stereo_label: str | None = None
+    isotope_key: str | None = None
+
+
+class ReviewQueueSubjectRead(SchemaBase):
+    """One subject block: the record a reviewer judges as one unit, and
+    every review row nested under it.
+
+    ``subject_type``/``subject_ref`` are always null or non-null together,
+    same contract as ``container_type``/``container_ref`` on
+    :class:`RecordReviewRead`. Both null is the orphan case: a record with
+    no public ref of its own whose container also could not be resolved
+    (see :mod:`app.services.review_queue`'s ``SubjectKey`` docstring) --
+    still one block, just one this page cannot link anywhere.
+    """
+
+    subject_type: SubmissionRecordType | None = None
+    subject_ref: str | None = None
+    chemistry: ReviewQueueSubjectChemistry
+    records: list[RecordReviewRead]
+
+
+class ReviewQueuePageRead(SchemaBase):
+    """One page of the subject-grouped review queue.
+
+    ``offset``/``limit`` count SUBJECTS. ``subject_total`` and
+    ``record_total`` are computed over every row matching the filter, not
+    just this page -- both are honest counts, never estimates, because
+    building this page required reading every matching row to know where
+    the subject boundaries fall. See :func:`app.services.review_queue.
+    list_review_queue`.
+    """
+
+    subjects: list[ReviewQueueSubjectRead]
+    subject_total: int
+    record_total: int
+    offset: int
+    limit: int
