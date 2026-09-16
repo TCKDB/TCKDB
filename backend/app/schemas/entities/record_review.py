@@ -215,13 +215,17 @@ class ReviewQueueSubjectRead(SchemaBase):
       own whose container also could not be resolved (see
       :mod:`app.services.review_queue`'s ``SubjectKey`` docstring) --
       still one block, just one this page cannot link anywhere;
-    * ``subject_type`` set, ``subject_ref`` null -- a ``species_entry``
-      or ``transition_state_entry`` review row whose OWN record has since
-      been deleted. Both types are their own subject unconditionally (see
-      :mod:`app.services.review_queue`'s module docstring on the
-      container-is-the-subject exception), so losing the record loses
-      the ref but not the type -- there is nowhere else for that row's
-      subject identity to fall back to.
+    * ``subject_type`` set, ``subject_ref`` null -- a review row of a type
+      that is unconditionally its OWN subject (see
+      :mod:`app.services.review_queue`'s ``_SELF_SUBJECT_TYPES`` and the
+      module docstring's container-is-the-subject exception --
+      ``species_entry``, ``transition_state_entry`` and ``reaction_entry``
+      as of this writing, but read the set, not this list: it is stated
+      as a rule rather than enumerated here on purpose, after the
+      enumeration went stale the last time this file named the set by
+      hand) whose OWN record has since been deleted. Such a type has
+      nowhere else for its subject identity to fall back to, so losing
+      the record loses the ref but not the type.
 
     A client must therefore treat ``subject_ref is None`` as "cannot
     link", exactly as for the orphan case, but must not infer from a null
