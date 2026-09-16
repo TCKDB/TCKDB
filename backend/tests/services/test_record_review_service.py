@@ -7,7 +7,8 @@ Cover:
 * curator/admin role gate,
 * self-approval guard scoped to ``approved`` only,
 * terminal-status reviewer/timestamp stamping,
-* bulk variant.
+* bulk variant,
+* ``applied_energy_correction`` excluded from write and read (task #266).
 """
 
 from __future__ import annotations
@@ -24,7 +25,10 @@ from app.db.models.common import (
 )
 from app.db.models.record_review import RecordReview
 from app.services.record_review import (
+    NON_REVIEWABLE_RECORD_TYPES,
     RecordRef,
+    ReviewPolicy,
+    apply_review_policy,
     bulk_set_record_review_status,
     ensure_record_review,
     get_record_review,
@@ -272,6 +276,53 @@ class TestList:
         for r in only_approved:
             assert r.status is RecordReviewStatus.approved
 
+    def test_applied_energy_correction_excluded_from_the_queue(self, db_session):
+        """task #266, point 2: the read surface, not just the write path.
+
+        A legacy ``applied_energy_correction`` review row (the 147 rows the
+        deployed database already carries, and can never delete --
+        ``trg_guard_record_review``) must not be offered to a curator as
+        work, even though the row itself is untouched and still exists.
+        This is deliberately built by calling ``ensure_record_review``
+        directly rather than through the (now correction-skipping)
+        ``apply_review_policy``, so the test exercises the read-side filter
+        on its own rather than accidentally passing because nothing was
+        ever written.
+        """
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            record_id=310,
+        )
+        # A sibling row of an ordinary reviewable type stays visible, so
+        # this is a targeted exclusion and not an accidental empty result.
+        ensure_record_review(
+            db_session, record_type=SubmissionRecordType.species, record_id=311
+        )
+
+        default_view = list_record_reviews(db_session, limit=50)
+        types_seen = {r.record_type for r in default_view}
+        assert SubmissionRecordType.applied_energy_correction not in types_seen
+        assert SubmissionRecordType.species in types_seen
+
+        not_reviewed_view = list_record_reviews(
+            db_session, status=RecordReviewStatus.not_reviewed, limit=50
+        )
+        assert not any(
+            r.record_type is SubmissionRecordType.applied_energy_correction
+            for r in not_reviewed_view
+        )
+
+        # Asking for the excluded type explicitly gets nothing rather than
+        # the legacy row: the type is off this read surface, not merely
+        # off the default filter.
+        explicit_type_view = list_record_reviews(
+            db_session,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            limit=50,
+        )
+        assert explicit_type_view == []
+
 
 class TestGet:
     def test_missing_returns_none(self, db_session):
@@ -497,3 +548,79 @@ class TestReviewEventHistory:
             record_id=405,
         )
         assert len(after_noop) == 3
+
+
+class TestAppliedEnergyCorrectionIsNonReviewable:
+    """task #266: an applied correction is derived arithmetic, not a judgement.
+
+    Once the scheme and the target's formula/connectivity are fixed, an
+    applied correction has no degrees of freedom left for a human to weigh.
+    It follows the precedent ``apply_review_policy`` already sets for
+    ``artifact`` (see that function's docstring): a ``submission_record_link``
+    row every time, but never a ``record_review`` row.
+    """
+
+    def test_applied_energy_correction_is_in_the_shared_exclusion_set(self):
+        assert (
+            SubmissionRecordType.applied_energy_correction
+            in NON_REVIEWABLE_RECORD_TYPES
+        )
+
+    def test_apply_review_policy_skips_the_review_row(self, db_session):
+        target = RecordRef(SubmissionRecordType.applied_energy_correction, 320)
+        policy = ReviewPolicy(status=RecordReviewStatus.not_reviewed)
+
+        reviews = apply_review_policy(
+            db_session, targets=[target], policy=policy, created_by=None
+        )
+
+        assert reviews == []
+        assert (
+            get_record_review(
+                db_session,
+                record_type=SubmissionRecordType.applied_energy_correction,
+                record_id=320,
+            )
+            is None
+        )
+
+    def test_apply_review_policy_reviews_the_other_targets_in_the_same_call(
+        self, db_session
+    ):
+        """The exclusion is scoped to the one type, not a blanket skip."""
+        corrected = RecordRef(SubmissionRecordType.applied_energy_correction, 321)
+        thermo = RecordRef(SubmissionRecordType.thermo, 321)
+        policy = ReviewPolicy(status=RecordReviewStatus.not_reviewed)
+
+        reviews = apply_review_policy(
+            db_session,
+            targets=[corrected, thermo],
+            policy=policy,
+            created_by=None,
+        )
+
+        assert len(reviews) == 1
+        assert reviews[0].record_type is SubmissionRecordType.thermo
+        assert reviews[0].record_id == 321
+
+    def test_a_legacy_row_is_still_individually_addressable(self, db_session):
+        """Point 3: existing rows are untouched, not deleted or hidden entirely.
+
+        ``get_record_review`` is a direct ``(record_type, record_id)`` lookup,
+        not the queue's list surface -- a legacy applied-correction row must
+        keep answering to it exactly as before. Only the *queue listing*
+        (``list_record_reviews``, ``TestList`` above) stops offering it as
+        work.
+        """
+        ensure_record_review(
+            db_session,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            record_id=322,
+        )
+        row = get_record_review(
+            db_session,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            record_id=322,
+        )
+        assert row is not None
+        assert row.status is RecordReviewStatus.not_reviewed

@@ -282,6 +282,51 @@ class TestApproval:
         )
         assert artifact_review is None
 
+    def test_approving_a_submission_with_an_applied_correction_does_not_review_it(
+        self, db_session
+    ):
+        """task #266: an applied correction is arithmetic, not a judgement.
+
+        ``apply_review_policy`` (upload time) already skips the review row
+        for this type; this pins the *other* writer of ``record_review`` --
+        ``approve_submission``, via ``bulk_set_record_review_status`` --
+        which bootstraps a missing row at ``not_reviewed`` and transitions
+        it in the same call. Left unguarded, approving a submission that
+        merely links an applied correction would manufacture the exact row
+        deposit was told never to write, and would then flip it straight to
+        ``approved`` -- worse than the status quo, not neutral.
+
+        The link itself must survive approval untouched: without it no
+        curator could ever reach the correction from its submission.
+        """
+        alice = _uploader(db_session)
+        curator = _curator(db_session)
+        sub = _open_pending(db_session, alice.id)
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            record_id=999_002,
+        )
+
+        approve_submission(db_session, submission_id=sub.id, actor=curator)
+
+        correction_review = db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type
+                == SubmissionRecordType.applied_energy_correction,
+                RecordReview.record_id == 999_002,
+            )
+        )
+        assert correction_review is None
+
+        links = list_record_links(db_session, submission_id=sub.id)
+        assert any(
+            link.record_type is SubmissionRecordType.applied_energy_correction
+            and link.record_id == 999_002
+            for link in links
+        )
+
 
 class TestRejection:
     def test_curator_can_reject_with_reason(self, db_session):
@@ -348,6 +393,45 @@ class TestRejection:
                 actor=alice_curator,
                 reason="bad data",
             )
+
+    def test_rejecting_a_submission_with_an_applied_correction_does_not_review_it(
+        self, db_session
+    ):
+        """Reject counterpart of the approval test above (task #266).
+
+        ``reject_submission`` shares the same ``bulk_set_record_review_status``
+        call shape as ``approve_submission``, so the same bootstrap-on-missing
+        hazard applies on this path too.
+        """
+        alice = _uploader(db_session)
+        curator = _curator(db_session)
+        sub = _open_pending(db_session, alice.id)
+        link_record(
+            db_session,
+            submission=sub,
+            record_type=SubmissionRecordType.applied_energy_correction,
+            record_id=999_003,
+        )
+
+        reject_submission(
+            db_session, submission_id=sub.id, actor=curator, reason="bad scheme"
+        )
+
+        correction_review = db_session.scalar(
+            select(RecordReview).where(
+                RecordReview.record_type
+                == SubmissionRecordType.applied_energy_correction,
+                RecordReview.record_id == 999_003,
+            )
+        )
+        assert correction_review is None
+
+        links = list_record_links(db_session, submission_id=sub.id)
+        assert any(
+            link.record_type is SubmissionRecordType.applied_energy_correction
+            and link.record_id == 999_003
+            for link in links
+        )
 
 
 # ---------------------------------------------------------------------------

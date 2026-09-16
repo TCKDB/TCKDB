@@ -51,6 +51,7 @@ from app.db.models.submission import (
     SubmissionRecordLink,
 )
 from app.services.record_review import (
+    NON_REVIEWABLE_RECORD_TYPES,
     RecordRef,
     bulk_set_record_review_status,
 )
@@ -471,14 +472,25 @@ def _record_links_as_targets(
     """Project ``submission_record_link`` rows into the ``RecordRef`` shape
     used by the record-review service.
 
-    Artifact links are evidence lineage only. Their visibility and acceptance
-    inherit from the owning calculation, so they must never acquire an
-    independent ``record_review`` row during submission transitions.
+    Links whose type is in ``NON_REVIEWABLE_RECORD_TYPES`` are excluded:
+    they are contribution evidence, not an independent reviewable result,
+    and must never acquire a ``record_review`` row here either. Artifact
+    links' visibility and acceptance inherit from the owning calculation.
+    Applied-energy-correction links are derived arithmetic once the scheme
+    and the target's formula/connectivity are fixed (task #266) — nobody
+    reviews them at deposit, and approving or rejecting the submission that
+    carries one must not silently create the row deposit was told to skip.
+
+    ``set_record_review_status`` bootstraps a missing row at
+    ``not_reviewed`` and transitions it in the same call (see its
+    docstring), so leaving either type in this list would not merely skip
+    an update -- it would manufacture the exact row ``apply_review_policy``
+    was just changed to never write.
     """
     return [
         RecordRef(record_type=link.record_type, record_id=link.record_id)
         for link in submission.record_links
-        if link.record_type is not SubmissionRecordType.artifact
+        if link.record_type not in NON_REVIEWABLE_RECORD_TYPES
     ]
 
 

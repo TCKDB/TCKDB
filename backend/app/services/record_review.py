@@ -58,6 +58,30 @@ _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 #: Role recorded on ``submission_record_link`` rows for artifact evidence.
 _ARTIFACT_LINK_ROLE = "artifact"
 
+#: Record types that are contribution evidence, not a reviewable scientific
+#: result: a ``submission_record_link`` row is written for every one of
+#: them, exactly as for any other record, but they never acquire a
+#: ``record_review`` row and are never offered to a human reviewer.
+#:
+#: ``artifact`` is the original member (see :func:`apply_review_policy`'s
+#: docstring): an uploaded evidence file attached to a calculation. It is
+#: included here for completeness even though it is structurally incapable
+#: of reaching :func:`bulk_ensure_record_reviews` (artifact targets are
+#: derived from linked calculations, not passed in via ``targets``).
+#:
+#: ``applied_energy_correction`` joins it for the same reason, not a new
+#: one: once the scheme and the molecule's formula/connectivity are fixed,
+#: an applied correction has no degrees of freedom left to judge -- it is
+#: arithmetic over those inputs, not a scientific claim a human evaluates.
+#: The reviewable unit is the *scheme* (``energy_correction_scheme``), which
+#: this set does not touch. See task #266.
+NON_REVIEWABLE_RECORD_TYPES: frozenset[SubmissionRecordType] = frozenset(
+    {
+        SubmissionRecordType.artifact,
+        SubmissionRecordType.applied_energy_correction,
+    }
+)
+
 #: Uniqueness scope that makes "one review row per record" true.
 _RECORD_REVIEW_UNIQUE_CONSTRAINT = "uq_record_review_record"
 
@@ -207,8 +231,19 @@ def list_record_reviews(
     limit: int = 50,
     offset: int = 0,
 ) -> list[RecordReview]:
-    """Return review rows newest-first, optionally filtered."""
-    stmt = select(RecordReview)
+    """Return review rows newest-first, optionally filtered.
+
+    ``NON_REVIEWABLE_RECORD_TYPES`` is excluded unconditionally, even when
+    a caller asks for one of those types explicitly. This is the human
+    review queue's read surface: those types are never offered as work,
+    full stop, and that has to hold for the legacy ``record_review`` rows
+    that already exist for them (frozen in place, not reviewable, per
+    task #266) as much as for any new one -- there will not be any more,
+    but the old rows do not delete themselves.
+    """
+    stmt = select(RecordReview).where(
+        RecordReview.record_type.not_in(NON_REVIEWABLE_RECORD_TYPES)
+    )
     if record_type is not None:
         stmt = stmt.where(RecordReview.record_type == record_type)
     if status is not None:
@@ -747,13 +782,25 @@ def apply_review_policy(
     additionally linked as evidence (``role="artifact"``) — they are *not*
     given ``record_review`` rows, since an artifact is contribution evidence,
     not a reviewable scientific result.
+
+    Targets whose type is in :data:`NON_REVIEWABLE_RECORD_TYPES` (currently
+    ``applied_energy_correction``, alongside ``artifact``) are excluded from
+    the ``bulk_ensure_record_reviews`` call below for the same reason, but
+    they are *not* excluded from the linking loop that follows: a caller
+    that passes one still gets its ``submission_record_link`` row, so the
+    submission's full record set stays traceable and every applied
+    correction remains reachable from its upload even though nobody is ever
+    asked to review it (task #266).
     """
     if policy is None:
         return []
     targets = list(targets)
+    reviewable_targets = [
+        target for target in targets if target.record_type not in NON_REVIEWABLE_RECORD_TYPES
+    ]
     reviews = bulk_ensure_record_reviews(
         session,
-        targets=targets,
+        targets=reviewable_targets,
         status=policy.status,
         submission_id=policy.submission_id,
         created_by=created_by,
@@ -783,6 +830,7 @@ def apply_review_policy(
 
 
 __all__ = [
+    "NON_REVIEWABLE_RECORD_TYPES",
     "RecordRef",
     "ReviewPolicy",
     "apply_review_policy",
