@@ -14,6 +14,19 @@ exercises for upload-contract conformance; this file uploads the subset that
 carries at least one ``scan_result`` and asks a different question of the
 rows that land: does ``coordinate_value`` match the geometry it was
 deposited beside.
+
+Task #264: three of the scan-carrying originals
+(``rotor_scan_2``/``rotor_scan_3``/``rotor_scan_6``) also carry a
+transition-state ``bac_total`` correction of value ``0.0`` with no
+components, which the upload contract now refuses (422,
+``bac_total_requires_components``) for reasons that have nothing to do
+with scan-coordinate conformance -- ADR 0020's subject. Uploading the
+*originals* here would fail on that refusal before a single scan series
+was ever persisted, so this file uploads the derived, trimmed copies
+under each scenario's sibling ``tckdb_payloads_trimmed_264/`` directory
+instead (identical except for the one refused entry; see the ``NOTE.md``
+beside each). ``tests/api/test_api_arc_run_fixtures.py`` is what asserts
+the refusal against the untouched originals.
 """
 
 from __future__ import annotations
@@ -34,6 +47,52 @@ from app.services.scan_coordinate_conformance import (
 )
 
 ARC_RUNS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "arc_runs"
+
+#: Task #264. Real ARC payloads that carry a componentless, zero-valued
+#: transition-state ``bac_total``, refused for reasons unrelated to
+#: scan-coordinate conformance -- see the module docstring. Keyed on
+#: ``(scenario, filename)`` since this file's ``case_id`` (below) omits
+#: the ``computed_reaction/`` subpath ``test_api_arc_run_fixtures.py``
+#: keeps.
+_KNOWN_REFUSED_TS_BAC_TOTAL: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("neb_1", "i-C3H7-n-C3H7.payload.json"),
+        ("reaction_1", "CHO-CH4-CH2O-CH3.payload.json"),
+        (
+            "rotor_scan_2",
+            "rxn_209_C-rxn_209_CO-O-rxn_209_-CH3-rxn_209_COO.payload.json",
+        ),
+        (
+            "rotor_scan_3",
+            "rxn_210_CC-rxn_210_-H-rxn_210_C-CH2-rxn_210_-H-H.payload.json",
+        ),
+        (
+            "rotor_scan_6",
+            "rxn_392_CO-rxn_392_-CH-C-rxn_392_C-O-rxn_392_C-C.payload.json",
+        ),
+    }
+)
+
+
+def _trimmed_payload_path(case_id: str, payload_file: Path) -> Path:
+    """The task-264 trimmed copy for a known-refused case, or the original.
+
+    ``tckdb_payloads_trimmed_264/`` sits beside ``tckdb_payloads/``, not
+    nested under it, so it is never itself discovered as a scan-payload
+    case.
+    """
+    scenario_name, _, filename = case_id.partition("/")
+    if (scenario_name, filename) not in _KNOWN_REFUSED_TS_BAC_TOTAL:
+        return payload_file
+    tckdb_payloads_dir = payload_file.parents[1]
+    assert tckdb_payloads_dir.name == "tckdb_payloads", tckdb_payloads_dir
+    trimmed = (
+        tckdb_payloads_dir.parent
+        / "tckdb_payloads_trimmed_264"
+        / payload_file.relative_to(tckdb_payloads_dir)
+    )
+    assert trimmed.exists(), f"missing trimmed fixture: {trimmed}"
+    return trimmed
 
 
 def _count_scan_results(obj: object) -> int:
@@ -130,7 +189,7 @@ def test_adr_0020_conformance_over_the_real_arc_corpus(client) -> None:
     for case_id, payload_file, meta_file in _SCAN_PAYLOAD_CASES:
         assert meta_file.exists(), f"{case_id}: missing companion .meta.json"
         meta = json.loads(meta_file.read_text())
-        payload = json.loads(payload_file.read_text())
+        payload = json.loads(_trimmed_payload_path(case_id, payload_file).read_text())
         url = _normalize_endpoint(meta["endpoint"])
         response = client.post(url, json=payload)
         assert 200 <= response.status_code < 300, (
