@@ -376,6 +376,15 @@
    cites, but deliberately quieter than the heading: it is not what the eye
    should scan the page for. See the brief: "for citation, not for
    scanning". */
+/* A caveat about missing data (no formula, no reaction SMILES) -- NEVER
+   rendered in the heading itself. It sits in its own quiet line, the same
+   register as the facet chips, directly under the heading and above the
+   ref. The heading always holds a NAME (the formula, or failing that the
+   record type); this is where the honest "we don't have it" goes instead. */
+.review-subject-caveat {
+    margin: 0 0 var(--s-1);
+}
+
 .review-subject-ref {
     margin: var(--s-1) 0 var(--s-3);
     font: var(--type-note-font);
@@ -401,12 +410,48 @@
     border-top: none;
 }
 
-.review-record-row-main,
 .review-record-group-summary {
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
     gap: var(--s-2) var(--s-3);
+}
+
+/* A single record's line: the record on the left, its status and Review
+   action on the right -- the mockup's layout, and the reason for it is
+   concrete, not aesthetic. Stacking the action under the record (the
+   previous layout) roughly doubled every record's rendered height and
+   left a ragged column of buttons down the left edge; on a 41-subject,
+   147-record backlog that is most of the page's height spent on
+   whitespace between a label and its own button.
+
+   `flex-wrap: wrap` does the responsive work with no separate breakpoint:
+   at phone width the two sides no longer fit one line, so
+   `.review-record-row-right` wraps onto its own line below and, being
+   alone on that line, `justify-content: space-between` places it at the
+   START -- which is exactly the stacked, left-aligned layout this had
+   before. Nothing here has to know where that width is; the content
+   finds it. */
+.review-record-row-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-3);
+}
+
+.review-record-row-left {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+    min-width: 0;
+}
+
+.review-record-row-right {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
 }
 
 .review-record-type {
@@ -421,10 +466,6 @@
 .review-record-note {
     color: var(--muted);
     font: var(--type-note-font);
-}
-
-.review-record-row-action {
-    margin-top: var(--s-2);
 }
 
 /* The count on a collapsed group ("Energy corrections  2") -- a plain

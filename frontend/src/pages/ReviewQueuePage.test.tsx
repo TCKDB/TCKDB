@@ -356,6 +356,29 @@ describe("what a subject block shows (task #269, defect #4: nothing said what th
         expect(within(section).getByText(/no reaction smiles recorded/i)).toBeInTheDocument()
     })
 
+    it("puts a NAME in the heading even with no formula -- the apology is a caveat, never the name itself", async () => {
+        // The exact defect the owner called "rubbish" once already
+        // ("applied_energy_correction cannot be named"), reappearing in
+        // the subject heading: an absence sentence must never occupy the
+        // slot where every OTHER subject's name sits.
+        meIs(curator)
+        queueIs([
+            subject([record({ record_type: "statmech", container_type: "transition_state_entry", container_ref: "tse_3" })], {
+                subject_type: "transition_state_entry",
+                subject_ref: "tse_3",
+                chemistry: chemistry({ multiplicity: 2 }),
+            }),
+        ])
+        renderPage()
+
+        const section = await screen.findByText("tse_3").then((el) => el.closest(".review-subject") as HTMLElement)
+        const heading = within(section).getByRole("heading", { level: 2 })
+        expect(heading).toHaveTextContent(/^Transition state/)
+        expect(heading).not.toHaveTextContent(/no reaction smiles recorded/i)
+        // The caveat still appears -- just outside the heading.
+        expect(within(section).getByText(/no reaction smiles recorded/i)).toBeInTheDocument()
+    })
+
     it("names a subject with no chemistry of its own by its record type, honestly", async () => {
         meIs(curator)
         queueIs([
@@ -476,15 +499,27 @@ describe("collapsing same-type records under one subject (defect #2: the duplica
         await waitFor(() => expect(patchedId).toBe("501"))
     })
 
-    it("shows the shared status when every collapsed record agrees", async () => {
+    it("shows the shared status when every collapsed record agrees, under a filter it does not just repeat", async () => {
         meIs(curator)
-        queueIs([twoCorrections({ status: "not_reviewed" }, { status: "not_reviewed" })])
+        // "all" is the one filter a shown status is never redundant
+        // against -- see the "does not repeat the active filter" suite
+        // below for the not_reviewed case, where this same status is
+        // deliberately suppressed.
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(
+                    queuePageBody([twoCorrections({ status: "approved" }, { status: "approved" })]),
+                ),
+            ),
+        )
+        const user = userEvent.setup()
         renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
         const section = await screen
             .findByText("spe_two_corrections")
             .then((el) => el.closest(".review-subject") as HTMLElement)
 
-        expect(within(section).getByText("not reviewed")).toBeInTheDocument()
+        expect(within(section).getByText("approved")).toBeInTheDocument()
         expect(within(section).queryByText(/mixed/i)).not.toBeInTheDocument()
     })
 
@@ -560,6 +595,50 @@ describe("the header's totals (defect #3: '50 shown' with no total)", () => {
         renderPage()
 
         expect(await screen.findByRole("alert")).toBeInTheDocument()
+    })
+})
+
+describe("a record's status is not repeated when it only echoes the active filter", () => {
+    it("drops a record's own status under a specific filter, where every shown record already shares it", async () => {
+        meIs(curator)
+        queueIs([H2O])
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        // "Showing: not reviewed" above already says this -- the record's
+        // own status line would say it again, fifteen times on a real page.
+        expect(within(section).queryByText("not reviewed")).not.toBeInTheDocument()
+        // The record and its action are still there.
+        expect(within(section).getByText("Thermochemistry")).toBeInTheDocument()
+        expect(within(section).getByRole("button", { name: "Review…" })).toBeInTheDocument()
+    })
+
+    it("shows a record's own status under 'all', where it is the information", async () => {
+        meIs(curator)
+        server.use(http.get(QUEUE, () => HttpResponse.json(queuePageBody([H2O]))))
+        const user = userEvent.setup()
+        renderPage()
+        await user.selectOptions(await screen.findByLabelText("Showing"), "all")
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).getByText("not reviewed")).toBeInTheDocument()
+    })
+
+    it("still shows a record's status under a specific filter when it genuinely differs from it", async () => {
+        meIs(curator)
+        // Not reachable through the server's own filtering today (a
+        // specific filter already narrows every returned row to that
+        // status), but the page must not assume that and hide a status
+        // that turns out to disagree -- it checks the actual value.
+        server.use(
+            http.get(QUEUE, () =>
+                HttpResponse.json(queuePageBody([subject([record({ status: "approved" })])])),
+            ),
+        )
+        renderPage()
+
+        const section = await subjectFor("spe_h2o")
+        expect(within(section).getByText("approved")).toBeInTheDocument()
     })
 })
 

@@ -208,35 +208,63 @@ function SubjectHeading({ subject }: { subject: ReviewQueueSubject }) {
         })
         const spin = spinWord(subject.chemistry.multiplicity)
         return (
-            <h2 className="review-subject-heading">
-                {subject.chemistry.formula ? (
-                    <Formula value={subject.chemistry.formula} />
-                ) : (
-                    <span className="admin-absent">formula not available</span>
+            <>
+                <h2 className="review-subject-heading">
+                    {subject.chemistry.formula ? (
+                        <Formula value={subject.chemistry.formula} />
+                    ) : (
+                        // An honest "we don't have this" is a CAVEAT, never a
+                        // name -- the name slot always holds a name. See the
+                        // transition_state_entry branch below, where the
+                        // same rule applies to a caveat that is common
+                        // rather than a near-unreachable edge case.
+                        recordTypeGroupLabel("species_entry", 1)
+                    )}
+                    {spin && <span className="review-subject-chip">{spin}</span>}
+                    {chips.map((chip) => (
+                        <span key={chip} className="review-subject-chip">
+                            {chip}
+                        </span>
+                    ))}
+                </h2>
+                {!subject.chemistry.formula && (
+                    <p className="review-subject-caveat admin-absent">
+                        formula not available
+                    </p>
                 )}
-                {spin && <span className="review-subject-chip">{spin}</span>}
-                {chips.map((chip) => (
-                    <span key={chip} className="review-subject-chip">
-                        {chip}
-                    </span>
-                ))}
-            </h2>
+            </>
         )
     }
 
     if (subject.subject_type === "transition_state_entry") {
         const spin = spinWord(subject.chemistry.multiplicity)
         return (
-            <h2 className="review-subject-heading">
-                {subject.chemistry.formula ? (
-                    <Formula value={subject.chemistry.formula} />
-                ) : (
-                    <span className="admin-absent">
+            <>
+                <h2 className="review-subject-heading">
+                    {/* A transition-state entry's `unmapped_smiles` is
+                        optional and often absent -- this is the common
+                        case, not an edge case, which is exactly why it
+                        must never fall into the name slot: an apology
+                        ("no reaction SMILES recorded...") standing where
+                        every other subject's name stands is the "cannot
+                        be named" defect happening again, in a new place.
+                        The name slot always holds a name -- the record
+                        type, when there is no formula to show instead --
+                        and the caveat moves to its own quiet line below,
+                        the way the facet chips sit. */}
+                    {subject.chemistry.formula ? (
+                        <Formula value={subject.chemistry.formula} />
+                    ) : (
+                        "Transition state"
+                    )}
+                    {spin && <span className="review-subject-chip">{spin}</span>}
+                </h2>
+                {!subject.chemistry.formula && (
+                    <p className="review-subject-caveat admin-absent">
                         no reaction SMILES recorded for this candidate
-                    </span>
+                    </p>
                 )}
-                {spin && <span className="review-subject-chip">{spin}</span>}
-            </h2>
+            </>
         )
     }
 
@@ -453,6 +481,20 @@ export default function ReviewQueuePage() {
         )
     }
 
+    /**
+     * Whether a record's own status is worth printing next to it.
+     *
+     * Under a specific filter every record on screen already carries that
+     * status -- the server filtered by it -- so repeating the word next to
+     * every one of them says nothing "Showing: {filter}" above did not
+     * already say, fifteen times on a five-subject page and hundreds
+     * across a real backlog. Under "all" a status IS the information, so
+     * it always shows there.
+     */
+    function showStatusFor(status: RecordReviewStatus): boolean {
+        return statusFilter === "all" || status !== statusFilter
+    }
+
     function toggleExpanded(groupKey: string) {
         setExpanded((current) => {
             const next = new Set(current)
@@ -521,79 +563,91 @@ export default function ReviewQueuePage() {
         const cls = statusClass(row.status)
         return (
             <li key={rowId} className="review-record-row">
-                <div className="review-record-row-main">
-                    <span className="review-record-type">
-                        {recordTypeGroupLabel(row.record_type, 1)}
-                    </span>
-                    <RecordOwnLink row={row} />
-                    <span className={cls ?? undefined}>{statusLabel(row.status)}</span>
-                    {row.note && <span className="review-record-note">{row.note}</span>}
-                </div>
-                <div className="review-record-row-action">
-                    {options.length > 0 ? (
-                        <button
-                            type="button"
-                            disabled={rowBusy}
-                            aria-expanded={draft?.rowId === rowId}
-                            aria-controls={`review-form-${rowId}`}
-                            onClick={() => toggleDraft(row)}
-                        >
-                            Review…
-                        </button>
-                    ) : (
-                        <span className="admin-absent">no transition available</span>
-                    )}
-                    {rowErrors.has(rowId) && (
-                        <p className="auth-error admin-row-error" role="alert">
-                            {rowErrors.get(rowId)?.message}
-                        </p>
-                    )}
-                    {draft?.rowId === rowId && canSubmit && (
-                        <form
-                            id={`review-form-${rowId}`}
-                            className="admin-resolve"
-                            onSubmit={(e) => {
-                                e.preventDefault()
-                                void submit(row, { ...draft, status: chosen })
-                            }}
-                        >
-                            <label htmlFor={`st-${rowId}`}>New review state</label>
-                            <select
-                                id={`st-${rowId}`}
-                                className="admin-role-select"
-                                value={chosen}
-                                onChange={(e) =>
-                                    setDraft({
-                                        ...draft,
-                                        status: e.target.value as RecordReviewStatus,
-                                    })
-                                }
-                            >
-                                {options.map((s) => (
-                                    <option key={s} value={s}>
-                                        {statusLabel(s)}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="admin-hint">{statusMeaning(chosen)}</p>
-                            <label htmlFor={`note-${rowId}`}>Why (required)</label>
-                            <textarea
-                                id={`note-${rowId}`}
-                                value={draft.note}
-                                rows={2}
-                                onChange={(e) =>
-                                    setDraft({ ...draft, note: e.target.value })
-                                }
-                            />
+                <div className="review-record-row-line">
+                    <div className="review-record-row-left">
+                        <span className="review-record-type">
+                            {recordTypeGroupLabel(row.record_type, 1)}
+                        </span>
+                        <RecordOwnLink row={row} />
+                        {row.note && (
+                            <span className="review-record-note">{row.note}</span>
+                        )}
+                    </div>
+                    <div className="review-record-row-right">
+                        {/* Dropped when it just repeats the active filter --
+                            "not reviewed" fifteen times on a five-subject
+                            page under the default filter said nothing a
+                            reader did not already know from "Showing: not
+                            reviewed" above. Shown in full under "all",
+                            where a status IS the information. */}
+                        {showStatusFor(row.status) && (
+                            <span className={cls ?? undefined}>{statusLabel(row.status)}</span>
+                        )}
+                        {options.length > 0 ? (
                             <button
-                                type="submit"
-                                disabled={draft.note.trim().length === 0 || rowBusy}
+                                type="button"
+                                disabled={rowBusy}
+                                aria-expanded={draft?.rowId === rowId}
+                                aria-controls={`review-form-${rowId}`}
+                                onClick={() => toggleDraft(row)}
                             >
-                                Record this judgement
+                                Review…
                             </button>
-                        </form>
-                    )}
+                        ) : (
+                            <span className="admin-absent">no transition available</span>
+                        )}
+                    </div>
                 </div>
+                {rowErrors.has(rowId) && (
+                    <p className="auth-error admin-row-error" role="alert">
+                        {rowErrors.get(rowId)?.message}
+                    </p>
+                )}
+                {draft?.rowId === rowId && canSubmit && (
+                    <form
+                        id={`review-form-${rowId}`}
+                        className="admin-resolve"
+                        onSubmit={(e) => {
+                            e.preventDefault()
+                            void submit(row, { ...draft, status: chosen })
+                        }}
+                    >
+                        <label htmlFor={`st-${rowId}`}>New review state</label>
+                        <select
+                            id={`st-${rowId}`}
+                            className="admin-role-select"
+                            value={chosen}
+                            onChange={(e) =>
+                                setDraft({
+                                    ...draft,
+                                    status: e.target.value as RecordReviewStatus,
+                                })
+                            }
+                        >
+                            {options.map((s) => (
+                                <option key={s} value={s}>
+                                    {statusLabel(s)}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="admin-hint">{statusMeaning(chosen)}</p>
+                        <label htmlFor={`note-${rowId}`}>Why (required)</label>
+                        <textarea
+                            id={`note-${rowId}`}
+                            value={draft.note}
+                            rows={2}
+                            onChange={(e) =>
+                                setDraft({ ...draft, note: e.target.value })
+                            }
+                        />
+                        <button
+                            type="submit"
+                            disabled={draft.note.trim().length === 0 || rowBusy}
+                        >
+                            Record this judgement
+                        </button>
+                    </form>
+                )}
             </li>
         )
     }
@@ -623,10 +677,16 @@ export default function ReviewQueuePage() {
                     </span>
                     <span className="review-record-count">{rows.length}</span>
                     {uniformStatus ? (
-                        <span className={statusClass(uniformStatus) ?? undefined}>
-                            {statusLabel(uniformStatus)}
-                        </span>
+                        showStatusFor(uniformStatus) && (
+                            <span className={statusClass(uniformStatus) ?? undefined}>
+                                {statusLabel(uniformStatus)}
+                            </span>
+                        )
                     ) : (
+                        // Mixed only arises under "all" (a specific filter
+                        // already narrows every grouped record to one
+                        // status server-side), where a status is always
+                        // worth showing -- so this is never suppressed.
                         <span className="admin-absent">mixed review state</span>
                     )}
                     <button
