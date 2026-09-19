@@ -74,6 +74,7 @@ from sqlalchemy import text
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.services.record_review import set_record_review_status
+from tests.services.release._attest import attest_thermo
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -142,6 +143,7 @@ def candidates(db_session, curator):
     )
     for row in (chosen, other):
         _approve(db_session, curator, row)
+    attest_thermo(db_session, depositor=curator, rows=[chosen, other])
     db_session.flush()
     return entry, chosen, other
 
@@ -156,6 +158,7 @@ def foreign_candidate(db_session, curator):
         db_session, species_entry=entry, h298_kj_mol=-104.7, s298_j_mol_k=270.3
     )
     _approve(db_session, curator, row)
+    attest_thermo(db_session, depositor=curator, rows=[row])
     db_session.flush()
     return row
 
@@ -595,6 +598,7 @@ def test_publishing_a_record_holding_nan_is_refused_not_a_500(
         db_session, species_entry=finite_entry, h298_kj_mol=-84.0, s298_j_mol_k=229.6
     )
     _approve(db_session, curator, finite)
+    attest_thermo(db_session, depositor=curator, rows=[finite])
 
     nan_entry = make_species_entry(
         db_session, species=make_species(db_session, smiles="CCCC")
@@ -605,6 +609,7 @@ def test_publishing_a_record_holding_nan_is_refused_not_a_500(
     # Approval freezes the row, so the value has to be non-finite before it.
     assert math.isnan(poisoned.h298_kj_mol)
     _approve(db_session, curator, poisoned)
+    attest_thermo(db_session, depositor=curator, rows=[poisoned])
     db_session.flush()
 
     # Neighbour first: an ordinary release of the finite record publishes.

@@ -1,6 +1,7 @@
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
+from tckdb_schemas.rights import DepositRights
 
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -49,6 +50,10 @@ class ReactionUploadRequest(SchemaBase):
     reaction_family_source_note: str | None = None
     reactants: list[ReactionParticipantUpload] = Field(min_length=1)
     products: list[ReactionParticipantUpload] = Field(min_length=1)
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     @field_validator("reaction_family", "reaction_family_source_note")
     @classmethod

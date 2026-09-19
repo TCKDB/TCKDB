@@ -74,6 +74,7 @@ from tckdb_schemas.local_key_codes import (
     undeclared_key_error,
 )
 from tckdb_schemas.reaction_family import find_canonical_reaction_family
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.shared.calculation_in import (
     CalculationIn as _BaseCalculationIn,
     GeometryIn,
@@ -1281,6 +1282,10 @@ class ComputedReactionUploadRequest(SchemaBase):
     software_release: SoftwareReleaseRef | None = None  # ESS software (e.g. Gaussian)
     analysis_software_release: SoftwareReleaseRef | None = None  # kinetics/thermo analysis code (e.g. Arkane, MESS)
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     # Species definitions
     species: list[BundleSpeciesIn] = Field(min_length=1)

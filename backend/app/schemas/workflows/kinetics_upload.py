@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.rights import DepositRights
 
 from app.chemistry.units import validate_a_units_for_molecularity
 from app.db.models.common import (
@@ -472,6 +473,10 @@ class KineticsUploadRequest(SchemaBase):
     literature: LiteratureUploadRequest | None = None
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     # Public, opaque handle for a pressure-dependent network counterpart
     # (DR-0036). Upload payloads must never accept database primary keys;

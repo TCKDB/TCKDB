@@ -99,7 +99,7 @@ dependencies = [
     # genuinely does not import without it. It lives in this repo rather
     # than on PyPI, hence the [tool.uv.sources] entry below; for the
     # conda+pip path install it first (see the header).
-    "tckdb-schemas>=0.45.0",
+    "tckdb-schemas>=0.46.0",
 ]
 
 [project.optional-dependencies]

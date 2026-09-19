@@ -39,6 +39,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
+from app.db.models.common import SubmissionRecordType
 from app.schemas.workflows.contribution_bundle import (
     BundleSourceInstanceKind,
     ContributionBundleV0,
@@ -46,6 +47,7 @@ from app.schemas.workflows.contribution_bundle import (
 from app.services.contribution_bundle_export import (
     DEFAULT_INSTANCE_NAME,
     ContributionBundleExportError,
+    deposit_rights_for_records,
     export_kinetics_bundle,
     export_thermo_bundle,
 )
@@ -166,6 +168,15 @@ def _write_bundle(bundle: ContributionBundleV0, output: Path) -> None:
 def _export(session: Session, args: argparse.Namespace) -> ContributionBundleV0:
     exporter_label = _resolve_exporter_label(args.exporter_label)
     if args.kind == "thermo":
+        # The bundle carries the rights fragment the source deposit stands
+        # under, so a hosted import records the same agreement the local
+        # instance holds. Absent locally, absent in the bundle: the exporter
+        # never invents consent.
+        rights = deposit_rights_for_records(
+            session,
+            record_type=SubmissionRecordType.thermo,
+            record_ids=args.thermo_id,
+        )
         return export_thermo_bundle(
             session,
             thermo_ids=args.thermo_id,
@@ -178,7 +189,13 @@ def _export(session: Session, args: argparse.Namespace) -> ContributionBundleV0:
             affiliation=args.affiliation,
             email=args.email,
             exporter_notes=args.exporter_notes,
+            rights=rights,
         )
+    rights = deposit_rights_for_records(
+        session,
+        record_type=SubmissionRecordType.kinetics,
+        record_ids=args.kinetics_id,
+    )
     return export_kinetics_bundle(
         session,
         kinetics_ids=args.kinetics_id,
@@ -191,6 +208,7 @@ def _export(session: Session, args: argparse.Namespace) -> ContributionBundleV0:
         affiliation=args.affiliation,
         email=args.email,
         exporter_notes=args.exporter_notes,
+        rights=rights,
     )
 
 

@@ -36,7 +36,14 @@ from app.db.models.dataset_release import (
 )
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import REVIEW_RANK
-from app.services.release.records import CANDIDATE_SOURCES, RECORD_TABLES
+from app.services.release.artifacts import release_record_universe
+from app.services.release.record_rights import linked_rights
+from app.services.release.records import (
+    CANDIDATE_SOURCES,
+    RECORD_TABLES,
+    public_refs_for,
+)
+from app.services.rights import licenses_match
 from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 
 
@@ -234,8 +241,16 @@ def publish_release(session: Session, release: DatasetRelease) -> DatasetRelease
     and publishing it then would put an unapproved value under a citable
     recommendation.
 
-    :raises ReleaseCurationError: the release is not a draft, or a standing
-        selection now names a record below the approval floor.
+    Re-checks the rights basis too, and over a *wider* set than the
+    selections: everything the release will ship. ``candidate_records.ndjson``
+    carries every candidate for every covered subject, selected or not, so a
+    gate on selections alone would still publish unlicensed bytes -- an
+    ordinary upload for a released species between selection and publication
+    is enough. See :func:`_assert_standing_selections_still_releasable`.
+
+    :raises ReleaseCurationError: the release is not a draft, a standing
+        selection now names a record below the approval floor, or a record the
+        release would ship has no compatible rights basis.
     """
     if release.status is not DatasetReleaseStatus.draft:
         raise ReleaseStateConflict(
@@ -243,6 +258,7 @@ def publish_release(session: Session, release: DatasetRelease) -> DatasetRelease
             f"{release.status.value!r}."
         )
     _assert_standing_selections_still_approved(session, release)
+    _assert_standing_selections_still_releasable(session, release)
     release.status = DatasetReleaseStatus.published
     release.published_at = _naive_utcnow()
     session.flush()
@@ -279,6 +295,41 @@ def _assert_standing_selections_still_approved(
                 f"selection_no_longer_approved: selection {row.public_ref} can no "
                 f"longer be published -- {exc}"
             ) from exc
+
+
+def _assert_standing_selections_still_releasable(
+    session: Session, release: DatasetRelease
+) -> None:
+    """Everything the release will ship must have a compatible rights basis.
+
+    Two sets, two code families, one reader:
+
+    * the **standing selections** -- refused as ``rights_basis_missing`` /
+      ``rights_basis_incompatible``, the same codes the selection was checked
+      against when appended (an attestation can be superseded to a different
+      license in between);
+    * the **rest of the candidate set** -- every other record that
+      ``candidate_records.ndjson`` would carry, refused as
+      ``candidate_rights_basis_missing`` / ``candidate_rights_basis_incompatible``
+      so a curator can tell "the record you chose" from "a record you did not
+      choose but the release ships anyway".
+
+    The set is taken from :func:`release_record_universe`, the same function
+    the renderer uses, so the gate covers exactly what the file contains.
+    **Refuse, never filter**: dropping an unattested candidate from the file
+    would falsify the release's claim that every candidate is retrievable.
+    """
+    universe = release_record_universe(session, release)
+    standing = {(row.record_type, row.record_id) for row in universe.state.active}
+    _assert_records_have_rights_basis(
+        session, pairs=standing, data_license=release.data_license, candidate=False
+    )
+    _assert_records_have_rights_basis(
+        session,
+        pairs=universe.candidate_pairs - standing,
+        data_license=release.data_license,
+        candidate=True,
+    )
 
 
 def withdraw_release(
@@ -483,6 +534,112 @@ def _assert_record_is_approved(
         )
 
 
+def _assert_record_has_rights_basis(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_id: int,
+    data_license: str,
+) -> None:
+    """A release may only ship a record somebody agreed to license under its terms.
+
+    The record is followed to every submission that links it, and each of
+    those must carry a *standing* rights attestation (latest, not superseded)
+    whose ``license_id`` matches ``data_license`` exactly, case-insensitively.
+    Every linked submission must pass -- a record that arrived twice, once
+    with agreement and once without, is refused, because the release cannot
+    say which deposit it is republishing.
+
+    A record with no submission link at all is refused as missing. There is
+    nothing to attest against: the historical path is a curator creating a
+    ``migration`` submission, linking the record, and attesting that.
+
+    :raises ReleaseCurationError: ``rights_basis_missing`` or
+        ``rights_basis_incompatible``.
+    """
+    _assert_records_have_rights_basis(
+        session,
+        pairs={(record_type, record_id)},
+        data_license=data_license,
+        candidate=False,
+    )
+
+
+def _assert_records_have_rights_basis(
+    session: Session,
+    *,
+    pairs: set[tuple[SubmissionRecordType, int]],
+    data_license: str,
+    candidate: bool,
+) -> None:
+    """Batch form of :func:`_assert_record_has_rights_basis`.
+
+    ``candidate=True`` reports under the ``candidate_*`` codes -- same test,
+    different question: not "may the record you chose ship?" but "may the
+    record you did *not* choose, which ships beside it, ship?".
+    """
+    if not pairs:
+        return
+    rights = linked_rights(session, pairs=pairs)
+    refs: dict[tuple[SubmissionRecordType, int], str | None] = {}
+    by_type: dict[SubmissionRecordType, list[int]] = {}
+    for record_type, record_id in pairs:
+        by_type.setdefault(record_type, []).append(record_id)
+    for record_type, ids in by_type.items():
+        found = public_refs_for(session, record_type=record_type, record_ids=sorted(ids))
+        for record_id in ids:
+            refs[(record_type, record_id)] = found.get(record_id)
+
+    for pair in sorted(pairs, key=lambda p: (p[0].value, refs.get(p) or "", p[1])):
+        record_type, _record_id = pair
+        record = refs.get(pair) or f"a {record_type.value} record"
+        links = rights.get(pair, [])
+        if not links:
+            if candidate:
+                raise ReleaseCurationError(
+                    f"candidate_rights_basis_missing: {record} would ship as a "
+                    "candidate but is linked to no submission, so nobody has "
+                    "agreed to license it. Attach it to a submission and record "
+                    "a rights attestation before publishing."
+                )
+            raise ReleaseCurationError(
+                f"rights_basis_missing: {record} is linked to no submission, so "
+                "nobody has agreed to license it. A release may only ship a "
+                "record whose deposit carries a rights attestation."
+            )
+        for link in links:
+            if link.attestation is None:
+                if candidate:
+                    raise ReleaseCurationError(
+                        f"candidate_rights_basis_missing: {record} would ship as "
+                        f"a candidate but its deposit {link.submission_ref} has no "
+                        "rights attestation. Record one before publishing."
+                    )
+                raise ReleaseCurationError(
+                    f"rights_basis_missing: deposit {link.submission_ref} of "
+                    f"{record} carries no rights attestation, so nobody has "
+                    "agreed to license it. Record one -- the depositor's "
+                    "agreement, or a curator's basis -- before selecting it."
+                )
+            if not licenses_match(link.attestation.license_id, data_license):
+                attested = link.attestation.license_id
+                if candidate:
+                    raise ReleaseCurationError(
+                        f"candidate_rights_basis_incompatible: {record} would ship "
+                        f"as a candidate but its deposit {link.submission_ref} is "
+                        f"attested under {attested!r}, not the release's "
+                        f"{data_license!r}."
+                    )
+                raise ReleaseCurationError(
+                    f"rights_basis_incompatible: deposit {link.submission_ref} of "
+                    f"{record} is attested under {attested!r}, and this release "
+                    f"publishes under {data_license!r}. Compatibility is an exact "
+                    "match of license identifiers; record a new attestation "
+                    "naming the release's license, or cut the release under the "
+                    "attested one."
+                )
+
+
 def add_selection(
     session: Session,
     *,
@@ -498,9 +655,10 @@ def add_selection(
     """Append a first selection of ``record_id`` for ``subject_id``.
 
     :raises ReleaseCurationError: the release is not a draft, the record type
-        is not selectable, the record is below the approval floor, the record
-        or subject does not exist or does not match, or the subject already has
-        a standing selection in this release (use :func:`supersede_selection` —
+        is not selectable, the record is below the approval floor, no
+        compatible rights basis stands for its deposit, the record or subject
+        does not exist or does not match, or the subject already has a
+        standing selection in this release (use :func:`supersede_selection` —
         changing a decision appends).
     """
     _assert_draft(release)
@@ -515,6 +673,12 @@ def add_selection(
     _assert_record_exists(session, record_type=record_type, record_id=record_id)
     _assert_record_is_approved(
         session, record_type=record_type, record_id=record_id
+    )
+    _assert_record_has_rights_basis(
+        session,
+        record_type=record_type,
+        record_id=record_id,
+        data_license=release.data_license,
     )
     _assert_subject_matches(
         session,
@@ -589,6 +753,12 @@ def supersede_selection(
     )
     _assert_record_is_approved(
         session, record_type=superseded.record_type, record_id=record_id
+    )
+    _assert_record_has_rights_basis(
+        session,
+        record_type=superseded.record_type,
+        record_id=record_id,
+        data_license=release.data_license,
     )
     _assert_subject_matches(
         session,

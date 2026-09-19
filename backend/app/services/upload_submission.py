@@ -10,7 +10,8 @@ every produced record back to the submission, and appends an
 Usage in a route (flat, exception-safe by ordering)::
 
     sub = open_upload_submission(session, created_by=user.id,
-                                 kind=SubmissionKind.conformer)
+                                 kind=SubmissionKind.conformer,
+                                 rights=request.rights)
     outcome = persist_conformer_upload(
         session, request, created_by=user.id, review_policy=sub.policy
     )
@@ -67,7 +68,9 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.rights import DepositRights
 
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionKind,
@@ -77,6 +80,7 @@ from app.db.models.common import (
 )
 from app.db.models.submission import Submission
 from app.services.record_review import ReviewPolicy
+from app.services.rights import attest_from_deposit
 from app.services.submission import (
     create_submission,
     mark_ingestion_failed,
@@ -110,6 +114,7 @@ def open_job_submission(
     created_by: int | None,
     job_kind: UploadJobKind,
     upload_job_id: str,
+    rights: DepositRights | None,
 ) -> Submission:
     """Create the submission wrapper for an enqueued async upload job.
 
@@ -117,8 +122,15 @@ def open_job_submission(
     moment it is accepted for processing — even if the worker later fails or
     never runs. The worker links records / flips audit state against this
     submission via its ``upload_job_id``.
+
+    ``rights`` is the upload's deposit-time license agreement and is attested
+    here, at enqueue, for the same reason the submission is opened here: the
+    agreement was made when the deposit was accepted, not when a worker got
+    round to it. Keyword-only and **without a default**, so a route that
+    forgets to pass it fails at the call rather than silently depositing
+    unlicensed records.
     """
-    return create_submission(
+    submission = create_submission(
         session,
         created_by=created_by,
         submission_kind=submission_kind_for_job_kind(job_kind),
@@ -126,6 +138,23 @@ def open_job_submission(
         upload_job_id=upload_job_id,
         title=f"Async {job_kind.value} upload",
     )
+    _attest_deposit(session, submission, rights)
+    return submission
+
+
+def _attest_deposit(
+    session: Session, submission: Submission, rights: DepositRights | None
+) -> None:
+    """Record the deposit's rights fragment against its freshly opened submission.
+
+    The actor is always the submission's creator: ``create_submission`` has
+    just verified that user exists, and a depositor agreement is the
+    depositor's own statement.
+    """
+    if rights is None:
+        return
+    actor = session.get(AppUser, submission.created_by)
+    attest_from_deposit(session, submission=submission, rights=rights, actor=actor)
 
 
 @dataclass
@@ -146,6 +175,7 @@ def open_upload_submission(
     *,
     created_by: int,
     kind: SubmissionKind,
+    rights: DepositRights | None,
     title: Optional[str] = None,
     summary: Optional[str] = None,
 ) -> UploadSubmissionContext:
@@ -156,6 +186,13 @@ def open_upload_submission(
     workflow so every produced record is initialised as awaiting review and
     linked to the submission. Call :func:`mark_upload_ingested` only after the
     workflow returns successfully.
+
+    ``rights`` is the request's deposit-time license agreement (``None`` when
+    the client sent none) and is recorded as a ``depositor_agreement``
+    attestation by the depositor. Keyword-only and **without a default** on
+    purpose: every one of the upload routes must state what it passes, so a
+    new route cannot forget the question and quietly take deposits nobody
+    licensed.
     """
     submission = create_submission(
         session,
@@ -165,6 +202,7 @@ def open_upload_submission(
         title=title,
         summary=summary,
     )
+    _attest_deposit(session, submission, rights)
     policy = ReviewPolicy(
         status=RecordReviewStatus.not_reviewed,
         submission_id=submission.id,

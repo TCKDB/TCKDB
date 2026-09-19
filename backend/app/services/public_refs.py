@@ -97,6 +97,9 @@ PREFIXES: dict[str, str] = {
     "DatasetRelease": "rel",
     "ReleaseSelection": "rsel",
     "ReleaseManifest": "rman",
+    # Rights basis of a deposit (B1). Opaque: an attestation is an event by
+    # an actor, and a correction is a new event that supersedes it.
+    "SubmissionRightsAttestation": "sra",
 }
 
 # Classes whose ref is content-derived from existing identity columns.

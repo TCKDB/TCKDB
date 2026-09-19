@@ -245,7 +245,10 @@ def upload_conformer(
     )
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.conformer
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.conformer,
+        rights=request.rights,
     )
     outcome = persist_conformer_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
@@ -306,7 +309,10 @@ def upload_reaction(
                 warnings.append(w.model_copy(update={"field": f"products[{i}].{w.field}"}))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.reaction
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.reaction,
+        rights=request.rights,
     )
     reaction_entry = persist_reaction_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
@@ -349,7 +355,10 @@ def upload_kinetics(
     warnings.extend(collect_kinetics_content_warnings(request))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.kinetics
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.kinetics,
+        rights=request.rights,
     )
     kinetics = persist_kinetics_upload(
         session,
@@ -385,7 +394,10 @@ def upload_network(
         return replay
     warnings = collect_software_release_version_warnings(request)
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.network
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.network,
+        rights=request.rights,
     )
     network = persist_network_upload(
         session,
@@ -417,7 +429,10 @@ def upload_network_pdep(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.network_pdep
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.network_pdep,
+        rights=request.rights,
     )
     pdep_warnings: list[UploadWarning] = stationary_point_warnings(
         request.stationary_point_findings()
@@ -480,7 +495,10 @@ def upload_statmech(
         )
     )
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.statmech
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.statmech,
+        rights=request.rights,
     )
     statmech = persist_statmech_upload(
         session,
@@ -525,7 +543,10 @@ def upload_thermo(
     warnings.extend(collect_thermo_provenance_warnings(request))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.thermo
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.thermo,
+        rights=request.rights,
     )
     thermo = persist_thermo_upload(
         session,
@@ -572,7 +593,10 @@ def upload_transition_state(
     warnings.extend(transition_state_upload_linearity_warnings(request))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.transition_state
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.transition_state,
+        rights=request.rights,
     )
     ts_entry = persist_transition_state_upload(
         session,
@@ -620,7 +644,10 @@ def upload_transport(
     warnings.extend(collect_transport_provenance_warnings(request))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.transport
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.transport,
+        rights=request.rights,
     )
     transport = persist_transport_upload(
         session,
@@ -664,7 +691,10 @@ def upload_computed_species(
     warnings.extend(computed_species_linearity_warnings(request))
     warnings.extend(collect_software_release_version_warnings(request))
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.computed_species
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.computed_species,
+        rights=request.rights,
     )
     outcome = persist_computed_species_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
@@ -736,7 +766,10 @@ def upload_computed_reaction(
     if (replay := idem.maybe_replay()) is not None:
         return replay
     sub = open_upload_submission(
-        session, created_by=current_user.id, kind=SubmissionKind.computed_reaction
+        session,
+        created_by=current_user.id,
+        kind=SubmissionKind.computed_reaction,
+        rights=request.rights,
     )
     result_dict = persist_computed_reaction_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy

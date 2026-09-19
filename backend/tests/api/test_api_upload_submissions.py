@@ -211,6 +211,7 @@ class TestFailedUploadRollsBackSubmission:
                     db_session,
                     created_by=_api_test_user,
                     kind=SubmissionKind.thermo,
+                    rights=None,
                 )
                 # ...then the workflow fails before mark_upload_ingested.
                 raise RuntimeError("simulated persistence failure")

@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 104 |
-| raw_only | 106 |
-| not_applicable | 43 |
-| **total** | **253** |
+| raw_only | 107 |
+| not_applicable | 44 |
+| **total** | **255** |
 
 ## Typed coverage
 
@@ -301,6 +301,7 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | `GET /api/v1/submissions/{submission_id}/ai-review-summary` | yes | — | — | — | — |
 | `GET /api/v1/submissions/{submission_id}/audit-events` | yes | — | — | — | — |
 | `GET /api/v1/submissions/{submission_id}/record-links` | yes | — | — | — | — |
+| `GET /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
 
 ## Not applicable
 
@@ -362,4 +363,5 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/submissions/for-review` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/approve` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
+| `POST /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/supersede` | yes | — | — | — | — |

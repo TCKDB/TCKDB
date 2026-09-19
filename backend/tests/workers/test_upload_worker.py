@@ -263,6 +263,7 @@ def test_reaper_skips_fenced_final_attempt_then_terminalizes_after_release(
             created_by=_api_test_user,
             job_kind=job.kind,
             upload_job_id=str(job.id),
+            rights=None,
         )
         job_id, submission_id = job.id, submission.id
 
@@ -765,6 +766,7 @@ def test_run_one_job_links_records_and_initializes_not_reviewed(
         created_by=_api_test_user,
         job_kind=UploadJobKind.thermo,
         upload_job_id=str(job.id),
+        rights=None,
     )
     db_session.flush()
 
@@ -834,7 +836,7 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
         job = _insert_job(worker_db, kind=UploadJobKind.thermo, payload=_thermo_job_payload())
         job.created_by = _api_test_user
         submission = open_job_submission(
-            worker_db, created_by=_api_test_user, job_kind=job.kind, upload_job_id=str(job.id)
+            worker_db, created_by=_api_test_user, job_kind=job.kind, upload_job_id=str(job.id), rights=None
         )
         job_id = job.id
         submission_id = submission.id
@@ -981,6 +983,7 @@ def test_terminal_worker_failure_records_durable_ingestion_failed(
             created_by=_api_test_user,
             job_kind=UploadJobKind.thermo,
             upload_job_id=str(job.id),
+            rights=None,
         )
         job_id = job.id
         submission_id = submission.id

@@ -19,8 +19,19 @@ from sqlalchemy.orm import Session
 
 #: Wire tag of the dataset-release manifest contract. Bumped only when the
 #: rendered manifest document changes shape, since ``content_sha256`` values
-#: recorded under an older tag would no longer reproduce.
-MANIFEST_SCHEMA = "tckdb.dataset_release.v1"
+#: recorded under an older tag would no longer reproduce. The renderer
+#: branches on the tag *stored on the manifest row*, never on this constant,
+#: so a row frozen under an older tag keeps reproducing its digest.
+#:
+#: ``v2`` (2026-09): the document gains a ``rights`` block — the data license,
+#: the number of rights attestations standing behind the shipped records, and
+#: a count per basis kind. A ``v1`` document has no such block.
+MANIFEST_SCHEMA = "tckdb.dataset_release.v2"
+
+#: The tag under which every manifest before the rights block was frozen.
+#: Named so the renderer's branch reads as a fact about history rather than
+#: a magic string.
+MANIFEST_SCHEMA_V1 = "tckdb.dataset_release.v1"
 
 #: The *recovery* archive contract, recorded in the manifest purely so a
 #: reader can see that it is a different thing (see
@@ -68,6 +79,7 @@ def schemas_package_version() -> str:
 
 __all__ = [
     "MANIFEST_SCHEMA",
+    "MANIFEST_SCHEMA_V1",
     "RECOVERY_ARCHIVE_SCHEMA",
     "REVIEW_POLICY_VERSION",
     "UNKNOWN",

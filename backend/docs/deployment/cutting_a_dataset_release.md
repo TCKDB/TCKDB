@@ -25,10 +25,19 @@ You need:
   `code_license` from the create call and you get `CC-BY-4.0` + `MIT`. Send
   them only if this deployment publishes under different terms, and see
   [`LICENSE-DATA`](../../../LICENSE-DATA) for what the data license covers.
-  **The default expresses what the operator is entitled to license.** On a
-  deployment with more than one depositor, do not cut a release until the
-  license has been agreed with each depositor at deposit time — a
-  configuration default is not their consent;
+  **The default expresses what the operator is entitled to license.** A
+  configuration default is not a depositor's consent, and the release layer
+  enforces that: a record is selectable only if every submission that
+  deposited it carries a standing rights attestation naming exactly this
+  release's `data_license` (422 `rights_basis_missing` /
+  `rights_basis_incompatible`), and publishing re-checks the selections *and*
+  every unselected candidate the release ships (`candidate_rights_basis_*`).
+  Deposits made with the upload's `rights` fragment are attested by the
+  depositor automatically; for anything older, a curator records the basis
+  with `POST /api/v1/submissions/{id}/rights-attestations` (`operator_own_data`
+  or `historical_review`; `source_terms` when the records came from a source
+  whose terms permit it). Records with no submission at all need a
+  `migration` submission linked first. Nothing is backfilled;
 - a citation string;
 - a maintainer contact address that will still work in five years;
 - records actually in `approved` review state. This is **enforced**: a

@@ -489,6 +489,17 @@ class ReleaseManifest(Base, CreatedByMixin, PublicRefMixin):
     # mode as re-rendering the document from the live release row.
     contract_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
+    # The ``rights`` block as rendered at publication (``tckdb.dataset_release.v2``
+    # and later): the data license, how many attestations stood behind the
+    # shipped records, and a count per basis kind. Snapshotted for the same
+    # reason as ``contract_json`` — the document must be rebuildable from this
+    # row alone. ``NULL`` on every manifest frozen under ``v1``, whose document
+    # had no such block; the renderer branches on ``manifest_schema`` so those
+    # rows keep reproducing their recorded digest.
+    rights_summary_json: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=True
+    )
+
     # --- integrity ---------------------------------------------------------
     # The frozen document, served verbatim to anyone resolving the citation.
     # ``content_sha256`` is its canonical-serialization digest.

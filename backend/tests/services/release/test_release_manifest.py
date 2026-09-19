@@ -30,6 +30,7 @@ from app.services.release.manifest import (
     recorded_manifest_document,
     verify_release,
 )
+from tests.services.release._attest import attest_thermo
 
 
 def _publish_with_selection(session, release, curator, thermo, species_entry):
@@ -396,6 +397,57 @@ def test_manifest_document_is_rebuildable_from_its_snapshot_columns(
     )
     rebuilt = render_manifest_document(snapshot_from_manifest(manifest))
     assert rebuilt == dict(manifest.document_json)
+    # v2: the rights block is part of the document and of the snapshot.
+    assert manifest.manifest_schema == "tckdb.dataset_release.v2"
+    assert rebuilt["rights"] == manifest.rights_summary_json
+    assert rebuilt["rights"]["data_license"] == "CC-BY-4.0"
+    assert rebuilt["rights"]["attestation_count"] == 1
+    assert rebuilt["rights"]["basis_kinds"] == {"depositor_agreement": 1}
+
+
+def test_a_v1_manifest_row_still_reproduces_its_v1_document(
+    db_session, policy, curator, thermo_candidates, species_entry, monkeypatch
+):
+    """A manifest frozen under ``v1`` renders the ``v1`` shape forever.
+
+    The renderer branches on the tag *stored on the row*, never on the live
+    constant. A ``v1`` row has no ``rights`` block, and gaining one after the
+    constant moved to ``v2`` would break every recorded digest. Simulated by
+    freezing a second release while the constant reads ``v1``, then restoring
+    the constant and rendering again.
+    """
+    from app.services.release import versions as versions_module
+    from app.services.release.curation import create_release
+    from app.services.release.manifest import (
+        render_manifest_document,
+        snapshot_from_manifest,
+    )
+
+    _chosen, other = thermo_candidates
+    legacy = create_release(
+        db_session,
+        tag="2026.06.0",
+        title="A release frozen before the rights block existed",
+        curation_policy=policy,
+        data_license="CC-BY-4.0",
+        code_license="MIT",
+        citation_text="TCKDB curated dataset release 2026.06.0.",
+        contact="tckdb-maintainers@example.org",
+        created_by=curator.id,
+    )
+    monkeypatch.setattr(versions_module, "MANIFEST_SCHEMA", versions_module.MANIFEST_SCHEMA_V1)
+    manifest = _publish_with_selection(db_session, legacy, curator, other, species_entry)
+    assert manifest.manifest_schema == "tckdb.dataset_release.v1"
+    assert "rights" not in manifest.document_json
+    recorded = manifest.content_sha256
+
+    monkeypatch.undo()
+    assert versions_module.MANIFEST_SCHEMA == "tckdb.dataset_release.v2"
+    rebuilt = render_manifest_document(snapshot_from_manifest(manifest))
+    assert "rights" not in rebuilt
+    assert rebuilt == dict(manifest.document_json)
+    assert manifest_digest(rebuilt) == recorded
+    assert verify_release(db_session, legacy).ok
 
 
 def test_verification_fails_when_a_stored_checksum_is_tampered_with(
@@ -529,6 +581,7 @@ def test_a_withdrawn_selection_still_resolves_in_the_ledger(
         status=RecordReviewStatus.approved,
         actor=curator,
     )
+    attest_thermo(db_session, depositor=curator, rows=[kept])
     add_selection(
         db_session,
         release=draft_release,
@@ -646,6 +699,7 @@ def test_artifact_lines_carry_chemical_identity_and_level_of_theory(
         status=RecordReviewStatus.approved,
         actor=curator,
     )
+    attest_thermo(db_session, depositor=curator, rows=[thermo])
     add_selection(
         db_session,
         release=draft_release,
@@ -848,11 +902,13 @@ def test_the_frozen_document_depends_only_on_the_manifest_row(
     assert render_manifest_document(snapshot_from_manifest(manifest)) == before
     assert verify_release(db_session, draft_release).ok
 
-    # …and module-constant drift is equally inert.
+    # …and module-constant drift is equally inert. ``v99`` rather than the
+    # ``v2`` this used to set: ``v2`` became the real value with the rights
+    # block, and setting a constant to what it already is checks nothing.
     original = versions_module.MANIFEST_SCHEMA
     try:
-        versions_module.MANIFEST_SCHEMA = "tckdb.dataset_release.v2"
-        manifest_module.versions.MANIFEST_SCHEMA = "tckdb.dataset_release.v2"
+        versions_module.MANIFEST_SCHEMA = "tckdb.dataset_release.v99"
+        manifest_module.versions.MANIFEST_SCHEMA = "tckdb.dataset_release.v99"
         assert render_manifest_document(snapshot_from_manifest(manifest)) == before
         assert verify_release(db_session, draft_release).ok
     finally:

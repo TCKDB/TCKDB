@@ -694,6 +694,7 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         ("GET", "/api/v1/submissions/{submission_id}/audit-events"),
         ("GET", "/api/v1/submissions/{submission_id}/record-links"),
         ("GET", "/api/v1/submissions/{submission_id}/ai-review-summary"),
+        ("GET", "/api/v1/submissions/{submission_id}/rights-attestations"),
     )
 ) + tuple(
     (method, path, _RELEASE_READ)
@@ -865,6 +866,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("POST", "/api/v1/conformer-groups/{conformer_group_id}/selections"),
         ("GET", "/api/v1/submissions/for-review"),
         ("POST", "/api/v1/submissions/{submission_id}/approve"),
+        ("POST", "/api/v1/submissions/{submission_id}/rights-attestations"),
         ("POST", "/api/v1/submissions/{submission_id}/reject"),
         ("POST", "/api/v1/submissions/{submission_id}/supersede"),
         ("POST", "/api/v1/releases"),

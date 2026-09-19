@@ -7,6 +7,7 @@ from app.services.record_review import set_record_review_status
 from app.services.release.manifest import load_manifest, verify_release
 from app.workflows.thermo import persist_thermo_upload
 from tests.schemas.test_thermo_phase_a_contract import IDENTITY
+from tests.services.release._attest import attest_thermo
 from tests.services.release.test_release_manifest import _publish_with_selection
 
 
@@ -20,6 +21,9 @@ def test_frozen_zero_kelvin_and_null_state_survive_new_uploads(
     set_record_review_status(db_session, record_type=SubmissionRecordType.thermo,
                              record_id=row.id, status=RecordReviewStatus.approved,
                              actor=curator, note="Phase A custody fixture")
+    # A release refuses a record nobody agreed to license (B1); the direct
+    # workflow call opens no submission, so license it the way an upload would.
+    attest_thermo(db_session, depositor=curator, rows=[row])
     manifest = _publish_with_selection(db_session, draft_release, curator, row, row.species_entry)
     frozen = {a.path: (a.content, a.sha256) for a in manifest.artifacts}
     candidate = next(json.loads(line) for line in frozen["candidate_records.ndjson"][0].splitlines()

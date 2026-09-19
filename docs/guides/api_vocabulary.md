@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 35 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 36 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 181 | `backend/app/api/code_catalogue.py` |
-| **total** | **468** | |
+| Refusal codes a caller can receive | 189 | `backend/app/api/code_catalogue.py` |
+| **total** | **477** | |
 
 ## How a record is named
 
@@ -94,7 +94,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (23)
+### Opaque prefixes (24)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -116,6 +116,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `rxe_` | reaction entry | no — one row, one database |
 | `sm_` | statmech | no — one row, one database |
 | `spe_` | species entry | no — one row, one database |
+| `sra_` | submission rights attestation | no — one row, one database |
 | `sub_` | submission | no — one row, one database |
 | `thm_` | thermo | no — one row, one database |
 | `trn_` | transport | no — one row, one database |
@@ -638,6 +639,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `invalid_idempotency_key` | a thing |
 
+### HTTP 403 (2 codes)
+
+| Code | Names |
+| --- | --- |
+| `rights_attestation_not_depositor` | a thing |
+| `rights_attestation_requires_curator` | a thing |
+
 ### HTTP 404 (19 codes)
 
 | Code | Names |
@@ -691,7 +699,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (133 codes)
+### HTTP 422 (139 codes)
 
 | Code | Names |
 | --- | --- |
@@ -712,6 +720,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
+| `candidate_rights_basis_incompatible` | a relationship — read `context` |
+| `candidate_rights_basis_missing` | a relationship — read `context` |
 | `canonical_parameter_value_requires_key` | a thing |
 | `client_sort_not_supported` | a thing |
 | `composed_search_candidate_limit_exceeded` | a relationship — read `context` |
@@ -781,6 +791,10 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `record_type_not_selectable` | a thing |
 | `release_scoping_not_implemented` | a thing |
 | `release_selects_nothing` | a thing |
+| `rights_basis_incompatible` | a relationship — read `context` |
+| `rights_basis_missing` | a relationship — read `context` |
+| `rights_license_blank` | a thing |
+| `rights_source_terms_required` | a thing |
 | `selection_no_longer_approved` | a thing |
 | `smiles_too_long` | a relationship — read `context` |
 | `species_entry_handle_conflict` | a relationship — read `context` |

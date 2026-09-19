@@ -68,6 +68,9 @@ def _enqueue(session: Session, kind: UploadJobKind, request, user_id: int) -> Jo
         created_by=user_id,
         job_kind=kind,
         upload_job_id=str(job.id),
+        # Attested at enqueue, with the submission: the agreement was made
+        # when the deposit was accepted, whether or not a worker ever runs.
+        rights=request.rights,
     )
     return JobEnqueueResponse(
         job_id=str(job.id),
