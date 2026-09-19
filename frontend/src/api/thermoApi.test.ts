@@ -84,3 +84,16 @@ describe("thermoRecordSchema's `levels` field", () => {
         await expect(loadEntryThermo(entryRef)).rejects.toThrow(ScientificApiError)
     })
 })
+
+describe("thermo state and 0 K custody", () => {
+    it.each([
+        { phase: null, reference_pressure_bar: null },
+        { phase: "gas", reference_pressure_bar: 1 },
+        { phase: "liquid", reference_pressure_bar: 1.01325 },
+    ])("preserves $phase / $reference_pressure_bar without defaults", async (state) => {
+        const values = { ...state, enthalpy_formation_0k_kj_mol: 0, enthalpy_formation_0k_uncertainty_kj_mol: 0.125 }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([minimalRecord(values)]))))
+        const response = await loadEntryThermo(entryRef)
+        expect(response.records[0]).toMatchObject(values)
+    })
+})

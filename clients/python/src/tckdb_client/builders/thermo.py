@@ -22,6 +22,11 @@ non-empty values rather than silently dropping them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
+import math
+
+from pydantic import ValidationError
+from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from typing import TYPE_CHECKING, Any, Callable
 
 from tckdb_client.builders.validation import (
@@ -162,6 +167,10 @@ def _check_optional_scalar(name: str, value: float | None) -> float | None:
     return float(value)
 
 
+class _Omitted(Enum):
+    value = "omitted"
+
+
 @dataclass(eq=False)
 class Thermo:
     """One thermo block attached to a species.
@@ -177,6 +186,12 @@ class Thermo:
     it today (see module docstring).
     """
 
+    phase: str | None | _Omitted = _Omitted.value
+    reference_pressure_bar: float | None | _Omitted = _Omitted.value
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
+    h298_uncertainty_kj_mol: float | None = None
+    s298_uncertainty_j_mol_k: float | None = None
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
     tmin_k: float | None = None
@@ -209,6 +224,22 @@ class Thermo:
         return self._kind
 
     def __post_init__(self) -> None:
+        try:
+            state = {name: getattr(self, name) for name in (
+                "phase", "reference_pressure_bar", "enthalpy_formation_0k_kj_mol",
+                "enthalpy_formation_0k_uncertainty_kj_mol") if getattr(self, name) is not _Omitted.value}
+            ThermoStateFields.model_validate(state)
+            if self.nasa_block is not None:
+                ThermoNASACreate.model_validate(self.nasa_block)
+            for point in self.point_table:
+                ThermoPointCreate.model_validate(point)
+        except ValidationError as exc:
+            raise TCKDBBuilderValidationError(str(exc)) from exc
+        for name in ("h298_kj_mol", "s298_j_mol_k", "tmin_k", "tmax_k",
+                     "h298_uncertainty_kj_mol", "s298_uncertainty_j_mol_k"):
+            value = _check_optional_scalar(name, getattr(self, name))
+            if value is not None and (not math.isfinite(value) or ("uncertainty" in name and value < 0)):
+                raise TCKDBBuilderValidationError(f"Thermo.{name} must be finite and uncertainty nonnegative.")
         # The factories do the upfront validation; this default path
         # still sanitises optional scalars so the bare constructor is
         # not a backdoor.
@@ -240,6 +271,12 @@ class Thermo:
     def scalar(
         cls,
         *,
+        phase: str | None | _Omitted = _Omitted.value,
+        reference_pressure_bar: float | None | _Omitted = _Omitted.value,
+        enthalpy_formation_0k_kj_mol: float | None = None,
+        enthalpy_formation_0k_uncertainty_kj_mol: float | None = None,
+        h298_uncertainty_kj_mol: float | None = None,
+        s298_uncertainty_j_mol_k: float | None = None,
         h298_kj_mol: float | None = None,
         s298_j_mol_k: float | None = None,
         tmin_k: float | None = None,
@@ -259,12 +296,18 @@ class Thermo:
         supplied — empty scalar blocks would be rejected by the
         server's validators downstream (and are meaningless anyway).
         """
-        if h298_kj_mol is None and s298_j_mol_k is None:
+        if h298_kj_mol is None and s298_j_mol_k is None and enthalpy_formation_0k_kj_mol is None:
             raise TCKDBBuilderValidationError(
                 "Thermo.scalar requires at least one of h298_kj_mol or "
-                "s298_j_mol_k."
+                "s298_j_mol_k or enthalpy_formation_0k_kj_mol."
             )
         out = cls(
+            phase=phase,
+            reference_pressure_bar=reference_pressure_bar,
+            enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
+            enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
+            h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
+            s298_uncertainty_j_mol_k=s298_uncertainty_j_mol_k,
             h298_kj_mol=h298_kj_mol,
             s298_j_mol_k=s298_j_mol_k,
             tmin_k=tmin_k,
@@ -287,6 +330,12 @@ class Thermo:
         t_low: float,
         t_mid: float,
         t_high: float,
+        phase: str | None | _Omitted = _Omitted.value,
+        reference_pressure_bar: float | None | _Omitted = _Omitted.value,
+        enthalpy_formation_0k_kj_mol: float | None = None,
+        enthalpy_formation_0k_uncertainty_kj_mol: float | None = None,
+        h298_uncertainty_kj_mol: float | None = None,
+        s298_uncertainty_j_mol_k: float | None = None,
         h298_kj_mol: float | None = None,
         s298_j_mol_k: float | None = None,
         source_calculations: (
@@ -350,6 +399,12 @@ class Thermo:
             nasa_dict[f"b{i}"] = value
 
         out = cls(
+            phase=phase,
+            reference_pressure_bar=reference_pressure_bar,
+            enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
+            enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
+            h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
+            s298_uncertainty_j_mol_k=s298_uncertainty_j_mol_k,
             h298_kj_mol=h298_kj_mol,
             s298_j_mol_k=s298_j_mol_k,
             tmin_k=t_low_f,
@@ -371,6 +426,12 @@ class Thermo:
         *,
         tmin_k: float | None = None,
         tmax_k: float | None = None,
+        phase: str | None | _Omitted = _Omitted.value,
+        reference_pressure_bar: float | None | _Omitted = _Omitted.value,
+        enthalpy_formation_0k_kj_mol: float | None = None,
+        enthalpy_formation_0k_uncertainty_kj_mol: float | None = None,
+        h298_uncertainty_kj_mol: float | None = None,
+        s298_uncertainty_j_mol_k: float | None = None,
         h298_kj_mol: float | None = None,
         s298_j_mol_k: float | None = None,
         source_calculations: (
@@ -422,6 +483,12 @@ class Thermo:
             cleaned.append(entry)
 
         out = cls(
+            phase=phase,
+            reference_pressure_bar=reference_pressure_bar,
+            enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
+            enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
+            h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
+            s298_uncertainty_j_mol_k=s298_uncertainty_j_mol_k,
             h298_kj_mol=h298_kj_mol,
             s298_j_mol_k=s298_j_mol_k,
             tmin_k=tmin_k,
@@ -467,6 +534,15 @@ class Thermo:
           calc namespace without any ``id()`` use.
         """
         out: dict[str, Any] = {}
+        for name in ("phase", "reference_pressure_bar"):
+            value = getattr(self, name)
+            if value is not _Omitted.value:
+                out[name] = value
+        for name in ("enthalpy_formation_0k_kj_mol", "enthalpy_formation_0k_uncertainty_kj_mol",
+                     "h298_uncertainty_kj_mol", "s298_uncertainty_j_mol_k"):
+            value = getattr(self, name)
+            if value is not None:
+                out[name] = value
         if self.h298_kj_mol is not None:
             out["h298_kj_mol"] = self.h298_kj_mol
         if self.s298_j_mol_k is not None:

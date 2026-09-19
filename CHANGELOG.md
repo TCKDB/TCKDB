@@ -57,6 +57,36 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Molecular thermo contract (Phase A)
+
+- Coordinated versions: backend 0.2.0, `tckdb-schemas` 0.43.0,
+  `tckdb-client` 0.77.0, and `tckdb-chemkin` 0.3.0. Backend and client
+  require schemas >=0.43.0. Deploy these contracts together; older clients
+  may still send valid content but cannot be assumed to preserve the new fields.
+- Scientific reads/search, selected NDJSON and contribution bundles now retain
+  phase, reference pressure, 0 K formation enthalpy and its uncertainty.
+  Selected NDJSON also retains the 298 K scalar uncertainties. Explicit null
+  state survives replay. Both computed bundle routes and typed thermo builders
+  carry these fields.
+- Creation validation is stricter: finite scientific values; a property in
+  each point; complete NASA7 bounds/coefficient blocks; and NASA9 intervals
+  that meet exactly in index order. A finite 0 K value, including zero,
+  suffices as content. Historical reads and recovery archives remain permissive.
+- CHEMKIN requires complete NASA7 at known gas phase and exactly 1.01325 bar
+  (1 atm). **The computed-upload default of 1 bar is not eligible.** Ineligible
+  selected records produce gaps; export does not substitute candidates, invent
+  bounds/coefficients or convert pressure. The importer preserves the card phase
+  and declares its supported 1 atm profile. Structured exports retain other states.
+- Before rollout, run `backend/scripts/inventory_thermo_contract.py` against
+  the intended database and review stable references/reasons. Drain queued and
+  processing uploads using the old worker before switching versions. Never
+  rewrite queued scientific payloads or historical rows to satisfy validation.
+  Incompatible contribution replay reports `thermo_upload_incompatible`;
+  use the recovery archive to retain historical incomplete evidence.
+- No schema migration or backfill. Frozen release bytes are unchanged.
+  See [rollout and verification](docs/research/tckdb-phase-a-verification.md)
+  and the [publication evidence checklist](docs/research/tckdb-publication-evidence-checklist.md).
+
 ### Added
 
 - **A conformer basin now says how many optimisations back it, not how many

@@ -103,6 +103,20 @@ class ScientificOriginKind(str, Enum):
     estimated = "estimated"
 
 
+class PhaseKind(str, Enum):
+    """Physical phase a thermochemistry record is referenced to.
+
+    Values are machine tokens (see feedback_enum_values memory), not
+    display labels. ``gas`` is the standard state for computed gas-phase
+    thermochemistry; ``aqueous`` denotes a solvated standard state.
+    """
+
+    gas = "gas"
+    liquid = "liquid"
+    solid = "solid"
+    aqueous = "aqueous"
+
+
 class RigidRotorKind(str, Enum):
     atom = "atom"
     linear = "linear"
@@ -521,6 +535,7 @@ __all__ = (
     "RigidRotorKind",
     "SCFStabilityStatus",
     "ScientificOriginKind",
+    "PhaseKind",
     "SpeciesEntryStateKind",
     "StatmechCalculationRole",
     "StatmechTreatmentKind",

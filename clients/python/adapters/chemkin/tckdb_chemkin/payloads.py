@@ -81,6 +81,10 @@ def build_thermo_payload(
     payload: dict = {
         "species_entry": species.identity_payload(),
         "scientific_origin": config.scientific_origin,
+        # The supported CHEMKIN NASA7 profile is referenced to 1 atm.
+        # Preserve the card phase; an unrecognized token remains unknown.
+        "phase": {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper()),
+        "reference_pressure_bar": 1.01325,
         "nasa": _nasa_payload(entry),
         "tmin_k": entry.t_low,
         "tmax_k": entry.t_high,

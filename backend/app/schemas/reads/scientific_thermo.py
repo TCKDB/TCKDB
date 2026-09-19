@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     GroupAdditivityComponentKind,
+    PhaseKind,
     RecordReviewStatus,
     ScientificOriginKind,
 )
@@ -256,6 +257,10 @@ class ThermoRecord(BaseModel):
     #: ``null`` on a current record — and always computed, never behind an
     #: ``include=`` token. See :class:`SupersessionNotice`.
     supersession: SupersessionNotice | None = None
+    phase: PhaseKind | None = None
+    reference_pressure_bar: float | None = None
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
     h298_uncertainty_kj_mol: float | None = None

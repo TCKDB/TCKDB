@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from app.db.models.common import ScientificOriginKind, ThermoCalculationRole
 from app.schemas.entities.thermo import (
     ThermoCreate,
+    ThermoNASABase,
     ThermoNASACreate,
     ThermoNASARead,
     ThermoPointCreate,
@@ -64,24 +65,28 @@ class TestThermoNASA:
         nasa = ThermoNASACreate(
             t_low=200, t_mid=1000, t_high=5000,
             a1=1, a2=2, a3=3, a4=4, a5=5, a6=6, a7=7,
+            b1=1, b2=2, b3=3, b4=4, b5=5, b6=6, b7=7,
         )
         assert nasa.t_mid == 1000
 
     def test_valid_with_no_bounds(self) -> None:
-        nasa = ThermoNASACreate(a1=1, a2=2, a3=3, a4=4, a5=5, a6=6, a7=7)
+        # Historical partial coefficients remain readable, but cannot be created.
+        nasa = ThermoNASABase(a1=1, a2=2, a3=3, a4=4, a5=5, a6=6, a7=7)
         assert nasa.t_low is None
+        with pytest.raises(ValidationError, match="Field required"):
+            ThermoNASACreate(a1=1, a2=2, a3=3, a4=4, a5=5, a6=6, a7=7)
 
     def test_rejects_partial_bounds(self) -> None:
-        with pytest.raises(ValidationError, match="all provided or all omitted"):
+        with pytest.raises(ValidationError, match="Field required"):
             ThermoNASACreate(t_low=200, t_mid=1000)
 
     def test_rejects_t_mid_le_t_low(self) -> None:
         with pytest.raises(ValidationError, match="t_mid must be greater"):
-            ThermoNASACreate(t_low=1000, t_mid=1000, t_high=5000)
+            ThermoNASACreate(t_low=1000, t_mid=1000, t_high=5000, **{f"{p}{i}": 0 for p in "ab" for i in range(1, 8)})
 
     def test_rejects_t_high_le_t_mid(self) -> None:
         with pytest.raises(ValidationError, match="t_high must be greater"):
-            ThermoNASACreate(t_low=200, t_mid=1000, t_high=1000)
+            ThermoNASACreate(t_low=200, t_mid=1000, t_high=1000, **{f"{p}{i}": 0 for p in "ab" for i in range(1, 8)})
 
     def test_read_from_orm(self) -> None:
         nasa = SimpleNamespace(
@@ -128,6 +133,7 @@ class TestThermoCreate:
             nasa=ThermoNASACreate(
                 t_low=200, t_mid=1000, t_high=5000,
                 a1=1, a2=2, a3=3, a4=4, a5=5, a6=6, a7=7,
+                b1=1, b2=2, b3=3, b4=4, b5=5, b6=6, b7=7,
             ),
             source_calculations=[
                 ThermoSourceCalculationCreate(
@@ -148,8 +154,8 @@ class TestThermoCreate:
                 species_entry_id=1,
                 scientific_origin=ScientificOriginKind.computed,
                 points=[
-                    ThermoPointCreate(temperature_k=298),
-                    ThermoPointCreate(temperature_k=298),
+                    ThermoPointCreate(temperature_k=298, cp_j_mol_k=0),
+                    ThermoPointCreate(temperature_k=298, cp_j_mol_k=0),
                 ],
             )
 

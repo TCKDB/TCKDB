@@ -88,7 +88,7 @@ from tckdb_schemas.stationary_point import (
     raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
-from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate
+from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.utils import normalize_optional_text, normalize_tunneling_model
 from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
@@ -290,7 +290,7 @@ class ConformerIn(SchemaBase):
 # ---------------------------------------------------------------------------
 
 
-class BundleThermoIn(SchemaBase):
+class BundleThermoIn(ThermoStateFields):
     """Thermo data attached to a species in this bundle.
 
     The reaction route's thermo carries the same provenance the species
@@ -356,6 +356,17 @@ class BundleThermoIn(SchemaBase):
     # for the exact rule; never persisted.
     energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_scientific_content(self) -> Self:
+        if (self.h298_kj_mol is None and self.s298_j_mol_k is None
+                and self.enthalpy_formation_0k_kj_mol is None
+                and self.nasa is None and not self.points):
+            raise ValueError("Thermo block must include a scalar thermo value, NASA block or thermo points.")
+        temperatures = [point.temperature_k for point in self.points]
+        if len(set(temperatures)) != len(temperatures):
+            raise ValueError("Thermo points must be unique by temperature_k.")
+        return self
 
     @model_validator(mode="after")
     def validate_unique_source_calculation_pairs(self) -> Self:

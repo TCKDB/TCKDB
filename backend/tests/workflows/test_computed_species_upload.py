@@ -877,6 +877,7 @@ def _bundle_with_thermo() -> ComputedSpeciesUploadRequest:
                 "t_high": 3500.0,
                 "a1": 4.198,
                 "b1": 3.034,
+                **{f"{p}{i}": 0.0 for p in "ab" for i in range(2, 8)},
             },
             "points": [
                 {"temperature_k": 298.15, "cp_j_mol_k": 33.59},

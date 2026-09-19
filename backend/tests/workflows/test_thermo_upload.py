@@ -476,7 +476,7 @@ def test_nasa_rejects_partial_temperature_bounds(missing_fields: tuple[str, ...]
     nasa = _nasa_block()
     for field in missing_fields:
         nasa[field] = None
-    with pytest.raises(ValidationError, match="all provided or all omitted"):
+    with pytest.raises(ValidationError, match="Input should be a valid number"):
         _thermo_request(nasa=nasa)
 
 
