@@ -21,11 +21,17 @@ lossless database snapshot that carries the evidence behind the release. A
 manuscript number; `expected_outputs/` holds what each generator produced on
 the instance the release was cut from.
 
-## 0. Check the deposit's own integrity (no database needed)
+## 0. Check the deposit's own integrity (no database, no checkout needed)
+
+Run from inside the deposit directory. `sha256sum -c` expects two spaces
+between digest and path; the one-liner prints exactly that.
 
 ```bash
-sha256sum -c <(python3 -c "import json; [print(m['sha256'], ' ', m['path']) for m in json.load(open('MANIFEST.json'))['members']]")
+python3 -c 'import json; print("\n".join(m["sha256"] + "  " + m["path"] for m in json.load(open("MANIFEST.json"))["members"]))' | sha256sum -c -
 ```
+
+Every member must print `OK`. With the checkout available,
+`build_publication_deposit.py checksums <deposit>` prints the same list.
 
 ## 1. Check out the pinned commit
 

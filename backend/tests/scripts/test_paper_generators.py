@@ -119,7 +119,10 @@ def test_every_generator_is_byte_stable_across_two_runs(db_session, tmp_path):
 
 def test_no_generator_output_carries_a_database_id_key(db_session, tmp_path):
     write_expected_outputs(db_session, tmp_path, GENERATORS)
-    for path in tmp_path.glob("*.json"):
+    documents = sorted(tmp_path.glob("*.json"))
+    assert documents, "the scan must have files to scan"
+    assert len(documents) == len(GENERATORS)
+    for path in documents:
         document = json.loads(path.read_text())
 
         def _keys(node):

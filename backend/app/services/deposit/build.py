@@ -211,6 +211,11 @@ class SourceBinding:
     #: and the author's checkout deliberately keeps ``paper/`` and
     #: ``.agents/`` untracked and unignored.
     untracked_paths: tuple[str, ...] = ()
+    #: Which refusals were armed when the binding was taken. Recorded in the
+    #: manifest so a build made with a switch off (only tests do that) is
+    #: distinguishable, byte for byte, from a strict one.
+    require_clean_tree: bool = True
+    require_exact_tag: bool = True
 
     def as_document(self) -> dict[str, Any]:
         return {
@@ -219,7 +224,21 @@ class SourceBinding:
             "backend_version": self.backend_version,
             "schemas_package_version": self.schemas_package_version,
             "alembic_head": self.alembic_head,
+            "tree_clean": self.tree_clean,
+            "checks": {"clean_tree": self.require_clean_tree, "exact_tag": self.require_exact_tag},
         }
+
+
+def checksum_lines(document: Mapping[str, Any]) -> str:
+    """``sha256sum -c`` input for a deposit manifest: ``<digest>  <path>`` per member.
+
+    Two spaces, because that is the format ``sha256sum`` reads back; anything
+    else makes it report every member as unreadable rather than as wrong.
+    """
+    members = document.get("members")
+    if not isinstance(members, list) or not members:
+        raise DepositError("checksum_lines: the manifest has no members")
+    return "".join(f"{member['sha256']}  {member['path']}\n" for member in members)
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -317,6 +336,8 @@ def source_binding(
         alembic_head=alembic_script_head(repo_root),
         tree_clean=tree_clean,
         untracked_paths=untracked_paths,
+        require_clean_tree=require_clean_tree,
+        require_exact_tag=require_exact_tag,
     )
 
 
@@ -907,6 +928,7 @@ __all__ = [
     "actor_columns",
     "alembic_script_head",
     "assert_publishable",
+    "checksum_lines",
     "collect_release_members",
     "source_binding",
     "verify_deposit",

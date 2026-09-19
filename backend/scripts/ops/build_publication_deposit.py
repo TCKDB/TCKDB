@@ -20,6 +20,7 @@ empty; 7 verification found problems.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -29,7 +30,8 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.api.deps import SessionLocal  # noqa: E402
-from app.services.deposit import DepositError, verify_deposit, write_deposit  # noqa: E402
+from app.services.deposit import DepositError, checksum_lines, verify_deposit, write_deposit  # noqa: E402
+from app.services.deposit.build import MANIFEST_NAME  # noqa: E402
 from scripts.paper.registry import GENERATORS  # noqa: E402
 
 GENERATOR_DIR = BACKEND_ROOT / "scripts" / "paper"
@@ -60,7 +62,16 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     verify = subparsers.add_parser("verify", help="Re-hash a deposit; with --db, check it against the database.")
     verify.add_argument("deposit", type=Path)
     verify.add_argument("--db", action="store_true", help="also compare with the database the environment points at")
+
+    checksums = subparsers.add_parser("checksums", help="Print '<sha256>  <path>' per member, for sha256sum -c.")
+    checksums.add_argument("deposit", type=Path)
     return parser.parse_args(argv)
+
+
+def _checksums(args: argparse.Namespace) -> int:
+    document = json.loads((args.deposit / MANIFEST_NAME).read_bytes())
+    sys.stdout.write(checksum_lines(document))
+    return 0
 
 
 def _build(args: argparse.Namespace) -> int:
@@ -111,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "build":
             return _build(args)
+        if args.command == "checksums":
+            return _checksums(args)
         return _verify(args)
     except DepositError as exc:
         print(f"refused: {exc}", file=sys.stderr)

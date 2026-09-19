@@ -104,7 +104,7 @@ def scratch_db():
     subprocess.run(
         ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
         cwd=BACKEND_ROOT,
-        env=conftest._db_env(db_name),
+        env=_subprocess_env(db_name),  # worktree first, so the migrations are this checkout's
         check=True,
         capture_output=True,
         text=True,
@@ -271,6 +271,17 @@ def test_deposit_round_trip_reproduces_expected_outputs_byte_for_byte(
         "protocol",
         "privacy",
     }
+    source = result.manifest["source"]
+    assert set(source) == {
+        "git_commit",
+        "git_tag",
+        "backend_version",
+        "schemas_package_version",
+        "alembic_head",
+        "tree_clean",
+        "checks",
+    }
+    assert source["checks"] == {"clean_tree": False, "exact_tag": False}, "a test build must say it was relaxed"
     expected_files = sorted(p.name for p in (deposit_dir / "expected_outputs").iterdir())
     assert expected_files == sorted(f"{name}{suffix}" for name in GENERATORS for suffix in (".json", ".md"))
     accounts = (deposit_dir / "ACCOUNTS.md").read_text()

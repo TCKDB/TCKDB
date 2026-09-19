@@ -11,12 +11,26 @@ import io
 import tarfile
 from pathlib import Path
 
+import pytest
 from sqlalchemy import text
 
 from app.db.base import Base
-from app.services.archive import restore_archive, verify_archive, write_archive
-from app.services.archive.registry import MIGRATION_WRITTEN_TABLES, PRESEEDED_TABLES
+from app.services.archive import registry, restore_archive, verify_archive, write_archive
+from app.services.archive.registry import (
+    MIGRATION_WRITTEN_TABLES,
+    PRESEEDED_TABLES,
+    ArchiveRegistryError,
+    validate_registry,
+)
 from scripts import tckdb_archive
+
+
+def test_registry_refuses_a_migration_written_table_that_is_archived(monkeypatch):
+    """The tolerance is only safe for tables the archive never carries; the guard says so by name."""
+    monkeypatch.setattr(registry, "MIGRATION_WRITTEN_TABLES", MIGRATION_WRITTEN_TABLES | {"thermo"})
+    with pytest.raises(ArchiveRegistryError) as excinfo:
+        validate_registry(Base.metadata)
+    assert "migration-written tables must be excluded from the archive: ['thermo']" in str(excinfo.value)
 
 
 def _rebuild(source: Path, target: Path, *, mutate: dict[str, bytes] | None = None, add: dict[str, bytes] | None = None) -> None:

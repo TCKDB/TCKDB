@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
+from app.db.base import Base
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole, SubmissionRecordType
 from app.services.deposit import build
@@ -31,6 +32,7 @@ from app.services.deposit.build import (
     UnknownVersionError,
     alembic_script_head,
     assert_publishable,
+    checksum_lines,
     collect_release_members,
     source_binding,
     verify_deposit,
@@ -261,12 +263,26 @@ def test_refuses_an_empty_allowlist(db_session, draft_release, curator, thermo_c
         assert_publishable(db_session, draft_release, author_accounts=[], source=_real_source(db_session))
 
 
-def test_actor_columns_are_introspected_not_listed():
-    columns = build.actor_columns()
-    assert ("submission", "created_by") in columns
-    assert ("release_selection", "selected_by") in columns
-    assert ("record_review", "reviewed_by") in columns
-    assert len(columns) > 3
+def test_actor_columns_equal_an_independent_walk_of_every_fk_onto_app_user():
+    """Set equality against a second, independently written metadata walk.
+
+    A named-column spot check stayed green when ``thermo.created_by`` was
+    dropped from ``actor_columns()``; this cannot.
+    """
+    expected: set[tuple[str, str]] = set()
+    for table in Base.metadata.sorted_tables:
+        for constraint in table.foreign_key_constraints:
+            for element in constraint.elements:
+                if element.column.table.name == "app_user" and element.column.name == "id":
+                    expected.add((table.name, element.parent.name))
+    actual = set(build.actor_columns())
+    assert actual == expected
+    assert len(build.actor_columns()) == len(actual), "no duplicates"
+    # Measured on this revision (Alembic head a55cc983501a): 52 foreign keys onto
+    # app_user.id. A table can only add to this; a drop below it is a lost actor.
+    assert len(actual) >= 52
+    for pair in (("submission", "created_by"), ("release_selection", "selected_by"), ("record_review", "reviewed_by")):
+        assert pair in actual
 
 
 # ---------------------------------------------------------------------------
@@ -435,6 +451,19 @@ def test_manifest_records_the_bound_source_and_never_an_email(built_deposit):
     assert document["schema"] == "tckdb.deposit.v1"
     assert len(document["source"]["git_commit"]) == 40
     assert document["source"]["alembic_head"] == alembic_script_head(REPO_ROOT)
+    # A relaxed (test) build must be byte-distinguishable from a strict one.
+    assert set(document["source"]) == {
+        "git_commit",
+        "git_tag",
+        "backend_version",
+        "schemas_package_version",
+        "alembic_head",
+        "tree_clean",
+        "checks",
+    }
+    assert document["source"]["checks"] == {"clean_tree": False, "exact_tag": False}
+    assert isinstance(document["source"]["tree_clean"], bool)
+    assert json.loads((built_deposit / "source" / "commit.json").read_text())["checks"] == document["source"]["checks"]
     assert set(document["release"]) == {"tag", "ref", "manifest_content_sha256"}
     assert document["privacy"]["author_accounts"]
     assert "@" not in (built_deposit / "MANIFEST.json").read_text()
@@ -444,6 +473,44 @@ def test_manifest_records_the_bound_source_and_never_an_email(built_deposit):
     for name in ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME", "S3_ENDPOINT_URL", "S3_BUCKET"):
         assert name in reproduce
     assert document["source"]["git_commit"] in reproduce
+
+
+def _sha256sum_check(stdin: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["sha256sum", "-c", "-"], input=stdin, cwd=cwd, capture_output=True, text=True)
+
+
+def _assert_every_member_ok(result: subprocess.CompletedProcess[str], deposit: Path) -> None:
+    members = [m["path"] for m in _manifest(deposit)["members"]]
+    assert result.returncode == 0, result.stdout + result.stderr
+    ok_lines = [line for line in result.stdout.splitlines() if line.endswith(": OK")]
+    assert sorted(line[: -len(": OK")] for line in ok_lines) == sorted(members)
+    assert "FAILED" not in result.stdout and "FAILED" not in result.stderr
+
+
+def test_the_reproduce_step_zero_one_liner_passes_sha256sum(built_deposit):
+    """The command a reader pastes from REPRODUCE.md must actually verify the deposit.
+
+    The first version printed three spaces between digest and path, which
+    ``sha256sum -c`` reads as a different filename and reports as
+    ``FAILED open or read`` for every member (exit 1).
+    """
+    reproduce = (built_deposit / "REPRODUCE.md").read_text()
+    lines = [line for line in reproduce.splitlines() if line.startswith("python3 -c ") and "sha256sum -c -" in line]
+    assert len(lines) == 1, "REPRODUCE.md must carry exactly one step-0 one-liner"
+    result = subprocess.run(lines[0], shell=True, cwd=built_deposit, capture_output=True, text=True)
+    _assert_every_member_ok(result, built_deposit)
+
+
+def test_checksum_lines_helper_passes_sha256sum_and_matches_the_ops_subcommand(built_deposit, capsys):
+    document = _manifest(built_deposit)
+    listing = checksum_lines(document)
+    assert listing.count("\n") == len(document["members"])
+    _assert_every_member_ok(_sha256sum_check(listing, built_deposit), built_deposit)
+
+    from scripts.ops import build_publication_deposit as cli
+
+    assert cli.main(["checksums", str(built_deposit)]) == 0
+    assert capsys.readouterr().out == listing
 
 
 def test_verify_detects_a_flipped_byte_in_a_release_artifact(built_deposit):
