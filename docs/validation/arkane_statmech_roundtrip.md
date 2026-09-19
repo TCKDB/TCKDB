@@ -1,5 +1,131 @@
 # Arkane statmech round-trip — TCKDB statmech-completeness validation
 
+> **Refactored 2026-09-19 (Phase B, work package B4, C2b).** The harness now
+> reads a SQLAlchemy session over the configured database instead of the
+> public API over `curl` and the Pi over SSH, so it runs unchanged against a
+> restored deposit database; it has a batch mode with a JSON summary; and it
+> records the RMG version it actually used. The sections below this notice
+> are the original single-species exhibits (methane, ethylperoxy) and their
+> numbers, kept as the historical record. Nothing in them was re-measured
+> here, because the corpus they were measured on is not on the machine this
+> refactor was done on.
+
+## Running the replay (current)
+
+```
+# one statmech record, or every statmech record of a species entry
+conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py --statmech-ref sm_...
+conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py --species-entry-ref spe_...
+
+# every statmech record in the database, with a JSON summary
+conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py --all-statmech --json-out replay.json
+
+# assemble the decks without running Arkane (no rmg_env needed)
+conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtrip.py --all-statmech --skip-arkane
+```
+
+* **Database access.** The connection comes from the `DB_USER`, `DB_PASSWORD`,
+  `DB_NAME`, `DB_HOST`, `DB_PORT` environment variables that
+  `Settings.database_url` (`backend/app/api/config.py`) reads, through
+  `app.api.deps.SessionLocal`. Read-only: nothing is written. Because the
+  database is read directly, review status is irrelevant; the old
+  `min_review_status=under_review` workaround is gone with the HTTP path.
+* **Arkane stays out of process.** Before anything is replayed the script asks
+  the `rmg_env` conda environment (`RMG_ENV` overrides) for
+  `rmgpy.__version__` and the `Arkane.py` next to the installed `rmgpy`
+  (`ARKANE_ENTRY` overrides), plus the checkout's described tag, and writes
+  all three into the JSON `rmg` block and every printed record. If the
+  environment is missing, decks are still assembled and every record is
+  reported as `arkane_skipped` with the reason; no number is fabricated.
+* **Per-record status** in the JSON: `compared` (S298 and Cp(T) deviations
+  against the stored thermo, plus `within_tolerance` under the declared
+  tolerance of 0.5 J/mol/K on S298 and 1 % on Cp), `skipped` with a
+  `skip_reason` (`no_frequencies`, `no_frequency_calculation`, `no_geometry`,
+  `no_external_symmetry`, `element_mass_unavailable:<symbols>`,
+  `torsion_<i>_has_no_scan`, `torsion_<i>_top_underivable:...`, ...),
+  `arkane_skipped`, or `arkane_failed` with Arkane's tail.
+* **Exit status.** `0` when every compared record is within tolerance; `1`
+  when any exceeds it or Arkane failed on a record; `2` when nothing was
+  compared (empty scope, everything skipped, or Arkane unavailable). The JSON
+  carries every record either way.
+* **Tests.** `backend/tests/scripts/test_arkane_statmech_roundtrip_deck.py`
+  builds a statmech record from the Gaussian frequency fixture (12 atoms, 30
+  printed frequencies, a methyl rotor with a 45-point threefold scan) and
+  checks the deck the script renders: the harmonic-oscillator list (29 of 30
+  frequencies, the lowest dropped for the rotor, all scaled by the stored
+  factor), the external symmetry number (parametrised over 1 and 2; a deck
+  that hard-codes `symmetry=1` fails the second case, which was checked by
+  mutation), `opticalIsomers = 2` derived from `point_group = C1`, the
+  `HinderedRotor` line with `symmetry=3` and the derived pivots/top, and that
+  a record with no frequencies yields the skip reason `no_frequencies` and no
+  deck. Arkane is not run by the tests.
+
+## The two approximations (unchanged, stated)
+
+1. **Torsional modes are removed by dropping the R lowest stored
+   frequencies**, R being the number of hindered rotors, rather than by
+   projecting the rotor out of the Hessian as Arkane does from ESS output.
+   TCKDB stores the full unprojected 3N−6 spectrum; for the corpus species the
+   torsions are the R lowest. A species whose lowest mode is not a torsion (a
+   ring pucker below a methyl torsion) would be handled wrongly, which is why
+   the dropped frequencies are listed in the deck and in the JSON.
+2. **No atom-energy or bond-additivity corrections are applied**, so Arkane's
+   H298 is an absolute `E_elec + ZPE + thermal` quantity and is not comparable
+   with the stored enthalpy of formation. S298 and Cp(T), which do not depend
+   on the energy reference, are the targets; H298 is reported with the caveat
+   and never decides pass/fail.
+
+Fixing either is not Phase B work.
+
+## The two data-access findings, re-measured 2026-09-19
+
+The original exhibits below recorded two public-API gaps: per-mode
+frequencies and `statmech.optical_isomers` were not served. Both have since
+been closed on the read surface:
+`GET /scientific/calculations/{ref}?include=freq_modes`
+(`backend/app/services/scientific_read/calculations.py`) returns the per-mode
+array, and `optical_isomers` is on the statmech read schema
+(`backend/app/schemas/reads/scientific_statmech.py`). The replay no longer
+depends on either, since it reads the database. What remains true, and is
+deliberately not fixed here:
+
+* `statmech.optical_isomers` is **NULL for the ARC corpus**, so the replay
+  derives it from the stored `point_group` (chiral groups C1/Cn/Dn/T/O/I give
+  2, anything with an improper element gives 1) and records which it used.
+  For a chiral species the naive default of 1 costs exactly R ln 2 =
+  5.76 J/mol/K in S298, the ethylperoxy finding below.
+* `statmech_torsion.top_description` is **NULL**, so the rotating top is
+  derived from the stored geometry's connectivity (cut the pivot bond, take
+  the side reachable from the first pivot atom). Deterministic for an acyclic
+  single-bond rotor; a ring rotor is refused with
+  `torsion_<i>_top_underivable`.
+
+Moments of inertia use standard atomic weights, rmgpy's convention and the
+one the stored thermo was computed with; this is deliberately not the
+isotopic convention the Hessian reanalysis applies.
+
+## What was run for the refactor
+
+No restored deposit database exists on the workstation the refactor was done
+on (the only local databases were empty), so the end-to-end run used a
+scratch database migrated to head and seeded with the test fixture record
+above. Arkane **did run**, in `rmg_env` with rmgpy 4.0.0 at RMG-Py
+`4.0.0-6-g62eb728c0`: rmgpy computed the rotor's reduced moment of inertia
+(2.556 amu·Å², 45 scan points, 5.93 kJ/mol barrier) and Fourier fit, Arkane
+produced `output.py`, and the script parsed S298 and Cp(300/500/1000/1500 K)
+from it. The stored thermo in that fixture is a placeholder (300 J/mol/K, a
+flat NASA polynomial), so the deviations it reported (`exceeding`, exit 1)
+say nothing about TCKDB's completeness; they show the pipeline is live. The
+`--skip-arkane` path on the same database exited 2 with two `arkane_skipped`
+records and one `skipped` (`no_frequencies`). A 12-point scan was tried first
+and rmgpy's Fourier fit refused it ("negative barrier on final try with 12
+terms"), which is why the fixture carries the corpus's 45-point resolution.
+
+---
+
+# Original exhibits (2026-08, live Pi, API + SSH harness)
+
+
 **Verdict: PROVEN, for both a rigid and a floppy species.** TCKDB stores enough
 statmech data to regenerate a species' entropy and heat capacity with Arkane,
 without the original ESS output files.
