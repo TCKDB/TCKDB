@@ -138,9 +138,6 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_submission_rights_attestation")),
         sa.UniqueConstraint(
-            "public_ref", name=op.f("uq_submission_rights_attestation_public_ref")
-        ),
-        sa.UniqueConstraint(
             "supersedes_attestation_id",
             name="uq_submission_rights_attestation_supersedes_attestation_id",
         ),
