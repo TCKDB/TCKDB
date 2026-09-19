@@ -19,7 +19,7 @@ Usage::
     # Every calculation with a Hessian or a frequency list.
     python backend/scripts/validation/hessian_reanalysis_report.py --all
 
-    # One calculation, by public ref or integer id.
+    # One calculation, by public ref (database ids are not accepted).
     python backend/scripts/validation/hessian_reanalysis_report.py --calculation-ref calc_...
 
     # Canonical JSON to a file (byte-identical across runs) and the
@@ -27,8 +27,10 @@ Usage::
     python backend/scripts/validation/hessian_reanalysis_report.py --all \\
         --json-out reanalysis.json --markdown-out reanalysis.md
 
-    # A tighter or looser bound than the derived default.
+    # Override the derived bound: a wider flat term, or a flat omega-squared
+    # term in place of the per-mode one (0 makes the bound flat in cm^-1).
     python backend/scripts/validation/hessian_reanalysis_report.py --all --max-deviation-cm1 0.01
+    python backend/scripts/validation/hessian_reanalysis_report.py --all --max-omega2-deviation-cm2 0
 
 Exit status:
 
@@ -59,7 +61,6 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from app.services.hessian_reanalysis import (  # noqa: E402
     DEFAULT_MAX_DEVIATION_CM1,
-    DEFAULT_MAX_OMEGA2_DEVIATION_CM2,
     ReanalysisStatus,
     hessian_reanalysis,
 )
@@ -128,9 +129,13 @@ def markdown_table(report: dict) -> str:
     refused = {k: v for k, v in scope["by_status"].items() if k != ReanalysisStatus.analysed.value and v}
     if refused:
         lines.append("Refused: " + ", ".join(f"{k} {v}" for k, v in sorted(refused.items())) + ".")
+    omega2 = (
+        "B_mode cm^-2 (per-mode first-order print-rounding sensitivity)"
+        if tolerance["max_omega2_deviation_cm2"] is None
+        else f"{tolerance['max_omega2_deviation_cm2']} cm^-2 (flat override)"
+    )
     lines.append(
-        f"Bound: |recovered - stored| <= {tolerance['max_deviation_cm1']} cm^-1 + "
-        f"(sqrt(stored^2 + {tolerance['max_omega2_deviation_cm2']} cm^-2) - |stored|)."
+        f"Bound: |recovered - stored| <= {tolerance['max_deviation_cm1']} cm^-1 + (sqrt(stored^2 + {omega2}) - |stored|)."
     )
     return "\n".join(lines) + "\n"
 
@@ -142,7 +147,7 @@ def main() -> int:
     )
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument("--all", action="store_true", help="every calculation with a Hessian or a frequency list")
-    scope.add_argument("--calculation-ref", help="one calculation, by public ref or integer id")
+    scope.add_argument("--calculation-ref", help="one calculation, by public ref (calc_...)")
     parser.add_argument(
         "--max-deviation-cm1",
         type=float,
@@ -155,11 +160,10 @@ def main() -> int:
     parser.add_argument(
         "--max-omega2-deviation-cm2",
         type=float,
-        default=DEFAULT_MAX_OMEGA2_DEVIATION_CM2,
+        default=None,
         help=(
-            "omega-squared part of the per-mode bound in cm^-2 (default: the half-ULP of a "
-            f"six-significant-figure force constant, {DEFAULT_MAX_OMEGA2_DEVIATION_CM2:.3f}); "
-            "0 makes the bound flat in cm^-1"
+            "override the omega-squared term of the per-mode bound with this flat figure in cm^-2 "
+            "(default: derived per mode from the Hessian's print format); 0 makes the bound flat in cm^-1"
         ),
     )
     parser.add_argument("--json-out", type=Path, default=None, help="write the canonical JSON here")
@@ -167,6 +171,8 @@ def main() -> int:
     parser.add_argument("--no-modes", action="store_true", help="omit the per-mode lists from the JSON")
     parser.add_argument("--quiet", action="store_true", help="do not print the table to stdout")
     args = parser.parse_args()
+    if args.calculation_ref is not None and not args.calculation_ref.startswith("calc_"):
+        parser.error("--calculation-ref takes a public ref (calc_...); database ids are not an interface")
 
     from app.api.deps import SessionLocal
 

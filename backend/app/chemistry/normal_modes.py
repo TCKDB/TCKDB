@@ -520,11 +520,13 @@ def solve_normal_modes(
 def wavenumber_from_eigenvalue(eigenvalue_hartree_bohr2_amu: float) -> float:
     """Convert a mass-weighted Hessian eigenvalue to a signed wavenumber.
 
-    The one conversion this module performs, stated once so that every
-    caller -- :func:`solve_normal_modes`, :func:`solve_vibrational_modes`
-    and :func:`rigid_body_curvature_cm1` -- quotes the same CODATA 2018
-    constants. ``hartree/bohr^2/amu`` in, ``cm^-1`` out, negative when the
-    curvature is negative (an imaginary mode), matching how
+    The same arithmetic :func:`solve_normal_modes` and
+    :func:`rigid_body_curvature_cm1` carry inline, on the same module
+    constants (CODATA 2018), exposed as a function so that
+    :func:`solve_vibrational_modes` and code outside this module -- the
+    Hessian reanalysis bound -- convert exactly the way the recovery does.
+    ``hartree/bohr^2/amu`` in, ``cm^-1`` out, negative when the curvature
+    is negative (an imaginary mode), matching how
     ``calc_freq_mode.frequency_cm1`` is stored.
     """
 

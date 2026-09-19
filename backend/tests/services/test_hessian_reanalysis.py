@@ -34,20 +34,22 @@ from app.chemistry.normal_modes import (
     unpack_lower_triangle,
     wavenumber_from_eigenvalue,
 )
-from app.db.models.common import CalculationType
+from app.db.models.common import CalculationType, HessianSource
 from app.services.hessian_parsing import parse_hessian_from_artifact
 from app.services.hessian_reanalysis import (
+    COARSEST_PRINT_FORMAT,
     DEFAULT_MAX_DEVIATION_CM1,
-    DEFAULT_MAX_OMEGA2_DEVIATION_CM2,
     FREQUENCY_PRINT_HALF_ULP_CM1,
-    HESSIAN_ELEMENT_SCALE_HARTREE_BOHR2_AMU,
-    HESSIAN_PRINT_RELATIVE_HALF_ULP,
     OMEGA2_PER_UNIT_EIGENVALUE_CM2,
+    HessianPrintFormat,
     ReanalysisStatus,
     compare_spectrum,
+    element_half_ulps,
     hessian_reanalysis,
+    mode_omega2_allowance_cm2,
     mode_tolerance_cm1,
     reanalyse_calculation,
+    resolve_print_format,
 )
 from tests.services.scientific_read._factories import (
     attach_freq_result,
@@ -159,25 +161,115 @@ def _gaussian_fixture():
 # ---------------------------------------------------------------------------
 
 
-def test_the_default_bound_is_the_stated_derivation():
-    """The two constants are the two roundings the module docstring names,
-    combined the way it says; nothing else feeds the default."""
+def test_term_one_is_the_frequency_print_half_ulp():
+    """Term 1 of the bound is the one stated constant, and the omega-squared
+    bracket is the exact inverse of an omega-squared interval, not a
+    first-order approximation of it."""
 
     assert DEFAULT_MAX_DEVIATION_CM1 == FREQUENCY_PRINT_HALF_ULP_CM1 == 0.005
-    assert DEFAULT_MAX_OMEGA2_DEVIATION_CM2 == pytest.approx(
-        HESSIAN_PRINT_RELATIVE_HALF_ULP * HESSIAN_ELEMENT_SCALE_HARTREE_BOHR2_AMU * OMEGA2_PER_UNIT_EIGENVALUE_CM2
-    )
     assert OMEGA2_PER_UNIT_EIGENVALUE_CM2 == pytest.approx(wavenumber_from_eigenvalue(1.0) ** 2)
-    assert 13.0 < DEFAULT_MAX_OMEGA2_DEVIATION_CM2 < 13.5
+    w, b = 110.0, 13.0
+    assert mode_tolerance_cm1(w, omega2_allowance_cm2=b) - 0.005 == pytest.approx(math.sqrt(w * w + b) - w)
+    assert mode_tolerance_cm1(3000.0, omega2_allowance_cm2=b) == pytest.approx(0.005 + b / 6000.0, rel=1e-3)
+    assert mode_tolerance_cm1(20.0, omega2_allowance_cm2=0.0) == 0.005
 
-    # Flat in omega squared means the cm^-1 allowance shrinks with frequency.
-    assert mode_tolerance_cm1(3000.0) == pytest.approx(0.005 + DEFAULT_MAX_OMEGA2_DEVIATION_CM2 / 6000.0, rel=1e-3)
-    assert mode_tolerance_cm1(110.0) > mode_tolerance_cm1(3000.0)
-    # And the exact inverse of the omega-squared interval, not its first-order approximation.
-    w = 110.0
-    assert mode_tolerance_cm1(w) - 0.005 == pytest.approx(math.sqrt(w * w + DEFAULT_MAX_OMEGA2_DEVIATION_CM2) - w)
-    # Zero omega-squared term reduces to a flat bound.
-    assert mode_tolerance_cm1(20.0, max_omega2_deviation_cm2=0.0) == 0.005
+
+def test_element_half_ulps_follow_the_print_format():
+    """Six significant figures in D-format: ``0.410282D-01`` is good to
+    5e-8; ``0.432137D+00`` to 5e-7; a printed zero to 5e-7. Molpro's seven
+    decimals are flat; ORCA's eleven figures are five orders finer."""
+
+    matrix = np.array([[0.0410282, 0.432137], [0.432137, 0.0]])
+    gaussian = element_half_ulps(matrix, HessianPrintFormat.gaussian_log)
+    assert gaussian[0, 0] == pytest.approx(5e-8)
+    assert gaussian[0, 1] == pytest.approx(5e-7)
+    assert gaussian[1, 1] == pytest.approx(5e-7)
+    molpro = element_half_ulps(matrix, HessianPrintFormat.molpro_log)
+    assert np.all(molpro == 5e-8)
+    orca = element_half_ulps(matrix, HessianPrintFormat.orca_hess)
+    assert orca[0, 1] == pytest.approx(5e-12)
+    assert np.all(orca < gaussian)
+
+
+def test_the_per_mode_allowance_is_the_eigenvector_weighted_sensitivity():
+    """Term 2 is ``sum_ij |u_i||u_j| e_ij`` with ``u = v / sqrt(m)``, checked
+    against a hand computation on the diatomic: the stretch eigenvector is
+    the only mode, the Cartesian half-ULPs are known, and the answer is a
+    closed form."""
+
+    elements, coords, matrix, expected = _diatomic()
+    masses = _masses(elements)
+    rigid = rigid_body_subspace(coords, masses)
+    (stretch,) = solve_vibrational_modes(matrix, masses, rigid)
+    half = element_half_ulps(matrix, HessianPrintFormat.gaussian_log)
+    root = np.repeat(np.sqrt(masses), 3)
+    u = np.abs(stretch.displacement / root)
+    by_hand = float(u @ half @ u) * OMEGA2_PER_UNIT_EIGENVALUE_CM2
+
+    assert mode_omega2_allowance_cm2(stretch.displacement, masses, half) == pytest.approx(by_hand)
+    # Only the four z-z elements are non-zero in the diatomic; the zeros
+    # carry the coarsest half-ULP but the eigenvector has no x/y weight, so
+    # they contribute nothing.
+    assert by_hand > 0.0
+    assert by_hand == pytest.approx(
+        (0.5e-6 * (u[2] * u[2] + u[5] * u[5] + 2 * u[2] * u[5])) * OMEGA2_PER_UNIT_EIGENVALUE_CM2
+    )
+
+
+def test_the_allowance_exceeds_every_measured_deviation_and_ranks_the_modes_honestly():
+    """On the Gaussian fixture every mode's measured omega-squared deviation
+    is inside its own derived allowance, and the allowance is a property
+    of the mode: the 3446 cm^-1 C-H stretch, whose eigenvector sits on the
+    largest and most coarsely printed elements, is entitled to more than
+    the 110 cm^-1 torsion. An allowance that ignored the eigenvector
+    weighting would give every mode the same figure and fail the second
+    assertion."""
+
+    elements, coords, matrix, printed = _gaussian_fixture()
+    result = compare_spectrum(matrix, coords, _masses(elements), _stored(printed))
+
+    assert result.status is ReanalysisStatus.analysed
+    assert result.within_tolerance is True
+    for mode in result.modes:
+        assert mode.omega2_deviation_cm2 < mode.omega2_allowance_cm2
+        assert abs(mode.deviation_cm1) <= mode.tolerance_cm1
+    by_stored = {round(m.stored_frequency_cm1, 4): m for m in result.modes}
+    stretch = by_stored[3446.2841]
+    torsion = by_stored[110.1603]
+    assert stretch.omega2_allowance_cm2 > 2.0 * torsion.omega2_allowance_cm2
+    assert 30.0 < stretch.omega2_allowance_cm2 < 40.0
+    assert 8.0 < torsion.omega2_allowance_cm2 < 14.0
+    assert len({m.omega2_allowance_cm2 for m in result.modes}) == len(result.modes)
+
+
+def test_a_flat_omega_squared_override_replaces_the_per_mode_term():
+    elements, coords, matrix, expected = _linear_triatomic()
+    masses = _masses(elements)
+    derived = compare_spectrum(matrix, coords, masses, _stored(expected))
+    flat = compare_spectrum(matrix, coords, masses, _stored(expected), max_omega2_deviation_cm2=13.0)
+    zero = compare_spectrum(matrix, coords, masses, _stored(expected), max_omega2_deviation_cm2=0.0)
+
+    assert len({m.omega2_allowance_cm2 for m in derived.modes}) > 1
+    assert {m.omega2_allowance_cm2 for m in flat.modes} == {13.0}
+    assert all(m.tolerance_cm1 == 0.005 for m in zero.modes)
+
+
+@pytest.mark.parametrize(
+    ("source", "software", "expected_format", "fallback"),
+    [
+        (HessianSource.parsed_hess, "ORCA", HessianPrintFormat.orca_hess, False),
+        (HessianSource.parsed_log, "Molpro", HessianPrintFormat.molpro_log, False),
+        (HessianSource.parsed_log, "gaussian", HessianPrintFormat.gaussian_log, False),
+        (HessianSource.parsed_log, "psi4", COARSEST_PRINT_FORMAT, True),
+        (HessianSource.parsed_fchk, "gaussian", COARSEST_PRINT_FORMAT, True),
+        (HessianSource.uploaded, None, COARSEST_PRINT_FORMAT, True),
+        (None, None, COARSEST_PRINT_FORMAT, True),
+    ],
+)
+def test_the_print_format_comes_from_provenance_or_falls_back_to_the_coarsest(source, software, expected_format, fallback):
+    print_format, basis = resolve_print_format(source, software)
+    assert print_format is expected_format
+    assert basis.startswith("fallback") is fallback
 
 
 # ---------------------------------------------------------------------------
@@ -227,7 +319,7 @@ def test_the_gaussian_fixture_reproduces_its_own_printed_list():
     assert result.matched_count == 30
     assert result.stored_order_violations == 0
     assert result.max_abs_deviation_cm1 < 0.01
-    assert result.max_omega2_deviation_cm2 < DEFAULT_MAX_OMEGA2_DEVIATION_CM2
+    assert result.hessian_print_format == COARSEST_PRINT_FORMAT.value
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +468,10 @@ def test_a_deposited_record_is_analysed_from_the_database(db_session):
     assert result.within_tolerance is True
     assert result.projection_status == "no_imaginary_modes"
     assert result.stored_imaginary_count == 0 and result.recovered_imaginary_count == 0
+    # The factory's Hessian is ``parsed_log`` with no software on the
+    # calculation, so the format falls back to the coarsest and says so.
+    assert result.hessian_print_format == COARSEST_PRINT_FORMAT.value
+    assert result.print_format_basis.startswith("fallback")
 
 
 @pytest.mark.parametrize(
@@ -463,20 +559,87 @@ def test_the_generator_counts_every_record_and_is_byte_identical(db_session):
     refs = [record["calculation_ref"] for record in first["records"]]
     assert refs == sorted(refs)
     assert {good.public_ref, bare.public_ref} == set(refs)
-    assert "timestamp" not in json.dumps(first)
     assert first["tolerance"]["max_deviation_cm1"] == DEFAULT_MAX_DEVIATION_CM1
+    assert first["tolerance"]["max_omega2_deviation_cm2"] is None
+    # Every key is on an allowlist, so a new one -- a run stamp, a host
+    # name, anything that would make two runs differ -- fails here until it
+    # is added deliberately.
+    assert set(first) == {"generator", "tolerance", "method", "scope", "records"}
+    assert set(first["tolerance"]) == {"max_deviation_cm1", "max_omega2_deviation_cm2", "omega2_allowance", "rule", "derivation"}
+    assert set(first["tolerance"]["derivation"]) == {
+        "frequency_print_half_ulp_cm1",
+        "print_formats",
+        "fallback_print_format",
+        "omega2_per_unit_eigenvalue_cm2",
+    }
+    assert set(first["method"]) == {"masses", "rigid_body_projection", "pairing", "units"}
+    assert set(first["scope"]) == {
+        "calculation_count",
+        "by_status",
+        "analysed_count",
+        "within_tolerance_count",
+        "exceeding_count",
+        "modes_compared",
+        "max_abs_deviation_cm1",
+        "max_omega2_deviation_cm2",
+        "records_with_order_violations",
+        "imaginary_declaration_conflicts",
+    }
+    record_keys = {
+        "calculation_ref",
+        "calculation_type",
+        "species_entry_ref",
+        "transition_state_entry_ref",
+        "status",
+        "natoms",
+        "hessian_print_format",
+        "print_format_basis",
+        "rigid_body_dimension",
+        "is_linear",
+        "max_rigid_body_curvature_cm1",
+        "stored_count",
+        "recovered_count",
+        "matched_count",
+        "within_tolerance_count",
+        "within_tolerance",
+        "max_abs_deviation_cm1",
+        "rms_abs_deviation_cm1",
+        "max_omega2_deviation_cm2",
+        "stored_order_violations",
+        "stored_imaginary_count",
+        "recovered_imaginary_count",
+        "projection_status",
+        "imaginary_modes",
+        "modes",
+    }
+    mode_keys = {
+        "mode_index",
+        "stored_frequency_cm1",
+        "recovered_frequency_cm1",
+        "deviation_cm1",
+        "omega2_deviation_cm2",
+        "omega2_allowance_cm2",
+        "tolerance_cm1",
+        "within_tolerance",
+        "nearest_match",
+    }
+    for record in first["records"]:
+        assert set(record) == record_keys
+        for mode in record["modes"]:
+            assert set(mode) == mode_keys
 
 
-def test_a_single_calculation_can_be_named(db_session):
+def test_a_single_calculation_is_named_by_public_ref_never_by_id(db_session):
     elements, coords, matrix, expected = _diatomic()
     calc = _deposit(db_session, elements, coords, matrix, [round(f, 4) for f in expected])
     _deposit(db_session, elements, coords, matrix, [round(f, 4) for f in expected])
 
     by_ref = hessian_reanalysis(db_session, calculation_ref=calc.public_ref)
-    by_id = hessian_reanalysis(db_session, calculation_ref=str(calc.id))
 
-    assert by_ref["scope"]["calculation_count"] == by_id["scope"]["calculation_count"] == 1
+    assert by_ref["scope"]["calculation_count"] == 1
     assert by_ref["records"][0]["calculation_ref"] == calc.public_ref
+    with pytest.raises(ValueError, match="public ref"):
+        hessian_reanalysis(db_session, calculation_ref=str(calc.id))
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +695,13 @@ def test_an_empty_scope_exits_two_and_has_no_silent_pass(db_session, report_scri
     assert "NOTHING ANALYSED" in out
     with pytest.raises(SystemExit):
         _run_main(report_script, monkeypatch, db_session, ["--all", "--allow-empty"])
+
+
+def test_the_script_refuses_a_database_id(db_session, report_script, monkeypatch, capsys):
+    with pytest.raises(SystemExit) as exc:
+        _run_main(report_script, monkeypatch, db_session, ["--calculation-ref", "42", "--quiet"])
+    assert exc.value.code == 2
+    assert "public ref" in capsys.readouterr().err
 
 
 def test_a_scope_where_everything_is_refused_also_exits_two(db_session, report_script, monkeypatch, capsys):
