@@ -28,7 +28,8 @@ The deposit is the directory that binds all of it by digest::
 Refusals
 --------
 Every reason the build will not proceed is its own error class with an exit
-code, so a runbook can name it: a dirty working tree, no exact tag on HEAD,
+code, so a runbook can name it: a dirty working tree (tracked paths only;
+untracked files are logged, never refused), no exact tag on HEAD,
 an ``"unknown"`` package version, a database whose Alembic revision is not
 the script head, a release that does not verify, an account outside the
 author allowlist, an actor reference resolving outside it, a non-empty
@@ -205,6 +206,11 @@ class SourceBinding:
     schemas_package_version: str
     alembic_head: str
     tree_clean: bool
+    #: Untracked, unignored paths at build time. Reported, never refused: an
+    #: untracked file cannot change any tracked member the deposit copies,
+    #: and the author's checkout deliberately keeps ``paper/`` and
+    #: ``.agents/`` untracked and unignored.
+    untracked_paths: tuple[str, ...] = ()
 
     def as_document(self) -> dict[str, Any]:
         return {
@@ -261,17 +267,22 @@ def source_binding(
         raise DepositError(f"not_a_git_repository: {repo_root}: {head.stderr.strip()}")
     git_commit = head.stdout.strip()
 
-    status = _git(repo_root, "status", "--porcelain")
+    # Only TRACKED paths make the tree dirty: modified, staged, deleted or
+    # renamed. Untracked files are collected for the build log and never
+    # refuse, because nothing the deposit copies can be changed by one.
+    status = _git(repo_root, "status", "--porcelain", "--untracked-files=no")
     if status.returncode != 0:
         raise DepositError(f"git_status_failed: {status.stderr.strip()}")
     tree_clean = status.stdout.strip() == ""
     if require_clean_tree and not tree_clean:
         changed = [line[3:] for line in status.stdout.splitlines() if line.strip()]
         raise DirtyTreeError(
-            "dirty_tree: the working tree differs from the commit a deposit would bind to: "
+            "dirty_tree: tracked paths differ from the commit a deposit would bind to: "
             + ", ".join(changed[:10])
             + (f" (+{len(changed) - 10} more)" if len(changed) > 10 else "")
         )
+    untracked = _git(repo_root, "ls-files", "--others", "--exclude-standard")
+    untracked_paths = tuple(line for line in untracked.stdout.splitlines() if line.strip())
 
     described = _git(repo_root, "describe", "--tags", "--exact-match", "HEAD")
     git_tag: str | None = described.stdout.strip() if described.returncode == 0 else None
@@ -305,6 +316,7 @@ def source_binding(
         schemas_package_version=schemas_version,
         alembic_head=alembic_script_head(repo_root),
         tree_clean=tree_clean,
+        untracked_paths=untracked_paths,
     )
 
 
@@ -485,6 +497,7 @@ def assert_publishable(
 class DepositResult:
     path: Path
     manifest: dict[str, Any]
+    source: SourceBinding
     members: list[Member] = field(default_factory=list)
 
 
@@ -666,7 +679,7 @@ def write_deposit(
             shutil.rmtree(output_dir, ignore_errors=True)
         raise
 
-    return DepositResult(path=output_dir, manifest=document, members=members)
+    return DepositResult(path=output_dir, manifest=document, source=source, members=members)
 
 
 # ---------------------------------------------------------------------------

@@ -76,6 +76,14 @@ def _build(args: argparse.Namespace) -> int:
         )
         session.rollback()  # the build reads; release the archive's snapshot locks promptly
     source = result.manifest["source"]
+    if result.source.untracked_paths:
+        listed = ", ".join(result.source.untracked_paths[:10])
+        extra = len(result.source.untracked_paths) - 10
+        print(
+            f"warning: {len(result.source.untracked_paths)} untracked path(s) in the checkout are not bound "
+            f"by the deposit: {listed}" + (f" (+{extra} more)" if extra > 0 else ""),
+            file=sys.stderr,
+        )
     print(f"Wrote {result.path}")
     print(f"Release {args.release}  commit {source['git_commit']}  tag {source['git_tag']}  alembic {source['alembic_head']}")
     print(f"Members: {len(result.members)}")

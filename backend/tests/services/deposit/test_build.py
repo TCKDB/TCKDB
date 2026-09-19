@@ -128,9 +128,26 @@ def test_source_binding_refuses_a_dirty_tree(tagged_repo, fake_alembic_head):
         source_binding(tagged_repo)
 
 
-def test_source_binding_refuses_an_untracked_file(tagged_repo, fake_alembic_head):
+def test_an_untracked_file_does_not_make_the_tree_dirty(tagged_repo, fake_alembic_head):
+    """An untracked file cannot change a tracked member; it is reported, not refused."""
     (tagged_repo / "stray.txt").write_text("x\n")
-    with pytest.raises(DirtyTreeError, match="stray.txt"):
+    (tagged_repo / "notes").mkdir()
+    (tagged_repo / "notes" / "draft.md").write_text("y\n")
+    binding = source_binding(tagged_repo)
+    assert binding.tree_clean is True
+    assert binding.untracked_paths == ("notes/draft.md", "stray.txt")
+    assert "untracked_paths" not in binding.as_document()
+
+
+def test_a_staged_and_a_deleted_tracked_path_still_refuse(tagged_repo, fake_alembic_head):
+    (tagged_repo / "new.txt").write_text("z\n")
+    _git(tagged_repo, "add", "new.txt")
+    with pytest.raises(DirtyTreeError, match="new.txt"):
+        source_binding(tagged_repo)
+    _git(tagged_repo, "reset", "-q", "new.txt")
+    (tagged_repo / "new.txt").unlink()
+    (tagged_repo / "tracked.txt").unlink()
+    with pytest.raises(DirtyTreeError, match="tracked.txt"):
         source_binding(tagged_repo)
 
 

@@ -314,8 +314,8 @@ one `MANIFEST.json`. Build it **on the host that holds the database**, from a
 clean checkout of the exact tagged commit that is deployed:
 
 ```bash
-git status --porcelain            # must print nothing
-git describe --tags --exact-match # must print the paper tag
+git status --porcelain --untracked-files=no   # must print nothing (untracked files are only warned about)
+git describe --tags --exact-match             # must print the paper tag
 export DB_USER=... DB_PASSWORD=... DB_HOST=... DB_PORT=... DB_NAME=...
 export S3_ENDPOINT_URL=... S3_ACCESS_KEY=... S3_SECRET_KEY=... S3_BUCKET=... S3_REGION=...
 
@@ -331,7 +331,7 @@ with a distinct exit code, when:
 | exit | refusal |
 | --- | --- |
 | 2 | the release is missing, unfrozen, withdrawn, or `verify_release` reports a problem; or the `release_artifact` rows inside the archive do not hash to the emitted release files |
-| 3 | the working tree is dirty, `HEAD` carries no tag, a package version resolves to `unknown`, or a source pin (`backend/environment.yml`, `backend/uv.lock`, `backend/Dockerfile`, `CITATION.cff`, `LICENSE`, `LICENSE-DATA`) is missing |
+| 3 | a tracked path is modified, staged, deleted or renamed (untracked files are printed as a warning, never refused), `HEAD` carries no tag, a package version resolves to `unknown`, or a source pin (`backend/environment.yml`, `backend/uv.lock`, `backend/Dockerfile`, `CITATION.cff`, `LICENSE`, `LICENSE-DATA`) is missing |
 | 4 | the database's `alembic_version` is not the checkout's Alembic script head |
 | 5 | any `app_user` row, or any actor reference (`created_by`, `selected_by`, `reviewed_by`, and every other foreign key onto `app_user`), resolves outside the `--author-account` list -- the message names usernames only |
 | 6 | the output directory already has content |
