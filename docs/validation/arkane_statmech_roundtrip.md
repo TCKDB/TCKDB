@@ -42,8 +42,15 @@ conda run -n tckdb_env python backend/scripts/validation/arkane_statmech_roundtr
   tolerance of 0.5 J/mol/K on S298 and 1 % on Cp), `skipped` with a
   `skip_reason` (`no_frequencies`, `no_frequency_calculation`, `no_geometry`,
   `no_external_symmetry`, `element_mass_unavailable:<symbols>`,
-  `torsion_<i>_has_no_scan`, `torsion_<i>_top_underivable:...`, ...),
-  `arkane_skipped`, or `arkane_failed` with Arkane's tail.
+  `torsion_<i>_has_no_scan`, `torsion_<i>_top_underivable:...`,
+  `isotope_labelled_geometry` -- the moment-of-inertia masses are looked
+  up by element symbol, so a labelled isotope is refused rather than
+  silently replayed at natural abundance, ...), `arkane_skipped`, or
+  `arkane_failed` with the reason: Arkane's tail, `output_unparseable`
+  when `output.py` yielded neither S298 nor a Cp table, or
+  `nothing_comparable` when it did but nothing stored could be checked
+  against it. A record passes only when at least one check was made and
+  every check passed; an undecided comparison is counted as exceeding.
 * **Exit status.** `0` when every compared record is within tolerance; `1`
   when any exceeds it or Arkane failed on a record; `2` when nothing was
   compared (empty scope, everything skipped, or Arkane unavailable). The JSON

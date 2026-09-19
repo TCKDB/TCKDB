@@ -165,8 +165,12 @@ def _statmech_record(
     with_frequencies: bool = True,
     with_rotor: bool = True,
     scale_factor: float = 0.97,
+    deuterate_atom: int | None = None,
 ):
-    """A statmech record for the Gaussian fixture molecule, sources and all."""
+    """A statmech record for the Gaussian fixture molecule, sources and all.
+
+    ``deuterate_atom`` labels that 1-based hydrogen with ``isotope_mass_number=2``.
+    """
 
     elements, coords = _split(GAUSSIAN_INPUT_ORIENTATION)
     species = make_species(session, inchi_key=next_inchi_key("ARKN"))
@@ -174,7 +178,11 @@ def _statmech_record(
 
     freq_calc = make_calculation(session, type=CalculationType.freq, species_entry_id=entry.id)
     geometry = make_geometry(session, natoms=len(elements))
-    attach_geometry_atoms(session, geometry=geometry, symbols=elements, coords=coords.tolist())
+    atoms = attach_geometry_atoms(session, geometry=geometry, symbols=elements, coords=coords.tolist())
+    if deuterate_atom is not None:
+        assert atoms[deuterate_atom - 1].element == "H"
+        atoms[deuterate_atom - 1].isotope_mass_number = 2
+        session.flush()
     attach_input_geometry(session, calculation=freq_calc, geometry=geometry)
     if with_frequencies:
         attach_freq_result(session, calculation=freq_calc, frequencies_cm1=_printed_frequencies(), zpe_hartree=0.1)
@@ -390,3 +398,122 @@ def test_the_replay_writes_nothing(db_session, replay, monkeypatch, capsys):
     assert not db_session.dirty
     assert not db_session.deleted
     assert set(db_session.identity_map.values()) >= before
+
+
+def test_an_isotope_labelled_geometry_is_refused_not_averaged(db_session, replay):
+    """The moments of inertia use standard atomic weights by element symbol,
+    so a deuterium label would be replayed as protium in silence. It is a
+    skip reason instead."""
+
+    statmech = _statmech_record(db_session, deuterate_atom=10)
+
+    with pytest.raises(replay.Skip, match="isotope_labelled_geometry"):
+        replay.gather_species(db_session, statmech)
+
+    record = replay.replay_record(
+        db_session,
+        statmech,
+        rmg={"env": "rmg_env", "available": False, "reason": "not probed"},
+        skip_arkane=True,
+        keep_dir=None,
+        s298_tolerance=0.5,
+        cp_tolerance_percent=1.0,
+    )
+    assert record["status"] == "skipped"
+    assert record["skip_reason"] == "isotope_labelled_geometry"
+    assert record["deck"] is None
+
+
+# ---------------------------------------------------------------------------
+# An output Arkane did not really produce is a failure, never a pass
+# ---------------------------------------------------------------------------
+
+
+def _stored_only_data() -> dict:
+    return {
+        "stored_s298": 300.0,
+        "stored_h298_kj_mol": -20.0,
+        "stored_nasa": {"t_mid": 1000.0, "low": [3.5, 0, 0, 0, 0, -1000.0, 4.0], "high": [3.2, 0, 0, 0, 0, -1000.0, 4.0]},
+    }
+
+
+@pytest.mark.parametrize("output", ["", "# nothing", "# Thermodynamics table ran off\n#   T  Cp  H  S  G\n"], ids=["empty", "comment", "header_only"])
+def test_an_unparseable_arkane_output_yields_no_checks_and_no_pass(replay, output):
+    arkane = replay.parse_arkane_output(output)
+    assert replay.output_is_unparseable(arkane)
+
+    comparison = replay.compare(_stored_only_data(), arkane, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+
+    assert comparison["checks"] == 0
+    assert comparison["within_tolerance"] is None
+    assert comparison["s298"] is None and comparison["cp"] == {}
+
+
+def test_a_readable_output_is_checked(replay):
+    output = "# Entropy of formation (298 K) = 71.702 cal/(mol*K)\n# 300.000 7.000 1.0 2.0 3.0\n"
+    arkane = replay.parse_arkane_output(output)
+    assert not replay.output_is_unparseable(arkane)
+
+    comparison = replay.compare(_stored_only_data(), arkane, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+
+    assert comparison["checks"] == 2
+    # 71.702 cal = 300.001 J against 300.0 stored; 7.000 cal = 29.288 J against the NASA's 29.101 (0.64 %).
+    assert comparison["within_tolerance"] is True
+    assert comparison["s298"]["abs_delta_j_mol_k"] < 0.01
+
+
+def test_an_unparseable_output_is_an_arkane_failure_on_the_record(db_session, replay, monkeypatch):
+    statmech = _statmech_record(db_session, with_rotor=False)
+    monkeypatch.setattr(replay, "run_arkane", lambda deck_path, *, entry, env: "# nothing")
+
+    record = replay.replay_record(
+        db_session,
+        statmech,
+        rmg={"env": "rmg_env", "available": True, "arkane_entry": "/nonexistent/Arkane.py", "reason": None},
+        skip_arkane=False,
+        keep_dir=None,
+        s298_tolerance=0.5,
+        cp_tolerance_percent=1.0,
+    )
+
+    assert record["status"] == "arkane_failed"
+    assert record["skip_reason"] == "output_unparseable"
+    assert record["comparison"] is None
+    assert record["deck"] is not None
+
+
+def test_only_a_true_within_tolerance_counts_as_passing(replay):
+    """The exit path: a compared record whose comparison could not decide
+    (``within_tolerance`` is ``None``) is exceeding, not passing, and an
+    Arkane failure alone makes the run exit 1."""
+
+    rmg = {"env": "rmg_env", "available": True}
+    undecided = {"statmech_ref": "sm_a", "status": "compared", "skip_reason": None, "comparison": {"checks": 0, "within_tolerance": None}}
+    passing = {"statmech_ref": "sm_b", "status": "compared", "skip_reason": None, "comparison": {"checks": 5, "within_tolerance": True}}
+    failing = {"statmech_ref": "sm_c", "status": "compared", "skip_reason": None, "comparison": {"checks": 5, "within_tolerance": False}}
+    failed = {"statmech_ref": "sm_d", "status": "arkane_failed", "skip_reason": "output_unparseable", "comparison": None}
+
+    summary, code = replay.summarise([undecided], rmg=rmg, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+    assert code == replay.EXIT_EXCEEDED
+    assert summary["scope"] == {
+        "statmech_count": 1,
+        "by_status": {"compared": 1},
+        "compared_count": 1,
+        "within_tolerance_count": 0,
+        "exceeding_count": 1,
+        "arkane_failed_count": 0,
+    }
+
+    summary, code = replay.summarise([passing], rmg=rmg, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+    assert code == replay.EXIT_OK
+    assert summary["scope"]["within_tolerance_count"] == 1
+
+    _, code = replay.summarise([passing, failing], rmg=rmg, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+    assert code == replay.EXIT_EXCEEDED
+
+    summary, code = replay.summarise([passing, failed], rmg=rmg, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+    assert code == replay.EXIT_EXCEEDED
+    assert summary["scope"]["arkane_failed_count"] == 1
+
+    _, code = replay.summarise([failed], rmg=rmg, s298_tolerance=0.5, cp_tolerance_percent=1.0)
+    assert code == replay.EXIT_NOTHING_COMPARED

@@ -418,6 +418,11 @@ def gather_species(session: Session, statmech: Statmech) -> dict:
     geometry, atoms = _geometry_of(session, freq_calc)
     if geometry is None or not atoms:
         raise Skip("no_geometry")
+    if any(atom.isotope_mass_number is not None for atom in atoms):
+        # Moments of inertia below use the standard-atomic-weight table by
+        # element symbol; a labelled isotope would be replayed at natural
+        # abundance without anyone noticing. Refuse instead.
+        raise Skip("isotope_labelled_geometry")
     symbols = [atom.element.strip() for atom in atoms]
     missing = sorted({s for s in symbols if s not in ATOMIC_MASS})
     if missing:
@@ -782,11 +787,23 @@ def parse_arkane_output(output: str) -> dict:
     return result
 
 
+def output_is_unparseable(arkane: dict) -> bool:
+    """True when :func:`parse_arkane_output` found neither S298 nor a Cp table."""
+
+    return math.isnan(arkane.get("s298_j", float("nan"))) and not arkane.get("cp_cal")
+
+
 def compare(data: dict, arkane: dict, *, s298_tolerance: float, cp_tolerance_percent: float) -> dict:
     """Deviations against the stored thermo, and whether they are inside
-    the declared tolerance."""
+    the declared tolerance.
 
-    out: dict = {"s298": None, "cp": {}, "h298": None, "within_tolerance": None}
+    ``within_tolerance`` is ``True`` only when at least one check was made
+    and every check passed, ``False`` when a check failed, and ``None``
+    when nothing could be checked -- which the caller must treat as a
+    failure to compare, never as a pass. ``checks`` counts them.
+    """
+
+    out: dict = {"s298": None, "cp": {}, "h298": None, "checks": 0, "within_tolerance": None}
     if data["stored_s298"] is not None and not math.isnan(arkane["s298_j"]):
         delta = arkane["s298_j"] - data["stored_s298"]
         out["s298"] = {
@@ -819,7 +836,8 @@ def compare(data: dict, arkane: dict, *, s298_tolerance: float, cp_tolerance_per
     if out["s298"] is not None:
         checks.append(out["s298"]["abs_delta_j_mol_k"] <= s298_tolerance)
     checks.extend(row["pct_delta"] <= cp_tolerance_percent for row in out["cp"].values())
-    out["within_tolerance"] = all(checks) if checks else None
+    out["checks"] = len(checks)
+    out["within_tolerance"] = (all(checks) if checks else None)
     return out
 
 
@@ -901,7 +919,17 @@ def replay_record(
         if not keep_dir:
             shutil.rmtree(work_dir, ignore_errors=True)
     arkane = parse_arkane_output(output)
-    record["comparison"] = compare(data, arkane, s298_tolerance=s298_tolerance, cp_tolerance_percent=cp_tolerance_percent)
+    if output_is_unparseable(arkane):
+        record["status"] = "arkane_failed"
+        record["skip_reason"] = "output_unparseable"
+        return record
+    comparison = compare(data, arkane, s298_tolerance=s298_tolerance, cp_tolerance_percent=cp_tolerance_percent)
+    if comparison["checks"] == 0:
+        record["status"] = "arkane_failed"
+        record["skip_reason"] = "nothing_comparable"
+        record["comparison"] = comparison
+        return record
+    record["comparison"] = comparison
     record["status"] = "compared"
     return record
 
@@ -942,6 +970,56 @@ def build_report(record: dict, rmg: dict) -> str:
         p(f"  within declared tolerance: {comparison['within_tolerance']}")
     p(f"  rmgpy {rmg.get('rmgpy_version')}  RMG-Py {rmg.get('rmg_py_git')}  env {rmg.get('env')}")
     return "\n".join(lines)
+
+
+def summarise(
+    records: list[dict],
+    *,
+    rmg: dict,
+    s298_tolerance: float,
+    cp_tolerance_percent: float,
+) -> tuple[dict, int]:
+    """The JSON summary and the exit status for a list of replayed records.
+
+    A record counts as passing only when its status is ``compared`` and
+    ``within_tolerance is True``; a compared record whose comparison says
+    anything else is exceeding, and any ``arkane_failed`` record makes the
+    run exit 1. Nothing compared exits 2.
+    """
+
+    by_status: dict[str, int] = {}
+    for record in records:
+        by_status[record["status"]] = by_status.get(record["status"], 0) + 1
+    compared = [r for r in records if r["status"] == "compared"]
+    passing = [r for r in compared if (r.get("comparison") or {}).get("within_tolerance") is True]
+    exceeding = [r for r in compared if r not in passing]
+    failed = [r for r in records if r["status"] == "arkane_failed"]
+    summary = {
+        "generator": "arkane_statmech_replay",
+        "rmg": {k: rmg.get(k) for k in ("env", "available", "rmgpy_version", "rmg_py_git", "arkane_entry", "reason")},
+        "approximations": list(APPROXIMATIONS),
+        "tolerance": {
+            "s298_j_mol_k": s298_tolerance,
+            "cp_percent": cp_tolerance_percent,
+            "cp_temperatures_k": list(CP_TEMPERATURES),
+        },
+        "scope": {
+            "statmech_count": len(records),
+            "by_status": dict(sorted(by_status.items())),
+            "compared_count": len(compared),
+            "within_tolerance_count": len(passing),
+            "exceeding_count": len(exceeding),
+            "arkane_failed_count": len(failed),
+        },
+        "records": records,
+    }
+    if not compared:
+        code = EXIT_NOTHING_COMPARED
+    elif exceeding or failed:
+        code = EXIT_EXCEEDED
+    else:
+        code = EXIT_OK
+    return summary, code
 
 
 def main() -> int:
@@ -986,51 +1064,34 @@ def main() -> int:
             if not args.quiet:
                 print(build_report(record, rmg))
 
-    by_status: dict[str, int] = {}
-    for record in records:
-        by_status[record["status"]] = by_status.get(record["status"], 0) + 1
-    compared = [r for r in records if r["status"] == "compared"]
-    exceeding = [r for r in compared if r["comparison"]["within_tolerance"] is False]
-    failed = [r for r in records if r["status"] == "arkane_failed"]
-    summary = {
-        "generator": "arkane_statmech_replay",
-        "rmg": {k: rmg.get(k) for k in ("env", "available", "rmgpy_version", "rmg_py_git", "arkane_entry", "reason")},
-        "approximations": list(APPROXIMATIONS),
-        "tolerance": {
-            "s298_j_mol_k": args.s298_tolerance_j_mol_k,
-            "cp_percent": args.cp_tolerance_percent,
-            "cp_temperatures_k": list(CP_TEMPERATURES),
-        },
-        "scope": {
-            "statmech_count": len(records),
-            "by_status": dict(sorted(by_status.items())),
-            "compared_count": len(compared),
-            "within_tolerance_count": len(compared) - len(exceeding),
-            "exceeding_count": len(exceeding),
-            "arkane_failed_count": len(failed),
-        },
-        "records": records,
-    }
+    summary, code = summarise(
+        records,
+        rmg=rmg,
+        s298_tolerance=args.s298_tolerance_j_mol_k,
+        cp_tolerance_percent=args.cp_tolerance_percent,
+    )
     if args.json_out is not None:
         args.json_out.write_text(json.dumps(summary, sort_keys=True, indent=2) + "\n")
 
+    scope = summary["scope"]
     print(
-        f"\n{len(records)} statmech record(s) in scope; {len(compared)} compared; "
-        f"{len(exceeding)} exceeding; {len(failed)} Arkane failure(s); "
-        f"statuses {summary['scope']['by_status']}"
+        f"\n{scope['statmech_count']} statmech record(s) in scope; {scope['compared_count']} compared; "
+        f"{scope['exceeding_count']} exceeding; {scope['arkane_failed_count']} Arkane failure(s); "
+        f"statuses {scope['by_status']}"
     )
-    if not compared:
+    if code == EXIT_NOTHING_COMPARED:
         print("RESULT: NOTHING COMPARED.")
-        return EXIT_NOTHING_COMPARED
-    if exceeding or failed:
-        for record in exceeding:
-            print(f"  exceeds tolerance: {record['statmech_ref']} ({record.get('smiles')})")
-        for record in failed:
-            print(f"  Arkane failed: {record['statmech_ref']}: {record['skip_reason'][:200]}")
+        return code
+    if code == EXIT_EXCEEDED:
+        for record in records:
+            if record["status"] == "compared" and (record.get("comparison") or {}).get("within_tolerance") is not True:
+                print(f"  exceeds tolerance: {record['statmech_ref']} ({record.get('smiles')})")
+            elif record["status"] == "arkane_failed":
+                print(f"  Arkane failed: {record['statmech_ref']}: {str(record['skip_reason'])[:200]}")
         print("RESULT: EXCEEDED.")
-        return EXIT_EXCEEDED
+        return code
     print("RESULT: every compared record is within the declared tolerance.")
-    return EXIT_OK
+    return code
 
 
 if __name__ == "__main__":
