@@ -1,0 +1,111 @@
+# Reproducing TCKDB dataset release ${tag}
+
+This directory is a `tckdb.deposit.v1` deposit. `MANIFEST.json` lists every
+file here with its SHA-256; nothing in this protocol needs anything that is
+not listed there or in the pinned source checkout.
+
+Bound source:
+
+| what | value |
+| --- | --- |
+| git commit | `${git_commit}` |
+| git tag | `${git_tag}` |
+| `tckdb-backend` | `${backend_version}` |
+| `tckdb-schemas` | `${schemas_package_version}` |
+| Alembic head | `${alembic_head}` |
+
+Definitions. A **release** is the frozen, citable set of selected values and
+their candidates (`release/`). The **archive** (`${archive_member}`) is the
+lossless database snapshot that carries the evidence behind the release. A
+**generator** is a script that reads the restored database and emits one
+manuscript number; `expected_outputs/` holds what each generator produced on
+the instance the release was cut from.
+
+## 0. Check the deposit's own integrity (no database needed)
+
+```bash
+sha256sum -c <(python3 -c "import json; [print(m['sha256'], ' ', m['path']) for m in json.load(open('MANIFEST.json'))['members']]")
+```
+
+## 1. Check out the pinned commit
+
+```bash
+git clone https://github.com/TCKDB/TCKDB.git tckdb && cd tckdb
+git checkout ${git_commit}
+git describe --tags --exact-match HEAD   # prints ${git_tag}
+```
+
+Create the environment from the pinned `source/environment.yml` (or the
+`source/Dockerfile`), then install the two packages so their versions are
+known:
+
+```bash
+conda env create -f <deposit>/source/environment.yml -n tckdb_env
+conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
+conda run -n tckdb_env python -m pip install -e "backend[dev]"
+```
+
+## 2. Start an empty database and object store, migrate to head
+
+```bash
+docker compose up -d db minio
+```
+
+The backend reads its database from these environment variables
+(`Settings.database_url`, `backend/app/api/config.py`): `DB_USER`,
+`DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME`. The object store that holds
+restored calculation artifacts is read by `backend/app/services/artifact_storage.py`
+from `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`,
+`S3_REGION`. The `docker compose` defaults match the values below.
+
+```bash
+export DB_USER=tckdb DB_PASSWORD=tckdb DB_HOST=127.0.0.1 DB_PORT=5432 DB_NAME=tckdb_repro
+export S3_ENDPOINT_URL=http://localhost:9000 S3_ACCESS_KEY=tckdb S3_SECRET_KEY=tckdb_secret S3_BUCKET=tckdb-artifacts S3_REGION=us-east-1
+PGPASSWORD=$$DB_PASSWORD createdb -h $$DB_HOST -U $$DB_USER $$DB_NAME
+cd backend && conda run -n tckdb_env alembic upgrade head && cd ..
+```
+
+`alembic current` must print `${alembic_head}`. The restore refuses any
+other revision.
+
+## 3. Verify and restore the evidence archive
+
+```bash
+conda run -n tckdb_env python backend/scripts/tckdb_archive.py verify <deposit>/${archive_member}
+conda run -n tckdb_env python backend/scripts/tckdb_archive.py restore <deposit>/${archive_member}
+```
+
+The restore requires an otherwise empty database at exactly the revision
+above. It writes every calculation artifact into the object store and every
+row into the database, byte-exact.
+
+## 4. Regenerate the manuscript numbers and byte-diff them
+
+```bash
+conda run -n tckdb_env python backend/scripts/paper/generate_expected_outputs.py --output-dir /tmp/regenerated
+diff -r <deposit>/expected_outputs /tmp/regenerated && echo "expected outputs reproduced byte for byte"
+```
+
+Every `[DATA]` number in the manuscript is read from one of these files.
+
+## 5. Verify the deposit against the restored database
+
+```bash
+conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py verify <deposit> --db
+conda run -n tckdb_env python backend/scripts/ops/verify_artifact_integrity.py --release ${tag}
+```
+
+The first re-hashes every member, checks the archive against its own
+manifest, and confirms the restored database holds the same frozen release
+bytes, the same Alembic revision and no account outside `ACCOUNTS.md`. The
+second re-reads every artifact the release cites from the object store and
+checks each against its recorded digest.
+
+## What a clean run proves, and what it does not
+
+A clean run proves that the deposited bytes are internally consistent, that
+the database they describe can be rebuilt from them, and that the numbers
+the manuscript quotes are what the deposited scripts compute from that
+database. It does not prove that any value is chemically accurate: the
+release's curation policy, review history and candidate set are in
+`release/` precisely so that a reader can disagree with a selection.

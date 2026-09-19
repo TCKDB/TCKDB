@@ -231,8 +231,13 @@ curl -sX POST https://<host>/api/v1/releases/2026.07.0/publish \
 
 ## 5. Verify, then download the artifacts
 
-Verification re-derives every artifact from the live database and re-renders
-the manifest document, comparing digests. Do not deposit anything until this
+Verification **re-hashes the frozen bytes**: the stored artifact rows and the
+stored manifest document are hashed again and compared with the digests
+recorded at publication (`verify_release` in
+`app/services/release/manifest.py`). It reads nothing from the live corpus,
+so a new upload or a review advancing can never make it fail. The separate,
+**non-blocking** `live_divergence` report is what compares the live database
+with the release (see below). Do not deposit anything until verification
 reports `verified: true`.
 
 ```bash
@@ -294,6 +299,62 @@ curl -s https://<host>/api/v1/scientific/releases/2026.07.0/manifest \
 arrive and review advances, and the release deliberately does not move with
 them. It is **not** a reason to withhold a deposit, and it does not affect the
 checksums. If you want the newer state published, cut the next release.
+
+---
+
+## 5b. Build the publication deposit
+
+The curl procedure above gives you the release. A **deposit**
+(`tckdb.deposit.v1`) is the directory a paper is backed by: the release, the
+`tckdb.archive.v1` evidence archive written in the same database session,
+the exact source commit and its lockfiles, the scripts that generate every
+manuscript number, those scripts' expected outputs, a `REPRODUCE.md`
+protocol and an `ACCOUNTS.md` privacy statement -- all bound by SHA-256 in
+one `MANIFEST.json`. Build it **on the host that holds the database**, from a
+clean checkout of the exact tagged commit that is deployed:
+
+```bash
+git status --porcelain            # must print nothing
+git describe --tags --exact-match # must print the paper tag
+export DB_USER=... DB_PASSWORD=... DB_HOST=... DB_PORT=... DB_NAME=...
+export S3_ENDPOINT_URL=... S3_ACCESS_KEY=... S3_SECRET_KEY=... S3_BUCKET=... S3_REGION=...
+
+conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py build \
+  --release 2026.07.0 \
+  --output /srv/deposits/tckdb-2026.07.0 \
+  --author-account alice --author-account bob
+```
+
+The build reads the release from the database (never over HTTP) and refuses,
+with a distinct exit code, when:
+
+| exit | refusal |
+| --- | --- |
+| 2 | the release is missing, unfrozen, withdrawn, or `verify_release` reports a problem; or the `release_artifact` rows inside the archive do not hash to the emitted release files |
+| 3 | the working tree is dirty, `HEAD` carries no tag, a package version resolves to `unknown`, or a source pin (`backend/environment.yml`, `backend/uv.lock`, `backend/Dockerfile`, `CITATION.cff`, `LICENSE`, `LICENSE-DATA`) is missing |
+| 4 | the database's `alembic_version` is not the checkout's Alembic script head |
+| 5 | any `app_user` row, or any actor reference (`created_by`, `selected_by`, `reviewed_by`, and every other foreign key onto `app_user`), resolves outside the `--author-account` list -- the message names usernames only |
+| 6 | the output directory already has content |
+
+There is no redaction mode: the archive is byte-exact, so the allowlist is
+the privacy control, and `ACCOUNTS.md` states the residual risk that ESS
+output files embed the authors' cluster paths.
+
+Then verify it, offline and against the database:
+
+```bash
+conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py verify /srv/deposits/tckdb-2026.07.0
+conda run -n tckdb_env python backend/scripts/ops/build_publication_deposit.py verify /srv/deposits/tckdb-2026.07.0 --db
+conda run -n tckdb_env python backend/scripts/tckdb_archive.py verify /srv/deposits/tckdb-2026.07.0/archive/2026.07.0.archive.tar
+```
+
+`REPRODUCE.md` inside the deposit is the protocol a reader follows from the
+deposit alone: check out the pinned commit, migrate an empty database,
+restore the archive, re-run the generators, byte-diff against
+`expected_outputs/`, and run the two verifiers. Run it yourself once on a
+throwaway database before minting a DOI for the deposit directory. The
+deposit's `MANIFEST.json` records the git commit from `git rev-parse HEAD`
+at build time; the release manifest itself does not yet carry a commit.
 
 ---
 
