@@ -57,6 +57,32 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Observation uncertainty, state basis and source custody (Phase C-E1)
+
+- New Alembic revision `0b4a3afabfd3` (down from `9b1c7e2d4a68`): gives
+  `molecular_property_observation` a `heat_capacity_cp` property kind
+  fixed to unit `J/mol/K`, `pressure_bar`, `state_basis`
+  (`ideal_gas`/`real_gas`), and a typed uncertainty --
+  `uncertainty_kind` (`standard`/`expanded`/`combined_standard`/
+  `combined_expanded`, no "unspecified" member per DR-0007),
+  `uncertainty_coverage_factor`, `uncertainty_level_of_confidence_pct`,
+  `uncertainty_assessor` (`source_author`/`source_evaluator`) -- instead
+  of a bare, meaningless `scalar_uncertainty` scalar.
+- New tables `external_source` and `external_source_record`
+  (`backend/app/db/models/external_source.py`): an immutable custody
+  chain (source database/release, one snapshot's retrieval metadata,
+  content digest, parser/mapping versions) that new importers attach to
+  via `molecular_property_observation.external_source_record_id`.
+  Existing CCCBDB rows are untouched and keep their flattened
+  `external_source_*` columns; see
+  `backend/docs/specs/cccbdb_importer.md` §7 Gap 4.
+  `SubmissionRecordType` gains `molecular_property_observation`
+  (reviewable, but not release-selectable and not supersession-eligible
+  in this revision).
+- No env vars. No route or importer changes -- schema only; the ThermoML
+  importer, persistence service and review check land in later Phase C
+  work packages (E2-E5).
+
 ### Digest-bound publication deposit (`tckdb.deposit.v1`)
 
 - New `backend/scripts/ops/build_publication_deposit.py build|verify` and

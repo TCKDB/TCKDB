@@ -449,10 +449,40 @@ constants in raw payload JSON during the pilot. They are routinely
 needed for partition functions, so this gap should be closed soon
 after the pilot lands.
 
-### Gap 4 — External source snapshots
+### Gap 4 — External source snapshots (CLOSED for new rows, Phase C-E1)
 
-The importer needs first-class source tracking, separate from
-`literature`. Propose:
+**Status update (2026-09-20):** the custody tables this section proposed
+now exist -- `external_source` and `external_source_record`
+(`backend/app/db/models/external_source.py`, migration `0b4a3afabfd3`).
+The shape differs from the original sketch below in a few ways decided
+during implementation: `page_kind` became `record_kind`
+(`ExternalSourceRecordKind`, currently `thermoml_article` /
+`cccbdb_page` -- a small, closed vocabulary rather than an open one,
+widened as new source kinds are actually implemented, not speculatively);
+`source_url` became `source_uri`; `raw_html_uri` became `raw_uri` (any
+raw snapshot, not HTML specifically) and pairs with a `content_sha256`
+CHECK-constrained to a lowercase hex digest; `parsed_json` was dropped in
+favor of `mapping_report_json` (what the parser/mapping declared
+unsupported or rejected, not the parsed values themselves -- those land
+as typed columns on the observation) plus `mapping_version` alongside
+`parser_version`, so a changed parser **or** a changed mapping both
+append a new custody row rather than overwriting one; and
+`molecular_property_observation.external_source_record_id` is a real FK,
+not a proposal.
+
+**Existing CCCBDB rows are NOT migrated to this FK.** Every row the
+CCCBDB importer has written keeps its flattened `external_source_*`
+columns on `molecular_property_observation` (`external_source_name`,
+`external_source_release`, `external_source_url`,
+`external_source_record_key`, `external_source_page_kind`,
+`external_source_content_sha256`, `external_source_parser_version`) --
+see that model's module docstring. The new custody tables are additive:
+they exist for new importers (starting with ThermoML, Phase C-E2/E3) to
+attach to, and a future migration could backfill CCCBDB rows into
+`external_source`/`external_source_record` rows if that is ever decided,
+but nothing in Phase C does so.
+
+Original sketch, for reference (superseded by the models cited above):
 
 ```text
 external_source
