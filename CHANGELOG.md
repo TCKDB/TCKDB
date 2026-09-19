@@ -59,9 +59,9 @@ wrapper over a contract that is itself still moving.
 
 ### Molecular thermo contract (Phase A)
 
-- Coordinated versions: backend 0.2.0, `tckdb-schemas` 0.43.0,
-  `tckdb-client` 0.77.0, and `tckdb-chemkin` 0.3.0. Backend and client
-  require schemas >=0.43.0. Deploy these contracts together; older clients
+- Coordinated versions: backend 0.2.0, `tckdb-schemas` 0.45.0,
+  `tckdb-client` 0.84.0, and `tckdb-chemkin` 0.3.0. Backend and client
+  require schemas >=0.45.0. Deploy these contracts together; older clients
   may still send valid content but cannot be assumed to preserve the new fields.
 - Scientific reads/search, selected NDJSON and contribution bundles now retain
   phase, reference pressure, 0 K formation enthalpy and its uncertainty.
