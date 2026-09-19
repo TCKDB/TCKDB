@@ -1241,6 +1241,33 @@ class SubmissionAuditEventKind(str, Enum):
     public_visibility_changed = "public_visibility_changed"
 
 
+class RightsBasisKind(str, Enum):
+    """On what footing a submission's records may be licensed for release.
+
+    Recorded on ``submission_rights_attestation`` — curation *of a deposit*,
+    keyed to the submission and never to a scientific row. The kind says who
+    is standing behind the license, which is the question a reader of a
+    released dataset is entitled to ask.
+
+    ``depositor_agreement``  the depositor said so at deposit time (the
+                             ``rights`` fragment of the upload). Always
+                             attested by the submission's creator.
+    ``operator_own_data``    the deploying operator owns the deposit outright
+                             and licenses it as their own work.
+    ``historical_review``    a curator reviewed a deposit that predates
+                             rights capture and records the basis after the
+                             fact, with an actor, rather than by a default.
+    ``source_terms``         the records were taken from a source whose own
+                             terms permit the release; ``source_terms`` on
+                             the row must then quote or cite those terms.
+    """
+
+    depositor_agreement = "depositor_agreement"
+    operator_own_data = "operator_own_data"
+    historical_review = "historical_review"
+    source_terms = "source_terms"
+
+
 class SubmissionSourceKind(str, Enum):
     """How the submission entered the system."""
 

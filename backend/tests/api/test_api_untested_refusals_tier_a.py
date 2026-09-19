@@ -81,6 +81,7 @@ from app.db.models.common import (
 )
 from app.db.models.statmech import Statmech
 from app.services.record_review import set_record_review_status
+from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_lot,
@@ -585,6 +586,11 @@ def test_selecting_a_record_ref_that_names_nothing_is_refused(
         record_type=SubmissionRecordType.thermo,
         record_id=thermo.id,
     )
+    deposit_and_attest(
+        db_session,
+        depositor=db_session.get(AppUser, _api_curator_user),
+        records=[(SubmissionRecordType.thermo, thermo.id)],
+    )
 
     refused = curator.post(
         f"{_RELEASES}/{draft_release}/selections",
@@ -691,6 +697,11 @@ def test_selecting_a_statmech_owned_by_a_transition_state_is_refused(
         _api_curator_user,
         record_type=SubmissionRecordType.statmech,
         record_id=species_statmech.id,
+    )
+    deposit_and_attest(
+        db_session,
+        depositor=db_session.get(AppUser, _api_curator_user),
+        records=[(SubmissionRecordType.statmech, species_statmech.id)],
     )
     accepted = curator.post(
         f"{_RELEASES}/{draft_release}/selections",

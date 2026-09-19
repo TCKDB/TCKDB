@@ -57,6 +57,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
     StatmechTorsionCoordinateIn,
@@ -656,6 +657,10 @@ class ComputedSpeciesUploadRequest(SchemaBase):
     conformers: list[ConformerInBundle] = Field(min_length=1)
     thermo: ThermoInBundle | None = None
     statmech: StatmechInBundle | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,

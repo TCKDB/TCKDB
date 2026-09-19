@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
+    RightsBasisKind,
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionKind,
@@ -175,3 +176,53 @@ class SubmissionSupersedeRequest(SchemaBase):
     """
 
     new_submission_id: int
+
+
+# ---------------------------------------------------------------------------
+# Rights attestations
+# ---------------------------------------------------------------------------
+
+
+class RightsAttestationCreate(SchemaBase):
+    """Payload for recording who agreed to license a submission, and how.
+
+    ``depositor_agreement`` may only be recorded by the submission's creator;
+    every other basis needs the curator or admin role. ``source_terms`` is
+    required exactly when ``basis`` is ``source_terms``.
+    """
+
+    license: str = Field(min_length=1, max_length=64)
+    basis: RightsBasisKind
+    source_terms: str | None = None
+    note: str | None = None
+
+
+class RightsAttestationActor(BaseModel):
+    """Who made an attestation -- by name and ORCID, never by row id."""
+
+    username: str
+    full_name: str | None = None
+    orcid: str | None = None
+    affiliation: str | None = None
+
+
+class RightsAttestationRead(BaseModel):
+    """One attestation, addressed by public refs only.
+
+    ``stands`` is derived from the append-only chain: true for the row nothing
+    supersedes. A superseded row is still listed -- the earlier statement
+    stays readable forever -- and says which row replaced it.
+    """
+
+    attestation_ref: str
+    submission_ref: str
+    license: str
+    basis: RightsBasisKind
+    actor_kind: SubmissionActorKind
+    attested_by: RightsAttestationActor
+    attested_at: datetime
+    source_terms: str | None = None
+    note: str | None = None
+    supersedes_attestation_ref: str | None = None
+    superseded_by_attestation_ref: str | None = None
+    stands: bool

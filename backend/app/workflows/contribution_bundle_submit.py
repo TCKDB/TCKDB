@@ -59,6 +59,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
 from app.services.record_review import ReviewPolicy
+from app.services.rights import attest_from_deposit
 from app.services.submission import (
     create_submission,
     link_record,
@@ -325,6 +326,13 @@ def submit_contribution_bundle(
         source_kind=SubmissionSourceKind.api,
         title=bundle.submission.title,
         summary=bundle.submission.summary,
+    )
+    #    The bundle's deposit-time license agreement is recorded against
+    #    this submission by the authenticated submitter -- the hosted actor,
+    #    never the local exporter label. Absent, nothing is recorded and the
+    #    release gate refuses the records until a curator attests a basis.
+    attest_from_deposit(
+        session, submission=submission, rights=bundle.submission.rights, actor=actor
     )
 
     # 3. Run the per-family import through existing workflows. The

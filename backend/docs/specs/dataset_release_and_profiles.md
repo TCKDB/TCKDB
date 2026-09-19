@@ -574,22 +574,59 @@ citable credential. The license is snapshotted into the manifest (§5.2), so a
 reader who resolves a citation is told the terms the data was published under
 rather than the terms in force today.
 
-### The constraint the default does not satisfy
+### The constraint the default does not satisfy, and the gate that does
 
 **An operator may license their own deposits and nobody else's.** Applying
 `CC-BY-4.0` to a release asserts rights over everything it ships. That is
-sound while every depositor is the operator — the situation on the hosted
-instance today — and it stops being sound the moment a second party uploads.
+sound while every depositor is the operator, and it stops being sound the
+moment a second party uploads.
 
-Therefore: **the license must become part of the upload contract before a
-deployment accepts deposits from a second contributor** — agreed at deposit
-time, recorded against the deposit, honoured when a release is cut. That
-mechanism is not built, and this section is not a plan for it; it is the
-statement that a release created after multi-contributor deposits, with
-nothing but a configuration default behind its `data_license`, would be making
-a claim nobody made. The same constraint is recorded from the ingestion side
-in [`ingestion_submission_model.md`](ingestion_submission_model.md) and in
-`LICENSE-DATA`.
+Therefore the license is part of the upload contract — agreed at deposit
+time, recorded against the deposit as a `submission_rights_attestation`, and
+honoured when a release is cut. The ingestion half is described in
+[`ingestion_submission_model.md`](ingestion_submission_model.md); this is the
+release half.
+
+**The predicate.** `_assert_record_has_rights_basis` in
+`app/services/release/curation.py` follows a record through
+`submission_record_link` to every submission that links it and requires each
+to carry a *standing* attestation — the latest not superseded — whose
+`license_id` matches the release's `data_license` by exact, case-insensitive
+comparison. Every linked submission must pass (fail closed); a record linked to
+no submission at all is refused as missing. There is no compatibility lattice:
+`CC0-1.0` does not satisfy a `CC-BY-4.0` release, because deciding that is a
+legal judgement the code does not encode.
+
+**Where it fires.**
+
+| Call | Set checked | Codes |
+|---|---|---|
+| `add_selection`, `supersede_selection` | the record being selected, after the approval floor | `rights_basis_missing`, `rights_basis_incompatible` (422) |
+| `publish_release` → `_assert_standing_selections_still_releasable` | the standing selections | the same two |
+| same | **every other record the release ships** — the candidate set from `release_record_universe`, the function the renderer uses | `candidate_rights_basis_missing`, `candidate_rights_basis_incompatible` (422) |
+
+The publish check is wider than the selections on purpose.
+`candidate_records.ndjson` carries every candidate for every covered subject,
+so a gate on selections alone would still publish unlicensed bytes: one
+ordinary upload for a released species between selection and publication is
+enough. The check **refuses, never filters** — dropping a candidate from the
+file would falsify the release's claim that every candidate is retrievable.
+
+**What the artifacts say.** Every line of `selected_records.ndjson` and
+`candidate_records.ndjson` carries a `rights` object: `license`, `basis`,
+`attestation_ref`, `attested_at`, and `attested_by` as the same name/ORCID
+label block used for curators — never a user primary key. The manifest
+document (`tckdb.dataset_release.v2`) carries a `rights` block —
+`{data_license, attestation_count, basis_kinds: {kind: count}}` — snapshotted
+onto `release_manifest.rights_summary_json` so the document stays rebuildable
+from the row. The renderer branches on the *stored* `manifest_schema`, so a
+manifest frozen under `v1` keeps reproducing its recorded digest.
+
+**What is deliberately not built:** a license compatibility lattice, a
+refuse-at-upload switch (absence is refused at release, so existing clients
+keep working), and any backfill — historical coverage is a curator's
+`historical_review` attestation with an actor, never a migration that writes
+consent nobody gave. The same constraint is recorded in `LICENSE-DATA`.
 
 ---
 

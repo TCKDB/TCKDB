@@ -128,6 +128,10 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "submission",
         "submission_audit_event",
         "submission_record_link",
+        # Who agreed to license each deposit. Curation of provenance: a
+        # restore that dropped it would leave every record unreleasable
+        # until re-attested, and could not say who had attested before.
+        "submission_rights_attestation",
         "thermo",
         "thermo_nasa",
         "thermo_nasa9_interval",

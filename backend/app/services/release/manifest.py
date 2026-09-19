@@ -86,8 +86,10 @@ from app.services.release import versions
 from app.services.release.artifacts import (
     RenderedArtifact,
     canonical_json,
+    release_record_universe,
     render_artifacts,
 )
+from app.services.release.record_rights import linked_rights, rights_summary
 from app.services.release.records import encode_scalar
 
 
@@ -212,10 +214,33 @@ class ManifestSnapshot:
     selected_record_count: int
     candidate_record_count: int
     artifacts: list[dict[str, Any]]
+    # ``tckdb.dataset_release.v2`` and later: the data license, how many rights
+    # attestations stand behind the shipped records, and a count per basis
+    # kind. ``None`` for a ``v1`` snapshot, whose document has no such block.
+    rights_summary: dict[str, Any] | None = None
 
 
 def render_manifest_document(snapshot: ManifestSnapshot) -> dict[str, Any]:
-    """Build the canonical manifest document from a snapshot (no digest)."""
+    """Build the canonical manifest document from a snapshot (no digest).
+
+    Branches on the snapshot's own ``manifest_schema`` -- the tag stored on
+    the manifest row -- and never on the live :data:`versions.MANIFEST_SCHEMA`
+    constant. A row frozen under ``v1`` renders the ``v1`` shape forever, so
+    its recorded ``content_sha256`` keeps reproducing after the constant
+    moved on; that is the whole reason the tag is stored.
+    """
+    document = _render_v1(snapshot)
+    if snapshot.manifest_schema == versions.MANIFEST_SCHEMA_V1:
+        return document
+    # v2: the rights block. Rendered from the snapshot, exactly like
+    # ``contract``, so the stored columns and the served document cannot
+    # disagree.
+    document["rights"] = snapshot.rights_summary
+    return document
+
+
+def _render_v1(snapshot: ManifestSnapshot) -> dict[str, Any]:
+    """The ``tckdb.dataset_release.v1`` document shape, unchanged since it shipped."""
     return {
         "schema": snapshot.manifest_schema,
         # A release is by construction the curated contract. Recorded rather
@@ -333,6 +358,15 @@ def freeze_manifest(
         ships=[entry["path"] for entry in artifact_entries],
         recovery_archive_schema=binding["recovery_archive_schema"],
     )
+    # The rights block spans everything the release ships -- the same set the
+    # publish gate checked and the renderer wrote -- and is snapshotted onto
+    # the row like ``contract`` so the document stays rebuildable from columns.
+    summary = rights_summary(
+        linked_rights(
+            session, pairs=release_record_universe(session, release).candidate_pairs
+        ),
+        data_license=release.data_license,
+    )
     snapshot = ManifestSnapshot(
         release_ref=release.public_ref,
         tag=release.tag,
@@ -358,6 +392,7 @@ def freeze_manifest(
         selected_record_count=selected_count,
         candidate_record_count=candidate_count,
         artifacts=artifact_entries,
+        rights_summary=summary,
     )
     document = render_manifest_document(snapshot)
 
@@ -389,6 +424,7 @@ def freeze_manifest(
         curation_policy_description=snapshot.policy_description,
         curation_policy_criteria_json=snapshot.policy_criteria,
         contract_json=contract,
+        rights_summary_json=summary,
         document_json=document,
         content_sha256=manifest_digest(document),
         selected_record_count=selected_count,
@@ -479,6 +515,11 @@ def snapshot_from_manifest(manifest: ReleaseManifest) -> ManifestSnapshot:
             }
             for row in sorted(manifest.artifacts, key=lambda a: a.path)
         ],
+        rights_summary=(
+            dict(manifest.rights_summary_json)
+            if manifest.rights_summary_json is not None
+            else None
+        ),
     )
 
 

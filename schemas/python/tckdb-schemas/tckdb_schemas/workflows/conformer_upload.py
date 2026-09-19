@@ -27,6 +27,7 @@ from tckdb_schemas.local_key_codes import (
     W_STATMECH_CALCULATION_KEY_UNDECLARED,
     undeclared_key_error,
 )
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
     StatmechTorsionIn,
@@ -245,6 +246,9 @@ class ConformerUploadRequest(SchemaBase):
     )
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
     note: str | None = None
     label: str | None = Field(default=None, max_length=64)
     conformer_key: str | None = Field(

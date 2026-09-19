@@ -69,6 +69,7 @@ from tckdb_schemas.local_key_codes import (
     W_TRANSITION_STATE_KEY_UNDECLARED,
     undeclared_key_error,
 )
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
@@ -1198,6 +1199,10 @@ class NetworkPDepUploadRequest(SchemaBase):
     literature: LiteratureUploadRequest | None = None
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     species: list[NetworkSpeciesIn] = Field(min_length=1)
     transition_states: list[TransitionStateIn] = Field(default_factory=list)

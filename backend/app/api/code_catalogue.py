@@ -965,6 +965,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "older code for the same reason in reverse: there, a "
                 "conformer name and a calculation name are one repair."
             )),
+    ApiCode("candidate_rights_basis_incompatible", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
+            note=(
+                "Raised at publish over the records the release would ship "
+                "beside its selections -- every candidate for a covered "
+                "subject -- so a curator can tell a record they chose from "
+                "one they did not. The sibling without the candidate_ prefix "
+                "is the same test on the standing selections."
+            )),
+    ApiCode("candidate_rights_basis_missing", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship),
     ApiCode("canonical_parameter_value_requires_key", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations_search.py"),
     ApiCode("client_sort_not_supported", 422, Surface.message_prefix,
@@ -1657,6 +1670,39 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "The database alembic_version differs from the Alembic script head. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
+    ApiCode("rights_attestation_not_depositor", 403, Surface.message_prefix,
+            "backend/app/services/rights.py",
+            note=(
+                "A depositor_agreement is the depositor's own statement: only "
+                "the account that created the submission may record one. A "
+                "curator who needs to cover the deposit records one of the "
+                "other basis kinds under their own name instead."
+            )),
+    ApiCode("rights_attestation_requires_curator", 403, Surface.message_prefix,
+            "backend/app/services/rights.py"),
+    ApiCode("rights_basis_incompatible", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
+            note=(
+                "Compatibility is an exact, case-insensitive match of the "
+                "attested license identifier with the release's data_license. "
+                "No lattice: CC0-1.0 does not satisfy a CC-BY-4.0 release, "
+                "because deciding that is a legal judgement this code does "
+                "not encode."
+            )),
+    ApiCode("rights_basis_missing", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
+            note=(
+                "Raised on selection and again at publish. Covers both a "
+                "record linked to a submission with no standing attestation "
+                "and a record linked to no submission at all: in either case "
+                "nobody has agreed to license it, and a release may not."
+            )),
+    ApiCode("rights_license_blank", 422, Surface.message_prefix,
+            "backend/app/services/rights.py"),
+    ApiCode("rights_source_terms_required", 422, Surface.message_prefix,
+            "backend/app/services/rights.py"),
     ApiCode("scan_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("schema_not_initialized", 503, Surface.response_literal,

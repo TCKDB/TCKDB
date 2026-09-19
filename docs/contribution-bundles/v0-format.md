@@ -123,6 +123,38 @@ Bundle-level submission metadata. The hosted instance maps this to its own
 | `title` | yes | Short title for the contribution. |
 | `summary` | yes | One-paragraph summary. |
 | `source_kind` | yes | Must be `local_bundle` in v0. |
+| `rights` | no | Deposit-time license agreement for every record in the bundle; see below. |
+
+#### `submission.rights`
+
+The `rights` object is the wire fragment `tckdb_schemas.rights.DepositRights`,
+the same one every direct upload request carries:
+
+```json
+"rights": {
+  "license": "CC-BY-4.0",
+  "depositor_attests_right_to_license": true,
+  "source_terms": null
+}
+```
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `license` | yes | SPDX identifier (1–64 characters). A hosted release compares it with its own `data_license` by exact, case-insensitive match; there is no compatibility lattice. |
+| `depositor_attests_right_to_license` | yes | Must be literally `true`. A `false` fails validation — the bundle cannot carry a stored "no"; it omits the object instead. |
+| `source_terms` | no | Citation or quotation of the terms the records were taken under, for records that are not the depositor's own work. |
+
+On hosted import the fragment is recorded as a `depositor_agreement` rights
+attestation on the submission, attested by the **authenticated submitter**
+— never by the local `exporter` label. A bundle without `rights` imports
+normally, but its records cannot be selected into a dataset release until a
+curator records a basis for the submission.
+
+`scripts/export_contribution_bundle.py` fills the object from the standing
+rights attestation of the submission that deposited the exported records on
+the source instance. If the records were deposited under different licenses
+the export refuses (one bundle, one agreement); if nothing is attested the
+object is omitted — the exporter never invents consent.
 
 > **Note on `local_bundle` and the database enum.** The
 > `submission.source_kind` field on the *bundle* uses a format-level enum

@@ -14,6 +14,7 @@ from tckdb_schemas.local_key_codes import (
     W_CALCULATION_KEY_UNDECLARED,
     undeclared_key_error,
 )
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
@@ -154,6 +155,10 @@ class ThermoUploadRequest(SchemaBase):
     literature: LiteratureUploadRequest | None = None
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     # Statmech linkage for computed thermo. This is an *advanced /
     # programmatic* mechanism (mirroring ``existing_calculation_id`` on

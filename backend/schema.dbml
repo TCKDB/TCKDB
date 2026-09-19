@@ -481,6 +481,13 @@ enum ReproducibilityGrade {
   rerunnable
 }
 
+enum RightsBasisKind {
+  depositor_agreement
+  operator_own_data
+  historical_review
+  source_terms
+}
+
 enum RigidRotorKind {
   atom
   linear
@@ -2845,6 +2852,7 @@ Table release_manifest {
   curation_policy_description text [not null]
   curation_policy_criteria_json jsonb [not null, default: '{}'::jsonb']
   contract_json jsonb [not null]
+  rights_summary_json jsonb
   document_json jsonb [not null]
   content_sha256 string [not null]
   selected_record_count bigint [not null]
@@ -3222,6 +3230,34 @@ Table submission_record_link {
   }
 
   Note: 'Lightweight mapping from a submission to one scientific record it'
+}
+
+Table submission_rights_attestation {
+  id bigint [pk, not null]
+  submission_id bigint [not null, ref: > submission.id]
+  license_id string [not null]
+  basis RightsBasisKind [not null]
+  attested_by bigint [not null, ref: > app_user.id]
+  actor_kind SubmissionActorKind [not null]
+  attested_at timestamp [not null, default: 'now']
+  source_terms text
+  note text
+  supersedes_attestation_id bigint [ref: > submission_rights_attestation.id]
+  created_at timestamp [not null, default: 'now']
+  public_ref string [not null]
+
+  indexes {
+    public_ref [unique, name: 'ix_submission_rights_attestation_public_ref']
+    submission_id [name: 'ix_submission_rights_attestation_submission_id']
+    supersedes_attestation_id [unique, name: 'uq_submission_rights_attestation_supersedes_attestation_id']
+  }
+
+  checks {
+    `length(btrim(license_id)) > 0` [name: 'ck_submission_rights_attestation_license_id_nonblank']
+    `(basis <> 'source_terms') OR (source_terms IS NOT NULL AND length(btrim(source_terms)) > 0)` [name: 'ck_submission_rights_attestation_source_terms_required']
+  }
+
+  Note: 'One append-only statement that a submission may be licensed as stated.'
 }
 
 Table thermo {

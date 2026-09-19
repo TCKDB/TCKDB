@@ -37,6 +37,7 @@ from app.services.release.curation import (
 )
 from app.services.scientific_read.releases import get_release_selections
 from app.services.scientific_record_supersession import supersede_scientific_record
+from tests.services.release._attest import attest_thermo
 from tests.services.scientific_read._factories import make_thermo_scalar
 
 
@@ -821,6 +822,7 @@ def test_the_selection_ledger_announces_a_post_cut_record_supersession(
         actor=curator,
         note="third candidate",
     )
+    attest_thermo(db_session, depositor=curator, rows=[third])
     selection = _select_first(
         db_session, draft_release, curator, first, species_entry
     )

@@ -118,6 +118,35 @@ wrapper over a contract that is itself still moving.
   See [rollout and verification](docs/research/tckdb-phase-a-verification.md)
   and the [publication evidence checklist](docs/research/tckdb-publication-evidence-checklist.md).
 
+### Rights basis for every released record (Phase B1)
+
+- **A dataset release can no longer ship a record nobody agreed to license.**
+  Before this change the only rights field was the per-release
+  `data_license` string, which says what terms the operator applies, not who
+  consented; `LICENSE-DATA`'s "a default is not consent" was enforced as prose.
+  Now every upload request and `BundleSubmissionMetadata` carry an optional
+  `rights` fragment (`tckdb_schemas.rights.DepositRights`: `license`,
+  `depositor_attests_right_to_license: true`, optional `source_terms`), recorded
+  at deposit as a `depositor_agreement` attestation by the depositor. Curators
+  record the other bases (`operator_own_data`, `historical_review`,
+  `source_terms`) through `POST /api/v1/submissions/{id}/rights-attestations`;
+  `GET` lists the append-only chain. Selecting or publishing a record whose
+  deposits do not all carry a standing attestation naming exactly the release's
+  `data_license` is refused (`rights_basis_missing`,
+  `rights_basis_incompatible`); publishing also checks every unselected
+  candidate the release ships (`candidate_rights_basis_*`) and refuses rather
+  than filters. Every line of `selected_records.ndjson` and
+  `candidate_records.ndjson` carries a `rights` object; the manifest document
+  is now `tckdb.dataset_release.v2` with a `rights` block, and `v1` manifests
+  keep reproducing their recorded digest.
+- Schema: new append-only table `submission_rights_attestation` (database
+  trigger refuses UPDATE/DELETE/TRUNCATE), new enum `rights_basis_kind`, and
+  nullable `release_manifest.rights_summary_json` — Alembic revision
+  `9b1c7e2d4a68`. **No backfill:** records deposited before this change are
+  unreleasable until a curator attests a basis with an actor. Existing
+  releases and their frozen bytes are unchanged.
+- Versions: `tckdb-schemas` 0.46.0 (new `rights` module and fields).
+
 ### Added
 
 - **A conformer basin now says how many optimisations back it, not how many
