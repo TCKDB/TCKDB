@@ -10,14 +10,14 @@ reports counts by class and expected outcome.
 ## The identity contract being tested
 
 - **Species** (`species`) is keyed on canonical SMILES + charge + multiplicity
-  (DR-0031, `docs/decisions/0031-species-identity-canonical-smiles-charge-multiplicity.md`).
+  (unpublished decision record DR-0031, not in the repository).
   The InChIKey is stored for lookup but is not the key, so tautomers that the
   standard InChIKey merges stay apart, and two spin states of one graph share
   an InChIKey while being two species. Multiplicity is authoritative over the
   radical count RDKit infers from a SMILES; the declared charge is validated
   against the formal charge summed from the SMILES.
-- **Stereo** is classified on the species (`stereo_kind`, DR-0018,
-  `docs/decisions/0018-stereo-kind-on-species.md`) and labelled on the entry
+- **Stereo** is classified on the species (`stereo_kind`; unpublished
+  decision record DR-0018, not in the repository) and labelled on the entry
   (`species_entry.stereo_label`), perceived from the deposited 3D geometry by
   `app.chemistry.species.derive_stereo_label_from_3d`. Only configuration
   (R/S, E/Z) is labelled; rotamers of one configuration share one entry.
@@ -30,8 +30,13 @@ reports counts by class and expected outcome.
   the contract is stated in `backend/docs/specs/pdep_upload_contract_v2.md`
   and in `backend/tests/services/test_species_isotope_identity.py`; no
   decision record exists for it). Isotopologues share one species; isotopomers
-  are distinct entries. A geometry's per-atom nuclides must agree with the
-  identity's labels.
+  are distinct entries. A deposited geometry's isotope *multiset* (how many
+  atoms of each element carry which mass number) must agree with the
+  identity's labels; per-atom *placement* is not checked, so an identity of
+  `[2H]OC` accepts a geometry that deuterates a methyl hydrogen instead
+  (`assert_geometry_isotopes_match_identity`, documented as a known false
+  acceptance in `backend/docs/specs/pdep_upload_contract_v2.md`). That gap is
+  pinned as a fixture case, not hidden.
 
 ## File format
 

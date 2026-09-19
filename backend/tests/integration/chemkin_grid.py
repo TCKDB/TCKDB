@@ -223,12 +223,19 @@ def _member_signature(rxn) -> tuple[float, ...]:
 
 
 def half_unit_relative(value: float, significant_digits: int) -> float:
-    """Half a unit in the last of ``significant_digits`` printed digits, relative to ``value``."""
+    """Half a unit in the last of ``significant_digits`` printed digits, relative to ``value``.
+
+    The exponent is read from the value *as the export prints it* (the same
+    ``E`` format), not recomputed from ``log10``: a mantissa that rounds up to
+    ``10`` at the printed precision is printed as ``1.0000E+(e+1)``, and the
+    unit of its last digit is ten times larger. Reading the printed text is
+    exact; a floating-point ``log10`` at that edge is not.
+    """
     if value == 0:
         return 0.0
-    exponent = math.floor(math.log10(abs(value)) + 1e-9)
-    mantissa = abs(value) / 10.0**exponent
-    return 0.5 * 10.0 ** (-(significant_digits - 1)) / mantissa
+    printed = f"{abs(value):.{significant_digits - 1}E}"
+    exponent = int(printed.split("E")[1])
+    return 0.5 * 10.0 ** (exponent - (significant_digits - 1)) / abs(value)
 
 
 def arrhenius_log_bound(rate: ct.ArrheniusRate, temperature: float) -> float:
@@ -632,13 +639,7 @@ def replace_unique(text: str, old: str, new: str) -> str:
 def swap_nasa_blocks(therm_dat: str, species_name: str) -> str:
     """Swap the high- and low-temperature coefficient blocks of one species card."""
     lines = therm_dat.splitlines()
-    cards = [
-        i for i, line in enumerate(lines)
-        if len(line) >= 80 and line[79] == "1" and line[:18].strip() == species_name
-    ]
-    if len(cards) != 1:
-        raise ValueError(f"expected one thermo card for {species_name!r}, found {len(cards)}")
-    index = cards[0]
+    index = _nasa_card_index(lines, species_name)
     fields = lines[index + 1][0:75] + lines[index + 2][0:75] + lines[index + 3][0:60]
     coeffs = [float(fields[k : k + 15]) for k in range(0, 14 * 15, 15)]
     swapped = coeffs[7:14] + coeffs[0:7]
@@ -649,6 +650,46 @@ def swap_nasa_blocks(therm_dat: str, species_name: str) -> str:
     lines[index + 1] = f"{fmt(swapped[0:5]):<75}    2"
     lines[index + 2] = f"{fmt(swapped[5:10]):<75}    3"
     lines[index + 3] = f"{fmt(swapped[10:14]):<75}    4"
+    return "\n".join(lines) + "\n"
+
+
+def _nasa_card_index(lines: list[str], species_name: str) -> int:
+    cards = [
+        i for i, line in enumerate(lines)
+        if len(line) >= 80 and line[79] == "1" and line[:18].strip() == species_name
+    ]
+    if len(cards) != 1:
+        raise ValueError(f"expected one thermo card for {species_name!r}, found {len(cards)}")
+    return cards[0]
+
+
+def perturb_nasa_coefficient(therm_dat: str, species_name: str, coefficient: int, printed_digit: int) -> str:
+    """Add one unit in the ``printed_digit``-th significant digit of one coefficient.
+
+    ``coefficient`` indexes the card's 14 values in CHEMKIN order (0-6 the
+    high-temperature block, 7-13 the low). ``printed_digit`` 9 is the last
+    digit the export prints (``.8E``); 10 is one place below print precision,
+    written by dropping the leading zero of a two-digit exponent so the
+    15-column field still holds it (``2.731180001E+0``), which ``ck2yaml``'s
+    fixed-width Fortran float reader accepts.
+    """
+    lines = therm_dat.splitlines()
+    index = _nasa_card_index(lines, species_name)
+    line_no, slot = divmod(coefficient, 5)
+    row = lines[index + 1 + line_no]
+    field = row[slot * 15 : slot * 15 + 15]
+    value = float(field)
+    exponent = int(field.split("E")[1])
+    perturbed = value + 10.0 ** (exponent - (printed_digit - 1))
+    if printed_digit <= 9:
+        text = f"{perturbed:>15.{printed_digit - 1}E}"
+    else:
+        text = f"{perturbed:.{printed_digit - 1}E}"
+        mantissa, exp_text = text.split("E")
+        text = f"{mantissa}E{exp_text[0]}{exp_text[1:].lstrip('0') or '0'}".rjust(15)
+    if len(text) != 15:
+        raise ValueError(f"perturbed field {text!r} does not fit the 15-column slot")
+    lines[index + 1 + line_no] = row[: slot * 15] + text + row[slot * 15 + 15 :]
     return "\n".join(lines) + "\n"
 
 

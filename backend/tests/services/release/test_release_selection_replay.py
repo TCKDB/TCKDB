@@ -12,6 +12,16 @@ SHA-256 digests with the ones recorded at publication.
 Two mutations on the restored state (a different standing candidate, a
 different policy version) must turn the digest check red, and a release with
 no eligible candidate must be refused explicitly.
+
+What this proves, exactly: that the selection ledger and every field the
+renderer reads round-trip through ``tckdb.archive.v1`` intact, that the
+frozen ``release_artifact`` bytes come back with their recorded digests, and
+that rendering over the restored rows is deterministic. What it does not
+prove: that the database being rendered is the restored one rather than the
+source one, except through a restore that loses or alters something; the
+restore assertion in ``_restore`` (four artifact rows back, digests equal to
+the ones read before the emptying) is what makes a skipped or no-op restore
+fail instead of passing silently.
 """
 
 from __future__ import annotations
@@ -23,7 +33,13 @@ import pytest
 from sqlalchemy import select, text
 
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
-from app.db.models.dataset_release import CurationPolicy, DatasetRelease, ReleaseSelection
+from app.db.models.dataset_release import (
+    CurationPolicy,
+    DatasetRelease,
+    ReleaseArtifact,
+    ReleaseManifest,
+    ReleaseSelection,
+)
 from app.services.archive import restore_archive, write_archive
 from app.services.release.artifacts import render_artifacts
 from app.services.release.curation import (
@@ -107,6 +123,16 @@ def _restore(db_session, frozen) -> DatasetRelease:
     restore_archive(db_session, io.BytesIO(frozen["archive"]))
     release = db_session.scalar(select(DatasetRelease).where(DatasetRelease.public_ref == frozen["release_ref"]))
     assert release is not None
+    # The restore is load-bearing: the frozen artifact rows must be back, and
+    # their bytes must hash to the digests read before the tables were
+    # emptied. A no-op restore leaves zero rows here.
+    restored_rows = db_session.scalars(
+        select(ReleaseArtifact)
+        .join(ReleaseManifest, ReleaseArtifact.release_manifest_id == ReleaseManifest.id)
+        .where(ReleaseManifest.dataset_release_id == release.id)
+    ).all()
+    assert len(restored_rows) == 4
+    assert {row.path: hashlib.sha256(row.content).hexdigest() for row in restored_rows} == frozen["digests"]
     return release
 
 

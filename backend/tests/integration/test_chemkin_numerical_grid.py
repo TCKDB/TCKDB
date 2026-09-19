@@ -18,6 +18,8 @@ the unmutated original, so each row of the table below is a landed mutation:
 
 ==================================================  =======
 swap one species' NASA high/low blocks              red
+NASA coefficient + 1 unit in the 9th printed digit  red   (the bound is half a unit)
+NASA coefficient + 1 unit in a 10th digit           green (below print precision)
 Arrhenius A + 1 unit in the original's 7th digit    green (0.01 export units)
 Arrhenius A + 1 unit in the export's 5th digit      red   (the bound is half a unit)
 Arrhenius A + 10 units in the export's 5th digit    red
@@ -56,6 +58,7 @@ from tests.integration.chemkin_grid import (
     drop_efficiency,
     group_reactions,
     load_solution,
+    perturb_nasa_coefficient,
     replace_unique,
     supported_keys,
     swap_nasa_blocks,
@@ -135,8 +138,10 @@ def test_exported_mechanism_matches_original_on_the_grid(pipeline):
     }
     assert summary["counts"]["unsupported"] == 0
     assert summary["unsupported"] == []
-    # Gaps are listed, never dropped; none may be a blocking one for this fixture.
-    assert all(gap["kind"] not in ("thermo_nasa", "kinetics") for gap in summary["export_gaps"])
+    # Gaps are listed, never dropped; this fixture has none at all, so a future
+    # transport or thermo gap fails here rather than passing through an empty list.
+    assert summary["export_gaps"] == []
+    assert summary["counts"]["export_gaps"] == 0
     assert all(entry["within_bound"] for entry in summary["species"])
     assert all(entry["within_bound"] for entry in summary["reactions"])
     assert sum(1 for entry in summary["reactions"] if entry["duplicate"]) == 3
@@ -240,6 +245,36 @@ def test_mutation_swapped_nasa_blocks_is_red(pipeline):
     # Only water moved.
     assert {v.split(":")[0] for v in result.bound_violations} == {canonical("O")}
     assert result.parameter_violations == []
+
+
+def _water_thermo_mutation(pipeline, printed_digit: int) -> GridComparison:
+    files = dict(pipeline["files_out"])
+    water = pipeline["name_out"][canonical("O")]
+    # Coefficient 0: the constant Cp/R term of the high-temperature block, so
+    # the grid points above T_mid (1500 K, 2000 K) see the change directly.
+    files["therm.dat"] = perturb_nasa_coefficient(files["therm.dat"], water, 0, printed_digit)
+    assert files["therm.dat"] != pipeline["files_out"]["therm.dat"]
+    return _compare(pipeline, files)
+
+
+def test_mutation_nasa_coefficient_plus_one_unit_of_the_ninth_printed_digit_is_red(pipeline):
+    # The export prints nine significant digits; the bound is half a unit of
+    # the ninth, so a full unit there is twice the bound.
+    result = _water_thermo_mutation(pipeline, 9)
+    assert result.bound_violations, "the thermo bound admitted a full unit of the last printed digit"
+    assert {v.split(":")[0] for v in result.bound_violations} == {canonical("O")}
+    water = next(e for e in result.species if e["smiles"] == canonical("O"))
+    assert water["within_bound"] is False
+    assert water["max_abs_deviation"]["cp_over_r"] == pytest.approx(1e-8, rel=1e-3)
+
+
+def test_mutation_nasa_coefficient_plus_one_unit_below_print_precision_is_green(pipeline):
+    # One unit in a tenth digit is a tenth of the printed unit: inside the bound.
+    result = _water_thermo_mutation(pipeline, 10)
+    assert result.violations == [], result.violations
+    water = next(e for e in result.species if e["smiles"] == canonical("O"))
+    assert 0 < water["max_abs_deviation"]["cp_over_r"] < water["max_bound"]["cp_over_r"]
+    assert water["max_abs_deviation"]["cp_over_r"] == pytest.approx(1e-9, rel=1e-3)
 
 
 #: HO2 + NH2 <=> O2 + NH3, A = 2.179000e+06 in the fixture, printed 2.1790E+06 by the export.

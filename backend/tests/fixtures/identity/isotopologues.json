@@ -197,5 +197,33 @@
       "match": "does not match the uploaded geometry"
     },
     "reason": "Isotopes may not enter through the geometry alone; the identity SMILES is the declaration."
+  },
+  {
+    "id": "isotopologues/misplaced_deuterium_accepted_known_limitation",
+    "description": "CH3-OD identity ([2H]OC) with a geometry that deuterates a methyl hydrogen (atom 3, on carbon) instead of the hydroxyl hydrogen (atom 4).",
+    "inputs": [
+      {
+        "smiles": "[2H]OC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "6\n\nC  -0.047131  0.664389  0.000000\nO  -0.047131 -0.758551  0.000000\nH  -1.092995  0.969785  0.000000\nH   0.878534 -1.048458  0.000000\nH   0.437145  1.080376  0.891772\nH   0.437145  1.080376 -0.891772\n",
+          "isotopes": {
+            "3": 2
+          }
+        }
+      },
+      {
+        "smiles": "[2H]OC",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "isotope_keys": [
+      "[2H]OC",
+      "[2H]OC"
+    ],
+    "reason": "Known limitation, recorded as today's behaviour: the geometry/identity isotope check compares only the multiset of substitutions (one deuterium on either side), never which atom carries it, so this CH2D-OH geometry is ACCEPTED under the CH3-OD identity and lands on the CH3-OD entry. A false acceptance, not a false rejection; closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have (backend/docs/specs/pdep_upload_contract_v2.md)."
   }
 ]
