@@ -237,7 +237,7 @@ def checksum_lines(document: Mapping[str, Any]) -> str:
     """
     members = document.get("members")
     if not isinstance(members, list) or not members:
-        raise DepositError("checksum_lines: the manifest has no members")
+        raise DepositError("the manifest has no members to checksum")
     return "".join(f"{member['sha256']}  {member['path']}\n" for member in members)
 
 
