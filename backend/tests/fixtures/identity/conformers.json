@@ -1,0 +1,114 @@
+[
+  {
+    "id": "conformers/e_crotyl_radical_rotamers",
+    "description": "Two torsional conformers of the E-crotyl radical.",
+    "inputs": [
+      {
+        "smiles": "CC=C[CH2]",
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {
+          "xyz_text": "11\n\nC     -1.744461   -0.003114    0.101531\nC     -0.290594    0.096727    0.431771\nC      0.690511   -0.097087   -0.459626\nC      2.080656    0.003853   -0.120509\nH     -2.213525   -0.777684    0.715897\nH     -2.240174    0.949683    0.310984\nH     -1.914469   -0.252380   -0.950660\nH     -0.051763    0.342417    1.464173\nH      0.458200   -0.343042   -1.493592\nH      2.827965   -0.164289   -0.886985\nH      2.397655    0.244916    0.887017\n"
+        }
+      },
+      {
+        "smiles": "CC=C[CH2]",
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {
+          "xyz_text": "11\n\nC     -1.744356   -0.100357    0.024796\nC     -0.298047   -0.364401   -0.242090\nC      0.698022    0.391243    0.239127\nC      2.080519    0.119202   -0.029924\nH     -2.193850   -0.962579    0.526743\nH     -1.895229    0.779979    0.657561\nH     -2.273404    0.062998   -0.919051\nH     -0.078072   -1.227544   -0.866472\nH      0.484588    1.255753    0.864120\nH      2.840802    0.768113    0.388542\nH      2.379025   -0.722409   -0.643352\n"
+        }
+      }
+    ],
+    "expected": "same_species_entry",
+    "stereo_labels": [
+      "E",
+      "E"
+    ],
+    "reason": "Rotamers share one configuration and one entry; conformers live below the entry (conformer groups), never as separate identities."
+  },
+  {
+    "id": "conformers/e_2_pentene_rotamers",
+    "description": "Two rotamers of E-2-pentene about the ethyl single bond.",
+    "inputs": [
+      {
+        "smiles": "CCC=CC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "15\n\nC     -2.198104    0.379734    0.835844\nC     -1.268474   -0.623298    0.170779\nC      0.033789    0.012810   -0.221359\nC      1.226672   -0.361405    0.266301\nC      2.523860    0.266654   -0.127610\nH     -1.754237    0.782969    1.752381\nH     -2.421274    1.218241    0.167398\nH     -3.145022   -0.101077    1.101507\nH     -1.748783   -1.024517   -0.728919\nH     -1.104790   -1.468420    0.849551\nH     -0.020870    0.816322   -0.953546\nH      1.285192   -1.167186    0.994854\nH      3.185744   -0.487885   -0.563449\nH      3.016013    0.688753    0.753866\nH      2.390286    1.068307   -0.860804\n"
+        }
+      },
+      {
+        "smiles": "CCC=CC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "15\n\nC     -1.972711    0.477135   -0.595377\nC     -1.392755   -0.533554    0.385023\nC      0.105913   -0.559150    0.525626\nC      0.997265    0.211438   -0.117835\nC      2.475790    0.118196    0.083787\nH     -3.064930    0.400650   -0.609815\nH     -1.713947    1.502224   -0.310347\nH     -1.612288    0.296506   -1.613453\nH     -1.721630   -1.536222    0.086593\nH     -1.822218   -0.343242    1.375933\nH      0.475803   -1.297010    1.237200\nH      0.667701    0.958641   -0.834909\nH      2.965900   -0.124697   -0.863961\nH      2.864457    1.078445    0.436335\nH      2.747650   -0.649358    0.815201\n"
+        }
+      }
+    ],
+    "expected": "same_species_entry",
+    "stereo_labels": [
+      "E",
+      "E"
+    ],
+    "reason": "A torsion must never be mistaken for configurational stereo."
+  },
+  {
+    "id": "conformers/ethanol_conformers",
+    "description": "Two ethanol conformers.",
+    "inputs": [
+      {
+        "smiles": "CCO",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "9\n\nC      0.902649   -0.050000    0.021395\nC     -0.574203   -0.385506    0.040590\nO     -1.331645    0.775687    0.348512\nH      1.217320    0.359344    0.986967\nH      1.116184    0.714203   -0.733164\nH      1.501461   -0.938287   -0.198247\nH     -0.785034   -1.142118    0.801926\nH     -0.901708   -0.771445   -0.929503\nH     -1.145024    1.438123   -0.338476\n"
+        }
+      },
+      {
+        "smiles": "CCO",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "9\n\nC     -0.863160    0.220412    0.202725\nC      0.406289   -0.375004   -0.369994\nO      1.527382    0.403609    0.022204\nH     -1.738486   -0.358822   -0.104136\nH     -0.988335    1.255433   -0.131901\nH     -0.821112    0.242401    1.296668\nH      0.551466   -1.401287   -0.019347\nH      0.364532   -0.386510   -1.463002\nH      1.561426    0.399768    0.994021\n"
+        }
+      }
+    ],
+    "expected": "same_species_entry",
+    "stereo_labels": [
+      null,
+      null
+    ],
+    "reason": "An achiral molecule gets no label from any geometry, so conformers cannot fork it."
+  },
+  {
+    "id": "conformers/benzene_geometries",
+    "description": "Two benzene geometries.",
+    "inputs": [
+      {
+        "smiles": "c1ccccc1",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "12\n\nC     -1.247330    0.624132   -0.013030\nC     -1.164278   -0.767672    0.026044\nC      0.083051   -1.391803    0.039072\nC      1.247328   -0.624131    0.013030\nC      1.164277    0.767671   -0.026043\nC     -0.083052    1.391803   -0.039072\nH     -2.219142    1.110403   -0.023172\nH     -2.071383   -1.365777    0.046346\nH      0.147760   -2.476177    0.069512\nH      2.219142   -1.110400    0.023172\nH      2.071384    1.365774   -0.046347\nH     -0.147757    2.476178   -0.069512\n"
+        }
+      },
+      {
+        "smiles": "c1ccccc1",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "12\n\nC      1.277231    0.559514   -0.034106\nC      1.121476   -0.825997   -0.074568\nC     -0.155755   -1.385513   -0.040461\nC     -1.277231   -0.559515    0.034101\nC     -1.121476    0.825997    0.074561\nC      0.155755    1.385511    0.040459\nH      2.272341    0.995442   -0.060668\nH      1.995237   -1.469542   -0.132668\nH     -0.277108   -2.464986   -0.071981\nH     -2.272342   -0.995440    0.060672\nH     -1.995232    1.469546    0.132664\nH      0.277105    2.464984    0.071994\n"
+        }
+      }
+    ],
+    "expected": "same_species_entry",
+    "stereo_labels": [
+      null,
+      null
+    ],
+    "reason": "Stereo perception is skipped for a species classified achiral."
+  }
+]

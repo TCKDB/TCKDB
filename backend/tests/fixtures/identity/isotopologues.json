@@ -1,0 +1,229 @@
+[
+  {
+    "id": "isotopologues/methanol_d3_vs_unlabelled",
+    "description": "CH3OH and CD3OH.",
+    "inputs": [
+      {
+        "smiles": "CO",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[2H]C([2H])([2H])O",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "isotope_keys": [
+      null,
+      "[2H]C([2H])([2H])O"
+    ],
+    "reason": "Isotopologues share one graph and one potential-energy surface (one species) and differ in nuclear masses (two entries); the isotope key is derived, never uploaded."
+  },
+  {
+    "id": "isotopologues/explicit_standard_isotope_dedupes",
+    "description": "Methanol with every hydrogen spelled [1H].",
+    "inputs": [
+      {
+        "smiles": "CO",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[1H]C([1H])([1H])O",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "isotope_keys": [
+      null,
+      null
+    ],
+    "reason": "The all-standard key is NULL however it is written, so a verbose re-deposit never forks a pre-existing entry."
+  },
+  {
+    "id": "isotopologues/carbon_13_methanol_vs_unlabelled",
+    "description": "13CH3OH against ordinary methanol.",
+    "inputs": [
+      {
+        "smiles": "[13CH3]O",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "CO",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "isotope_keys": [
+      "[13CH3]O",
+      null
+    ],
+    "reason": "Heavy-atom substitution forks the entry exactly as deuteration does."
+  },
+  {
+    "id": "isotopologues/isotopomers_ch2d_oh_vs_ch3_od",
+    "description": "CH2D-OH and CH3-OD: one isotopologue, two isotopomers.",
+    "inputs": [
+      {
+        "smiles": "[2H]CO",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[2H]OC",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "isotope_keys": [
+      "[2H]CO",
+      "[2H]OC"
+    ],
+    "reason": "The key is atom-resolved: the two have different frequencies, rotational constants and ZPE, so a formula-counting key would be scientifically wrong."
+  },
+  {
+    "id": "isotopologues/atom_order_independent_key",
+    "description": "CH2D-OH written from either end.",
+    "inputs": [
+      {
+        "smiles": "OC[2H]",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[2H]CO",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "isotope_keys": [
+      "[2H]CO",
+      "[2H]CO"
+    ],
+    "reason": "The isotope key is the canonical SMILES of the labelled molecule, so upload atom order cannot fork it."
+  },
+  {
+    "id": "isotopologues/consistent_labelled_geometry",
+    "description": "CD3OH deposited with a geometry whose per-atom nuclides agree, then again without a geometry.",
+    "inputs": [
+      {
+        "smiles": "[2H]C([2H])([2H])O",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "6\n\nC  -0.047131  0.664389  0.000000\nO  -0.047131 -0.758551  0.000000\nH  -1.092995  0.969785  0.000000\nH   0.878534 -1.048458  0.000000\nH   0.437145  1.080376  0.891772\nH   0.437145  1.080376 -0.891772\n",
+          "isotopes": {
+            "3": 2,
+            "5": 2,
+            "6": 2
+          }
+        }
+      },
+      {
+        "smiles": "[2H]C([2H])([2H])O",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "isotope_keys": [
+      "[2H]C([2H])([2H])O",
+      "[2H]C([2H])([2H])O"
+    ],
+    "reason": "A geometry that agrees with the identity's isotope labels is accepted and resolves to the same entry as the bare identity."
+  },
+  {
+    "id": "isotopologues/unknown_isotope_rejected",
+    "description": "Mass number 12 is not an isotope of hydrogen.",
+    "inputs": [
+      {
+        "smiles": "[12H]CO",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "rejected",
+    "rejection": {
+      "match": "not a known isotope"
+    },
+    "reason": "An impossible nuclide is refused, never guessed at."
+  },
+  {
+    "id": "isotopologues/geometry_contradicts_identity_rejected",
+    "description": "CD3OH identity with an all-protium geometry.",
+    "inputs": [
+      {
+        "smiles": "[2H]C([2H])([2H])O",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "6\n\nC  -0.047131  0.664389  0.000000\nO  -0.047131 -0.758551  0.000000\nH  -1.092995  0.969785  0.000000\nH   0.878534 -1.048458  0.000000\nH   0.437145  1.080376  0.891772\nH   0.437145  1.080376 -0.891772\n"
+        }
+      }
+    ],
+    "expected": "rejected",
+    "rejection": {
+      "match": "does not match the uploaded geometry"
+    },
+    "reason": "The identity's isotope multiset and the geometry's per-atom nuclides must agree."
+  },
+  {
+    "id": "isotopologues/geometry_isotopes_without_identity_rejected",
+    "description": "Ordinary methanol identity with a deuterated geometry.",
+    "inputs": [
+      {
+        "smiles": "CO",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "6\n\nC  -0.047131  0.664389  0.000000\nO  -0.047131 -0.758551  0.000000\nH  -1.092995  0.969785  0.000000\nH   0.878534 -1.048458  0.000000\nH   0.437145  1.080376  0.891772\nH   0.437145  1.080376 -0.891772\n",
+          "isotopes": {
+            "3": 2,
+            "5": 2,
+            "6": 2
+          }
+        }
+      }
+    ],
+    "expected": "rejected",
+    "rejection": {
+      "match": "does not match the uploaded geometry"
+    },
+    "reason": "Isotopes may not enter through the geometry alone; the identity SMILES is the declaration."
+  },
+  {
+    "id": "isotopologues/misplaced_deuterium_accepted_known_limitation",
+    "description": "CH3-OD identity ([2H]OC) with a geometry that deuterates a methyl hydrogen (atom 3, on carbon) instead of the hydroxyl hydrogen (atom 4).",
+    "inputs": [
+      {
+        "smiles": "[2H]OC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "6\n\nC  -0.047131  0.664389  0.000000\nO  -0.047131 -0.758551  0.000000\nH  -1.092995  0.969785  0.000000\nH   0.878534 -1.048458  0.000000\nH   0.437145  1.080376  0.891772\nH   0.437145  1.080376 -0.891772\n",
+          "isotopes": {
+            "3": 2
+          }
+        }
+      },
+      {
+        "smiles": "[2H]OC",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "isotope_keys": [
+      "[2H]OC",
+      "[2H]OC"
+    ],
+    "reason": "Known limitation, recorded as today's behaviour: the geometry/identity isotope check compares only the multiset of substitutions (one deuterium on either side), never which atom carries it, so this CH2D-OH geometry is ACCEPTED under the CH3-OD identity and lands on the CH3-OD entry. A false acceptance, not a false rejection; closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have (backend/docs/specs/pdep_upload_contract_v2.md)."
+  }
+]
