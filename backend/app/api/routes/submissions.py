@@ -401,10 +401,11 @@ def create_rights_attestation(
             note=body.note,
             source_terms=body.source_terms,
         )
-    except RightsAttestationForbidden as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except RightsAttestationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # One handler, two statuses: Forbidden is a subclass, and the
+        # re-raise gate can address only one except per function.
+        status = 403 if isinstance(exc, RightsAttestationForbidden) else 422
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
     rows = list_attestations(session, submission_id=submission.id)
     return next(
         record

@@ -411,6 +411,12 @@ KNOWN_BUNDLE_KINETICS_GAPS: dict[str, str] = {
 #: than listed as gaps, because for each of these the reason is on record.
 _STANDALONE_ONLY_BY_DESIGN = frozenset(
     {
+        # Rights. A deposit is attested once, at the request root
+        # (``ComputedReactionUploadRequest.rights``), and every record the
+        # bundle creates is linked to that one submission; the nested
+        # kinetics block has no separate licensor to name. See B1 in
+        # docs/research/tckdb-phase-b-implementation-plan.md.
+        "rights",
         # Identity. The bundle declares one reaction at its root and names
         # participants by local key; ``direction`` is expressed by which
         # keys land in ``reactant_keys`` vs ``product_keys``, which
