@@ -1,0 +1,167 @@
+[
+  {
+    "id": "stereo/diazene_cis_vs_trans",
+    "description": "cis- and trans-diazene deposited with 3D geometry.",
+    "inputs": [
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "4\n\nH      0.973587   -0.404125   -0.158772\nN      0.631171    0.451375    0.299819\nN     -0.551296    0.416560    0.690583\nH     -1.053462   -0.463810    0.511107\n"
+        }
+      },
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "4\n\nH      1.382783    0.165917    0.014414\nN      0.501731   -0.367616   -0.026574\nN     -0.501731    0.367616    0.026574\nH     -1.382783   -0.165917   -0.014414\n"
+        }
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "stereo_labels": [
+      "Z",
+      "E"
+    ],
+    "reason": "Same graph, so one species (DR-0018 puts the stereo kind on the species); the configuration is perceived from 3D and forks the entry."
+  },
+  {
+    "id": "stereo/2_butene_cis_vs_trans",
+    "description": "cis- and trans-2-butene.",
+    "inputs": [
+      {
+        "smiles": "CC=CC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "12\n\nC      1.593750   -0.384373    0.038103\nC      0.658322    0.779905    0.086909\nC     -0.682642    0.763117    0.029056\nC     -1.581006   -0.424119   -0.098864\nH      2.197063   -0.410157    0.950983\nH      2.271568   -0.276288   -0.814470\nH      1.087790   -1.347127   -0.056254\nH      1.145439    1.750136    0.181025\nH     -1.200146    1.720771    0.079830\nH     -2.185374   -0.332089   -1.006757\nH     -1.044904   -1.373827   -0.148255\nH     -2.259861   -0.465948    0.758694\n"
+        }
+      },
+      {
+        "smiles": "CC=CC",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "12\n\nC      1.946502    0.106115    0.072872\nC      0.518905   -0.181086    0.407489\nC     -0.518905    0.181085   -0.361761\nC     -1.946502   -0.106115   -0.027145\nH      2.399654    0.711979    0.863423\nH      2.506114   -0.830853   -0.006587\nH      2.049562    0.646753   -0.873259\nH      0.342376   -0.717598    1.337311\nH     -0.342375    0.717597   -1.291584\nH     -2.399654   -0.711979   -0.817695\nH     -2.049563   -0.646753    0.918986\nH     -2.506114    0.830854    0.052313\n"
+        }
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "stereo_labels": [
+      "Z",
+      "E"
+    ],
+    "reason": "E/Z is configurational, not conformational, and splits the entry."
+  },
+  {
+    "id": "stereo/chfclbr_enantiomers",
+    "description": "The two hands of bromochlorofluoromethane.",
+    "inputs": [
+      {
+        "smiles": "[CH](F)(Cl)Br",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "5\n\nC     -0.042055    0.103441   -0.094705\nF     -0.173330    1.302918    0.525644\nCl    -1.393270   -0.944670    0.333480\nBr     1.634288   -0.723650    0.411356\nH     -0.025633    0.261961   -1.175775\n"
+        }
+      },
+      {
+        "smiles": "[CH](F)(Cl)Br",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "5\n\nC     -0.058462    0.110813    0.075765\nF     -0.286039    1.179766   -0.728199\nCl    -1.259671   -1.141173   -0.236147\nBr     1.724635   -0.580000   -0.230257\nH     -0.120463    0.430594    1.118840\n"
+        }
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "stereo_labels": [
+      "R",
+      "S"
+    ],
+    "reason": "A tetrahedral centre's CIP label is read from the geometry; enantiomers are two entries of one species."
+  },
+  {
+    "id": "stereo/crotyl_radical_e_vs_z",
+    "description": "E- and Z-crotyl radical: configurational stereo on an open-shell species.",
+    "inputs": [
+      {
+        "smiles": "CC=C[CH2]",
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {
+          "xyz_text": "11\n\nC     -1.744461   -0.003114    0.101531\nC     -0.290594    0.096727    0.431771\nC      0.690511   -0.097087   -0.459626\nC      2.080656    0.003853   -0.120509\nH     -2.213525   -0.777684    0.715897\nH     -2.240174    0.949683    0.310984\nH     -1.914469   -0.252380   -0.950660\nH     -0.051763    0.342417    1.464173\nH      0.458200   -0.343042   -1.493592\nH      2.827965   -0.164289   -0.886985\nH      2.397655    0.244916    0.887017\n"
+        }
+      },
+      {
+        "smiles": "CC=C[CH2]",
+        "charge": 0,
+        "multiplicity": 2,
+        "geometry": {
+          "xyz_text": "11\n\nC     -1.302734   -0.392788    0.617820\nC     -0.493045    0.727528    0.047790\nC      0.749822    0.684118   -0.452854\nC      1.588823   -0.475077   -0.550910\nH     -1.569083   -0.163675    1.654456\nH     -0.784957   -1.354384    0.609591\nH     -2.229042   -0.505271    0.045673\nH     -0.996101    1.693925    0.048965\nH      1.188417    1.607976   -0.828939\nH      2.579267   -0.371105   -0.979298\nH      1.268634   -1.451246   -0.212294\n"
+        }
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "stereo_labels": [
+      "E",
+      "Z"
+    ],
+    "reason": "Radical electrons are neutralised on a copy before bond-order mapping, so radicals are labelled like closed-shell species."
+  },
+  {
+    "id": "stereo/same_configuration_redeposited",
+    "description": "cis-diazene deposited twice with the same geometry.",
+    "inputs": [
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "4\n\nH      0.973587   -0.404125   -0.158772\nN      0.631171    0.451375    0.299819\nN     -0.551296    0.416560    0.690583\nH     -1.053462   -0.463810    0.511107\n"
+        }
+      },
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "4\n\nH      0.973587   -0.404125   -0.158772\nN      0.631171    0.451375    0.299819\nN     -0.551296    0.416560    0.690583\nH     -1.053462   -0.463810    0.511107\n"
+        }
+      }
+    ],
+    "expected": "same_species_entry",
+    "stereo_labels": [
+      "Z",
+      "Z"
+    ],
+    "reason": "Re-resolving the same configuration dedupes onto the existing entry."
+  },
+  {
+    "id": "stereo/labelled_vs_unlabelled_deposit",
+    "description": "cis-diazene with geometry, then diazene with no geometry at all.",
+    "inputs": [
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1,
+        "geometry": {
+          "xyz_text": "4\n\nH      0.973587   -0.404125   -0.158772\nN      0.631171    0.451375    0.299819\nN     -0.551296    0.416560    0.690583\nH     -1.053462   -0.463810    0.511107\n"
+        }
+      },
+      {
+        "smiles": "N=N",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_distinct_entries",
+    "stereo_labels": [
+      "Z",
+      null
+    ],
+    "reason": "Without a geometry no configuration is perceived and the label stays NULL. There is no stereo backfill for entries deposited before the 3D-perception repair: such an entry is a distinct, unlabelled row, not a silent alias of the labelled one."
+  }
+]

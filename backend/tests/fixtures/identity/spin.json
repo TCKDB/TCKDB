@@ -1,0 +1,74 @@
+[
+  {
+    "id": "spin/methylene_singlet_vs_triplet",
+    "description": "Singlet and triplet CH2.",
+    "inputs": [
+      {
+        "smiles": "[CH2]",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[CH2]",
+        "charge": 0,
+        "multiplicity": 3
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Multiplicity is part of the species key and is authoritative over the radical count RDKit infers from the SMILES (DR-0031). The two share one InChIKey."
+  },
+  {
+    "id": "spin/dioxygen_triplet_vs_singlet",
+    "description": "Ground-state triplet O2 and singlet O2.",
+    "inputs": [
+      {
+        "smiles": "[O][O]",
+        "charge": 0,
+        "multiplicity": 3
+      },
+      {
+        "smiles": "[O][O]",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Spin states with different thermochemistry must not merge."
+  },
+  {
+    "id": "spin/imidogen_singlet_vs_triplet",
+    "description": "NH in its singlet and triplet states.",
+    "inputs": [
+      {
+        "smiles": "[NH]",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[NH]",
+        "charge": 0,
+        "multiplicity": 3
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Same graph, different multiplicity, different species."
+  },
+  {
+    "id": "spin/same_multiplicity_dedupes",
+    "description": "Triplet CH2 deposited twice.",
+    "inputs": [
+      {
+        "smiles": "[CH2]",
+        "charge": 0,
+        "multiplicity": 3
+      },
+      {
+        "smiles": "[CH2]",
+        "charge": 0,
+        "multiplicity": 3
+      }
+    ],
+    "expected": "same_species_entry",
+    "reason": "The key is exact: the same spin state resolves to the same row."
+  }
+]

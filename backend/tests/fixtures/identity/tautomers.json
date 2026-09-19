@@ -1,0 +1,79 @@
+[
+  {
+    "id": "tautomers/2_pyridone_vs_2_hydroxypyridine",
+    "description": "2-pyridone and 2-hydroxypyridine: distinct structures that the standard InChIKey's mobile-hydrogen layer merges.",
+    "inputs": [
+      {
+        "smiles": "O=c1cccc[nH]1",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "Oc1ccccn1",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Identity is canonical SMILES, which keeps tautomers apart; the InChIKey is stored but is not the key (DR-0031)."
+  },
+  {
+    "id": "tautomers/acetaldehyde_vs_vinyl_alcohol",
+    "description": "Keto and enol forms of C2H4O.",
+    "inputs": [
+      {
+        "smiles": "CC=O",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "C=CO",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Different molecular graphs, different canonical SMILES, different species."
+  },
+  {
+    "id": "tautomers/acetone_vs_propen_2_ol",
+    "description": "Acetone and its enol.",
+    "inputs": [
+      {
+        "smiles": "CC(C)=O",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "C=C(C)O",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Keto/enol pairs are distinct graphs and must never merge."
+  },
+  {
+    "id": "tautomers/notation_variants_are_one_species",
+    "description": "Control: ethanol written three ways is not a tautomer set.",
+    "inputs": [
+      {
+        "smiles": "CCO",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "OCC",
+        "charge": 0,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "C(O)C",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "reason": "Canonicalisation removes notation; only the graph, charge and multiplicity carry identity."
+  }
+]

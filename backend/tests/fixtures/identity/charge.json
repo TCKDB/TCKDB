@@ -1,0 +1,88 @@
+[
+  {
+    "id": "charge/methyl_radical_vs_methyl_cation",
+    "description": "CH3 radical and CH3+.",
+    "inputs": [
+      {
+        "smiles": "[CH3]",
+        "charge": 0,
+        "multiplicity": 2
+      },
+      {
+        "smiles": "[CH3+]",
+        "charge": 1,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Charge is part of the species key; the charged and neutral species are distinct rows."
+  },
+  {
+    "id": "charge/hydroxide_vs_hydroxyl",
+    "description": "OH- and the OH radical.",
+    "inputs": [
+      {
+        "smiles": "[OH-]",
+        "charge": -1,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[OH]",
+        "charge": 0,
+        "multiplicity": 2
+      }
+    ],
+    "expected": "distinct_species_entries",
+    "reason": "Anion and neutral radical differ in charge and multiplicity."
+  },
+  {
+    "id": "charge/same_ion_two_notations",
+    "description": "Ammonium written implicitly and with explicit hydrogens.",
+    "inputs": [
+      {
+        "smiles": "[NH4+]",
+        "charge": 1,
+        "multiplicity": 1
+      },
+      {
+        "smiles": "[H][N+]([H])([H])[H]",
+        "charge": 1,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "same_species_entry",
+    "reason": "Notation does not carry identity; the canonical charged graph does."
+  },
+  {
+    "id": "charge/declared_neutral_hydroxide_rejected",
+    "description": "[OH-] deposited with charge 0.",
+    "inputs": [
+      {
+        "smiles": "[OH-]",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "rejected",
+    "rejection": {
+      "match": "does not match SMILES charge"
+    },
+    "reason": "The declared charge is validated against the formal charge summed from the SMILES."
+  },
+  {
+    "id": "charge/declared_neutral_ammonium_rejected",
+    "description": "[NH4+] deposited with charge 0.",
+    "inputs": [
+      {
+        "smiles": "[NH4+]",
+        "charge": 0,
+        "multiplicity": 1
+      }
+    ],
+    "expected": "rejected",
+    "rejection": {
+      "match": "does not match SMILES charge"
+    },
+    "reason": "A cation cannot be deposited as neutral."
+  }
+]
