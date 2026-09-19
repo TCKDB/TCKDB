@@ -57,6 +57,37 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Digest-bound publication deposit (`tckdb.deposit.v1`)
+
+- New `backend/scripts/ops/build_publication_deposit.py build|verify` and
+  service `app/services/deposit/`: binds one published dataset release, the
+  `tckdb.archive.v1` evidence archive written in the same session, the exact
+  git commit and lockfiles, the manuscript-number generators and their
+  expected outputs, `REPRODUCE.md` and `ACCOUNTS.md` into one `MANIFEST.json`
+  of SHA-256 digests. Refuses (distinct exit codes) on a dirty tree, an
+  untagged commit, an `unknown` package version, a database not at the
+  Alembic script head, an unverifiable release, and any account or actor
+  outside the `--author-account` allowlist; messages name usernames only.
+- New `backend/scripts/paper/` generators (`corpus_counts`,
+  `mechanism_roundtrip_counts`, `selected_thermo_by_species`,
+  `candidate_lineage`, `transition_state_evidence`,
+  `mechanism_fixture_provenance`) with a registry hook for
+  `hessian_reanalysis`; `generate_expected_outputs.py --output-dir` renders
+  each as canonical JSON and Markdown, deterministically.
+- New `tckdb_archive.py verify <tar>`: offline member-hash check of an
+  archive against its own manifest.
+- Fixed: `tckdb_archive.py restore` refused every database produced by
+  `alembic upgrade head` (`Target contains rows in table
+  'accepted_science_repair'`), because data-repair revisions declare
+  themselves unconditionally. Restore now tolerates rows in the two
+  migration-written repair tables, which are excluded from the archive in
+  both directions; every other excluded table must still be empty. Found by
+  the first out-of-process restore test
+  (`tests/integration/test_deposit_round_trip.py`).
+- Runbook: `cutting_a_dataset_release.md` now says verification re-hashes
+  frozen bytes and `live_divergence` is the separate non-blocking comparison,
+  and gains "Build the publication deposit". No schema or migration change.
+
 ### Molecular thermo contract (Phase A)
 
 - Coordinated versions: backend 0.2.0, `tckdb-schemas` 0.45.0,

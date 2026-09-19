@@ -674,6 +674,27 @@ class ApiCode:
 #: this from :mod:`app.scientific_checks`, whose entries claim something a
 #: referee could argue with and must stay expensive.
 CATALOGUE: tuple[ApiCode, ...] = (
+    ApiCode("account_not_allowlisted", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "An app_user row is not in the author allowlist the build was given. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("actor_outside_allowlist", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "A row's actor column resolves to a user outside the author allowlist. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("alembic_heads_ambiguous", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "The Alembic script directory has more than one head. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("ambiguous_conformer_selection_locator", 422, Surface.coded_exception,
             "backend/app/services/conformer_selection_locator.py",
             shape=Shape.relationship,
@@ -734,6 +755,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("archive_release_artifacts_differ", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The release artifacts inside the evidence archive do not match the emitted members. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("archive_unreadable", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The evidence archive could not be read back from the output directory. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
             "backend/app/chemistry/units.py",
             shape=Shape.relationship),
@@ -873,6 +908,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("author_allowlist_empty", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "No --author-account was given. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("bac_total_requires_components", 422, Surface.coded_exception,
             "backend/app/services/energy_correction_resolution.py",
             shape=Shape.relationship,
@@ -997,6 +1039,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("database_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
+    ApiCode("dirty_tree", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "Tracked paths differ from HEAD; a deposit binds a commit, not a working tree. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("doi_already_recorded", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
@@ -1120,6 +1169,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "not the withheld kind of measurement: it is a property of "
                 "one record the caller named, and strictly less than this "
                 "endpoint returns for any request under the cap."
+            )),
+    ApiCode("git_status_failed", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "git status could not be run in the repository root. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
@@ -1415,8 +1471,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
+    ApiCode("no_exact_tag", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "HEAD carries no exact tag; a deposit must be built from a tagged commit. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("no_generators", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The paper generator registry is empty. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
+    ApiCode("not_a_git_repository", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The repository root is not a git checkout. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("offset_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,
@@ -1429,6 +1506,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the route, so settings.public_max_offset is the only one. "
                 "Shape.relationship since 2026-08-18; context carries "
                 "offset_max (a setting) and offset (the caller's own)."
+            )),
+    ApiCode("output_not_empty", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The output directory already has content. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("owner_missing", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculations.py"),
@@ -1488,6 +1572,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("release_artifact_corrupt", 500, Surface.message_prefix,
             "backend/app/api/routes/scientific/releases.py"),
+    ApiCode("release_artifact_digest_differs", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "A frozen release artifact re-hashed to a different digest than its manifest records. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("release_manifest_digest_differs", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The release manifest document re-hashed to a different digest than the row records. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("release_not_draft", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
@@ -1496,6 +1594,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "succeed, so 422 was telling a client to resend something "
                 "that could never be accepted. It raises ReleaseStateConflict, "
                 "and the route reads the status off the class."
+            )),
+    ApiCode("release_not_found", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "No dataset release with the requested tag exists. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("release_not_frozen", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The release has no frozen manifest yet. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("release_not_published", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
@@ -1506,6 +1618,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "the same sentence about the same state, so they share a "
                 "code and now share a status; the curation.py literal is the "
                 "one the drift guard checks."
+            )),
+    ApiCode("release_not_verified", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "verify_release reported a problem for the release. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("release_scoping_not_implemented", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/profile.py"),
@@ -1520,10 +1639,24 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "maps to 409. A tag that is taken is taken; there is no "
                 "corrected body, only a different tag."
             )),
+    ApiCode("release_withdrawn", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The release has been withdrawn and must not be deposited. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("request_validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("resource_not_found", 404, Surface.generic_fallback,
             "backend/app/api/errors.py"),
+    ApiCode("revision_mismatch", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "The database alembic_version differs from the Alembic script head. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
     ApiCode("scan_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("schema_not_initialized", 503, Surface.response_literal,
@@ -1558,6 +1691,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "because app.schemas.reads sits on the wire side. context "
                 "carries max_length (a module constant) and length (the "
                 "caller's own string, measured). The string is not echoed."
+            )),
+    ApiCode("source_pin_missing", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "A required source pin file (environment.yml, uv.lock, Dockerfile, licences, CITATION.cff) is absent. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
@@ -1883,6 +2023,13 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "them before either of the other two sites runs. The other "
                 "two stay as tripwires against a reordering. context['field'] "
                 "says which ref asked."
+            )),
+    ApiCode("unknown_version", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard,
+            note=(
+                "The backend or schemas package version resolved to unknown. "
+                "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
             )),
     ApiCode("unsafe_lowest_energy_comparison", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/species_calculations_search.py"),

@@ -231,11 +231,17 @@ Design of `tckdb.deposit.v1`:
 | --- | --- |
 | `4_limitations.md:7` corpus counts, depositors, tools, ESS releases, levels of theory, review states | `corpus_counts` |
 | `3_results.md:16` mechanism species, rate expressions, forms | `mechanism_roundtrip_counts` |
-| `3_results.md:33` ethylene selected thermo values | `ethylene_selected_thermo` |
-| `3_results.md:35`, `SI.md:33` seven ethylene candidates: submission refs, timestamps, ARC commits, artifact digests | `ethylene_candidate_lineage` |
+| `3_results.md:33` ethylene selected thermo values | `selected_thermo_by_species` |
+| `3_results.md:35`, `SI.md:33` seven ethylene candidates: submission refs, timestamps, ARC commits, artifact digests | `candidate_lineage` |
 | `3_results.md:43` transition-state entries with an imaginary mode, with a Hessian | `transition_state_evidence` |
 | `3_results.md:44`, `SI.md:29` spectrum-from-Hessian agreement table | `hessian_reanalysis` (B4) |
 | `SI.md:25` fixture mechanism provenance and Cantera version | `mechanism_fixture_provenance` |
+
+The two ethylene rows are served by the generalised generators (every species
+with a standing selection; every species entry with more than one thermo
+candidate), which the paper filters to ethylene at write-up time; the shipped
+registry (`backend/scripts/paper/registry.py`, PR #497) carries no
+ethylene-specific generator.
 
 - `REPRODUCE.md`: check out the pinned commit; start `db` and `minio`;
   `alembic upgrade head`; `backend/scripts/tckdb_archive.py restore` with the

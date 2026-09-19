@@ -52,6 +52,7 @@ from app.db.types import RDKitMol
 from app.services.archive.registry import (
     EXCLUDED_COLUMNS,
     EXCLUDED_TABLES,
+    MIGRATION_WRITTEN_TABLES,
     PRESEEDED_TABLES,
     included_column_names,
     included_tables_in_fk_order,
@@ -623,9 +624,17 @@ def _read_blobs(
 
 
 def _ensure_restore_target(session: Session, tables) -> None:
-    """Require only the exact identities seeded by the migrations."""
+    """Require only the exact identities seeded by the migrations.
+
+    Rows in :data:`MIGRATION_WRITTEN_TABLES` are tolerated: a migration to
+    head writes its own repair declarations there, so a target produced by
+    nothing but ``alembic upgrade head`` legitimately holds them, and they
+    are outside the archive in both directions.
+    """
 
     for table in tables:
+        if table.name in MIGRATION_WRITTEN_TABLES:
+            continue
         preseed = PRESEEDED_TABLES.get(table.name)
         if preseed is not None:
             identity_names, expected = preseed
@@ -668,6 +677,148 @@ def _repair_sequences(session: Session, tables) -> None:
                     text("SELECT setval(CAST(:sequence AS regclass), :value, true)"),
                     {"sequence": sequence, "value": maximum},
                 )
+
+
+@dataclass(frozen=True)
+class ArchiveVerificationReport:
+    """Result of the offline member-hash check of one archive file."""
+
+    schema: str | None
+    database_revisions: list[str]
+    rows_declared: int
+    blobs_declared: int
+    members_checked: int
+    problems: list[str]
+
+    @property
+    def ok(self) -> bool:
+        return not self.problems
+
+
+def _hash_member(archive: tarfile.TarFile, member: tarfile.TarInfo) -> tuple[str, int]:
+    handle = archive.extractfile(member)
+    if handle is None:
+        raise ArchiveIntegrityError(f"Archive member {member.name!r} is unreadable")
+    digest = hashlib.sha256()
+    size = 0
+    while True:
+        chunk = handle.read(1024 * 1024)
+        if not chunk:
+            break
+        digest.update(chunk)
+        size += len(chunk)
+    return digest.hexdigest(), size
+
+
+def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
+    """Check an archive file against its own manifest, without a database.
+
+    Re-hashes ``rows.ndjson`` and every packaged blob against the digests and
+    byte counts ``manifest.json`` declares, and refuses undeclared, missing or
+    duplicate members. It does **not** check the registry or the revision
+    against a database -- that is :func:`restore_archive`'s job, and it can
+    only be answered with a target in hand. A clean report here means the
+    bytes are the bytes the writer produced; it says nothing about whether
+    any particular database can accept them.
+    """
+
+    problems: list[str] = []
+    schema: str | None = None
+    revisions: list[str] = []
+    rows_declared = 0
+    blobs_declared = 0
+    members_checked = 0
+
+    with _open_tar(source, "r:*") as archive:
+        try:
+            members = _members_by_name(archive)
+        except ArchiveIntegrityError as exc:
+            return ArchiveVerificationReport(None, [], 0, 0, 0, [str(exc)])
+
+        manifest_member = members.get(_MANIFEST_PATH)
+        rows_member = members.get(_ROWS_PATH)
+        if manifest_member is None or rows_member is None:
+            problems.append("archive lacks manifest.json or rows.ndjson")
+            return ArchiveVerificationReport(None, [], 0, 0, 0, problems)
+        try:
+            manifest = json.loads(_read_member_bytes(archive, manifest_member, max_bytes=10 * 1024 * 1024))
+        except (json.JSONDecodeError, ArchiveIntegrityError) as exc:
+            problems.append(f"manifest.json is unreadable: {exc}")
+            return ArchiveVerificationReport(None, [], 0, 0, 0, problems)
+        if not isinstance(manifest, dict):
+            return ArchiveVerificationReport(None, [], 0, 0, 0, ["manifest.json is not an object"])
+
+        schema = manifest.get("schema") if isinstance(manifest.get("schema"), str) else None
+        if schema != ARCHIVE_SCHEMA:
+            problems.append(f"manifest schema is {schema!r}, expected {ARCHIVE_SCHEMA!r}")
+        declared_revisions = manifest.get("database_revisions")
+        if isinstance(declared_revisions, list) and all(isinstance(r, str) for r in declared_revisions):
+            revisions = list(declared_revisions)
+        else:
+            problems.append("manifest database_revisions block is malformed")
+
+        rows_block = manifest.get("rows")
+        if not isinstance(rows_block, dict):
+            problems.append("manifest rows block is malformed")
+        else:
+            rows_declared = rows_block.get("count") if isinstance(rows_block.get("count"), int) else 0
+            digest, size = _hash_member(archive, rows_member)
+            members_checked += 1
+            if rows_block.get("path") != _ROWS_PATH:
+                problems.append("manifest rows path is invalid")
+            if rows_block.get("bytes") != size:
+                problems.append(f"rows.ndjson is {size} bytes, manifest declares {rows_block.get('bytes')}")
+            if rows_block.get("sha256") != digest:
+                problems.append(f"rows.ndjson hashes to {digest}, manifest declares {rows_block.get('sha256')}")
+
+        declarations = manifest.get("blobs")
+        expected_paths: set[str] = set()
+        if not isinstance(declarations, list):
+            problems.append("manifest blobs block is malformed")
+        else:
+            blobs_declared = len(declarations)
+            for declaration in declarations:
+                if not isinstance(declaration, dict):
+                    problems.append("manifest blob entry is malformed")
+                    continue
+                sha256 = declaration.get("sha256")
+                path = declaration.get("path")
+                size = declaration.get("bytes")
+                if (
+                    not isinstance(sha256, str)
+                    or not _SHA256_RE.fullmatch(sha256)
+                    or path != f"{_BLOB_PREFIX}{sha256}"
+                    or not isinstance(size, int)
+                ):
+                    problems.append(f"manifest blob entry is malformed: {path!r}")
+                    continue
+                if path in expected_paths:
+                    problems.append(f"duplicate manifest blob {path!r}")
+                    continue
+                expected_paths.add(path)
+                member = members.get(path)
+                if member is None:
+                    problems.append(f"missing blob member {path!r}")
+                    continue
+                actual_digest, actual_size = _hash_member(archive, member)
+                members_checked += 1
+                if actual_size != size or actual_digest != sha256:
+                    problems.append(f"blob {path!r} hashes to {actual_digest} ({actual_size} bytes), declared {sha256} ({size} bytes)")
+
+        undeclared = sorted(
+            name for name in members if name not in {_MANIFEST_PATH, _ROWS_PATH} and name not in expected_paths
+        )
+        if undeclared:
+            problems.append(f"archive contains undeclared members: {undeclared}")
+
+    return ArchiveVerificationReport(
+        schema=schema,
+        database_revisions=revisions,
+        rows_declared=rows_declared,
+        blobs_declared=blobs_declared,
+        members_checked=members_checked,
+        problems=problems,
+    )
 
 
 def restore_archive(
@@ -763,6 +914,8 @@ __all__ = [
     "ArchiveIntegrityError",
     "ArchiveNotEmptyError",
     "ArchiveRestoreReport",
+    "ArchiveVerificationReport",
     "restore_archive",
+    "verify_archive",
     "write_archive",
 ]
