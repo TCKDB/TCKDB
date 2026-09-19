@@ -185,6 +185,31 @@ EXCLUDED_COLUMNS: Mapping[str, Mapping[str, str]] = {
 }
 
 
+# Tables a migration writes *about itself* on the way to head. A data-repair
+# revision declares its repair in ``accepted_science_repair`` before touching
+# an accepted record, and it does so unconditionally -- the declaration is the
+# revision's own audit trail, and a revision that skipped it on an empty
+# database would behave differently on every deployment. So a database
+# produced by nothing but ``alembic upgrade head`` is *not* empty in these
+# tables (measured 2026-09-19: two rows at head ``a55cc983501a``, declared by
+# ``b8e3f1a7c250`` and ``53b1e7dece9d``), and the archive CLI refused every
+# fresh restore target with ``Target contains rows in table
+# 'accepted_science_repair'``. The in-process tests never saw it because their
+# "fresh target" helper deletes these rows along with everything else.
+#
+# Both tables are already excluded from the archive (the rows are keyed on a
+# cluster transaction id and cannot be transplanted), so a restore neither
+# reads nor writes them. Restore therefore tolerates rows here and only here;
+# every other excluded table must still be empty, because rows in ``api_key``
+# or ``upload_job`` mean the target is a live deployment, not a fresh one.
+MIGRATION_WRITTEN_TABLES: frozenset[str] = frozenset(
+    {
+        "accepted_science_repair",
+        "accepted_science_repair_change",
+    }
+)
+
+
 # A freshly migrated database intentionally contains these identity rows.
 # Restore accepts exactly this target-side set, removes it, and then restores
 # the archived rows. Other included tables must be empty.
@@ -267,6 +292,12 @@ def validate_registry(metadata: MetaData) -> None:
         if unknown_columns:
             errors.append(f"excluded columns absent from {table_name}: {sorted(unknown_columns)}")
 
+    not_excluded = MIGRATION_WRITTEN_TABLES - excluded
+    if not_excluded:
+        errors.append(
+            f"migration-written tables must be excluded from the archive: {sorted(not_excluded)}"
+        )
+
     for table_name, (identity_columns, _identities) in PRESEEDED_TABLES.items():
         table = metadata.tables.get(table_name)
         if table is None or table_name not in included:
@@ -307,6 +338,7 @@ __all__ = [
     "EXCLUDED_COLUMNS",
     "EXCLUDED_TABLES",
     "INCLUDED_TABLES",
+    "MIGRATION_WRITTEN_TABLES",
     "PRESEEDED_TABLES",
     "ArchiveRegistryError",
     "included_column_names",

@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 from app.api.deps import SessionLocal
-from app.services.archive import ArchiveError, restore_archive, write_archive
+from app.services.archive import ArchiveError, restore_archive, verify_archive, write_archive
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -30,6 +30,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Restore into a revision-compatible freshly migrated database.",
     )
     restore.add_argument("input", type=Path)
+
+    verify = subparsers.add_parser(
+        "verify",
+        help="Check an archive's members against its own manifest. Offline; no database.",
+    )
+    verify.add_argument("input", type=Path)
     return parser.parse_args(argv)
 
 
@@ -86,11 +92,33 @@ def _restore_archive(source: Path) -> None:
     print(f"Rows: {report.rows_restored}  Blobs: {report.blobs_restored}  Tables: {len(report.table_row_counts)}")
 
 
+def _verify_archive(source: Path) -> int:
+    """Exit 0 when every member hashes to what the manifest declares, 1 otherwise."""
+    if not source.is_file():
+        raise FileNotFoundError(f"archive path {source} is not a file")
+
+    report = verify_archive(source)
+    revisions = ",".join(report.database_revisions)
+    print(f"Checked {source}")
+    print(
+        f"Schema: {report.schema}  Revision: {revisions}  Rows: {report.rows_declared}  "
+        f"Blobs: {report.blobs_declared}  Members hashed: {report.members_checked}"
+    )
+    if report.ok:
+        print("Archive members match the manifest.")
+        return 0
+    for problem in report.problems:
+        print(f"problem: {problem}", file=sys.stderr)
+    return 1
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         if args.command == "create":
             _create_archive(args.output, overwrite=args.overwrite)
+        elif args.command == "verify":
+            return _verify_archive(args.input)
         else:
             _restore_archive(args.input)
     except (ArchiveError, OSError) as exc:
