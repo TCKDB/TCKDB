@@ -1,12 +1,12 @@
 # TCKDB implementation programme
 
-Companions: [Detailed phase A plan](tckdb-phase-a-implementation-plan.md), [Detailed phase B plan](tckdb-phase-b-implementation-plan.md).
+Companions: [Detailed phase A plan](tckdb-phase-a-implementation-plan.md), [Detailed phase B plan](tckdb-phase-b-implementation-plan.md), [Detailed phase C plan](tckdb-phase-c-implementation-plan.md).
 
 ## Objective and publication boundary
 
 Deliver a defensible first paper demonstrating chemical identity → computational evidence → thermo/kinetics products → attributed review → frozen release → reproducible downstream use.
 
-The first-publication scope is the roadmap's **A/B molecular programme**. QCSchema and ThermoML adapters follow it; a manually curated, rights-cleared external reference comparison is sufficient for the initial paper. This supersedes the conflicting interchange follow-up requirement.
+The first-publication scope is the roadmap's **A/B molecular programme plus the Phase C interchange demonstration** (decided 2026-09-19): one independently generated QCSchema bundle and one ThermoML ideal-gas heat-capacity subset, each imported through a bounded, versioned adapter and compared with existing TCKDB evidence. This supersedes the earlier sentence that the adapters follow the paper; a manually curated, rights-cleared external reference comparison remains the ceiling of what the paper claims about external data.
 
 Keep four categories distinct: confirmed defects (reproduced validation holes and field loss); implemented foundations (storage, provenance, curation, releases, archives and selected evaluators); proposed capabilities (general evaluation, correlated uncertainty, reconciliation, experimental adapters and additional domains); and unverified outcomes (corpus accuracy, production health, rights clearance and independent reproduction).
 
