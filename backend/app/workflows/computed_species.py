@@ -245,6 +245,10 @@ def _build_synthetic_thermo_upload_request(
         workflow_tool_release=(
             thermo_in.workflow_tool_release or default_workflow_tool_release
         ),
+        phase=thermo_in.phase,
+        reference_pressure_bar=thermo_in.reference_pressure_bar,
+        enthalpy_formation_0k_kj_mol=thermo_in.enthalpy_formation_0k_kj_mol,
+        enthalpy_formation_0k_uncertainty_kj_mol=thermo_in.enthalpy_formation_0k_uncertainty_kj_mol,
         h298_kj_mol=thermo_in.h298_kj_mol,
         s298_j_mol_k=thermo_in.s298_j_mol_k,
         h298_uncertainty_kj_mol=thermo_in.h298_uncertainty_kj_mol,

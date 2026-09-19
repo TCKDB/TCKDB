@@ -27,6 +27,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from pydantic import ValidationError
+from tckdb_schemas.thermo import ThermoNASACreate
+
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.export import (
     ExportGap,
@@ -209,6 +212,31 @@ def _a_to_mol_cm_s(a: float | None, units: ArrheniusAUnits | None) -> float | No
 # ---------------------------------------------------------------------------
 
 
+def thermo_chemkin_incompatibilities(thermo, nasa) -> list[str]:
+    """Reasons a stored candidate cannot represent the gas/1 atm profile.
+
+    This checks export applicability, not chemical accuracy. It also accepts
+    historical ORM rows without making their ordinary read contract stricter.
+    """
+    reasons = []
+    if thermo.phase is None:
+        reasons.append("unknown phase")
+    elif thermo.phase != "gas":
+        reasons.append("CHEMKIN requires gas phase")
+    if thermo.reference_pressure_bar is None:
+        reasons.append("unknown reference pressure")
+    elif thermo.reference_pressure_bar != 1.01325:
+        reasons.append("CHEMKIN requires reference_pressure_bar=1.01325 (1 atm); no pressure conversion is performed")
+    if nasa is None:
+        reasons.append("selected thermo has no NASA-7 block (unsupported representation)")
+    else:
+        try:
+            ThermoNASACreate.model_validate(nasa, from_attributes=True)
+        except ValidationError:
+            reasons.append("incomplete or invalid NASA-7 bounds/coefficients")
+    return reasons
+
+
 def _nasa_card(name: str, comp: Counter, selected) -> list[str]:
     """Build the 4-line NASA-7 thermo card for one species.
 
@@ -219,9 +247,10 @@ def _nasa_card(name: str, comp: Counter, selected) -> list[str]:
     = HIGH-temperature. Hence CHEMKIN high block ← ``b*``; low block ← ``a*``.
     """
     nasa = selected.nasa
-    t_low = nasa.t_low if nasa.t_low is not None else 300.0
-    t_high = nasa.t_high if nasa.t_high is not None else 5000.0
-    t_mid = nasa.t_mid if nasa.t_mid is not None else 1000.0
+    reasons = thermo_chemkin_incompatibilities(selected.thermo, nasa)
+    if reasons:
+        raise ValueError("; ".join(reasons))
+    t_low, t_high, t_mid = nasa.t_low, nasa.t_high, nasa.t_mid
 
     # Element field: up to four "AA###" groups in cols 25-44.
     elem_field = ""
@@ -241,7 +270,7 @@ def _nasa_card(name: str, comp: Counter, selected) -> list[str]:
 
     high = [nasa.b1, nasa.b2, nasa.b3, nasa.b4, nasa.b5, nasa.b6, nasa.b7]
     low = [nasa.a1, nasa.a2, nasa.a3, nasa.a4, nasa.a5, nasa.a6, nasa.a7]
-    coeffs = [c if c is not None else 0.0 for c in (high + low)]
+    coeffs = high + low
 
     def fmt(values: list[float]) -> str:
         return "".join(f"{v:>15.8E}" for v in values)
@@ -278,27 +307,12 @@ def _build_therm_dat(
                 )
             )
             continue
-        # Require the NASA-7 child, not just the "nasa" model_kind: with
-        # stored-column classification a (data-inconsistent) nasa7 row could
-        # lack its ThermoNASA child, and _nasa_card would crash on it. Such a
-        # record degrades to the gap message below, as it did pre-fix.
-        nasa_thermo = next(
-            (
-                t
-                for t in sr.thermos
-                if t.model_kind == "nasa" and t.nasa is not None
-            ),
-            None,
-        )
-        if nasa_thermo is None:
-            detail = (
-                "selected thermo has no NASA-7 block"
-                if sr.thermos
-                else "no thermo record"
-            )
-            gaps.append(
-                ExportGap(kind="thermo_nasa", ref=ref, detail=detail)
-            )
+        # Selection is final: never silently substitute another candidate.
+        nasa_thermo = sr.thermos[0] if sr.thermos else None
+        reasons = (["no thermo record"] if nasa_thermo is None else
+                   thermo_chemkin_incompatibilities(nasa_thermo.thermo, nasa_thermo.nasa))
+        if reasons:
+            gaps.append(ExportGap(kind="thermo_nasa", ref=ref, detail="; ".join(reasons)))
             continue
         lines.append(
             f"! {names[se_id]}  SMILES={sr.species.smiles}  ref={sr.species.public_ref}"

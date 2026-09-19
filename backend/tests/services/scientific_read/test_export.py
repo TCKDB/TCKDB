@@ -63,6 +63,8 @@ def _species_with_nasa(session, *, smiles=None):
     sp = make_species(session, smiles=smiles, inchi_key=next_inchi_key("EX"))
     entry = make_species_entry(session, sp)
     thermo = make_thermo_scalar(session, species_entry=entry)
+    thermo.phase = "gas"
+    thermo.reference_pressure_bar = 1.01325
     attach_thermo_nasa(session, thermo=thermo)
     _approve(session, SubmissionRecordType.thermo, thermo.id)
     return sp, entry, thermo

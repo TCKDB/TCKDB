@@ -121,8 +121,9 @@ reconstruct an upload-equivalent payload:
 
 ### Thermo (`Thermo` row)
 
-- the `Thermo` row's scalar fields, `tmin_k`/`tmax_k`, and note
-- attached `ThermoNASA` (if any) and `ThermoPoint` rows
+- the `Thermo` row's scalar values and uncertainties, including 0 K formation
+  enthalpy, phase, reference pressure, `tmin_k`/`tmax_k`, and note
+- attached NASA7, NASA9, Wilhoit and tabulated point rows
 - target `SpeciesEntry` and its parent `Species` (rebuilt as the upload
   schema's `species_entry` identity payload)
 - `Literature` reference if attached
@@ -153,6 +154,28 @@ exits non-zero) when:
   reason (including nested upload-schema validation)
 
 The bundle file is **not** written when any of these fail.
+
+### Thermo compatibility from backend 0.2.0
+
+Bundle export preserves explicit null phase and reference pressure. Replaying
+these records keeps their state unknown. New computed uploads that omit those
+fields default to gas at 1 bar; explicit null and omission have different meanings.
+
+The current upload contract requires complete finite NASA7 fits, nonempty finite
+points, and ordered NASA9 intervals with adjoining bounds. A historical record
+that cannot satisfy it raises `ContributionBundleExportError` with the prefix
+`thermo_upload_incompatible` and its stable reference. The historical row remains
+readable; use the recovery archive to preserve evidence that cannot be represented
+as a valid new upload. No historical row or frozen release is rewritten.
+
+CHEMKIN export has a narrower profile: the selected candidate must be complete
+NASA7, gas phase, with reference pressure exactly **1.01325 bar (1 atm)**.
+Unknown state, other phases, 1 bar, incomplete fits and other representations
+produce export gaps. The exporter performs no pressure conversion, substitutes
+no candidate and invents no coefficients or temperature bounds. Consequently,
+the computed-upload default of 1 bar is not eligible for CHEMKIN export.
+A mechanism missing required thermo cannot pass strict executable-mechanism
+validation. Structured exports retain the supplied scientific values.
 
 ## What is *not* reconstructed in v0
 

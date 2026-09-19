@@ -10,9 +10,10 @@ ids and ORM-read shapes that have no place in the wire contract.
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
+from tckdb_schemas.enums import PhaseKind, ScientificOriginKind
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,14 @@ class ThermoPointBase(BaseModel):
 
 class ThermoPointCreate(ThermoPointBase, SchemaBase):
     """Nested create payload for a thermo data point."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_property_content(self) -> Self:
+        if all(getattr(self, name) is None for name in ("cp_j_mol_k", "h_kj_mol", "s_j_mol_k", "g_kj_mol")):
+            raise ValueError("Thermo point must contain at least one property value.")
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +110,28 @@ class ThermoNASABase(BaseModel):
 
 
 class ThermoNASACreate(ThermoNASABase, SchemaBase):
-    """Nested create payload for NASA polynomial coefficients."""
+    """Complete, finite NASA7 fit; historical reads use ThermoNASABase."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    t_low: float = Field(gt=0)
+    t_mid: float = Field(gt=0)
+    t_high: float = Field(gt=0)
+    a1: float
+    a2: float
+    a3: float
+    a4: float
+    a5: float
+    a6: float
+    a7: float
+    b1: float
+    b2: float
+    b3: float
+    b4: float
+    b5: float
+    b6: float
+    b7: float
+
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +178,8 @@ class ThermoNASA9IntervalBase(BaseModel):
 class ThermoNASA9IntervalCreate(ThermoNASA9IntervalBase, SchemaBase):
     """Nested create payload for one NASA-9 polynomial interval."""
 
+    model_config = ConfigDict(allow_inf_nan=False)
+
 
 # ---------------------------------------------------------------------------
 # Thermo Wilhoit heat-capacity form
@@ -183,3 +215,30 @@ class ThermoWilhoitBase(BaseModel):
 
 class ThermoWilhoitCreate(ThermoWilhoitBase, SchemaBase):
     """Nested create payload for the Wilhoit heat-capacity form."""
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+
+class ThermoStateFields(SchemaBase):
+    """State and 0 K content shared by the computed bundle contracts.
+
+    Defaults apply only to omitted computed state. Explicit null is evidence
+    of unknown state and survives conversion to standalone uploads.
+    """
+
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
+    phase: PhaseKind | None = None
+    reference_pressure_bar: float | None = Field(default=None, gt=0)
+    enthalpy_formation_0k_kj_mol: float | None = None
+    enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def apply_computed_state_defaults(self) -> Self:
+        if self.scientific_origin == ScientificOriginKind.computed:
+            if "phase" not in self.model_fields_set:
+                self.phase = PhaseKind.gas
+            if "reference_pressure_bar" not in self.model_fields_set:
+                self.reference_pressure_bar = 1.0
+        return self

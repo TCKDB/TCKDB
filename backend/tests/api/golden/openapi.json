@@ -3510,6 +3510,29 @@
               }
             ]
           },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -3564,12 +3587,34 @@
             ],
             "title": "Note"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ThermoPointCreate"
             },
             "title": "Points",
             "type": "array"
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
             "anyOf": [
@@ -43464,6 +43509,29 @@
               }
             ]
           },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -43518,12 +43586,34 @@
             ],
             "title": "Note"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "items": {
               "$ref": "#/components/schemas/ThermoPointCreate"
             },
             "title": "Points",
             "type": "array"
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
             "anyOf": [
@@ -43925,199 +44015,99 @@
       },
       "ThermoNASACreate": {
         "additionalProperties": false,
-        "description": "Nested create payload for NASA polynomial coefficients.",
+        "description": "Complete, finite NASA7 fit; historical reads use ThermoNASABase.",
         "properties": {
           "a1": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A1"
+            "title": "A1",
+            "type": "number"
           },
           "a2": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A2"
+            "title": "A2",
+            "type": "number"
           },
           "a3": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A3"
+            "title": "A3",
+            "type": "number"
           },
           "a4": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A4"
+            "title": "A4",
+            "type": "number"
           },
           "a5": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A5"
+            "title": "A5",
+            "type": "number"
           },
           "a6": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A6"
+            "title": "A6",
+            "type": "number"
           },
           "a7": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "A7"
+            "title": "A7",
+            "type": "number"
           },
           "b1": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B1"
+            "title": "B1",
+            "type": "number"
           },
           "b2": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B2"
+            "title": "B2",
+            "type": "number"
           },
           "b3": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B3"
+            "title": "B3",
+            "type": "number"
           },
           "b4": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B4"
+            "title": "B4",
+            "type": "number"
           },
           "b5": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B5"
+            "title": "B5",
+            "type": "number"
           },
           "b6": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B6"
+            "title": "B6",
+            "type": "number"
           },
           "b7": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "B7"
+            "title": "B7",
+            "type": "number"
           },
           "t_high": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "T High"
+            "exclusiveMinimum": 0.0,
+            "title": "T High",
+            "type": "number"
           },
           "t_low": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "T Low"
+            "exclusiveMinimum": 0.0,
+            "title": "T Low",
+            "type": "number"
           },
           "t_mid": {
-            "anyOf": [
-              {
-                "exclusiveMinimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "T Mid"
+            "exclusiveMinimum": 0.0,
+            "title": "T Mid",
+            "type": "number"
           }
         },
+        "required": [
+          "t_low",
+          "t_mid",
+          "t_high",
+          "a1",
+          "a2",
+          "a3",
+          "a4",
+          "a5",
+          "a6",
+          "a7",
+          "b1",
+          "b2",
+          "b3",
+          "b4",
+          "b5",
+          "b6",
+          "b7"
+        ],
         "title": "ThermoNASACreate",
         "type": "object"
       },
@@ -44943,6 +44933,28 @@
             ],
             "x-tckdb-include-gated": "assessments"
           },
+          "enthalpy_formation_0k_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Kj Mol"
+          },
+          "enthalpy_formation_0k_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
           },
@@ -45008,6 +45020,16 @@
             ],
             "title": "Nasa9"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "anyOf": [
               {
@@ -45024,6 +45046,17 @@
           },
           "provenance": {
             "$ref": "#/components/schemas/ThermoProvenance"
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"

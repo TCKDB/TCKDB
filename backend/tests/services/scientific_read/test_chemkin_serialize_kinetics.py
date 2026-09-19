@@ -77,7 +77,8 @@ def _species(sid: int, smiles: str, ref: str) -> SpeciesExportRecord:
         species_entry=se,
         species=sp,
         is_linear=None,
-        thermos=[SimpleNamespace(model_kind="nasa", nasa=_nasa())],
+        thermos=[SimpleNamespace(model_kind="nasa", nasa=_nasa(),
+                                 thermo=SimpleNamespace(phase="gas", reference_pressure_bar=1.01325))],
         transports=[],
     )
 

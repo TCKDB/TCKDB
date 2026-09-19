@@ -66,7 +66,7 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
-from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate
+from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.upload_warning import UploadWarning
 
 
@@ -358,7 +358,7 @@ class AppliedEnergyCorrectionInBundle(AppliedEnergyCorrectionUploadPayload):
     """
 
 
-class ThermoInBundle(SchemaBase):
+class ThermoInBundle(ThermoStateFields):
     """Thermo block within a bundle. Lives at bundle level (one thermo
     per species_entry); references calcs from any conformer via the
     bundle's global calc-key namespace.
@@ -419,13 +419,14 @@ class ThermoInBundle(SchemaBase):
 
     @model_validator(mode="after")
     def validate_has_scientific_content(self) -> Self:
-        has_scalar = self.h298_kj_mol is not None or self.s298_j_mol_k is not None
+        has_scalar = (self.h298_kj_mol is not None or self.s298_j_mol_k is not None
+                      or self.enthalpy_formation_0k_kj_mol is not None)
         has_nasa = self.nasa is not None
         has_points = bool(self.points)
         if not (has_scalar or has_nasa or has_points):
             raise ValueError(
                 "Thermo block must include at least one of: a scalar "
-                "thermo value (h298_kj_mol or s298_j_mol_k), a NASA block, "
+                "thermo value (h298_kj_mol, s298_j_mol_k or enthalpy_formation_0k_kj_mol), a NASA block, "
                 "or one or more thermo points."
             )
         return self

@@ -57,6 +57,7 @@ from app.schemas.workflows.contribution_bundle import (
     BundleSubmissionSourceKind,
     ContributionBundleV0,
 )
+from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 
 # Schema version of the local DB at the time of writing. The local export
 # stamps this into the bundle so a future hosted importer can refuse
@@ -250,6 +251,10 @@ def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "species_entry": _species_entry_payload(thermo.species_entry),
         "scientific_origin": thermo.scientific_origin.value,
+        "phase": thermo.phase.value if thermo.phase is not None else None,
+        "reference_pressure_bar": thermo.reference_pressure_bar,
+        "enthalpy_formation_0k_kj_mol": thermo.enthalpy_formation_0k_kj_mol,
+        "enthalpy_formation_0k_uncertainty_kj_mol": thermo.enthalpy_formation_0k_uncertainty_kj_mol,
         "h298_kj_mol": thermo.h298_kj_mol,
         "s298_j_mol_k": thermo.s298_j_mol_k,
         "h298_uncertainty_kj_mol": thermo.h298_uncertainty_kj_mol,
@@ -282,6 +287,12 @@ def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
     if workflow_tool is not None:
         payload["workflow_tool_release"] = workflow_tool
 
+    try:
+        ThermoUploadRequest.model_validate(payload)
+    except ValidationError as exc:
+        raise ContributionBundleExportError(
+            f"thermo_upload_incompatible: {thermo.public_ref}: {exc}"
+        ) from exc
     return payload
 
 

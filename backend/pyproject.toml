@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-backend"
-version = "0.1.0"
+version = "0.2.0"
 description = "FastAPI backend for the TCKDB scientific database (thermochemistry / kinetics with provenance)."
 requires-python = ">=3.13"
 # The repository ships an MIT LICENSE at its root; this metadata states the
@@ -99,7 +99,7 @@ dependencies = [
     # genuinely does not import without it. It lives in this repo rather
     # than on PyPI, hence the [tool.uv.sources] entry below; for the
     # conda+pip path install it first (see the header).
-    "tckdb-schemas>=0.10",
+    "tckdb-schemas>=0.45.0",
 ]
 
 [project.optional-dependencies]

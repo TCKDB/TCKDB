@@ -28,6 +28,8 @@ def _seed_reaction(db_session):
         sp = make_species(db_session, smiles=smiles, inchi_key=next_inchi_key("AP"))
         entry = make_species_entry(db_session, sp)
         thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.phase = "gas"
+        thermo.reference_pressure_bar = 1.01325
         attach_thermo_nasa(db_session, thermo=thermo)
         set_review(
             db_session,

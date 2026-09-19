@@ -58,6 +58,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.RigidRotorKind, wire_enums.RigidRotorKind),
     (db_enums.SCFStabilityStatus, wire_enums.SCFStabilityStatus),
     (db_enums.ScientificOriginKind, wire_enums.ScientificOriginKind),
+    (db_enums.PhaseKind, wire_enums.PhaseKind),
     (db_enums.SpeciesEntryStateKind, wire_enums.SpeciesEntryStateKind),
     (db_enums.SpinTreatment, wire_enums.SpinTreatment),
     (db_enums.StatmechCalculationRole, wire_enums.StatmechCalculationRole),

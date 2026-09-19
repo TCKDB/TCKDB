@@ -1704,6 +1704,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "endpoint; see MAX_ELEMENT_SYMBOLS in "
                 "app/schemas/reads/_field_bounds.py for the measurement."
             )),
+    ApiCode("thermo_upload_incompatible", 422, Surface.message_prefix,
+            "backend/app/services/contribution_bundle_export.py",
+            reach=Reach.guard,
+            note=(
+                "Raised by local contribution-bundle export and the read-only "
+                "compatibility inventory, neither of which is exposed as an "
+                "HTTP route. No current request can receive it. The local "
+                "exception includes the stable thermo reference and validation "
+                "reasons; archive recovery remains available. Reclassify before "
+                "exposing upload-equivalent export through an API."
+            )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),

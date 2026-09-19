@@ -5,9 +5,10 @@ creates the ``Thermo`` row with optional child data (tabulated points,
 NASA polynomials), and attaches it to the resolved species entry.
 """
 
+from itertools import pairwise
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
     W_CALCULATION_KEY_UNDECLARED,
@@ -175,6 +176,8 @@ class ThermoUploadRequest(SchemaBase):
     # re-validated against it (see ``validate_energy_level_requires_no_
     # statmech_link`` below). Never persisted.
     energy_level_of_theory: LevelOfTheoryRef | None = None
+
+    model_config = ConfigDict(allow_inf_nan=False)
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
@@ -401,13 +404,14 @@ class ThermoUploadRequest(SchemaBase):
         """Reject uploads that carry only identity/provenance and no thermo data.
 
         At least one of: a scalar thermo value (``h298_kj_mol`` or
-        ``s298_j_mol_k``), a NASA-7 polynomial block, a NASA-9 interval set,
+        ``s298_j_mol_k`` or ``enthalpy_formation_0k_kj_mol``), a NASA-7 polynomial block, a NASA-9 interval set,
         a Wilhoit block, or one or more tabulated thermo points must be
         present. Provenance-only fields such as ``literature``,
         ``software_release``, ``workflow_tool_release``, and ``note`` do not
         count.
         """
-        has_scalar = self.h298_kj_mol is not None or self.s298_j_mol_k is not None
+        has_scalar = (self.h298_kj_mol is not None or self.s298_j_mol_k is not None
+                      or self.enthalpy_formation_0k_kj_mol is not None)
         has_nasa = self.nasa is not None
         has_nasa9 = bool(self.nasa9_intervals)
         has_wilhoit = self.wilhoit is not None
@@ -415,7 +419,7 @@ class ThermoUploadRequest(SchemaBase):
         if not (has_scalar or has_nasa or has_nasa9 or has_wilhoit or has_points):
             raise ValueError(
                 "Thermo upload must include at least one of: a scalar "
-                "thermo value (h298_kj_mol or s298_j_mol_k), a NASA-7 block, "
+                "thermo value (h298_kj_mol, s298_j_mol_k or enthalpy_formation_0k_kj_mol), a NASA-7 block, "
                 "a NASA-9 interval set, a Wilhoit block, or one or more "
                 "thermo points."
             )
@@ -461,6 +465,13 @@ class ThermoUploadRequest(SchemaBase):
                     "nasa9_intervals interval_index values must be contiguous "
                     "starting from 1."
                 )
+
+            ordered = sorted(self.nasa9_intervals, key=lambda interval: interval.interval_index)
+            for previous, current in pairwise(ordered):
+                if previous.t_max_k != current.t_min_k:
+                    raise ValueError(
+                        "NASA9 intervals must meet exactly in interval_index order; gaps, overlaps and reversals are unsupported."
+                    )
 
         # If model_kind is supplied, it must agree with the primary
         # representation (points may coexist with any fit).

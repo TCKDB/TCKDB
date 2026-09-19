@@ -1141,6 +1141,10 @@ def persist_computed_reaction_upload(
                     if thermo_workflow_tool_release
                     else None
                 ),
+                phase=t.phase,
+                reference_pressure_bar=t.reference_pressure_bar,
+                enthalpy_formation_0k_kj_mol=t.enthalpy_formation_0k_kj_mol,
+                enthalpy_formation_0k_uncertainty_kj_mol=t.enthalpy_formation_0k_uncertainty_kj_mol,
                 h298_kj_mol=t.h298_kj_mol,
                 s298_j_mol_k=t.s298_j_mol_k,
                 h298_uncertainty_kj_mol=t.h298_uncertainty_kj_mol,
