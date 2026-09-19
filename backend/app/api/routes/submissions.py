@@ -30,7 +30,11 @@ from app.api.deps import (
 from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
+from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.schemas.entities.submission import (
+    RightsAttestationActor,
+    RightsAttestationCreate,
+    RightsAttestationRead,
     SubmissionAIReviewFindingCounts,
     SubmissionAIReviewSummaryRead,
     SubmissionApproveRequest,
@@ -39,6 +43,12 @@ from app.schemas.entities.submission import (
     SubmissionRecordLinkRead,
     SubmissionRejectRequest,
     SubmissionSupersedeRequest,
+)
+from app.services.rights import (
+    RightsAttestationError,
+    RightsAttestationForbidden,
+    list_attestations,
+    record_attestation,
 )
 from app.services.submission import (
     approve_submission,
@@ -280,3 +290,125 @@ def supersede(
         actor=actor,
     )
     return SubmissionRead.model_validate(old)
+
+
+# ---------------------------------------------------------------------------
+# Rights attestations
+# ---------------------------------------------------------------------------
+
+
+def _attestation_records(
+    rows: list[SubmissionRightsAttestation], submission: Submission
+) -> list[RightsAttestationRead]:
+    """Render the chain with refs only: no user id, no row id."""
+    by_id = {row.id: row for row in rows}
+    replaced_by = {
+        row.supersedes_attestation_id: row
+        for row in rows
+        if row.supersedes_attestation_id is not None
+    }
+    out: list[RightsAttestationRead] = []
+    for row in rows:
+        superseded = by_id.get(row.supersedes_attestation_id or -1)
+        replacement = replaced_by.get(row.id)
+        attester = row.attester
+        out.append(
+            RightsAttestationRead(
+                attestation_ref=row.public_ref,
+                submission_ref=submission.public_ref,
+                license=row.license_id,
+                basis=row.basis,
+                actor_kind=row.actor_kind,
+                attested_by=RightsAttestationActor(
+                    username=attester.username,
+                    full_name=attester.full_name,
+                    orcid=attester.orcid,
+                    affiliation=attester.affiliation,
+                ),
+                attested_at=row.attested_at,
+                source_terms=row.source_terms,
+                note=row.note,
+                supersedes_attestation_ref=(
+                    superseded.public_ref if superseded is not None else None
+                ),
+                superseded_by_attestation_ref=(
+                    replacement.public_ref if replacement is not None else None
+                ),
+                stands=replacement is None,
+            )
+        )
+    return out
+
+
+@router.get(
+    "/{submission_id}/rights-attestations",
+    response_model=list[RightsAttestationRead],
+)
+def read_rights_attestations(
+    submission_id: int,
+    session: Session = Depends(get_db),
+    current_user: AppUser = Depends(get_current_user),
+) -> list[RightsAttestationRead]:
+    """Every rights attestation ever recorded for a submission, oldest first.
+
+    Visible to the submission's creator and to curators/admins, like the rest
+    of the submission. Superseded rows stay listed with ``stands: false``.
+    """
+    submission = get_submission(session, submission_id)
+    _require_view_permission(submission, current_user)
+    rows = list_attestations(session, submission_id=submission.id)
+    return _attestation_records(rows, submission)
+
+
+@router.post(
+    "/{submission_id}/rights-attestations",
+    response_model=RightsAttestationRead,
+    status_code=201,
+    dependencies=[Depends(require_supported_tckdb_client)],
+)
+def create_rights_attestation(
+    submission_id: int,
+    body: RightsAttestationCreate,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+) -> RightsAttestationRead:
+    """Record who agrees to license this submission, and on what basis.
+
+    A ``depositor_agreement`` is the depositor's own statement and is accepted
+    only from the submission's creator; ``operator_own_data``,
+    ``historical_review`` and ``source_terms`` record a curator's judgement
+    and need the curator or admin role. Appending never edits: a new row
+    supersedes the one that stood before.
+
+    :raises HTTPException: 403 when the caller may not make this attestation;
+        422 for a body the caller can correct (blank license, missing
+        ``source_terms``).
+    """
+    submission = get_submission(session, submission_id)
+    if not _can_view(submission, current_user):
+        # Same answer as every other route on this router for a submission
+        # the caller has no business with: not "who may attest", just "no".
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this submission."
+        )
+    try:
+        row = record_attestation(
+            session,
+            submission=submission,
+            license_id=body.license,
+            basis=body.basis,
+            actor=current_user,
+            note=body.note,
+            source_terms=body.source_terms,
+        )
+    except RightsAttestationError as exc:
+        # One handler, two statuses: Forbidden is a subclass, and the
+        # re-raise gate can address only one except per function.
+        status = 403 if isinstance(exc, RightsAttestationForbidden) else 422
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    rows = list_attestations(session, submission_id=submission.id)
+    return next(
+        record
+        for record in _attestation_records(rows, submission)
+        if record.attestation_ref == row.public_ref
+    )

@@ -3466,6 +3466,16 @@
         "additionalProperties": false,
         "description": "Bundle-level submission metadata.\n\nThe hosted instance maps this to its own ``submission`` row at import\ntime; the bundle does not create submissions.",
         "properties": {
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_kind": {
             "$ref": "#/components/schemas/BundleSubmissionSourceKind",
             "default": "local_bundle"
@@ -10680,6 +10690,16 @@
             "title": "Reversible",
             "type": "boolean"
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software_release": {
             "anyOf": [
               {
@@ -10867,6 +10887,16 @@
             ],
             "description": "Free-text note about the bundle. Accepted and validated but not persisted: there is no bundle-level row to carry it.",
             "title": "Note"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "species_entry": {
             "$ref": "#/components/schemas/SpeciesEntryIdentityPayload"
@@ -12735,6 +12765,16 @@
             ],
             "title": "Note"
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind",
             "default": "computed"
@@ -14233,6 +14273,40 @@
           "curation_policy"
         ],
         "title": "DatasetReleaseSummary",
+        "type": "object"
+      },
+      "DepositRights": {
+        "additionalProperties": false,
+        "description": "Deposit-time agreement that the records may be licensed as stated.",
+        "properties": {
+          "depositor_attests_right_to_license": {
+            "const": true,
+            "title": "Depositor Attests Right To License",
+            "type": "boolean"
+          },
+          "license": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "License",
+            "type": "string"
+          },
+          "source_terms": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Terms"
+          }
+        },
+        "required": [
+          "license",
+          "depositor_attests_right_to_license"
+        ],
+        "title": "DepositRights",
         "type": "object"
       },
       "DerivedSinglePointEnergy": {
@@ -20714,6 +20788,16 @@
               }
             ]
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind"
           },
@@ -25668,6 +25752,16 @@
             ],
             "title": "Name"
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software_release": {
             "anyOf": [
               {
@@ -28634,6 +28728,16 @@
             },
             "title": "Reactions",
             "type": "array"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "software_release": {
             "anyOf": [
@@ -31738,6 +31842,16 @@
           "reversible": {
             "title": "Reversible",
             "type": "boolean"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -33022,6 +33136,198 @@
         },
         "title": "ReviewStatusSummary",
         "type": "object"
+      },
+      "RightsAttestationActor": {
+        "description": "Who made an attestation -- by name and ORCID, never by row id.",
+        "properties": {
+          "affiliation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affiliation"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "orcid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Orcid"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "RightsAttestationActor",
+        "type": "object"
+      },
+      "RightsAttestationCreate": {
+        "additionalProperties": false,
+        "description": "Payload for recording who agreed to license a submission, and how.\n\n``depositor_agreement`` may only be recorded by the submission's creator;\nevery other basis needs the curator or admin role. ``source_terms`` is\nrequired exactly when ``basis`` is ``source_terms``.",
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/RightsBasisKind"
+          },
+          "license": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "License",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_terms": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Terms"
+          }
+        },
+        "required": [
+          "license",
+          "basis"
+        ],
+        "title": "RightsAttestationCreate",
+        "type": "object"
+      },
+      "RightsAttestationRead": {
+        "description": "One attestation, addressed by public refs only.\n\n``stands`` is derived from the append-only chain: true for the row nothing\nsupersedes. A superseded row is still listed -- the earlier statement\nstays readable forever -- and says which row replaced it.",
+        "properties": {
+          "actor_kind": {
+            "$ref": "#/components/schemas/SubmissionActorKind"
+          },
+          "attestation_ref": {
+            "title": "Attestation Ref",
+            "type": "string"
+          },
+          "attested_at": {
+            "format": "date-time",
+            "title": "Attested At",
+            "type": "string"
+          },
+          "attested_by": {
+            "$ref": "#/components/schemas/RightsAttestationActor"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/RightsBasisKind"
+          },
+          "license": {
+            "title": "License",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source_terms": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Terms"
+          },
+          "stands": {
+            "title": "Stands",
+            "type": "boolean"
+          },
+          "submission_ref": {
+            "title": "Submission Ref",
+            "type": "string"
+          },
+          "superseded_by_attestation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Attestation Ref"
+          },
+          "supersedes_attestation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Attestation Ref"
+          }
+        },
+        "required": [
+          "attestation_ref",
+          "submission_ref",
+          "license",
+          "basis",
+          "actor_kind",
+          "attested_by",
+          "attested_at",
+          "stands"
+        ],
+        "title": "RightsAttestationRead",
+        "type": "object"
+      },
+      "RightsBasisKind": {
+        "description": "On what footing a submission's records may be licensed for release.\n\nRecorded on ``submission_rights_attestation`` — curation *of a deposit*,\nkeyed to the submission and never to a scientific row. The kind says who\nis standing behind the license, which is the question a reader of a\nreleased dataset is entitled to ask.\n\n``depositor_agreement``  the depositor said so at deposit time (the\n                         ``rights`` fragment of the upload). Always\n                         attested by the submission's creator.\n``operator_own_data``    the deploying operator owns the deposit outright\n                         and licenses it as their own work.\n``historical_review``    a curator reviewed a deposit that predates\n                         rights capture and records the basis after the\n                         fact, with an actor, rather than by a default.\n``source_terms``         the records were taken from a source whose own\n                         terms permit the release; ``source_terms`` on\n                         the row must then quote or cite those terms.",
+        "enum": [
+          "depositor_agreement",
+          "operator_own_data",
+          "historical_review",
+          "source_terms"
+        ],
+        "title": "RightsBasisKind",
+        "type": "string"
       },
       "RigidRotorKind": {
         "enum": [
@@ -41970,6 +42276,16 @@
             ],
             "title": "Point Group"
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rigid_rotor_kind": {
             "anyOf": [
               {
@@ -45745,6 +46061,16 @@
             ],
             "title": "Reference Pressure Bar"
           },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "s298_j_mol_k": {
             "anyOf": [
               {
@@ -47234,6 +47560,16 @@
           },
           "reaction": {
             "$ref": "#/components/schemas/TSReactionUpload"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "unmapped_smiles": {
             "anyOf": [
@@ -48806,6 +49142,16 @@
               }
             ],
             "title": "Polarizability Angstrom3"
+          },
+          "rights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DepositRights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "rotational_relaxation": {
             "anyOf": [
@@ -83966,6 +84312,200 @@
           }
         },
         "summary": "Reject",
+        "tags": [
+          "submissions"
+        ]
+      }
+    },
+    "/api/v1/submissions/{submission_id}/rights-attestations": {
+      "get": {
+        "description": "Every rights attestation ever recorded for a submission, oldest first.\n\nVisible to the submission's creator and to curators/admins, like the rest\nof the submission. Superseded rows stay listed with ``stands: false``.",
+        "operationId": "read_rights_attestations_api_v1_submissions__submission_id__rights_attestations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RightsAttestationRead"
+                  },
+                  "title": "Response Read Rights Attestations Api V1 Submissions  Submission Id  Rights Attestations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Rights Attestations",
+        "tags": [
+          "submissions"
+        ]
+      },
+      "post": {
+        "description": "Record who agrees to license this submission, and on what basis.\n\nA ``depositor_agreement`` is the depositor's own statement and is accepted\nonly from the submission's creator; ``operator_own_data``,\n``historical_review`` and ``source_terms`` record a curator's judgement\nand need the curator or admin role. Appending never edits: a new row\nsupersedes the one that stood before.\n\n:raises HTTPException: 403 when the caller may not make this attestation;\n    422 for a body the caller can correct (blank license, missing\n    ``source_terms``).",
+        "operationId": "create_rights_attestation_api_v1_submissions__submission_id__rights_attestations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "submission_id",
+            "required": true,
+            "schema": {
+              "title": "Submission Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RightsAttestationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RightsAttestationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Rights Attestation",
         "tags": [
           "submissions"
         ]

@@ -1,6 +1,7 @@
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.rights import DepositRights
 
 from app.db.models.common import NetworkSpeciesRole
 from app.schemas.common import SchemaBase
@@ -52,6 +53,10 @@ class NetworkUploadRequest(SchemaBase):
     literature: LiteratureUploadRequest | None = None
     software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     species_links: list[NetworkUploadSpeciesLinkPayload] = Field(default_factory=list)
     reactions: list[NetworkUploadReactionPayload] = Field(default_factory=list)

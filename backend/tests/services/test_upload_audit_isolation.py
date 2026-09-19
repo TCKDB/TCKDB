@@ -101,6 +101,7 @@ def _open(session: Session, user_id: int, suffix: str):
         session,
         created_by=user_id,
         kind=SubmissionKind.conformer,
+        rights=None,
         title=f"{MARKER}-{suffix}",
     )
 

@@ -100,6 +100,8 @@ class RejectionCode(str, Enum):
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
+    CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE = "candidate_rights_basis_incompatible"
+    CANDIDATE_RIGHTS_BASIS_MISSING = "candidate_rights_basis_missing"
     CANONICAL_PARAMETER_VALUE_REQUIRES_KEY = "canonical_parameter_value_requires_key"
     CLIENT_SORT_NOT_SUPPORTED = "client_sort_not_supported"
     COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED = "composed_search_candidate_limit_exceeded"
@@ -193,6 +195,12 @@ class RejectionCode(str, Enum):
     RELEASE_SCOPING_NOT_IMPLEMENTED = "release_scoping_not_implemented"
     RELEASE_SELECTS_NOTHING = "release_selects_nothing"
     RELEASE_TAG_TAKEN = "release_tag_taken"
+    RIGHTS_ATTESTATION_NOT_DEPOSITOR = "rights_attestation_not_depositor"
+    RIGHTS_ATTESTATION_REQUIRES_CURATOR = "rights_attestation_requires_curator"
+    RIGHTS_BASIS_INCOMPATIBLE = "rights_basis_incompatible"
+    RIGHTS_BASIS_MISSING = "rights_basis_missing"
+    RIGHTS_LICENSE_BLANK = "rights_license_blank"
+    RIGHTS_SOURCE_TERMS_REQUIRED = "rights_source_terms_required"
     SCAN_RESULT_NOT_FOUND = "scan_result_not_found"
     SELECTION_ALREADY_STANDS = "selection_already_stands"
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
@@ -286,6 +294,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
+        RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE,
+        RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING,
         RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.CLIENT_SORT_NOT_SUPPORTED,
         RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED,
@@ -355,6 +365,10 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RECORD_TYPE_NOT_SELECTABLE,
         RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED,
         RejectionCode.RELEASE_SELECTS_NOTHING,
+        RejectionCode.RIGHTS_BASIS_INCOMPATIBLE,
+        RejectionCode.RIGHTS_BASIS_MISSING,
+        RejectionCode.RIGHTS_LICENSE_BLANK,
+        RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
         RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT,
@@ -470,6 +484,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
+    RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING: frozenset({422}),
     RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
     RejectionCode.CLIENT_SORT_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED: frozenset({422}),
@@ -563,6 +579,12 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED: frozenset({422}),
     RejectionCode.RELEASE_SELECTS_NOTHING: frozenset({422}),
     RejectionCode.RELEASE_TAG_TAKEN: frozenset({409}),
+    RejectionCode.RIGHTS_ATTESTATION_NOT_DEPOSITOR: frozenset({403}),
+    RejectionCode.RIGHTS_ATTESTATION_REQUIRES_CURATOR: frozenset({403}),
+    RejectionCode.RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
+    RejectionCode.RIGHTS_BASIS_MISSING: frozenset({422}),
+    RejectionCode.RIGHTS_LICENSE_BLANK: frozenset({422}),
+    RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED: frozenset({422}),
     RejectionCode.SCAN_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.SELECTION_ALREADY_STANDS: frozenset({409}),
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),

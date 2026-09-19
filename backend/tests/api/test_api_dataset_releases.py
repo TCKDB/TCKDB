@@ -23,6 +23,7 @@ from app.api.config import settings
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.services.record_review import set_record_review_status
+from tests.services.release._attest import attest_thermo
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -70,6 +71,9 @@ def corpus(db_session, _api_curator_user):
             status=RecordReviewStatus.approved,
             actor=curator,
         )
+    # A release refuses a record nobody agreed to license (B1): deposit
+    # both candidates under the release's license, as an upload would.
+    attest_thermo(db_session, depositor=curator, rows=[chosen, other])
     db_session.flush()
     return entry, chosen, other
 
@@ -126,7 +130,8 @@ def test_cite_and_reproduce_a_release_end_to_end(
 
     manifest = body["manifest"]
     document = manifest["document"]
-    assert manifest["manifest_schema"] == "tckdb.dataset_release.v1"
+    # ``v2`` since the rights block (B1); a ``v1`` row keeps its own shape.
+    assert manifest["manifest_schema"] == "tckdb.dataset_release.v2"
     assert manifest["profile"] == "curated"
 
     # Version binding — what a reproducer needs to know.
@@ -884,6 +889,7 @@ def test_a_release_is_not_capped_at_one_page_of_selections(
             status=RecordReviewStatus.approved,
             actor=curator,
         )
+        attest_thermo(db_session, depositor=curator, rows=[thermo])
         db_session.flush()
         created = client.post(
             f"/api/v1/releases/{RELEASE['tag']}/selections",

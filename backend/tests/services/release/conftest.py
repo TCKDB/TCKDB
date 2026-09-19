@@ -18,6 +18,8 @@ from app.services.release.curation import (
     create_release,
     resolve_curation_policy,
 )
+from app.services.submission import link_records
+from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -60,8 +62,30 @@ def species_entry(db_session):
 
 
 @pytest.fixture
-def thermo_candidates(db_session, species_entry, curator):
-    """Two approved thermo candidates for one species entry."""
+def attested_submission(db_session, curator):
+    """One deposit, by the curator, attested ``CC-BY-4.0`` by its depositor.
+
+    Empty until a fixture links records to it. The curator plays the
+    depositor here because a ``depositor_agreement`` must be made by the
+    account that created the submission, and the curator is the one user
+    every release test already has.
+    """
+    return deposit_and_attest(
+        db_session,
+        depositor=curator,
+        records=[],
+        title="release fixture deposit",
+    )
+
+
+@pytest.fixture
+def thermo_candidates(db_session, species_entry, curator, attested_submission):
+    """Two approved thermo candidates for one species entry, both licensed.
+
+    Linked to :func:`attested_submission` because a release refuses a record
+    nobody agreed to license; a candidate that is approved but unattested is
+    its own test case (``test_release_rights.py``), not the default corpus.
+    """
     first = make_thermo_scalar(
         db_session, species_entry=species_entry, h298_kj_mol=-234.5, s298_j_mol_k=281.6
     )
@@ -77,6 +101,14 @@ def thermo_candidates(db_session, species_entry, curator):
             actor=curator,
             note="approved for release fixture",
         )
+    link_records(
+        db_session,
+        submission=attested_submission,
+        records=[
+            (SubmissionRecordType.thermo, first.id, None),
+            (SubmissionRecordType.thermo, second.id, None),
+        ],
+    )
     return first, second
 
 

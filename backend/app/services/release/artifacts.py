@@ -61,6 +61,7 @@ from app.db.models.dataset_release import (
     ReleaseSelection,
 )
 from app.db.models.record_review import RecordReview, RecordReviewEvent
+from app.services.release.record_rights import LinkedRights, linked_rights
 from app.services.release.records import (
     CANDIDATE_SOURCES,
     calculation_provenance,
@@ -279,16 +280,34 @@ def _review_state(
 # ---------------------------------------------------------------------------
 
 
-def render_artifacts(
-    session: Session, release: DatasetRelease
-) -> list[RenderedArtifact]:
-    """Render all four release artifacts, in a stable order."""
-    state = load_selection_state(session, release)
+@dataclass(frozen=True)
+class ReleaseRecordUniverse:
+    """Every record a release ships, and how each got there.
 
-    policies = _policy_labels(
-        session, {row.curation_policy_id for row in state.all_selections}
-    )
-    actors = _actor_labels(session, {row.selected_by for row in state.all_selections})
+    ``candidate_pairs`` is the complete set of ``(record_type, record_id)``
+    pairs that appear in ``candidate_records.ndjson``: every candidate for
+    every subject any selection row names, plus every record any selection
+    row ever named. It is computed here, once, and used by *both* the
+    renderer and the publish-time rights gate, so "what the gate checked" and
+    "what the file contains" are the same set by construction rather than by
+    two functions agreeing.
+    """
+
+    state: SelectionState
+    selected_pairs: set[tuple[SubmissionRecordType, int]]
+    subject_pairs: set[tuple[SubmissionRecordType, int]]
+    ledger_pairs: set[tuple[SubmissionRecordType, int]]
+    candidate_pairs: set[tuple[SubmissionRecordType, int]]
+    candidates_by_subject: dict[
+        tuple[SubmissionRecordType, int], tuple[SubmissionRecordType, int]
+    ]
+
+
+def release_record_universe(
+    session: Session, release: DatasetRelease
+) -> ReleaseRecordUniverse:
+    """Resolve the selection state and the full candidate set of a release."""
+    state = load_selection_state(session, release)
 
     selected_pairs = {(row.record_type, row.record_id) for row in state.active}
 
@@ -329,7 +348,31 @@ def render_artifacts(
     # reference something the release does not ship.
     candidate_pairs |= selected_pairs | ledger_pairs
 
-    all_pairs = candidate_pairs
+    return ReleaseRecordUniverse(
+        state=state,
+        selected_pairs=selected_pairs,
+        subject_pairs=subject_pairs,
+        ledger_pairs=ledger_pairs,
+        candidate_pairs=candidate_pairs,
+        candidates_by_subject=candidates_by_subject,
+    )
+
+
+def render_artifacts(
+    session: Session, release: DatasetRelease
+) -> list[RenderedArtifact]:
+    """Render all four release artifacts, in a stable order."""
+    universe = release_record_universe(session, release)
+    state = universe.state
+    selected_pairs = universe.selected_pairs
+    subject_pairs = universe.subject_pairs
+    candidates_by_subject = universe.candidates_by_subject
+
+    policies = _policy_labels(
+        session, {row.curation_policy_id for row in state.all_selections}
+    )
+
+    all_pairs = universe.candidate_pairs
     refs = _all_refs(session, all_pairs)
     payloads = _all_payloads(session, all_pairs)
     reviews = _review_state(session, all_pairs)
@@ -340,6 +383,19 @@ def render_artifacts(
     # than the unauthenticated read API already publishes.
     subject_identity_map = _subject_identities(session, subject_pairs)
     provenance_map = _record_provenance(session, all_pairs)
+    # Who agreed to license each shipped record, through its deposit. The
+    # attester is labelled the same way a curator is -- by name and ORCID,
+    # never by row id -- so the two actor sets are resolved together.
+    rights_map = linked_rights(session, pairs=all_pairs)
+    attester_ids = {
+        link.attestation.attested_by
+        for links in rights_map.values()
+        for link in links
+        if link.attestation is not None
+    }
+    actors = _actor_labels(
+        session, {row.selected_by for row in state.all_selections} | attester_ids
+    )
 
     artifacts = [
         _render_selected(
@@ -350,6 +406,7 @@ def render_artifacts(
             subject_ref_map,
             subject_identity_map,
             provenance_map,
+            rights_map,
             policies,
             actors,
         ),
@@ -362,11 +419,52 @@ def render_artifacts(
             subject_ref_map,
             subject_identity_map,
             provenance_map,
+            rights_map,
+            actors,
         ),
         _render_review_history(session, all_pairs, refs, reviews),
         _render_ledger(state, refs, subject_ref_map, policies, actors),
     ]
     return artifacts
+
+
+def _rights_block(
+    links: list[LinkedRights], actors: dict[int, dict[str, Any]]
+) -> dict[str, Any] | None:
+    """The ``rights`` object on a record line: who licensed it, and how.
+
+    ``None`` when nothing stands attested for any linked submission. That
+    cannot happen for a release frozen after the rights gate -- publishing
+    refuses it -- but the advisory ``live_divergence`` re-render of a release
+    frozen before the gate has to say *something* honest for its records, and
+    ``null`` is that.
+
+    One deposit is the common case, so the five fields describe the earliest
+    standing attestation directly. A record linked through several attested
+    deposits lists the others under ``also_attested`` rather than picking one
+    silently: every agreement is named, and a reader can see there were
+    several.
+    """
+    attested = sorted(
+        (link.attestation for link in links if link.attestation is not None),
+        key=lambda row: row.id,
+    )
+    if not attested:
+        return None
+
+    def _entry(row) -> dict[str, Any]:
+        return {
+            "license": row.license_id,
+            "basis": row.basis.value,
+            "attestation_ref": row.public_ref,
+            "attested_at": encode_scalar(row.attested_at),
+            "attested_by": actors.get(row.attested_by),
+        }
+
+    block = _entry(attested[0])
+    if len(attested) > 1:
+        block["also_attested"] = [_entry(row) for row in attested[1:]]
+    return block
 
 
 def _subject_identities(
@@ -458,6 +556,7 @@ def _render_selected(
     subject_refs: dict[tuple[SubmissionRecordType, int], str | None],
     subject_identity: dict[tuple[SubmissionRecordType, int], dict[str, Any]],
     provenance: dict[tuple[SubmissionRecordType, int], list[dict[str, Any]]],
+    rights: dict[tuple[SubmissionRecordType, int], list[LinkedRights]],
     policies: dict[int, dict[str, Any]],
     actors: dict[int, dict[str, Any]],
 ) -> RenderedArtifact:
@@ -476,6 +575,8 @@ def _render_selected(
                 "subject": subject_identity.get(subject_key, {}),
                 # Level of theory and software for each cited calculation.
                 "provenance": {"calculations": provenance.get(key, [])},
+                # Who agreed to license this record, through its deposit.
+                "rights": _rights_block(rights.get(key, []), actors),
                 "selection": {
                     "selection_ref": row.public_ref,
                     "action": row.action.value,
@@ -509,6 +610,8 @@ def _render_candidates(
     subject_refs: dict[tuple[SubmissionRecordType, int], str | None],
     subject_identity: dict[tuple[SubmissionRecordType, int], dict[str, Any]],
     provenance: dict[tuple[SubmissionRecordType, int], list[dict[str, Any]]],
+    rights: dict[tuple[SubmissionRecordType, int], list[LinkedRights]],
+    actors: dict[int, dict[str, Any]],
 ) -> RenderedArtifact:
     lines = []
     for key in sorted(payloads, key=lambda k: (k[0].value, refs.get(k) or "", k[1])):
@@ -523,6 +626,9 @@ def _render_candidates(
                 # it is and how it was produced, same as the selected one.
                 "subject": subject_identity.get(subject_key, {}) if subject_key else {},
                 "provenance": {"calculations": provenance.get(key, [])},
+                # An unselected candidate ships too, so it needs a rights
+                # basis too -- the publish gate refuses the release otherwise.
+                "rights": _rights_block(rights.get(key, []), actors),
                 "selected_in_release": key in selected_pairs,
                 "review": _review_block(reviews.get(key)),
                 "record": payloads.get(key, {}),
@@ -633,9 +739,11 @@ __all__ = [
     "ARTIFACT_PATHS",
     "NDJSON_MEDIA_TYPE",
     "NonFiniteValueError",
+    "ReleaseRecordUniverse",
     "RenderedArtifact",
     "SelectionState",
     "canonical_json",
     "load_selection_state",
+    "release_record_universe",
     "render_artifacts",
 ]

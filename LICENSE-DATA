@@ -118,10 +118,29 @@ Therefore:
   * **Before a deployment accepts deposits from a second contributor,
     the license must become part of the upload contract** — agreed at
     deposit time, recorded against the deposit, and honoured when a
-    release is cut. That mechanism is not yet built. It must be
-    designed and landed *before* multi-contributor deposits are
-    accepted, not retrofitted afterwards, because a deposit already
-    taken cannot be retroactively consented to.
+    release is cut. That mechanism is built, and it works like this:
+
+      - Every upload request carries an optional `rights` fragment
+        (`license`, `depositor_attests_right_to_license: true`,
+        optional `source_terms`). When present it is recorded as a
+        `depositor_agreement` attestation on the submission, by the
+        depositor. A `false` is refused at the wire; absence is not —
+        an unlicensed deposit is accepted and simply cannot be released.
+      - A curator can record the other bases with an actor —
+        `operator_own_data`, `historical_review`, `source_terms` —
+        through `POST /api/v1/submissions/{id}/rights-attestations`.
+        Attestations are append-only; a correction supersedes.
+      - A release refuses to select, and refuses to publish, any
+        record whose deposits do not all carry a standing attestation
+        naming exactly the release's `data_license` (case-insensitive,
+        no compatibility lattice). The publish check covers every
+        candidate the release ships, not only the selections, and it
+        refuses rather than filters. Every released record line states
+        its license, basis, attestation ref and attester.
+
+    A deposit already taken cannot be retroactively consented to, which
+    is why nothing is backfilled: a record with no attestation stays
+    unreleasable until someone with the standing to do so attests.
 
 The same constraint is recorded, from the ingestion side, in
 `backend/docs/specs/ingestion_submission_model.md`, and from the

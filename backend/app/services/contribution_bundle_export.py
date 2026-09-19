@@ -27,8 +27,13 @@ from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from tckdb_schemas.rights import DepositRights
 
-from app.db.models.common import ActivationEnergyUnits, ReactionRole
+from app.db.models.common import (
+    ActivationEnergyUnits,
+    ReactionRole,
+    SubmissionRecordType,
+)
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import (
     ChemReaction,
@@ -58,6 +63,7 @@ from app.schemas.workflows.contribution_bundle import (
     ContributionBundleV0,
 )
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.services.release.record_rights import linked_rights
 
 # Schema version of the local DB at the time of writing. The local export
 # stamps this into the bundle so a future hosted importer can refuse
@@ -99,6 +105,7 @@ def export_thermo_bundle(
     submission_source_kind: BundleSubmissionSourceKind = (
         BundleSubmissionSourceKind.local_bundle
     ),
+    rights: DepositRights | None = None,
 ) -> ContributionBundleV0:
     """Export selected thermo rows as a validated thermo contribution bundle.
 
@@ -127,6 +134,7 @@ def export_thermo_bundle(
         title=title,
         summary=summary,
         submission_source_kind=submission_source_kind,
+        rights=rights,
         exporter_label=exporter_label,
         orcid=orcid,
         affiliation=affiliation,
@@ -157,6 +165,7 @@ def export_kinetics_bundle(
     submission_source_kind: BundleSubmissionSourceKind = (
         BundleSubmissionSourceKind.local_bundle
     ),
+    rights: DepositRights | None = None,
 ) -> ContributionBundleV0:
     """Export selected kinetics rows as a validated kinetics contribution bundle."""
     if not kinetics_ids:
@@ -179,6 +188,7 @@ def export_kinetics_bundle(
         title=title,
         summary=summary,
         submission_source_kind=submission_source_kind,
+        rights=rights,
         exporter_label=exporter_label,
         orcid=orcid,
         affiliation=affiliation,
@@ -188,6 +198,72 @@ def export_kinetics_bundle(
         instance_kind=instance_kind,
         schema_version=schema_version,
         software_version=software_version,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rights: what the source deposit stands under
+# ---------------------------------------------------------------------------
+
+
+def deposit_rights_for_records(
+    session: Session,
+    *,
+    record_type: SubmissionRecordType,
+    record_ids: Sequence[int],
+) -> DepositRights | None:
+    """The ``rights`` fragment the exported records' deposits stand under.
+
+    Follows each record to the submissions that link it and reads their
+    *standing* attestation. One bundle carries one agreement, so the export
+    refuses rather than picking a side whenever the records do not all stand
+    under the same one: attested under different licenses, or some attested
+    and some not (a record linked to no submission, or to a submission with
+    no standing attestation). ``None`` only when *nothing* is attested: the
+    exporter never manufactures consent, and a hosted release will refuse
+    the records until somebody does.
+
+    :raises ContributionBundleExportError: the source deposits are attested
+        under different licenses, or only some of the records are attested.
+    """
+    pairs = {(record_type, int(record_id)) for record_id in record_ids}
+    rights = linked_rights(session, pairs=pairs)
+    attested = {
+        link.attestation.id: link.attestation
+        for links in rights.values()
+        for link in links
+        if link.attestation is not None
+    }
+    if not attested:
+        return None
+    # A record counts as unattested if it has no link at all, or any link
+    # whose submission has no standing attestation -- the same fail-closed
+    # reading the release gate applies.
+    unattested = sorted(
+        record_id
+        for (_type, record_id), links in rights.items()
+        if not links or any(link.attestation is None for link in links)
+    )
+    if unattested:
+        raise ContributionBundleExportError(
+            f"{len(unattested)} of the {len(pairs)} selected records carry no "
+            "rights attestation while the others do; a bundle carries one "
+            "rights statement and the exporter will not extend it to records "
+            "nobody licensed. Attest the missing deposits, or export the "
+            "attested records on their own."
+        )
+    licenses = sorted({row.license_id for row in attested.values()})
+    if len(licenses) > 1:
+        raise ContributionBundleExportError(
+            "The selected records were deposited under different licenses "
+            f"({', '.join(licenses)}); a bundle carries one rights statement. "
+            "Export them as separate bundles."
+        )
+    terms = sorted({row.source_terms for row in attested.values() if row.source_terms})
+    return DepositRights(
+        license=licenses[0],
+        depositor_attests_right_to_license=True,
+        source_terms="; ".join(terms) if terms else None,
     )
 
 
@@ -634,6 +710,7 @@ def _build_and_validate_bundle(
     title: str,
     summary: str,
     submission_source_kind: BundleSubmissionSourceKind,
+    rights: DepositRights | None,
     exporter_label: str,
     orcid: str | None,
     affiliation: str | None,
@@ -661,6 +738,7 @@ def _build_and_validate_bundle(
         title=title,
         summary=summary,
         source_kind=submission_source_kind,
+        rights=rights,
     )
     manifest = BundleManifest(sha256=None, files=[])
 

@@ -9,6 +9,7 @@ second, slightly different corpus.
 from __future__ import annotations
 
 from tests.services.release.conftest import (  # re-exported fixtures
+    attested_submission,
     curator,
     draft_release,
     policy,

@@ -46,6 +46,7 @@ from app.services.release.curation import (
     resolve_curation_policy,
     withdraw_selection,
 )
+from tests.services.release._attest import attest_thermo
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
@@ -164,6 +165,8 @@ def released_thermo(db_session, curator):
         actor=curator,
         note="approved for the sweep fixture",
     )
+    # A release refuses a record nobody agreed to license (B1).
+    attest_thermo(db_session, depositor=curator, rows=[thermo])
     policy = resolve_curation_policy(
         db_session,
         name="sweep-policy",
@@ -734,6 +737,7 @@ def released_without_artifacts(db_session, curator):
         actor=curator,
         note="approved for the empty-evidence fixture",
     )
+    attest_thermo(db_session, depositor=curator, rows=[thermo])
     policy = resolve_curation_policy(
         db_session,
         name="empty-evidence-policy",

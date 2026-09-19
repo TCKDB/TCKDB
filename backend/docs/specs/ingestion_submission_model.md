@@ -207,36 +207,70 @@ returns the stored response — including the original `submission_id` — and
 creates no second submission, duplicate record links, or duplicate artifact
 links. Failed attempts do not store an idempotency record, so a retry re-attempts.
 
-## Licensing is not yet part of the upload contract — and must become one
+## Licensing is part of the upload contract
 
 A submission records **who** deposited **what**, **when**, and **how it was
-produced**. It does not record **under what terms it may be republished**, and
-nothing in an upload payload says.
+produced** — and, since Phase B1, **under what terms it may be republished**.
 
-That gap is invisible today and only today. The scientific corpus is published
-under CC BY 4.0 (`LICENSE-DATA`; `dataset_release.data_license` defaults to
-`CC-BY-4.0`), and every depositor on the hosted instance is the operator, who
-may license his own deposits. The moment a second contributor uploads, a
-release cut with that default would republish their records under a license
-they never agreed to. A configuration default is not consent, and a deposit
-already accepted cannot be retroactively consented to.
+The reason it has to: the scientific corpus is published under CC BY 4.0
+(`LICENSE-DATA`; `dataset_release.data_license` defaults to `CC-BY-4.0`), and
+an operator may license their own deposits and nobody else's. The moment a
+second contributor uploads, a release cut on the default alone would republish
+their records under a license they never agreed to. A configuration default is
+not consent, and a deposit already accepted cannot be retroactively consented
+to. So the license is agreed at deposit time, recorded against the submission,
+and honoured when a release selects the records — **before** a deployment
+accepts deposits from anyone but its operator.
 
-**The constraint, stated so a future implementer meets it before the second
-contributor does:** the data license must become part of the upload contract —
-declared or agreed at deposit time, recorded against the submission, and
-honoured when a release selects the records — **before** a deployment accepts
-deposits from anyone but its operator. Until then, the `CC-BY-4.0` default
-means only "the terms the operator applies to data the operator is entitled to
-license".
+### The mechanism
 
-Deliberately not designed here. It touches the upload payloads, the submission
-tables, the bundle format, and the release manifest at once, and it deserves
-its own decision record rather than a field bolted onto a schema. What this
-paragraph fixes is that the requirement is written down where ingestion is
-specified, instead of living in the head of the person who noticed it. The
-same constraint is recorded from the release side in
-[`dataset_release_and_profiles.md`](dataset_release_and_profiles.md) §7b and
-in `LICENSE-DATA`.
+- **Wire.** Every upload request class (the twelve direct `/uploads/*` and
+  async `/jobs/*` payloads) and `BundleSubmissionMetadata` carry an optional
+  `rights` fragment, `tckdb_schemas.rights.DepositRights`: `license` (an SPDX
+  identifier), `depositor_attests_right_to_license` typed `Literal[True]` so a
+  `false` is a 422 rather than a stored "no", and an optional `source_terms`.
+  No identifiers. Optional in v1 so existing clients keep working; absence
+  bites at release time, not at upload.
+- **Choke point.** `open_upload_submission` and `open_job_submission`
+  (`app/services/upload_submission.py`) take a keyword-only `rights`
+  argument *with no default*, and `submit_contribution_bundle` passes the
+  bundle's fragment straight after `create_submission`. All three call
+  `app.services.rights.attest_from_deposit`, which records a
+  `depositor_agreement` attestation whose actor is always
+  `submission.created_by`. A route that forgets the argument fails at the
+  call, not silently in production.
+- **Table.** `submission_rights_attestation` — curation of a deposit, keyed
+  to the submission and never to a scientific row: public ref, `license_id`,
+  `basis` (`RightsBasisKind`: `depositor_agreement`, `operator_own_data`,
+  `historical_review`, `source_terms`), `attested_by`, `actor_kind`,
+  `attested_at`, `source_terms` (required when the basis is `source_terms`),
+  `note`, `supersedes_attestation_id`. Append-only by database trigger; a
+  correction is an insert that supersedes, and the standing attestation is the
+  head of the chain.
+- **Curator path.** `POST` / `GET
+  /api/v1/submissions/{id}/rights-attestations`. A `depositor_agreement` is
+  accepted only from the submission's creator; the other kinds need the
+  curator or admin role. Historical coverage is a curator action with an
+  actor: for records deposited before rights capture, a `migration`
+  submission is created, the records are linked, and a `historical_review`
+  attestation is recorded. Nothing is backfilled by migration.
+- **Release.** `add_selection`, `supersede_selection` and `publish_release`
+  refuse any record whose linked submissions do not all carry a standing
+  attestation whose license matches the release's `data_license` exactly
+  (case-insensitive; no lattice) — `rights_basis_missing` /
+  `rights_basis_incompatible`, and the `candidate_*` pair for the unselected
+  candidates the release ships beside them. See
+  [`dataset_release_and_profiles.md`](dataset_release_and_profiles.md) §7b.
+- **Bundles.** `scripts/export_contribution_bundle.py` emits the fragment
+  from the source submission's standing attestation, so a hosted import
+  records the same agreement the local instance holds.
+
+Until a deposit is attested, the `CC-BY-4.0` default still means only "the
+terms the operator applies to data the operator is entitled to license" — and
+the release layer will not let that default stand in for a second
+contributor's consent. The same constraint is recorded from the release side
+in [`dataset_release_and_profiles.md`](dataset_release_and_profiles.md) §7b
+and in `LICENSE-DATA`.
 
 ## What is unchanged
 

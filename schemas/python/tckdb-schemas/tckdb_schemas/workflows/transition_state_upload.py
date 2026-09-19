@@ -22,6 +22,7 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
     validate_ts_evidence_set,
 )
 from tckdb_schemas.reaction_family import find_canonical_reaction_family
+from tckdb_schemas.rights import DepositRights
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
@@ -128,6 +129,10 @@ class TransitionStateUploadRequest(SchemaBase):
     charge: int
     multiplicity: int = Field(ge=1)
     unmapped_smiles: str | None = None
+
+    # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
+    # so existing clients keep working -- absence bites at release time.
+    rights: DepositRights | None = None
 
     geometry: GeometryPayload
     primary_opt: CalculationWithResultsPayload

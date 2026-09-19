@@ -21,6 +21,7 @@ from enum import Enum
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.rights import DepositRights
 
 from app.schemas.common import SchemaBase
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -126,6 +127,10 @@ class BundleSubmissionMetadata(SchemaBase):
     title: str = Field(min_length=1)
     summary: str = Field(min_length=1)
     source_kind: BundleSubmissionSourceKind = BundleSubmissionSourceKind.local_bundle
+    # Deposit-time license agreement for every record in the bundle; see
+    # ``tckdb_schemas.rights``. The hosted importer records it as a
+    # ``depositor_agreement`` attestation by the authenticated submitter.
+    rights: DepositRights | None = None
 
 
 class BundleLocalRefEntry(SchemaBase):
