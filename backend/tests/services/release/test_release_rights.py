@@ -156,6 +156,40 @@ def test_an_attestation_under_a_different_license_is_incompatible(
     assert "'CC0-1.0'" in str(info.value) and "'CC-BY-4.0'" in str(info.value)
 
 
+@pytest.mark.parametrize(
+    ("attested", "released", "compatible"),
+    [
+        ("CC-BY-4.0", "CC-BY-4.0", True),
+        ("cc-by-4.0", "CC-BY-4.0", True),
+        (" CC-BY-4.0 ", "CC-BY-4.0", True),
+        # A prefix match would accept every one of these; exact equality
+        # refuses them. Share-alike and an older version are different terms.
+        ("CC-BY-SA-4.0", "CC-BY-4.0", False),
+        ("CC-BY-4.0", "CC-BY-SA-4.0", False),
+        ("CC-BY-3.0", "CC-BY-4.0", False),
+        ("CC-BY-4.0", "CC-BY-3.0", False),
+        ("CC0-1.0", "CC-BY-4.0", False),
+    ],
+)
+def test_licenses_match_is_exact_equality_not_a_prefix(attested, released, compatible):
+    from app.services.rights import licenses_match
+
+    assert licenses_match(attested, released) is compatible
+
+
+@pytest.mark.parametrize("attested", ["CC-BY-SA-4.0", "CC-BY-3.0"])
+def test_a_near_miss_license_is_incompatible_at_selection(
+    db_session, draft_release, curator, species_entry, depositor, attested
+):
+    """``CC-BY-SA-4.0`` and ``CC-BY-3.0`` share a prefix with the release's license and are still refused."""
+    thermo = _approved_thermo(db_session, species_entry, curator)
+    attest_thermo(db_session, depositor=depositor, rows=[thermo], license_id=attested)
+
+    with pytest.raises(ReleaseCurationError, match="^rights_basis_incompatible:") as info:
+        _select(db_session, draft_release, curator, thermo, species_entry)
+    assert f"{attested!r}" in str(info.value)
+
+
 def test_a_compatible_attestation_is_matched_case_insensitively(
     db_session, draft_release, curator, species_entry, depositor
 ):

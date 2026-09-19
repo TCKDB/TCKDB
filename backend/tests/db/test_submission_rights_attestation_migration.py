@@ -126,8 +126,13 @@ def test_upgrade_creates_table_trigger_enum_and_column_and_downgrade_removes_the
         _restore_head(config)
 
 
-def test_the_guard_refuses_an_update_and_a_delete(db_engine, monkeypatch):
-    """The trigger is not decoration: a direct UPDATE or DELETE is refused."""
+def test_the_guard_refuses_an_update_a_delete_and_a_truncate(db_engine, monkeypatch):
+    """The triggers are not decoration: UPDATE, DELETE and TRUNCATE are refused.
+
+    TRUNCATE separately, because a row-level trigger never sees it; the
+    statement-level ``_truncate`` twin is what stops one statement erasing
+    every attestation at once.
+    """
     config = _configure(db_engine, monkeypatch)
     engine = create_engine(db_engine.url.render_as_string(hide_password=False))
     try:
@@ -158,17 +163,81 @@ def test_the_guard_refuses_an_update_and_a_delete(db_engine, monkeypatch):
             for statement in (
                 f"UPDATE {_TABLE} SET license_id = 'CC0-1.0' WHERE id = :id",
                 f"DELETE FROM {_TABLE} WHERE id = :id",
+                f"TRUNCATE {_TABLE}",
             ):
                 try:
                     connection.execute(text("SAVEPOINT probe"))
                     connection.execute(text(statement), {"id": row_id})
                 except Exception as exc:
-                    assert "append-only" in str(exc)
+                    assert "append-only" in str(exc), statement
                     connection.execute(text("ROLLBACK TO SAVEPOINT probe"))
                 else:
                     raise AssertionError(f"{statement!r} was not refused")
+            assert connection.scalar(text(f"SELECT count(*) FROM {_TABLE}")) == 1
             # Leave nothing behind for the rest of the suite: the attestation
             # cannot be deleted, so the whole transaction is rolled back.
+            connection.rollback()
+    finally:
+        engine.dispose()
+        _restore_head(config)
+
+
+def test_the_check_constraints_refuse_a_blank_license_and_terms_without_terms(
+    db_engine, monkeypatch
+):
+    """The two CHECKs hold at the database, not only in the service layer."""
+    config = _configure(db_engine, monkeypatch)
+    engine = create_engine(db_engine.url.render_as_string(hide_password=False))
+    try:
+        with engine.begin() as connection:
+            user_id = connection.scalar(
+                text(
+                    "INSERT INTO app_user (username, role, is_active) "
+                    "VALUES ('rights-check-user', 'curator', true) RETURNING id"
+                )
+            )
+            submission_id = connection.scalar(
+                text(
+                    "INSERT INTO submission (created_by, submission_kind, source_kind, "
+                    "status, public_ref) VALUES (:u, 'thermo', 'api', 'pending', "
+                    "'sub_rightscheckprobe000000000') RETURNING id"
+                ),
+                {"u": user_id},
+            )
+            insert = text(
+                f"INSERT INTO {_TABLE} (submission_id, license_id, basis, attested_by, "
+                "actor_kind, source_terms, public_ref) VALUES (:s, :license, :basis, "
+                ":u, 'curator', :terms, :ref)"
+            )
+            probes = (
+                ("license_id_nonblank", {"license": "   ", "basis": "operator_own_data", "terms": None}),
+                ("source_terms_required", {"license": "CC-BY-4.0", "basis": "source_terms", "terms": None}),
+                ("source_terms_required", {"license": "CC-BY-4.0", "basis": "source_terms", "terms": "  "}),
+            )
+            for index, (constraint, params) in enumerate(probes):
+                try:
+                    connection.execute(text("SAVEPOINT probe"))
+                    connection.execute(
+                        insert,
+                        {**params, "s": submission_id, "u": user_id, "ref": f"sra_rightscheckprobe0000000{index}"},
+                    )
+                except Exception as exc:
+                    assert constraint in str(exc), (constraint, str(exc))
+                    connection.execute(text("ROLLBACK TO SAVEPOINT probe"))
+                else:
+                    raise AssertionError(f"{params!r} was not refused by {constraint}")
+            # The accepted neighbour: the same insert with terms supplied lands.
+            connection.execute(
+                insert,
+                {
+                    "license": "CC-BY-4.0",
+                    "basis": "source_terms",
+                    "terms": "Source terms, section 3.",
+                    "s": submission_id,
+                    "u": user_id,
+                    "ref": "sra_rightscheckprobe00000009",
+                },
+            )
             connection.rollback()
     finally:
         engine.dispose()

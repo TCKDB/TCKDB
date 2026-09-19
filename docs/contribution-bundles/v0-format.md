@@ -153,8 +153,10 @@ curator records a basis for the submission.
 `scripts/export_contribution_bundle.py` fills the object from the standing
 rights attestation of the submission that deposited the exported records on
 the source instance. If the records were deposited under different licenses
-the export refuses (one bundle, one agreement); if nothing is attested the
-object is omitted — the exporter never invents consent.
+the export refuses (one bundle, one agreement); if only some of the records
+are attested the export also refuses, rather than extending one deposit's
+agreement to records nobody licensed; only if nothing at all is attested is
+the object omitted — the exporter never invents consent.
 
 > **Note on `local_bundle` and the database enum.** The
 > `submission.source_kind` field on the *bundle* uses a format-level enum

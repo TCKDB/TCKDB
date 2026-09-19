@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select
 
 from app.db.models.app_user import AppUser
@@ -18,6 +19,7 @@ from app.db.models.common import AppUserRole, RightsBasisKind, SubmissionRecordT
 from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.schemas.workflows.contribution_bundle import ContributionBundleV0
 from app.services.contribution_bundle_export import (
+    ContributionBundleExportError,
     deposit_rights_for_records,
     export_thermo_bundle,
 )
@@ -40,8 +42,8 @@ def _bundle_with_rights() -> ContributionBundleV0:
     return ContributionBundleV0.model_validate(raw)
 
 
-def _submitter(session) -> AppUser:
-    user = AppUser(username="bundle-rights-submitter", role=AppUserRole.user)
+def _submitter(session, username: str = "bundle-rights-submitter") -> AppUser:
+    user = AppUser(username=username, role=AppUserRole.user)
     session.add(user)
     session.flush()
     return user
@@ -108,6 +110,45 @@ def test_export_carries_the_same_fragment_and_round_trips(db_session):
     # …and through JSON, the way the CLI writes it.
     again = ContributionBundleV0.model_validate(exported.model_dump(mode="json"))
     assert again.submission.rights == bundle.submission.rights
+
+
+def test_a_partially_attested_selection_is_refused_not_extended(db_session):
+    """One attested deposit must not lend its agreement to an unattested one.
+
+    Two records: one from a bundle that carried ``rights``, one from a bundle
+    that did not. Exporting them together refuses; exporting either alone
+    behaves as expected (the fragment, or ``None``).
+    """
+    attested = submit_contribution_bundle(
+        db_session, _bundle_with_rights(), actor=_submitter(db_session)
+    )
+    raw = json.loads((EXAMPLES_DIR / "thermo-bundle-v0.json").read_text())
+    unattested = submit_contribution_bundle(
+        db_session,
+        ContributionBundleV0.model_validate(raw),
+        actor=_submitter(db_session, username="bundle-rights-submitter-2"),
+    )
+    attested_ids = [r.record_id for r in attested.records if r.record_type.value == "thermo"]
+    unattested_ids = [r.record_id for r in unattested.records if r.record_type.value == "thermo"]
+
+    with pytest.raises(ContributionBundleExportError, match="carry no rights attestation"):
+        deposit_rights_for_records(
+            db_session,
+            record_type=SubmissionRecordType.thermo,
+            record_ids=[*attested_ids, *unattested_ids],
+        )
+    assert (
+        deposit_rights_for_records(
+            db_session, record_type=SubmissionRecordType.thermo, record_ids=attested_ids
+        )
+        is not None
+    )
+    assert (
+        deposit_rights_for_records(
+            db_session, record_type=SubmissionRecordType.thermo, record_ids=unattested_ids
+        )
+        is None
+    )
 
 
 def test_the_exporter_never_invents_consent(db_session):

@@ -215,18 +215,19 @@ def deposit_rights_for_records(
     """The ``rights`` fragment the exported records' deposits stand under.
 
     Follows each record to the submissions that link it and reads their
-    *standing* attestation. Every attested deposit must agree on the license
-    -- one bundle carries one agreement -- otherwise the export refuses
-    rather than picking a side. ``None`` when nothing is attested: the
+    *standing* attestation. One bundle carries one agreement, so the export
+    refuses rather than picking a side whenever the records do not all stand
+    under the same one: attested under different licenses, or some attested
+    and some not (a record linked to no submission, or to a submission with
+    no standing attestation). ``None`` only when *nothing* is attested: the
     exporter never manufactures consent, and a hosted release will refuse
     the records until somebody does.
 
     :raises ContributionBundleExportError: the source deposits are attested
-        under different licenses.
+        under different licenses, or only some of the records are attested.
     """
-    rights = linked_rights(
-        session, pairs={(record_type, int(record_id)) for record_id in record_ids}
-    )
+    pairs = {(record_type, int(record_id)) for record_id in record_ids}
+    rights = linked_rights(session, pairs=pairs)
     attested = {
         link.attestation.id: link.attestation
         for links in rights.values()
@@ -235,6 +236,22 @@ def deposit_rights_for_records(
     }
     if not attested:
         return None
+    # A record counts as unattested if it has no link at all, or any link
+    # whose submission has no standing attestation -- the same fail-closed
+    # reading the release gate applies.
+    unattested = sorted(
+        record_id
+        for (_type, record_id), links in rights.items()
+        if not links or any(link.attestation is None for link in links)
+    )
+    if unattested:
+        raise ContributionBundleExportError(
+            f"{len(unattested)} of the {len(pairs)} selected records carry no "
+            "rights attestation while the others do; a bundle carries one "
+            "rights statement and the exporter will not extend it to records "
+            "nobody licensed. Attest the missing deposits, or export the "
+            "attested records on their own."
+        )
     licenses = sorted({row.license_id for row in attested.values()})
     if len(licenses) > 1:
         raise ContributionBundleExportError(

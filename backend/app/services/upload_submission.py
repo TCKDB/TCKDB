@@ -10,7 +10,8 @@ every produced record back to the submission, and appends an
 Usage in a route (flat, exception-safe by ordering)::
 
     sub = open_upload_submission(session, created_by=user.id,
-                                 kind=SubmissionKind.conformer)
+                                 kind=SubmissionKind.conformer,
+                                 rights=request.rights)
     outcome = persist_conformer_upload(
         session, request, created_by=user.id, review_policy=sub.policy
     )
