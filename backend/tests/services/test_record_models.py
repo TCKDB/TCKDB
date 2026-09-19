@@ -45,6 +45,9 @@ EXPECTED_TABLES: dict[SubmissionRecordType, str] = {
     SubmissionRecordType.network_solve: "network_solve",
     SubmissionRecordType.applied_energy_correction: "applied_energy_correction",
     SubmissionRecordType.artifact: "calculation_artifact",
+    SubmissionRecordType.molecular_property_observation: (
+        "molecular_property_observation"
+    ),
 }
 
 
