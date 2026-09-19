@@ -30,6 +30,9 @@ from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import SubmissionRecordType
 from app.db.models.energy_correction import AppliedEnergyCorrection
 from app.db.models.kinetics import Kinetics
+from app.db.models.molecular_property_observation import (
+    MolecularPropertyObservation,
+)
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkSolve
 from app.db.models.reaction import ChemReaction, ReactionEntry
@@ -65,6 +68,7 @@ RECORD_MODELS: dict[SubmissionRecordType, type[Any]] = {
     SubmissionRecordType.network_solve: NetworkSolve,
     SubmissionRecordType.applied_energy_correction: AppliedEnergyCorrection,
     SubmissionRecordType.artifact: CalculationArtifact,
+    SubmissionRecordType.molecular_property_observation: MolecularPropertyObservation,
 }
 
 __all__ = ["RECORD_MODELS"]

@@ -66,6 +66,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "energy_correction_scheme_bond_param",
         "energy_correction_scheme_component_param",
         "execution_environment_manifest",
+        # Source custody (Phase C-E1): the database/collection a document
+        # was fetched from, and the immutable per-document snapshot
+        # metadata (digest, parser/mapping versions) an observation cites.
+        # See app/db/models/external_source.py.
+        "external_source",
+        "external_source_record",
         "frequency_scale_factor",
         "geometry",
         "geometry_atom",

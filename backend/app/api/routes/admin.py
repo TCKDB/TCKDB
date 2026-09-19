@@ -541,7 +541,7 @@ class AdminCuratorTaskResponse(BaseModel):
     ``container_type`` / ``container_ref`` are the same fields
     ``RecordReviewRead`` carries and are resolved the same way, via
     :func:`app.services.record_containers.resolve_record_containers`. Six of
-    the seventeen ``SubmissionRecordType`` members (``thermo``, ``statmech``,
+    the eighteen ``SubmissionRecordType`` members (``thermo``, ``statmech``,
     ``kinetics``, ``transition_state``, ``network_solve``,
     ``applied_energy_correction``) name a table with no page of its own; a
     curator task against one of those used to render as inert text, exactly

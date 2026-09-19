@@ -198,7 +198,57 @@ class MolecularPropertyKind(str, Enum):
     homo_lumo_gap = "homo_lumo_gap"
     rotational_constant = "rotational_constant"
     spectroscopic_constant = "spectroscopic_constant"
+    # Phase C-E1: fixed-unit (J/mol/K) ideal-gas heat capacity observation.
+    # See ``ck_mpo_heat_capacity_cp_unit_j_mol_k`` on
+    # ``molecular_property_observation`` -- the unit is enforced by CHECK,
+    # not left to ``scalar_unit`` free text, per the unit policy.
+    heat_capacity_cp = "heat_capacity_cp"
     other = "other"
+
+
+class ObservedUncertaintyKind(str, Enum):
+    """Meaning of ``molecular_property_observation.scalar_uncertainty``.
+
+    One-to-one with ThermoML's per-value uncertainty fields
+    (``vDataUncertaintyType`` sub-elements): a standard deviation, an
+    expanded interval at a stated coverage factor, or a combined
+    (multi-source) variant of either. Deliberately has no "unspecified"
+    member (DR-0007) -- an uncertainty whose kind was not stated is
+    absent, not an enum value pretending to carry meaning it doesn't have.
+    """
+
+    standard = "standard"
+    expanded = "expanded"
+    combined_standard = "combined_standard"
+    combined_expanded = "combined_expanded"
+
+
+class ObservedUncertaintyAssessor(str, Enum):
+    """Who assessed an observation's uncertainty: the source's original
+    author, or a later evaluator (e.g. a compilation/review editor)."""
+
+    source_author = "source_author"
+    source_evaluator = "source_evaluator"
+
+
+class ObservedStateBasis(str, Enum):
+    """Physical-state basis an experimental observation is referenced to.
+
+    Distinct from :class:`PhaseKind` -- that enum names the phase of a
+    *computed* thermochemistry record; this one names whether an
+    *experimental* gas-phase measurement was reported on an ideal-gas or
+    a real-gas basis, which the CCCBDB/ThermoML source states directly.
+    """
+
+    ideal_gas = "ideal_gas"
+    real_gas = "real_gas"
+
+
+class ExternalSourceRecordKind(str, Enum):
+    """Kind of document an ``external_source_record`` custody row snapshots."""
+
+    thermoml_article = "thermoml_article"
+    cccbdb_page = "cccbdb_page"
 
 
 class SpeciesEntryReviewRole(str, Enum):
@@ -1343,6 +1393,16 @@ class SubmissionRecordType(str, Enum):
     # for traceability (role="artifact") but never carries a record_review row:
     # artifacts are contribution evidence, not reviewable scientific results.
     artifact = "artifact"
+    # Phase C-E1: an experimental molecular-property observation (e.g. an
+    # imported ThermoML/CCCBDB Cp(T) point). Reviewable like other results
+    # (may carry a ``record_review`` / ``record_machine_review`` row) but
+    # deliberately NOT in ``SELECTABLE_RECORD_TYPES`` -- observations are
+    # raw evidence a release cites through the science it supports (e.g. a
+    # future thermo cross-check), not a record a release selects on its own
+    # terms -- and NOT in ``ck_scientific_record_supersession_supported_type``
+    # -- correcting an observation is re-import/re-attachment (see
+    # ``attach_observation_identity``, C3), not a supersession edge.
+    molecular_property_observation = "molecular_property_observation"
 
 
 class RecordReviewStatus(str, Enum):

@@ -4,7 +4,7 @@
 module answers the question a reader asks next and which a ref alone cannot:
 **where do I go to see it?**
 
-Six of the seventeen :class:`SubmissionRecordType` members name a table with
+Six of the eighteen :class:`SubmissionRecordType` members name a table with
 no page of its own -- ``thermo``, ``statmech``, ``kinetics``,
 ``transition_state``, ``network_solve``, ``applied_energy_correction``. A
 review row carrying only ``(record_type, record_public_ref)`` addresses
@@ -43,9 +43,13 @@ left a reader of any one of them with a different idea of what null meant.
    ``network`` are roots of their own trees.
 2. **The record itself no longer exists.** A review row outliving the record
    it was raised for. This is the one that actually happens in production.
-3. **The record names no owner.** Not reachable for any type today -- every
-   owning key below is either NOT NULL or covered by an XOR ``CHECK`` -- but
-   the resolver must not assume a constraint it cannot see.
+3. **The record names no owner.** Reachable for one type:
+   ``molecular_property_observation.species_entry_id`` is nullable by design
+   (an importer may deposit an identity-unresolved observation, see that
+   model's module docstring) -- every other owning key below is either NOT
+   NULL or covered by an XOR ``CHECK``. The resolver does not assume a
+   constraint it cannot see, so this was already handled correctly; it is
+   just no longer hypothetical.
 4. **The owner no longer exists,** so it cannot be named.
 
 Callers get ``None`` for all four and must present it as "cannot be linked",
@@ -153,6 +157,12 @@ _CONTAINER_COLUMNS: dict[SubmissionRecordType, tuple[tuple[str, SubmissionRecord
     ),
     SubmissionRecordType.artifact: (
         ("calculation_id", SubmissionRecordType.calculation),
+    ),
+    # Nullable: see case 3 above. An identity-unresolved observation has no
+    # owner to report, which the resolver already treats as "cannot be
+    # linked" rather than an error.
+    SubmissionRecordType.molecular_property_observation: (
+        ("species_entry_id", SubmissionRecordType.species_entry),
     ),
 }
 
