@@ -1,0 +1,14 @@
+{
+  "outcome": "route",
+  "expected": "opt",
+  "family": "v1",
+  "driver": null,
+  "raw_sha256": "b8e0088697c0a1402ec2231ceaf25299cbe85ebb5eadd4af977e51969ba9cbba",
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "level": "hf/sto-3g",
+  "molecule": "water, standard experimental geometry"
+}

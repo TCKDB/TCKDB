@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "multi_fragment_unsupported",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "af2bdaa4c26afda4a11521822f764f8d5dd9ecd8fa3f3f9585aecab667b5f44f",
+  "generator": "hand-derived from raw_out/energy_v1.json or energy_v2.json",
+  "qcelemental": "0.51.2",
+  "edit": "appended a He atom 50 bohr away with an explicit two-entry molecule.fragments"
+}

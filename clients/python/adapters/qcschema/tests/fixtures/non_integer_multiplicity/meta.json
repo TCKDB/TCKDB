@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "non_integer_identity",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "98f076b40ec08ce9ca78197b0e7239f0bfa8d3edc475a83418f84550a2b345fd",
+  "generator": "hand-derived from raw_out/energy_v1.json or energy_v2.json",
+  "qcelemental": "0.51.2",
+  "edit": "molecule.molecular_multiplicity changed from 1.0 to 2.5"
+}

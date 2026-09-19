@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "nonstandard_mass",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "f26a78c17b2b8a647adb5c77ea9a6ab979d312cd60322788347c2e1a1db04fba",
+  "generator": "hand-derived from raw_out/energy_v1.json or energy_v2.json",
+  "qcelemental": "0.51.2",
+  "edit": "molecule.masses[0] (O, mass_number=16) changed from 15.994... to 15.0"
+}

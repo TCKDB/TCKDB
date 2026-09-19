@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "schema_version_family_mismatch",
+  "family": "v2",
+  "driver": "energy",
+  "raw_sha256": "d3a5b9d123fcb2e571a8012841bda646136b3d385b9d97148560c18f56d1e858",
+  "generator": "hand-derived from raw_out/energy_v1.json or energy_v2.json",
+  "qcelemental": "0.51.2",
+  "edit": "schema_version changed from 2 to 1 on an input_data-bearing (v2-shaped) document"
+}
