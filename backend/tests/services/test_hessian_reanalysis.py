@@ -505,9 +505,9 @@ def test_each_refusal_category_fires(db_session, with_hessian, frequencies, isot
     assert result.within_tolerance is None
 
 
-def test_the_imaginary_determination_sits_beside_the_declaration(db_session):
-    """A real transition state: the ORCA fixture's own frame and matrix,
-    with its reaction coordinate stored as the depositor printed it."""
+def _orca_transition_state():
+    """The ORCA fixture's own frame, matrix and printed list: a real
+    six-atom transition state with one imaginary mode."""
 
     text = (FIXTURES / "orca" / "Orca_TS_test.hess").read_text()
     parsed = parse_hessian_from_artifact(text, from_hess_file=True)
@@ -521,7 +521,14 @@ def test_the_imaginary_determination_sits_beside_the_declaration(db_session):
     printed = [float(lines[head + 2 + k].split()[1]) for k in range(count)]
     printed = [f for f in printed if f != 0.0]
     assert len(printed) == 12 and printed[0] < 0
+    return elements, coords, matrix, printed
 
+
+def test_the_imaginary_determination_sits_beside_the_declaration(db_session):
+    """A real transition state: the ORCA fixture's own frame and matrix,
+    with its reaction coordinate stored as the depositor printed it."""
+
+    elements, coords, matrix, printed = _orca_transition_state()
     calc = _deposit(db_session, elements, coords, matrix, printed)
     result = reanalyse_calculation(db_session, calc)
 
@@ -544,6 +551,9 @@ def test_the_generator_counts_every_record_and_is_byte_identical(db_session):
     elements, coords, matrix, expected = _diatomic()
     good = _deposit(db_session, elements, coords, matrix, [round(f, 4) for f in expected])
     bare = _deposit(db_session, elements, coords, matrix, [round(f, 4) for f in expected], with_hessian=False)
+    # A record with an imaginary mode, so the imaginary-mode entries are
+    # exercised rather than vacuously allowlisted over an empty list.
+    saddle = _deposit(db_session, *_orca_transition_state())
 
     first = hessian_reanalysis(db_session)
     second = hessian_reanalysis(db_session)
@@ -552,13 +562,14 @@ def test_the_generator_counts_every_record_and_is_byte_identical(db_session):
 
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
     assert first["generator"] == "hessian_reanalysis"
-    assert first["scope"]["calculation_count"] == 2
-    assert first["scope"]["analysed_count"] == 1
+    assert first["scope"]["calculation_count"] == 3
+    assert first["scope"]["analysed_count"] == 2
     assert first["scope"]["by_status"]["hessian_not_stored"] == 1
-    assert first["scope"]["within_tolerance_count"] == 1
+    assert first["scope"]["within_tolerance_count"] == 1  # the ORCA saddle exceeds (average-mass list)
+    assert first["scope"]["exceeding_count"] == 1
     refs = [record["calculation_ref"] for record in first["records"]]
     assert refs == sorted(refs)
-    assert {good.public_ref, bare.public_ref} == set(refs)
+    assert {good.public_ref, bare.public_ref, saddle.public_ref} == set(refs)
     assert first["tolerance"]["max_deviation_cm1"] == DEFAULT_MAX_DEVIATION_CM1
     assert first["tolerance"]["max_omega2_deviation_cm2"] is None
     # Every key is on an allowlist, so a new one -- a run stamp, a host
@@ -623,10 +634,25 @@ def test_the_generator_counts_every_record_and_is_byte_identical(db_session):
         "within_tolerance",
         "nearest_match",
     }
+    imaginary_keys = {
+        "mode_index",
+        "stored_frequency_cm1",
+        "declared_disposition",
+        "determination",
+        "not_determined_reason",
+        "agreement",
+        "rigid_body_overlap",
+        "torsion_overlap",
+    }
+    imaginary_entries = 0
     for record in first["records"]:
         assert set(record) == record_keys
         for mode in record["modes"]:
             assert set(mode) == mode_keys
+        for entry in record["imaginary_modes"]:
+            assert set(entry) == imaginary_keys
+            imaginary_entries += 1
+    assert imaginary_entries == 1  # the saddle's reaction coordinate; the allowlist above was applied to it
 
 
 def test_a_single_calculation_is_named_by_public_ref_never_by_id(db_session):

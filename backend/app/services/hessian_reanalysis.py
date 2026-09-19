@@ -76,8 +76,10 @@ a small cm^-1 allowance on a stretch and a larger one on a torsion.
 Measured on ``freq_g09.log`` the per-mode ``B`` runs from 4.6 to
 34.6 cm^-2 (the 3446 cm^-1 C-H stretch, whose eigenvector concentrates
 on the largest, most coarsely printed elements), against measured
-omega-squared deviations of 0.1 to 11.2 cm^-2; the worst mode uses 30%
-of its allowance.
+omega-squared deviations of 0.1 to 11.2 cm^-2. The mode closest to its
+bound on that fixture is the 837 cm^-1 one, at 11.2 of 28.6 cm^-2 --
+39% of its omega-squared allowance, which is 30% of the resulting cm^-1
+tolerance (0.0067 of 0.0221 cm^-1).
 
 A stored mode therefore passes when
 
