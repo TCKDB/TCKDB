@@ -142,6 +142,29 @@ regeneration is part of this working-tree change. Before deployment:
 4. Deploy backend 0.2.0 with schemas >=0.45.0 and coordinate client 0.84.0 /
    CHEMKIN adapter 0.3.0. Validate generated OpenAPI and client compatibility.
 5. Record exact commit, required gates, inventory review and paired recovery
-   evidence. Production rollout and the broader Phase A completion gate remain
-   pending until this evidence exists. Phase B rights and reproduction gates
-   are separate.
+   evidence. Phase B rights and reproduction gates are separate.
+
+## Rollout evidence (recorded 2026-09-19)
+
+The working tree above was rebased onto `b23bd6c4` (31 commits ahead of the
+planning baseline, three of them migrations; head `a55cc983501a`) and merged
+as squash commit `fd68f1ba380d6fd741c14deb1dd92ee78635f7ba` (PR #495). The
+rebase moved the coordinated versions to schemas 0.45.0 and client 0.84.0
+because `main` had already taken 0.44.0 and 0.83.0; `backend/uv.lock` was
+regenerated because it was already stale on `main`.
+
+| Step | Evidence |
+| --- | --- |
+| Gates on the rebased commit, local | REST 5,720 passed, 14 skipped; API 3,845 passed; scientific 2,882 passed |
+| Gates in CI | `Required gates` and `CI gate coverage` passed on the merged commit |
+| Independent review | PASS; twelve mutations each turned exactly its target test red; one documentation defect (changelog versions) fixed before merge |
+| Hold point 1, queue drain | The deployed database held zero `upload_job` rows |
+| Hold point 2, inventory | Run read-only from the new image against the deployed database: 65 thermo rows, 0 upload incompatibilities, 0 pending jobs; all 65 CHEMKIN-ineligible (21 computed 1 bar defaults, 44 unknown phase and pressure), as the plan predicts |
+| Hold point 3, review | Historical rows unchanged; no incompatible jobs to resolve |
+| Hold point 4, deploy | `tckdb_deploy.sh sha-fd68f1ba…` on the self-hosted instance: pre-deploy dump taken, migration no-op, container swapped, `status ok`, `degraded []`, revision `a55cc983501a` |
+
+Paired database and object-store recovery was not exercised: the first paper
+does not claim a hosted service (Phase B decision), so that drill stays
+tracked operations work outside the A and B gates. This closes the Phase A
+completion gate for the self-hosted deployment; corpus accuracy, rights,
+independent reproduction and submission readiness remain B gates.
