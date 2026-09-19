@@ -77,8 +77,10 @@ __all__ = [
     "rigid_body_subspace",
     "rotatable_bonds",
     "solve_normal_modes",
+    "solve_vibrational_modes",
     "torsion_axes",
     "unpack_lower_triangle",
+    "wavenumber_from_eigenvalue",
 ]
 
 # CODATA 2018, matching the constants the rest of the backend quotes.
@@ -511,6 +513,90 @@ def solve_normal_modes(
                 displacement=np.asarray(vector, dtype=float),
             )
         )
+    modes.sort(key=lambda mode: mode.frequency_cm1)
+    return modes
+
+
+def wavenumber_from_eigenvalue(eigenvalue_hartree_bohr2_amu: float) -> float:
+    """Convert a mass-weighted Hessian eigenvalue to a signed wavenumber.
+
+    The same arithmetic :func:`solve_normal_modes` and
+    :func:`rigid_body_curvature_cm1` carry inline, on the same module
+    constants (CODATA 2018), exposed as a function so that
+    :func:`solve_vibrational_modes` and code outside this module -- the
+    Hessian reanalysis bound -- convert exactly the way the recovery does.
+    ``hartree/bohr^2/amu`` in, ``cm^-1`` out, negative when the curvature
+    is negative (an imaginary mode), matching how
+    ``calc_freq_mode.frequency_cm1`` is stored.
+    """
+
+    omega_squared = eigenvalue_hartree_bohr2_amu * _EIGENVALUE_TO_OMEGA2_SI
+    wavenumber = math.sqrt(abs(omega_squared)) / (2.0 * math.pi * _C_CM_S)
+    return -wavenumber if omega_squared < 0.0 else wavenumber
+
+
+def solve_vibrational_modes(
+    hessian_hartree_bohr2: np.ndarray,
+    masses_amu: Sequence[float],
+    rigid_body: RigidBodySubspace,
+) -> list[NormalMode]:
+    """Diagonalise the mass-weighted Hessian inside the vibrational subspace.
+
+    The complement of :func:`solve_normal_modes`, and used for a different
+    question. That function keeps the rigid-body directions *in* so their
+    overlap with each mode can be measured. This one projects them *out*
+    first -- which is what every electronic-structure program does before
+    it prints a frequency list -- so that the spectrum it returns is the
+    one a stored ``calc_freq_mode`` list can be compared with mode for
+    mode. The difference is not cosmetic: a Hessian whose rigid-body
+    curvature is a few cm-1 (every real record has some; the live corpus
+    reaches 12 cm-1) couples that residue into its lowest vibrations when
+    left in, and the lowest vibrations are exactly where a comparison is
+    most sensitive because the noise floor is flat in omega squared, not
+    in omega.
+
+    The projection is exact rather than approximate: an orthonormal basis
+    ``Q`` for the orthogonal complement of ``rigid_body.basis`` is taken
+    from the full SVD of that basis, the ``(3N-k) x (3N-k)`` matrix
+    ``Q^T H_mw Q`` is diagonalised, and each eigenvector is mapped back to
+    ``3N`` mass-weighted coordinates. Exactly ``3N - k`` modes come back,
+    with ``k = rigid_body.dimension``; nothing is dropped by magnitude.
+
+    :param hessian_hartree_bohr2: ``(3N, 3N)`` Cartesian force constants.
+    :param masses_amu: ``N`` atomic masses.
+    :param rigid_body: Basis from :func:`rigid_body_subspace`, built
+        from the same masses and the geometry the matrix was computed at.
+    :returns: ``3N - k`` modes in ascending frequency order, imaginary
+        ones first as negative wavenumbers, displacements unit-norm in
+        mass-weighted coordinates and orthogonal to every rigid-body
+        direction.
+    """
+
+    masses = np.asarray(masses_amu, dtype=float)
+    dim = 3 * masses.size
+    if masses.ndim != 1 or hessian_hartree_bohr2.shape != (dim, dim):
+        raise ValueError(f"hessian shape {hessian_hartree_bohr2.shape} does not match {masses.size} atoms")
+    if not np.all(masses > 0.0):
+        raise ValueError("every atomic mass must be positive")
+    if rigid_body.basis.shape[1] != dim:
+        raise ValueError(f"rigid-body basis is {rigid_body.basis.shape[1]}-dimensional, expected {dim}")
+
+    root_mass = np.repeat(np.sqrt(masses), 3)
+    weighted = hessian_hartree_bohr2 / np.outer(root_mass, root_mass)
+
+    _, _, right = np.linalg.svd(rigid_body.basis, full_matrices=True)
+    complement = right[rigid_body.dimension :].T  # (3N, 3N-k), orthonormal columns
+    reduced = complement.T @ weighted @ complement
+    reduced = 0.5 * (reduced + reduced.T)  # symmetrise away round-off before eigh
+    eigenvalues, eigenvectors = np.linalg.eigh(reduced)
+
+    modes = [
+        NormalMode(
+            frequency_cm1=wavenumber_from_eigenvalue(float(value)),
+            displacement=np.asarray(complement @ vector, dtype=float),
+        )
+        for value, vector in zip(eigenvalues, eigenvectors.T, strict=True)
+    ]
     modes.sort(key=lambda mode: mode.frequency_cm1)
     return modes
 
