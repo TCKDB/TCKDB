@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 106 |
+| typed | 107 |
 | raw_only | 107 |
 | not_applicable | 45 |
-| **total** | **258** |
+| **total** | **259** |
 
 ## Typed coverage
 
@@ -126,6 +126,7 @@ A first-class client method exists for these operations.
 | `POST /api/v1/uploads/reactions` | yes | `upload` | — | — | `tests/test_client_upload_dispatch.py` |
 | `POST /api/v1/uploads/statmech` | yes | `upload` | — | — | `tests/test_client_upload_dispatch.py` |
 | `POST /api/v1/uploads/thermo` | yes | `upload` | — | — | `tests/test_client_upload_dispatch.py` |
+| `POST /api/v1/uploads/thermoml` | yes | `upload_thermoml` | — | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/uploads/transition-states` | yes | `upload` | — | — | `tests/test_client_upload_dispatch.py` |
 | `POST /api/v1/uploads/transport` | yes | `upload` | — | — | `tests/test_client_upload_dispatch.py` |
 

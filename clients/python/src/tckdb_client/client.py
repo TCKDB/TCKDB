@@ -908,6 +908,67 @@ class TCKDBClient:
             idempotency_key=idempotency_key,
         )
 
+    def upload_thermoml(
+        self,
+        path: "str | Path",
+        *,
+        rights: dict[str, Any],
+        idempotency_key: str,
+        doi: str | None = None,
+        filename: str | None = None,
+    ) -> Any:
+        """POST a standalone ThermoML XML document to
+        ``/api/v1/uploads/thermoml`` (Phase C-E6) — not the NIST bulk
+        archive path, which is a backend-only CLI
+        (``backend/scripts/thermoml_cp_import.py --archive``).
+
+        Reads the local file at ``path``, base64-encodes its contents,
+        and posts a ``ThermoMLUploadRequest``-shaped payload — the same
+        read-encode-post shape as :meth:`upload_artifact`, the only
+        other typed method that sends inline file bytes. Always commits
+        — this route has no preview mode (see the backend route's own
+        docstring); run the same file through the backend CLI's default
+        (no ``--commit``) dry run instead if a preview is wanted.
+
+        ``rights`` is required (unlike every other typed upload method's
+        optional rights) — see ``ThermoMLUploadRequest.rights`` on the
+        backend for why: this route's whole content is a document the
+        caller is asserting the right to submit, with no NIST/TRC
+        ``source_terms`` to fall back on. Pass e.g.
+        ``{"license": "CC0-1.0", "depositor_attests_right_to_license": True}``.
+
+        ``idempotency_key`` is required (unlike every other typed upload
+        method's optional key): this route itself requires the
+        ``Idempotency-Key`` header (DR-0024) and refuses a request
+        without one before this method's payload is even read, so a
+        default of ``None`` here would just defer that failure to the
+        server for no benefit.
+
+        ``doi`` overrides the file's own ``Citation/sDOI`` only when the
+        file carries none; a value that disagrees with the file's own
+        ``sDOI`` is refused (``thermoml_doi_conflict``).
+        """
+        import base64
+        import pathlib
+
+        src = pathlib.Path(path)
+        if not src.exists():
+            raise ValueError(f"ThermoML file does not exist: {src}")
+        if not src.is_file():
+            raise ValueError(f"ThermoML path is not a file: {src}")
+        content = src.read_bytes()
+        payload: dict[str, Any] = {
+            "filename": filename or src.name,
+            "content_base64": base64.b64encode(content).decode("ascii"),
+            "rights": rights,
+        }
+        if doi is not None:
+            payload["doi"] = doi
+
+        return self.post_json(
+            "/uploads/thermoml", payload, idempotency_key=idempotency_key
+        )
+
     def upload_artifacts(
         self,
         plan: "Iterable[Any]",

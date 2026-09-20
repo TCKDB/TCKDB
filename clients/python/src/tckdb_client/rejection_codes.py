@@ -244,6 +244,11 @@ class RejectionCode(str, Enum):
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
     THERMO_SP_GEOMETRY_MISMATCH = "thermo_sp_geometry_mismatch"
     THERMO_STATMECH_OWNER_MISMATCH = "thermo_statmech_owner_mismatch"
+    THERMOML_DOI_CONFLICT = "thermoml_doi_conflict"
+    THERMOML_FILE_TOO_LARGE = "thermoml_file_too_large"
+    THERMOML_INVALID_BASE64 = "thermoml_invalid_base64"
+    THERMOML_NO_SUPPORTED_CONTENT = "thermoml_no_supported_content"
+    THERMOML_SCHEMA_INVALID = "thermoml_schema_invalid"
     TOO_MANY_ELEMENT_SYMBOLS = "too_many_element_symbols"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
@@ -409,6 +414,11 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.THERMO_SP_GEOMETRY_MISMATCH,
         RejectionCode.THERMO_STATMECH_OWNER_MISMATCH,
+        RejectionCode.THERMOML_DOI_CONFLICT,
+        RejectionCode.THERMOML_FILE_TOO_LARGE,
+        RejectionCode.THERMOML_INVALID_BASE64,
+        RejectionCode.THERMOML_NO_SUPPORTED_CONTENT,
+        RejectionCode.THERMOML_SCHEMA_INVALID,
         RejectionCode.TOO_MANY_ELEMENT_SYMBOLS,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
@@ -639,6 +649,11 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SP_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.THERMOML_DOI_CONFLICT: frozenset({422}),
+    RejectionCode.THERMOML_FILE_TOO_LARGE: frozenset({422}),
+    RejectionCode.THERMOML_INVALID_BASE64: frozenset({422}),
+    RejectionCode.THERMOML_NO_SUPPORTED_CONTENT: frozenset({422}),
+    RejectionCode.THERMOML_SCHEMA_INVALID: frozenset({422}),
     RejectionCode.TOO_MANY_ELEMENT_SYMBOLS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),

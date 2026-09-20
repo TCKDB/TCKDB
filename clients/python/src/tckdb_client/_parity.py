@@ -198,6 +198,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "POST", "/api/v1/calculations/{calculation_id}/artifacts",
         "upload_artifacts", None, None, "tests/test_upload_artifacts_batch.py",
     ),
+    (
+        "POST", "/api/v1/uploads/thermoml", "upload_thermoml", None, None,
+        _NEW_METHOD_TESTS,
+    ),
     # --- Async job lifecycle ----------------------------------------
     (
         "POST", "/api/v1/jobs/computed-reaction", "enqueue_job", None, None,

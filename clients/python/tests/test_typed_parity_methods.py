@@ -8,6 +8,7 @@ the parsed response is handed back untouched.
 
 from __future__ import annotations
 
+import base64
 import json
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -1363,3 +1364,100 @@ class TestSpeciesObservations:
         result = client.get_species_observations("spe_abc123")
 
         assert result["records"] == [record]
+
+
+# ---------------------------------------------------------------------------
+# ThermoML file upload (Phase C-E6)
+# ---------------------------------------------------------------------------
+
+
+class TestThermoMLUpload:
+    def _thermoml_file(self, tmp_path, content: bytes = b"<DataReport/>"):
+        path = tmp_path / "pilot.xml"
+        path.write_bytes(content)
+        return path
+
+    def _rights(self) -> dict:
+        return {
+            "license": "CC0-1.0",
+            "depositor_attests_right_to_license": True,
+        }
+
+    def test_hits_the_thermoml_upload_endpoint(self, tmp_path):
+        src = self._thermoml_file(tmp_path)
+        handler, seen = _capture({"type": "thermoml_import"})
+        client, _ = make_client(handler)
+
+        client.upload_thermoml(
+            src, rights=self._rights(), idempotency_key="thermoml-upload-key-001"
+        )
+
+        assert seen[0].method == "POST"
+        assert _path_of(str(seen[0].url)).endswith("/uploads/thermoml")
+
+    def test_encodes_content_and_defaults_filename_and_sends_idempotency_key(
+        self, tmp_path
+    ):
+        src = self._thermoml_file(tmp_path)
+        handler, seen = _capture({"type": "thermoml_import"})
+        client, _ = make_client(handler)
+
+        client.upload_thermoml(
+            src, rights=self._rights(), idempotency_key="thermoml-upload-key-001"
+        )
+
+        body = json.loads(seen[0].content.decode())
+        assert body["filename"] == src.name
+        assert base64.b64decode(body["content_base64"]) == src.read_bytes()
+        assert "doi" not in body
+        assert "dry_run" not in body
+        assert seen[0].headers["Idempotency-Key"] == "thermoml-upload-key-001"
+
+    def test_doi_and_filename_overrides_are_forwarded(self, tmp_path):
+        src = self._thermoml_file(tmp_path)
+        handler, seen = _capture({"type": "thermoml_import"})
+        client, _ = make_client(handler)
+
+        client.upload_thermoml(
+            src,
+            rights=self._rights(),
+            idempotency_key="thermoml-upload-key-001",
+            doi="10.1016/j.jct.2013.08.022",
+            filename="renamed.xml",
+        )
+
+        body = json.loads(seen[0].content.decode())
+        assert body["doi"] == "10.1016/j.jct.2013.08.022"
+        assert body["filename"] == "renamed.xml"
+
+    def test_rejects_missing_file(self, tmp_path):
+        client, _ = make_client(_capture({})[0])
+        with pytest.raises(ValueError, match="does not exist"):
+            client.upload_thermoml(
+                tmp_path / "no-such-file.xml",
+                rights=self._rights(),
+                idempotency_key="thermoml-upload-key-001",
+            )
+
+    def test_idempotency_key_is_required(self, tmp_path):
+        src = self._thermoml_file(tmp_path)
+        client, _ = make_client(_capture({"type": "thermoml_import"})[0])
+
+        with pytest.raises(TypeError):
+            client.upload_thermoml(src, rights=self._rights())
+
+    def test_returns_the_parsed_response_untouched(self, tmp_path):
+        src = self._thermoml_file(tmp_path)
+        body = {
+            "type": "thermoml_import",
+            "submission_ref": "sub_abc123",
+            "payload_count": 12,
+        }
+        handler, _ = _capture(body)
+        client, _ = make_client(handler)
+
+        result = client.upload_thermoml(
+            src, rights=self._rights(), idempotency_key="thermoml-upload-key-001"
+        )
+
+        assert result == body
