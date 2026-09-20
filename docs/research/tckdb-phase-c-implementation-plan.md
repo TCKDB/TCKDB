@@ -85,8 +85,20 @@ distinct values from 1020 to 3400 kPa across the 38 points (Cp spans
 citing Booth & Swinehart 1935 and Parthasarathy 1935); against that Tc, the
 archive's 315.33-365.75 K span is a reduced temperature Tr = T/Tc of
 0.84-0.98, and the measured 1020-3400 kPa is well above atmospheric pressure.
-Pilot choice pending re-decision on these measured pressures (2026-09-20);
-fluoroethane's points are far from ideal-gas conditions. The scan script
+Fluoroethane's points are far from ideal-gas conditions, and every
+other calorimetric gas-phase entry in the archive is near-critical or
+organometallic. **Decision (Calvin, 2026-09-20): the pilot is benzene**
+(`UHOVQNZJYSORNB-UHFFFAOYSA-N`), from the archive's ideal-gas entries derived
+by statistical thermodynamics: DOI `10.1016/j.jct.2013.08.022`, J. Chem.
+Thermodyn. 2014, 12 values at 200-1000 K, phase "Ideal gas" at a 100 kPa
+constraint, method recorded as the free-text `sMethodName` "statistical
+thermodynamics", combined expanded uncertainty with a level of confidence and
+no coverage factor; XML sha256
+`e33222268a0f5eb10b8249e5b39253886cb4e87110cf8d5ef2b7d2cc368163c7`. The state
+matches a computed ideal-gas record exactly, so the comparison is between an
+externally evaluated ideal-gas Cp and TCKDB's computed statmech Cp, and the
+paper says "evaluated", never "measured". It needs one computed thermo record
+for benzene (an ARC B3LYP/def2-TZVP opt+freq, author-run). The scan script
 `backend/scripts/validation/thermoml_cp_pilot_scan.py` and its report
 `docs/validation/thermoml_cp_pilot_scan.md` are the evidence.
 
@@ -275,6 +287,15 @@ Design.
   normalisation step is the versioned mapping report plus each row's
   `raw_payload_json["mapping"]`. Typed derivation edges with parameters are
   deferred.
+- Origin for a property that carries neither an `eMethodName` nor a
+  `Prediction` element but a free-text `sMethodName` (the archive's own
+  ideal-gas entries, including the benzene pilot): the importer holds an
+  explicit allowlist of verbatim `sMethodName` strings observed in the pinned
+  archive, each mapped to an origin and recorded as a mapping rule with the
+  string ("statistical thermodynamics" maps to `computed`, with the string
+  verbatim in `method_note`); a string not on the allowlist leaves the origin
+  unresolved and the row is rejected with the string in the report. No keyword
+  matching: the rule names observed strings only.
 - Uncertainty precedence, versioned as `uncertainty.precedence.v1`: the typed
   columns hold the first present of combined expanded, combined standard,
   expanded, standard; every other uncertainty present is retained under
@@ -386,14 +407,16 @@ The two halves can claim: one ThermoML 4.0 article validated against the
 pinned XSD with every value, condition, uncertainty definition, method string,
 identifier and citation preserved as raw bytes by digest, typed columns and a
 mapping report; idempotent re-import; identity by exact InChIKey only; computed
-Cp(T) for fluoroethane evaluated independently with Cantera at the 38 observed
-temperatures, with residuals reported beside the declared uncertainty meaning
-and the real-gas pressure, the non-ideality contribution stated as unquantified,
-and no approval effect; and one Psi4 QCSchema bundle round-tripped exactly and compared with
+Cp(T) for benzene evaluated independently with Cantera at the 12 temperatures
+of the externally evaluated ideal-gas table, with residuals reported beside the
+declared uncertainty meaning and the source's verbatim method string, and no
+approval effect; and one Psi4 QCSchema bundle round-tripped exactly and compared with
 the existing Gaussian record as a measurement.
 
-They cannot claim ThermoML support beyond this profile; calorimetric
-provenance when the method is acoustic or derived; agreement or accuracy;
+They cannot claim ThermoML support beyond this profile; that the benzene
+table is a measurement (it is a statistical-thermodynamics evaluation, and the
+archive holds no calorimetric ideal-gas Cp for any small molecule); agreement
+or accuracy;
 anything about enthalpy, entropy, Gibbs energy, formation basis, mixtures,
 condensed phases or covariance; that the residual isolates the computed model
 from the real-gas contribution (no correction is applied); or QCSchema support
