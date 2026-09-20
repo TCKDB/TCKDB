@@ -64,10 +64,44 @@ select single-component `PureOrMixtureData` blocks whose property is
 "Molar heat capacity at constant pressure, J/K/mol", whose phase is "Ideal gas"
 or "Gas", and which carry an experimental method; intersect their standard
 InChIKeys with playground species that hold computed thermo (water, methane
-and ethylene confirmed among 59). Methane by "Derived from speed of sound" is
-the likely hit. If the intersection is empty, the fallback (compute thermo for
-methanol, ethane or propane) is an author decision recorded here. Output: one
-article DOI and the sha256 of its XML and JSON, pinned in the deposit.
+and ethylene confirmed among 59). Methane by "Derived from speed of sound" was
+the expected hit.
+
+**WP0 result (2026-09-19, PR #503).** The scan of all 11,923 articles found
+no single-component ideal-gas Cp for any playground species: methane, ethane
+and propane occur only inside natural-gas mixture blocks; methanol only as
+liquid or crystal; water once, as one real-gas point at 508 K. Every
+calorimetric gas-phase Cp in the archive is tagged "Gas" at a stated pressure,
+never "Ideal gas"; of the archive's 13 "Ideal gas" entries, 12 are
+statistical-thermodynamics-derived and one is tagged "Predicted". The most-covered non-playground candidate
+is **fluoroethane** (C2H5F, `UHCBBWUQDAVSMS-UHFFFAOYSA-N`), 38 flow-calorimetry
+points at 315.33-365.75 K, DOI `10.1016/j.fluid.2016.07.034`, J. Fluid Phase
+Equilib. 2016 — but its pressure is not the fixed 101.325 kPa first assumed
+here. Re-measured directly from the block: pressure is a per-point `Variable`
+("Pressure, kPa", `nVarNumber` 2), not a block-level `Constraint`, with 30
+distinct values from 1020 to 3400 kPa across the 38 points (Cp spans
+71.2-118.1 J/K/mol over that range). Fluoroethane's critical temperature is
+375.31 K (NIST WebBook, `https://webbook.nist.gov/cgi/cbook.cgi?ID=353-36-6`,
+citing Booth & Swinehart 1935 and Parthasarathy 1935); against that Tc, the
+archive's 315.33-365.75 K span is a reduced temperature Tr = T/Tc of
+0.84-0.97, and the measured 1020-3400 kPa is well above atmospheric pressure.
+Fluoroethane's points are far from ideal-gas conditions, and every
+other calorimetric gas-phase entry in the archive is either real-gas at high
+pressure (four fluorocarbons near or above their critical temperature; water's
+single point at 30 bar) or organometallic (ferrocene, nickelocene at 1 atm). **Decision (Calvin, 2026-09-20): the pilot is benzene**
+(`UHOVQNZJYSORNB-UHFFFAOYSA-N`), from the archive's ideal-gas entries derived
+by statistical thermodynamics: DOI `10.1016/j.jct.2013.08.022`, J. Chem.
+Thermodyn. 2014, 12 values at 200-1000 K, phase "Ideal gas" at a 100 kPa
+constraint, method recorded as the free-text `sMethodName` "statistical
+thermodynamics", combined expanded uncertainty with a level of confidence and
+no coverage factor; XML sha256
+`e33222268a0f5eb10b8249e5b39253886cb4e87110cf8d5ef2b7d2cc368163c7`. The state
+matches a computed ideal-gas record exactly, so the comparison is between an
+externally evaluated ideal-gas Cp and TCKDB's computed statmech Cp, and the
+paper says "evaluated", never "measured". It needs one computed thermo record
+for benzene (an ARC B3LYP/def2-TZVP opt+freq, author-run). The scan script
+`backend/scripts/validation/thermoml_cp_pilot_scan.py` and its report
+`docs/validation/thermoml_cp_pilot_scan.md` are the evidence.
 
 ## C1 — QCSchema importer (no migration)
 
@@ -118,6 +152,7 @@ Design.
 | any `real` false; more than one fragment | refuse `ghost_atoms_unsupported`, `multi_fragment_unsupported` | rejected |
 | charge, multiplicity | species identity payload (must be integers) | transformed |
 | identity | `--smiles` on the CLI (recorded `depositor_declared`), else `identifiers.smiles`, else refuse `identity_unavailable`; no 3D perception | transformed or rejected |
+| non-integer `molecular_charge` or `molecular_multiplicity` | refuse `non_integer_identity` (added by C-Q1, PR #504) | rejected |
 | `model.method`, `model.basis` | `LevelOfTheoryRef` verbatim, case preserved (the level-of-theory hash at `backend/app/services/calculation_resolution.py:118` is byte-exact, so `b3lyp` and `B3LYP` are distinct rows; the demonstration selects by explicit level, not by hash) | transformed |
 | `keywords.reference` | `spin_treatment` when recognised | transformed |
 | `keywords` | parameter observations, section `qcschema.keywords`, no canonical key | transformed |
@@ -253,17 +288,29 @@ Design.
   normalisation step is the versioned mapping report plus each row's
   `raw_payload_json["mapping"]`. Typed derivation edges with parameters are
   deferred.
+- Origin for a property that carries neither an `eMethodName` nor a
+  `Prediction` element but a free-text `sMethodName` (the archive's own
+  ideal-gas entries, including the benzene pilot): the importer holds an
+  explicit allowlist of verbatim `sMethodName` strings observed in the pinned
+  archive, each mapped to an origin and recorded as a mapping rule with the
+  string ("statistical thermodynamics" maps to `computed`, with the string
+  verbatim in `method_note`); a string not on the allowlist leaves the origin
+  unresolved and the row is rejected with the string in the report. No keyword
+  matching: the rule names observed strings only.
 - Uncertainty precedence, versioned as `uncertainty.precedence.v1`: the typed
   columns hold the first present of combined expanded, combined standard,
   expanded, standard; every other uncertainty present is retained under
   `raw_payload_json["uncertainties"]`; repeatability, device specification,
   curve deviation and asymmetric forms are listed as unsupported; no inference
   between a coverage factor and a confidence level.
-- State: "Ideal gas" maps to `ideal_gas`; "Gas" maps to `real_gas` and is
-  stored but reported not comparable; pressure comes from a "Pressure, kPa"
-  constraint or variable; every other phase or standard state, any
-  multi-component block and any reaction block is rejected with the source
-  string in the report. No solvent, composition or activity fields.
+- State: "Ideal gas" maps to `ideal_gas`; "Gas" maps to `real_gas` with the
+  pressure required from a "Pressure, kPa" constraint or variable (a real-gas
+  row without a pressure is rejected); every other phase or standard state,
+  any multi-component block and any reaction block is rejected with the source
+  string in the report. No solvent, composition or activity fields. Since WP0
+  showed the archive's calorimetric gas Cp is always real-gas at a stated
+  pressure, real-gas rows are comparable in C4 with the non-ideality flagged,
+  not excluded.
 - Wire schema mirrored on `MolecularPropertyObservationBase`; `schema.dbml`
   regenerated; one revision from the verified head with both directions
   (removing an enum value on downgrade needs a type rebuild; follow the
@@ -330,8 +377,13 @@ Design.
   a context hash from the real inputs, and per-observation findings: the
   observation and custody refs, temperature, observed Cp, its uncertainty with
   kind, coverage factor and assessor, computed Cp, residual, representation,
-  in-range flag; `not_comparable` for real-gas rows and temperatures outside
-  the fit. No threshold, no status change, no selection effect.
+  in-range flag, the observation's `state_basis` and pressure, and for
+  real-gas rows a `non_ideality: unquantified` flag stating that the residual
+  includes the real-gas contribution at the observed pressure and that no
+  virial or equation-of-state correction was applied (a correction would be a
+  convention the hold points do not authorize); `not_comparable` only for
+  temperatures outside the fit range. No threshold, no status change, no
+  selection effect.
 - Generators `experimental_cp_comparison` and `thermoml_source_provenance` in
   `backend/scripts/paper/generators.py`, registered in the registry, and a row
   added to the Phase B plan's manuscript correspondence table.
@@ -356,15 +408,19 @@ The two halves can claim: one ThermoML 4.0 article validated against the
 pinned XSD with every value, condition, uncertainty definition, method string,
 identifier and citation preserved as raw bytes by digest, typed columns and a
 mapping report; idempotent re-import; identity by exact InChIKey only; computed
-Cp(T) evaluated independently with Cantera at the observed temperatures, with
-residuals reported beside the declared uncertainty meaning and no approval
-effect; and one Psi4 QCSchema bundle round-tripped exactly and compared with
+Cp(T) for benzene evaluated independently with Cantera at the 12 temperatures
+of the externally evaluated ideal-gas table, with residuals reported beside the
+declared uncertainty meaning and the source's verbatim method string, and no
+approval effect; and one Psi4 QCSchema bundle round-tripped exactly and compared with
 the existing Gaussian record as a measurement.
 
-They cannot claim ThermoML support beyond this profile; calorimetric
-provenance when the method is acoustic or derived; agreement or accuracy;
-anything about enthalpy, entropy, Gibbs energy, formation basis, real-gas
-corrections, mixtures, condensed phases or covariance; or QCSchema support
+They cannot claim ThermoML support beyond this profile; that the benzene
+table is a measurement (it is a statistical-thermodynamics evaluation, and the
+archive holds no calorimetric ideal-gas Cp for any small molecule); agreement
+or accuracy;
+anything about enthalpy, entropy, Gibbs energy, formation basis, mixtures,
+condensed phases or covariance; that the residual isolates the computed model
+from the real-gas contribution (no correction is applied); or QCSchema support
 beyond the profile.
 
 ## Work packages
