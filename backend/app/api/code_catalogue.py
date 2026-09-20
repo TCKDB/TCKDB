@@ -1534,6 +1534,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "is refused rather than silently proceeding without an "
                 "audit trail."
             )),
+    ApiCode("observation_identity_hint_conflict", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "Phase C-E5 review round 3 (Probe C). The observation "
+                "carries its own identity_hint.inchikey and its "
+                "connectivity block (the InChIKey's first, hyphen-"
+                "delimited segment) disagrees with the attach target "
+                "species's own InChIKey. Only the connectivity block is "
+                "compared -- a hint with no stereo layer can still be "
+                "attached to a stereo-specific entry (the isomer case "
+                "this tool is for) -- but a different molecular skeleton "
+                "is refused rather than silently attached."
+            )),
     ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.message_prefix,
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,

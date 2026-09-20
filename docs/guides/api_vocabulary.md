@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 194 | `backend/app/api/code_catalogue.py` |
-| **total** | **483** | |
+| Refusal codes a caller can receive | 195 | `backend/app/api/code_catalogue.py` |
+| **total** | **484** | |
 
 ## How a record is named
 
@@ -701,7 +701,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (143 codes)
+### HTTP 422 (144 codes)
 
 | Code | Names |
 | --- | --- |
@@ -779,6 +779,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `non_finite_value` | a thing |
 | `observation_identity_already_set` | a thing |
 | `observation_identity_attach_requires_submission` | a relationship — read `context` |
+| `observation_identity_hint_conflict` | a relationship — read `context` |
 | `observation_identity_target_not_ground_state_minimum` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |

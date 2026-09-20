@@ -175,6 +175,7 @@ class RejectionCode(str, Enum):
     NON_FINITE_VALUE = "non_finite_value"
     OBSERVATION_IDENTITY_ALREADY_SET = "observation_identity_already_set"
     OBSERVATION_IDENTITY_ATTACH_REQUIRES_SUBMISSION = "observation_identity_attach_requires_submission"
+    OBSERVATION_IDENTITY_HINT_CONFLICT = "observation_identity_hint_conflict"
     OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM = "observation_identity_target_not_ground_state_minimum"
     OFFSET_TOO_LARGE = "offset_too_large"
     OWNER_MISSING = "owner_missing"
@@ -356,6 +357,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NON_FINITE_VALUE,
         RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET,
         RejectionCode.OBSERVATION_IDENTITY_ATTACH_REQUIRES_SUBMISSION,
+        RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT,
         RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM,
         RejectionCode.OFFSET_TOO_LARGE,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
@@ -568,6 +570,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_ATTACH_REQUIRES_SUBMISSION: frozenset({422}),
+    RejectionCode.OBSERVATION_IDENTITY_HINT_CONFLICT: frozenset({422}),
     RejectionCode.OBSERVATION_IDENTITY_TARGET_NOT_GROUND_STATE_MINIMUM: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),

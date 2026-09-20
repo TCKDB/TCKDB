@@ -227,6 +227,17 @@ def test_curator_may_choose_among_ambiguous_entries(
 def test_non_ground_state_target_refuses(
     client, db_session, login_as, _api_curator_user
 ):
+    """Review round 3 (R5): the observation is now linked to a submission
+    before the attach attempt, so the only guard standing between this
+    request and a 200 is the target-validity rule -- previously, with no
+    submission linked, a mutation that neutralized the target rule would
+    still redden this test via the unrelated ``observation_identity_
+    attach_requires_submission`` guard (which happens to run right after
+    the target check), making the assertion's redness a coincidence rather
+    than proof the target rule fired. With the submission linked, that
+    mutation now lets the request actually succeed (200), which the
+    assertions below catch directly.
+    """
     species, ground_entry = _entry(db_session, prefix="SEEXCITED")
     excited_entry = make_species_entry(
         db_session,
@@ -236,6 +247,7 @@ def test_non_ground_state_target_refuses(
         electronic_state_label="A",
     )
     obs = make_observation(db_session, species_entry=None)
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
     login_as(_api_curator_user)
 
     resp = client.post(
@@ -252,6 +264,13 @@ def test_single_excited_state_entry_species_refuses(
     used to slip past the old (pre-F4) ambiguity guard's deleted-clause
     mutation because every other fixture species had two entries. This
     pins the target-validity check on a single-entry species directly.
+
+    Review round 3 (R5): the observation is now linked to a submission
+    first, for the same reason as ``test_non_ground_state_target_refuses``
+    above -- without it, this test's redness under the
+    ``electronic_state_kind == ground`` mutation came from the unrelated
+    ``observation_identity_attach_requires_submission`` guard, not from the
+    target rule itself.
     """
     species = make_species(
         db_session, smiles="CC=O", inchi_key=next_inchi_key("SESINGLEEXC")
@@ -264,6 +283,7 @@ def test_single_excited_state_entry_species_refuses(
         electronic_state_label="A",
     )
     obs = make_observation(db_session, species_entry=None)
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
     login_as(_api_curator_user)
 
     resp = client.post(
@@ -292,6 +312,92 @@ def test_attach_refuses_an_observation_linked_to_no_submission(
 
     db_session.refresh(obs)
     assert obs.species_entry_id is None
+
+
+# ---------------------------------------------------------------------------
+# Identity-hint conflict (Probe C, Phase C-E5 review round 3)
+# ---------------------------------------------------------------------------
+
+
+def test_hint_same_connectivity_different_stereo_accepts(
+    client, db_session, login_as, _api_curator_user
+):
+    """A source InChIKey with no stereo resolution of its own (or a
+    different stereo block than the target's) must still be attachable to
+    a stereo-specific entry -- that is the isomer-disambiguation case this
+    tool exists for. Only the connectivity block (before the first hyphen)
+    is compared.
+    """
+    species = make_species(
+        db_session,
+        smiles="CCO",
+        inchi_key="LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+    )
+    entry = make_species_entry(db_session, species)
+    obs = make_observation(
+        db_session,
+        species_entry=None,
+        raw_payload_json={
+            "identity_hint": {"inchikey": "LFQSCWFLJHTTHZ-DIFFRSTEREO-N"}
+        },
+    )
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        _url(obs.public_ref), json={"species_entry_ref": entry.public_ref}
+    )
+    assert resp.status_code == 200, resp.text
+
+    db_session.refresh(obs)
+    assert obs.species_entry_id == entry.id
+
+
+def test_hint_different_skeleton_refuses(
+    client, db_session, login_as, _api_curator_user
+):
+    """The observation's own identity hint names a different molecular
+    connectivity than the target species -- attaching it would silently
+    associate an observation with the wrong molecule.
+    """
+    species = make_species(
+        db_session,
+        smiles="CCO",
+        inchi_key="LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
+    )
+    entry = make_species_entry(db_session, species)
+    obs = make_observation(
+        db_session,
+        species_entry=None,
+        raw_payload_json={
+            "identity_hint": {"inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N"}
+        },
+    )
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        _url(obs.public_ref), json={"species_entry_ref": entry.public_ref}
+    )
+    assert resp.status_code == 422, resp.text
+    assert "observation_identity_hint_conflict" in resp.text
+
+    db_session.refresh(obs)
+    assert obs.species_entry_id is None
+
+
+def test_no_hint_accepts(client, db_session, login_as, _api_curator_user):
+    """An observation with no usable identity_hint.inchikey is unaffected
+    by the conflict check -- there is nothing to compare."""
+    _, entry = _entry(db_session, prefix="SENOHINT")
+    obs = make_observation(db_session, species_entry=None, raw_payload_json=None)
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        _url(obs.public_ref), json={"species_entry_ref": entry.public_ref}
+    )
+    assert resp.status_code == 200, resp.text
 
 
 def test_404_for_unknown_observation(client, db_session, login_as, _api_curator_user):
