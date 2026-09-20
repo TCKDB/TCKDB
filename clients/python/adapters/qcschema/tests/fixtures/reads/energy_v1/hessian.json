@@ -1,0 +1,8 @@
+{
+  "body": {
+    "code": "hessian_not_found",
+    "context": {},
+    "detail": "Hessian not found for the calculation"
+  },
+  "status_code": 404
+}

@@ -93,3 +93,84 @@ E_ARTIFACT_TOO_LARGE = "artifact_too_large"
 #: The artifact-search pre-check found an existing artifact with the same
 #: raw-file SHA-256 and ``--allow-duplicate`` was not passed.
 E_ALREADY_IMPORTED = "already_imported"
+
+# ---------------------------------------------------------------------------
+# Export (C-Q3)
+# ---------------------------------------------------------------------------
+
+#: A document whose top-level ``provenance.creator`` is exactly ``"TCKDB"``
+#: -- i.e. one this adapter itself exported -- is refused on import. Without
+#: this, an export could be re-imported and treated as independent evidence
+#: of a second ESS job, which it is not: it is TCKDB's own stored numbers
+#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"`` and the
+#: "reimport refused" note in the C-Q3 brief.
+E_TCKDB_EXPORT_REIMPORT_REFUSED = "tckdb_export_reimport_refused"
+
+#: The calculation's ``type`` is not one this adapter can export --
+#: currently only ``sp`` and ``freq`` (with a stored Hessian) are supported.
+#: ``opt`` is refused deliberately: no trajectory is stored, so relabelling
+#: a final energy as a single point would be a claim the record does not
+#: support.
+E_EXPORT_UNSUPPORTED_TYPE = "export_unsupported_type"
+
+#: An ``sp`` calculation has no recorded ``electronic_energy_hartree`` to
+#: export as ``return_result``.
+E_EXPORT_ENERGY_UNAVAILABLE = "export_energy_unavailable"
+
+#: A ``freq`` calculation carries no stored Hessian
+#: (``GET /calculations/{id}/hessian`` returned 404).
+E_EXPORT_HESSIAN_UNAVAILABLE = "export_hessian_unavailable"
+
+#: The calculation has no geometry this adapter can export a molecule from.
+E_EXPORT_GEOMETRY_UNAVAILABLE = "export_geometry_unavailable"
+
+#: The geometry's owning entry carries no resolvable charge/multiplicity
+#: (identity ``null`` or ambiguous across owners).
+E_EXPORT_IDENTITY_UNAVAILABLE = "export_identity_unavailable"
+
+#: The calculation carries no level of theory (method/basis) to export.
+E_EXPORT_LEVEL_OF_THEORY_UNAVAILABLE = "export_level_of_theory_unavailable"
+
+#: Exporting a ``freq`` record requires the integer ``calculation_id`` to
+#: call ``GET /calculations/{id}/hessian`` (a plain, non-scientific route
+#: that takes only the integer id, never a public ref). On a deployment
+#: whose internal-id visibility policy hides ``calculation_id`` from the
+#: scientific read, and when the caller supplied a ref rather than an int,
+#: there is no way to recover it -- refused rather than guessed. Pass the
+#: integer id directly (``export_calculation(client, 123)``) to avoid this.
+E_EXPORT_CALCULATION_ID_UNAVAILABLE = "export_calculation_id_unavailable"
+
+#: The freq path's Hessian read (``GET /calculations/{id}/hessian``)
+#: reached this deployment's legacy-read auth gate and was rejected (401/403)
+#: rather than returning a genuine 404. Distinct from
+#: ``export_hessian_unavailable``: that code means the calculation has no
+#: stored Hessian at all; this one means the read was never actually
+#: evaluated because the caller carried no (or an invalid) credential for a
+#: hosted deployment with ``legacy_reads_require_auth`` enabled. Configure
+#: an API key on the client and retry rather than treating this as "no
+#: Hessian".
+E_EXPORT_HESSIAN_UNAUTHORIZED = "export_hessian_unauthorized"
+
+#: The per-atom isotope read this adapter needs to export honest
+#: ``mass_numbers`` could not be completed. ``export_calculation`` reads
+#: atom-resolved isotopes from the legacy, internal-id ``GET /geometries``
+#: surface (``GeometryAtomRead.isotope_mass_number``) -- the scientific
+#: geometry read (``GET /scientific/geometries/{handle}``) carries no such
+#: field at all, see the module docstring's "Isotopes" section. This code
+#: covers every way that legacy read can fail to produce a usable row: the
+#: deployment's legacy-read auth gate rejected it (401/403, e.g. a hosted
+#: deployment with no API key configured), the geometry id/hash was not
+#: found (404, or a 200 with an empty ``items`` list for a ``geom_hash``
+#: query), or the call raised for any other reason. Never worked around by
+#: silently defaulting every atom to its standard nuclide -- that is
+#: exactly the guess this code exists to refuse instead of making.
+E_EXPORT_ISOTOPES_UNAVAILABLE = "export_isotopes_unavailable"
+
+#: The legacy per-atom isotope read (see ``export_isotopes_unavailable``)
+#: returned atoms that do not line up, element-for-element in
+#: ``atom_index`` order, with the atoms already read from the scientific
+#: geometry route that supplies the exported molecule's coordinates. Two
+#: reads of what should be the identical stored geometry disagreeing is
+#: refused rather than silently exporting mismatched coordinates and
+#: isotopes.
+E_EXPORT_GEOMETRY_MISMATCH = "export_geometry_mismatch"

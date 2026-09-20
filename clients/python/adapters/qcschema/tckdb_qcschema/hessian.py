@@ -9,6 +9,10 @@ against a real Psi4/qcengine hessian document -- see
 ``[matrix[row][col] for row in range(3N) for col in range(row + 1)]``. This
 module reshapes and packs to that same order, and applies the same
 symmetry check ORCA parsing does before trusting the result.
+
+:func:`unpack_lower_triangle` (C-Q3) is the exact inverse, used by the
+exporter to rebuild the full symmetric matrix QCSchema's driver-``hessian``
+``return_result`` expects from the packed lower triangle TCKDB stores.
 """
 
 from __future__ import annotations
@@ -68,4 +72,45 @@ def pack_lower_triangle(flat: list[float], natoms: int) -> list[float]:
     return [matrix[row][col] for row in range(dim) for col in range(row + 1)]
 
 
-__all__ = ["SYMMETRY_ATOL", "reshape_full_matrix", "pack_lower_triangle"]
+def unpack_lower_triangle(packed: list[float], natoms: int) -> list[float]:
+    """Packed lower triangle (incl. diagonal) -> full symmetric matrix, flat row-major.
+
+    The exact inverse of :func:`pack_lower_triangle`'s iteration order
+    (``for row in range(dim): for col in range(row + 1): ...``): walked in
+    the same order, each packed value is placed at both ``[row][col]`` and
+    its mirror ``[col][row]``, so the result is symmetric by construction
+    rather than by a second check. Returns a flat list of length
+    ``(3N)**2`` -- QCSchema's own flattened-full-matrix shape for a
+    driver-``hessian`` ``return_result`` (see the module docstring), ready
+    to hand straight to ``qcelemental``.
+
+    :raises ValueError: ``packed`` is not exactly ``3N*(3N+1)/2`` long.
+    """
+    dim = 3 * natoms
+    expected = dim * (dim + 1) // 2
+    if len(packed) != expected:
+        raise ValueError(
+            f"packed lower triangle has {len(packed)} entries but a "
+            f"{natoms}-atom Hessian's packed lower triangle (incl. "
+            f"diagonal) must have exactly {expected} (= 3N*(3N+1)/2 for "
+            f"N={natoms})."
+        )
+
+    matrix = [[0.0] * dim for _ in range(dim)]
+    index = 0
+    for row in range(dim):
+        for col in range(row + 1):
+            value = float(packed[index])
+            matrix[row][col] = value
+            matrix[col][row] = value
+            index += 1
+
+    return [matrix[row][col] for row in range(dim) for col in range(dim)]
+
+
+__all__ = [
+    "SYMMETRY_ATOL",
+    "reshape_full_matrix",
+    "pack_lower_triangle",
+    "unpack_lower_triangle",
+]

@@ -60,6 +60,15 @@ Both are real "the job did not produce usable evidence" states, so
 family-specific class validation is attempted, and ``False`` there refuses
 ``job_failed`` immediately, uniformly, for either shape. Only once that
 gate has passed does the reader attempt strict class validation.
+
+TCKDB exports (C-Q3)
+---------------------
+:mod:`tckdb_qcschema.exporter` turns a stored calculation back into a
+QCSchema document with top-level ``provenance.creator="TCKDB"``. Such a
+document is refused with ``tckdb_export_reimport_refused``, checked the
+same way and at the same point as the ``job_failed`` gate above -- on the
+raw dict, before family dispatch -- so TCKDB's own reformatted numbers can
+never be re-imported and read back as a second, independent ESS job.
 """
 
 from __future__ import annotations
@@ -82,6 +91,7 @@ from .errors import (
     E_DOCUMENT_INVALID,
     E_JOB_FAILED,
     E_SCHEMA_VERSION_FAMILY_MISMATCH,
+    E_TCKDB_EXPORT_REIMPORT_REFUSED,
     QCSchemaAdapterError,
 )
 
@@ -206,6 +216,27 @@ def read_document(raw_bytes: bytes) -> QCRecord:
         raise QCSchemaAdapterError(
             E_JOB_FAILED,
             "document declares success=false; nothing is mapped or posted.",
+        )
+
+    # A document this adapter itself exported (see exporter.py) carries
+    # provenance.creator="TCKDB" at the top level, on every family and
+    # record kind (v1 and v2 both type a top-level ``provenance`` on
+    # AtomicResult/OptimizationResult; v2's is distinct from
+    # ``input_data.provenance``, which is the *original* request's, not
+    # what this check reads). Refused before any family dispatch or class
+    # validation, on the raw dict, so an export can never be re-imported
+    # and read back as independent evidence of a second ESS job -- it is
+    # TCKDB's own stored numbers reformatted, not a new document.
+    exported_creator = (document.get("provenance") or {}).get("creator")
+    if exported_creator == "TCKDB":
+        raise QCSchemaAdapterError(
+            E_TCKDB_EXPORT_REIMPORT_REFUSED,
+            "document declares provenance.creator='TCKDB': this is a "
+            "document tckdb-qcschema itself exported, not independent "
+            "evidence. Re-importing it would let TCKDB's own stored "
+            "numbers return as a second, apparently-independent "
+            "calculation of the same result. Refused; nothing is mapped "
+            "or posted.",
         )
 
     family = _family_of(document)
