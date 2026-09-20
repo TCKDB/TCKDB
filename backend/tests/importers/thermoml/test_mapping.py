@@ -687,7 +687,28 @@ def test_identity_hint_uses_tckdb_key_names_and_keeps_thermoml_names():
     assert hint["inchi"].startswith("InChI=1S/C6H6")
     assert hint["smiles"] == ["c1ccccc1"]
     assert hint["formula"] == "C6H6"
-    assert hint["cas"] == "71-43-2"
+    assert hint["cas_number"] == "71-43-2"
+    assert hint["name"] == "benzene"
     assert hint["names"] == ["benzene"]
     assert hint["thermoml_identifiers"]["sStandardInChIKey"] == hint["inchikey"]
     assert "standard_inchi_key" not in hint
+
+
+def test_report_identity_is_deduplicated_by_inchikey_across_tables():
+    """Two Cp tables for one compound in one document yield ONE identity
+    entry. This is the line ``5f38ed46`` broke by missing a key rename; a
+    no-op on that line must turn this red."""
+    fixture = (
+        Path(__file__).resolve().parents[3]
+        / "app" / "importers" / "thermoml" / "fixtures"
+        / "cp_ideal_gas_statistical_thermodynamics.xml"
+    )
+    text = fixture.read_text()
+    start = text.index("<PureOrMixtureData>")
+    end = text.index("</PureOrMixtureData>") + len("</PureOrMixtureData>")
+    doubled = text[:end] + text[start:end] + text[end:]
+    document = parse_thermoml_document(doubled.encode("utf-8"))
+    result = map_document(document, doi="10.0000/dedupe-test")
+    keys = [ident["inchikey"] for ident in result.report.identity]
+    assert len(result.payloads) >= 2
+    assert len(keys) == 1, keys

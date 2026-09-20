@@ -207,7 +207,8 @@ def _identity_hint(compound: ThermoMLCompound) -> dict[str, Any]:
         "inchi": compound.standard_inchi,
         "smiles": list(compound.smiles),
         "formula": compound.formula_molec,
-        "cas": compound.cas_rn,
+        "cas_number": compound.cas_rn,
+        "name": compound.common_names[0] if compound.common_names else None,
         "names": list(compound.common_names),
         "thermoml_identifiers": {
             "sStandardInChI": compound.standard_inchi,
@@ -589,7 +590,7 @@ def map_document(
         retained_only.update(table_report.retained_only)
         unsupported.extend(table_report.unsupported)
         rejected.extend(table_report.rejected)
-        key = identity_hint.get("standard_inchi_key") or f"block-{table.block_index}"
+        key = identity_hint.get("inchikey") or f"block-{table.block_index}"
         identity_by_key[key] = identity_hint
 
     report = MappingReport(
