@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 import json
-from typing import Any, get_args, get_type_hints
+from typing import Any, Required, get_args, get_type_hints
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -47,6 +47,7 @@ from tckdb_client import (
     WorkflowToolReleaseIdentity,
 )
 from tckdb_client.pagination import iter_paginated_records
+from tckdb_client.scientific_types import ObservationRecord
 
 
 def _page(*, offset: int = 0, limit: int = 50, total: int = 0) -> dict[str, Any]:
@@ -139,6 +140,28 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
         "WorkflowToolReleaseIdentity",
     ):
         assert name in tckdb_client.__all__
+
+
+def test_observation_record_carries_a_required_identity_basis() -> None:
+    """Phase C-E5 review round 3 (R2). ``identity_basis`` distinguishes
+    *how* a returned observation got its species-entry identity (importer
+    auto-match vs. curator attach) -- not whether it has one, which is
+    structurally guaranteed by the route (see ``ObservationRecord``'s
+    docstring). It is therefore ``Required``, like every other field on
+    this record that the backend always returns.
+
+    ``__required_keys__`` is not used here: this module's TypedDicts use
+    ``from __future__ import annotations``, and on this repo's Python this
+    leaves ``__required_keys__`` empty for every TypedDict in the module
+    (verified: ``ThermoDetailRecord.__required_keys__`` is also
+    ``frozenset()``), so asserting against it would pass regardless of
+    whether the field is actually ``Required``. ``get_type_hints(...,
+    include_extras=True)`` resolves the forward-ref string annotation and
+    keeps the ``Required``/``NotRequired`` wrapper, which plain
+    ``get_type_hints(...)`` strips.
+    """
+    hints = get_type_hints(ObservationRecord, include_extras=True)
+    assert hints["identity_basis"] == Required[str]
 
 
 def test_detail_methods_publish_flat_record_response_annotations() -> None:

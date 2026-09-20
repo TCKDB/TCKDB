@@ -206,6 +206,32 @@ class MolecularPropertyKind(str, Enum):
     other = "other"
 
 
+class ObservationIdentityBasis(str, Enum):
+    """How a ``molecular_property_observation`` row came to carry a
+    ``species_entry_id`` -- read-only, derived, never stored.
+
+    Every row reachable through ``GET .../species-entries/{id}/observations``
+    has a non-null ``species_entry_id`` by construction (see that schema's
+    module docstring), so this is never absent on a returned record; it
+    only distinguishes *how* the identity got there.
+
+    ``external_identifier_match``  an importer resolved it automatically
+                                    (:func:`app.services.
+                                    external_observation_identity.
+                                    resolve_identity`), by an exact
+                                    single-InChIKey match.
+    ``curator_attached``           a curator resolved it after deposit
+                                    through the identity-attach service
+                                    (``app/services/
+                                    observation_identity_attach.py``),
+                                    recorded as a ``SubmissionAuditEvent``
+                                    of kind ``observation_identity_attached``.
+    """
+
+    external_identifier_match = "external_identifier_match"
+    curator_attached = "curator_attached"
+
+
 class ObservedUncertaintyKind(str, Enum):
     """Meaning of ``molecular_property_observation.scalar_uncertainty``.
 
@@ -1289,6 +1315,7 @@ class SubmissionAuditEventKind(str, Enum):
     submission_superseded = "submission_superseded"
     status_changed = "status_changed"
     public_visibility_changed = "public_visibility_changed"
+    observation_identity_attached = "observation_identity_attached"
 
 
 class RightsBasisKind(str, Enum):

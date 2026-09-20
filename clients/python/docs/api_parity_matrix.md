@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 105 |
+| typed | 106 |
 | raw_only | 107 |
-| not_applicable | 44 |
-| **total** | **256** |
+| not_applicable | 45 |
+| **total** | **258** |
 
 ## Typed coverage
 
@@ -100,6 +100,7 @@ A first-class client method exists for these operations.
 | `POST /api/v1/scientific/reactions/search` | yes | `search_reactions` | `iter_reactions` | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species-calculations/search` | yes | `search_species_calculations` | `iter_species_calculations` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
 | `POST /api/v1/scientific/species-calculations/search` | yes | `search_species_calculations` | `iter_species_calculations` | `examples/query_cookbook.py` | `tests/test_scientific_search.py` |
+| `GET /api/v1/scientific/species-entries/{species_entry_id}/observations` | yes | `get_species_observations` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/species-entries/{species_entry_id}/thermo` | yes | `get_species_thermo` | — | `examples/scientific_reads.py` | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species/browse` | yes | `browse_species` | `iter_species_browse` | — | `tests/test_scientific.py` |
 | `GET /api/v1/scientific/species/search` | yes | `search_species` | `iter_species` | `examples/scientific_reads.py` | `tests/test_scientific.py` |
@@ -328,21 +329,11 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/admin/users` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/users/{user_id}/role` | yes | — | — | — | — |
 
-> Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
-
-| Operation | raw HTTP | typed client | iterator | example | contract test |
-|---|---|---|---|---|---|
-| `GET /api/v1/auth/api-keys` | yes | — | — | — | — |
-| `POST /api/v1/auth/api-keys` | yes | — | — | — | — |
-| `DELETE /api/v1/auth/api-keys/{key_id}` | yes | — | — | — | — |
-| `POST /api/v1/auth/login` | yes | — | — | — | — |
-| `POST /api/v1/auth/logout` | yes | — | — | — | — |
-| `POST /api/v1/auth/register` | yes | — | — | — | — |
-
 > Curator/reviewer workflow. Driving review state from a producer-side upload client would let a contributor grade their own submission.
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
+| `POST /api/v1/admin/observations/{observation_ref}/identity` | yes | — | — | — | — |
 | `POST /api/v1/conformer-groups/{conformer_group_id}/selections` | yes | — | — | — | — |
 | `POST /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate` | yes | — | — | — | — |
 | `GET /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/latest` | yes | — | — | — | — |
@@ -366,3 +357,14 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/supersede` | yes | — | — | — | — |
+
+> Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/auth/api-keys` | yes | — | — | — | — |
+| `POST /api/v1/auth/api-keys` | yes | — | — | — | — |
+| `DELETE /api/v1/auth/api-keys/{key_id}` | yes | — | — | — | — |
+| `POST /api/v1/auth/login` | yes | — | — | — | — |
+| `POST /api/v1/auth/logout` | yes | — | — | — | — |
+| `POST /api/v1/auth/register` | yes | — | — | — | — |

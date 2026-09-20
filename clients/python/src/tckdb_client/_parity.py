@@ -263,6 +263,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_species_thermo", None, "examples/scientific_reads.py",
         "tests/test_scientific.py",
     ),
+    (
+        "GET", "/api/v1/scientific/species-entries/{species_entry_id}/observations",
+        "get_species_observations", None, None, _NEW_METHOD_TESTS,
+    ),
     # --- Scientific product searches --------------------------------
     (
         "GET", "/api/v1/scientific/thermo/search", "search_thermo", "iter_thermo",
@@ -865,6 +869,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("GET", "/api/v1/record-reviews/queue"),
         ("GET", "/api/v1/record-reviews/{record_type}/{record_id}"),
         ("PATCH", "/api/v1/record-reviews/{record_type}/{record_id}"),
+        ("POST", "/api/v1/admin/observations/{observation_ref}/identity"),
         ("GET", "/api/v1/species-entries/{species_entry_id}/reviews"),
         ("POST", "/api/v1/species-entries/{species_entry_id}/reviews"),
         ("POST", "/api/v1/conformer-groups/{conformer_group_id}/selections"),

@@ -2,6 +2,16 @@
 
 Uses the per-test transactional ``db_session`` fixture so every test
 rolls back at teardown.
+
+Phase C-E5 review round 3 (R1): every ``commit=True`` call now opens (or
+reuses) a bulk-import ``Submission`` and links every inserted row to it --
+mirrors ``app.services.thermoml_cp_import`` / ``tests/services/
+test_thermoml_cp_import.py``. Without this, ``observation_identity_attach``
+refuses every CCCBDB-imported row (`observation_identity_attach_requires_
+submission`); see ``test_inserted_rows_are_linked_to_submission`` and
+``tests/api/test_api_observation_identity_attach.py::
+test_attach_refuses_an_observation_linked_to_no_submission`` (which already
+pins the attach-side refusal for any unlinked row, CCCBDB-sourced or not).
 """
 
 from __future__ import annotations
@@ -12,16 +22,21 @@ from pathlib import Path
 import pytest
 from sqlalchemy import select
 
+from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import (
     MoleculeKind,
+    RightsBasisKind,
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    SubmissionSourceKind,
 )
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.db.models.species import Species, SpeciesEntry
+from app.db.models.submission import Submission, SubmissionRecordLink
+from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.importers.cccbdb.payload_io import (
     filter_payloads_by_property_kind,
     load_payloads,
@@ -32,6 +47,25 @@ from app.services.cccbdb_molecular_property_import import (
 
 WATER_INCHIKEY = "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
 ETHANOL_INCHIKEY = "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+
+_LICENSE_ID = "CC0-1.0"
+
+
+@pytest.fixture
+def curator(db_session) -> AppUser:
+    user = AppUser(username="cccbdb_curator_test", role=AppUserRole.curator)
+    db_session.add(user)
+    db_session.flush()
+    return user
+
+
+def _import(db_session, curator, payloads, **kwargs):
+    """``import_cccbdb_molecular_property_payloads`` with the actor/license
+    kwargs every call now needs, overridable per-test."""
+
+    kwargs.setdefault("actor", curator)
+    kwargs.setdefault("license_id", _LICENSE_ID)
+    return import_cccbdb_molecular_property_payloads(db_session, payloads, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -206,13 +240,13 @@ class TestPayloadLoading:
 
 
 class TestDryRunVsCommit:
-    def test_dry_run_inserts_no_rows(self, db_session):
+    def test_dry_run_inserts_no_rows(self, db_session, curator):
         payloads = [_make_payload()]
         before = db_session.execute(
             select(MolecularPropertyObservation)
         ).all()
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, payloads, commit=False, resolve_identity=False
+        result = _import(
+            db_session, curator, payloads, commit=False, resolve_identity=False
         )
         after = db_session.execute(
             select(MolecularPropertyObservation)
@@ -221,10 +255,10 @@ class TestDryRunVsCommit:
         assert result.would_insert_count == 1
         assert result.inserted_count == 0
 
-    def test_commit_persists_rows(self, db_session):
+    def test_commit_persists_rows(self, db_session, curator):
         payloads = [_make_payload()]
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, payloads, commit=True, resolve_identity=False
+        result = _import(
+            db_session, curator, payloads, commit=True, resolve_identity=False
         )
         rows = db_session.execute(
             select(MolecularPropertyObservation)
@@ -241,13 +275,13 @@ class TestDryRunVsCommit:
 
 
 class TestIdempotency:
-    def test_second_import_is_idempotent(self, db_session):
+    def test_second_import_is_idempotent(self, db_session, curator):
         payloads = [_make_payload()]
-        first = import_cccbdb_molecular_property_payloads(
-            db_session, payloads, commit=True, resolve_identity=False
+        first = _import(
+            db_session, curator, payloads, commit=True, resolve_identity=False
         )
-        second = import_cccbdb_molecular_property_payloads(
-            db_session, payloads, commit=True, resolve_identity=False
+        second = _import(
+            db_session, curator, payloads, commit=True, resolve_identity=False
         )
         rows = db_session.execute(
             select(MolecularPropertyObservation)
@@ -266,12 +300,12 @@ class TestIdempotency:
 
 
 class TestIdentityResolution:
-    def test_exact_inchikey_match_resolves(self, db_session):
+    def test_exact_inchikey_match_resolves(self, db_session, curator):
         entry_id = _seed_species_entry(
             db_session, smiles="O", inchi_key=WATER_INCHIKEY
         )
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [_make_payload()], commit=True
+        result = _import(
+            db_session, curator, [_make_payload()], commit=True
         )
         assert result.resolved_identity_count == 1
         row = db_session.execute(
@@ -279,10 +313,10 @@ class TestIdentityResolution:
         ).scalar_one()
         assert row.species_entry_id == entry_id
 
-    def test_no_inchikey_remains_unresolved_but_insertable(self, db_session):
+    def test_no_inchikey_remains_unresolved_but_insertable(self, db_session, curator):
         payload = _make_payload(inchikey=None)
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [payload], commit=True
+        result = _import(
+            db_session, curator, [payload], commit=True
         )
         assert result.unresolved_identity_count == 1
         assert result.inserted_count == 1
@@ -291,10 +325,10 @@ class TestIdentityResolution:
         ).scalar_one()
         assert row.species_entry_id is None
 
-    def test_inchikey_not_in_db_is_not_found(self, db_session):
+    def test_inchikey_not_in_db_is_not_found(self, db_session, curator):
         payload = _make_payload(inchikey="NOTASPECIESINCHIKEY-AA-N")
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [payload], commit=True
+        result = _import(
+            db_session, curator, [payload], commit=True
         )
         assert result.not_found_identity_count == 1
         assert result.inserted_count == 1
@@ -303,7 +337,7 @@ class TestIdentityResolution:
         ).scalar_one()
         assert row.species_entry_id is None
 
-    def test_multiple_compatible_entries_is_ambiguous(self, db_session):
+    def test_multiple_compatible_entries_is_ambiguous(self, db_session, curator):
         species = Species(
             smiles="O", inchi_key=WATER_INCHIKEY,
             charge=0, multiplicity=1,
@@ -325,8 +359,8 @@ class TestIdentityResolution:
                 )
             )
         db_session.flush()
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [_make_payload()], commit=True
+        result = _import(
+            db_session, curator, [_make_payload()], commit=True
         )
         assert result.ambiguous_identity_count == 1
         row = db_session.execute(
@@ -334,12 +368,12 @@ class TestIdentityResolution:
         ).scalar_one()
         assert row.species_entry_id is None
 
-    def test_formula_only_does_not_auto_resolve(self, db_session):
+    def test_formula_only_does_not_auto_resolve(self, db_session, curator):
         payload = _make_payload(
             inchikey=None, name=None, cas_number=None, formula="H2O"
         )
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [payload], commit=True
+        result = _import(
+            db_session, curator, [payload], commit=True
         )
         assert result.unresolved_identity_count == 1
         assert result.resolved_identity_count == 0
@@ -349,22 +383,22 @@ class TestIdentityResolution:
             for w in result.dispositions[0].warnings
         )
 
-    def test_formula_plus_name_does_not_auto_resolve(self, db_session):
+    def test_formula_plus_name_does_not_auto_resolve(self, db_session, curator):
         payload = _make_payload(
             inchikey=None, cas_number=None, formula="H2O", name="Water"
         )
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [payload], commit=True
+        result = _import(
+            db_session, curator, [payload], commit=True
         )
         assert result.resolved_identity_count == 0
         assert result.unresolved_identity_count == 1
 
-    def test_cas_only_does_not_auto_resolve(self, db_session):
+    def test_cas_only_does_not_auto_resolve(self, db_session, curator):
         payload = _make_payload(
             inchikey=None, cas_number="7732-18-5", name=None, formula="H2O"
         )
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [payload], commit=True
+        result = _import(
+            db_session, curator, [payload], commit=True
         )
         assert result.resolved_identity_count == 0
         assert result.unresolved_identity_count == 1
@@ -374,12 +408,12 @@ class TestIdentityResolution:
             for w in result.dispositions[0].warnings
         )
 
-    def test_no_resolve_identity_flag_skips_lookup(self, db_session):
+    def test_no_resolve_identity_flag_skips_lookup(self, db_session, curator):
         _seed_species_entry(
             db_session, smiles="O", inchi_key=WATER_INCHIKEY
         )
-        result = import_cccbdb_molecular_property_payloads(
-            db_session,
+        result = _import(
+            db_session, curator,
             [_make_payload()],
             commit=True,
             resolve_identity=False,
@@ -399,15 +433,15 @@ class TestIdentityResolution:
 
 
 class TestInvalidPayloads:
-    def test_invalid_payload_warns_and_continues(self, db_session):
+    def test_invalid_payload_warns_and_continues(self, db_session, curator):
         good = _make_payload()
         bad = {
             # Missing required scientific_origin / property_kind.
             "scalar_value": 100.0,
             "scalar_unit": "kJ/mol",
         }
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [good, bad], commit=True, resolve_identity=False
+        result = _import(
+            db_session, curator, [good, bad], commit=True, resolve_identity=False
         )
         assert result.invalid_payload_count == 1
         assert result.valid_payload_count == 1
@@ -416,13 +450,13 @@ class TestInvalidPayloads:
         assert "invalid" in actions
         assert "inserted" in actions
 
-    def test_fail_on_invalid_raises(self, db_session):
+    def test_fail_on_invalid_raises(self, db_session, curator):
         from pydantic import ValidationError
 
         bad = {"scalar_value": 100.0, "scalar_unit": "kJ/mol"}
         with pytest.raises(ValidationError):
-            import_cccbdb_molecular_property_payloads(
-                db_session, [bad],
+            _import(
+                db_session, curator, [bad],
                 commit=False, resolve_identity=False,
                 fail_on_invalid=True,
             )
@@ -434,7 +468,7 @@ class TestInvalidPayloads:
 
 
 class TestDispositionShape:
-    def test_counts_add_up(self, db_session):
+    def test_counts_add_up(self, db_session, curator):
         _seed_species_entry(
             db_session, smiles="O", inchi_key=WATER_INCHIKEY
         )
@@ -445,8 +479,8 @@ class TestDispositionShape:
                           inchikey="NOMATCHINCHIKEY-AB-N"),
             {"scalar_value": 1.0, "scalar_unit": "kJ/mol"},  # invalid
         ]
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, payloads, commit=True
+        result = _import(
+            db_session, curator, payloads, commit=True
         )
         assert result.payload_count == 4
         assert (
@@ -463,9 +497,9 @@ class TestDispositionShape:
         ).scalars().all()
         assert len(rows) == 3
 
-    def test_disposition_to_json_keys(self, db_session):
-        result = import_cccbdb_molecular_property_payloads(
-            db_session, [_make_payload(inchikey=None)],
+    def test_disposition_to_json_keys(self, db_session, curator):
+        result = _import(
+            db_session, curator, [_make_payload(inchikey=None)],
             commit=False, resolve_identity=True,
         )
         d = result.dispositions[0].to_json()
@@ -507,15 +541,97 @@ def test_service_does_not_import_parsers_or_fetchers():
 
 
 # ---------------------------------------------------------------------------
+# Submission wiring (Phase C-E5 review round 3, R1)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmissionWiring:
+    def test_inserted_rows_are_linked_to_submission(self, db_session, curator):
+        payloads = [_make_payload(record_key="a"), _make_payload(record_key="b")]
+        result = _import(db_session, curator, payloads, commit=True)
+
+        assert result.submission_id is not None
+        submission = db_session.get(Submission, result.submission_id)
+        assert submission is not None
+        assert submission.source_kind == SubmissionSourceKind.bulk_import
+
+        links = db_session.execute(
+            select(SubmissionRecordLink).where(
+                SubmissionRecordLink.submission_id == submission.id
+            )
+        ).scalars().all()
+        assert len(links) == 2
+
+        rows = db_session.execute(
+            select(MolecularPropertyObservation)
+        ).scalars().all()
+        assert {r.id for r in rows} == {link.record_id for link in links}
+
+    def test_submission_stands_on_depositor_agreement(self, db_session, curator):
+        """No CCCBDB terms/citation text exists anywhere in this repo (see
+        ``backend/docs/specs/cccbdb_importer.md``'s open "Q1. Legal / terms
+        of use" question) -- unlike ThermoML, this importer does not record
+        a second, explicit ``source_terms`` attestation. The automatic
+        ``depositor_agreement`` row ``open_upload_submission`` always
+        records from the deposit's own ``rights`` fragment is left
+        standing.
+        """
+        result = _import(db_session, curator, [_make_payload()], commit=True)
+        submission = db_session.get(Submission, result.submission_id)
+
+        attestations = db_session.execute(
+            select(SubmissionRightsAttestation).where(
+                SubmissionRightsAttestation.submission_id == submission.id
+            )
+        ).scalars().all()
+        assert len(attestations) == 1
+        assert attestations[0].basis == RightsBasisKind.depositor_agreement
+        assert attestations[0].license_id == _LICENSE_ID
+
+    def test_dry_run_opens_no_persisted_submission(self, db_session, curator):
+        before_subs = db_session.execute(select(Submission)).all()
+        result = _import(
+            db_session, curator, [_make_payload()], commit=False
+        )
+        after_subs = db_session.execute(select(Submission)).all()
+        assert len(after_subs) == len(before_subs)
+        assert result.would_insert_count == 1
+
+    def test_second_run_opens_no_new_submission(self, db_session, curator):
+        payloads = [_make_payload()]
+        first = _import(db_session, curator, payloads, commit=True)
+        before_subs = db_session.execute(select(Submission)).all()
+
+        second = _import(db_session, curator, payloads, commit=True)
+
+        after_subs = db_session.execute(select(Submission)).all()
+        assert len(after_subs) == len(before_subs)
+        assert first.submission_id is not None
+        assert second.submission_id is None
+        assert second.inserted_count == 0
+        assert second.duplicate_count == 1
+
+
+# ---------------------------------------------------------------------------
 # CLI (subset — the CLI just composes load + service; tests exercise both)
 # ---------------------------------------------------------------------------
 
 
 class TestCli:
+    def test_cli_missing_required_args_exits_2(self):
+        """``--license`` is required (mirrors ``scripts/thermoml_cp_import.
+        py``'s ``--archive``/``--doi``/``--license``): argparse itself
+        raises ``SystemExit(2)`` before any app-level validation runs."""
+        from scripts.cccbdb_import_molecular_property_payloads import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main([])
+        assert exc_info.value.code == 2
+
     def test_cli_rejects_when_no_dirs_given(self, tmp_path):
         from scripts.cccbdb_import_molecular_property_payloads import main
 
-        rc = main([])
+        rc = main(["--license", _LICENSE_ID])
         assert rc == 2
 
     def test_cli_rejects_missing_directory(self, tmp_path):
@@ -523,6 +639,7 @@ class TestCli:
 
         rc = main(
             [
+                "--license", _LICENSE_ID,
                 "--flat-payload-dir", str(tmp_path / "nope"),
             ]
         )

@@ -4,7 +4,10 @@ from the flat and form dry-run output directories into the database.
 Default behavior is a dry-run preview — every payload is validated,
 identity resolution runs against the current DB state, and would-be
 inserts are counted, but **no rows are committed**. Pass ``--commit``
-to persist.
+to persist. Whenever at least one row would newly insert, a
+``Submission(source_kind=bulk_import)`` wrapper is opened (mirroring
+``scripts/thermoml_cp_import.py``) so every inserted row is linked to it;
+a dry run's submission is rolled back with everything else.
 
 Exit codes:
 
@@ -68,6 +71,26 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--license",
+        dest="license_id",
+        required=True,
+        help=(
+            "SPDX identifier to license this deposit's rows under. Must "
+            "equal the release's own data_license exactly for a citable "
+            "release to include them (app.services.rights.licenses_match)."
+        ),
+    )
+    p.add_argument(
+        "--actor",
+        default="cccbdb_importer",
+        help=(
+            "Username of the AppUser recorded as this run's submission "
+            "creator and depositor_agreement rights attestor. Created "
+            "(role=curator) if it does not exist yet. Default: "
+            "cccbdb_importer."
+        ),
+    )
+    p.add_argument(
         "--commit", action="store_true",
         help="Actually persist rows. Default is dry-run.",
     )
@@ -117,6 +140,21 @@ def _database_url() -> str:
     )
 
 
+def _ensure_actor(session: Session, username: str):
+    from app.db.models.app_user import AppUser, AppUserRole
+
+    user = session.query(AppUser).filter_by(username=username).first()
+    if user is None:
+        user = AppUser(
+            username=username,
+            full_name="CCCBDB Importer",
+            role=AppUserRole.curator,
+        )
+        session.add(user)
+        session.flush()
+    return user
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
@@ -145,9 +183,12 @@ def main(argv: list[str] | None = None) -> int:
 
     engine = create_engine(_database_url(), future=True)
     with Session(engine) as session:
+        actor = _ensure_actor(session, args.actor)
         result = import_cccbdb_molecular_property_payloads(
             session,
             payloads,
+            actor=actor,
+            license_id=args.license_id,
             commit=args.commit,
             resolve_identity=not args.no_resolve_identity,
             created_by=args.created_by,

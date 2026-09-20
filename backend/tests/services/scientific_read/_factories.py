@@ -45,6 +45,7 @@ from app.db.models.common import (
     ImaginaryModeDisposition,
     KineticsModelKind,
     MeliusBacComponentKind,
+    MolecularPropertyKind,
     MoleculeKind,
     ReactionRole,
     RecordReviewStatus,
@@ -75,10 +76,14 @@ from app.db.models.energy_correction import (
     EnergyCorrectionSchemeComponentParam,
     FrequencyScaleFactor,
 )
+from app.db.models.external_source import ExternalSource, ExternalSourceRecord
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.kinetics import Kinetics
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
+from app.db.models.molecular_property_observation import (
+    MolecularPropertyObservation,
+)
 from app.db.models.reaction import (
     ChemReaction,
     ReactionEntry,
@@ -1490,6 +1495,113 @@ def make_transport(
     session.add(tr)
     session.flush()
     return tr
+
+
+def make_observation(
+    session: Session,
+    *,
+    species_entry=None,
+    property_kind: MolecularPropertyKind = MolecularPropertyKind.dipole_moment,
+    property_label: str | None = None,
+    scalar_value: float | None = 1.85,
+    scalar_unit: str | None = "D",
+    scalar_uncertainty: float | None = None,
+    uncertainty_kind=None,
+    uncertainty_coverage_factor: float | None = None,
+    uncertainty_level_of_confidence_pct: float | None = None,
+    uncertainty_assessor=None,
+    scientific_origin: _ScientificOriginKind = _ScientificOriginKind.experimental,
+    temperature_k: float | None = None,
+    pressure_bar: float | None = None,
+    state_basis=None,
+    state_label_raw: str | None = None,
+    method_note: str | None = None,
+    literature_id: int | None = None,
+    external_source_name: str | None = None,
+    external_source_release: str | None = None,
+    external_source_record_id: int | None = None,
+    reference_label: str | None = None,
+    raw_payload_json: dict | None = None,
+) -> MolecularPropertyObservation:
+    """Create a MolecularPropertyObservation row.
+
+    Defaults populate a plausible CCCBDB-style dipole-moment observation.
+    ``species_entry=None`` creates an identity-unresolved row (nullable
+    ``species_entry_id``, see the model's module docstring).
+    """
+    obs = MolecularPropertyObservation(
+        species_entry_id=species_entry.id if species_entry is not None else None,
+        scientific_origin=scientific_origin,
+        property_kind=property_kind,
+        property_label=property_label,
+        scalar_value=scalar_value,
+        scalar_unit=scalar_unit,
+        scalar_uncertainty=scalar_uncertainty,
+        uncertainty_kind=uncertainty_kind,
+        uncertainty_coverage_factor=uncertainty_coverage_factor,
+        uncertainty_level_of_confidence_pct=uncertainty_level_of_confidence_pct,
+        uncertainty_assessor=uncertainty_assessor,
+        temperature_k=temperature_k,
+        pressure_bar=pressure_bar,
+        state_basis=state_basis,
+        state_label_raw=state_label_raw,
+        method_note=method_note,
+        literature_id=literature_id,
+        external_source_name=external_source_name,
+        external_source_release=external_source_release,
+        external_source_record_id=external_source_record_id,
+        reference_label=reference_label,
+        raw_payload_json=raw_payload_json,
+    )
+    session.add(obs)
+    session.flush()
+    return obs
+
+
+def make_external_source(
+    session: Session,
+    *,
+    source_name: str = "NIST ThermoML Archive",
+    source_release: str = "2024-06",
+) -> ExternalSource:
+    src = ExternalSource(source_name=source_name, source_release=source_release)
+    session.add(src)
+    session.flush()
+    return src
+
+
+def make_external_source_record(
+    session: Session,
+    *,
+    external_source: ExternalSource,
+    source_record_key: str = "rec-1",
+    content_sha256: str = "a" * 64,
+    schema_id: str | None = "thermoml.v1",
+    parser_version: str = "1.0.0",
+    mapping_version: str = "1.0.0",
+    record_kind=None,
+) -> ExternalSourceRecord:
+    from datetime import datetime, timezone
+
+    from app.db.models.common import ExternalSourceRecordKind
+
+    row = ExternalSourceRecord(
+        external_source_id=external_source.id,
+        record_kind=record_kind or ExternalSourceRecordKind.thermoml_article,
+        source_uri="https://example.invalid/doc",
+        source_record_key=source_record_key,
+        retrieved_at=datetime.now(timezone.utc).replace(tzinfo=None),
+        content_sha256=content_sha256,
+        content_length=1024,
+        raw_uri="s3://bucket/key",
+        schema_id=schema_id,
+        parser_name="thermoml_parser",
+        parser_version=parser_version,
+        mapping_version=mapping_version,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def attach_transport_source_calculation(

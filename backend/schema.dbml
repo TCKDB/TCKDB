@@ -619,6 +619,7 @@ enum SubmissionAuditEventKind {
   submission_superseded
   status_changed
   public_visibility_changed
+  observation_identity_attached
 }
 
 enum SubmissionKind {
@@ -2300,8 +2301,10 @@ Table molecular_property_observation {
   note text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
 
   indexes {
+    public_ref [unique, name: 'ix_molecular_property_observation_public_ref']
     external_source_content_sha256 [name: 'ix_mpo_external_source_content_sha256']
     (external_source_name, external_source_release) [name: 'ix_mpo_external_source_release']
     (property_kind, scientific_origin) [name: 'ix_mpo_property_kind_origin']

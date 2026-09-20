@@ -23,9 +23,27 @@ Design contract
   provenance for later manual curation.
 * **Idempotency** rides on the existing
   ``molecular_property_observation.mpo_dedupe_key`` UNIQUE
-  constraint (postgresql_nulls_not_distinct=True) via
-  ``INSERT ... ON CONFLICT DO NOTHING``. A second import of the same
-  payloads yields ``duplicate`` dispositions instead of new rows.
+  constraint (postgresql_nulls_not_distinct=True) via a read-before-write
+  dedupe pre-check. A second import of the same payloads yields
+  ``duplicate`` dispositions instead of new rows, and opens no new
+  submission (see below).
+* **Every inserted row is linked to a submission (Phase C-E5 review round
+  3).** Mirrors ``app.services.thermoml_cp_import``: one
+  ``Submission(source_kind=bulk_import)`` is opened per run whenever the
+  run's dedupe pre-check finds at least one row that would newly insert,
+  every row this run actually inserts is linked to it via
+  ``app.services.submission.link_record``, and the open happens
+  regardless of ``commit`` (a dry run's submission is rolled back with
+  everything else at the end, so nothing persists — see
+  ``_open_bulk_import_submission`` for why the rights basis is
+  ``depositor_agreement`` rather than ``source_terms``). Without this, a
+  curator's later ``observation_identity_attach`` call on any row this
+  importer wrote could never succeed:
+  ``observation_identity_attach_requires_submission`` refuses an
+  observation with no submission link, and until this change every row
+  this importer ever wrote had none. Rows written by this importer
+  *before* this change are not retroactively linked — see the "Legacy
+  CCCBDB rows" section of PR #513 for the operator remediation.
 * **Dry-run by default.** ``commit=False`` runs the full pipeline
   inside the caller's transaction without committing. ``commit=True``
   commits on success and rolls back on unexpected error.
@@ -41,7 +59,10 @@ from pydantic import ValidationError
 from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.rights import DepositRights
 
+from app.db.models.app_user import AppUser
+from app.db.models.common import SubmissionKind, SubmissionRecordType, SubmissionSourceKind
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
@@ -63,6 +84,12 @@ from app.services.external_observation_identity import (
 )
 from app.services.external_observation_identity import (
     resolve_identity as _resolve_identity,
+)
+from app.services.submission import link_record
+from app.services.upload_submission import (
+    UploadSubmissionContext,
+    mark_upload_ingested,
+    open_upload_submission,
 )
 
 _logger = logging.getLogger(__name__)
@@ -147,6 +174,7 @@ class CCCBDBMolecularPropertyImportResult:
     unresolved_identity_count: int = 0
     ambiguous_identity_count: int = 0
     not_found_identity_count: int = 0
+    submission_id: int | None = None
     warnings: list[str] = field(default_factory=list)
     dispositions: list[PayloadDisposition] = field(default_factory=list)
 
@@ -163,6 +191,7 @@ class CCCBDBMolecularPropertyImportResult:
             "unresolved_identity_count": self.unresolved_identity_count,
             "ambiguous_identity_count": self.ambiguous_identity_count,
             "not_found_identity_count": self.not_found_identity_count,
+            "submission_id": self.submission_id,
             "warnings": list(self.warnings),
             "dispositions": [d.to_json() for d in self.dispositions],
         }
@@ -177,6 +206,50 @@ class CCCBDBMolecularPropertyImportResult:
 # app.services.external_observation_identity (Phase C-E3 extraction);
 # imported above and aliased so the rest of this module (and any external
 # caller importing these private names) sees identical behavior.
+
+
+# ---------------------------------------------------------------------------
+# Submission wrapper (Phase C-E5 review round 3)
+# ---------------------------------------------------------------------------
+
+
+def _open_bulk_import_submission(
+    session: Session,
+    *,
+    actor: AppUser,
+    license_id: str,
+) -> UploadSubmissionContext:
+    """Open the submission wrapper for one CCCBDB import run.
+
+    Unlike ``app.services.thermoml_cp_import``'s ThermoML importer, which
+    records an explicit ``source_terms`` attestation quoting NIST/TRC's own
+    published terms verbatim, CCCBDB has no terms/citation text captured
+    anywhere in this repo: ``app/importers/cccbdb/__init__.py`` defines
+    ``SOURCE_NAME`` / ``SOURCE_RELEASE`` / ``SOURCE_DATABASE_DOI`` but no
+    ``TERMS_TEXT``, and ``backend/docs/specs/cccbdb_importer.md`` still
+    lists "Q1. Legal / terms of use: confirm CCCBDB's published use policy"
+    as an open question. Rather than fabricate terms text that was never
+    verified, this import stands on ``depositor_agreement`` — the same
+    basis ``open_upload_submission`` always records automatically from the
+    deposit's own ``rights`` fragment, and the same basis ThermoML's own
+    first (superseded) attestation carries before its explicit
+    ``source_terms`` row supersedes it. No second attestation is recorded
+    here, so ``depositor_agreement`` is left standing for this submission.
+    """
+
+    rights = DepositRights(
+        license=license_id,
+        depositor_attests_right_to_license=True,
+    )
+    submission_ctx = open_upload_submission(
+        session,
+        created_by=actor.id,
+        kind=SubmissionKind.other,
+        rights=rights,
+        title="CCCBDB molecular-property bulk import",
+    )
+    submission_ctx.submission.source_kind = SubmissionSourceKind.bulk_import
+    return submission_ctx
 
 
 # ---------------------------------------------------------------------------
@@ -230,14 +303,16 @@ def _attempt_insert(
     row_kwargs: dict[str, Any],
     *,
     commit_mode: bool,
-) -> tuple[bool, str | None]:
+) -> tuple[bool, str | None, int | None]:
     """Insert one row via the ORM after a dedupe-key pre-check.
 
-    Returns ``(inserted, warning)``. ``inserted`` is False iff the
+    Returns ``(inserted, warning, row_id)``. ``inserted`` is False iff the
     pre-check found a match (the dedupe is taken as "this exact row
     already exists"). The pre-check uses ``IS NOT DISTINCT FROM`` so
     NULL columns match exactly like the DB-level UNIQUE constraint
-    with ``postgresql_nulls_not_distinct=True``.
+    with ``postgresql_nulls_not_distinct=True``. ``row_id`` is the
+    inserted (or matched) row's id, so a caller in commit mode can link
+    it to the run's submission.
 
     A SAVEPOINT around the insert (managed by the caller) protects
     the outer transaction from race-condition IntegrityError if two
@@ -247,7 +322,7 @@ def _attempt_insert(
 
     existing_id = _existing_dedupe_id(session, row_kwargs)
     if existing_id is not None:
-        return False, None
+        return False, None, existing_id
 
     row = MolecularPropertyObservation(**row_kwargs)
     session.add(row)
@@ -260,9 +335,9 @@ def _attempt_insert(
         # bubbles out so the outer try block can roll back.
         message = str(exc.orig) if exc.orig is not None else str(exc)
         if _DEDUPE_CONSTRAINT_NAME in message:
-            return False, "race-condition duplicate (unique constraint)"
+            return False, "race-condition duplicate (unique constraint)", None
         raise
-    return True, None
+    return True, None, row.id
 
 
 # ---------------------------------------------------------------------------
@@ -274,6 +349,8 @@ def import_cccbdb_molecular_property_payloads(
     session: Session,
     payloads: Sequence[dict | MolecularPropertyObservationCreate],
     *,
+    actor: AppUser,
+    license_id: str,
     commit: bool = False,
     resolve_identity: bool = True,
     created_by: int | None = None,
@@ -290,14 +367,29 @@ def import_cccbdb_molecular_property_payloads(
         instances or raw dicts. Dicts are validated lazily; invalid
         ones are recorded as ``action="invalid"`` (or raise when
         ``fail_on_invalid=True``).
+    :param actor: The operator running this import. Recorded as the
+        creator of this run's ``Submission`` (opened only when at
+        least one row would newly insert — see module docstring) and
+        as the ``depositor_agreement`` rights attestor.
+    :param license_id: SPDX identifier the operator is licensing this
+        deposit's rows under. Must equal the release's own
+        ``data_license`` exactly for a citable release to include them
+        (``app.services.rights.licenses_match``); this service does
+        not check that here, only the release layer does.
     :param commit: When ``True``, commit on success. When ``False``
         (default), every change is rolled back at the end so the
-        caller can preview what would have happened.
+        caller can preview what would have happened. A submission may
+        still be opened during a dry run (mirroring
+        ``app.services.thermoml_cp_import``) — it is rolled back with
+        everything else, so nothing persists.
     :param resolve_identity: When ``False``, skip auto-resolution
         entirely and insert every row with ``species_entry_id=None``.
         Useful for staging large CCCBDB imports before identity work
         catches up.
     :param created_by: Optional user id to record on each inserted row.
+        Independent of ``actor``: ``actor`` owns the submission/rights
+        wrapper, ``created_by`` is who/what is recorded on the row
+        itself (defaults to unset, matching the pre-existing behavior).
     :param fail_on_invalid: When ``True``, raise the first pydantic
         :class:`ValidationError` instead of recording the disposition.
     :param source_paths: Optional parallel list of source-path strings
@@ -317,18 +409,64 @@ def import_cccbdb_molecular_property_payloads(
             )
 
     try:
+        # Phase 1: validate + resolve identity + build row kwargs + a
+        # read-only dedupe pre-check for every payload, WITHOUT inserting
+        # anything yet. This decides, before any row is written, whether
+        # this run has anything new to deposit at all -- so a fully
+        # duplicate second run opens no submission (mirrors
+        # app.services.thermoml_cp_import's "the submission is opened only
+        # when there is something to link").
+        prepared: list[tuple[Any, dict[str, Any] | None, int | None, str | None]] = []
         for raw, source_path in zip(payloads, source_paths_list, strict=False):
-            disposition = _process_one(
-                session,
-                raw,
-                source_path=source_path,
-                resolve_identity=resolve_identity,
-                created_by=created_by,
-                commit_mode=commit,
-                fail_on_invalid=fail_on_invalid,
+            prepared.append(
+                _prepare_one(
+                    session,
+                    raw,
+                    source_path=source_path,
+                    resolve_identity=resolve_identity,
+                    created_by=created_by,
+                    fail_on_invalid=fail_on_invalid,
+                )
             )
+
+        would_insert_count = sum(
+            1
+            for _invalid, row_kwargs, existing_id, _ctx in prepared
+            if row_kwargs is not None and existing_id is None
+        )
+
+        submission_ctx: UploadSubmissionContext | None = None
+        if would_insert_count > 0:
+            submission_ctx = _open_bulk_import_submission(
+                session, actor=actor, license_id=license_id
+            )
+            result.submission_id = submission_ctx.submission_id
+
+        for invalid_disposition, row_kwargs, existing_id, ctx in prepared:
+            if row_kwargs is None:
+                # invalid_disposition is already a complete PayloadDisposition
+                disposition = invalid_disposition
+            else:
+                disposition = _insert_one(
+                    session,
+                    row_kwargs=row_kwargs,
+                    existing_id=existing_id,
+                    submission_ctx=submission_ctx,
+                    commit_mode=commit,
+                    ctx=ctx,
+                )
             result.dispositions.append(disposition)
             _bump_counters(result, disposition)
+
+        if submission_ctx is not None and commit:
+            mark_upload_ingested(
+                session,
+                submission_ctx,
+                summary=(
+                    "Ingested CCCBDB molecular-property bulk import "
+                    f"({result.inserted_count} row(s))."
+                ),
+            )
     except Exception:
         # Any unexpected exception → roll back the outer transaction
         # and re-raise so the caller sees the original traceback.
@@ -343,22 +481,44 @@ def import_cccbdb_molecular_property_payloads(
     return result
 
 
-def _process_one(
+@dataclass
+class _PreparedContext:
+    payload: MolecularPropertyObservationCreate
+    source_path: str | None
+    identity_status: str
+    inchikey: str | None
+    warnings: list[str]
+
+
+def _prepare_one(
     session: Session,
     raw: dict | MolecularPropertyObservationCreate,
     *,
     source_path: str | None,
     resolve_identity: bool,
     created_by: int | None,
-    commit_mode: bool,
     fail_on_invalid: bool,
-) -> PayloadDisposition:
-    """Validate, resolve, and (try to) insert one payload. Runs in a
-    SAVEPOINT so a recoverable failure (e.g. an invalid row's pydantic
-    error after an earlier good row) never poisons the outer transaction.
+) -> tuple[
+    PayloadDisposition | None,
+    dict[str, Any] | None,
+    int | None,
+    "_PreparedContext | None",
+]:
+    """Validate and resolve identity for one payload, and pre-check the
+    dedupe key -- read-only, no insert.
+
+    Returns ``(invalid_disposition, row_kwargs, existing_id, ctx)``:
+
+    * On a validation failure, ``invalid_disposition`` is a complete
+      :class:`PayloadDisposition` (``action="invalid"``) and the other
+      three fields are ``None`` -- the caller appends it directly.
+    * On success, ``invalid_disposition`` is ``None`` and ``row_kwargs``/
+      ``existing_id`` carry the prepared insert (or the id of the row it
+      already matches). ``ctx`` is a :class:`_PreparedContext` carrying
+      everything :func:`_insert_one` needs to build the final
+      disposition without re-deriving it from ``row_kwargs``.
     """
 
-    # 1) Validation
     try:
         if isinstance(raw, MolecularPropertyObservationCreate):
             payload = raw
@@ -367,28 +527,32 @@ def _process_one(
     except ValidationError as exc:
         if fail_on_invalid:
             raise
-        return PayloadDisposition(
-            property_kind=(raw or {}).get("property_kind")
-            if isinstance(raw, dict) else None,
-            property_label=(raw or {}).get("property_label")
-            if isinstance(raw, dict) else None,
-            external_source_record_key=(raw or {}).get(
-                "external_source_record_key"
-            ) if isinstance(raw, dict) else None,
-            identity_status=_IDENTITY_SKIPPED,
-            species_entry_id=None,
-            action=_ACTION_INVALID,
-            warnings=[
-                f"pydantic validation failed: "
-                f"{exc.errors()[0].get('msg', '?')!r}"
-            ],
-            source_path=source_path,
+        return (
+            PayloadDisposition(
+                property_kind=(raw or {}).get("property_kind")
+                if isinstance(raw, dict) else None,
+                property_label=(raw or {}).get("property_label")
+                if isinstance(raw, dict) else None,
+                external_source_record_key=(raw or {}).get(
+                    "external_source_record_key"
+                ) if isinstance(raw, dict) else None,
+                identity_status=_IDENTITY_SKIPPED,
+                species_entry_id=None,
+                action=_ACTION_INVALID,
+                warnings=[
+                    f"pydantic validation failed: "
+                    f"{exc.errors()[0].get('msg', '?')!r}"
+                ],
+                source_path=source_path,
+            ),
+            None,
+            None,
+            None,
         )
 
     hint = _identity_hint(payload)
     inchikey = (hint.get("inchikey") or None) if hint else None
 
-    # 2) Identity resolution
     if resolve_identity:
         resolution = _resolve_identity(payload, session)
     else:
@@ -404,25 +568,64 @@ def _process_one(
             ),
         )
 
-    # 3) Insertion (or dry-run preview)
     row_kwargs = _payload_to_row_kwargs(
         payload,
         species_entry_id=resolution.species_entry_id,
         created_by=created_by,
     )
+    existing_id = _existing_dedupe_id(session, row_kwargs)
 
-    warnings = list(resolution.warnings)
+    context = _PreparedContext(
+        payload=payload,
+        source_path=source_path,
+        identity_status=resolution.status,
+        inchikey=inchikey,
+        warnings=list(resolution.warnings),
+    )
+    return None, row_kwargs, existing_id, context
+
+
+def _insert_one(
+    session: Session,
+    *,
+    row_kwargs: dict[str, Any],
+    existing_id: int | None,
+    submission_ctx: UploadSubmissionContext | None,
+    commit_mode: bool,
+    ctx: "_PreparedContext",
+) -> PayloadDisposition:
+    """Actually attempt the insert (or record the pre-checked duplicate)
+    for one prepared payload, in a SAVEPOINT, and link a newly inserted
+    row to ``submission_ctx`` when committing."""
+
+    payload = ctx.payload
+    row_warnings = list(ctx.warnings)
+
     nested = session.begin_nested()
     try:
-        inserted, insert_warning = _attempt_insert(
-            session, row_kwargs, commit_mode=commit_mode
-        )
+        if existing_id is not None:
+            inserted, insert_warning, _row_id = False, None, existing_id
+        else:
+            inserted, insert_warning, row_id = _attempt_insert(
+                session, row_kwargs, commit_mode=commit_mode
+            )
         if insert_warning:
-            warnings.append(insert_warning)
+            row_warnings.append(insert_warning)
         if not inserted:
             action = _ACTION_DUPLICATE
         elif commit_mode:
             action = _ACTION_INSERTED
+            assert submission_ctx is not None, (
+                "a row was inserted but no submission was opened to link "
+                "it to -- the would-insert pre-check and the authoritative "
+                "insert disagreed"
+            )
+            link_record(
+                session,
+                submission=submission_ctx.submission,
+                record_type=SubmissionRecordType.molecular_property_observation,
+                record_id=row_id,
+            )
         else:
             action = _ACTION_WOULD_INSERT
         # In dry-run mode the SAVEPOINT will roll back when we drop
@@ -434,7 +637,7 @@ def _process_one(
             nested.rollback()
     except Exception as exc:
         nested.rollback()
-        warnings.append(
+        row_warnings.append(
             f"row insert failed: {type(exc).__name__}: {exc}"
         )
         action = _ACTION_SKIPPED
@@ -445,12 +648,12 @@ def _process_one(
         else str(payload.property_kind),
         property_label=payload.property_label,
         external_source_record_key=payload.external_source_record_key,
-        identity_status=resolution.status,
-        species_entry_id=resolution.species_entry_id,
+        identity_status=ctx.identity_status,
+        species_entry_id=row_kwargs.get("species_entry_id"),
         action=action,
-        warnings=warnings,
-        inchikey=inchikey,
-        source_path=source_path,
+        warnings=row_warnings,
+        inchikey=ctx.inchikey,
+        source_path=ctx.source_path,
     )
 
 

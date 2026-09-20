@@ -1250,6 +1250,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py"),
     ApiCode("invalid_pagination", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
+    ApiCode("invalid_property_kind", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/observations.py",
+            note=(
+                "GET /scientific/species-entries/{id}/observations?property_kind= "
+                "was given a token that is not a MolecularPropertyKind member."
+            )),
     ApiCode("invalid_range", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/analytics.py",
             shape=Shape.relationship),
@@ -1508,6 +1514,87 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "The repository root is not a git checkout. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("observation_identity_already_set", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.thing,
+            note=(
+                "A curator tried to attach a species-entry identity to a "
+                "molecular_property_observation that already carries one. "
+                "Correction is supersession (ADR 0003): deposit a corrected "
+                "observation instead of repointing this row."
+            )),
+    ApiCode("observation_identity_attach_requires_submission", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "A curator attach succeeded validation but the observation "
+                "is linked to no submission, so there is nowhere to record "
+                "the curation fact as a SubmissionAuditEvent -- the attach "
+                "is refused rather than silently proceeding without an "
+                "audit trail."
+            )),
+    ApiCode("observation_identity_hint_conflict", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "Phase C-E5 review round 3 (Probe C). The observation "
+                "carries its own identity_hint.inchikey and its "
+                "connectivity block (the InChIKey's first, hyphen-"
+                "delimited segment) disagrees with the attach target "
+                "species's own InChIKey. Only the connectivity block is "
+                "compared -- a hint with no stereo layer can still be "
+                "attached to a stereo-specific entry (the isomer case "
+                "this tool is for) -- but a different molecular skeleton "
+                "is refused rather than silently attached."
+            )),
+    ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "Review round 2 (Phase C-E5): renamed from "
+                "observation_identity_ambiguous_entry and the rule relaxed "
+                "-- the target no longer has to be the *unique* "
+                "ground-state minimum entry of its species (that refused "
+                "precisely the isomer-ambiguity case this tool exists for; "
+                "the curator's choice of which entry IS the "
+                "disambiguation), only a ground-state minimum entry at "
+                "all. An observation carries no stereo/excited-state "
+                "resolution of its own, so attaching it to a non-minimum "
+                "or non-ground-state target would silently claim "
+                "specificity the source data does not have."
+            )),
+    ApiCode("observation_rights_basis_incompatible", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "A molecular-property observation about a species the release "
+                "covers is licensed under a deposit attested for a different "
+                "data_license than the release being deposited. Raised by the "
+                "publication-deposit builder (backend/scripts/ops/"
+                "build_publication_deposit.py) or the deposit service it wraps, "
+                "an operator CLI with no HTTP route. No request can receive it. "
+                "Catalogued so a client can import the spelling and so the "
+                "closure guard checks it still exists; reclassify before "
+                "exposing deposit building through an API. Sibling of "
+                "rights_basis_incompatible (backend/app/services/release/"
+                "curation.py) applied to a record type that is never a release "
+                "selection candidate -- molecular_property_observation is not "
+                "in SELECTABLE_RECORD_TYPES or CANDIDATE_SOURCES, so the "
+                "publish-time gate in curation.py structurally cannot see one; "
+                "this is the gate for the one place an observation does travel "
+                "under a release's name, the evidence archive bundled into its "
+                "deposit."
+            )),
+    ApiCode("observation_rights_basis_missing", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "A molecular-property observation about a species the release "
+                "covers is linked to no submission, or to one with no standing "
+                "rights attestation. Same operator-CLI-only reach and "
+                "reclassify-before-exposing note as "
+                "observation_rights_basis_incompatible above."
             )),
     ApiCode("offset_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",

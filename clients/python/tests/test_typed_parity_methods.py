@@ -1310,3 +1310,56 @@ class TestJobs:
 
     def test_terminal_statuses_match_the_backend_enum(self):
         assert TERMINAL_JOB_STATUSES == frozenset({"complete", "failed"})
+
+
+# ---------------------------------------------------------------------------
+# Species-entry observations (Phase C-E5 review round 2, F9)
+# ---------------------------------------------------------------------------
+
+
+class TestSpeciesObservations:
+    def test_builds_the_species_entry_path(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.get_species_observations("spe_abc123")
+
+        assert seen[0].method == "GET"
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/species-entries/spe_abc123/observations"
+        )
+
+    def test_property_kind_and_paging_land_in_the_query_string(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.get_species_observations(
+            "spe_abc123",
+            property_kind="dipole_moment",
+            include_rejected=True,
+            offset=10,
+            limit=25,
+        )
+
+        query = _query_of(str(seen[0].url))
+        assert query["property_kind"] == ["dipole_moment"]
+        assert query["include_rejected"] == ["true"]
+        assert query["offset"] == ["10"]
+        assert query["limit"] == ["25"]
+
+    def test_returns_the_parsed_envelope_untouched(self):
+        record = {
+            "observation_ref": "mpo_abc123",
+            "property_kind": "dipole_moment",
+            "scalar_value": 1.85,
+            "scalar_unit": "D",
+            "scientific_origin": "experimental",
+            "identity_basis": "external_identifier_match",
+            "review": {"status": "not_reviewed"},
+        }
+        handler, _ = _capture(_envelope([record]))
+        client, _ = make_client(handler)
+
+        result = client.get_species_observations("spe_abc123")
+
+        assert result["records"] == [record]

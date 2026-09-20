@@ -57,6 +57,82 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Observation reads, a deposit-time rights gate, and curator identity attach (Phase C-E5)
+
+- New `GET /api/v1/scientific/species-entries/{id}/observations`
+  (`?property_kind=`, `min_review_status`, `include_rejected`,
+  `include_deprecated`, `include=internal_ids`, `offset`/`limit`): the first
+  public read of `molecular_property_observation` -- until now no read route
+  named that table at all. Returns typed value/unit, uncertainty (value,
+  kind, coverage factor, level of confidence, assessor), temperature,
+  pressure, state basis, method note, scientific origin, literature ref,
+  external-source provenance (name/release/DOI/record key/content sha256/
+  schema label/parser+mapping versions, unioned across the legacy flattened
+  columns and the new `external_source_record` custody FK), and a review
+  badge. No `collapse`/`selection_policy`/`trust` -- this record type is a
+  raw observation, not a candidate product with review-rank selection.
+- New Alembic revision `d2f4a7c1b8e6` (down from `0b4a3afabfd3`): gives
+  `molecular_property_observation` a `public_ref` (`mpo_` prefix, opaque,
+  backfilled server-side), so the new route never has to leak a row id.
+- Rights gate, in the place the evidence actually ships unattested: a
+  release's frozen artifacts (`selected_records.ndjson` /
+  `candidate_records.ndjson`) never carry an observation row --
+  `molecular_property_observation` is absent from `SELECTABLE_RECORD_TYPES`
+  and `CANDIDATE_SOURCES`, so `publish_release`'s existing rights gate
+  structurally cannot see one. It travels out instead inside
+  `tckdb.deposit.v1`'s bundled `tckdb.archive.v1` evidence archive, which
+  `write_deposit` wrote unconditionally. `write_deposit` now refuses
+  (`observation_rights_basis_missing` / `observation_rights_basis_incompatible`,
+  catalogued as operator-CLI-only) when an observation attached to one of
+  the release's covered species entries has no rights basis compatible with
+  the release's `data_license`. Scope is deliberately narrow: only
+  observations about a species the release's own
+  `release_record_universe` names as a subject; an observation about an
+  unrelated species is bundled as archive bytes but asserts nothing about
+  that release's license.
+- New `POST /api/v1/admin/observations/{ref}/identity` (curator or admin):
+  fills in an identity-unresolved observation's `species_entry_id`. Refuses
+  a second attach (`observation_identity_already_set` -- correction is
+  supersession, ADR 0003, not a repoint), a target that is not a
+  ground-state, minimum-energy entry of its species
+  (`observation_identity_target_not_ground_state_minimum` -- an observation
+  carries no stereo/excited-state resolution of its own; the target does
+  *not* have to be the unique such entry, since a curator choosing between
+  two isomer-candidate entries is the disambiguation this tool exists for),
+  and an observation with no linked submission
+  (`observation_identity_attach_requires_submission`). Records the actor by
+  username, an optional note, and the previous identity (always `null` --
+  correction is supersession, never a repoint) as a `SubmissionAuditEvent`
+  (`observation_identity_attached`) on the submission the observation was
+  deposited under; never creates a species or species entry, and never
+  mutates `raw_payload_json` (provenance, byte-identical across a later
+  curation act).
+- Every observation the ThermoML and CCCBDB bulk importers write is now
+  linked to the `Submission` that deposited it (the CCCBDB importer opens
+  a `source_kind=bulk_import` submission per run, standing on a
+  `depositor_agreement` rights basis -- no CCCBDB terms/citation text
+  exists in this repo to attest `source_terms` against, unlike ThermoML).
+  Without this link, `observation_identity_attach` has nowhere to record
+  the curation fact and refuses. Rows written by the CCCBDB importer
+  before this change have no such link and refuse an attach until an
+  operator backfills a submission for them.
+- Each observation record returned by the species-entry read above now
+  carries `identity_basis` (`external_identifier_match` /
+  `curator_attached`), naming *how* the row got its identity -- derived
+  from whether a `SubmissionAuditEvent` names it, not a stored column.
+- New: an observation whose `identity_hint.inchikey` names a different
+  connectivity (the InChIKey's first, hyphen-delimited block) than the
+  attach target's species refuses with `observation_identity_hint_conflict`
+  -- a stereochemistry-only difference is still accepted, since resolving
+  that ambiguity is exactly what a curator attach is for.
+- `tckdb-client` 0.86.0 -> 0.87.1: 0.87.0 adds the typed
+  `get_species_observations()` method for the new species-entry
+  observations read (the route entered the parity ledger as `raw_only`
+  earlier in this feature, without a bump); the admin identity-attach route
+  stays a curator-workflow `not_applicable`.
+  0.87.1 regenerates `rejection_codes.py` for the new
+  `observation_identity_hint_conflict` code.
+
 ### Observation uncertainty, state basis and source custody (Phase C-E1)
 
 - New Alembic revision `0b4a3afabfd3` (down from `9b1c7e2d4a68`): gives

@@ -17,7 +17,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_write_db, require_admin
+from app.api.deps import get_db, get_write_db, require_admin, require_curator_or_admin
 from app.api.errors import not_found
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.app_user import AppUser
@@ -57,6 +57,7 @@ from app.services.machine_review import (
     start_curator_task_review,
 )
 from app.services.machine_review.run import run_machine_review_for_submission
+from app.services.observation_identity_attach import attach_observation_identity
 from app.services.record_containers import (
     RecordContainer,
     resolve_record_container,
@@ -1310,4 +1311,70 @@ def attach_energy_correction_scheme_provenance(
             if scheme.workflow_tool_release_id is not None
             else None
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Molecular-property observation identity attach (Phase C-E5)
+# ---------------------------------------------------------------------------
+
+
+class AdminObservationIdentityAttachRequest(BaseModel):
+    """Body for ``POST /admin/observations/{ref}/identity``.
+
+    ``species_entry_ref`` must be a ground-state, minimum-energy entry of
+    its species; it no longer has to be the *unique* such entry -- see
+    ``app/services/observation_identity_attach.py`` for the target rule
+    and its rationale. The observation must also be linked to a submission,
+    so the attach has somewhere to record the curation fact -- every
+    observation either importer writes from Phase C-E5 review round 3
+    onward is linked; a pre-existing unlinked row refuses with
+    ``observation_identity_attach_requires_submission`` until an operator
+    backfills a submission for it.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    species_entry_ref: str = Field(..., min_length=1, max_length=64)
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class AdminObservationIdentityAttachResponse(BaseModel):
+    """The observation's own ref plus the identity it now carries."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    observation_ref: str
+    species_entry_ref: str
+
+
+@router.post(
+    "/observations/{observation_ref}/identity",
+    response_model=AdminObservationIdentityAttachResponse,
+)
+def attach_observation_identity_endpoint(
+    observation_ref: str,
+    request: AdminObservationIdentityAttachRequest,
+    session: Session = Depends(get_write_db),
+    actor: AppUser = Depends(require_curator_or_admin),
+) -> AdminObservationIdentityAttachResponse:
+    """Attach a species-entry identity to an unresolved observation.
+
+    Curator or admin only. Refuses (422) when the observation already
+    carries an identity -- correction is supersession, not update, see
+    ADR 0003 and the service's module docstring -- when the target species
+    entry is not a ground-state minimum entry of its species, or when the
+    observation is linked to no submission (nowhere to record the curation
+    fact). 404 for an unknown observation or species entry.
+    """
+    obs = attach_observation_identity(
+        session,
+        observation_handle=observation_ref,
+        species_entry_ref=request.species_entry_ref,
+        actor=actor,
+        note=request.note,
+    )
+    return AdminObservationIdentityAttachResponse(
+        observation_ref=obs.public_ref,
+        species_entry_ref=request.species_entry_ref,
     )

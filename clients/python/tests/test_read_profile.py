@@ -90,6 +90,7 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_meta_workflow_tool_versions": ("arc",),
     "get_reaction_full": ("rxe_1",),
     "get_reaction_kinetics": ("rxe_1",),
+    "get_species_observations": ("spe_1",),
     "get_species_thermo": ("spe_1",),
     "get_transition_state": ("ts_1",),
     "get_transition_state_entry": ("tse_1",),
