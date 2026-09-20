@@ -31,12 +31,20 @@ specificity the source data does not have.
 
 The curation fact is recorded as a :class:`~app.db.models.submission.
 SubmissionAuditEvent` on the submission the observation is linked to via
-``submission_record_link`` (every imported observation is linked to the
-submission that deposited it) -- never in ``raw_payload_json``, which is
+``submission_record_link`` -- never in ``raw_payload_json``, which is
 provenance (the archive's forensic/round-trip copy of what was deposited)
 and must stay byte-identical across a later curation act. An observation
 with no submission link has nowhere honest to record the curation fact and
 the attach is refused rather than silently skipping the record.
+
+Every observation written by either importer (``app.services.
+cccbdb_molecular_property_import``, ``app.services.thermoml_cp_import``) is
+linked to the submission that deposited it *as of Phase C-E5 review round
+3* -- this was not always true. Before that round, the CCCBDB importer
+wrote rows with no submission link at all, so any such pre-existing row
+refuses an attach with ``observation_identity_attach_requires_submission``
+until an operator backfills a submission for it; see the "Legacy CCCBDB
+rows" section of PR #513.
 """
 
 from __future__ import annotations
@@ -53,7 +61,7 @@ from app.db.models.common import (
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.external_observation_identity import (
     ground_state_minimum_entries_for_species,
@@ -62,7 +70,7 @@ from app.services.scientific_read.handles import (
     parse_handle,
     resolve_species_entry_handle,
 )
-from app.services.submission import _resolve_actor_kind, append_audit_event
+from app.services.submission import append_audit_event, resolve_actor_kind
 
 
 def _resolve_observation(
@@ -130,6 +138,67 @@ def _assert_ground_state_minimum_entry(session: Session, target: SpeciesEntry) -
         )
 
 
+def _hint_inchikey_connectivity_block(
+    obs: MolecularPropertyObservation,
+) -> str | None:
+    """The connectivity block (the 14-character segment before the first
+    hyphen) of the observation's own ``identity_hint.inchikey``, if it
+    carries one.
+
+    Only the connectivity block is used, never the stereo/protonation
+    layers that follow it -- a source InChIKey with no stereo resolution
+    of its own must still be attachable to a stereo-specific entry, since
+    that is exactly the isomer-disambiguation case this tool exists for
+    (see the module docstring).
+    """
+    raw = obs.raw_payload_json
+    hint = raw.get("identity_hint") if isinstance(raw, dict) else None
+    if not isinstance(hint, dict):
+        return None
+    inchikey = hint.get("inchikey")
+    if not inchikey or not isinstance(inchikey, str):
+        return None
+    block = inchikey.strip().upper().split("-", 1)[0]
+    return block or None
+
+
+def _assert_no_identity_hint_conflict(
+    session: Session, obs: MolecularPropertyObservation, target: SpeciesEntry
+) -> None:
+    """Refuse an attach when the observation's own identity hint names a
+    different molecular connectivity than the attach target's species.
+
+    Probe C (Phase C-E5 review round 3): without this check, an
+    observation carrying a usable ``identity_hint.inchikey`` could be
+    silently attached to an entry of an unrelated species -- the curator
+    UI has no way to know the hint disagrees with the chosen target unless
+    something checks. Compares connectivity blocks only (see
+    :func:`_hint_inchikey_connectivity_block`); an observation with no
+    usable hint is unaffected -- this is a plausibility check on the hint
+    the depositor/importer already recorded, not a new identity signal.
+
+    :raises ValueError: 422 ``observation_identity_hint_conflict``.
+    """
+    hint_block = _hint_inchikey_connectivity_block(obs)
+    if hint_block is None:
+        return
+    species = session.get(Species, target.species_id)
+    if species is None or not species.inchi_key:  # pragma: no cover — FK-guaranteed
+        return
+    species_block = species.inchi_key.strip().upper().split("-", 1)[0]
+    if hint_block != species_block:
+        raise ValueError(
+            "observation_identity_hint_conflict: this observation's own "
+            f"identity_hint.inchikey names a different molecular "
+            f"connectivity ({hint_block}) than the target species's "
+            f"InChIKey ({species_block}). Only the InChIKey's first "
+            "(connectivity) block is compared, so a stereochemistry-only "
+            "difference is still accepted -- resolving that is what a "
+            "curator attach is for -- but a different molecular skeleton "
+            "is refused."
+        )
+
+
 def _linked_submission_id(session: Session, observation_id: int) -> int | None:
     """The submission ``observation_id`` is linked to, if any.
 
@@ -179,6 +248,9 @@ def attach_observation_identity(
         docstring -- not a repoint here);
         422 ``observation_identity_target_not_ground_state_minimum`` if the
         target is not a ground-state minimum entry of its species;
+        422 ``observation_identity_hint_conflict`` if the observation
+        carries its own ``identity_hint.inchikey`` and its connectivity
+        block disagrees with the target species's InChIKey;
         422 ``observation_identity_attach_requires_submission`` if the
         observation is linked to no submission, so there is nowhere honest
         to record the curation fact.
@@ -199,6 +271,7 @@ def attach_observation_identity(
         raise not_found("species_entry", ref=species_entry_ref)
 
     _assert_ground_state_minimum_entry(session, target)
+    _assert_no_identity_hint_conflict(session, obs, target)
 
     submission_id = _linked_submission_id(session, obs.id)
     if submission_id is None:
@@ -218,7 +291,7 @@ def attach_observation_identity(
         session,
         submission=submission,
         event_kind=SubmissionAuditEventKind.observation_identity_attached,
-        actor_kind=_resolve_actor_kind(actor),
+        actor_kind=resolve_actor_kind(actor),
         actor_user_id=actor.id,
         details_json={
             "observation_ref": obs.public_ref,

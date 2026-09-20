@@ -25,7 +25,7 @@ from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.common import RightsBasisKind
 from app.db.models.submission import Submission
 from app.db.models.submission_rights import SubmissionRightsAttestation
-from app.services.submission import _resolve_actor_kind
+from app.services.submission import resolve_actor_kind
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -107,7 +107,7 @@ def record_attestation(
         license_id=license_id,
         basis=basis,
         attested_by=actor.id,
-        actor_kind=_resolve_actor_kind(actor),
+        actor_kind=resolve_actor_kind(actor),
         source_terms=source_terms,
         note=note,
         supersedes_attestation_id=standing.id if standing is not None else None,

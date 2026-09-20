@@ -1325,9 +1325,12 @@ class AdminObservationIdentityAttachRequest(BaseModel):
     ``species_entry_ref`` must be a ground-state, minimum-energy entry of
     its species; it no longer has to be the *unique* such entry -- see
     ``app/services/observation_identity_attach.py`` for the target rule
-    and its rationale. The observation must also be linked to a submission
-    (every imported observation is), so the attach has somewhere to record
-    the curation fact.
+    and its rationale. The observation must also be linked to a submission,
+    so the attach has somewhere to record the curation fact -- every
+    observation either importer writes from Phase C-E5 review round 3
+    onward is linked; a pre-existing unlinked row refuses with
+    ``observation_identity_attach_requires_submission`` until an operator
+    backfills a submission for it.
     """
 
     model_config = ConfigDict(extra="forbid")

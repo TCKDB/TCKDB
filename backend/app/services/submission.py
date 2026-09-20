@@ -67,7 +67,7 @@ def _now_naive_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _resolve_actor_kind(user: AppUser) -> SubmissionActorKind:
+def resolve_actor_kind(user: AppUser) -> SubmissionActorKind:
     """Map an ``AppUser`` role onto the audit-event actor vocabulary.
 
     Users with the ``admin`` role record as :attr:`SubmissionActorKind.admin`,
@@ -75,6 +75,11 @@ def _resolve_actor_kind(user: AppUser) -> SubmissionActorKind:
     :attr:`SubmissionActorKind.user`. LLM/system actor kinds are only
     produced through the dedicated precheck/system helpers below and never
     derive from an ``AppUser``.
+
+    Public (Phase C-E5 review round 3, R8): other modules (``app.services.
+    rights``, ``app.services.observation_identity_attach``) need this same
+    mapping and previously imported the underscore-prefixed name directly --
+    a private-name import across module boundaries. Exported here instead.
     """
     if user.role is AppUserRole.admin:
         return SubmissionActorKind.admin
@@ -548,7 +553,7 @@ def approve_submission(
         submission=submission,
         event_kind=SubmissionAuditEventKind.curator_approved,
         actor_user_id=actor.id,
-        actor_kind=_resolve_actor_kind(actor),
+        actor_kind=resolve_actor_kind(actor),
         from_status=from_status,
         to_status=SubmissionStatus.approved,
         summary=summary,
@@ -608,7 +613,7 @@ def reject_submission(
         submission=submission,
         event_kind=SubmissionAuditEventKind.curator_rejected,
         actor_user_id=actor.id,
-        actor_kind=_resolve_actor_kind(actor),
+        actor_kind=resolve_actor_kind(actor),
         from_status=from_status,
         to_status=SubmissionStatus.rejected,
         reason=reason.strip(),
@@ -620,7 +625,7 @@ def reject_submission(
             submission=submission,
             event_kind=SubmissionAuditEventKind.correction_window_opened,
             actor_user_id=actor.id,
-            actor_kind=_resolve_actor_kind(actor),
+            actor_kind=resolve_actor_kind(actor),
             details_json={"correction_due_at": correction_due_at.isoformat()},
         )
     return submission
@@ -672,7 +677,7 @@ def supersede_submission(
 
     actor_user_id = actor.id if actor is not None else None
     actor_kind = (
-        _resolve_actor_kind(actor) if actor is not None else SubmissionActorKind.system
+        resolve_actor_kind(actor) if actor is not None else SubmissionActorKind.system
     )
 
     append_audit_event(
