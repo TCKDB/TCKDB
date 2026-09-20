@@ -90,7 +90,12 @@ def test_every_check_constraint_is_named_as_the_model_predicts(db_session):
         f"  present in the database, not declared in the ORM: {unexpected}\n"
         "If a migration passed an already-expanded 'ck_<table>_...' name to "
         "op.create_check_constraint, pass the short name instead -- "
-        "NAMING_CONVENTION adds the prefix. See b7e4d1a9c026."
+        "NAMING_CONVENTION adds the prefix. See b7e4d1a9c026. The exception "
+        "is a name the prefix would push past PostgreSQL's 63-character "
+        "limit (silently hash-truncated): then wrap the literal in conv() "
+        "on the model and op.f() in the revision so both sides use it "
+        "verbatim, as molecular_property_observation's ck_mpo_* names do "
+        "since 0b4a3afabfd3."
     )
 
 

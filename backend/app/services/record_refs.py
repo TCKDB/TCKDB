@@ -9,14 +9,19 @@ DR-0028 Req 2 keeps internal ids out of what they are shown, and
 ``public_ref`` is the identifier every scientific read route already answers
 to. This module is the one place that crosses from one to the other.
 
-Sixteen of the seventeen :class:`SubmissionRecordType` members name a table
-carrying :class:`~app.db.base.PublicRefMixin`. The seventeenth,
-``applied_energy_correction``, does not: ``AppliedEnergyCorrection`` has no
-``public_ref`` column, so there is nothing to return and callers get ``None``
-rather than a fabricated value or a stringified id. That is the same refusal
-:mod:`app.services.scientific_read.supersession` makes about the same table,
-for the same reason -- giving that table a public ref is the prerequisite for
-naming its rows, not something a caller may work around.
+Sixteen of the eighteen :class:`SubmissionRecordType` members name a table
+carrying :class:`~app.db.base.PublicRefMixin`. Two do not:
+``applied_energy_correction`` (``AppliedEnergyCorrection`` has no
+``public_ref`` column) and ``molecular_property_observation``
+(``MolecularPropertyObservation`` likewise -- Phase C-E1 added the enum
+member without a public ref; C5's read route is expected to address
+observations by entry + property kind, not by their own ref). Both cases
+mean there is nothing to return and callers get ``None`` rather than a
+fabricated value or a stringified id. That is the same refusal
+:mod:`app.services.scientific_read.supersession` makes about
+``applied_energy_correction``, for the same reason -- giving a table a
+public ref is the prerequisite for naming its rows, not something a caller
+may work around.
 
 The mapping from record type to table is not written here -- it is
 :data:`app.services.record_models.RECORD_MODELS`, filtered. Writing it out

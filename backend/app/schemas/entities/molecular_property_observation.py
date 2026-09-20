@@ -11,12 +11,24 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.db.models.common import MolecularPropertyKind, ScientificOriginKind
+from app.db.models.common import (
+    MolecularPropertyKind,
+    ObservedStateBasis,
+    ObservedUncertaintyAssessor,
+    ObservedUncertaintyKind,
+    ScientificOriginKind,
+)
 from app.schemas.common import (
     ORMBaseSchema,
     SchemaBase,
     TimestampedCreatedByReadSchema,
 )
+
+#: Fixed unit for ``MolecularPropertyKind.heat_capacity_cp``, mirroring the
+#: database CHECK ``ck_mpo_heat_capacity_cp_unit_j_mol_k``. Unit policy:
+#: quantities with one canonical unit get a fixed-unit CHECK, not a new
+#: free-text unit field (docs/unit_policy.md).
+HEAT_CAPACITY_CP_UNIT = "J/mol/K"
 
 
 class MolecularPropertyObservationBase(BaseModel):
@@ -54,7 +66,19 @@ class MolecularPropertyObservationBase(BaseModel):
     scalar_uncertainty: float | None = Field(default=None, ge=0.0)
     vector_json: dict[str, Any] | list[Any] | None = None
     tensor_json: dict[str, Any] | list[Any] | None = None
+
+    # Phase C-E1: typed uncertainty meaning. See ObservedUncertaintyKind's
+    # docstring -- no "unspecified" member (DR-0007); absent is None.
+    uncertainty_kind: ObservedUncertaintyKind | None = None
+    uncertainty_coverage_factor: float | None = Field(default=None, ge=1.0)
+    uncertainty_level_of_confidence_pct: float | None = Field(
+        default=None, gt=0.0, le=100.0
+    )
+    uncertainty_assessor: ObservedUncertaintyAssessor | None = None
+
     temperature_k: float | None = Field(default=None, gt=0.0)
+    pressure_bar: float | None = Field(default=None, gt=0.0)
+    state_basis: ObservedStateBasis | None = None
     wavelength_nm: float | None = Field(default=None, gt=0.0)
     method_note: str | None = None
     state_label_raw: str | None = None
@@ -72,6 +96,13 @@ class MolecularPropertyObservationBase(BaseModel):
     external_source_page_kind: str | None = None
     external_source_content_sha256: str | None = None
     external_source_parser_version: str | None = None
+
+    # Phase C-E1 source custody. Follows the same convention as the FK ids
+    # above (literature_id, source_calculation_id, ...): this schema is the
+    # importer bridge's internal linkage shape, not a contributor-facing
+    # upload schema, so a resolved FK id here is consistent with the
+    # existing fields rather than a new exception to the no-FK-ids rule.
+    external_source_record_id: int | None = None
 
     reference_label: str | None = None
     reference_comment: str | None = None
@@ -109,6 +140,61 @@ class MolecularPropertyObservationBase(BaseModel):
         ):
             raise ValueError(
                 "property_label is required when property_kind=other"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _heat_capacity_cp_requires_j_mol_k_unit(self) -> Self:
+        """Mirrors ``ck_mpo_heat_capacity_cp_unit_j_mol_k``."""
+        if (
+            self.property_kind == MolecularPropertyKind.heat_capacity_cp
+            and self.scalar_unit != HEAT_CAPACITY_CP_UNIT
+        ):
+            raise ValueError(
+                f"scalar_unit must be {HEAT_CAPACITY_CP_UNIT!r} when "
+                "property_kind=heat_capacity_cp"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _heat_capacity_cp_requires_temperature(self) -> Self:
+        """Mirrors ``ck_mpo_heat_capacity_cp_requires_temperature``."""
+        if (
+            self.property_kind == MolecularPropertyKind.heat_capacity_cp
+            and self.temperature_k is None
+        ):
+            raise ValueError(
+                "temperature_k is required when property_kind=heat_capacity_cp"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _heat_capacity_cp_uncertainty_kind_iff_value(self) -> Self:
+        """Mirrors ``ck_mpo_uncertainty_kind_iff_value``.
+
+        Scoped to ``heat_capacity_cp`` only, matching the database CHECK:
+        other property kinds (e.g. CCCBDB imports) may still carry a bare
+        ``scalar_uncertainty`` with no ``uncertainty_kind``.
+        """
+        if self.property_kind != MolecularPropertyKind.heat_capacity_cp:
+            return self
+        if (self.scalar_uncertainty is None) != (self.uncertainty_kind is None):
+            raise ValueError(
+                "scalar_uncertainty and uncertainty_kind must be both set "
+                "or both absent when property_kind=heat_capacity_cp"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _coverage_factor_only_with_expanded(self) -> Self:
+        """Mirrors ``ck_mpo_coverage_factor_only_expanded``."""
+        if self.uncertainty_coverage_factor is not None and self.uncertainty_kind not in (
+            ObservedUncertaintyKind.expanded,
+            ObservedUncertaintyKind.combined_expanded,
+        ):
+            raise ValueError(
+                "uncertainty_coverage_factor requires uncertainty_kind to be "
+                "expanded or combined_expanded"
             )
         return self
 

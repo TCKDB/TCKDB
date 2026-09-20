@@ -185,6 +185,11 @@ enum EnergyZeroConvention {
   other
 }
 
+enum ExternalSourceRecordKind {
+  thermoml_article
+  cccbdb_page
+}
+
 enum FrequencyScaleKind {
   fundamental
   zpe
@@ -341,6 +346,7 @@ enum MolecularPropertyKind {
   homo_lumo_gap
   rotational_constant
   spectroscopic_constant
+  heat_capacity_cp
   other
 }
 
@@ -399,6 +405,23 @@ enum NetworkStateKind {
   well
   bimolecular
   termolecular
+}
+
+enum ObservedStateBasis {
+  ideal_gas
+  real_gas
+}
+
+enum ObservedUncertaintyAssessor {
+  source_author
+  source_evaluator
+}
+
+enum ObservedUncertaintyKind {
+  standard
+  expanded
+  combined_standard
+  combined_expanded
 }
 
 enum ParameterSource {
@@ -636,6 +659,7 @@ enum SubmissionRecordType {
   network_solve
   applied_energy_correction
   artifact
+  molecular_property_observation
 }
 
 enum SubmissionSourceKind {
@@ -1771,6 +1795,56 @@ Table execution_environment_manifest {
   Note: 'A normalized, immutable manifest whose SHA-256 identifies its exact closure.'
 }
 
+Table external_source {
+  id bigint [pk, not null]
+  source_name text [not null]
+  source_release text [not null]
+  source_database_doi text
+  citation_text text
+  terms_url text
+  terms_text text
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (source_name, source_release) [unique, name: 'uq_external_source_name_release']
+  }
+
+  Note: 'One external database/collection a custody record can cite.'
+}
+
+Table external_source_record {
+  id bigint [pk, not null]
+  external_source_id bigint [not null, ref: > external_source.id]
+  record_kind ExternalSourceRecordKind [not null]
+  source_uri text [not null]
+  source_record_key text [not null]
+  retrieved_at timestamp [not null]
+  http_status int
+  content_sha256 text [not null]
+  content_length bigint [not null]
+  raw_uri text [not null]
+  container_digest text
+  schema_id text
+  schema_valid boolean
+  parser_name text [not null]
+  parser_version text [not null]
+  mapping_version text [not null]
+  mapping_report_json jsonb
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    (external_source_id, source_record_key, content_sha256, parser_version, mapping_version) [unique, name: 'uq_external_source_record_identity']
+  }
+
+  checks {
+    `content_length >= 0` [name: 'ck_external_source_record_content_length_ge_0']
+    `content_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_external_source_record_content_sha256_hex']
+    `http_status IS NULL OR http_status BETWEEN 100 AND 599` [name: 'ck_external_source_record_http_status_range']
+  }
+
+  Note: 'One immutable snapshot of one document fetched from an'
+}
+
 Table frequency_scale_factor {
   id bigint [pk, not null]
   level_of_theory_id bigint [not null, ref: > level_of_theory.id]
@@ -2196,7 +2270,13 @@ Table molecular_property_observation {
   scalar_uncertainty double
   vector_json jsonb
   tensor_json jsonb
+  uncertainty_kind ObservedUncertaintyKind
+  uncertainty_coverage_factor double
+  uncertainty_level_of_confidence_pct double
+  uncertainty_assessor ObservedUncertaintyAssessor
   temperature_k double
+  pressure_bar double
+  state_basis ObservedStateBasis
   wavelength_nm double
   method_note text
   state_label_raw text
@@ -2212,6 +2292,7 @@ Table molecular_property_observation {
   external_source_page_kind text
   external_source_content_sha256 text
   external_source_parser_version text
+  external_source_record_id bigint [ref: > external_source_record.id]
   reference_label text
   reference_comment text
   raw_reference_text text
@@ -2234,6 +2315,13 @@ Table molecular_property_observation {
     `temperature_k IS NULL OR temperature_k > 0` [name: 'ck_molecular_property_observation_mpo_temperature_k_gt_0']
     `scalar_value IS NOT NULL OR vector_json IS NOT NULL OR tensor_json IS NOT NULL` [name: 'ck_molecular_property_observation_mpo_value_at_least_one']
     `wavelength_nm IS NULL OR wavelength_nm > 0` [name: 'ck_molecular_property_observation_mpo_wavelength_nm_gt_0']
+    `uncertainty_coverage_factor IS NULL OR uncertainty_kind IN ('expanded', 'combined_expanded')` [name: 'ck_mpo_coverage_factor_only_expanded']
+    `property_kind <> 'heat_capacity_cp' OR temperature_k IS NOT NULL` [name: 'ck_mpo_heat_capacity_cp_requires_temperature']
+    `property_kind <> 'heat_capacity_cp' OR scalar_unit = 'J/mol/K'` [name: 'ck_mpo_heat_capacity_cp_unit_j_mol_k']
+    `pressure_bar IS NULL OR pressure_bar > 0` [name: 'ck_mpo_pressure_bar_gt_0']
+    `uncertainty_level_of_confidence_pct IS NULL OR (uncertainty_level_of_confidence_pct > 0 AND uncertainty_level_of_confidence_pct <= 100)` [name: 'ck_mpo_uncertainty_confidence_pct_range']
+    `uncertainty_coverage_factor IS NULL OR uncertainty_coverage_factor >= 1` [name: 'ck_mpo_uncertainty_coverage_factor_ge_1']
+    `property_kind <> 'heat_capacity_cp' OR (scalar_uncertainty IS NULL) = (uncertainty_kind IS NULL)` [name: 'ck_mpo_uncertainty_kind_iff_value']
   }
 
   Note: 'One molecular-property observation with full external provenance.'

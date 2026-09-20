@@ -742,7 +742,7 @@ def test_the_write_routes_carry_the_ref_too(
 # Containers (task #267)
 # --------------------------------------------------------------------------- #
 #
-# Six of the seventeen ``SubmissionRecordType`` members name a table with no
+# Six of the eighteen ``SubmissionRecordType`` members name a table with no
 # page of its own -- ``thermo`` is one. Before this slice a task against a
 # thermo row carried nothing that let a client find it: ``record_public_ref``
 # addresses no route (thermo has no page), and the response had no

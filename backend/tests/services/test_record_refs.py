@@ -129,10 +129,39 @@ def test_every_record_type_is_accounted_for():
     because a test that derives its expectation from the mapping agrees with
     any typo in it.
     """
-    no_public_ref_column = {SubmissionRecordType.applied_energy_correction}
+    no_public_ref_column = {
+        SubmissionRecordType.applied_energy_correction,
+        SubmissionRecordType.molecular_property_observation,
+    }
 
     assert REF_BEARING_RECORD_TYPES | no_public_ref_column == set(SubmissionRecordType)
     assert REF_BEARING_RECORD_TYPES & no_public_ref_column == set()
+
+
+def test_molecular_property_observation_has_no_ref_and_none_is_invented(db_session):
+    """``MolecularPropertyObservation`` carries no ``public_ref`` column
+    either (Phase C-E1) -- same refusal, same reason, as
+    ``applied_energy_correction`` above.
+    """
+    assert (
+        SubmissionRecordType.molecular_property_observation
+        not in REF_BEARING_RECORD_TYPES
+    )
+    assert (
+        resolve_record_public_ref(
+            db_session,
+            record_type=SubmissionRecordType.molecular_property_observation,
+            record_id=1,
+        )
+        is None
+    )
+    assert (
+        resolve_record_public_refs(
+            db_session,
+            [(SubmissionRecordType.molecular_property_observation, 1)],
+        )
+        == {}
+    )
 
 
 @pytest.mark.parametrize("record_count", [1, 8])
