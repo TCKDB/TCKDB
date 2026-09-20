@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header
@@ -22,7 +21,7 @@ from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.db.models.common import SubmissionKind
 from app.db.models.species import SpeciesEntry
-from app.importers.thermoml.archive import ArticleBytes
+from app.importers.thermoml.archive import build_standalone_article
 from app.schemas.entities.calculation import CalculationUploadRef
 from app.schemas.fragments.refs import collect_software_release_version_warnings
 from app.schemas.upload_warning import UploadWarning
@@ -75,6 +74,7 @@ from app.services.statmech_resolution import (
 )
 from app.services.thermoml_cp_import import (
     ThermoMLDoiConflictError,
+    ThermoMLNoSupportedContentError,
     import_thermoml_cp_upload,
 )
 from app.services.upload_reconciliation import (
@@ -894,10 +894,13 @@ def upload_thermoml(
     # Required, unlike every sibling route's optional Idempotency-Key
     # (``idempotency_dependency`` itself treats a missing header as "not
     # idempotent, proceed anyway" -- see that dependency's own
-    # docstring). DR-0024 and this work package's brief both require an
-    # idempotency key on every upload here; declaring the SAME header a
-    # second time, this time required, makes FastAPI's ordinary
-    # missing-required-field 422 fire before the route body runs -- the
+    # docstring, and DR-0024 itself: the header is optional in general).
+    # The C-E6 decision (2026-09-20; see "C-E6 -- ThermoML file input and
+    # upload route" in docs/research/tckdb-phase-c-implementation-plan.md)
+    # requires a key on every upload through *this* route specifically;
+    # declaring the SAME header a second time, this time required, makes
+    # FastAPI's ordinary missing-required-field 422 fire before the route
+    # body runs -- the
     # existing validation mechanism every required field already uses,
     # not a new bespoke refusal. The two parameters read one header once;
     # neither shadows the other.
@@ -917,12 +920,14 @@ def upload_thermoml(
     padding slack.
 
     Idempotency: unlike every sibling ``/uploads/*`` route (where the
-    ``Idempotency-Key`` header is optional), this route requires it --
-    DR-0024 and this work package's brief both call for every upload
-    here to carry one. A request without the header never reaches this
-    function's body at all: FastAPI's own required-header validation
-    (see the ``_idempotency_key_required`` parameter above) answers with
-    its ordinary 422 first.
+    ``Idempotency-Key`` header is optional -- DR-0024 does not make it
+    mandatory in general), this specific route requires it, by the C-E6
+    decision (2026-09-20; "C-E6 -- ThermoML file input and upload route",
+    ``docs/research/tckdb-phase-c-implementation-plan.md``). A request
+    without the header never reaches this function's body at all:
+    FastAPI's own required-header validation (see the
+    ``_idempotency_key_required`` parameter above) answers with its
+    ordinary 422 first.
 
     Rights: ``request.rights`` (``DepositRights``) is required on this
     schema -- unlike every sibling upload schema, where it is optional
@@ -949,14 +954,31 @@ def upload_thermoml(
             f"{MAX_THERMOML_UPLOAD_BYTES:,} bytes.",
             context={"max_bytes": MAX_THERMOML_UPLOAD_BYTES},
         )
+    if not request.content_base64.isascii():
+        # ``base64.b64decode`` encodes its input to ASCII internally
+        # before decoding, and for non-ASCII input that raises a plain
+        # ``ValueError`` -- NOT ``binascii.Error`` (Phase C-E6 review
+        # round 2, F2: measured, e.g. "YWJjé" -> ValueError('string
+        # argument should contain only ASCII characters')). Pre-checking
+        # here, rather than adding ``ValueError`` to the ``except``
+        # clause below, keeps that clause narrow to ``binascii.Error``
+        # only -- ``ValueError`` is one of the types the API layer's
+        # coded-exception reraise gate treats as able to absorb a
+        # ``CodedValidationError``, and a broader clause here would trip
+        # it (the precedent this route otherwise mirrors,
+        # ``app.services.artifact_persistence._strict_b64decode``, lives
+        # below the API layer and is not scanned by that gate).
+        raise CodedValidationError(
+            "thermoml_invalid_base64",
+            "content_base64 must contain only ASCII characters.",
+        )
     try:
         xml_bytes = base64.b64decode(request.content_base64, validate=True)
     except binascii.Error as exc:
-        # Narrower than ``except Exception`` on purpose: ``b64decode``
-        # raises exactly ``binascii.Error`` for both bad characters and
-        # bad padding, and a broader clause here would trip the API
-        # layer's coded-exception reraise gate (nothing else can be
-        # raised under this try, but the gate does not reason that far).
+        # Narrower than ``except Exception`` on purpose: with the ASCII
+        # pre-check above, ``b64decode`` raises exactly ``binascii.Error``
+        # for both bad characters and bad padding, and a broader clause
+        # here would trip the reraise gate described above.
         raise CodedValidationError(
             "thermoml_invalid_base64",
             f"content_base64 is not valid base64: {exc}",
@@ -973,15 +995,16 @@ def upload_thermoml(
             },
         )
 
-    placeholder_json = b"{}"
-    article = ArticleBytes(
-        xml=xml_bytes,
-        json_bytes=placeholder_json,
-        xml_sha256=hashlib.sha256(xml_bytes).hexdigest(),
-        json_sha256=hashlib.sha256(placeholder_json).hexdigest(),
-        member_paths=(f"upload:{request.filename}", ""),
-    )
+    article = build_standalone_article(xml_bytes, label=f"upload:{request.filename}")
 
+    # ``ArtifactStorageUnavailable`` (raised inside ``import_thermoml_cp_
+    # upload`` -> ``_raw_uri_for`` when the object store is down and
+    # ``allow_member_path_fallback=False``) is deliberately NOT caught
+    # here -- it has its own registered FastAPI handler
+    # (``app.api.errors._artifact_storage_unavailable_handler``, 503
+    # ``artifact_storage_unavailable``), so letting it propagate reuses
+    # the existing refusal instead of inventing a second one (Phase C-E6
+    # review round 2, F5).
     try:
         result = import_thermoml_cp_upload(
             session,
@@ -992,29 +1015,24 @@ def upload_thermoml(
             commit=True,
         )
     except ThermoMLDoiConflictError as exc:
-        raise CodedValidationError("thermoml_doi_conflict", str(exc)) from exc
+        raise CodedValidationError(
+            "thermoml_doi_conflict",
+            str(exc),
+            context={"declared_doi": exc.declared_doi, "file_doi": exc.file_doi},
+        ) from exc
+    except ThermoMLNoSupportedContentError as exc:
+        raise CodedValidationError(
+            "thermoml_no_supported_content",
+            "No mappable ideal-gas or real-gas Cp(T) content was found in "
+            "this file.",
+            context={"reasons": exc.reasons},
+        ) from exc
 
     if not result.schema_valid:
         raise CodedValidationError(
             "thermoml_schema_invalid",
             "ThermoML file failed XSD validation: "
             + "; ".join(result.warnings),
-        )
-
-    if result.payload_count == 0:
-        report = result.mapping_report or {}
-        reasons = sorted(
-            {
-                str(entry.get("reason"))
-                for entry in (*report.get("unsupported", []), *report.get("rejected", []))
-                if entry.get("reason")
-            }
-        )
-        raise CodedValidationError(
-            "thermoml_no_supported_content",
-            "No mappable ideal-gas or real-gas Cp(T) content was found in "
-            "this file.",
-            context={"reasons": reasons},
         )
 
     dispositions = [

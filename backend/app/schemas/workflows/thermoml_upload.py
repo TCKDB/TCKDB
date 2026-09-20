@@ -25,9 +25,14 @@ class ThermoMLUploadRequest(SchemaBase):
     """One ThermoML XML document, uploaded directly (not from the NIST
     bulk archive — that path is the ``--archive``/``--doi`` CLI only).
 
-    :param filename: Provenance metadata only — recorded on the custody
-        row's warnings/summary text. Never used as a storage path (the
-        object store is content-addressed by SHA-256).
+    :param filename: Provenance metadata only — recorded verbatim (as
+        ``f"upload:{filename}"``) in the custody row's
+        ``mapping_report_json["source_label"]``. Never used as a storage
+        path (the object store is content-addressed by SHA-256) and never
+        used as a fallback ``raw_uri`` the way an archive member path is
+        (see ``app.services.thermoml_cp_import._raw_uri_for``'s
+        ``allow_member_path_fallback``) — it is a display label, not a
+        retrievable location.
     :param content_base64: Base64-encoded ThermoML XML bytes.
     :param doi: The article's own DOI, if the depositor wants to assert
         it explicitly. Optional — when omitted, the DOI is taken from the
