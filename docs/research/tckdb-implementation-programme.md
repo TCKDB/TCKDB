@@ -1,6 +1,6 @@
 # TCKDB implementation programme
 
-Companions: [Detailed phase A plan](tckdb-phase-a-implementation-plan.md), [Detailed phase B plan](tckdb-phase-b-implementation-plan.md), [Detailed phase C plan](tckdb-phase-c-implementation-plan.md).
+Companions: [Detailed phase A plan](tckdb-phase-a-implementation-plan.md), [Detailed phase B plan](tckdb-phase-b-implementation-plan.md), [Detailed phase C plan](tckdb-phase-c-implementation-plan.md). Implementation evidence: [Phase A](tckdb-phase-a-verification.md), [Phase B](tckdb-phase-b-verification.md), [Phase C](tckdb-phase-c-verification.md).
 
 ## Objective and publication boundary
 

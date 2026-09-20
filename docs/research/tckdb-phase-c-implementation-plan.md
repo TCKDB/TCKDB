@@ -4,6 +4,7 @@ Companions: [Whole-programme plan](tckdb-implementation-programme.md),
 [Phase A plan](tckdb-phase-a-implementation-plan.md),
 [Phase B plan](tckdb-phase-b-implementation-plan.md),
 [Phase B evidence](tckdb-phase-b-verification.md),
+[Phase C evidence](tckdb-phase-c-verification.md),
 [Interchange standards note](tckdb-interchange-standards.md).
 
 ## Baseline, scope and decisions
