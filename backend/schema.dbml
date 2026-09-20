@@ -619,6 +619,7 @@ enum SubmissionAuditEventKind {
   submission_superseded
   status_changed
   public_visibility_changed
+  observation_identity_attached
 }
 
 enum SubmissionKind {

@@ -9,10 +9,18 @@ raw external observation, so this surface carries no ``collapse`` /
 ``docs/research/tckdb-phase-c-implementation-plan.md`` C5.
 
 Identity is resolved by construction: every record returned here was found by
-its ``species_entry_id``, so there is no separate "identity status" field —
-the route itself is the proof. Unresolved observations (nullable
-``species_entry_id``, see the model's module docstring) are structurally
-unreachable through this route; they have no owning entry to be listed under.
+its ``species_entry_id``, so there is no separate "identity *status*" field —
+the route itself is the proof that one exists. Unresolved observations
+(nullable ``species_entry_id``, see the model's module docstring) are
+structurally unreachable through this route; they have no owning entry to be
+listed under.
+
+What ``identity_basis`` answers is a different question -- not *whether* the
+row has an identity, but *how* it got one: an importer's automatic
+single-InChIKey match (``external_identifier_match``) or a curator's later
+judgement call through the identity-attach service
+(``curator_attached``, review round 2 / F8). See
+``app.db.models.common.ObservationIdentityBasis``.
 """
 
 from __future__ import annotations
@@ -21,6 +29,7 @@ from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     MolecularPropertyKind,
+    ObservationIdentityBasis,
     ObservedStateBasis,
     ObservedUncertaintyAssessor,
     ObservedUncertaintyKind,
@@ -113,6 +122,7 @@ class MolecularPropertyObservationRecord(BaseModel):
     literature_ref: str | None = None
     reference_label: str | None = None
     external_source: ObservationExternalSource | None = None
+    identity_basis: ObservationIdentityBasis
 
     review: RecordReviewBadge
 

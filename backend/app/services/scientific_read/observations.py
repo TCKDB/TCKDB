@@ -14,13 +14,17 @@ See ``docs/research/tckdb-phase-c-implementation-plan.md`` C5 and
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
 from app.db.models.common import (
     MolecularPropertyKind,
+    ObservationIdentityBasis,
     RecordReviewStatus,
+    SubmissionAuditEventKind,
     SubmissionRecordType,
 )
 from app.db.models.external_source import ExternalSource, ExternalSourceRecord
@@ -29,6 +33,7 @@ from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.db.models.species import SpeciesEntry
+from app.db.models.submission import SubmissionAuditEvent
 from app.schemas.reads.scientific_common import REVIEW_RANK, RecordReviewBadge
 from app.schemas.reads.scientific_observation import (
     MolecularPropertyObservationRecord,
@@ -214,6 +219,10 @@ def _materialize_records(
                     if esr.external_source_id == src.id:
                         source_by_esr[esr.id] = src
 
+    curator_attached_refs = _curator_attached_refs(
+        session, (r.public_ref for r in rows)
+    )
+
     out: list[MolecularPropertyObservationRecord] = []
     for cid in page_ids:
         obs = by_id.get(cid)
@@ -226,9 +235,37 @@ def _materialize_records(
                 literature_by_id=literature_by_id,
                 esr_by_id=esr_by_id,
                 source_by_esr=source_by_esr,
+                curator_attached_refs=curator_attached_refs,
             )
         )
     return out
+
+
+def _curator_attached_refs(
+    session: Session, observation_refs: Iterable[str]
+) -> set[str]:
+    """Which of ``observation_refs`` carry an ``observation_identity_attached``
+    audit event -- the curator-attach path, as opposed to automatic
+    importer resolution. See ``ObservationIdentityBasis``.
+    """
+    refs = list(observation_refs)
+    if not refs:
+        return set()
+    return set(
+        session.scalars(
+            select(
+                SubmissionAuditEvent.details_json["observation_ref"].astext
+            )
+            .where(
+                SubmissionAuditEvent.event_kind
+                == SubmissionAuditEventKind.observation_identity_attached,
+                SubmissionAuditEvent.details_json["observation_ref"].astext.in_(
+                    refs
+                ),
+            )
+            .distinct()
+        ).all()
+    )
 
 
 def _build_uncertainty(
@@ -296,11 +333,17 @@ def _build_record(
     literature_by_id: dict[int, Literature],
     esr_by_id: dict[int, ExternalSourceRecord],
     source_by_esr: dict[int, ExternalSource],
+    curator_attached_refs: set[str],
 ) -> MolecularPropertyObservationRecord:
     lit = (
         literature_by_id.get(obs.literature_id)
         if obs.literature_id is not None
         else None
+    )
+    identity_basis = (
+        ObservationIdentityBasis.curator_attached
+        if obs.public_ref in curator_attached_refs
+        else ObservationIdentityBasis.external_identifier_match
     )
     return MolecularPropertyObservationRecord(
         observation_ref=obs.public_ref,
@@ -323,6 +366,7 @@ def _build_record(
         external_source=_build_external_source(
             obs, esr_by_id=esr_by_id, source_by_esr=source_by_esr
         ),
+        identity_basis=identity_basis,
         review=badge,
     )
 

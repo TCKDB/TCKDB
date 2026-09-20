@@ -263,6 +263,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_species_thermo", None, "examples/scientific_reads.py",
         "tests/test_scientific.py",
     ),
+    (
+        "GET", "/api/v1/scientific/species-entries/{species_entry_id}/observations",
+        "get_species_observations", None, None, _NEW_METHOD_TESTS,
+    ),
     # --- Scientific product searches --------------------------------
     (
         "GET", "/api/v1/scientific/thermo/search", "search_thermo", "iter_thermo",
@@ -727,15 +731,6 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         "Species-entry transport subresource; the equivalent query is "
         "search_transport(species_entry_ref=...), which also carries "
         "evidence and provenance. Reachable via get_json().",
-    ),
-    (
-        "GET",
-        "/api/v1/scientific/species-entries/{species_entry_id}/observations",
-        "Species-entry molecular-property-observation subresource "
-        "(Phase C-E5). Unlike its statmech/transport siblings there is no "
-        "broad search endpoint to point a future typed method at -- this "
-        "is the only public read of molecular_property_observation today. "
-        "Reachable via get_json().",
     ),
     (
         "GET",

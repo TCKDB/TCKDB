@@ -1058,6 +1058,42 @@ class SpeciesThermoResponse(ScientificSearchResponse[ThermoDetailRecord]):
     species_entry_id: NotRequired[int]
 
 
+class ObservationRecord(TypedDict, total=False):
+    """One ``molecular_property_observation`` row (Phase C-E5).
+
+    Not a *product* with candidacy/selection semantics like
+    :class:`ThermoDetailRecord` -- a raw external measurement, so there is
+    no ``collapse``/``selection_policy``/``trust``/``assessments`` here.
+    Identity is resolved by construction: every row on this surface was
+    found by its owning species entry, so unresolved observations
+    (nullable ``species_entry_id`` on the backend) are structurally
+    unreachable and there is no separate identity-status field.
+    """
+
+    observation_ref: Required[str]
+    property_kind: Required[str]
+    property_label: str | None
+    scalar_value: float | None
+    scalar_unit: str | None
+    vector: JSONDict | None
+    tensor: JSONDict | None
+    uncertainty: JSONDict | None
+    temperature_k: float | None
+    pressure_bar: float | None
+    wavelength_nm: float | None
+    state_basis: str | None
+    state_label_raw: str | None
+    method_note: str | None
+    scientific_origin: Required[str]
+    literature_ref: str | None
+    reference_label: str | None
+    external_source: JSONDict | None
+    review: Required[JSONDict]
+
+
+SpeciesObservationsResponse: TypeAlias = ScientificSearchResponse[ObservationRecord]
+
+
 KineticsSearchResponse: TypeAlias = ScientificSearchResponse[KineticsSearchRecord]
 
 
@@ -1188,6 +1224,7 @@ __all__ = [
     "NetworkStateComposition",
     "NetworkStateCompositionParticipant",
     "NetworkStateSummary",
+    "ObservationRecord",
     "Pagination",
     "PublicAssessmentSummary",
     "ReactionKineticsResponse",
@@ -1203,6 +1240,7 @@ __all__ = [
     "SpeciesBrowseResponse",
     "SpeciesCalculationRecord",
     "SpeciesCalculationsSearchResponse",
+    "SpeciesObservationsResponse",
     "SpeciesRecord",
     "SpeciesSearchResponse",
     "SpeciesStructureRecord",

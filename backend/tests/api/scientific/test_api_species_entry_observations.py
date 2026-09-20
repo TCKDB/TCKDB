@@ -64,6 +64,64 @@ def test_returns_200_for_valid_species_entry_id(client, db_session):
     assert body["records"][0]["observation_ref"] == obs.public_ref
 
 
+def test_identity_basis_distinguishes_importer_from_curator_attach(
+    client, db_session, _api_curator_user
+):
+    """F8: importer-resolved rows read ``external_identifier_match``;
+    rows a curator attached through ``observation_identity_attach.py``
+    read ``curator_attached`` -- derived from the
+    ``observation_identity_attached`` SubmissionAuditEvent, no extra
+    column on the observation row itself.
+    """
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import SubmissionKind, SubmissionRecordType
+    from app.services.observation_identity_attach import (
+        attach_observation_identity,
+    )
+    from app.services.submission import create_submission, link_records
+
+    _, entry = _entry(db_session)
+    imported = make_observation(db_session, species_entry=entry)
+
+    unresolved = make_observation(
+        db_session,
+        species_entry=None,
+        property_kind=MolecularPropertyKind.ionization_energy,
+        scalar_value=10.5,
+        scalar_unit="eV",
+    )
+    submission = create_submission(
+        db_session,
+        created_by=_api_curator_user,
+        submission_kind=SubmissionKind.other,
+        title="identity_basis test deposit",
+    )
+    link_records(
+        db_session,
+        submission=submission,
+        records=[
+            (
+                SubmissionRecordType.molecular_property_observation,
+                unresolved.id,
+                None,
+            )
+        ],
+    )
+    curator = db_session.get(AppUser, _api_curator_user)
+    attach_observation_identity(
+        db_session,
+        observation_handle=unresolved.public_ref,
+        species_entry_ref=entry.public_ref,
+        actor=curator,
+    )
+
+    body = client.get(_url(entry.id)).json()
+    assert body["pagination"]["total"] == 2
+    by_ref = {r["observation_ref"]: r for r in body["records"]}
+    assert by_ref[imported.public_ref]["identity_basis"] == "external_identifier_match"
+    assert by_ref[unresolved.public_ref]["identity_basis"] == "curator_attached"
+
+
 def test_resolves_species_entry_ref_handle(client, db_session):
     _, entry = _entry(db_session)
     make_observation(db_session, species_entry=entry)

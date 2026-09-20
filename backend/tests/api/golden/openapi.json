@@ -509,7 +509,7 @@
       },
       "AdminObservationIdentityAttachRequest": {
         "additionalProperties": false,
-        "description": "Body for ``POST /admin/observations/{ref}/identity``.\n\n``species_entry_ref`` must be the unique ground-state, minimum-energy\nentry of its species -- see\n``app/services/observation_identity_attach.py`` for the ambiguity rule\nand its rationale.",
+        "description": "Body for ``POST /admin/observations/{ref}/identity``.\n\n``species_entry_ref`` must be a ground-state, minimum-energy entry of\nits species; it no longer has to be the *unique* such entry -- see\n``app/services/observation_identity_attach.py`` for the target rule\nand its rationale. The observation must also be linked to a submission\n(every imported observation is), so the attach has somewhere to record\nthe curation fact.",
         "properties": {
           "note": {
             "anyOf": [
@@ -23273,6 +23273,9 @@
               }
             ]
           },
+          "identity_basis": {
+            "$ref": "#/components/schemas/ObservationIdentityBasis"
+          },
           "literature_ref": {
             "anyOf": [
               {
@@ -23452,6 +23455,7 @@
         "required": [
           "property_kind",
           "scientific_origin",
+          "identity_basis",
           "review"
         ],
         "title": "MolecularPropertyObservationRecord",
@@ -29258,6 +29262,15 @@
         },
         "title": "ObservationExternalSource",
         "type": "object"
+      },
+      "ObservationIdentityBasis": {
+        "description": "How a ``molecular_property_observation`` row came to carry a\n``species_entry_id`` -- read-only, derived, never stored.\n\nEvery row reachable through ``GET .../species-entries/{id}/observations``\nhas a non-null ``species_entry_id`` by construction (see that schema's\nmodule docstring), so this is never absent on a returned record; it\nonly distinguishes *how* the identity got there.\n\n``external_identifier_match``  an importer resolved it automatically\n                                (:func:`app.services.\n                                external_observation_identity.\n                                resolve_identity`), by an exact\n                                single-InChIKey match.\n``curator_attached``           a curator resolved it after deposit\n                                through the identity-attach service\n                                (``app/services/\n                                observation_identity_attach.py``),\n                                recorded as a ``SubmissionAuditEvent``\n                                of kind ``observation_identity_attached``.",
+        "enum": [
+          "external_identifier_match",
+          "curator_attached"
+        ],
+        "title": "ObservationIdentityBasis",
+        "type": "string"
       },
       "ObservationUncertainty": {
         "description": "Typed uncertainty on ``scalar_value`` (Phase C-E1 contract).\n\n``kind`` may be ``None`` even when ``value`` is present: legacy\nCCCBDB-imported rows carry a bare ``scalar_uncertainty`` with no stated\nmeaning (see the model's ``ck_mpo_uncertainty_kind_iff_value`` CHECK,\nwhich only requires the pairing for ``heat_capacity_cp`` rows). A present\n``kind`` with no ``value`` never occurs.",
@@ -43255,7 +43268,8 @@
           "correction_uploaded",
           "submission_superseded",
           "status_changed",
-          "public_visibility_changed"
+          "public_visibility_changed",
+          "observation_identity_attached"
         ],
         "title": "SubmissionAuditEventKind",
         "type": "string"
@@ -54065,7 +54079,7 @@
     },
     "/api/v1/admin/observations/{observation_ref}/identity": {
       "post": {
-        "description": "Attach a species-entry identity to an unresolved observation.\n\nCurator or admin only. Refuses (422) when the observation already\ncarries an identity -- correction is supersession, not update, see\nADR 0003 and the service's module docstring -- or when the target\nspecies entry is not the unique ground-state minimum entry of its\nspecies. 404 for an unknown observation or species entry.",
+        "description": "Attach a species-entry identity to an unresolved observation.\n\nCurator or admin only. Refuses (422) when the observation already\ncarries an identity -- correction is supersession, not update, see\nADR 0003 and the service's module docstring -- when the target species\nentry is not a ground-state minimum entry of its species, or when the\nobservation is linked to no submission (nowhere to record the curation\nfact). 404 for an unknown observation or species entry.",
         "operationId": "attach_observation_identity_endpoint_api_v1_admin_observations__observation_ref__identity_post",
         "parameters": [
           {

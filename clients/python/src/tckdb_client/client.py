@@ -77,6 +77,7 @@ from tckdb_client.scientific_types import (
     SpeciesBrowseResponse,
     SpeciesCalculationRecord,
     SpeciesCalculationsSearchResponse,
+    SpeciesObservationsResponse,
     SpeciesRecord,
     SpeciesSearchResponse,
     SpeciesStructureRecord,
@@ -1518,6 +1519,49 @@ class TCKDBClient:
             "include_rejected": include_rejected,
             "include": include,
             "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET", path, params=params, authenticated=False
+        ).data
+
+    def get_species_observations(
+        self,
+        species_entry_id: int | str,
+        *,
+        property_kind: str | None = None,
+        min_review_status: str | None = None,
+        include_rejected: bool | None = None,
+        include_deprecated: bool | None = None,
+        include: list[str] | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> SpeciesObservationsResponse:
+        """``GET /scientific/species-entries/{species_entry_id}/observations``.
+
+        ``species_entry_id`` accepts the integer ``species_entry.id`` or a
+        public ref of the form ``spe_...``. ``property_kind=`` filters to
+        one molecular-property-kind token.
+
+        Unlike :meth:`get_species_thermo`, a ``molecular_property_
+        observation`` is not a candidate product with review-rank
+        selection semantics -- it is a raw external measurement, so there
+        is no ``collapse`` / ``selection_policy`` here, and ``sort=`` is
+        rejected server-side (v0), so this method does not accept one.
+        Identity is resolved by construction: every record returned here
+        was found by its owning species entry, so there is no separate
+        identity-status field.
+        """
+        path = f"/scientific/species-entries/{species_entry_id}/observations"
+        params = {
+            "property_kind": property_kind,
+            "min_review_status": min_review_status,
+            "include_rejected": include_rejected,
+            "include_deprecated": include_deprecated,
+            "include": include,
             "offset": offset,
             "limit": limit,
             "profile": profile,
