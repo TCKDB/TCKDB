@@ -38,9 +38,18 @@ from app.db.models.thermo import Thermo
 from app.services.external_comparison.cp import (
     ExternalCpComparisonConfigurationError,
     compare_thermo_with_cp_observations,
+    latest_cp_comparison_for_thermo,
     run_and_record,
 )
+from app.services.machine_review.context_hash import MachineReviewContextDigest
+from app.services.machine_review.persistence import create_record_machine_review_row
+from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+from app.services.machine_review.rereview import (
+    MachineReviewReReviewDecision,
+    plan_record_machine_rereview,
+)
+from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
 from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V1
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
@@ -157,6 +166,114 @@ def test_computed_thermo_with_three_cp_observations_yields_one_row_three_finding
         select(RecordMachineReviewRow).where(RecordMachineReviewRow.record_id == thermo.id)
     )
     assert count is not None
+
+
+# --------------------------------------------------------------------------- #
+# HIGH finding, review round 2: a Cp-comparison row must never restale a
+# thermo's existing reviewer-family (LLM) review. Before
+# app.services.machine_review.query.MachineReviewRecordFamily existed,
+# get_record_machine_review_currency_for_record loaded every persisted row
+# for (record_type, record_id) with no regard for provider. A Cp row's own
+# recipe (model=external_cp_comparison_v1, provider=tckdb.scientific_checks)
+# never matches the reviewer recipe, and run_and_record always stamps a
+# reviewed_at newer than any prior row -- so the Cp row was always read as
+# the latest row, always classified stale, and always demoted the thermo's
+# genuine current reviewer review to historical. This test pins the
+# behaviour end to end through the actual planner
+# (plan_record_machine_rereview), not just the classifier, and must assert
+# skip_current both before and after run_and_record.
+# --------------------------------------------------------------------------- #
+
+
+def test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current_review(
+    db_session,
+):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    reviewer_digest = MachineReviewContextDigest(context_hash="c" * 64, context_schema_version="v1")
+    reviewer_prompt = "reviewer_prompt_v9"
+    reviewer_rubrics = {"computed_thermo_v1": "1"}
+
+    # A fake "current" reviewer-family (LLM) review for this same thermo,
+    # recorded before the Cp check ever runs.
+    create_record_machine_review_row(
+        db_session,
+        record_type="thermo",
+        record_id=thermo.id,
+        review=RecordMachineReview(
+            record_type="thermo",
+            record_ref=thermo.public_ref,
+            status=ServiceMachineReviewStatus.machine_screened_pass,
+            reviewed_at=datetime(2026, 9, 1, 0, 0, 0),
+            record_id=thermo.id,
+        ),
+        context_digest=reviewer_digest,
+        prompt_version=reviewer_prompt,
+        rubric_versions=reviewer_rubrics,
+    )
+    db_session.flush()
+
+    def _plan():
+        return plan_record_machine_rereview(
+            db_session,
+            record_type="thermo",
+            record_id=thermo.id,
+            current_context=reviewer_digest,
+            active_prompt_version=reviewer_prompt,
+            active_rubric_versions=reviewer_rubrics,
+        )
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+    # Run and record the unrelated, deterministic external-Cp-comparison
+    # check for the same thermo -- this must not touch reviewer currency.
+    run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+
+def test_latest_cp_comparison_for_thermo_ignores_a_newer_reviewer_family_row(db_session):
+    """The Cp helper reads its own family; it must not return a reviewer row.
+
+    Companion to the restaling test above, from the other direction: a
+    reviewer-family row recorded AFTER a Cp comparison (newer by
+    ``reviewed_at``) must not make ``latest_cp_comparison_for_thermo`` return
+    that reviewer row or ``None`` -- it must keep returning the Cp row, since
+    the two families are read independently by ``family``.
+    """
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    assert latest_cp_comparison_for_thermo(db_session, thermo.id) is None
+
+    cp_row = run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    # A newer reviewer-family row for the same thermo.
+    create_record_machine_review_row(
+        db_session,
+        record_type="thermo",
+        record_id=thermo.id,
+        review=RecordMachineReview(
+            record_type="thermo",
+            record_ref=thermo.public_ref,
+            status=ServiceMachineReviewStatus.machine_screened_pass,
+            reviewed_at=datetime(2099, 1, 1, 0, 0, 0),
+            record_id=thermo.id,
+        ),
+        context_digest=MachineReviewContextDigest(context_hash="d" * 64, context_schema_version="v1"),
+        prompt_version="reviewer_prompt_v9",
+        rubric_versions={"computed_thermo_v1": "1"},
+    )
+    db_session.flush()
+
+    latest_cp = latest_cp_comparison_for_thermo(db_session, thermo.id)
+    assert latest_cp is not None
+    assert latest_cp.id == cp_row.id
 
 
 # --------------------------------------------------------------------------- #
@@ -455,6 +572,51 @@ def test_finding_message_decodes_to_every_required_field_including_custody_ref(d
     assert f"observation:{detail['observation_ref']}" in finding["evidence_keys"]
 
 
+def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_session):
+    """A 2000-char ``source_record_key`` must not make the whole run raise.
+
+    MEDIUM finding, review round 2: ``source_record_key``
+    (``ExternalSourceRecord``) is an unbounded ``Text`` column, and before
+    this fix it was embedded, untruncated, into the JSON ``message`` twice
+    (as both ``observation_ref`` and ``external_source_record_ref``).
+    ``MachineReviewFinding.message`` is capped at 1000 chars
+    (``app.services.machine_review.schemas``), and the only existing
+    fallback (dropping ``method_note``) could not save a message that was
+    already over the limit from the ref fields alone -- so a sufficiently
+    long custody key made ``_finding_from_comparison`` raise a pydantic
+    ``ValidationError`` instead of recording a finding, silently killing an
+    otherwise-successful comparison run. Mutation: remove ``_bounded_ref``
+    from ``_finding_payload`` -> this test goes red with a raised
+    ``ValidationError`` (or, run against the pre-fix code, does exactly
+    that).
+    """
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    long_key = "10.1016/j.jct.2013.08.022#" + "P" * 2000
+    custody = _make_external_source_record(db_session, key=long_key)
+    _make_observation(
+        db_session,
+        thermo=thermo,
+        temperature_k=298.15,
+        scalar_value=80.0,
+        external_source_record=custody,
+    )
+
+    # Must not raise (the pre-fix behaviour) and must persist a row.
+    row = run_and_record(db_session, thermo.id)
+    (finding,) = row.findings_json
+    assert len(finding["message"].encode("utf-8")) <= 1000
+
+    detail = json.loads(finding["message"])
+    # The message's copy is bounded and carries a truncation marker...
+    assert len(detail["observation_ref"]) < len(long_key)
+    assert detail["observation_ref"] != long_key
+    # ...but evidence_keys still carries the full, untruncated key, so exact
+    # matching against the custody row's own key is never degraded.
+    assert f"observation:{long_key}" in finding["evidence_keys"]
+    assert f"external_source_record:{long_key}" in finding["evidence_keys"]
+
+
 def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(db_session):
     thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCC")
     attach_thermo_nasa(db_session, thermo=thermo)
@@ -464,27 +626,61 @@ def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(
     (comparison,) = result.comparisons
     assert comparison.external_source_record_ref is None
     assert str(obs.id) not in comparison.observation_ref
-    assert comparison.observation_ref == "heat_capacity_cp@298.15K=80"
+    # !r (full repr), not :g (6 sig figs) -- see _observation_ref's docstring:
+    # two distinct observations agreeing to 6 sig figs must not collide.
+    assert comparison.observation_ref == "heat_capacity_cp@298.15K=80.0"
 
 
 # --------------------------------------------------------------------------- #
-# Status is never one that implies approval, and is derived (not invented).
+# The status token is derived (not invented) and is never not_run / failed --
+# it is NOT, despite the name a residual of 50% still reading "pass" would
+# suggest, an approval signal in the everyday sense of that word. See
+# test_status_pins_the_shared_derivation_and_is_not_an_accuracy_verdict below
+# for the documented limitation this leaves.
 # --------------------------------------------------------------------------- #
 
 
-def test_status_is_not_an_approval_signal(db_session):
+def test_status_pins_the_shared_derivation_and_is_not_an_accuracy_verdict(db_session):
+    """Pin what the status token actually is, and record its known limitation.
+
+    MEDIUM finding, review round 2: ``run_and_record`` derives its status via
+    the shared ``derive_machine_review_status`` (``app.services.machine_review
+    .derivation``), the same function every reviewer-family review uses.
+    Every Cp finding is ``severity=info`` (no ratio is ever judged here --
+    see the module docstring), and that shared function's documented rule
+    (``derivation.py`` §"Notes for the implementer") is "info-only findings
+    are still a pass". So a thermo whose computed Cp is wildly off from an
+    observation -- 50% off, say -- still stamps ``machine_screened_pass``.
+
+    This is a genuine, currently-unresolved limitation, not a bug this
+    change fixes: ``MachineReviewStatus``
+    (``app.db.models.common.MachineReviewStatus``) has no advisory/
+    info-only/not-assessed token distinct from ``machine_screened_pass`` to
+    use instead, and inventing one is a new enum value, which requires a
+    migration and is out of scope here (and would fork this check's status
+    semantics from every other machine-review consumer's, which is worse).
+    So this test does NOT claim the status is safe to read as "no accuracy
+    concern" -- it pins the current, shared, and honestly-limited behaviour,
+    and this docstring is where that limitation is recorded until an
+    advisory token exists. A prior version of this test was named
+    ``test_status_is_not_an_approval_signal``, which claimed the opposite of
+    what the assertions below actually show.
+    """
     from app.services.machine_review.schemas import MachineReviewStatus
 
     thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCC")
     attach_thermo_nasa(db_session, thermo=thermo)
-    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+    # Observed at half the computed value -- a 100%-of-observed residual, to
+    # make the "still reads pass despite a huge residual" limitation
+    # concrete rather than hypothetical.
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=_CP_LOW_RANGE_J_MOL_K * 0.5)
 
     row = run_and_record(db_session, thermo.id)
-    # Every finding is severity=info (no ratio is ever judged), so the
-    # record-level status is whatever the shared derivation function maps
-    # an all-info finding set to -- this pins that value stays in sync
-    # with app.services.machine_review.derivation rather than being
-    # hand-picked here.
+    detail = json.loads(row.findings_json[0]["message"])
+    assert detail["comparability"] == "comparable"
+    assert abs(detail["residual_j_mol_k"]) > 0.9 * detail["cp_observed_j_mol_k"]
+
+    # The known limitation: a residual this large still reads "pass".
     assert row.status is MachineReviewStatus.machine_screened_pass
     assert row.status is not MachineReviewStatus.not_run
     assert row.status is not MachineReviewStatus.machine_review_failed

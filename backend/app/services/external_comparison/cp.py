@@ -74,6 +74,11 @@ from app.services.machine_review.derivation import (
     derive_machine_review_status,
 )
 from app.services.machine_review.persistence import create_record_machine_review_row
+from app.services.machine_review.query import (
+    SCIENTIFIC_CHECK_PROVIDER_NAMESPACE,
+    MachineReviewRecordFamily,
+    get_latest_record_machine_review_row,
+)
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.recipe import (
     ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
@@ -105,10 +110,24 @@ _PLACEHOLDER_ELEMENT = "Ar"
 #: expects: "the version of the logic that produced this review."
 RUNNER_VERSION = "external_cp_comparison_v1"
 
-PROVIDER = "tckdb.scientific_checks"
+#: Single source of truth is ``app.services.machine_review.query`` (imported,
+#: never redefined here) -- see
+#: :data:`~app.services.machine_review.query.SCIENTIFIC_CHECK_PROVIDER_NAMESPACE`
+#: and :class:`~app.services.machine_review.query.MachineReviewRecordFamily`.
+PROVIDER = SCIENTIFIC_CHECK_PROVIDER_NAMESPACE
 
 _MESSAGE_METHOD_NOTE_MAX_CHARS = 120
 _MESSAGE_MAX_BYTES = 1000
+#: Deterministic bound on each ref string embedded in ``message`` (never on
+#: ``evidence_keys``, which keeps the untruncated value for exact matching).
+#: ``observation_ref`` and ``external_source_record_ref`` are the same
+#: content-derived, externally-sourced ``source_record_key`` when custody
+#: exists, and that key has no length limit in the DB (``Text`` column) --
+#: so an unbounded key can otherwise push ``message`` past its 1000-char
+#: schema limit (``MachineReviewFinding.message``) and make the whole run
+#: raise instead of recording a finding.
+_MESSAGE_REF_MAX_CHARS = 120
+_TRUNCATION_MARKER = "...(truncated)"
 
 
 class ExternalCpComparisonConfigurationError(RuntimeError):
@@ -267,9 +286,19 @@ def _resolve_evaluator(thermo: Thermo) -> tuple[str, _Evaluator]:
 
 
 def _observation_ref(observation: MolecularPropertyObservation) -> str:
+    """A content-derived, id-free label for one observation.
+
+    Custody-backed observations get the custody row's own natural key
+    (globally unique by construction). The fallback label for an
+    uncustodied observation uses ``!r`` (full ``repr`` precision, matching
+    :func:`_context_note`'s hashed fields) rather than ``:g`` -- two
+    observations that agree to 6 significant figures but differ beyond that
+    would otherwise format to the same ``:g``-truncated label despite being
+    distinct rows.
+    """
     if observation.external_source_record is not None:
         return observation.external_source_record.source_record_key
-    return f"heat_capacity_cp@{observation.temperature_k:g}K={observation.scalar_value:g}"
+    return f"heat_capacity_cp@{observation.temperature_k!r}K={observation.scalar_value!r}"
 
 
 def _external_source_record_ref(observation: MolecularPropertyObservation) -> str | None:
@@ -383,10 +412,25 @@ def _truncate(text: str | None, max_chars: int) -> str | None:
     return text[:max_chars]
 
 
+def _bounded_ref(ref: str | None, max_chars: int = _MESSAGE_REF_MAX_CHARS) -> str | None:
+    """Deterministically bound a ref string for embedding in ``message``.
+
+    Plain prefix truncation plus a fixed marker -- the same input always
+    yields the same output, so this never makes ``message`` (or the byte-
+    length fallback below) non-deterministic across runs. Only affects the
+    value embedded in ``message``; ``evidence_keys`` always carries the
+    untruncated ref (see :func:`_finding_from_comparison`).
+    """
+    if ref is None or len(ref) <= max_chars:
+        return ref
+    keep = max_chars - len(_TRUNCATION_MARKER)
+    return ref[:keep] + _TRUNCATION_MARKER
+
+
 def _finding_payload(comparison: CpObservationComparison) -> dict:
     return {
-        "observation_ref": comparison.observation_ref,
-        "external_source_record_ref": comparison.external_source_record_ref,
+        "observation_ref": _bounded_ref(comparison.observation_ref),
+        "external_source_record_ref": _bounded_ref(comparison.external_source_record_ref),
         "temperature_k": comparison.temperature_k,
         "pressure_bar": comparison.pressure_bar,
         "state_basis": comparison.state_basis,
@@ -526,6 +570,29 @@ def run_and_record(
     )
 
 
+def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordMachineReviewRow | None:
+    """Return the current external-Cp-comparison row for one thermo, or ``None``.
+
+    Reads its own family (:attr:`~app.services.machine_review.query.
+    MachineReviewRecordFamily.scientific_check`) and model
+    (:data:`RUNNER_VERSION`), so "the current Cp comparison for this thermo"
+    is a well-defined notion independent of any reviewer-family (LLM /
+    fake-provider) row that may also exist for the same ``(thermo, "thermo")``
+    key. Callers that want the latest Cp comparison (the CLI, the paper
+    generator) should use this rather than the generic
+    :func:`~app.services.machine_review.query.get_latest_record_machine_review_row`
+    call with no family, which would default to the reviewer family and
+    never see a Cp row at all. Read-only.
+    """
+    return get_latest_record_machine_review_row(
+        session,
+        record_type="thermo",
+        record_id=thermo_id,
+        family=MachineReviewRecordFamily.scientific_check,
+        model=RUNNER_VERSION,
+    )
+
+
 __all__ = [
     "PROVIDER",
     "RUNNER_VERSION",
@@ -533,5 +600,6 @@ __all__ = [
     "CpObservationComparison",
     "ExternalCpComparisonConfigurationError",
     "compare_thermo_with_cp_observations",
+    "latest_cp_comparison_for_thermo",
     "run_and_record",
 ]

@@ -55,6 +55,8 @@ from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowToolRelease
 from app.services.external_comparison.cp import RUNNER_VERSION as EXTERNAL_CP_COMPARISON_RUNNER_VERSION
+from app.services.external_comparison.cp import latest_cp_comparison_for_thermo
+from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER_NAMESPACE
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -444,7 +446,7 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
     """Latest ``external_cp_comparison_v1`` review-tier row per thermo record.
 
     ``record_machine_review`` is a private, append-only table with no public
-    ref of its own (``docs/specs/record_machine_review_policy.md``), so this
+    ref of its own (``backend/docs/specs/record_machine_review_policy.md``), so this
     reads it directly through the ORM the way every other generator reads its
     tables, and renders only what a reader needs: the thermo and species it
     is about (by public ref), the review's status and rubric version, and
@@ -457,22 +459,29 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
     ``docs/research/tckdb-phase-c-implementation-plan.md`` C4) -- this
     generator reports residuals, never a verdict on them.
     """
-    rows = list(
-        session.scalars(
-            select(RecordMachineReviewRow).where(
-                RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER_VERSION,
-                RecordMachineReviewRow.record_type == SubmissionRecordType.thermo,
+    # Discovery only: which thermo records have ever had a Cp-comparison row
+    # recorded. "Which one is current for a given thermo" is not decided
+    # here -- that is latest_cp_comparison_for_thermo's job, reading its own
+    # (scientific_check family, RUNNER_VERSION) recipe, the same notion the
+    # currency classifier now uses (record_machine_review_policy.md, Phase
+    # C-E4 review round 2).
+    thermo_ids = sorted(
+        set(
+            session.scalars(
+                select(RecordMachineReviewRow.record_id).where(
+                    RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER_VERSION,
+                    RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER_NAMESPACE,
+                    RecordMachineReviewRow.record_type == SubmissionRecordType.thermo,
+                )
             )
         )
     )
-    latest_by_thermo_id: dict[int, RecordMachineReviewRow] = {}
-    for row in rows:
-        current = latest_by_thermo_id.get(row.record_id)
-        if current is None or (row.reviewed_at, row.id) > (current.reviewed_at, current.id):
-            latest_by_thermo_id[row.record_id] = row
 
     comparisons: list[dict[str, Any]] = []
-    for thermo_id, row in latest_by_thermo_id.items():
+    for thermo_id in thermo_ids:
+        row = latest_cp_comparison_for_thermo(session, thermo_id)
+        if row is None:
+            continue
         thermo = session.get(Thermo, thermo_id)
         if thermo is None:
             continue

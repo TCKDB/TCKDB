@@ -312,3 +312,30 @@ def test_thermoml_source_provenance_lists_custody_rows_with_counts(db_session):
     first = render_json(out)
     second = render_json(generators.thermoml_source_provenance(db_session))
     assert first == second
+
+    # MEDIUM finding, review round 2: test_no_generator_output_carries_a_
+    # database_id_key (above) runs write_expected_outputs on an EMPTY
+    # db_session, so every generator (this one included) produces an empty
+    # collection and the scan finds nothing to scan -- a vacuous pass that
+    # would not have caught this generator leaking a database id. This is
+    # the dedicated, populated-row scan the cp generator's own test already
+    # has (test_experimental_cp_comparison_reports_every_finding_field_with_
+    # no_ids, above), mirrored here with a real row on disk.
+    #
+    # The key/value form (not key-name-only, as the vacuous general test
+    # uses): a leaked database primary key is always a JSON integer, and
+    # this row's own ``schema_id`` field is a legitimate content string (an
+    # XSD/schema identifier from the ThermoML record, not a row id) that
+    # happens to end in ``_id`` -- a name-only scan would wrongly flag it.
+    def _int_id_like_offenders(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if (key == "id" or key.endswith("_id")) and isinstance(value, int):
+                    yield key
+                yield from _int_id_like_offenders(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from _int_id_like_offenders(item)
+
+    offenders = sorted(set(_int_id_like_offenders(json.loads(first))))
+    assert not offenders, offenders
