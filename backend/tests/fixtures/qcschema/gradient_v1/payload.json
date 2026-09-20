@@ -1,0 +1,96 @@
+{
+  "additional_calculations": [],
+  "applied_energy_corrections": [],
+  "calculation": {
+    "constraints": [],
+    "input_geometries": [
+      {
+        "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162194\nH -0.0000000000 0.7906895713 0.5437010614\nH 0.0000000000 -0.7906895713 0.5437010614"
+      }
+    ],
+    "level_of_theory": {
+      "basis": "sto-3g",
+      "method": "hf"
+    },
+    "output_geometries": [],
+    "parameters_json": {
+      "tckdb_origin": {
+        "independent_ess_job": true,
+        "origin_kind": "imported",
+        "producer": "tckdb-qcschema/0.2.0",
+        "reason": "Imported from a MolSSI QCSchema atomic document (family=v1, driver=gradient)."
+      },
+      "tckdb_qcschema": {
+        "adapter_version": "0.2.0",
+        "bohr_to_angstrom": 0.52917721067,
+        "canonical_document_sha256": "4759dc967d52a84adb47088cc9a86b07e2d00401b140119ca65f354d1ca1478c",
+        "driver": "gradient",
+        "identity_source": "depositor_declared",
+        "mapping_report": {
+          "rejected": [],
+          "retained_only": [
+            "return_result"
+          ],
+          "transformed": [
+            "molecule.geometry",
+            "provenance.creator",
+            "provenance.version",
+            "model.method",
+            "model.basis",
+            "properties.return_energy",
+            "--smiles",
+            "molecule.molecular_charge",
+            "molecule.molecular_multiplicity"
+          ],
+          "unsupported": [
+            "stdout",
+            "provenance.cpu",
+            "provenance.module",
+            "provenance.qcengine_version",
+            "provenance.username"
+          ]
+        },
+        "model_family": "v1",
+        "provenance": {
+          "creator": "Psi4",
+          "hostname": "archlinux",
+          "memory": 25.564,
+          "nthreads": 12,
+          "routine": "psi4.schema_runner.run_qcschema",
+          "version": "1.11",
+          "wall_time": 0.9455356597900391
+        },
+        "qcelemental_version": "0.51.2",
+        "raw_artifact_filename": "gradient_v1.qcschema.json",
+        "raw_artifact_sha256": "531b2847f28fe932bf808d8f1365c372c32af35b06470f8be422317fe1a36030",
+        "record_kind": "atomic",
+        "schema_name": "qcschema_output",
+        "schema_version": 1,
+        "software_source": "provenance"
+      }
+    },
+    "parameters_parser_version": "tckdb-qcschema/0.2.0;qcelemental/0.51.2",
+    "quality": "raw",
+    "software_release": {
+      "name": "Psi4",
+      "version": "1.11"
+    },
+    "sp_result": {
+      "electronic_energy_hartree": -74.96475172227329
+    },
+    "type": "sp"
+  },
+  "geometry": {
+    "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162194\nH -0.0000000000 0.7906895713 0.5437010614\nH 0.0000000000 -0.7906895713 0.5437010614"
+  },
+  "scientific_origin": "computed",
+  "species_entry": {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "molecule_kind": "molecule",
+    "multiplicity": 1,
+    "smiles": "O",
+    "species_entry_kind": "minimum",
+    "stereo_kind": "unspecified"
+  }
+}

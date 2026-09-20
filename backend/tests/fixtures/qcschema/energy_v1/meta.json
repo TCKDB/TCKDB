@@ -1,0 +1,15 @@
+{
+  "driver": "energy",
+  "expected_calculation_type": "sp",
+  "family": "v1",
+  "generator": {
+    "adapter_version": "0.2.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/energy_v1"
+  },
+  "pins": {
+    "electronic_energy_hartree": -74.96475172227183,
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194"
+  },
+  "raw_sha256": "6e0de7881187c554a4a03d52b7713343c1228a96123eb2bb1b991adad7f30743"
+}
