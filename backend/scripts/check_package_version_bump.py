@@ -144,6 +144,11 @@ PACKAGES: tuple[Package, ...] = (
         dist_paths=("clients/python/adapters/chemkin/tckdb_chemkin",),
     ),
     Package(
+        name="tckdb-qcschema",
+        pyproject="clients/python/adapters/qcschema/pyproject.toml",
+        dist_paths=("clients/python/adapters/qcschema/tckdb_qcschema",),
+    ),
+    Package(
         name="tckdb-mcp",
         pyproject="integrations/mcp/pyproject.toml",
         dist_paths=("integrations/mcp/src/tckdb_mcp",),
