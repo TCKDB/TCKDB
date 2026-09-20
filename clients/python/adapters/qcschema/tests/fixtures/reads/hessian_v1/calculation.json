@@ -27,8 +27,8 @@
       "scan_applicable": false
     },
     "calculation": {
-      "calculation_ref": "calc_bfz6d34evyggcvj4sen7iycu5a",
-      "created_at": "2026-09-20T07:38:20.544393",
+      "calculation_ref": "calc_eeqxf4b7jjsfg5z6koyjlx3k4y",
+      "created_at": "2026-09-20T08:30:41.076789",
       "quality": "raw",
       "review": {
         "note": null,
@@ -40,8 +40,8 @@
     },
     "conformer": {
       "conformer_group_label": "conformer_1",
-      "conformer_group_ref": "cg_xa4fq5r2lkxciwedz65h2huagu",
-      "conformer_observation_ref": "co_jxp4spolynij5hg4lnsn2tpy54"
+      "conformer_group_ref": "cg_vbu5aqoavqexz6bqkgksk4bok4",
+      "conformer_observation_ref": "co_r3ti6eq6eu35galpvtokpzikwm"
     },
     "input_geometries": [
       {
@@ -77,7 +77,7 @@
         "multiplicity": 1,
         "species_entry_kind": "minimum",
         "species_entry_label": null,
-        "species_entry_ref": "spe_l7nizgeya26rwptrrdbp3duztq",
+        "species_entry_ref": "spe_yctigkwev3leq4lyh56aahy2ee",
         "species_ref": "spc_kdncgcvv7jrvhvggxllsoj4ldm"
       },
       "transition_state_entry": null

@@ -128,6 +128,9 @@ class StubClient:
         self.calculation = json.loads((case_dir / "calculation.json").read_text())
         self.geometries = json.loads((case_dir / "geometries.json").read_text())
         self.hessian_response = json.loads((case_dir / "hessian.json").read_text())
+        self.legacy_geometry = json.loads(
+            (case_dir / "legacy_geometry.json").read_text()
+        )
 
     def get_calculation(self, calculation_ref_or_id, *, include=None, profile=None):
         del calculation_ref_or_id, include, profile
@@ -142,6 +145,13 @@ class StubClient:
         if self.hessian_response["status_code"] != 200:
             raise _FakeHTTPError(self.hessian_response["status_code"])
         return self.hessian_response["body"]
+
+    def get_json(self, path):
+        assert path == self.legacy_geometry["request_path"], (
+            f"get_json called with {path!r}, expected "
+            f"{self.legacy_geometry['request_path']!r}"
+        )
+        return self.legacy_geometry["response"]
 
     def search_calculations(self, **filters):
         del filters
@@ -262,6 +272,13 @@ def test_round_trip(document_case: str, read_case: str) -> None:
     assert int(exported["molecule"]["molecular_multiplicity"]) == int(
         original["molecule"]["molecular_multiplicity"]
     )
+
+    # --- mass_numbers, element-for-element (C-Q3 review round 2) -------
+    # Every pinned-read case in this corpus is ordinary water (no recorded
+    # isotope on any atom), so this is the standard-nuclide path --
+    # test_exporter.py's D2O-style cases cover a recorded non-standard
+    # isotope directly against a hand-built stub.
+    assert exported["molecule"]["mass_numbers"] == original["molecule"]["mass_numbers"]
 
     # --- method, basis -----------------------------------------------
     original_method, original_basis = _original_method_basis(original, record.family)

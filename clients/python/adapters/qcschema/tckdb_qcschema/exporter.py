@@ -36,25 +36,51 @@ has no ghost-atom representation to begin with, so this is automatic, not
 re-checked). ``model.method``/``model.basis`` are the calculation's level
 of theory, verbatim.
 
-**Isotopes, a known gap.** The scientific geometry read
-(``GET /scientific/geometries/{handle}``, ``GeometryAtomPayload``) carries
-no per-atom isotope field -- confirmed empirically against a live capture,
-see ``scripts/capture_read_fixtures.py``'s module docstring -- although the
-isotope is stored (``GeometryAtom.isotope_mass_number`` in the backend
-database) and *is* served by the unrelated, internal-id-only
-``GET /geometries/{id}`` route. ``export_calculation`` therefore always
-exports ``mass_numbers`` as each element's standard tabulated nuclide
-(``qcelemental.periodictable.to_A``), never a recorded non-standard
-isotope. This is silently correct for every calculation whose geometry
-carries no isotope (the overwhelming common case, and the only case this
-adapter's own round-trip corpus exercises), and silently *wrong* -- not
-refused, not flagged -- for a record whose stored geometry names a
-non-standard nuclide. Closing this needs a backend schema change (adding
-``isotope_mass_number`` to ``GeometryAtomPayload``), out of scope for a
-client-side adapter package under the sovereignty rule that nothing under
-``backend/`` changes here; noted for a future work package instead of
-worked around by inventing a second backend read this package has no
-authority to add.
+**Isotopes, closed by reading the legacy surface.** The scientific
+geometry read (``GET /scientific/geometries/{handle}``,
+``GeometryAtomPayload``) carries no per-atom isotope field -- confirmed
+empirically against a live capture, see
+``scripts/capture_read_fixtures.py``'s module docstring -- so
+``_build_molecule`` never derives ``mass_numbers`` from it. **This does
+not need a backend schema change**, and an earlier revision of this
+docstring was wrong to say so: the isotope is stored
+(``GeometryAtom.isotope_mass_number`` in the backend database) and is
+already served, per atom, by the unrelated, internal-id-only,
+pre-Phase-D ``GET /geometries/{id}`` route (``GeometryRead.atoms``,
+``GeometryAtomRead.isotope_mass_number`` --
+:mod:`app.schemas.entities.geometry`) and by its list sibling
+``GET /geometries?geom_hash=...`` (``geom_hash`` is ``unique=True`` on
+the ``geometry`` table, so it resolves to exactly one row). Both sit
+under the exact same legacy-read auth gate
+(``require_auth_for_legacy_reads``) as ``GET /calculations/{id}/hessian``,
+which this adapter already reads for a ``freq`` export.
+
+So ``export_calculation`` reads per-atom isotopes from that legacy
+surface -- ``GET /geometries?geom_hash=<hash>`` for an ``sp`` export
+(``geom_hash`` comes from the calculation's own geometry link, no extra
+lookup needed) and ``GET /geometries/{id}`` for a ``freq`` export
+(``id`` is the Hessian read's own ``geometry_id``) -- via
+:func:`tckdb_client.TCKDBClient.get_json`, cross-checks the returned
+atoms element-for-element against the atoms already read from the
+scientific geometry (refusing ``export_geometry_mismatch`` if they
+disagree), and uses each atom's ``isotope_mass_number``: ``null`` means
+the element's standard tabulated nuclide (``GeometryAtomBase``'s own
+docstring: "``None`` means the element's most abundant natural
+isotope"), *not* "unrecorded" -- so ``qcelemental.periodictable.to_A``
+is the correct, non-guessing fallback for exactly that atom, never a
+blanket default applied regardless of what the row says. A recorded
+non-standard value is used verbatim. ``masses`` is left for
+``qcelemental.models.v2.Molecule`` to derive on its own from
+``symbols`` + ``mass_numbers`` (measured: it does, e.g. ``mass_numbers``
+16/2/1 for O/D/H yields ``masses`` 15.995/2.014/1.008) -- never computed
+or invented here.
+
+When the legacy read cannot be completed (this deployment's legacy-read
+auth gate rejects it -- 401/403, e.g. a hosted deployment with no API
+key configured -- the id/hash is not found, or a ``geom_hash`` query
+comes back with an empty ``items`` list), the export is refused
+``export_isotopes_unavailable`` rather than silently falling back to
+standard nuclides for every atom.
 
 **The calculation-id gap for ``freq`` export.** ``GET /calculations/{id}/hessian``
 (C-Q2) is a plain, pre-Phase-D route that takes only the integer
@@ -80,9 +106,12 @@ from . import __version__ as _ADAPTER_VERSION
 from .errors import (
     E_EXPORT_CALCULATION_ID_UNAVAILABLE,
     E_EXPORT_ENERGY_UNAVAILABLE,
+    E_EXPORT_GEOMETRY_MISMATCH,
     E_EXPORT_GEOMETRY_UNAVAILABLE,
+    E_EXPORT_HESSIAN_UNAUTHORIZED,
     E_EXPORT_HESSIAN_UNAVAILABLE,
     E_EXPORT_IDENTITY_UNAVAILABLE,
+    E_EXPORT_ISOTOPES_UNAVAILABLE,
     E_EXPORT_LEVEL_OF_THEORY_UNAVAILABLE,
     E_EXPORT_UNSUPPORTED_TYPE,
     QCSchemaAdapterError,
@@ -146,10 +175,67 @@ def _geometry_identity(geometry: dict) -> tuple[int, int]:
     return int(charge), int(multiplicity)
 
 
-def _build_molecule(geometry: dict) -> qcel_v2.Molecule:
+def _mass_numbers_from_isotope_atoms(
+    symbols: list[str], isotope_atoms: list[dict]
+) -> list[int]:
+    """Per-atom ``mass_numbers``, honest per the module docstring's
+    "Isotopes" section: a ``null`` ``isotope_mass_number`` means the
+    element's standard tabulated nuclide (``to_A`` is the correct
+    fallback for *that* atom, not a blanket default), a recorded value
+    is used verbatim. Refuses ``export_geometry_mismatch`` if the legacy
+    read's atoms do not line up, element-for-element in ``atom_index``
+    order, with the atoms already read from the scientific geometry --
+    two reads of what should be the same stored geometry disagreeing is
+    a refusal, not something to silently paper over.
+    """
+    sorted_isotope_atoms = sorted(
+        isotope_atoms, key=lambda a: a["atom_index"]
+    )
+    if len(sorted_isotope_atoms) != len(symbols):
+        raise QCSchemaAdapterError(
+            E_EXPORT_GEOMETRY_MISMATCH,
+            "the legacy per-atom isotope read returned "
+            f"{len(sorted_isotope_atoms)} atoms, but the scientific "
+            f"geometry read returned {len(symbols)}; refusing rather than "
+            "exporting mismatched coordinates and isotopes.",
+        )
+
+    mass_numbers: list[int] = []
+    for index, (symbol, isotope_atom) in enumerate(
+        zip(symbols, sorted_isotope_atoms)
+    ):
+        # GeometryAtom.element is a Postgres CHAR(2); a single-letter symbol
+        # comes back blank-padded from the legacy read (the scientific read
+        # already strips this server-side -- see
+        # app.services.scientific_read.geometry -- the legacy route does
+        # not), so strip before comparing/using it.
+        legacy_symbol = (isotope_atom.get("element") or "").strip()
+        if legacy_symbol != symbol:
+            raise QCSchemaAdapterError(
+                E_EXPORT_GEOMETRY_MISMATCH,
+                f"atom {index + 1}: the legacy per-atom isotope read names "
+                f"element {legacy_symbol!r}, but the scientific geometry "
+                f"read names {symbol!r} at the same atom_index; refusing "
+                "rather than exporting mismatched coordinates and "
+                "isotopes.",
+            )
+        mass_number = isotope_atom.get("isotope_mass_number")
+        if mass_number is None:
+            # null means the element's most abundant natural isotope for
+            # *this* atom (GeometryAtomBase's own docstring), not
+            # "unrecorded" -- to_A is the correct, non-guessing fallback
+            # here, scoped to the one atom whose row actually says so.
+            mass_numbers.append(int(_periodic_table.to_A(symbol)))
+        else:
+            mass_numbers.append(int(mass_number))
+    return mass_numbers
+
+
+def _build_molecule(geometry: dict, isotope_atoms: list[dict]) -> qcel_v2.Molecule:
     """One exported ``Molecule``: Å -> bohr (inverse of the importer's
-    conversion, same constant), standard-nuclide ``mass_numbers`` (see the
-    module docstring's isotope gap), single fragment, every atom real.
+    conversion, same constant), per-atom ``mass_numbers`` read from the
+    legacy isotope surface (see the module docstring's "Isotopes"
+    section), single fragment, every atom real.
     """
     atoms = sorted(geometry.get("atoms") or [], key=lambda a: a["atom_index"])
     if not atoms:
@@ -163,7 +249,7 @@ def _build_molecule(geometry: dict) -> qcel_v2.Molecule:
         geometry_bohr.extend(
             v / BOHR_TO_ANGSTROM for v in (a["x"], a["y"], a["z"])
         )
-    mass_numbers = [int(_periodic_table.to_A(sym)) for sym in symbols]
+    mass_numbers = _mass_numbers_from_isotope_atoms(symbols, isotope_atoms)
     charge, multiplicity = _geometry_identity(geometry)
 
     return qcel_v2.Molecule(
@@ -172,6 +258,12 @@ def _build_molecule(geometry: dict) -> qcel_v2.Molecule:
         molecular_charge=charge,
         molecular_multiplicity=multiplicity,
         mass_numbers=mass_numbers,
+        # masses is deliberately never passed: qcelemental.models.v2.Molecule
+        # derives it itself from symbols + mass_numbers (measured 2026-09-20:
+        # mass_numbers [16, 2, 1] for O/D/H yields masses
+        # [15.99491462, 2.01410178, 1.00782503]) -- inventing it here would
+        # risk disagreeing with qcelemental's own tabulated values.
+        #
         # qcelemental rounds Molecule.geometry to GEOMETRY_NOISE=8 decimal
         # places (bohr) by default on every construction -- not merely for
         # its own hashing, see qcelemental.models.v2.molecule.Molecule.__init__
@@ -185,6 +277,77 @@ def _build_molecule(geometry: dict) -> qcel_v2.Molecule:
         # derivation in tests/test_round_trip.py.
         geometry_noise=14,
     )
+
+
+def _fetch_isotope_atoms(
+    client: Any,
+    *,
+    calc_type: str,
+    geometry_link: dict | None,
+    hessian: dict | None,
+) -> list[dict]:
+    """Per-atom isotopes from the legacy ``GET /geometries`` surface (see
+    the module docstring's "Isotopes" section) -- ``GET
+    /geometries?geom_hash=<hash>`` for an ``sp`` export (``geom_hash`` is
+    already on the calculation's own geometry link, no extra lookup
+    needed), ``GET /geometries/{id}`` for a ``freq`` export (``id`` is the
+    Hessian read's own ``geometry_id``). Any way this read fails to
+    produce a usable row -- the legacy-read auth gate rejecting it
+    (401/403), not found (404), an empty ``items`` list for a ``geom_hash``
+    query, or any other error -- is refused ``export_isotopes_unavailable``
+    rather than silently falling back to standard nuclides for every atom.
+    """
+    try:
+        if calc_type == "sp":
+            geom_hash = (geometry_link or {}).get("geom_hash")
+            if not geom_hash:
+                raise QCSchemaAdapterError(
+                    E_EXPORT_ISOTOPES_UNAVAILABLE,
+                    "the sp calculation's geometry link carries no "
+                    "geom_hash to look up per-atom isotopes on the legacy "
+                    "GET /geometries route.",
+                )
+            response = client.get_json(f"/geometries?geom_hash={geom_hash}")
+            items = (
+                response.get("items") if isinstance(response, dict) else None
+            )
+            if not items:
+                raise QCSchemaAdapterError(
+                    E_EXPORT_ISOTOPES_UNAVAILABLE,
+                    "GET /geometries?geom_hash=<hash> returned no rows; "
+                    "cannot recover per-atom isotopes for this sp export.",
+                )
+            atoms = items[0].get("atoms")
+        else:  # calc_type == "freq"
+            geometry_id = (hessian or {}).get("geometry_id")
+            if geometry_id is None:
+                raise QCSchemaAdapterError(
+                    E_EXPORT_ISOTOPES_UNAVAILABLE,
+                    "the stored Hessian carries no geometry_id to look up "
+                    "per-atom isotopes on the legacy GET /geometries/{id} "
+                    "route.",
+                )
+            response = client.get_json(f"/geometries/{geometry_id}")
+            atoms = (
+                response.get("atoms") if isinstance(response, dict) else None
+            )
+        if not atoms:
+            raise QCSchemaAdapterError(
+                E_EXPORT_ISOTOPES_UNAVAILABLE,
+                "the legacy geometry read returned no atoms; cannot "
+                "recover per-atom isotopes for this export.",
+            )
+        return atoms
+    except QCSchemaAdapterError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - any failure here is refused
+        raise QCSchemaAdapterError(
+            E_EXPORT_ISOTOPES_UNAVAILABLE,
+            "could not read per-atom isotopes from the legacy "
+            f"GET /geometries route ({exc.__class__.__name__}: {exc}); "
+            "refused rather than defaulting every atom to its standard "
+            "nuclide.",
+        ) from exc
 
 
 def _level_of_theory(record: dict) -> tuple[str, str | None]:
@@ -332,6 +495,9 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
                 "the sp calculation has no linked geometry to export.",
             )
         geometry = client.get_geometry(geometry_link["geometry_ref"])
+        isotope_atoms = _fetch_isotope_atoms(
+            client, calc_type="sp", geometry_link=geometry_link, hessian=None
+        )
 
         driver = "energy"
         return_result: Any = energy
@@ -344,11 +510,20 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
         try:
             hessian = client.get_calculation_hessian(calc_id)
         except Exception as exc:  # noqa: BLE001 - narrowed by status_code below
-            if getattr(exc, "status_code", None) == 404:
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 404:
                 raise QCSchemaAdapterError(
                     E_EXPORT_HESSIAN_UNAVAILABLE,
                     "the freq calculation has no stored Hessian "
                     "(GET /calculations/{id}/hessian returned 404).",
+                ) from exc
+            if status_code in (401, 403):
+                raise QCSchemaAdapterError(
+                    E_EXPORT_HESSIAN_UNAUTHORIZED,
+                    "GET /calculations/{id}/hessian was rejected by this "
+                    "deployment's legacy-read auth gate "
+                    f"(status {status_code}); configure an API key rather "
+                    "than treating this as \"no Hessian\".",
                 ) from exc
             raise
 
@@ -357,6 +532,9 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
             hessian["lower_triangle_hartree_bohr2"], natoms
         )
         geometry = client.get_geometry(hessian["geometry_id"])
+        isotope_atoms = _fetch_isotope_atoms(
+            client, calc_type="freq", geometry_link=None, hessian=hessian
+        )
 
         driver = "hessian"
         return_result = full_matrix
@@ -364,7 +542,7 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
             client, record=record, level_of_theory_ref=level_of_theory_ref
         )
 
-    molecule = _build_molecule(geometry)
+    molecule = _build_molecule(geometry, isotope_atoms)
 
     software_release = record.get("software_release") or {}
     api_version, api_version_source = _client_version(client)

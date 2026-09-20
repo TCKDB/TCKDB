@@ -43,6 +43,14 @@ server:
   water fixtures.
 * ``GET /calculations/{id}/hessian`` (C-Q2) -- 404 for ``energy_v1``
   (no stored Hessian), 200 for ``hessian_v1``.
+* The legacy per-atom-isotope read (review round 2, C-Q3): for
+  ``energy_v1`` (an ``sp`` case), ``GET /geometries?geom_hash=<hash>``
+  using the calculation's own geometry link's ``geom_hash``; for
+  ``hessian_v1`` (a ``freq`` case), ``GET /geometries/{id}`` using the
+  Hessian read's own ``geometry_id``. See ``exporter.py``'s module
+  docstring's "Isotopes" section for why this legacy surface, rather than
+  the scientific geometry read, is what ``export_calculation`` reads
+  isotopes from.
 
 and writes the raw JSON response bodies to
 ``clients/python/adapters/qcschema/tests/fixtures/reads/<case>/*.json``:
@@ -50,9 +58,14 @@ and writes the raw JSON response bodies to
 (a dict keyed by whatever handle -- ``geometry_ref`` or, for the Hessian's
 own geometry, the bare numeric id -- was used to fetch it), ``hessian.json``
 (``{"status_code": ..., "body": ...}`` so a 404 is captured as data, not an
-exception) and ``meta.json`` (bookkeeping: which calculation id this run
-happened to mint, for a human re-reading the capture -- never read by the
-round-trip test itself, which only reads the three response-body files).
+exception), ``legacy_geometry.json`` (``{"route": "geom_hash_query" |
+"by_id", "request_path": ..., "response": ...}`` -- ``request_path`` is
+the exact, un-prefixed path :func:`tckdb_qcschema.exporter.export_calculation`
+passes to ``TCKDBClient.get_json``, so the pinned-read stub can assert it
+was called with the exact path the exporter actually builds) and
+``meta.json`` (bookkeeping: which calculation id this run happened to
+mint, for a human re-reading the capture -- never read by the round-trip
+test itself, which only reads the response-body files).
 
 Measured 2026-09-20 against this backend: the default deployment's
 internal-id visibility policy strips ``calculation_id`` from
@@ -67,6 +80,19 @@ response body (``CalculationHessianRead``) always carries both
 docstring for how ``export_calculation`` copes with this asymmetry (a
 caller must supply the integer id directly to export a ``freq`` record on
 a deployment that hides it from the scientific read).
+
+Measured again 2026-09-20 (review round 2): ``GET /geometries/{id}`` and
+``GET /geometries?geom_hash=...`` are a *different* pair of routes from
+the ones above -- plain, pre-Phase-D ``/geometries/...`` routes (not
+``/scientific/geometries/...``), gated by the exact same
+``require_auth_for_legacy_reads`` dependency as
+``GET /calculations/{id}/hessian`` (see ``backend/app/api/router.py``).
+Both serve ``GeometryAtomRead.isotope_mass_number`` per atom, which the
+scientific geometry read never does. This is why the earlier revision of
+this docstring and of ``exporter.py``'s module docstring, which said
+closing the isotope gap needed a backend schema change, was wrong: the
+field was already being served by a route this adapter already reads
+from (the Hessian route) for a different purpose.
 """
 
 from __future__ import annotations
@@ -181,13 +207,54 @@ def _capture(client, case: str) -> None:
     (out_case_dir / "geometries.json").write_text(
         json.dumps(geometries, indent=2, sort_keys=True) + "\n"
     )
+
+    # Legacy per-atom-isotope read (review round 2): the exact call
+    # tckdb_qcschema.exporter._fetch_isotope_atoms makes for this record's
+    # own calculation type -- see the module docstring above.
+    calc_type = record["calculation"]["type"]
+    if calc_type == "sp":
+        first_link = None
+        for block_name in ("input_geometries", "output_geometries"):
+            links = record.get(block_name) or []
+            if links:
+                first_link = links[0]
+                break
+        assert first_link is not None, f"{case}: sp record has no geometry link"
+        geom_hash = first_link["geom_hash"]
+        request_path = f"/geometries?geom_hash={geom_hash}"
+        legacy_resp = client.get(f"/api/v1{request_path}")
+        assert legacy_resp.status_code == 200, legacy_resp.text[:2000]
+        legacy_geometry = {
+            "route": "geom_hash_query",
+            "request_path": request_path,
+            "response": legacy_resp.json(),
+        }
+    else:
+        assert hessian_resp.status_code == 200, (
+            f"{case}: freq case with no stored Hessian to read a "
+            "geometry_id from"
+        )
+        hessian_geom_id = hessian_resp.json()["geometry_id"]
+        request_path = f"/geometries/{hessian_geom_id}"
+        legacy_resp = client.get(f"/api/v1{request_path}")
+        assert legacy_resp.status_code == 200, legacy_resp.text[:2000]
+        legacy_geometry = {
+            "route": "by_id",
+            "request_path": request_path,
+            "response": legacy_resp.json(),
+        }
+
+    (out_case_dir / "legacy_geometry.json").write_text(
+        json.dumps(legacy_geometry, indent=2, sort_keys=True) + "\n"
+    )
+
     (out_case_dir / "meta.json").write_text(
         json.dumps(
             {
                 "case": case,
                 "calculation_id": calc_id,
                 "captured_from": (
-                    "backend GET routes, real migrated DB, C-Q3 pinned-read capture"
+                    "backend GET routes, real DB, C-Q3 pinned-read capture"
                 ),
             },
             indent=2,
