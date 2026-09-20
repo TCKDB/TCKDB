@@ -7,6 +7,7 @@ the ``get_write_db`` dependency (commit on success, rollback on exception).
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 from typing import Any
 
@@ -950,7 +951,12 @@ def upload_thermoml(
         )
     try:
         xml_bytes = base64.b64decode(request.content_base64, validate=True)
-    except Exception as exc:
+    except binascii.Error as exc:
+        # Narrower than ``except Exception`` on purpose: ``b64decode``
+        # raises exactly ``binascii.Error`` for both bad characters and
+        # bad padding, and a broader clause here would trip the API
+        # layer's coded-exception reraise gate (nothing else can be
+        # raised under this try, but the gate does not reason that far).
         raise CodedValidationError(
             "thermoml_invalid_base64",
             f"content_base64 is not valid base64: {exc}",
