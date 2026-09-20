@@ -433,6 +433,117 @@ Design.
   clause before an observation ships in a release; the plan flags this and does
   not decide it.
 
+## C-E6 — ThermoML file input and upload route
+
+**Decision (Calvin, 2026-09-20): "yes I want those small additions"** — let
+anyone ingest a ThermoML file, not only the NIST archive. Two surfaces: (1)
+the backend CLI accepts a standalone ThermoML file path (`--file`, mutually
+exclusive with `--archive`/`--doi`), and (2) an authenticated HTTP upload
+route, `POST /api/v1/uploads/thermoml`, accepts one inline.
+
+**Mechanism.** `backend/app/services/thermoml_cp_import.py`'s
+`import_thermoml_cp_article` (C-E3) was refactored into a shared private
+`_run_pipeline` core (validate -> parse -> map -> persist) plus two public
+entry points: the original (archive-sourced) and a new
+`import_thermoml_cp_upload` (depositor-sourced). Neither the XSD validator,
+the parser, the mapper, nor the identity resolver changed — the mapping
+profile (ideal-gas/gas Cp only, exact single-InChIKey identity, everything
+else reported unsupported/rejected) is identical on both paths.
+
+**Custody design, and why NIST fields are not reused.** An uploaded
+document's custody must not claim NIST provenance it does not have:
+
+- Raw bytes: stored content-addressed by the same helper the archive path
+  uses (`app.services.artifact_storage`), keyed by the document's own
+  SHA-256 — no bulk-archive `container_digest` (honestly `None`; there is no
+  container).
+- `external_source`: **one shared row** naming the depositor-upload
+  *channel* — `source_name="TCKDB depositor ThermoML upload"`,
+  `source_release="v1"` — not the individual depositor (who is already
+  recorded via the submission's `created_by` and rights attestation) and not
+  NIST.
+- `external_source_record.record_kind`: reuses the existing
+  `ExternalSourceRecordKind.thermoml_article` value. **No migration.** The
+  record kind names *what shape of document* was snapshotted (a ThermoML
+  `DataReport` for one article), which is identical whether the bytes came
+  from the NIST bulk archive or a depositor's own file; the two channels are
+  already distinguished by `external_source` (name/release) and `source_uri`
+  (`"tckdb:depositor-upload"` vs. the archive URL), not by `record_kind`. An
+  `ALTER TYPE ... ADD VALUE` revision was considered and rejected as
+  unnecessary duplication of an existing, honest discriminator.
+- Rights: the archive path's standing attestation is an explicit
+  `source_terms` row quoting NIST/TRC's published terms verbatim — nobody
+  "agreed" to license those rows, they were taken under a source's own
+  terms. An uploaded file has no such fallback: its submission's standing
+  attestation is the depositor's own `DepositRights`, recorded as an
+  ordinary `depositor_agreement` through the same `open_upload_submission`
+  choke point every other upload route uses. `source_terms` is never
+  recorded for an upload.
+- `doi` is optional on the upload path (required on the archive path, where
+  the operator already picked the article to fetch): taken from the file's
+  own `Citation/sDOI` when the caller supplies none; a caller-supplied `doi`
+  that disagrees with the file's own `sDOI` is refused
+  (`ThermoMLDoiConflictError` / `thermoml_doi_conflict`) before anything is
+  parsed further; when neither is present, record-keying falls back to a
+  content-digest-derived synthetic key (`"upload:<sha256[:16]>"`). Literature
+  resolution is unaffected — it always reads the file's own citation block,
+  never the caller's `doi` argument.
+
+**CLI.** `backend/scripts/thermoml_cp_import.py` gained `--file PATH`, an
+argparse `mutually_exclusive_group(required=True)` with `--archive` (so
+supplying both is refused by argparse itself, before any of this module's
+own code runs). `--doi` is required with `--archive`, optional with `--file`.
+`--commit` (default off), `--actor` and `--license` are unchanged and shared
+by both modes.
+
+**Route.** `POST /api/v1/uploads/thermoml`: authenticated (`user` role
+suffices — a standard upload, unlike the archive path's curator-only
+`source_terms` attestation), transport is JSON body with
+`content_base64` (mirrors `ArtifactIn.content_base64`, the only other schema
+in this codebase carrying inline file bytes — no multipart route exists
+anywhere in the API). `rights: DepositRights` is **required** on this
+schema specifically (every other upload schema's `DepositRights` is
+optional — "absence bites at release time, not at upload" — but this
+route's whole content is a third-party document with no fallback source
+terms). `Idempotency-Key` is likewise **required** on this route
+specifically, unlike every sibling `/uploads/*` route: a second, required
+binding of the same header (`Header(..., alias=IDEMPOTENCY_HEADER)`)
+declared alongside the existing optional `idempotency_dependency` makes
+FastAPI's ordinary missing-required-header 422 fire before the route body
+runs — DR-0024 plus this work package's own brief call for every upload
+here to carry a key, and reusing FastAPI's existing required-field
+validation avoids inventing a second refusal mechanism for the same fact.
+No `dry_run` flag: none of the eleven sibling `/uploads/*` routes preview a
+request before committing it (the one preview mechanism in this codebase,
+`POST /bundles/dry-run`, is a wholly separate endpoint from its commit
+sibling, not a boolean flag shared with one) — this route follows that
+precedent and always commits; a caller wanting a preview runs the file
+through the CLI's default (no `--commit`) dry run instead. Size cap reuses
+`app.services.artifact_storage.MAX_ARTIFACT_BYTES`/`MAX_ENCODED_ARTIFACT_LEN`
+— no second size policy for one more route. Coded refusals:
+`thermoml_schema_invalid`, `thermoml_no_supported_content` (zero mappable
+rows — refuses rather than opening an empty submission, listing the mapping
+report's unsupported/rejected reasons), `thermoml_file_too_large`,
+`thermoml_doi_conflict`, and `thermoml_invalid_base64` (malformed base64,
+one beyond the four named in the brief — a distinct failure from an
+oversized payload). The response (`ThermoMLUploadResult`) names only public
+refs (`submission_ref`, `observation_ref` per row, `species_entry_ref` when
+identity resolved) — never a database id, following the `public_ref`
+precedent C-E5 set for this exact table rather than the older
+`/uploads/*` routes' `id`/`submission_id` convention.
+
+**Client.** `tckdb_client.client.TCKDBClient.upload_thermoml()` (reads a
+local file, base64-encodes it, posts) mirrors `upload_artifact`, the nearest
+typed method that sends inline file bytes; `rights` and `idempotency_key`
+are both required keyword arguments client-side too, so a caller who forgets
+either fails locally rather than round-tripping a 422. Package bumped
+0.87.1 -> 0.88.0; parity ledger entry `typed`; contract test in
+`clients/python/tests/test_typed_parity_methods.py`.
+
+**Non-goals.** No new `SubmissionKind`/`SubmissionSourceKind`/
+`ExternalSourceRecordKind` member; no multipart transport; no per-depositor
+`external_source` row; no preview/dry-run flag on the route.
+
 ## Publication demonstration
 
 The two halves can claim: one ThermoML 4.0 article validated against the
@@ -467,6 +578,7 @@ beyond the profile.
 | C-E3 persistence | service, identity extraction, submission and attestation, CLI | none | E1, E2 |
 | C-E4 review check and generators | check, rubric, runner, two generators | none | E3 |
 | C-E5 read route, rights, attach | route, gate extension, curator attach | none | E1, E3 |
+| C-E6 ThermoML file input and upload route | source-neutral service core, CLI `--file`, `POST /uploads/thermoml`, client method, golden/vocab/parity | none | E3 |
 
 The Q series and the E series run in parallel; E1 holds the only revision.
 Every brief reproduces the known problem first, names files, reuse,
