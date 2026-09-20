@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. A single-component Cp block with
+  TWO block-level PhaseIDs ("Crystal" and "Gas"; PhaseID is unbounded,
+  schema/ThermoML.xsd's PureOrMixtureData element) and NO
+  PropPhaseID/ePropPhase on the Property itself: which phase the Cp
+  reading belongs to is genuinely ambiguous, so the parser must reject
+  the property (reason "ambiguous_phase") rather than guessing "the
+  first PhaseID". Component/Compound keyed by RegNum/nOrgNum, matching
+  the real archive. No values from any real article. See
+  fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>J. Chem. Thermodyn.</sPubName>
+    <yrPubYr>2017</yrPubYr>
+    <sTitle>Fixture: heat capacities with an ambiguous block phase (invented values)</sTitle>
+    <sDOI>10.1016/j.jct.2017.xxxxxx</sDOI>
+  </Citation>
+  <Compound>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Small sample (50 mg) DSC</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <ePresentation>Direct value, X</ePresentation>
+    </Property>
+    <PhaseID>
+      <ePhase>Crystal</ePhase>
+    </PhaseID>
+    <PhaseID>
+      <ePhase>Gas</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>293.00</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>70.00</nPropValue>
+        <nPropDigits>4</nPropDigits>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>

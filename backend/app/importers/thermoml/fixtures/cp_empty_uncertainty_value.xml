@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Single-component "Ideal gas" Cp
+  block with TWO NumValues rows: the first carries a normal
+  PropUncertainty (nStdUncertValue set); the second's PropUncertainty
+  carries ONLY nUncertAssessNum; neither nStdUncertValue nor
+  nExpandUncertValue, and it does not use the AsymStdUncert/
+  AsymExpandUncert branch either (both are schema-legal: every child of
+  the PropUncertainty choice's sequences is itself optional, so an
+  uncertainty entry with literally no value is schema-valid but
+  semantically empty). The mapper must reject that SECOND row (reason
+  "empty_uncertainty_value") rather than building a payload with
+  uncertainty_kind=standard and scalar_uncertainty=None. Component/
+  Compound keyed by RegNum/nOrgNum, matching the real archive. No values
+  from any real article. See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>J. Chem. Eng. Data</sPubName>
+    <yrPubYr>2019</yrPubYr>
+    <sTitle>Fixture: ideal-gas heat capacities with one empty per-value uncertainty entry (invented values)</sTitle>
+    <sDOI>10.1021/acs.jced.9zzzzzz</sDOI>
+  </Citation>
+  <Compound>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Derived from speed of sound</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Ideal gas</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+    </Property>
+    <PhaseID>
+      <ePhase>Ideal gas</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>290.00</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>57.10</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <PropUncertainty>
+          <nUncertAssessNum>1</nUncertAssessNum>
+          <nStdUncertValue>0.12</nStdUncertValue>
+        </PropUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>310.00</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>59.80</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <PropUncertainty>
+          <nUncertAssessNum>1</nUncertAssessNum>
+        </PropUncertainty>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>

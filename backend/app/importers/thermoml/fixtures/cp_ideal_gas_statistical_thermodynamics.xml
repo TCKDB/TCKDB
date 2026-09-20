@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Structurally modelled on the pilot
+  article's own ideal-gas Cp block; DOI 10.1016/j.jct.2013.08.022
+  (benzene, UHOVQNZJYSORNB-UHFFFAOYSA-N): phase "Ideal gas", a 100 kPa
+  Constraint carrying its own ConstraintPhaseID ("Ideal gas"),
+  Property-MethodID carrying ONLY sMethodName "statistical thermodynamics"
+  (no eMethodName, no Prediction; the observed-method-string allowlist
+  rule this fixture exists to exercise), and a Property-level
+  CombinedUncertainty stating a level of confidence but NO coverage
+  factor. Component/Compound keyed by RegNum/nOrgNum, matching the real
+  archive. No temperature, pressure, Cp value, uncertainty or digit count
+  below was read from that article or from the ThermoML archive; every
+  number here is invented for the test suite. See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sAuthor>Roe, R.</sAuthor>
+    <sPubName>J. Chem. Thermodyn.</sPubName>
+    <yrPubYr>2013</yrPubYr>
+    <sTitle>Fixture: ideal-gas statistical-thermodynamics heat capacities of an aromatic (invented values)</sTitle>
+    <sDOI>10.1016/j.jct.2013.08.022</sDOI>
+  </Citation>
+  <Compound>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
+    <sStandardInChI>InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H</sStandardInChI>
+    <sStandardInChIKey>UHOVQNZJYSORNB-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>benzene</sCommonName>
+    <sFormulaMolec>C6H6</sFormulaMolec>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <sMethodName>statistical thermodynamics</sMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Ideal gas</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+      <CombinedUncertainty>
+        <nCombUncertAssessNum>1</nCombUncertAssessNum>
+        <sCombUncertEvaluator>Data file compiler</sCombUncertEvaluator>
+        <eCombUncertEvalMethod>Propagation of evaluated standard uncertainties</eCombUncertEvalMethod>
+        <nCombUncertLevOfConfid>95</nCombUncertLevOfConfid>
+      </CombinedUncertainty>
+    </Property>
+    <PhaseID>
+      <ePhase>Ideal gas</ePhase>
+    </PhaseID>
+    <Constraint>
+      <nConstraintNumber>1</nConstraintNumber>
+      <ConstraintID>
+        <ConstraintType>
+          <ePressure>Pressure, kPa</ePressure>
+        </ConstraintType>
+      </ConstraintID>
+      <ConstraintPhaseID>
+        <eConstraintPhase>Ideal gas</eConstraintPhase>
+      </ConstraintPhaseID>
+      <nConstraintValue>100</nConstraintValue>
+      <nConstrDigits>1</nConstrDigits>
+    </Constraint>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>244</nVarValue>
+        <nVarDigits>3</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>61.5</nPropValue>
+        <nPropDigits>3</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>2.3</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>372</nVarValue>
+        <nVarDigits>3</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>97.8</nPropValue>
+        <nPropDigits>3</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>3.6</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>588</nVarValue>
+        <nVarDigits>3</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>141.2</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>5.5</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>863</nVarValue>
+        <nVarDigits>3</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>214.7</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>8.3</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>

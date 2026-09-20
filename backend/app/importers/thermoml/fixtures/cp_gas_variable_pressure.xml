@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Structurally modelled on the SHAPE
+  of the real archive's fluoroethane Gas-phase Cp block (DOI
+  10.1016/j.fluid.2016.07.034): phase "Gas" (real-gas basis) with
+  pressure carried by a "Pressure, kPa" VARIABLE (nVarNumber 2), not a
+  Constraint; each NumValues row states its own pressure, and those
+  pressures DIFFER across rows. This exercises pressure_source="variable"
+  (vs. the Constraint-sourced case in cp_gas_single_component.xml /
+  cp_ideal_gas_statistical_thermodynamics.xml) and proves per-row
+  pressure_bar tracks the per-row source rather than a single block-wide
+  value. Component/Compound keyed by RegNum/nOrgNum, matching the real
+  archive. No values from any real article; every temperature, pressure
+  and Cp value below is invented for the tests; deliberately NOT the
+  real article's own endpoint temperatures/pressures, so nothing here
+  could be mistaken for that article's actual data. See
+  fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>Fluid Phase Equilib.</sPubName>
+    <yrPubYr>2016</yrPubYr>
+    <sTitle>Fixture: gas-phase heat capacities with a per-row pressure variable (invented values)</sTitle>
+    <sDOI>10.1016/j.fluid.2016.vvvvvv</sDOI>
+  </Citation>
+  <Compound>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Flow calorimetry</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Gas</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+      <CombinedUncertainty>
+        <nCombUncertAssessNum>1</nCombUncertAssessNum>
+        <sCombUncertEvaluator>Data file compiler</sCombUncertEvaluator>
+        <eCombUncertEvalMethod>Propagation of evaluated standard uncertainties</eCombUncertEvalMethod>
+        <nCombUncertLevOfConfid>95</nCombUncertLevOfConfid>
+      </CombinedUncertainty>
+    </Property>
+    <PhaseID>
+      <ePhase>Gas</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <Variable>
+      <nVarNumber>2</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <ePressure>Pressure, kPa</ePressure>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>322.10</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <VariableValue>
+        <nVarNumber>2</nVarNumber>
+        <nVarValue>1150</nVarValue>
+        <nVarDigits>4</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>63.10</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>0.30</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>347.65</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <VariableValue>
+        <nVarNumber>2</nVarNumber>
+        <nVarValue>2450</nVarValue>
+        <nVarDigits>4</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>65.20</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>0.31</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>354.80</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <VariableValue>
+        <nVarNumber>2</nVarNumber>
+        <nVarValue>3050</nVarValue>
+        <nVarDigits>4</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>67.80</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>0.33</nCombExpandUncertValue>
+        </CombinedUncertainty>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>
