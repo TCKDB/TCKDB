@@ -10,5 +10,9 @@
   "qcelemental": "0.51.2",
   "geometric": "1.1.1",
   "level": "hf/sto-3g",
-  "molecule": "water, standard experimental geometry"
+  "molecule": "water, standard experimental geometry",
+  "pins": {
+    "electronic_energy_hartree": -74.96475172227329,
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194"
+  }
 }

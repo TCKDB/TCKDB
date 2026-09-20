@@ -93,13 +93,34 @@ here as hand-derived, never as a Psi4 result.
   that family (v2's valid `schema_version` is `2` for both record kinds).
 - **`family_drift_v1_shape`** — the mirror-image edit, starting from
   `energy_v1.json` (no `input_data`, so dispatches to family v1 by
-  shape): `schema_version` changed from `1` to `2`. Both `family_drift`
-  cases refuse the same code, but for different reasons a reader that
-  dispatches from the integer would get backwards in different ways --
-  `family_drift` would be dispatched to the wrong family and then simply
-  fail generic class validation (`document_invalid`, not the specific
-  code), while `family_drift_v1_shape` would be dispatched to family v2
-  by the integer and then fail v2's `input_data`-required validation the
+  shape): **both** `schema_version` (`1` -> `2`) **and** `schema_name`
+  (`"qcschema_output"` -> `"qcschema_atomic_result"`) are changed, so the
+  document ends up declaring v2's entire pair, not just one field of it
+  (see `meta.json`'s `edit`, which already stated this correctly -- this
+  paragraph previously didn't). That second field is not incidental: a
+  reader that gates on "does the declared pair look internally
+  self-consistent?" rather than strictly on shape would see a document
+  declaring a fully matched v2 `(schema_name, schema_version)` pair and
+  could be tempted to trust it -- exactly the failure the version trap
+  warns about (`reader.py`'s module docstring: family is decided by shape
+  alone, `input_data`'s presence, never by anything the document itself
+  claims about its own version). Changing `schema_version` alone would
+  already refuse (a v1-shaped document declaring `schema_version: 2`
+  fails the version check on its own), so it would not by itself catch a
+  reader that only checks `schema_name` for family-consistency and
+  tolerates a mismatched version when the name still passes. Declaring
+  the complete, self-consistent v2 pair is what forces shape to be the
+  *only* thing that can decide family, regardless of which of the two
+  declared fields a weaker implementation happens to check.
+
+  Both `family_drift` cases refuse the same code, but for different
+  reasons a reader that dispatches from the integer (or from the
+  declared pair's own internal consistency) would get backwards in
+  different ways -- `family_drift` would be dispatched to the wrong
+  family and then simply fail generic class validation
+  (`document_invalid`, not the specific code), while
+  `family_drift_v1_shape` would be dispatched to family v2 by the
+  integer/pair and then fail v2's `input_data`-required validation the
   same way. Keeping both is what makes "family taken from the integer"
   an observable mutation in both directions rather than one.
 
