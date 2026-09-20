@@ -130,6 +130,7 @@ class RejectionCode(str, Enum):
     GEOMETRY_TOO_LARGE = "geometry_too_large"
     HANDLE_NOT_FOUND = "handle_not_found"
     HANDLE_TYPE_MISMATCH = "handle_type_mismatch"
+    HESSIAN_NOT_FOUND = "hessian_not_found"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     INCLUDE_NOT_IMPLEMENTED_YET = "include_not_implemented_yet"
     INVALID_CURSOR = "invalid_cursor"
@@ -514,6 +515,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.GEOMETRY_TOO_LARGE: frozenset({422}),
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
     RejectionCode.HANDLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.HESSIAN_NOT_FOUND: frozenset({404}),
     RejectionCode.IDEMPOTENCY_CONFLICT: frozenset({409}),
     RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET: frozenset({422}),
     RejectionCode.INVALID_CURSOR: frozenset({422}),
