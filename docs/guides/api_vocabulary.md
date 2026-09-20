@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 36 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 189 | `backend/app/api/code_catalogue.py` |
-| **total** | **477** | |
+| Refusal codes a caller can receive | 190 | `backend/app/api/code_catalogue.py` |
+| **total** | **478** | |
 
 ## How a record is named
 
@@ -646,12 +646,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_attestation_not_depositor` | a thing |
 | `rights_attestation_requires_curator` | a thing |
 
-### HTTP 404 (19 codes)
+### HTTP 404 (20 codes)
 
 | Code | Names |
 | --- | --- |
 | `curator_task_not_found` | a thing |
 | `handle_not_found` | a thing |
+| `hessian_not_found` | a thing |
 | `irc_result_not_found` | a thing |
 | `manifest_not_frozen` | a thing |
 | `owner_missing` | a thing |

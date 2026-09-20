@@ -5475,6 +5475,64 @@
         "title": "CalculationGeometryValidationSummary",
         "type": "object"
       },
+      "CalculationHessianRead": {
+        "description": "The stored Cartesian Hessian for a calculation (``calc_hessian``).\n\nRead-only: mirrors ``app.db.models.calculation.CalculationHessian``\nexactly, returning the packed lower triangle (including the diagonal)\nverbatim -- no re-derivation, no unit conversion. ``geometry_id`` binds\nthe matrix to the exact :class:`~app.db.models.geometry.Geometry` row\nit was computed at, following the same convention as\n:class:`CalculationInputGeometryBase`/:class:`CalculationOutputGeometryBase`.",
+        "properties": {
+          "calculation_id": {
+            "title": "Calculation Id",
+            "type": "integer"
+          },
+          "geometry_id": {
+            "title": "Geometry Id",
+            "type": "integer"
+          },
+          "lower_triangle_hartree_bohr2": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Lower Triangle Hartree Bohr2",
+            "type": "array"
+          },
+          "natoms": {
+            "title": "Natoms",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "parser_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parser Version"
+          },
+          "source": {
+            "$ref": "#/components/schemas/HessianSource-Output"
+          }
+        },
+        "required": [
+          "calculation_id",
+          "geometry_id",
+          "natoms",
+          "lower_triangle_hartree_bohr2",
+          "source"
+        ],
+        "title": "CalculationHessianRead",
+        "type": "object"
+      },
       "CalculationIRCPointRead": {
         "properties": {
           "calculation_id": {
@@ -17535,7 +17593,7 @@
             "title": "Parser Version"
           },
           "source": {
-            "$ref": "#/components/schemas/HessianSource"
+            "$ref": "#/components/schemas/HessianSource-Input"
           }
         },
         "required": [
@@ -17546,8 +17604,20 @@
         "title": "HessianPayload",
         "type": "object"
       },
-      "HessianSource": {
+      "HessianSource-Input": {
         "description": "Where a stored Cartesian Hessian matrix was obtained from.",
+        "enum": [
+          "parsed_fchk",
+          "parsed_hess",
+          "parsed_log",
+          "uploaded",
+          "derived"
+        ],
+        "title": "HessianSource",
+        "type": "string"
+      },
+      "HessianSource-Output": {
+        "description": "Where a stored Cartesian Hessian matrix was obtained from.\n\nMirrors the \"observation, not possibility\" discipline of the rest of\nthe calculation provenance: a row records how the matrix actually\nreached TCKDB, not a capability claim.",
         "enum": [
           "parsed_fchk",
           "parsed_hess",
@@ -55514,6 +55584,81 @@
           }
         },
         "summary": "Get Geometry Validation",
+        "tags": [
+          "calculations"
+        ]
+      }
+    },
+    "/api/v1/calculations/{calculation_id}/hessian": {
+      "get": {
+        "description": "The calculation's stored Cartesian Hessian (``calc_hessian``), if any.\n\nReturns the packed lower triangle exactly as stored — no re-derivation,\nno unit conversion (native hartree/bohr²). 404 ``hessian_not_found``\nwhen the calculation carries no stored matrix (most calculations: this\nis a one-row-per-calculation side table, absent by default, same as\n:class:`~app.db.models.calculation.CalculationSCFStability`). Same\nauth/visibility as the parent calculation resource — none beyond\ncalculation existence, matching every other Tier-B read on this router.",
+        "operationId": "get_hessian_api_v1_calculations__calculation_id__hessian_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "calculation_id",
+            "required": true,
+            "schema": {
+              "title": "Calculation Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalculationHessianRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Hessian",
         "tags": [
           "calculations"
         ]

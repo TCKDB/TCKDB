@@ -27,6 +27,7 @@ from app.db.models.calculation import (
     CalculationDependency,
     CalculationFreqResult,
     CalculationGeometryValidation,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
@@ -58,6 +59,7 @@ from app.schemas.entities.calculation import (
     CalculationDependencyDirectionalRead,
     CalculationFreqResultRead,
     CalculationGeometryValidationRead,
+    CalculationHessianRead,
     CalculationInputGeometryDetailRead,
     CalculationIRCPointRead,
     CalculationIRCResultRead,
@@ -264,6 +266,31 @@ def get_freq_result(calculation_id: int, session: Session = Depends(get_db)):
             "Frequency result not found for the calculation"
         )
     return CalculationFreqResultRead.model_validate(row)
+
+
+@router.get("/{calculation_id}/hessian", response_model=CalculationHessianRead)
+def get_hessian(calculation_id: int, session: Session = Depends(get_db)):
+    """The calculation's stored Cartesian Hessian (``calc_hessian``), if any.
+
+    Returns the packed lower triangle exactly as stored — no re-derivation,
+    no unit conversion (native hartree/bohr²). 404 ``hessian_not_found``
+    when the calculation carries no stored matrix (most calculations: this
+    is a one-row-per-calculation side table, absent by default, same as
+    :class:`~app.db.models.calculation.CalculationSCFStability`). Same
+    auth/visibility as the parent calculation resource — none beyond
+    calculation existence, matching every other Tier-B read on this router.
+    """
+    _get_calculation_or_404(calculation_id, session)
+    row = session.scalar(
+        select(CalculationHessian).where(
+            CalculationHessian.calculation_id == calculation_id
+        )
+    )
+    if row is None:
+        raise NotFoundError(
+            "Hessian not found for the calculation", code="hessian_not_found"
+        )
+    return CalculationHessianRead.model_validate(row)
 
 
 # ---------------------------------------------------------------------------
