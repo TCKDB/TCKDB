@@ -44580,6 +44580,220 @@
         "title": "ThermoInBundle",
         "type": "object"
       },
+      "ThermoMLUploadDisposition": {
+        "description": "One mapped Cp(T) row's outcome. Never a database id -- see\n``ThermoMLUploadResult``.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "identity_status": {
+            "title": "Identity Status",
+            "type": "string"
+          },
+          "observation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Ref"
+          },
+          "property_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Kind"
+          },
+          "species_entry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Ref"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "identity_status"
+        ],
+        "title": "ThermoMLUploadDisposition",
+        "type": "object"
+      },
+      "ThermoMLUploadRequest": {
+        "additionalProperties": false,
+        "description": "One ThermoML XML document, uploaded directly (not from the NIST\nbulk archive — that path is the ``--archive``/``--doi`` CLI only).\n\n:param filename: Provenance metadata only — recorded on the custody\n    row's warnings/summary text. Never used as a storage path (the\n    object store is content-addressed by SHA-256).\n:param content_base64: Base64-encoded ThermoML XML bytes.\n:param doi: The article's own DOI, if the depositor wants to assert\n    it explicitly. Optional — when omitted, the DOI is taken from the\n    file's own ``Citation/sDOI`` element, if present. Supplying one\n    that disagrees with the file's own ``sDOI`` is a refusal\n    (``thermoml_doi_conflict``), never a silent override.\n:param rights: The depositor's deposit-time license agreement.\n    Required — deliberately **not** optional like ``DepositRights`` on\n    every other upload schema. Every other upload route can fall back\n    on \"attested later, at release time\" because the underlying\n    science already exists in TCKDB under someone's authority; this\n    route's whole content *is* a third-party document the depositor\n    is asserting the right to submit, and unlike the CLI's\n    ``--archive`` path there is no NIST/TRC ``source_terms`` to stand\n    on instead. Omitting it is refused by ordinary Pydantic\n    field-requiredness (422, the same mechanism every other required\n    field on every other schema in this codebase already uses — not\n    a new bespoke refusal). Recorded as an ordinary\n    ``depositor_agreement`` attestation, never ``source_terms``.\n\nNo ``dry_run`` field: none of the sibling ``/uploads/*`` routes in\nthis router preview a request before committing it (the one preview\nmechanism in this codebase, ``POST /bundles/dry-run``, is a wholly\nseparate endpoint from its commit sibling, not a boolean flag shared\nwith one). This route follows that precedent and always commits, like\nevery other route in ``app.api.routes.uploads``; a caller who wants a\npreview runs the same document through the backend CLI's default\n(no ``--commit``) dry-run mode instead.",
+        "properties": {
+          "content_base64": {
+            "minLength": 1,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "filename": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename",
+            "type": "string"
+          },
+          "rights": {
+            "$ref": "#/components/schemas/DepositRights"
+          }
+        },
+        "required": [
+          "filename",
+          "content_base64",
+          "rights"
+        ],
+        "title": "ThermoMLUploadRequest",
+        "type": "object"
+      },
+      "ThermoMLUploadResult": {
+        "additionalProperties": false,
+        "description": "What ``POST /uploads/thermoml`` wrote, named back to the depositor\nentirely in public refs.\n\nDeliberately carries no database id anywhere, unlike the ``id``/\n``submission_id`` fields on every sibling result above: this route\nwas written after ``docs/specs/public_identifier_policy.md`` landed\nand after the C-E5 read route set the ``public_ref`` precedent for\nthis exact table, so it follows that precedent rather than repeating\nthe older routes' leak.",
+        "properties": {
+          "ambiguous_identity_count": {
+            "title": "Ambiguous Identity Count",
+            "type": "integer"
+          },
+          "dispositions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ThermoMLUploadDisposition"
+            },
+            "title": "Dispositions",
+            "type": "array"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "duplicate_count": {
+            "title": "Duplicate Count",
+            "type": "integer"
+          },
+          "inserted_count": {
+            "title": "Inserted Count",
+            "type": "integer"
+          },
+          "mapping_report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Report"
+          },
+          "not_found_identity_count": {
+            "title": "Not Found Identity Count",
+            "type": "integer"
+          },
+          "payload_count": {
+            "title": "Payload Count",
+            "type": "integer"
+          },
+          "resolved_identity_count": {
+            "title": "Resolved Identity Count",
+            "type": "integer"
+          },
+          "schema_valid": {
+            "title": "Schema Valid",
+            "type": "boolean"
+          },
+          "skipped_count": {
+            "title": "Skipped Count",
+            "type": "integer"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          },
+          "type": {
+            "default": "thermoml_import",
+            "title": "Type",
+            "type": "string"
+          },
+          "unresolved_identity_count": {
+            "title": "Unresolved Identity Count",
+            "type": "integer"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "would_insert_count": {
+            "title": "Would Insert Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_valid",
+          "payload_count",
+          "would_insert_count",
+          "inserted_count",
+          "duplicate_count",
+          "skipped_count",
+          "resolved_identity_count",
+          "unresolved_identity_count",
+          "ambiguous_identity_count",
+          "not_found_identity_count"
+        ],
+        "title": "ThermoMLUploadResult",
+        "type": "object"
+      },
       "ThermoModelKind": {
         "description": "Explicit representation kind for a thermo record.\n\nPreviously the representation was implied by which child rows existed;\nthis enum makes it explicit so NASA-9 (arbitrary interval count) and\nWilhoit forms can be distinguished from NASA-7 / tabulated / scalar.",
         "enum": [
@@ -87457,6 +87671,123 @@
           }
         },
         "summary": "Upload Thermo",
+        "tags": [
+          "uploads"
+        ]
+      }
+    },
+    "/api/v1/uploads/thermoml": {
+      "post": {
+        "description": "Accept one ThermoML XML document directly -- not from the NIST bulk\narchive that ``backend/scripts/thermoml_cp_import.py --archive``\nreads. Anyone authenticated may deposit one (Phase C-E6, \"let anyone\ningest a ThermoML file, not only the NIST archive\").\n\nTransport mirrors ``ArtifactIn.content_base64`` (the only other\ninline-file-bytes schema in this codebase): JSON body,\nbase64-encoded content, decoded and size-checked here before the\npipeline runs at all -- the encoded-length pre-check\n(``MAX_ENCODED_ARTIFACT_LEN``) rejects an oversized payload before\nthe decode allocation, the decoded-length check catches base64\npadding slack.\n\nIdempotency: unlike every sibling ``/uploads/*`` route (where the\n``Idempotency-Key`` header is optional), this route requires it --\nDR-0024 and this work package's brief both call for every upload\nhere to carry one. A request without the header never reaches this\nfunction's body at all: FastAPI's own required-header validation\n(see the ``_idempotency_key_required`` parameter above) answers with\nits ordinary 422 first.\n\nRights: ``request.rights`` (``DepositRights``) is required on this\nschema -- unlike every sibling upload schema, where it is optional\nand absence \"bites at release time, not at upload\". This route's\nwhole content is a third-party document the depositor is asserting\nthe right to submit, with no fallback source terms to stand on\ninstead (see ``ThermoMLUploadRequest.rights`` for the full\nreasoning), so omitting it is refused by ordinary Pydantic\nfield-requiredness before this function's body runs.\n\nNo preview: unlike the CLI (``--commit`` default-off), this route\nalways commits, like every sibling ``/uploads/*`` route -- none of\nthem preview a request before writing it (see\n``ThermoMLUploadRequest``'s docstring for the one preview mechanism\nthat does exist in this codebase, and why it does not apply here).",
+        "operationId": "upload_thermoml_api_v1_uploads_thermoml_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThermoMLUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThermoMLUploadResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Thermoml",
         "tags": [
           "uploads"
         ]

@@ -6,14 +6,22 @@ the ``get_write_db`` dependency (commit on success, rollback on exception).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import base64
+import hashlib
+from typing import Any
+
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.db.models.common import SubmissionKind
+from app.db.models.species import SpeciesEntry
+from app.importers.thermoml.archive import ArticleBytes
 from app.schemas.entities.calculation import CalculationUploadRef
 from app.schemas.fragments.refs import collect_software_release_version_warnings
 from app.schemas.upload_warning import UploadWarning
@@ -35,10 +43,15 @@ from app.schemas.workflows.network_upload import NetworkUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.schemas.workflows.thermoml_upload import ThermoMLUploadRequest
 from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.artifact_storage import (
+    MAX_ARTIFACT_BYTES,
+    MAX_ENCODED_ARTIFACT_LEN,
+)
 from app.services.frequency_geometry_linearity import (
     computed_reaction_linearity_warnings,
     computed_species_linearity_warnings,
@@ -46,6 +59,7 @@ from app.services.frequency_geometry_linearity import (
     network_pdep_linearity_warnings,
     transition_state_upload_linearity_warnings,
 )
+from app.services.idempotency import IDEMPOTENCY_HEADER
 from app.services.provenance_warnings import (
     collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
@@ -57,6 +71,10 @@ from app.services.provenance_warnings import (
 )
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
+)
+from app.services.thermoml_cp_import import (
+    ThermoMLDoiConflictError,
+    import_thermoml_cp_upload,
 )
 from app.services.upload_reconciliation import (
     reconcile_species_entry,
@@ -789,3 +807,240 @@ def upload_computed_reaction(
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result
+
+
+# ---------------------------------------------------------------------------
+# ThermoML file upload (Phase C-E6)
+# ---------------------------------------------------------------------------
+
+#: Reuses the artifact-upload cap (``app.services.artifact_storage``)
+#: rather than minting a second size policy for one more upload route.
+MAX_THERMOML_UPLOAD_BYTES = MAX_ARTIFACT_BYTES
+
+
+class ThermoMLUploadDisposition(BaseModel):
+    """One mapped Cp(T) row's outcome. Never a database id -- see
+    ``ThermoMLUploadResult``."""
+
+    property_kind: str | None = None
+    action: str
+    identity_status: str
+    species_entry_ref: str | None = None
+    observation_ref: str | None = None
+    warnings: list[str] = []
+
+
+class ThermoMLUploadResult(BaseModel):
+    """What ``POST /uploads/thermoml`` wrote, named back to the depositor
+    entirely in public refs.
+
+    Deliberately carries no database id anywhere, unlike the ``id``/
+    ``submission_id`` fields on every sibling result above: this route
+    was written after ``docs/specs/public_identifier_policy.md`` landed
+    and after the C-E5 read route set the ``public_ref`` precedent for
+    this exact table, so it follows that precedent rather than repeating
+    the older routes' leak.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = "thermoml_import"
+    submission_ref: str | None = None
+    doi: str | None = None
+    schema_valid: bool
+    payload_count: int
+    would_insert_count: int
+    inserted_count: int
+    duplicate_count: int
+    skipped_count: int
+    resolved_identity_count: int
+    unresolved_identity_count: int
+    ambiguous_identity_count: int
+    not_found_identity_count: int
+    mapping_report: dict[str, Any] | None = None
+    dispositions: list[ThermoMLUploadDisposition] = []
+    warnings: list[str] = []
+
+
+def _thermoml_species_entry_ref(
+    session: Session, species_entry_id: int | None
+) -> str | None:
+    """Resolve a resolved-identity row's public ref for the response.
+
+    The service's ``ObservationDisposition.species_entry_id`` is an
+    internal int (kept for the CLI's operator-facing JSON summary,
+    printed to a terminal the depositor does not see); this route never
+    puts that int on the wire, only the ref it names.
+    """
+    if species_entry_id is None:
+        return None
+    return session.scalar(
+        select(SpeciesEntry.public_ref).where(SpeciesEntry.id == species_entry_id)
+    )
+
+
+@router.post(
+    "/thermoml",
+    response_model=ThermoMLUploadResult,
+    status_code=201,
+)
+@audit_sync_upload_failure(SubmissionKind.other)
+def upload_thermoml(
+    request: ThermoMLUploadRequest,
+    session: Session = Depends(get_write_db),
+    current_user: AppUser = Depends(get_current_user),
+    idem: IdempotencyContext = Depends(idempotency_dependency),
+    # Required, unlike every sibling route's optional Idempotency-Key
+    # (``idempotency_dependency`` itself treats a missing header as "not
+    # idempotent, proceed anyway" -- see that dependency's own
+    # docstring). DR-0024 and this work package's brief both require an
+    # idempotency key on every upload here; declaring the SAME header a
+    # second time, this time required, makes FastAPI's ordinary
+    # missing-required-field 422 fire before the route body runs -- the
+    # existing validation mechanism every required field already uses,
+    # not a new bespoke refusal. The two parameters read one header once;
+    # neither shadows the other.
+    _idempotency_key_required: str = Header(..., alias=IDEMPOTENCY_HEADER),
+):
+    """Accept one ThermoML XML document directly -- not from the NIST bulk
+    archive that ``backend/scripts/thermoml_cp_import.py --archive``
+    reads. Anyone authenticated may deposit one (Phase C-E6, "let anyone
+    ingest a ThermoML file, not only the NIST archive").
+
+    Transport mirrors ``ArtifactIn.content_base64`` (the only other
+    inline-file-bytes schema in this codebase): JSON body,
+    base64-encoded content, decoded and size-checked here before the
+    pipeline runs at all -- the encoded-length pre-check
+    (``MAX_ENCODED_ARTIFACT_LEN``) rejects an oversized payload before
+    the decode allocation, the decoded-length check catches base64
+    padding slack.
+
+    Idempotency: unlike every sibling ``/uploads/*`` route (where the
+    ``Idempotency-Key`` header is optional), this route requires it --
+    DR-0024 and this work package's brief both call for every upload
+    here to carry one. A request without the header never reaches this
+    function's body at all: FastAPI's own required-header validation
+    (see the ``_idempotency_key_required`` parameter above) answers with
+    its ordinary 422 first.
+
+    Rights: ``request.rights`` (``DepositRights``) is required on this
+    schema -- unlike every sibling upload schema, where it is optional
+    and absence "bites at release time, not at upload". This route's
+    whole content is a third-party document the depositor is asserting
+    the right to submit, with no fallback source terms to stand on
+    instead (see ``ThermoMLUploadRequest.rights`` for the full
+    reasoning), so omitting it is refused by ordinary Pydantic
+    field-requiredness before this function's body runs.
+
+    No preview: unlike the CLI (``--commit`` default-off), this route
+    always commits, like every sibling ``/uploads/*`` route -- none of
+    them preview a request before writing it (see
+    ``ThermoMLUploadRequest``'s docstring for the one preview mechanism
+    that does exist in this codebase, and why it does not apply here).
+    """
+    if (replay := idem.maybe_replay()) is not None:
+        return replay
+
+    if len(request.content_base64) > MAX_ENCODED_ARTIFACT_LEN:
+        raise CodedValidationError(
+            "thermoml_file_too_large",
+            "ThermoML file exceeds the maximum upload size of "
+            f"{MAX_THERMOML_UPLOAD_BYTES:,} bytes.",
+            context={"max_bytes": MAX_THERMOML_UPLOAD_BYTES},
+        )
+    try:
+        xml_bytes = base64.b64decode(request.content_base64, validate=True)
+    except Exception as exc:
+        raise CodedValidationError(
+            "thermoml_invalid_base64",
+            f"content_base64 is not valid base64: {exc}",
+        ) from exc
+    if len(xml_bytes) > MAX_THERMOML_UPLOAD_BYTES:
+        raise CodedValidationError(
+            "thermoml_file_too_large",
+            "ThermoML file exceeds the maximum upload size of "
+            f"{MAX_THERMOML_UPLOAD_BYTES:,} bytes "
+            f"({len(xml_bytes):,} bytes given).",
+            context={
+                "max_bytes": MAX_THERMOML_UPLOAD_BYTES,
+                "given_bytes": len(xml_bytes),
+            },
+        )
+
+    placeholder_json = b"{}"
+    article = ArticleBytes(
+        xml=xml_bytes,
+        json_bytes=placeholder_json,
+        xml_sha256=hashlib.sha256(xml_bytes).hexdigest(),
+        json_sha256=hashlib.sha256(placeholder_json).hexdigest(),
+        member_paths=(f"upload:{request.filename}", ""),
+    )
+
+    try:
+        result = import_thermoml_cp_upload(
+            session,
+            article=article,
+            doi=request.doi,
+            actor=current_user,
+            rights=request.rights,
+            commit=True,
+        )
+    except ThermoMLDoiConflictError as exc:
+        raise CodedValidationError("thermoml_doi_conflict", str(exc)) from exc
+
+    if not result.schema_valid:
+        raise CodedValidationError(
+            "thermoml_schema_invalid",
+            "ThermoML file failed XSD validation: "
+            + "; ".join(result.warnings),
+        )
+
+    if result.payload_count == 0:
+        report = result.mapping_report or {}
+        reasons = sorted(
+            {
+                str(entry.get("reason"))
+                for entry in (*report.get("unsupported", []), *report.get("rejected", []))
+                if entry.get("reason")
+            }
+        )
+        raise CodedValidationError(
+            "thermoml_no_supported_content",
+            "No mappable ideal-gas or real-gas Cp(T) content was found in "
+            "this file.",
+            context={"reasons": reasons},
+        )
+
+    dispositions = [
+        ThermoMLUploadDisposition(
+            property_kind=d.property_kind,
+            action=d.action,
+            identity_status=d.identity_status,
+            species_entry_ref=_thermoml_species_entry_ref(
+                session, d.species_entry_id
+            ),
+            observation_ref=d.observation_ref,
+            warnings=list(d.warnings),
+        )
+        for d in result.dispositions
+    ]
+
+    response_body = ThermoMLUploadResult(
+        submission_ref=result.submission_ref,
+        doi=result.doi or None,
+        schema_valid=result.schema_valid,
+        payload_count=result.payload_count,
+        would_insert_count=result.would_insert_count,
+        inserted_count=result.inserted_count,
+        duplicate_count=result.duplicate_count,
+        skipped_count=result.skipped_count,
+        resolved_identity_count=result.resolved_identity_count,
+        unresolved_identity_count=result.unresolved_identity_count,
+        ambiguous_identity_count=result.ambiguous_identity_count,
+        not_found_identity_count=result.not_found_identity_count,
+        mapping_report=result.mapping_report,
+        dispositions=dispositions,
+        warnings=list(result.warnings),
+    )
+    idem.record(session, status_code=201, body=response_body.model_dump(mode="json"))
+    return response_body
