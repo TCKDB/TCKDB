@@ -171,7 +171,7 @@ def test_export_refuses_calculation_id_unavailable_for_ref_only_handle():
     )
 
     with pytest.raises(QCSchemaAdapterError) as excinfo:
-        export_calculation(client, "calc_bfz6d34evyggcvj4sen7iycu5a")
+        export_calculation(client, "calc_eeqxf4b7jjsfg5z6koyjlx3k4y")
     assert excinfo.value.code == E_EXPORT_CALCULATION_ID_UNAVAILABLE
 
 
@@ -366,6 +366,129 @@ def test_export_refuses_geometry_mismatch_on_atom_count_disagreement():
     calculation, geometries, hessian, legacy_geometry = _load("energy_v1")
     legacy_geometry = copy.deepcopy(legacy_geometry)
     del legacy_geometry["response"]["items"][0]["atoms"][-1]
+    client = _Client(
+        calculation, geometries, hessian, legacy_geometry=legacy_geometry
+    )
+
+    with pytest.raises(QCSchemaAdapterError) as excinfo:
+        export_calculation(client, 1)
+    assert excinfo.value.code == E_EXPORT_GEOMETRY_MISMATCH
+
+
+# ---------------------------------------------------------------------
+# D/T nuclide symbols (C-Q3 review round 3)
+# ---------------------------------------------------------------------
+
+
+def _label_atom_as_nuclide(
+    geometries, legacy_response_atoms, *, atom_index, symbol, isotope_mass_number
+):
+    """Relabel one atom as a ``D``/``T`` nuclide symbol in both the
+    scientific-route and legacy-route fixtures in place -- mirrors how a
+    real deuterated/tritiated deposit is stored: ``geometry_atom.element``
+    keeps the depositor's nuclide symbol verbatim (backend
+    ``app/chemistry/isotopes.py``), usually with a ``null``
+    ``isotope_mass_number`` (the implied-standard-nuclide case).
+    """
+    for sci_geometry in geometries.values():
+        for atom in sci_geometry["atoms"]:
+            if atom["atom_index"] == atom_index:
+                atom["element"] = symbol
+    for atom in legacy_response_atoms:
+        if atom["atom_index"] == atom_index:
+            # GeometryAtom.element is CHAR(2): a single-letter symbol comes
+            # back blank-padded from the legacy read.
+            atom["element"] = f"{symbol} "
+            atom["isotope_mass_number"] = isotope_mass_number
+
+
+def test_sp_export_collapses_a_null_deuterium_label_to_hydrogen():
+    """A ``D``-labelled atom with a ``null`` isotope_mass_number (the
+    ordinary, no-explicit-value case a real deuterated deposit has) must
+    not crash: qcelemental.models.v2.Molecule requires real element
+    symbols, so ``D`` is exported as ``H``, with mass_numbers carrying
+    the isotope (2) instead. This is the test that must go RED against a
+    build that skips the D/T -> H collapse -- see the mutation table.
+    """
+    calculation, geometries, hessian, legacy_geometry = _load("energy_v1")
+    geometries = copy.deepcopy(geometries)
+    legacy_geometry = copy.deepcopy(legacy_geometry)
+    _label_atom_as_nuclide(
+        geometries,
+        legacy_geometry["response"]["items"][0]["atoms"],
+        atom_index=2,
+        symbol="D",
+        isotope_mass_number=None,
+    )
+    client = _Client(
+        calculation, geometries, hessian, legacy_geometry=legacy_geometry
+    )
+
+    exported = export_calculation(client, 1)
+
+    assert exported["molecule"]["symbols"] == ["O", "H", "H"]
+    assert exported["molecule"]["mass_numbers"] == [16, 2, 1]
+
+
+def test_freq_export_collapses_a_null_tritium_label_to_hydrogen():
+    calculation, geometries, hessian, legacy_geometry = _load("hessian_v1")
+    geometries = copy.deepcopy(geometries)
+    legacy_geometry = copy.deepcopy(legacy_geometry)
+    _label_atom_as_nuclide(
+        geometries,
+        legacy_geometry["response"]["atoms"],
+        atom_index=3,
+        symbol="T",
+        isotope_mass_number=None,
+    )
+    client = _Client(
+        calculation, geometries, hessian, legacy_geometry=legacy_geometry
+    )
+
+    exported = export_calculation(client, 2)
+
+    assert exported["molecule"]["symbols"] == ["O", "H", "H"]
+    assert exported["molecule"]["mass_numbers"] == [16, 1, 3]
+
+
+def test_sp_export_accepts_an_explicit_deuterium_mass_number_that_agrees():
+    """An explicit isotope_mass_number that agrees with the D label (2)
+    is accepted, same as the null case -- only a *disagreement* refuses.
+    """
+    calculation, geometries, hessian, legacy_geometry = _load("energy_v1")
+    geometries = copy.deepcopy(geometries)
+    legacy_geometry = copy.deepcopy(legacy_geometry)
+    _label_atom_as_nuclide(
+        geometries,
+        legacy_geometry["response"]["items"][0]["atoms"],
+        atom_index=2,
+        symbol="D",
+        isotope_mass_number=2,
+    )
+    client = _Client(
+        calculation, geometries, hessian, legacy_geometry=legacy_geometry
+    )
+
+    exported = export_calculation(client, 1)
+
+    assert exported["molecule"]["mass_numbers"] == [16, 2, 1]
+
+
+def test_export_refuses_geometry_mismatch_on_contradictory_deuterium_mass_number():
+    """A ``D``-labelled atom recorded with isotope_mass_number=1 (protium)
+    contradicts its own element label; refused rather than exporting
+    either the label's implied mass number or the recorded one.
+    """
+    calculation, geometries, hessian, legacy_geometry = _load("energy_v1")
+    geometries = copy.deepcopy(geometries)
+    legacy_geometry = copy.deepcopy(legacy_geometry)
+    _label_atom_as_nuclide(
+        geometries,
+        legacy_geometry["response"]["items"][0]["atoms"],
+        atom_index=2,
+        symbol="D",
+        isotope_mass_number=1,
+    )
     client = _Client(
         calculation, geometries, hessian, legacy_geometry=legacy_geometry
     )

@@ -75,6 +75,28 @@ non-standard value is used verbatim. ``masses`` is left for
 16/2/1 for O/D/H yields ``masses`` 15.995/2.014/1.008) -- never computed
 or invented here.
 
+**``D``/``T`` element symbols.** ``geometry_atom.element`` keeps a
+deuterium/tritium label exactly as deposited (``D``/``T``, not collapsed
+to ``H`` -- ``backend/app/chemistry/isotopes.py``'s own docstring: doing
+so "would destroy the depositor's own isotope labelling"), and both
+geometry reads hand this exporter that raw symbol. Two things follow,
+mirroring ``backend/app/chemistry/normal_modes.py``'s ``atomic_mass``
+(lines 405-444) and ``backend/app/chemistry/geometry.py``'s
+``resolve_element_symbol`` (~lines 64-95) exactly rather than by
+coincidence: a ``null`` ``isotope_mass_number`` on a ``D``/``T`` atom
+resolves to the mass number the symbol itself names (2/3), and
+``Molecule.symbols`` collapses ``D``/``T`` to ``H`` (measured
+2026-09-20: constructing a ``Molecule`` with a raw ``"D"`` symbol raises
+``qcelemental.exceptions.NotAnElementError``, even though
+``to_A("D")`` itself returns ``2`` without complaint) -- the isotope
+stays carried in ``mass_numbers``, never lost by the collapse. An
+*explicit*, non-standard ``isotope_mass_number`` that contradicts a
+``D``/``T`` label (e.g. ``D`` recorded with mass number 1 or 3) is
+refused ``export_geometry_mismatch`` -- ``atomic_mass`` itself has no
+such check (an explicit value simply overrides there), but silently
+picking one of two contradictory claims is exactly the guess this
+adapter exists to refuse instead of making.
+
 When the legacy read cannot be completed (this deployment's legacy-read
 auth gate rejects it -- 401/403, e.g. a hosted deployment with no API
 key configured -- the id/hash is not found, or a ``geom_hash`` query
@@ -175,34 +197,86 @@ def _geometry_identity(geometry: dict) -> tuple[int, int]:
     return int(charge), int(multiplicity)
 
 
+#: Element symbols that name a *nuclide* rather than an element, mapped to
+#: the mass number they stand for -- the exact mirror of
+#: ``HYDROGEN_ISOTOPE_SYMBOLS`` in ``backend/app/chemistry/isotopes.py``
+#: (only hydrogen has these, and only these two). ``geometry_atom.element``
+#: keeps ``D``/``T`` verbatim rather than collapsing them to ``H`` at
+#: deposit time (same module, same reasoning: collapsing would destroy the
+#: depositor's own isotope labelling), so both the scientific and the
+#: legacy geometry read can hand this exporter a raw ``"D"``/``"T"``
+#: symbol. Duplicated here rather than imported: this adapter package has
+#: no dependency on the backend's ``app.*`` code (sovereignty -- the
+#: adapter only ever talks to the backend over HTTP).
+_HYDROGEN_ISOTOPE_SYMBOLS: dict[str, int] = {"D": 2, "T": 3}
+
+
+def _resolve_nuclide_symbol(symbol: str) -> str:
+    """The *element* an XYZ symbol names, not the nuclide it names.
+
+    Mirrors ``backend/app/chemistry/geometry.py``'s ``resolve_element_symbol``
+    (~lines 64-95) exactly: ``D``/``T`` resolve to ``H``, everything else is
+    unchanged. Required because ``qcelemental.models.v2.Molecule.symbols``
+    must be real periodic-table element symbols -- constructing one with a
+    raw ``"D"`` raises ``qcelemental.exceptions.NotAnElementError`` (measured
+    2026-09-20) even though ``qcelemental.periodictable.to_A("D")`` happily
+    returns ``2``. The isotope this atom actually is stays carried
+    separately, in ``mass_numbers``.
+    """
+    return "H" if symbol in _HYDROGEN_ISOTOPE_SYMBOLS else symbol
+
+
 def _mass_numbers_from_isotope_atoms(
-    symbols: list[str], isotope_atoms: list[dict]
+    raw_symbols: list[str], isotope_atoms: list[dict]
 ) -> list[int]:
     """Per-atom ``mass_numbers``, honest per the module docstring's
     "Isotopes" section: a ``null`` ``isotope_mass_number`` means the
     element's standard tabulated nuclide (``to_A`` is the correct
-    fallback for *that* atom, not a blanket default), a recorded value
-    is used verbatim. Refuses ``export_geometry_mismatch`` if the legacy
-    read's atoms do not line up, element-for-element in ``atom_index``
-    order, with the atoms already read from the scientific geometry --
-    two reads of what should be the same stored geometry disagreeing is
-    a refusal, not something to silently paper over.
+    fallback for *that* atom, not a blanket default) -- except for a
+    ``D``/``T`` symbol, whose standard nuclide is the mass number the
+    symbol itself names (2/3), read off ``_HYDROGEN_ISOTOPE_SYMBOLS``
+    rather than ``to_A`` so the fallback matches
+    ``backend/app/chemistry/normal_modes.py``'s ``atomic_mass`` (~line
+    429: ``mass_number = HYDROGEN_ISOTOPE_SYMBOLS.get(symbol)`` when
+    ``isotope_mass_number is None``) exactly rather than coincidentally.
+    A recorded value is used verbatim -- *except* an explicit,
+    non-standard mass number on a ``D``/``T``-labelled atom (e.g. ``D``
+    with ``isotope_mass_number=1`` or ``3``) contradicts the label the
+    depositor themselves wrote, and is refused
+    ``export_geometry_mismatch`` rather than silently exported as one
+    value or the other (this refusal is this adapter's own "reject,
+    don't guess" choice -- ``atomic_mass`` itself has no such check,
+    since an explicit ``isotope_mass_number`` simply overrides there;
+    see its docstring's "which an explicit isotope_mass_number
+    overrides").
+
+    ``raw_symbols`` are compared and resolved *before* any ``D``/``T``
+    -> ``H`` collapse (:func:`_resolve_nuclide_symbol` is applied
+    separately, only to what actually goes into ``Molecule.symbols``) --
+    comparing post-collapse would hide a legacy read naming ``T`` where
+    the scientific read named ``D`` behind an identical ``"H"``.
+
+    Refuses ``export_geometry_mismatch`` if the legacy read's atoms do
+    not line up, element-for-element in ``atom_index`` order, with the
+    atoms already read from the scientific geometry -- two reads of what
+    should be the same stored geometry disagreeing is a refusal, not
+    something to silently paper over.
     """
     sorted_isotope_atoms = sorted(
         isotope_atoms, key=lambda a: a["atom_index"]
     )
-    if len(sorted_isotope_atoms) != len(symbols):
+    if len(sorted_isotope_atoms) != len(raw_symbols):
         raise QCSchemaAdapterError(
             E_EXPORT_GEOMETRY_MISMATCH,
             "the legacy per-atom isotope read returned "
             f"{len(sorted_isotope_atoms)} atoms, but the scientific "
-            f"geometry read returned {len(symbols)}; refusing rather than "
-            "exporting mismatched coordinates and isotopes.",
+            f"geometry read returned {len(raw_symbols)}; refusing rather "
+            "than exporting mismatched coordinates and isotopes.",
         )
 
     mass_numbers: list[int] = []
     for index, (symbol, isotope_atom) in enumerate(
-        zip(symbols, sorted_isotope_atoms)
+        zip(raw_symbols, sorted_isotope_atoms)
     ):
         # GeometryAtom.element is a Postgres CHAR(2); a single-letter symbol
         # comes back blank-padded from the legacy read (the scientific read
@@ -220,14 +294,33 @@ def _mass_numbers_from_isotope_atoms(
                 "isotopes.",
             )
         mass_number = isotope_atom.get("isotope_mass_number")
+        nuclide_mass_number = _HYDROGEN_ISOTOPE_SYMBOLS.get(symbol)
         if mass_number is None:
             # null means the element's most abundant natural isotope for
             # *this* atom (GeometryAtomBase's own docstring), not
-            # "unrecorded" -- to_A is the correct, non-guessing fallback
-            # here, scoped to the one atom whose row actually says so.
-            mass_numbers.append(int(_periodic_table.to_A(symbol)))
+            # "unrecorded". For a plain element symbol that is to_A; for
+            # a D/T nuclide symbol, D/T's own implied mass number *is*
+            # that standard nuclide -- both are non-guessing fallbacks
+            # scoped to the one atom whose row actually says so.
+            if nuclide_mass_number is not None:
+                mass_numbers.append(nuclide_mass_number)
+            else:
+                mass_numbers.append(int(_periodic_table.to_A(symbol)))
         else:
-            mass_numbers.append(int(mass_number))
+            mass_number = int(mass_number)
+            if (
+                nuclide_mass_number is not None
+                and mass_number != nuclide_mass_number
+            ):
+                raise QCSchemaAdapterError(
+                    E_EXPORT_GEOMETRY_MISMATCH,
+                    f"atom {index + 1}: element {symbol!r} names a specific "
+                    f"nuclide (mass number {nuclide_mass_number}), but "
+                    f"isotope_mass_number={mass_number} was recorded, "
+                    "contradicting the atom's own element label; refusing "
+                    "rather than exporting either value.",
+                )
+            mass_numbers.append(mass_number)
     return mass_numbers
 
 
@@ -243,13 +336,17 @@ def _build_molecule(geometry: dict, isotope_atoms: list[dict]) -> qcel_v2.Molecu
             E_EXPORT_GEOMETRY_UNAVAILABLE,
             "the calculation's geometry carries no atoms to export.",
         )
-    symbols = [a["element"] for a in atoms]
+    raw_symbols = [a["element"] for a in atoms]
     geometry_bohr: list[float] = []
     for a in atoms:
         geometry_bohr.extend(
             v / BOHR_TO_ANGSTROM for v in (a["x"], a["y"], a["z"])
         )
-    mass_numbers = _mass_numbers_from_isotope_atoms(symbols, isotope_atoms)
+    mass_numbers = _mass_numbers_from_isotope_atoms(raw_symbols, isotope_atoms)
+    # Resolved only now, after both the coordinate-order symbols and the
+    # mass-number fallback/contradiction check have used the raw (possibly
+    # D/T) symbol -- Molecule.symbols itself must be real element symbols.
+    symbols = [_resolve_nuclide_symbol(s) for s in raw_symbols]
     charge, multiplicity = _geometry_identity(geometry)
 
     return qcel_v2.Molecule(
