@@ -1,0 +1,16 @@
+{
+  "driver": null,
+  "expected_calculation_type": "opt",
+  "family": "v2",
+  "generator": {
+    "adapter_version": "0.2.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/optimization_v2"
+  },
+  "pins": {
+    "final_energy_hartree": -74.96599012188283,
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162195",
+    "output_first_xyz_line": "O 0.0000000000 0.0000000000 -0.0842433051"
+  },
+  "raw_sha256": "9c7bb8c30737fc5c79f8f6b386d57686aedee98b46332618ff5621a1f556b92a"
+}

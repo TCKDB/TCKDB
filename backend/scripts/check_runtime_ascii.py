@@ -246,6 +246,12 @@ UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
         "output is prose in a document, not an emitted string",
     ),
     (
+        "clients/python/adapters/qcschema/scripts",
+        "one generator that writes the checked-in QCSchema backend corpus "
+        "(JSON fixtures) from the adapter's own fixtures; its output is test "
+        "data, not an emitted string",
+    ),
+    (
         "examples/clients",
         "demo programs, as clients/python/examples",
     ),

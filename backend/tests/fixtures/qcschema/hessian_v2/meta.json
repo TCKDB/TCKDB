@@ -1,0 +1,16 @@
+{
+  "driver": "hessian",
+  "expected_calculation_type": "freq",
+  "family": "v2",
+  "generator": {
+    "adapter_version": "0.2.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/hessian_v2"
+  },
+  "pins": {
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194",
+    "hessian_first_value": -0.001533616561028961,
+    "hessian_length": 45
+  },
+  "raw_sha256": "592a0398123ae159b5c64479fff1c30cd0c20e667f30e2fb661b0a8c23b426e6"
+}

@@ -324,6 +324,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "get_calculation_path_search", None, None, _NEW_METHOD_TESTS,
     ),
     (
+        "GET", "/api/v1/calculations/{calculation_id}/hessian",
+        "get_calculation_hessian", None, None, _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/species-calculations/search",
         "search_species_calculations", "iter_species_calculations",
         "examples/query_cookbook.py", "tests/test_scientific_search.py",
