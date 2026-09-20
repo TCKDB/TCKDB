@@ -61,11 +61,19 @@ Usage::
 line an optional free-text label (name, SMILES, both) this script never parses further. Blank
 lines and lines starting with ``#`` are skipped.
 
-Exit status: ``2`` when the archive's SHA-256 does not match the pinned digest (nothing is read);
-``1`` when the archive is valid but no playground species from ``--inchikeys`` was hit by any
-qualifying property (the JSON and Markdown output still report the most-covered compounds in the
-archive generally, as a fallback for an author decision -- this script does not choose a fallback
-species itself); ``0`` when at least one playground species was hit.
+Method precedence: a ``Property`` carries exactly one of ``eMethodName``, ``sMethodName``,
+``CriticalEvaluation`` or ``Prediction`` per the schema's ``choice`` group, so they should not
+co-occur -- but ``_property_method`` checks in that fixed order (``eMethodName`` first, then
+``sMethodName``, then ``Prediction``, then ``CriticalEvaluation``), so if a non-conformant
+document ever carried more than one, ``eMethodName`` wins and the property is treated as
+``"experimental_enum"`` regardless of a co-occurring ``Prediction``.
+
+Exit status: ``3`` when ``--archive`` does not point at an existing file (nothing is read);
+``2`` when the archive's SHA-256 does not match the pinned digest (nothing is read); ``1`` when
+the archive is valid but no playground species from ``--inchikeys`` was hit by any qualifying
+property (the JSON and Markdown output still report the most-covered compounds in the archive
+generally, as a fallback for an author decision -- this script does not choose a fallback species
+itself); ``0`` when at least one playground species was hit.
 """
 
 from __future__ import annotations
@@ -82,6 +90,7 @@ from pathlib import Path
 EXIT_OK = 0
 EXIT_NO_PLAYGROUND_CANDIDATE = 1
 EXIT_DIGEST_MISMATCH = 2
+EXIT_ARCHIVE_NOT_FOUND = 3
 
 #: NIST records API entry for ark:/88434/mds2-2422, component ``ThermoML.v2020-09-30.tgz``,
 #: cross-checked against ``ThermoML.v2020-09-30.tgz.sha256`` -- both read 2026-09-19.
@@ -158,6 +167,7 @@ def load_inchikeys(path: Path) -> list[PlaygroundSpecies]:
 class Compound:
     org_num: int
     inchikey: str | None
+    has_standard_inchi: bool
     names: list[str] = field(default_factory=list)
 
     @property
@@ -175,9 +185,14 @@ class Candidate:
     n_values: int
     temperature_min_k: float | None
     temperature_max_k: float | None
-    pressures_kpa: list[float]
+    pressure_kind: str  # "constraint" | "variable" | "none"
+    pressures_kpa: list[float]  # distinct values, sorted
+    pressure_min_kpa: float | None
+    pressure_max_kpa: float | None
+    pressure_n_distinct: int
     e_phase: str
     e_method_name: str
+    origin: str  # "experimental_enum" (eMethodName) | "experimental_free" (sMethodName)
     uncertainty_elements: list[str]
     has_coverage_factor: bool
     has_level_of_confidence: bool
@@ -196,9 +211,14 @@ class Candidate:
             "inchikey": self.inchikey,
             "n_values": self.n_values,
             "temperature_range_k": [self.temperature_min_k, self.temperature_max_k],
+            "pressure_kind": self.pressure_kind,
             "pressures_kpa": self.pressures_kpa,
+            "pressure_min_kpa": self.pressure_min_kpa,
+            "pressure_max_kpa": self.pressure_max_kpa,
+            "pressure_n_distinct": self.pressure_n_distinct,
             "e_phase": self.e_phase,
             "e_method_name": self.e_method_name,
+            "origin": self.origin,
             "uncertainty_elements_present": self.uncertainty_elements,
             "has_coverage_factor": self.has_coverage_factor,
             "has_level_of_confidence": self.has_level_of_confidence,
@@ -225,8 +245,11 @@ def _parse_compounds(root: ET.Element) -> dict[int, Compound]:
             continue
         org_num = int(org_num_text)
         inchikey = _child_text(compound_elem, "sStandardInChIKey")
+        has_standard_inchi = _child_text(compound_elem, "sStandardInChI") is not None
         names = [e.text.strip() for e in compound_elem.findall(_tag("sCommonName")) if e.text and e.text.strip()]
-        compounds[org_num] = Compound(org_num=org_num, inchikey=inchikey, names=names)
+        compounds[org_num] = Compound(
+            org_num=org_num, inchikey=inchikey, has_standard_inchi=has_standard_inchi, names=names
+        )
     return compounds
 
 
@@ -246,6 +269,12 @@ def _property_method(property_elem: ET.Element) -> tuple[str | None, str | None,
     ``origin`` is one of ``"experimental_enum"`` (an ``eMethodName``), ``"experimental_free"``
     (an ``sMethodName`` only), ``"critical_evaluation"`` or ``"prediction"``, or ``None`` when the
     property carries none of the four (should not happen for a schema-valid document).
+
+    Precedence: the schema's ``choice`` group means a conformant document carries exactly one of
+    the four, but this function checks in a fixed order regardless -- ``eMethodName`` first, then
+    ``sMethodName``, then ``Prediction``, then ``CriticalEvaluation`` -- so a non-conformant
+    document that somehow carried more than one (e.g. an ``eMethodName`` alongside a
+    ``Prediction``) would be read as ``"experimental_enum"``; ``eMethodName`` always wins.
     """
 
     method_id = property_elem.find(_tag("Property-MethodID"))
@@ -302,6 +331,8 @@ def _temperature_var_numbers(block_elem: ET.Element) -> set[int]:
 
 
 def _pressure_constraints_kpa(block_elem: ET.Element) -> list[float]:
+    """Block-level fixed pressure(s), held constant for every point via a ``Constraint``."""
+
     pressures: list[float] = []
     for constraint in block_elem.findall(_tag("Constraint")):
         constraint_id = constraint.find(_tag("ConstraintID"))
@@ -315,6 +346,29 @@ def _pressure_constraints_kpa(block_elem: ET.Element) -> list[float]:
             if value_text is not None:
                 pressures.append(float(value_text))
     return pressures
+
+
+def _pressure_var_numbers(block_elem: ET.Element) -> set[int]:
+    """``nVarNumber``s of any block ``Variable`` whose ``VariableType`` is ``ePressure``.
+
+    Unlike a ``Constraint`` (one fixed value for the whole block), a pressure ``Variable`` carries
+    a per-point value in each ``NumValues``' ``VariableValue`` entries -- exactly like the
+    temperature variable. A block may report pressure either way, or not at all.
+    """
+
+    numbers: set[int] = set()
+    for variable in block_elem.findall(_tag("Variable")):
+        var_id = variable.find(_tag("VariableID"))
+        if var_id is None:
+            continue
+        var_type = var_id.find(_tag("VariableType"))
+        if var_type is None:
+            continue
+        if var_type.find(_tag("ePressure")) is not None:
+            num_text = _child_text(variable, "nVarNumber")
+            if num_text is not None:
+                numbers.add(int(num_text))
+    return numbers
 
 
 def _uncertainty_flags(property_value_elem: ET.Element) -> set[str]:
@@ -348,12 +402,19 @@ class ArticleScanResult:
     doi: str
     matched_any_property: bool = False
     compounds_hit: set[str] = field(default_factory=set)
-    # Every qualifying (property, compound) match in this article, playground or not.
+    # Every qualifying eMethodName (property, compound) match in this article, playground or not.
     matches: list[Candidate] = field(default_factory=list)
+    # Every qualifying sMethodName-only (free-text method) match, same shape as `matches`, kept
+    # separately: these are the "statistical-thermodynamics-derived ideal-gas" candidates a
+    # playground-empty scan falls back to reporting (finding 4), not proposed as WP0 hits.
+    free_method_matches: list[Candidate] = field(default_factory=list)
     skipped_free_method: int = 0
     skipped_prediction: int = 0
     skipped_critical_evaluation: int = 0
     skipped_mixture_blocks: int = 0
+    # Compounds referenced by a qualifying (target property, target phase) block that carry an
+    # sStandardInChI but no sStandardInChIKey -- silently dropped before this fix (finding 6).
+    compounds_without_inchikey: list[dict] = field(default_factory=list)
 
 
 def _scan_document(
@@ -383,7 +444,8 @@ def _scan_document(
             continue
 
         temp_var_numbers = _temperature_var_numbers(block)
-        pressures = _pressure_constraints_kpa(block)
+        pressure_var_numbers = _pressure_var_numbers(block)
+        constraint_pressures = _pressure_constraints_kpa(block)
 
         for prop in block.findall(_tag("Property")):
             prop_name, origin, method_text = _property_method(prop)
@@ -398,10 +460,7 @@ def _scan_document(
             if origin == "critical_evaluation":
                 result.skipped_critical_evaluation += 1
                 continue
-            if origin == "experimental_free":
-                result.skipped_free_method += 1
-                continue
-            if origin != "experimental_enum":
+            if origin not in ("experimental_free", "experimental_enum"):
                 continue
 
             prop_number_text = _child_text(prop, "nPropNumber")
@@ -409,12 +468,9 @@ def _scan_document(
                 continue
             prop_number = int(prop_number_text)
 
-            result.matched_any_property = True
-            if compound.inchikey:
-                result.compounds_hit.add(compound.inchikey)
-
             has_coverage, has_confidence = _property_level_uncertainty_meta(prop)
             temps: list[float] = []
+            pressures_from_vars: list[float] = []
             uncertainty_present: set[str] = set()
             n_values = 0
             for num_values in block.findall(_tag("NumValues")):
@@ -431,40 +487,89 @@ def _scan_document(
                     var_number_text = _child_text(var_value, "nVarNumber")
                     if var_number_text is None:
                         continue
-                    if int(var_number_text) in temp_var_numbers:
+                    var_number = int(var_number_text)
+                    if var_number in temp_var_numbers:
                         temp_text = _child_text(var_value, "nVarValue")
                         if temp_text is not None:
                             temps.append(float(temp_text))
+                    if var_number in pressure_var_numbers:
+                        pressure_text = _child_text(var_value, "nVarValue")
+                        if pressure_text is not None:
+                            pressures_from_vars.append(float(pressure_text))
 
             if n_values == 0:
                 continue
+
             if not compound.inchikey:
+                # Silently dropped before finding 6: counted and logged now, not just discarded.
+                if compound.has_standard_inchi:
+                    result.compounds_without_inchikey.append(
+                        {"doi": doi, "compound_name": compound.name, "org_num": compound.org_num}
+                    )
+                if origin == "experimental_free":
+                    result.skipped_free_method += 1
                 continue
 
-            result.matches.append(
-                Candidate(
-                    doi=doi,
-                    journal=journal,
-                    year=year,
-                    compound_name=compound.name,
-                    inchikey=compound.inchikey,
-                    n_values=n_values,
-                    temperature_min_k=min(temps) if temps else None,
-                    temperature_max_k=max(temps) if temps else None,
-                    pressures_kpa=sorted(set(pressures)),
-                    e_phase=phase,
-                    e_method_name=method_text or "",
-                    uncertainty_elements=sorted(uncertainty_present),
-                    has_coverage_factor=has_coverage,
-                    has_level_of_confidence=has_confidence,
-                    xml_member=xml_member,
-                    json_member=json_member,
-                    xml_sha256=sha256_bytes(xml_bytes),
-                    json_sha256=None,
-                    is_playground=compound.inchikey in playground_keys,
-                )
+            if constraint_pressures:
+                pressure_kind = "constraint"
+                all_pressures = constraint_pressures
+            elif pressures_from_vars:
+                pressure_kind = "variable"
+                all_pressures = pressures_from_vars
+            else:
+                pressure_kind = "none"
+                all_pressures = []
+            distinct_pressures = sorted(set(all_pressures))
+
+            candidate = Candidate(
+                doi=doi,
+                journal=journal,
+                year=year,
+                compound_name=compound.name,
+                inchikey=compound.inchikey,
+                n_values=n_values,
+                temperature_min_k=min(temps) if temps else None,
+                temperature_max_k=max(temps) if temps else None,
+                pressure_kind=pressure_kind,
+                pressures_kpa=distinct_pressures,
+                pressure_min_kpa=min(distinct_pressures) if distinct_pressures else None,
+                pressure_max_kpa=max(distinct_pressures) if distinct_pressures else None,
+                pressure_n_distinct=len(distinct_pressures),
+                e_phase=phase,
+                e_method_name=method_text or "",
+                origin=origin,
+                uncertainty_elements=sorted(uncertainty_present),
+                has_coverage_factor=has_coverage,
+                has_level_of_confidence=has_confidence,
+                xml_member=xml_member,
+                json_member=json_member,
+                xml_sha256=sha256_bytes(xml_bytes),
+                json_sha256=None,
+                is_playground=compound.inchikey in playground_keys,
             )
-    return result if result.matched_any_property or result.skipped_mixture_blocks else None
+
+            if origin == "experimental_free":
+                result.skipped_free_method += 1
+                result.free_method_matches.append(candidate)
+                continue
+
+            # origin == "experimental_enum"
+            result.matched_any_property = True
+            result.compounds_hit.add(compound.inchikey)
+            result.matches.append(candidate)
+
+    return (
+        result
+        if (
+            result.matched_any_property
+            or result.skipped_mixture_blocks
+            or result.skipped_free_method
+            or result.skipped_prediction
+            or result.skipped_critical_evaluation
+            or result.compounds_without_inchikey
+        )
+        else None
+    )
 
 
 @dataclass
@@ -480,6 +585,13 @@ class ScanSummary:
     skipped_mixture_blocks: int = 0
     playground_total: int = 0
     playground_hit: set[str] = field(default_factory=set)
+    # Every single-component "Ideal gas"/"Gas" Cp block whose only method is a free-text
+    # sMethodName -- the "statistical-thermodynamics-derived ideal-gas" set an author may pick
+    # from when no playground species has a qualifying eMethodName record (finding 4).
+    free_method_candidates: list[Candidate] = field(default_factory=list)
+    # Compounds with sStandardInChI but no sStandardInChIKey, referenced by a qualifying block
+    # (finding 6); previously silently dropped.
+    compounds_without_inchikey: list[dict] = field(default_factory=list)
 
 
 def scan_archive(
@@ -517,6 +629,13 @@ def scan_archive(
         summary.skipped_prediction += article.skipped_prediction
         summary.skipped_critical_evaluation += article.skipped_critical_evaluation
         summary.skipped_mixture_blocks += article.skipped_mixture_blocks
+        summary.compounds_without_inchikey.extend(article.compounds_without_inchikey)
+        for free_match in article.free_method_matches:
+            if compute_json_digests:
+                json_member = json_members.get(stem)
+                if json_member is not None:
+                    free_match.json_sha256 = sha256_bytes(tf.extractfile(json_member).read())
+            summary.free_method_candidates.append(free_match)
         if article.matched_any_property:
             summary.articles_with_any_idealgas_cp += 1
             summary.distinct_compounds_hit |= article.compounds_hit
@@ -551,6 +670,21 @@ def _candidate_rank_key(candidate: Candidate) -> tuple:
     return (has_expanded_with_coverage, candidate.n_values)
 
 
+def _format_pressure(c: Candidate) -> str:
+    """Render a candidate's pressure for the report's P (kPa) column.
+
+    Distinguishes a block-level fixed ``Constraint`` from a per-point ``Variable`` (finding 2):
+    a single constraint value prints bare (e.g. ``3000``); several distinct values -- always from
+    a per-point ``Variable`` -- print as a range with the distinct count and the kind.
+    """
+
+    if c.pressure_kind == "none" or not c.pressures_kpa:
+        return "n/a"
+    if c.pressure_n_distinct == 1:
+        return f"{c.pressure_min_kpa:g} ({c.pressure_kind})"
+    return f"{c.pressure_min_kpa:g}-{c.pressure_max_kpa:g} ({c.pressure_n_distinct} distinct, {c.pressure_kind})"
+
+
 def _print_markdown(summary: ScanSummary, playground: list[PlaygroundSpecies]) -> None:
     print(f"Articles scanned: {summary.articles_scanned}")
     print(f"Articles with any ideal-gas/gas Cp (any compound): {summary.articles_with_any_idealgas_cp}")
@@ -561,6 +695,9 @@ def _print_markdown(summary: ScanSummary, playground: list[PlaygroundSpecies]) -
         f"Skipped (Prediction): {summary.skipped_prediction}  "
         f"Skipped (CriticalEvaluation): {summary.skipped_critical_evaluation}  "
         f"Skipped (mixture blocks): {summary.skipped_mixture_blocks}"
+    )
+    print(
+        f"Compounds with sStandardInChI but no sStandardInChIKey (dropped): {len(summary.compounds_without_inchikey)}"
     )
     print()
 
@@ -573,7 +710,7 @@ def _print_markdown(summary: ScanSummary, playground: list[PlaygroundSpecies]) -
         print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for rank, c in enumerate(candidates, start=1):
             trange = f"{c.temperature_min_k:g}-{c.temperature_max_k:g}" if c.temperature_min_k is not None else "n/a"
-            pressures = ", ".join(f"{p:g}" for p in c.pressures_kpa) or "n/a"
+            pressures = _format_pressure(c)
             uncertainty = ", ".join(c.uncertainty_elements) or "none"
             print(
                 f"| {rank} | {c.compound_name} | {c.inchikey} | {c.doi} | {c.journal} | "
@@ -591,6 +728,27 @@ def _print_markdown(summary: ScanSummary, playground: list[PlaygroundSpecies]) -
         for bucket in top:
             print(f"| {bucket['inchikey']} | {bucket['n_articles']} | {bucket['n_values']} |")
 
+    print()
+    free_candidates = sorted(summary.free_method_candidates, key=_candidate_rank_key, reverse=True)
+    print(
+        f"sMethodName-only single-component Ideal gas/Gas Cp candidates "
+        f"(statistical-thermodynamics-derived set): {len(free_candidates)}"
+    )
+    if free_candidates:
+        print(
+            "| Compound | InChIKey | DOI | Journal | Year | N | T range (K) | P (kPa) | ePhase | "
+            "sMethodName | Uncertainty |"
+        )
+        print("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |")
+        for c in free_candidates:
+            trange = f"{c.temperature_min_k:g}-{c.temperature_max_k:g}" if c.temperature_min_k is not None else "n/a"
+            pressures = _format_pressure(c)
+            uncertainty = ", ".join(c.uncertainty_elements) or "none"
+            print(
+                f"| {c.compound_name} | {c.inchikey} | {c.doi} | {c.journal} | {c.year} | "
+                f"{c.n_values} | {trange} | {pressures} | {c.e_phase} | {c.e_method_name} | {uncertainty} |"
+            )
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -606,7 +764,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.archive.exists():
         print(f"error: archive not found: {args.archive}", file=sys.stderr)
-        return EXIT_DIGEST_MISMATCH
+        return EXIT_ARCHIVE_NOT_FOUND
 
     observed_digest = sha256_file(args.archive)
     expected_digest = pinned_archive_sha256()
@@ -641,11 +799,19 @@ def main(argv: list[str] | None = None) -> int:
             "skipped_prediction": summary.skipped_prediction,
             "skipped_critical_evaluation": summary.skipped_critical_evaluation,
             "skipped_mixture_blocks": summary.skipped_mixture_blocks,
+            "compounds_without_inchikey": len(summary.compounds_without_inchikey),
         },
         "candidates": [c.to_json() for c in sorted(summary.candidates, key=_candidate_rank_key, reverse=True)],
         "fallback_coverage_by_compound": sorted(
             summary.coverage_by_compound.values(), key=lambda b: b["n_values"], reverse=True
         )[:10],
+        # The sMethodName-only, single-component "Ideal gas"/"Gas" Cp set (finding 4): survives
+        # even when the archive has zero playground hits, since scan_archive no longer discards
+        # an article's skip counters/free-method matches just because it has no eMethodName hit.
+        "free_method_ideal_gas_candidates": [
+            c.to_json() for c in sorted(summary.free_method_candidates, key=_candidate_rank_key, reverse=True)
+        ],
+        "compounds_without_inchikey": summary.compounds_without_inchikey,
     }
     args.out.write_text(json.dumps(payload, indent=2, sort_keys=False))
 

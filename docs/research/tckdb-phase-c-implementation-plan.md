@@ -73,14 +73,22 @@ and propane occur only inside natural-gas mixture blocks; methanol only as
 liquid or crystal; water once, as one real-gas point at 508 K. Every
 calorimetric gas-phase Cp in the archive is tagged "Gas" at a stated pressure,
 never "Ideal gas"; the archive's "Ideal gas" entries are
-statistical-thermodynamics-derived. Decision (Calvin, 2026-09-20): the pilot
-species is **fluoroethane** (C2H5F, `UHCBBWUQDAVSMS-UHFFFAOYSA-N`), 38
-flow-calorimetry points at 315.33–365.75 K and 101.325 kPa, DOI
-`10.1016/j.fluid.2016.07.034`, J. Fluid Phase Equilib. 2016. It needs one
-computed thermo record (an ARC B3LYP/def2-TZVP opt+freq, author-run) before
-C4 can be demonstrated. The scan script `backend/scripts/validation/
-thermoml_cp_pilot_scan.py` and its report `docs/validation/
-thermoml_cp_pilot_scan.md` are the evidence.
+statistical-thermodynamics-derived. The most-covered non-playground candidate
+is **fluoroethane** (C2H5F, `UHCBBWUQDAVSMS-UHFFFAOYSA-N`), 38 flow-calorimetry
+points at 315.33-365.75 K, DOI `10.1016/j.fluid.2016.07.034`, J. Fluid Phase
+Equilib. 2016 — but its pressure is not the fixed 101.325 kPa first assumed
+here. Re-measured directly from the block: pressure is a per-point `Variable`
+("Pressure, kPa", `nVarNumber` 2), not a block-level `Constraint`, with 30
+distinct values from 1020 to 3400 kPa across the 38 points (Cp spans
+71.2-118.1 J/K/mol over that range). Fluoroethane's critical temperature is
+375.31 K (NIST WebBook, `https://webbook.nist.gov/cgi/cbook.cgi?ID=353-36-6`,
+citing Booth & Swinehart 1935 and Parthasarathy 1935); against that Tc, the
+archive's 315.33-365.75 K span is a reduced temperature Tr = T/Tc of
+0.84-0.98, and the measured 1020-3400 kPa is well above atmospheric pressure.
+Pilot choice pending re-decision on these measured pressures (2026-09-20);
+fluoroethane's points are far from ideal-gas conditions. The scan script
+`backend/scripts/validation/thermoml_cp_pilot_scan.py` and its report
+`docs/validation/thermoml_cp_pilot_scan.md` are the evidence.
 
 ## C1 — QCSchema importer (no migration)
 
