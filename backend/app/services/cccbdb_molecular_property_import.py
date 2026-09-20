@@ -42,16 +42,27 @@ from sqlalchemy import and_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.db.models.common import (
-    SpeciesEntryStateKind,
-    StationaryPointKind,
-)
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
-from app.db.models.species import Species, SpeciesEntry
 from app.schemas.entities.molecular_property_observation import (
     MolecularPropertyObservationCreate,
+)
+from app.services.external_observation_identity import (
+    IDENTITY_AMBIGUOUS,
+    IDENTITY_NOT_FOUND,
+    IDENTITY_RESOLVED,
+    IDENTITY_SKIPPED,
+    IDENTITY_UNRESOLVED,
+)
+from app.services.external_observation_identity import (
+    IdentityResolution as _IdentityResolution,
+)
+from app.services.external_observation_identity import (
+    identity_hint as _identity_hint,
+)
+from app.services.external_observation_identity import (
+    resolve_identity as _resolve_identity,
 )
 
 _logger = logging.getLogger(__name__)
@@ -79,11 +90,11 @@ _DEDUPE_COLUMNS = (
 # ---------------------------------------------------------------------------
 
 
-_IDENTITY_RESOLVED = "resolved"
-_IDENTITY_UNRESOLVED = "unresolved"
-_IDENTITY_AMBIGUOUS = "ambiguous"
-_IDENTITY_NOT_FOUND = "not_found"
-_IDENTITY_SKIPPED = "skipped"
+_IDENTITY_RESOLVED = IDENTITY_RESOLVED
+_IDENTITY_UNRESOLVED = IDENTITY_UNRESOLVED
+_IDENTITY_AMBIGUOUS = IDENTITY_AMBIGUOUS
+_IDENTITY_NOT_FOUND = IDENTITY_NOT_FOUND
+_IDENTITY_SKIPPED = IDENTITY_SKIPPED
 
 _ACTION_WOULD_INSERT = "would_insert"
 _ACTION_INSERTED = "inserted"
@@ -162,124 +173,10 @@ class CCCBDBMolecularPropertyImportResult:
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class _IdentityResolution:
-    species_entry_id: int | None
-    status: str
-    warnings: tuple[str, ...] = ()
-
-
-def _identity_hint(payload: MolecularPropertyObservationCreate) -> dict:
-    hint = (
-        payload.raw_payload_json.get("identity_hint")
-        if payload.raw_payload_json else None
-    )
-    return hint if isinstance(hint, dict) else {}
-
-
-def _resolve_identity(
-    payload: MolecularPropertyObservationCreate,
-    session: Session,
-) -> _IdentityResolution:
-    """Conservative identity resolution.
-
-    Returns ``_IdentityResolution`` reflecting the outcome:
-
-    * ``resolved`` — exactly one ``Species`` matched by InChIKey AND
-      exactly one compatible :class:`SpeciesEntry`.
-    * ``ambiguous`` — multiple species rows or multiple compatible
-      entries matched.
-    * ``not_found`` — no Species/SpeciesEntry matched the InChIKey.
-    * ``unresolved`` — no InChIKey available; identity hints are
-      preserved on the row but no FK is set.
-    """
-
-    if payload.species_entry_id is not None:
-        return _IdentityResolution(
-            species_entry_id=payload.species_entry_id,
-            status=_IDENTITY_RESOLVED,
-        )
-
-    hint = _identity_hint(payload)
-    inchikey = (hint.get("inchikey") or "").strip().upper() or None
-    cas_number = (hint.get("cas_number") or "").strip() or None
-    formula = (hint.get("formula") or "").strip() or None
-    name = (hint.get("name") or "").strip() or None
-
-    warnings: list[str] = []
-    if inchikey is None:
-        # Propose-only signals; we do NOT auto-resolve from these.
-        if cas_number:
-            warnings.append(
-                "CAS present but no CAS identity table available for "
-                "automatic resolution"
-            )
-        if formula and name:
-            warnings.append(
-                "formula+name available but not used for automatic "
-                "resolution (proposal-only)"
-            )
-        elif formula:
-            warnings.append(
-                "formula available but not used for automatic resolution"
-            )
-        return _IdentityResolution(
-            species_entry_id=None,
-            status=_IDENTITY_UNRESOLVED,
-            warnings=tuple(warnings),
-        )
-
-    species_rows = session.scalars(
-        select(Species).where(Species.inchi_key == inchikey)
-    ).all()
-    if not species_rows:
-        return _IdentityResolution(
-            species_entry_id=None,
-            status=_IDENTITY_NOT_FOUND,
-            warnings=(f"no Species row matched inchi_key={inchikey!r}",),
-        )
-    if len(species_rows) > 1:
-        return _IdentityResolution(
-            species_entry_id=None,
-            status=_IDENTITY_AMBIGUOUS,
-            warnings=(
-                f"{len(species_rows)} Species rows share inchi_key="
-                f"{inchikey!r}; refusing to pick",
-            ),
-        )
-
-    species = species_rows[0]
-    compatible_entries = session.scalars(
-        select(SpeciesEntry).where(
-            SpeciesEntry.species_id == species.id,
-            SpeciesEntry.kind == StationaryPointKind.minimum,
-            SpeciesEntry.electronic_state_kind
-                == SpeciesEntryStateKind.ground,
-        )
-    ).all()
-    if not compatible_entries:
-        return _IdentityResolution(
-            species_entry_id=None,
-            status=_IDENTITY_NOT_FOUND,
-            warnings=(
-                f"species_id={species.id} (inchi_key={inchikey!r}) has no "
-                "minimum / ground SpeciesEntry; refusing to pick",
-            ),
-        )
-    if len(compatible_entries) > 1:
-        return _IdentityResolution(
-            species_entry_id=None,
-            status=_IDENTITY_AMBIGUOUS,
-            warnings=(
-                f"species_id={species.id} has {len(compatible_entries)} "
-                "compatible minimum/ground entries; refusing to pick",
-            ),
-        )
-
-    return _IdentityResolution(
-        species_entry_id=compatible_entries[0].id,
-        status=_IDENTITY_RESOLVED,
-    )
+# _IdentityResolution / _identity_hint / _resolve_identity now live in
+# app.services.external_observation_identity (Phase C-E3 extraction);
+# imported above and aliased so the rest of this module (and any external
+# caller importing these private names) sees identical behavior.
 
 
 # ---------------------------------------------------------------------------
