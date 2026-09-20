@@ -340,6 +340,12 @@ def _build_record(
         if obs.literature_id is not None
         else None
     )
+    # Assumption: a resolved row with no observation_identity_attached event
+    # is importer-resolved, never an unlinked curator attach -- the attach
+    # service refuses to run at all on an observation with no submission
+    # link (observation_identity_attach_requires_submission), so there is
+    # no code path that resolves species_entry_id via a curator without
+    # leaving that event behind.
     identity_basis = (
         ObservationIdentityBasis.curator_attached
         if obs.public_ref in curator_attached_refs

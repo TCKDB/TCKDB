@@ -93,17 +93,44 @@ wrapper over a contract that is itself still moving.
 - New `POST /api/v1/admin/observations/{ref}/identity` (curator or admin):
   fills in an identity-unresolved observation's `species_entry_id`. Refuses
   a second attach (`observation_identity_already_set` -- correction is
-  supersession, ADR 0003, not a repoint) and an ambiguous target
-  (`observation_identity_ambiguous_entry` -- the target must be the unique
-  ground-state, minimum-energy entry of its species, since an observation
-  carries no stereo/excited-state resolution of its own). Records the
-  actor by username and an optional note in
-  `raw_payload_json["identity_attachment"]`; never creates a species or
-  species entry.
-- `tckdb-client` 0.85.0 -> 0.86.0: the new species-entry observations read
-  and the admin identity-attach route are declared in the parity ledger
-  (raw-only and curator-workflow respectively; no typed method yet -- there
-  is no broad `/observations/search` to point one at).
+  supersession, ADR 0003, not a repoint), a target that is not a
+  ground-state, minimum-energy entry of its species
+  (`observation_identity_target_not_ground_state_minimum` -- an observation
+  carries no stereo/excited-state resolution of its own; the target does
+  *not* have to be the unique such entry, since a curator choosing between
+  two isomer-candidate entries is the disambiguation this tool exists for),
+  and an observation with no linked submission
+  (`observation_identity_attach_requires_submission`). Records the actor by
+  username, an optional note, and the previous identity (always `null` --
+  correction is supersession, never a repoint) as a `SubmissionAuditEvent`
+  (`observation_identity_attached`) on the submission the observation was
+  deposited under; never creates a species or species entry, and never
+  mutates `raw_payload_json` (provenance, byte-identical across a later
+  curation act).
+- Every observation the ThermoML and CCCBDB bulk importers write is now
+  linked to the `Submission` that deposited it (the CCCBDB importer opens
+  a `source_kind=bulk_import` submission per run, standing on a
+  `depositor_agreement` rights basis -- no CCCBDB terms/citation text
+  exists in this repo to attest `source_terms` against, unlike ThermoML).
+  Without this link, `observation_identity_attach` has nowhere to record
+  the curation fact and refuses. Rows written by the CCCBDB importer
+  before this change have no such link and refuse an attach until an
+  operator backfills a submission for them.
+- Each observation record returned by the species-entry read above now
+  carries `identity_basis` (`external_identifier_match` /
+  `curator_attached`), naming *how* the row got its identity -- derived
+  from whether a `SubmissionAuditEvent` names it, not a stored column.
+- New: an observation whose `identity_hint.inchikey` names a different
+  connectivity (the InChIKey's first, hyphen-delimited block) than the
+  attach target's species refuses with `observation_identity_hint_conflict`
+  -- a stereochemistry-only difference is still accepted, since resolving
+  that ambiguity is exactly what a curator attach is for.
+- `tckdb-client` 0.85.0 -> 0.87.1: the new species-entry observations read
+  has a typed `get_species_observations()` method (0.86.0 added the route
+  to the parity ledger as `raw_only`; 0.87.0 promoted it to `typed`); the
+  admin identity-attach route stays a curator-workflow `not_applicable`.
+  0.87.1 regenerates `rejection_codes.py` for the new
+  `observation_identity_hint_conflict` code.
 
 ### Observation uncertainty, state basis and source custody (Phase C-E1)
 
