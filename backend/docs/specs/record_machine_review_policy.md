@@ -533,6 +533,25 @@ indexes back the latest-selection paths
 `source_audit_event_id DESC` tiebreak) plus `context_hash`,
 `source_submission_id`, and `source_audit_event_id`.
 
+**Two families share this one table (`provider` discriminates them).** Since
+Phase C-E4, `record_machine_review` holds not only reviewer-recipe rows (the
+human/LLM machine review this section otherwise describes) but also
+deterministic **scientific-check** rows — e.g. the review-tier
+external-Cp-comparison runner — appended through the same
+`create_record_machine_review_row` helper with
+`provider="tckdb.scientific_checks"`. `app.services.machine_review.query`
+(`backend/app/services/machine_review/query.py`) is where this is
+discriminated: `MachineReviewRecordFamily` (`reviewer` | `scientific_check`)
+is a keyword on every read function there, `reviewer` is the default every
+pre-existing consumer keeps, and §4/§5 currency and re-review planning
+(`plan_record_machine_rereview`) read **only** the `reviewer` family — a
+scientific-check row is never newest-selected against, and never restales, a
+reviewer review. Scientific-check rows also carry no `source_submission_id`
+/ `source_audit_event_id` (they are not triggered by, or projected from, a
+submission audit event), so they are structurally absent from every curator
+surface built on that link (task queue, curator inspection) — not filtered
+out, simply never reachable from it.
+
 ### Uniqueness / write model
 
 ```text

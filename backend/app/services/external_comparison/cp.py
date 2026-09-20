@@ -75,7 +75,7 @@ from app.services.machine_review.derivation import (
 )
 from app.services.machine_review.persistence import create_record_machine_review_row
 from app.services.machine_review.query import (
-    SCIENTIFIC_CHECK_PROVIDER_NAMESPACE,
+    SCIENTIFIC_CHECK_PROVIDER,
     MachineReviewRecordFamily,
     get_latest_record_machine_review_row,
 )
@@ -112,9 +112,9 @@ RUNNER_VERSION = "external_cp_comparison_v1"
 
 #: Single source of truth is ``app.services.machine_review.query`` (imported,
 #: never redefined here) -- see
-#: :data:`~app.services.machine_review.query.SCIENTIFIC_CHECK_PROVIDER_NAMESPACE`
+#: :data:`~app.services.machine_review.query.SCIENTIFIC_CHECK_PROVIDER`
 #: and :class:`~app.services.machine_review.query.MachineReviewRecordFamily`.
-PROVIDER = SCIENTIFIC_CHECK_PROVIDER_NAMESPACE
+PROVIDER = SCIENTIFIC_CHECK_PROVIDER
 
 _MESSAGE_METHOD_NOTE_MAX_CHARS = 120
 _MESSAGE_MAX_BYTES = 1000

@@ -24,8 +24,10 @@ from app.db.models.common import (
 from app.db.models.record_machine_review import RecordMachineReviewRow
 from app.db.models.submission import SubmissionAuditEvent
 from app.services.machine_review import (
+    SCIENTIFIC_CHECK_PROVIDER,
     MachineReviewContextDigest,
     MachineReviewCurrencyState,
+    MachineReviewRecordFamily,
     MachineReviewStatus,
     RecordMachineReview,
     create_record_machine_review_row,
@@ -54,6 +56,8 @@ def _review(
     record_type: str = "kinetics",
     record_id: int | None = 9001,
     audit_event_id: int | None = None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> RecordMachineReview:
     return RecordMachineReview(
         record_type=record_type,
@@ -62,6 +66,8 @@ def _review(
         reviewed_at=reviewed_at,
         audit_event_id=audit_event_id,
         record_id=record_id,
+        provider=provider,
+        model=model,
     )
 
 
@@ -73,12 +79,20 @@ def _insert(
     reviewed_at: datetime = _T0,
     context_digest: MachineReviewContextDigest | None = None,
     source_audit_event_id: int | None = None,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> RecordMachineReviewRow:
     row = create_record_machine_review_row(
         db_session,
         record_type=record_type,
         record_id=record_id,
-        review=_review(reviewed_at=reviewed_at, record_type=record_type, record_id=record_id),
+        review=_review(
+            reviewed_at=reviewed_at,
+            record_type=record_type,
+            record_id=record_id,
+            provider=provider,
+            model=model,
+        ),
         context_digest=context_digest or _digest(),
         prompt_version=_PROMPT,
         rubric_versions=_RUBRICS,
@@ -237,6 +251,124 @@ def test_get_latest_row_returns_the_newest(db_session):
         db_session, record_type="kinetics", record_id=9001
     )
     assert latest.id == newest.id
+
+
+# --------------------------------------------------------------------------- #
+# family / model: the reviewer vs scientific_check split (review round 3).
+#
+# One record carries four rows: a NULL-provider reviewer row (the shape
+# every pre-existing reviewer-family row has), a "fake"-provider reviewer
+# row (the fake-provider test harness), and two scientific-check rows under
+# SCIENTIFIC_CHECK_PROVIDER with two different models -- the shape a
+# thermo record gets once more than one scientific check exists.
+# --------------------------------------------------------------------------- #
+
+
+def _insert_family_fixture(db_session):
+    null_provider = _insert(db_session, reviewed_at=_T0, provider=None)
+    fake_provider = _insert(
+        db_session, reviewed_at=_T0 + timedelta(hours=1), provider="fake"
+    )
+    check_a = _insert(
+        db_session,
+        reviewed_at=_T0 + timedelta(hours=2),
+        provider=SCIENTIFIC_CHECK_PROVIDER,
+        model="check_a_v1",
+    )
+    check_b = _insert(
+        db_session,
+        reviewed_at=_T0 + timedelta(hours=3),
+        provider=SCIENTIFIC_CHECK_PROVIDER,
+        model="check_b_v1",
+    )
+    return null_provider, fake_provider, check_a, check_b
+
+
+def test_reviewer_family_returns_null_and_non_scientific_check_provider_rows_only(
+    db_session,
+):
+    """The reviewer family is NULL-provider rows plus any non-scientific-check provider.
+
+    Mutation: drop the ``provider.is_(None)`` arm from the reviewer-family
+    filter in ``list_record_machine_review_rows_for_record`` -- in SQL,
+    ``NULL != 'tckdb.scientific_checks'`` evaluates to NULL (not true), so
+    the NULL-provider row would silently vanish from this result. This is
+    the test that goes red under that mutation (see PR body).
+    """
+    null_provider, fake_provider, check_a, check_b = _insert_family_fixture(db_session)
+
+    rows = list_record_machine_review_rows_for_record(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.reviewer,
+    )
+    assert {r.id for r in rows} == {null_provider.id, fake_provider.id}
+    assert {r.id for r in rows}.isdisjoint({check_a.id, check_b.id})
+
+
+def test_scientific_check_family_returns_both_check_rows(db_session):
+    """scientific_check (no model filter) returns every scientific-check row."""
+    null_provider, fake_provider, check_a, check_b = _insert_family_fixture(db_session)
+
+    rows = list_record_machine_review_rows_for_record(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.scientific_check,
+    )
+    assert {r.id for r in rows} == {check_a.id, check_b.id}
+    assert {r.id for r in rows}.isdisjoint({null_provider.id, fake_provider.id})
+
+
+def test_scientific_check_family_with_model_narrows_to_one_row(db_session):
+    """scientific_check + model narrows to the single matching runner's row."""
+    _null_provider, _fake_provider, check_a, _check_b = _insert_family_fixture(db_session)
+
+    rows = list_record_machine_review_rows_for_record(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.scientific_check,
+        model="check_a_v1",
+    )
+    assert [r.id for r in rows] == [check_a.id]
+
+
+def test_get_latest_row_respects_family(db_session):
+    """The latest-row helper's ``family`` must scope which row counts as latest.
+
+    ``check_b`` (scientific_check) is newest overall (see
+    ``_insert_family_fixture``), but the reviewer family's latest must still
+    be ``fake_provider`` -- a scientific-check row must never be returned as
+    "the latest" for a reviewer-family caller, however recent it is.
+    """
+    _null_provider, fake_provider, check_a, check_b = _insert_family_fixture(db_session)
+
+    latest_reviewer = get_latest_record_machine_review_row(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.reviewer,
+    )
+    assert latest_reviewer.id == fake_provider.id
+
+    latest_check = get_latest_record_machine_review_row(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.scientific_check,
+    )
+    assert latest_check.id == check_b.id
+
+    latest_check_a = get_latest_record_machine_review_row(
+        db_session,
+        record_type="kinetics",
+        record_id=9001,
+        family=MachineReviewRecordFamily.scientific_check,
+        model="check_a_v1",
+    )
+    assert latest_check_a.id == check_a.id
 
 
 # --------------------------------------------------------------------------- #

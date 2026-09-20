@@ -42,15 +42,22 @@ from app.services.machine_review.persistence import (
     classify_record_machine_review_currency_from_rows,
 )
 
-#: The ``provider`` namespace reserved for deterministic scientific-check
+#: The exact ``provider`` value stamped by deterministic scientific-check
 #: runners (e.g. ``app.services.external_comparison.cp``) that persist
 #: through :func:`~app.services.machine_review.persistence.create_record_machine_review_row`
 #: alongside the reviewer recipe (LLM / fake-provider) rows for the same
-#: record. This is the single source of truth for that namespace -- any
-#: scientific-check runner that wants its rows to be discriminated from the
-#: reviewer family imports this constant rather than redefining its own
-#: string (see ``app.services.external_comparison.cp.PROVIDER``).
-SCIENTIFIC_CHECK_PROVIDER_NAMESPACE = "tckdb.scientific_checks"
+#: record. Matched by **exact equality**, not by prefix -- there is one
+#: scientific-check provider string today, and a row with, say,
+#: ``provider="tckdb.scientific_checks.other"`` is a *different* provider
+#: and reads as ``reviewer`` family, not ``scientific_check``. If a second
+#: scientific-check provider is ever introduced, this becomes a set of exact
+#: values (or the filter is deliberately widened to a real ``LIKE`` prefix
+#: match on both arms below) -- not a silent semantic change. This is the
+#: single source of truth for that value -- any scientific-check runner that
+#: wants its rows discriminated from the reviewer family imports this
+#: constant rather than redefining its own string (see
+#: ``app.services.external_comparison.cp.PROVIDER``).
+SCIENTIFIC_CHECK_PROVIDER = "tckdb.scientific_checks"
 
 
 class MachineReviewRecordFamily(str, Enum):
@@ -61,18 +68,21 @@ class MachineReviewRecordFamily(str, Enum):
     review, ``computed_thermo_v1`` / ``machine_review_v1`` and friends) and
     deterministic **scientific-check** runners (e.g. the review-tier
     external-Cp-comparison check) that persist through the same helper with
-    ``provider=SCIENTIFIC_CHECK_PROVIDER_NAMESPACE``. Before this enum
-    existed, every reader of this table implicitly saw both kinds mixed
-    together, newest-first -- which meant a scientific-check row (whose
-    recipe a reviewer-family currency check never matches) could outrank and
-    demote a genuine reviewer-family review from "current" to "historical".
+    ``provider=SCIENTIFIC_CHECK_PROVIDER`` (exact string, not a prefix --
+    see that constant's docstring). Before this enum existed, every reader
+    of this table implicitly saw both kinds mixed together, newest-first --
+    which meant a scientific-check row (whose recipe a reviewer-family
+    currency check never matches) could outrank and demote a genuine
+    reviewer-family review from "current" to "historical".
 
     ``reviewer`` (the default, preserving every existing consumer's
     behaviour) selects rows whose ``provider`` is ``NULL`` or anything
-    *outside* :data:`SCIENTIFIC_CHECK_PROVIDER_NAMESPACE`.
+    *other than exactly* :data:`SCIENTIFIC_CHECK_PROVIDER` (``!=``, not a
+    negated prefix match).
 
-    ``scientific_check`` selects rows *inside* that namespace, optionally
-    narrowed further by ``model`` (each scientific-check runner's
+    ``scientific_check`` selects rows whose ``provider`` **equals**
+    :data:`SCIENTIFIC_CHECK_PROVIDER`, optionally narrowed further by
+    ``model`` (each scientific-check runner's
     :data:`~app.services.external_comparison.cp.RUNNER_VERSION`-style
     identity) so "the current run of check X" is a well-defined notion.
     """
@@ -138,7 +148,7 @@ def list_record_machine_review_rows_for_record(
     )
     if family is MachineReviewRecordFamily.scientific_check:
         stmt = stmt.where(
-            RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER_NAMESPACE
+            RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER
         )
         if model is not None:
             stmt = stmt.where(RecordMachineReviewRow.model == model)
@@ -146,7 +156,7 @@ def list_record_machine_review_rows_for_record(
         stmt = stmt.where(
             or_(
                 RecordMachineReviewRow.provider.is_(None),
-                RecordMachineReviewRow.provider != SCIENTIFIC_CHECK_PROVIDER_NAMESPACE,
+                RecordMachineReviewRow.provider != SCIENTIFIC_CHECK_PROVIDER,
             )
         )
     if limit is not None:

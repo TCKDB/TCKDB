@@ -56,7 +56,7 @@ from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowToolRelease
 from app.services.external_comparison.cp import RUNNER_VERSION as EXTERNAL_CP_COMPARISON_RUNNER_VERSION
 from app.services.external_comparison.cp import latest_cp_comparison_for_thermo
-from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER_NAMESPACE
+from app.services.machine_review.query import SCIENTIFIC_CHECK_PROVIDER
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -470,7 +470,7 @@ def experimental_cp_comparison(session: Session) -> dict[str, Any]:
             session.scalars(
                 select(RecordMachineReviewRow.record_id).where(
                     RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER_VERSION,
-                    RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER_NAMESPACE,
+                    RecordMachineReviewRow.provider == SCIENTIFIC_CHECK_PROVIDER,
                     RecordMachineReviewRow.record_type == SubmissionRecordType.thermo,
                 )
             )
