@@ -56,7 +56,7 @@ from app.db.models.calculation import (
     CalculationOutputGeometry,
     CalculationSPResult,
 )
-from app.db.models.common import CalculationGeometryRole
+from app.db.models.common import ArtifactKind, CalculationGeometryRole
 from app.db.models.idempotency import IdempotencyRecord
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -211,9 +211,11 @@ def test_qcschema_corpus_case_accepted_and_persisted(
         # No freq_result / calc_freq_mode rows: the mapper stores an
         # uploaded matrix, never a derived spectrum -- see the plan's
         # "Why a Hessian becomes a freq record with no spectrum".
-        assert calc.freq_result is None or calc.freq_result.n_imag is None, (
-            f"{case}: expected no freq_result (or a null n_imag), got "
-            f"{calc.freq_result!r}"
+        # The mapper emits no ``freq_result`` at all for a Hessian document,
+        # so the row must be absent; a row with a null ``n_imag`` would mean
+        # something started minting one.
+        assert calc.freq_result is None, (
+            f"{case}: expected no freq_result row, got {calc.freq_result!r}"
         )
         mode_count = db_session.scalar(
             select(func.count())
@@ -268,6 +270,9 @@ def test_qcschema_corpus_case_accepted_and_persisted(
     )
     assert stored_artifact is not None
     assert stored_artifact.sha256 == artifact["sha256"] == meta["raw_sha256"]
+    # The kind is asserted directly: the schema's per-kind filename allowlist
+    # would refuse most other kinds for a ``.json``, but not a renamed file.
+    assert stored_artifact.kind == ArtifactKind.ancillary
 
     # --- parameters_json / mapping provenance ----------------------------
     pj = calc.parameters_json
