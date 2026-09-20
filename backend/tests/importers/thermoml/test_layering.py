@@ -11,6 +11,23 @@ this one keeps the importer package (which runs against arbitrary
 third-party bytes, no DB session available) from reaching into
 ``app.db`` session/engine machinery or ``app.services`` business logic.
 Persistence is Phase C-E3, a different package.
+
+PINNED EXCEPTION, minimized 2026-09-20: ``mapping.py`` needs four
+enums -- ``MolecularPropertyKind`` (via the wire schema import above),
+``ObservedStateBasis``, ``ObservedUncertaintyAssessor`` and
+``ObservedUncertaintyKind``. Of those, only ``ScientificOriginKind``
+has a wire-package mirror today (``tckdb_schemas.enums``, checked
+byte-for-byte against ``app.db.models.common`` by
+``backend/tests/schemas/test_tckdb_schemas_enum_drift.py``), so
+``mapping.py`` imports THAT one enum from ``tckdb_schemas.enums``
+instead of ``app.db.models.common`` -- see ``mapping.py``'s own module
+docstring. The other three enums have no wire mirror yet, so
+``app.db.models.common`` stays in ``ALLOWED_APP_DB_IMPORTS`` for them.
+This is the same shape of exception the CCCBDB precedent documents
+(a named, minimal, tested allowlist entry, not a blanket carve-out):
+when a wire mirror is added for the remaining three enums, this
+allowlist should shrink to match, the same way it would grow if a
+wire mirror it depends on were ever removed.
 """
 
 from __future__ import annotations
@@ -21,8 +38,8 @@ from pathlib import Path
 THERMOML_PKG = Path(__file__).parents[3] / "app" / "importers" / "thermoml"
 
 #: The one exception: the wire schema module the mapper builds
-#: payloads against. It is schema/DTO code, not database or service
-#: machinery.
+#: payloads against, plus the three ``app.db.models.common`` enums
+#: with no wire mirror yet (see the module docstring above).
 ALLOWED_APP_DB_IMPORTS = {"app.db.models.common"}
 ALLOWED_APP_SERVICES_IMPORTS: set[str] = set()
 

@@ -4,6 +4,14 @@
   PropUncertainty (source_author) definition, no pressure Constraint or
   Variable: ideal-gas Cp is comparable without a stated pressure. No
   values are taken from any real article. See fixtures/README.md.
+
+  DELIBERATE EXCEPTION: this is the one fixture kept keyed by
+  Compound/Component nCompIndex rather than RegNum/nOrgNum. The XSD
+  offers nCompIndex/RegNum as a genuine choice (schema/ThermoML.xsd),
+  and every other fixture in this directory was rewritten to
+  RegNum/nOrgNum to match how the real archive keys its Cp blocks (see
+  parser.py's module docstring); this one stays on nCompIndex so the
+  parser's other supported join path keeps direct fixture coverage too.
 -->
 <DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"

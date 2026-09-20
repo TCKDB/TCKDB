@@ -4,7 +4,8 @@
   gas") with NO "Pressure, kPa" Constraint or Variable anywhere in the
   block: schema-valid, but our mapper must reject it: a real-gas Cp
   reading is not comparable without a stated pressure. No values from any
-  real article. See fixtures/README.md.
+  real article. Component/Compound keyed by RegNum/nOrgNum, matching the
+  real archive. See fixtures/README.md.
 -->
 <DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -21,7 +22,9 @@
     <sDOI>10.1016/j.fluid.2016.xxxxxx</sDOI>
   </Citation>
   <Compound>
-    <nCompIndex>1</nCompIndex>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
     <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
     <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
     <sCommonName>fluoroethane</sCommonName>
@@ -31,7 +34,9 @@
   <PureOrMixtureData>
     <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
     <Component>
-      <nCompIndex>1</nCompIndex>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
     </Component>
     <Property>
       <nPropNumber>1</nPropNumber>

@@ -5,6 +5,17 @@ Walks ``Compound``, ``Citation`` and ``PureOrMixtureData``; joins
 per-value uncertainties to their Property-level definitions by
 assessment number.
 
+``PureOrMixtureData/Component`` is an XSD ``choice`` (see
+``schema/ThermoML.xsd`` around the ``Component`` element definitions):
+a component is keyed EITHER by ``nCompIndex`` OR by ``RegNum`` (which
+in turn is ``{nCASRNum?, nOrgNum?}``, both optional). ``Compound``
+mirrors this -- both ``nCompIndex`` and ``RegNum`` are optional there
+too. The real NIST TRC ThermoML Archive (``mds2-2422``,
+``ThermoML.v2020-09-30.tgz``) keys every Component/Compound pair we
+have inspected by ``RegNum/nOrgNum``, never by ``nCompIndex`` -- so
+both keys are resolved here and joined against whichever key the
+Compound was keyed by.
+
 Only ``xml.etree.ElementTree`` (stdlib) is used here -- schema
 validation (which does need ``lxml``) happens earlier in
 ``validate.py``, and by the time a document reaches this module it is
@@ -23,6 +34,7 @@ the document did not actually match the schema it claimed to.
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from typing import Literal
 
 from app.importers.thermoml.models import (
     ThermoMLCitation,
@@ -106,6 +118,9 @@ def parse_thermoml_document(xml_bytes: bytes) -> ThermoMLParsedDocument:
     compounds_by_index = {
         c.n_comp_index: c for c in compounds if c.n_comp_index is not None
     }
+    compounds_by_org_num = {
+        c.reg_org_num: c for c in compounds if c.reg_org_num is not None
+    }
 
     cp_tables: list[ThermoMLCpTable] = []
     unsupported: list[ThermoMLUnsupportedBlock] = []
@@ -115,7 +130,10 @@ def parse_thermoml_document(xml_bytes: bytes) -> ThermoMLParsedDocument:
         root.findall(_q("PureOrMixtureData")), start=1
     ):
         outcome = _parse_pure_or_mixture_data(
-            pomd_el, compounds_by_index, block_index=block_index
+            pomd_el,
+            compounds_by_index,
+            compounds_by_org_num,
+            block_index=block_index,
         )
         if isinstance(outcome, ThermoMLCpTable):
             cp_tables.append(outcome)
@@ -160,6 +178,7 @@ def _parse_citation(el: ET.Element | None) -> ThermoMLCitation:
 def _parse_compound(el: ET.Element) -> ThermoMLCompound:
     reg_num = el.find(_q("RegNum"))
     cas_rn = _text(reg_num.find(_q("nCASRNum"))) if reg_num is not None else None
+    reg_org_num = _int(reg_num.find(_q("nOrgNum"))) if reg_num is not None else None
     smiles = tuple(
         t for s in el.findall(_q("sSmiles")) if (t := _text(s)) is not None
     )
@@ -174,31 +193,58 @@ def _parse_compound(el: ET.Element) -> ThermoMLCompound:
         smiles=smiles,
         formula_molec=_text(el.find(_q("sFormulaMolec"))),
         common_names=common_names,
+        reg_org_num=reg_org_num,
     )
+
+
+def _component_ref(component_el: ET.Element) -> tuple[str, int] | None:
+    """Resolve one ``Component``'s join key: ``("index", n)`` for
+    ``nCompIndex``, or ``("org_num", n)`` for ``RegNum/nOrgNum``. The
+    XSD makes these a ``choice`` -- exactly one branch is present (a
+    ``RegNum`` with only ``nCASRNum`` and no ``nOrgNum`` does not
+    resolve to a join key; CAS numbers are never used for this join).
+    """
+
+    idx = _int(component_el.find(_q("nCompIndex")))
+    if idx is not None:
+        return ("index", idx)
+    reg_num = component_el.find(_q("RegNum"))
+    if reg_num is not None:
+        org_num = _int(reg_num.find(_q("nOrgNum")))
+        if org_num is not None:
+            return ("org_num", org_num)
+    return None
 
 
 def _parse_pure_or_mixture_data(
     pomd_el: ET.Element,
     compounds_by_index: dict[int, ThermoMLCompound],
+    compounds_by_org_num: dict[int, ThermoMLCompound],
     *,
     block_index: int,
 ) -> ThermoMLCpTable | ThermoMLUnsupportedBlock:
-    component_indexes = [
-        _int(c.find(_q("nCompIndex"))) for c in pomd_el.findall(_q("Component"))
+    component_refs = [
+        _component_ref(c) for c in pomd_el.findall(_q("Component"))
     ]
-    if len(component_indexes) != 1:
+    if len(component_refs) != 1:
         return ThermoMLUnsupportedBlock(
             block_index=block_index,
             reason="multi_component",
-            detail=f"{len(component_indexes)} components",
+            detail=f"{len(component_refs)} components",
         )
-    (comp_index,) = component_indexes
-    if comp_index is None or comp_index not in compounds_by_index:
+    (ref,) = component_refs
+    compound: ThermoMLCompound | None = None
+    if ref is not None:
+        kind, key = ref
+        if kind == "index":
+            compound = compounds_by_index.get(key)
+        else:
+            compound = compounds_by_org_num.get(key)
+    if compound is None:
         raise ThermoMLMalformedDocumentError(
             f"PureOrMixtureData[{block_index}] Component references "
-            f"nCompIndex={comp_index!r}, no matching Compound"
+            f"{ref!r}, no matching Compound"
         )
-    compound = compounds_by_index[comp_index]
 
     property_els = pomd_el.findall(_q("Property"))
     cp_property_els = [
@@ -289,14 +335,40 @@ def _parse_pure_or_mixture_data(
             "of eMethodName/sMethodName/CriticalEvaluation/Prediction"
         )
 
-    # PhaseID is required (minOccurs defaults to 1) at the block level;
-    # a block may list more than one for a mixture, but we already
-    # rejected multi-component blocks above, so exactly one applies.
-    phase_els = pomd_el.findall(_q("PhaseID") + "/" + _q("ePhase"))
-    phase_raw = _text(phase_els[0]) if phase_els else None
-    if phase_raw is None:
+    # Phase resolution: the property's OWN PropPhaseID/ePropPhase wins
+    # when present -- a single-component block can still list several
+    # PhaseIDs (e.g. "Crystal"/"Gas" for a sublimation-adjacent block,
+    # or "Crystal"/"Liquid"/"Air at 1 atmosphere" for a fusion block),
+    # and PhaseID is unbounded (schema/ThermoML.xsd, PureOrMixtureData
+    # element, ~line 1336), so falling back to "the first PhaseID"
+    # would silently pick an arbitrary phase whenever a property omits
+    # its own PropPhaseID. Fall back to the block's PhaseID only when
+    # there is exactly one; more than one with no PropPhaseID is
+    # genuinely ambiguous and the property is rejected, not guessed.
+    prop_phase_raw = _text(
+        property_el.find(_q("PropPhaseID") + "/" + _q("ePropPhase"))
+    )
+    block_phase_raws = [
+        t for e in pomd_el.findall(_q("PhaseID") + "/" + _q("ePhase"))
+        if (t := _text(e)) is not None
+    ]
+    if prop_phase_raw is not None:
+        phase_raw: str | None = prop_phase_raw
+    elif len(block_phase_raws) == 1:
+        phase_raw = block_phase_raws[0]
+    elif not block_phase_raws:
         raise ThermoMLMalformedDocumentError(
-            f"PureOrMixtureData[{block_index}] has no PhaseID/ePhase"
+            f"PureOrMixtureData[{block_index}] has no PhaseID/ePhase and "
+            "its Property has no PropPhaseID/ePropPhase"
+        )
+    else:
+        return ThermoMLUnsupportedBlock(
+            block_index=block_index,
+            reason="ambiguous_phase",
+            detail=(
+                f"no PropPhaseID/ePropPhase on Property[{prop_number}]; "
+                f"block PhaseIDs={block_phase_raws!r}"
+            ),
         )
     if phase_raw not in SUPPORTED_PHASES:
         return ThermoMLUnsupportedBlock(
@@ -312,6 +384,14 @@ def _parse_pure_or_mixture_data(
     constraints = _parse_constraints(pomd_el)
     variables = _parse_variables(pomd_el)
 
+    pressure_source: Literal["constraint", "variable"] | None
+    if _PRESSURE_LABEL in constraints:
+        pressure_source = "constraint"
+    elif _PRESSURE_LABEL in variables.values():
+        pressure_source = "variable"
+    else:
+        pressure_source = None
+
     values = _parse_num_values(
         pomd_el,
         prop_number=prop_number,
@@ -326,6 +406,7 @@ def _parse_pure_or_mixture_data(
         property_label=CP_PROPERTY_LABEL,
         phase_raw=phase_raw,
         standard_state_raw=standard_state_raw,
+        pressure_source=pressure_source,
         method_kind=method_kind,
         method_name=method_name,
         prediction_type=prediction_type,

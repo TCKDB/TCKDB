@@ -11,12 +11,23 @@ TCKDB payloads). **No database writes anywhere in this package** --
 persistence is Phase C-E3 (``backend/app/services/thermoml_cp_import.py``,
 not part of this package).
 
-Pilot species (Phase C plan amendment): fluoroethane,
-``UHCBBWUQDAVSMS-UHFFFAOYSA-N``, DOI ``10.1016/j.fluid.2016.07.034``, 38
-flow-calorimetry Cp values at 315.33-365.75 K and 101.325 kPa, phase
-tagged "Gas". Real-gas rows are stored with their pressure and are
-comparable later with the non-ideality flagged (``state_basis``), not
-rejected.
+Pilot article (Phase C plan amendment, section C0): benzene,
+``UHOVQNZJYSORNB-UHFFFAOYSA-N``, DOI ``10.1016/j.jct.2013.08.022``, 12
+"Ideal gas" Cp values at 200-1000 K, pressure fixed by a 100 kPa
+Constraint, method carried only as ``sMethodName`` "statistical
+thermodynamics" (mapped via the observed-method-string allowlist in
+``mapping.py``, not ``eMethodName``), combined expanded uncertainty
+stating a level of confidence but no coverage factor.
+
+A second real-archive article this package's tests also exercise:
+fluoroethane, ``UHCBBWUQDAVSMS-UHFFFAOYSA-N``, DOI
+``10.1016/j.fluid.2016.07.034``, 38 flow-calorimetry Cp values at
+315.33-365.75 K, phase tagged "Gas" (real-gas basis). Its pressure is
+NOT a fixed 101.325 kPa -- it is carried by a per-row "Pressure, kPa"
+VARIABLE ranging 1020-3400 kPa, so ``pressure_bar`` differs row to
+row (see ``ThermoMLCpTable.pressure_source`` in ``models.py``).
+Real-gas rows are stored with their pressure and are comparable later
+with the non-ideality flagged (``state_basis``), not rejected.
 """
 
 from __future__ import annotations
@@ -86,19 +97,32 @@ MAPPING_VERSION = "thermoml-cp-mapping/0.1.0"
 #: (journal-publisher permission) are quoted in ``TERMS_TEXT`` below.
 TERMS_URL = "https://www.nist.gov/open/license"
 
-#: Verbatim NIST/TRC terms text for the ThermoML Archive, assembled
-#: from two fetches taken 2026-09-20:
+#: NIST/TRC terms text for the ThermoML Archive. The first two
+#: paragraphs are verbatim, from two fetches taken 2026-09-20; the
+#: THIRD is author-composed, not a verbatim quote of any single fetched
+#: page -- see below for exactly which is which:
 #:
-#: 1. The general-purpose disclaimer paragraph, quoted verbatim from
-#:    the dataset's own NERDm metadata record
+#: 1. VERBATIM. The general-purpose disclaimer paragraph, quoted
+#:    verbatim from the dataset's own NERDm metadata record
 #:    (``https://data.nist.gov/rmm/records/mds2-2422``, ``description``
 #:    field, second paragraph) -- the same text rendered on the dataset
-#:    landing page at ``https://data.nist.gov/od/id/mds2-2422``.
-#: 2. The journal-publisher-permission sentence, quoted verbatim from
+#:    landing page at ``https://data.nist.gov/od/id/mds2-2422``. Copied
+#:    character-for-character (whitespace-collapsed only).
+#: 2. VERBATIM. The journal-publisher-permission sentence, quoted
+#:    verbatim from
 #:    ``https://www.nist.gov/mml/acmd/trc/thermoml/thermoml-archive``.
-#:
-#: Neither sentence is paraphrased; both are copied character-for-
-#: character from the fetched page text (whitespace-collapsed only).
+#:    Copied character-for-character (whitespace-collapsed only).
+#: 3. AUTHOR-COMPOSED, not verbatim. The "Cite this dataset as: ..."
+#:    citation string is built from the record's own author/title/DOI
+#:    metadata in the standard citation format NIST data.nist.gov
+#:    record pages display, but it was assembled here rather than
+#:    copied as one block from a single fetched page -- and the final
+#:    sentence ("A downstream user who reproduces content from a
+#:    specific article must also cite that article's own DOI, carried
+#:    per-row in raw_payload_json['citation']") is this codebase's own
+#:    usage guidance for TCKDB's ``raw_payload_json`` shape, which NIST
+#:    obviously never wrote. Do not treat paragraph 3 as something to
+#:    diff against a NIST page -- treat paragraphs 1-2 that way.
 TERMS_TEXT = (
     "The data and other information throughout this digital resource "
     "(including the website, API, JSON, and ThermoML files) have been "

@@ -70,6 +70,55 @@ CASES: dict[str, dict] = {
     "schema_invalid.xml": {
         "schema_valid": False,
     },
+    "cp_ideal_gas_statistical_thermodynamics.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 4,
+        "rejected_reasons": (),
+    },
+    "cp_ambiguous_phase.xml": {
+        "schema_valid": True,
+        "cp_tables": 0,
+        "unsupported_blocks": ("ambiguous_phase",),
+        "payloads": 0,
+        "rejected_reasons": (),
+    },
+    "cp_unsupported_standard_state.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 0,
+        "rejected_reasons": ("unsupported_standard_state",),
+    },
+    "cp_empty_uncertainty_value.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 1,
+        "rejected_reasons": ("empty_uncertainty_value",),
+    },
+    "cp_unrecognized_smethodname.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 0,
+        "rejected_reasons": ("unrecognized_smethodname",),
+    },
+    "cp_uncertainty_precedence_order.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 1,
+        "rejected_reasons": (),
+    },
+    "cp_gas_variable_pressure.xml": {
+        "schema_valid": True,
+        "cp_tables": 1,
+        "unsupported_blocks": (),
+        "payloads": 3,
+        "rejected_reasons": (),
+    },
 }
 
 

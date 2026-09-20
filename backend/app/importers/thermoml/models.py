@@ -36,8 +36,21 @@ class ThermoMLCitation:
 class ThermoMLCompound:
     """One ``Compound`` block. All identifiers are kept verbatim.
 
+    ``Compound`` is joined to a block's ``Component`` by whichever of
+    two keys the source used -- the XSD offers both, as a genuine
+    choice, and the real ThermoML archive uses ``RegNum/nOrgNum``, not
+    ``nCompIndex`` (see ``parser.py``'s module docstring). A document
+    may carry either or both keys per compound.
+
     :param n_comp_index: ``nCompIndex`` -- the integer other blocks
         use to reference this compound (``Component/nCompIndex``).
+        ``None`` when the source keys this compound by ``RegNum``
+        instead (the common case in the real archive).
+    :param reg_org_num: ``RegNum/nOrgNum`` -- the archive's own
+        per-document organization number, used to reference this
+        compound from ``Component/RegNum/nOrgNum``. Distinct from
+        ``cas_rn`` (``RegNum/nCASRNum``), which is a hint only and
+        never used for the Component/Compound join.
     :param cas_rn: ``RegNum/nCASRNum``, as the exact digit string the
         source carries (CAS numbers are not TCKDB identity; this is a
         hint only).
@@ -56,6 +69,7 @@ class ThermoMLCompound:
     smiles: tuple[str, ...]
     formula_molec: str | None
     common_names: tuple[str, ...]
+    reg_org_num: int | None = None
 
 
 #: The two ThermoML elements a per-value uncertainty can appear under.
@@ -186,6 +200,13 @@ class ThermoMLCpTable:
     :param uncertainty_definitions: Every Property-level uncertainty
         definition on this Property.
     :param values: The table's ``NumValues`` rows, in document order.
+    :param pressure_source: ``"constraint"`` when the block fixes
+        pressure via a ``Constraint``, ``"variable"`` when it varies
+        per row via a ``Variable``, ``None`` when the block states no
+        pressure at all. Recorded for the mapping report (see
+        ``mapping.py``) -- never inferred from whether
+        ``ThermoMLCpValue.pressure_kpa`` happens to be set, since that
+        conflates the two sources.
     """
 
     block_index: int
@@ -200,6 +221,7 @@ class ThermoMLCpTable:
     prediction_method_name: str | None
     uncertainty_definitions: tuple[ThermoMLUncertaintyDefinition, ...] = ()
     values: tuple[ThermoMLCpValue, ...] = ()
+    pressure_source: Literal["constraint", "variable"] | None = None
 
 
 @dataclass(frozen=True)

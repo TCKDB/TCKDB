@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Hand-authored ThermoML 4.0 fixture. Schema-valid single-component Cp block
-  in the Liquid phase: our mapper only supports "Ideal gas" and "Gas", so
-  this block must be recorded as unsupported. No values from any real
-  article. Component/Compound keyed by RegNum/nOrgNum, matching the real
-  archive. See fixtures/README.md.
+  Hand-authored ThermoML 4.0 fixture. A single-component Cp block with
+  TWO block-level PhaseIDs ("Crystal" and "Gas"; PhaseID is unbounded,
+  schema/ThermoML.xsd's PureOrMixtureData element) and NO
+  PropPhaseID/ePropPhase on the Property itself: which phase the Cp
+  reading belongs to is genuinely ambiguous, so the parser must reject
+  the property (reason "ambiguous_phase") rather than guessing "the
+  first PhaseID". Component/Compound keyed by RegNum/nOrgNum, matching
+  the real archive. No values from any real article. See
+  fixtures/README.md.
 -->
 <DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -16,9 +20,9 @@
   <Citation>
     <sAuthor>Doe, J.</sAuthor>
     <sPubName>J. Chem. Thermodyn.</sPubName>
-    <yrPubYr>2014</yrPubYr>
-    <sTitle>Fixture: liquid-phase heat capacities (invented values, unsupported phase)</sTitle>
-    <sDOI>10.1016/j.jct.2014.xxxxxx</sDOI>
+    <yrPubYr>2017</yrPubYr>
+    <sTitle>Fixture: heat capacities with an ambiguous block phase (invented values)</sTitle>
+    <sDOI>10.1016/j.jct.2017.xxxxxx</sDOI>
   </Citation>
   <Compound>
     <RegNum>
@@ -28,7 +32,6 @@
     <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
     <sCommonName>fluoroethane</sCommonName>
     <sFormulaMolec>C2H5F</sFormulaMolec>
-    <sSmiles>CCF</sSmiles>
   </Compound>
   <PureOrMixtureData>
     <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
@@ -47,24 +50,14 @@
           </HeatCapacityAndDerivedProp>
         </PropertyGroup>
       </Property-MethodID>
-      <PropPhaseID>
-        <ePropPhase>Liquid</ePropPhase>
-      </PropPhaseID>
       <ePresentation>Direct value, X</ePresentation>
     </Property>
     <PhaseID>
-      <ePhase>Liquid</ePhase>
+      <ePhase>Crystal</ePhase>
     </PhaseID>
-    <Constraint>
-      <nConstraintNumber>1</nConstraintNumber>
-      <ConstraintID>
-        <ConstraintType>
-          <ePressure>Pressure, kPa</ePressure>
-        </ConstraintType>
-      </ConstraintID>
-      <nConstraintValue>101.325</nConstraintValue>
-      <nConstrDigits>6</nConstrDigits>
-    </Constraint>
+    <PhaseID>
+      <ePhase>Gas</ePhase>
+    </PhaseID>
     <Variable>
       <nVarNumber>1</nVarNumber>
       <VariableID>
@@ -76,12 +69,12 @@
     <NumValues>
       <VariableValue>
         <nVarNumber>1</nVarNumber>
-        <nVarValue>250.00</nVarValue>
+        <nVarValue>293.00</nVarValue>
         <nVarDigits>5</nVarDigits>
       </VariableValue>
       <PropertyValue>
         <nPropNumber>1</nPropNumber>
-        <nPropValue>98.40</nPropValue>
+        <nPropValue>70.00</nPropValue>
         <nPropDigits>4</nPropDigits>
       </PropertyValue>
     </NumValues>

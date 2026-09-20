@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Single-component "Ideal gas" Cp
+  block with ONE NumValues row whose PropertyValue carries all FOUR
+  uncertainty kinds at once: a CombinedUncertainty with ONLY
+  nCombExpandUncertValue (assess_num 1), a second CombinedUncertainty
+  with ONLY nCombStdUncertValue (assess_num 2), a PropUncertainty with
+  ONLY nExpandUncertValue (assess_num 1), and a second PropUncertainty
+  with ONLY nStdUncertValue (assess_num 2). mapping._PRECEDENCE must
+  pick combined_expanded (the CombinedUncertainty/nCombExpandUncertValue
+  entry) over all three others; swapping the precedence order makes
+  this fixture's expectation go red. Component/Compound keyed by
+  RegNum/nOrgNum, matching the real archive. No values from any real
+  article. See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>J. Chem. Eng. Data</sPubName>
+    <yrPubYr>2020</yrPubYr>
+    <sTitle>Fixture: ideal-gas heat capacity with every uncertainty kind on one row (invented values)</sTitle>
+    <sDOI>10.1021/acs.jced.0wwwwww</sDOI>
+  </Citation>
+  <Compound>
+    <RegNum>
+      <nOrgNum>1</nOrgNum>
+    </RegNum>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <RegNum>
+        <nOrgNum>1</nOrgNum>
+      </RegNum>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Flow calorimetry</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Ideal gas</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+      <CombinedUncertainty>
+        <nCombUncertAssessNum>1</nCombUncertAssessNum>
+        <sCombUncertEvaluator>Data file compiler</sCombUncertEvaluator>
+        <eCombUncertEvalMethod>Propagation of evaluated standard uncertainties</eCombUncertEvalMethod>
+        <nCombCoverageFactor>2</nCombCoverageFactor>
+        <nCombUncertLevOfConfid>95</nCombUncertLevOfConfid>
+      </CombinedUncertainty>
+      <CombinedUncertainty>
+        <nCombUncertAssessNum>2</nCombUncertAssessNum>
+        <sCombUncertEvaluator>Data file compiler</sCombUncertEvaluator>
+        <eCombUncertEvalMethod>Propagation of evaluated standard uncertainties</eCombUncertEvalMethod>
+      </CombinedUncertainty>
+      <PropUncertainty>
+        <nUncertAssessNum>1</nUncertAssessNum>
+        <sUncertEvaluator>source author</sUncertEvaluator>
+      </PropUncertainty>
+      <PropUncertainty>
+        <nUncertAssessNum>2</nUncertAssessNum>
+        <sUncertEvaluator>source author</sUncertEvaluator>
+      </PropUncertainty>
+    </Property>
+    <PhaseID>
+      <ePhase>Ideal gas</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>320.00</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>62.40</nPropValue>
+        <nPropDigits>4</nPropDigits>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>1</nCombUncertAssessNum>
+          <nCombExpandUncertValue>2.50</nCombExpandUncertValue>
+        </CombinedUncertainty>
+        <CombinedUncertainty>
+          <nCombUncertAssessNum>2</nCombUncertAssessNum>
+          <nCombStdUncertValue>1.10</nCombStdUncertValue>
+        </CombinedUncertainty>
+        <PropUncertainty>
+          <nUncertAssessNum>1</nUncertAssessNum>
+          <nExpandUncertValue>2.80</nExpandUncertValue>
+        </PropUncertainty>
+        <PropUncertainty>
+          <nUncertAssessNum>2</nUncertAssessNum>
+          <nStdUncertValue>1.40</nStdUncertValue>
+        </PropUncertainty>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>
