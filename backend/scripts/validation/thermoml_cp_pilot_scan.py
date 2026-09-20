@@ -40,7 +40,7 @@ a ``DataReport`` holds ``Compound`` elements (``RegNum/nOrgNum`` -> ``sStandardI
 ``sCommonName``) and ``PureOrMixtureData`` blocks. A block is single-component when it has exactly
 one ``Component``. Each ``Property`` carries ``Property-MethodID/PropertyGroup/*/ePropName`` and,
 as a ``choice``, one of ``eMethodName`` (an enumerated, genuinely experimental method label),
-``sMethodName`` (free-text, also experimental but not what this scan's brief asks for),
+``sMethodName`` (free-text, free text; in this archive the strings are 'statistical thermodynamics' and 'Predicted', never a calorimetric method but not what this scan's brief asks for),
 ``CriticalEvaluation`` or ``Prediction``. Phase comes from ``PropPhaseID/ePropPhase`` when present,
 else the block's ``PhaseID/ePhase``. ``NumValues`` entries carry the temperature (via a
 ``Variable``/``VariableValue`` pair whose ``VariableType`` is ``eTemperature``) and the Cp value

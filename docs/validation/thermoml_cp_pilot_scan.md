@@ -34,7 +34,7 @@ archive before this revision of the document was written:
 1. **Plan text corrected.** The Phase C plan said fluoroethane's points were
    "at 101.325 kPa". They are not -- see "A finding that contradicts..."
    below and the plan's own C0 section, which now records the corrected
-   pressure range and marks the pilot choice pending re-decision.
+   pressure range and records the benzene decision (DOI 10.1016/j.jct.2013.08.022, taken 2026-09-20 on these measured facts).
 2. **Pressure is now read from a `Variable` as well as a `Constraint`.**
    `_pressure_constraints_kpa` previously read only the block-level fixed
    `Constraint`; most of the fluorinated-refrigerant records in this archive
@@ -292,7 +292,7 @@ playground species.
 
 ## Candidates for re-decision
 
-Three groups, as measured, with no recommendation made -- the choice among
+Three groups, as measured, with the decision is recorded in the plan, not here -- the choice among
 them is the author's, per the plan's own C0 section.
 
 ### (a) Strict experimental gas-phase Cp candidates

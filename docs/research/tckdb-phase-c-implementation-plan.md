@@ -72,8 +72,8 @@ no single-component ideal-gas Cp for any playground species: methane, ethane
 and propane occur only inside natural-gas mixture blocks; methanol only as
 liquid or crystal; water once, as one real-gas point at 508 K. Every
 calorimetric gas-phase Cp in the archive is tagged "Gas" at a stated pressure,
-never "Ideal gas"; the archive's "Ideal gas" entries are
-statistical-thermodynamics-derived. The most-covered non-playground candidate
+never "Ideal gas"; of the archive's 13 "Ideal gas" entries, 12 are
+statistical-thermodynamics-derived and one is tagged "Predicted". The most-covered non-playground candidate
 is **fluoroethane** (C2H5F, `UHCBBWUQDAVSMS-UHFFFAOYSA-N`), 38 flow-calorimetry
 points at 315.33-365.75 K, DOI `10.1016/j.fluid.2016.07.034`, J. Fluid Phase
 Equilib. 2016 — but its pressure is not the fixed 101.325 kPa first assumed
@@ -84,10 +84,11 @@ distinct values from 1020 to 3400 kPa across the 38 points (Cp spans
 375.31 K (NIST WebBook, `https://webbook.nist.gov/cgi/cbook.cgi?ID=353-36-6`,
 citing Booth & Swinehart 1935 and Parthasarathy 1935); against that Tc, the
 archive's 315.33-365.75 K span is a reduced temperature Tr = T/Tc of
-0.84-0.98, and the measured 1020-3400 kPa is well above atmospheric pressure.
+0.84-0.97, and the measured 1020-3400 kPa is well above atmospheric pressure.
 Fluoroethane's points are far from ideal-gas conditions, and every
-other calorimetric gas-phase entry in the archive is near-critical or
-organometallic. **Decision (Calvin, 2026-09-20): the pilot is benzene**
+other calorimetric gas-phase entry in the archive is either real-gas at high
+pressure (four fluorocarbons near or above their critical temperature; water's
+single point at 30 bar) or organometallic (ferrocene, nickelocene at 1 atm). **Decision (Calvin, 2026-09-20): the pilot is benzene**
 (`UHOVQNZJYSORNB-UHFFFAOYSA-N`), from the archive's ideal-gas entries derived
 by statistical thermodynamics: DOI `10.1016/j.jct.2013.08.022`, J. Chem.
 Thermodyn. 2014, 12 values at 200-1000 K, phase "Ideal gas" at a 100 kPa

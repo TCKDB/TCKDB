@@ -1,570 +1,570 @@
 {
-  "archive": "/tmp/claude-1000/-home-calvin-code-TCKDB-v2/eb128cb6-1efd-440d-bce5-582f5c9ef5b0/scratchpad/ThermoML.v2020-09-30.tgz",
-  "archive_sha256": "231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2",
-  "archive_size": 189433115,
-  "target_property": "Molar heat capacity at constant pressure, J/K/mol",
-  "target_phases": [
-    "Ideal gas",
-    "Gas"
+ "archive": "ThermoML.v2020-09-30.tgz",
+ "archive_sha256": "231161b5e443dc1ae0e5da8429d86a88474cb722016e5b790817bb31c58d7ec2",
+ "archive_size": 189433115,
+ "target_property": "Molar heat capacity at constant pressure, J/K/mol",
+ "target_phases": [
+  "Ideal gas",
+  "Gas"
+ ],
+ "counts": {
+  "articles_scanned": 11923,
+  "articles_with_any_idealgas_cp": 6,
+  "distinct_compounds_hit": 7,
+  "playground_total": 26,
+  "playground_hit": 1,
+  "playground_hit_inchikeys": [
+   "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
   ],
-  "counts": {
-    "articles_scanned": 11923,
-    "articles_with_any_idealgas_cp": 6,
-    "distinct_compounds_hit": 7,
-    "playground_total": 26,
-    "playground_hit": 1,
-    "playground_hit_inchikeys": [
-      "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
-    ],
-    "skipped_free_method": 15,
-    "skipped_prediction": 0,
-    "skipped_critical_evaluation": 0,
-    "skipped_mixture_blocks": 480,
-    "compounds_without_inchikey": 0
+  "skipped_free_method": 15,
+  "skipped_prediction": 0,
+  "skipped_critical_evaluation": 0,
+  "skipped_mixture_blocks": 480,
+  "compounds_without_inchikey": 0
+ },
+ "candidates": [
+  {
+   "doi": "10.1016/j.tca.2018.04.018",
+   "journal": "Thermochim. Acta",
+   "year": "2018",
+   "compound_name": "water",
+   "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+   "n_values": 1,
+   "temperature_range_k": [
+    508.4,
+    508.4
+   ],
+   "pressure_kind": "variable",
+   "pressures_kpa": [
+    3000.0
+   ],
+   "pressure_min_kpa": 3000.0,
+   "pressure_max_kpa": 3000.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Gas",
+   "e_method_name": "Flow calorimetry",
+   "origin": "experimental_enum",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.tca.2018.04.018.xml",
+   "json_member": "10.1016/j.tca.2018.04.018.json",
+   "xml_sha256": "e0bee9dede8df2e874e1d3ee9201be396d1c2ba86be32221b7b8266765894ed7",
+   "json_sha256": "6c666ea0ec5359b0070e6ab68f04dc1e7d23ca22a911b565dc4886175e08693a"
+  }
+ ],
+ "fallback_coverage_by_compound": [
+  {
+   "inchikey": "DFRHTHSZMBROSH-UHFFFAOYSA-N",
+   "compound_name": "ferrocene",
+   "n_values": 61,
+   "n_articles": 1
   },
-  "candidates": [
-    {
-      "doi": "10.1016/j.tca.2018.04.018",
-      "journal": "Thermochim. Acta",
-      "year": "2018",
-      "compound_name": "water",
-      "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
-      "n_values": 1,
-      "temperature_range_k": [
-        508.4,
-        508.4
-      ],
-      "pressure_kind": "variable",
-      "pressures_kpa": [
-        3000.0
-      ],
-      "pressure_min_kpa": 3000.0,
-      "pressure_max_kpa": 3000.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Gas",
-      "e_method_name": "Flow calorimetry",
-      "origin": "experimental_enum",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.tca.2018.04.018.xml",
-      "json_member": "10.1016/j.tca.2018.04.018.json",
-      "xml_sha256": "e0bee9dede8df2e874e1d3ee9201be396d1c2ba86be32221b7b8266765894ed7",
-      "json_sha256": "6c666ea0ec5359b0070e6ab68f04dc1e7d23ca22a911b565dc4886175e08693a"
-    }
-  ],
-  "fallback_coverage_by_compound": [
-    {
-      "inchikey": "DFRHTHSZMBROSH-UHFFFAOYSA-N",
-      "compound_name": "ferrocene",
-      "n_values": 61,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "KZPXREABEBSAQM-UHFFFAOYSA-N",
-      "compound_name": "nickelocene",
-      "n_values": 61,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "UHCBBWUQDAVSMS-UHFFFAOYSA-N",
-      "compound_name": "fluoroethane",
-      "n_values": 38,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "FXRLMCRCYDHQFW-UHFFFAOYSA-N",
-      "compound_name": "2,3,3,3-tetrafluoro-1-propene",
-      "n_values": 33,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "GTLACDSXYULKMZ-UHFFFAOYSA-N",
-      "compound_name": "pentafluoroethane",
-      "n_values": 29,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "UJPMYEOUBPIPHQ-UHFFFAOYSA-N",
-      "compound_name": "1,1,1-trifluoroethane",
-      "n_values": 10,
-      "n_articles": 1
-    },
-    {
-      "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
-      "compound_name": "water",
-      "n_values": 1,
-      "n_articles": 1
-    }
-  ],
-  "free_method_ideal_gas_candidates": [
-    {
-      "doi": "10.1016/j.jct.2013.05.032",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": "cesium hydroxide iodide",
-      "inchikey": "PSXWJXDCROVHEL-UHFFFAOYSA-L",
-      "n_values": 29,
-      "temperature_range_k": [
-        298.15,
-        3000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "statistical thermodynamics",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.05.032.xml",
-      "json_member": "10.1016/j.jct.2013.05.032.json",
-      "xml_sha256": "1130bf74d04c7ed2e7c34d59b52db4a6564e6fe29dc7af20d7876563e45db442",
-      "json_sha256": "299974d440c60a342ab48482757c0148c52cdcab1d6a3eeb7942adc884b4db98"
-    },
-    {
-      "doi": "10.1016/j.jct.2012.11.031",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": ".alpha.-D-glucose",
-      "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N",
-      "n_values": 16,
-      "temperature_range_k": [
-        50.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2012.11.031.xml",
-      "json_member": "10.1016/j.jct.2012.11.031.json",
-      "xml_sha256": "a5d809161b663409cb7fdbc546f4972e804c13216440f777b0eea53cde41b298",
-      "json_sha256": "1725e3838e63391a979d8d1584fa9ca1f4110756e30e6667cbe79f3390adf393"
-    },
-    {
-      "doi": "10.1016/j.fluid.2015.06.045",
-      "journal": "Fluid Phase Equilib.",
-      "year": "2015",
-      "compound_name": "N-methylpyrrolidone",
-      "inchikey": "SECXISVLQFMRJM-UHFFFAOYSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "STD",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.fluid.2015.06.045.xml",
-      "json_member": "10.1016/j.fluid.2015.06.045.json",
-      "xml_sha256": "303c336c3afdc7089d2dc0a623f5d811e5eba30d067b6d2420a4b0d84177db70",
-      "json_sha256": "9f97e57eb82c4f41a7b597feabf6bbb8bd5b98492d5517fcdc3b0a41b2fd266a"
-    },
-    {
-      "doi": "10.1016/j.fluid.2015.06.045",
-      "journal": "Fluid Phase Equilib.",
-      "year": "2015",
-      "compound_name": "2-aminoethan-1-ol",
-      "inchikey": "HZAXFHJVJLSVMW-UHFFFAOYSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "STD",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.fluid.2015.06.045.xml",
-      "json_member": "10.1016/j.fluid.2015.06.045.json",
-      "xml_sha256": "303c336c3afdc7089d2dc0a623f5d811e5eba30d067b6d2420a4b0d84177db70",
-      "json_sha256": "9f97e57eb82c4f41a7b597feabf6bbb8bd5b98492d5517fcdc3b0a41b2fd266a"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.01.009",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": "(S)-2-pinene",
-      "inchikey": "GRWFGVWFFZKLTI-IUCAKERBSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.01.009.xml",
-      "json_member": "10.1016/j.jct.2013.01.009.json",
-      "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
-      "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.01.009",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": "(1S,5S)-6,6-dimethyl-2-methylenebicyclo[3.1.1]heptane",
-      "inchikey": "WTARULDDTDQWMU-IUCAKERBSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.01.009.xml",
-      "json_member": "10.1016/j.jct.2013.01.009.json",
-      "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
-      "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.01.009",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": "(-)-cis-verbenol",
-      "inchikey": "WONIGEXYPVIKFS-YIZRAAEISA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.01.009.xml",
-      "json_member": "10.1016/j.jct.2013.01.009.json",
-      "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
-      "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.01.009",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2013",
-      "compound_name": "(-)-verbenone",
-      "inchikey": "DCSCXTJOXBUFGB-JGVFFNPUSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.01.009.xml",
-      "json_member": "10.1016/j.jct.2013.01.009.json",
-      "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
-      "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
-    },
-    {
-      "doi": "10.1016/j.tca.2014.07.018",
-      "journal": "Thermochim. Acta",
-      "year": "2014",
-      "compound_name": "5-(1-adamantyl)tetrazole",
-      "inchikey": "OBWRBAQXRLLXFR-UHFFFAOYSA-N",
-      "n_values": 14,
-      "temperature_range_k": [
-        100.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamic calculations",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.tca.2014.07.018.xml",
-      "json_member": "10.1016/j.tca.2014.07.018.json",
-      "xml_sha256": "5aaea13fd3f2609c7c9737baeb2a85ca269cc7c945c167ece25b89acf0dd04eb",
-      "json_sha256": "464ba2110254ccfd0a30c45ef664eca4037cb6864747697d3bc0210c452ff6b6"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.08.022",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2014",
-      "compound_name": "benzene",
-      "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
-      "n_values": 12,
-      "temperature_range_k": [
-        200.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "statistical thermodynamics",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.08.022.xml",
-      "json_member": "10.1016/j.jct.2013.08.022.json",
-      "xml_sha256": "e33222268a0f5eb10b8249e5b39253886cb4e87110cf8d5ef2b7d2cc368163c7",
-      "json_sha256": "ef390ce97cd131d558780cf23aad428a90ad09f7a418810548cf92f8812a6ac9"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.11.013",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2014",
-      "compound_name": "phenoxazine",
-      "inchikey": "TZMSYXZUNZXBOL-UHFFFAOYSA-N",
-      "n_values": 10,
-      "temperature_range_k": [
-        200.0,
-        600.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamics",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.11.013.xml",
-      "json_member": "10.1016/j.jct.2013.11.013.json",
-      "xml_sha256": "3b4c734ceeede91782298bef125255dec25a685dbe9f5f433ac632158c215afc",
-      "json_sha256": "47e9a7b7645d473241a44f98d7e8b4a57b4d1d9eef6297af0630f5d738c7e8c3"
-    },
-    {
-      "doi": "10.1016/j.jct.2013.11.013",
-      "journal": "J. Chem. Thermodyn.",
-      "year": "2014",
-      "compound_name": "10H-phenothiazine",
-      "inchikey": "WJFKNYWRSNBZNX-UHFFFAOYSA-N",
-      "n_values": 10,
-      "temperature_range_k": [
-        200.0,
-        600.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Statistical thermodynamics",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.jct.2013.11.013.xml",
-      "json_member": "10.1016/j.jct.2013.11.013.json",
-      "xml_sha256": "3b4c734ceeede91782298bef125255dec25a685dbe9f5f433ac632158c215afc",
-      "json_sha256": "47e9a7b7645d473241a44f98d7e8b4a57b4d1d9eef6297af0630f5d738c7e8c3"
-    },
-    {
-      "doi": "10.1016/j.fluid.2007.04.028",
-      "journal": "Fluid Phase Equilib.",
-      "year": "2007",
-      "compound_name": "decamethylcyclopentasiloxane",
-      "inchikey": "XMSXQFUHVRWGNA-UHFFFAOYSA-N",
-      "n_values": 9,
-      "temperature_range_k": [
-        298.0,
-        1000.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        100.0
-      ],
-      "pressure_min_kpa": 100.0,
-      "pressure_max_kpa": 100.0,
-      "pressure_n_distinct": 1,
-      "e_phase": "Ideal gas",
-      "e_method_name": "Predicted",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.fluid.2007.04.028.xml",
-      "json_member": "10.1016/j.fluid.2007.04.028.json",
-      "xml_sha256": "4e7d639c127fd2c4fff69d3832fc97ab4ac0630daa9bb45b7ba93656c7ea49f1",
-      "json_sha256": "b6b8ebcdf024f75dc36dbc5fa1600a0d8f1c412cc05c98bc1d57974a6a8c1805"
-    },
-    {
-      "doi": "10.1016/j.fluid.2014.09.017",
-      "journal": "Fluid Phase Equilib.",
-      "year": "2014",
-      "compound_name": "2-methylpropane",
-      "inchikey": "NNPPMTNAJDCUHE-UHFFFAOYSA-N",
-      "n_values": 7,
-      "temperature_range_k": [
-        270.0,
-        330.0
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Gas",
-      "e_method_name": "derived from presented speed of sound measurements",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1016/j.fluid.2014.09.017.xml",
-      "json_member": "10.1016/j.fluid.2014.09.017.json",
-      "xml_sha256": "0c9d33fd4d3480ff31370e3a268e62fcb2b8d9e37f02018401a55551f677721a",
-      "json_sha256": "d222c16d3235a28b6ddf7f4525f022be483a8a4e5cdd0854a4ede52bf8ec4540"
-    },
-    {
-      "doi": "10.1021/je4004564",
-      "journal": "J. Chem. Eng. Data",
-      "year": "2013",
-      "compound_name": "trans-1,3,3,3-tetrafluoropropene",
-      "inchikey": "CDOOAUSHHFGWSA-OWOJBTEDSA-N",
-      "n_values": 6,
-      "temperature_range_k": [
-        278.15,
-        353.15
-      ],
-      "pressure_kind": "constraint",
-      "pressures_kpa": [
-        101.325
-      ],
-      "pressure_min_kpa": 101.325,
-      "pressure_max_kpa": 101.325,
-      "pressure_n_distinct": 1,
-      "e_phase": "Gas",
-      "e_method_name": "Derived with speed of sound",
-      "origin": "experimental_free",
-      "uncertainty_elements_present": [
-        "nCombExpandUncertValue"
-      ],
-      "has_coverage_factor": false,
-      "has_level_of_confidence": true,
-      "xml_member": "10.1021/je4004564.xml",
-      "json_member": "10.1021/je4004564.json",
-      "xml_sha256": "3b80c209810733644d7e323abfb4930af0601ee25ffdc97a15cc51acd1b380d8",
-      "json_sha256": "e24a4dd97f9f472c6389483fc984e50551735b17c62d181a479a263808b81d5f"
-    }
-  ],
-  "compounds_without_inchikey": []
+  {
+   "inchikey": "KZPXREABEBSAQM-UHFFFAOYSA-N",
+   "compound_name": "nickelocene",
+   "n_values": 61,
+   "n_articles": 1
+  },
+  {
+   "inchikey": "UHCBBWUQDAVSMS-UHFFFAOYSA-N",
+   "compound_name": "fluoroethane",
+   "n_values": 38,
+   "n_articles": 1
+  },
+  {
+   "inchikey": "FXRLMCRCYDHQFW-UHFFFAOYSA-N",
+   "compound_name": "2,3,3,3-tetrafluoro-1-propene",
+   "n_values": 33,
+   "n_articles": 1
+  },
+  {
+   "inchikey": "GTLACDSXYULKMZ-UHFFFAOYSA-N",
+   "compound_name": "pentafluoroethane",
+   "n_values": 29,
+   "n_articles": 1
+  },
+  {
+   "inchikey": "UJPMYEOUBPIPHQ-UHFFFAOYSA-N",
+   "compound_name": "1,1,1-trifluoroethane",
+   "n_values": 10,
+   "n_articles": 1
+  },
+  {
+   "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+   "compound_name": "water",
+   "n_values": 1,
+   "n_articles": 1
+  }
+ ],
+ "free_method_ideal_gas_candidates": [
+  {
+   "doi": "10.1016/j.jct.2013.05.032",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": "cesium hydroxide iodide",
+   "inchikey": "PSXWJXDCROVHEL-UHFFFAOYSA-L",
+   "n_values": 29,
+   "temperature_range_k": [
+    298.15,
+    3000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "statistical thermodynamics",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.05.032.xml",
+   "json_member": "10.1016/j.jct.2013.05.032.json",
+   "xml_sha256": "1130bf74d04c7ed2e7c34d59b52db4a6564e6fe29dc7af20d7876563e45db442",
+   "json_sha256": "299974d440c60a342ab48482757c0148c52cdcab1d6a3eeb7942adc884b4db98"
+  },
+  {
+   "doi": "10.1016/j.jct.2012.11.031",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": ".alpha.-D-glucose",
+   "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N",
+   "n_values": 16,
+   "temperature_range_k": [
+    50.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2012.11.031.xml",
+   "json_member": "10.1016/j.jct.2012.11.031.json",
+   "xml_sha256": "a5d809161b663409cb7fdbc546f4972e804c13216440f777b0eea53cde41b298",
+   "json_sha256": "1725e3838e63391a979d8d1584fa9ca1f4110756e30e6667cbe79f3390adf393"
+  },
+  {
+   "doi": "10.1016/j.fluid.2015.06.045",
+   "journal": "Fluid Phase Equilib.",
+   "year": "2015",
+   "compound_name": "N-methylpyrrolidone",
+   "inchikey": "SECXISVLQFMRJM-UHFFFAOYSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "STD",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.fluid.2015.06.045.xml",
+   "json_member": "10.1016/j.fluid.2015.06.045.json",
+   "xml_sha256": "303c336c3afdc7089d2dc0a623f5d811e5eba30d067b6d2420a4b0d84177db70",
+   "json_sha256": "9f97e57eb82c4f41a7b597feabf6bbb8bd5b98492d5517fcdc3b0a41b2fd266a"
+  },
+  {
+   "doi": "10.1016/j.fluid.2015.06.045",
+   "journal": "Fluid Phase Equilib.",
+   "year": "2015",
+   "compound_name": "2-aminoethan-1-ol",
+   "inchikey": "HZAXFHJVJLSVMW-UHFFFAOYSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "STD",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.fluid.2015.06.045.xml",
+   "json_member": "10.1016/j.fluid.2015.06.045.json",
+   "xml_sha256": "303c336c3afdc7089d2dc0a623f5d811e5eba30d067b6d2420a4b0d84177db70",
+   "json_sha256": "9f97e57eb82c4f41a7b597feabf6bbb8bd5b98492d5517fcdc3b0a41b2fd266a"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.01.009",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": "(S)-2-pinene",
+   "inchikey": "GRWFGVWFFZKLTI-IUCAKERBSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.01.009.xml",
+   "json_member": "10.1016/j.jct.2013.01.009.json",
+   "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
+   "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.01.009",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": "(1S,5S)-6,6-dimethyl-2-methylenebicyclo[3.1.1]heptane",
+   "inchikey": "WTARULDDTDQWMU-IUCAKERBSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.01.009.xml",
+   "json_member": "10.1016/j.jct.2013.01.009.json",
+   "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
+   "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.01.009",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": "(-)-cis-verbenol",
+   "inchikey": "WONIGEXYPVIKFS-YIZRAAEISA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.01.009.xml",
+   "json_member": "10.1016/j.jct.2013.01.009.json",
+   "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
+   "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.01.009",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2013",
+   "compound_name": "(-)-verbenone",
+   "inchikey": "DCSCXTJOXBUFGB-JGVFFNPUSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.01.009.xml",
+   "json_member": "10.1016/j.jct.2013.01.009.json",
+   "xml_sha256": "3a34638fc4741aaa3d2493b8111c1d523baad2bcd92b6ba31d9fb5872de1106d",
+   "json_sha256": "40f372a8cf276b4a08b465c2834cce17f5427b677edb93d4a31b3b4119cbc0aa"
+  },
+  {
+   "doi": "10.1016/j.tca.2014.07.018",
+   "journal": "Thermochim. Acta",
+   "year": "2014",
+   "compound_name": "5-(1-adamantyl)tetrazole",
+   "inchikey": "OBWRBAQXRLLXFR-UHFFFAOYSA-N",
+   "n_values": 14,
+   "temperature_range_k": [
+    100.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamic calculations",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.tca.2014.07.018.xml",
+   "json_member": "10.1016/j.tca.2014.07.018.json",
+   "xml_sha256": "5aaea13fd3f2609c7c9737baeb2a85ca269cc7c945c167ece25b89acf0dd04eb",
+   "json_sha256": "464ba2110254ccfd0a30c45ef664eca4037cb6864747697d3bc0210c452ff6b6"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.08.022",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2014",
+   "compound_name": "benzene",
+   "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
+   "n_values": 12,
+   "temperature_range_k": [
+    200.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "statistical thermodynamics",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.08.022.xml",
+   "json_member": "10.1016/j.jct.2013.08.022.json",
+   "xml_sha256": "e33222268a0f5eb10b8249e5b39253886cb4e87110cf8d5ef2b7d2cc368163c7",
+   "json_sha256": "ef390ce97cd131d558780cf23aad428a90ad09f7a418810548cf92f8812a6ac9"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.11.013",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2014",
+   "compound_name": "phenoxazine",
+   "inchikey": "TZMSYXZUNZXBOL-UHFFFAOYSA-N",
+   "n_values": 10,
+   "temperature_range_k": [
+    200.0,
+    600.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamics",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.11.013.xml",
+   "json_member": "10.1016/j.jct.2013.11.013.json",
+   "xml_sha256": "3b4c734ceeede91782298bef125255dec25a685dbe9f5f433ac632158c215afc",
+   "json_sha256": "47e9a7b7645d473241a44f98d7e8b4a57b4d1d9eef6297af0630f5d738c7e8c3"
+  },
+  {
+   "doi": "10.1016/j.jct.2013.11.013",
+   "journal": "J. Chem. Thermodyn.",
+   "year": "2014",
+   "compound_name": "10H-phenothiazine",
+   "inchikey": "WJFKNYWRSNBZNX-UHFFFAOYSA-N",
+   "n_values": 10,
+   "temperature_range_k": [
+    200.0,
+    600.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Statistical thermodynamics",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.jct.2013.11.013.xml",
+   "json_member": "10.1016/j.jct.2013.11.013.json",
+   "xml_sha256": "3b4c734ceeede91782298bef125255dec25a685dbe9f5f433ac632158c215afc",
+   "json_sha256": "47e9a7b7645d473241a44f98d7e8b4a57b4d1d9eef6297af0630f5d738c7e8c3"
+  },
+  {
+   "doi": "10.1016/j.fluid.2007.04.028",
+   "journal": "Fluid Phase Equilib.",
+   "year": "2007",
+   "compound_name": "decamethylcyclopentasiloxane",
+   "inchikey": "XMSXQFUHVRWGNA-UHFFFAOYSA-N",
+   "n_values": 9,
+   "temperature_range_k": [
+    298.0,
+    1000.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    100.0
+   ],
+   "pressure_min_kpa": 100.0,
+   "pressure_max_kpa": 100.0,
+   "pressure_n_distinct": 1,
+   "e_phase": "Ideal gas",
+   "e_method_name": "Predicted",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.fluid.2007.04.028.xml",
+   "json_member": "10.1016/j.fluid.2007.04.028.json",
+   "xml_sha256": "4e7d639c127fd2c4fff69d3832fc97ab4ac0630daa9bb45b7ba93656c7ea49f1",
+   "json_sha256": "b6b8ebcdf024f75dc36dbc5fa1600a0d8f1c412cc05c98bc1d57974a6a8c1805"
+  },
+  {
+   "doi": "10.1016/j.fluid.2014.09.017",
+   "journal": "Fluid Phase Equilib.",
+   "year": "2014",
+   "compound_name": "2-methylpropane",
+   "inchikey": "NNPPMTNAJDCUHE-UHFFFAOYSA-N",
+   "n_values": 7,
+   "temperature_range_k": [
+    270.0,
+    330.0
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Gas",
+   "e_method_name": "derived from presented speed of sound measurements",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1016/j.fluid.2014.09.017.xml",
+   "json_member": "10.1016/j.fluid.2014.09.017.json",
+   "xml_sha256": "0c9d33fd4d3480ff31370e3a268e62fcb2b8d9e37f02018401a55551f677721a",
+   "json_sha256": "d222c16d3235a28b6ddf7f4525f022be483a8a4e5cdd0854a4ede52bf8ec4540"
+  },
+  {
+   "doi": "10.1021/je4004564",
+   "journal": "J. Chem. Eng. Data",
+   "year": "2013",
+   "compound_name": "trans-1,3,3,3-tetrafluoropropene",
+   "inchikey": "CDOOAUSHHFGWSA-OWOJBTEDSA-N",
+   "n_values": 6,
+   "temperature_range_k": [
+    278.15,
+    353.15
+   ],
+   "pressure_kind": "constraint",
+   "pressures_kpa": [
+    101.325
+   ],
+   "pressure_min_kpa": 101.325,
+   "pressure_max_kpa": 101.325,
+   "pressure_n_distinct": 1,
+   "e_phase": "Gas",
+   "e_method_name": "Derived with speed of sound",
+   "origin": "experimental_free",
+   "uncertainty_elements_present": [
+    "nCombExpandUncertValue"
+   ],
+   "has_coverage_factor": false,
+   "has_level_of_confidence": true,
+   "xml_member": "10.1021/je4004564.xml",
+   "json_member": "10.1021/je4004564.json",
+   "xml_sha256": "3b80c209810733644d7e323abfb4930af0601ee25ffdc97a15cc51acd1b380d8",
+   "json_sha256": "e24a4dd97f9f472c6389483fc984e50551735b17c62d181a479a263808b81d5f"
+  }
+ ],
+ "compounds_without_inchikey": []
 }
