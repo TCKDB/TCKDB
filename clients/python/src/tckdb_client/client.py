@@ -939,10 +939,11 @@ class TCKDBClient:
 
         ``idempotency_key`` is required (unlike every other typed upload
         method's optional key): this route itself requires the
-        ``Idempotency-Key`` header (DR-0024) and refuses a request
-        without one before this method's payload is even read, so a
-        default of ``None`` here would just defer that failure to the
-        server for no benefit.
+        ``Idempotency-Key`` header, by the C-E6 decision (2026-09-20) --
+        not by DR-0024, which leaves the header optional in general --
+        and refuses a keyless request at the wire, so a default of
+        ``None`` here would just defer that failure to the server for no
+        benefit.
 
         ``doi`` overrides the file's own ``Citation/sDOI`` only when the
         file carries none; a value that disagrees with the file's own

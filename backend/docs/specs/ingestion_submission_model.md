@@ -203,17 +203,22 @@ curator-approvable and never public.
 ## Idempotency
 
 Idempotency is unchanged and route-level (header `Idempotency-Key`), and
-optional everywhere except one route. A replay returns the stored response —
-including the original `submission_id` — and creates no second submission,
-duplicate record links, or duplicate artifact links. Failed attempts do not
-store an idempotency record, so a retry re-attempts.
+optional everywhere except one route (DR-0024 does not make the header
+mandatory in general). A replay returns the stored response and creates no
+second submission, duplicate record links, or duplicate artifact links.
+Failed attempts do not store an idempotency record, so a retry re-attempts.
+Most routes' stored response echoes the original `submission_id`; the one
+exception is `POST /uploads/thermoml` (below), whose response is refs-only
+and echoes `submission_ref` instead — there is no `submission_id` field on
+that route's response body to echo.
 
-**`POST /uploads/thermoml` (Phase C-E6) requires the header.** It declares a
-second, required binding of the same `Idempotency-Key` header alongside the
-normal optional dependency, so a request without one never reaches the route
-body: FastAPI's ordinary missing-required-header 422 answers first. This is
-the one route DR-0024's "every upload carries an idempotency key" is enforced
-at the wire rather than left to convention — reusing FastAPI's existing
+**`POST /uploads/thermoml` (Phase C-E6) requires the header, by the C-E6
+decision (2026-09-20; see the "C-E6 — ThermoML file input and upload route"
+section of `docs/research/tckdb-phase-c-implementation-plan.md`), not by
+DR-0024.** It declares a second, required binding of the same
+`Idempotency-Key` header alongside the normal optional dependency, so a
+request without one never reaches the route body: FastAPI's ordinary
+missing-required-header 422 answers first — reusing FastAPI's existing
 required-parameter validation rather than inventing a bespoke refusal.
 
 ## Licensing is part of the upload contract
@@ -249,7 +254,7 @@ accepts deposits from anyone but its operator.
   TCKDB has seen yet. Omitting it is refused by ordinary Pydantic
   field-requiredness, the same mechanism every other required field
   already uses. This route is also the one place `Idempotency-Key` is
-  required rather than optional (see Idempotency below) — both deviations
+  required rather than optional (see Idempotency above) — both deviations
   are documented on the route itself, not silent.
 - **Choke point.** `open_upload_submission` and `open_job_submission`
   (`app/services/upload_submission.py`) take a keyword-only `rights`

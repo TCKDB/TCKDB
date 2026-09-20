@@ -510,8 +510,9 @@ specifically, unlike every sibling `/uploads/*` route: a second, required
 binding of the same header (`Header(..., alias=IDEMPOTENCY_HEADER)`)
 declared alongside the existing optional `idempotency_dependency` makes
 FastAPI's ordinary missing-required-header 422 fire before the route body
-runs — DR-0024 plus this work package's own brief call for every upload
-here to carry a key, and reusing FastAPI's existing required-field
+runs — this C-E6 decision (2026-09-20) calls for every upload through this
+route specifically to carry a key (DR-0024 itself leaves the header
+optional in general), and reusing FastAPI's existing required-field
 validation avoids inventing a second refusal mechanism for the same fact.
 No `dry_run` flag: none of the eleven sibling `/uploads/*` routes preview a
 request before committing it (the one preview mechanism in this codebase,
