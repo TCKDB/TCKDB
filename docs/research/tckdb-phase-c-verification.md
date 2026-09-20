@@ -24,8 +24,8 @@ coverage`, and the language/backend/client suites) before a single-parent
 | #502 | Phase C plan (docs) | docs only | CI |
 | #503 | C0 pilot species scan | FAIL, 8 findings (headline: fluoroethane's archived pressure is a per-point `Variable` at 1020-3400 kPa, not the fixed 101.325 kPa the plan first stated); fixed | n/a — script + its own pytest suite, 11 passed; no backend DB |
 | #504 | C-Q1 QCSchema adapter core | FAIL, 6 findings (1 blocking: wall-clock `parameters_extracted_at` broke idempotency-key stability); fixed | n/a — client-side package; adapter suite 81 passed (up from 63) |
-| #505 | C-E1 observation schema (revision `0b4a3afabfd3`) | no independent-review round recorded in the PR body | schema-only WP; targeted + full services/schemas/importers sweep, 4,357 passed; the three gate scripts not run |
-| #508 | C-Q2 backend acceptance + Hessian read | no independent-review round recorded in the PR body | targeted + regression sweep 230 passed, client suite 1,511 passed; the three gate scripts not run in-PR — the main session records them green afterward except issue #506 |
+| #505 | C-E1 observation schema (revision `0b4a3afabfd3`) | PASS, no blocking findings (independent review recorded in the main session, not in the PR body) | schema-only WP; targeted + full services/schemas/importers sweep, 4,357 passed; the three gate scripts not run |
+| #508 | C-Q2 backend acceptance + Hessian read | PASS (independent review recorded in the main session, not in the PR body) | targeted + regression sweep 230 passed, client suite 1,511 passed; the three gate scripts not run in-PR — the main session records them green afterward except issue #506 |
 | #507 | C-E2 ThermoML importer | FAIL, 1 blocking (`Component`/`Compound` joined by `nCompIndex` only; the real archive keys by `RegNum`/`nOrgNum`) + 10 more findings; fixed | main session's full local run: 6,034 / 3,870 / 2,882 (the 1 REST failure is issue #506) |
 | #511 | C-Q3 export + round trip | first review FAIL (isotopes always exported as the standard nuclide, undetected by two mutations); PASS; a third pass found an uncoded crash on a D/T atom symbol, fixed | n/a — client-side package; adapter suite 113 passed (86 -> 102 -> 113 across the rounds) |
 | #509 | C-E3 persistence | PASS; a second review tightened one finding (a dry run had uploaded the article to the object store anyway) | main session's full local run: 6,044 / 3,885 / 2,882 |
@@ -371,12 +371,19 @@ method, then one new rejection code for the hint-conflict refusal).
 
 ## Rollout
 
-<!-- ROLLOUT: filled by the main session after the Pi deploy of 2f7f23b2 (revisions 0b4a3afabfd3 and d2f4a7c1b8e6) -->
+Deployed to the Pi on 2026-09-20 with `backend/scripts/ops/tckdb_deploy.sh
+sha-2f7f23b25b8d0ae3b54077fdbe1d67d34271550d` from the main session, after
+the first image build hung in the arm64 smoke-test step under QEMU and was
+cancelled and rerun (the rerun took the usual eight to nine minutes).
 
 | Step | Evidence |
 | --- | --- |
-| Pre-deploy dump | |
-| Migration upgrade to `d2f4a7c1b8e6` | |
-| Container swap | |
-| `status` | |
-| `degraded` | |
+| Pre-deploy dump | `/home/calvin/backups/tckdb-predeploy-20260920-155627.dump` (2.7 MB, custom format) |
+| Migration upgrade to `d2f4a7c1b8e6` | Alembic ran `9b1c7e2d4a68 -> 0b4a3afabfd3` then `0b4a3afabfd3 -> d2f4a7c1b8e6` from the new image while the old container served |
+| Container swap | `tckdb-api` now runs `laxzal/tckdb-api:sha-2f7f23b25b8d0ae3b54077fdbe1d67d34271550d` (digest `sha256:574da58f...`) |
+| `status` | `ok`; `alembic_revision` `d2f4a7c1b8e6`; database, worker and artifact storage healthy; confirmed again from the public `/api/v1/status` |
+| `degraded` | `[]` |
+
+Nothing was written to the deployed database beyond the two migrations: no
+ThermoML or CCCBDB import was run, no observation was attached, and the
+playground remains a playground.
