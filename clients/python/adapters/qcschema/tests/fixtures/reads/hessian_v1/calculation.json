@@ -1,0 +1,120 @@
+{
+  "record": {
+    "available_sections": {
+      "constraints_applicable": false,
+      "freq_modes_applicable": true,
+      "geometry_validation_applicable": false,
+      "has_artifacts": true,
+      "has_constraints": false,
+      "has_dependencies": false,
+      "has_energy_corrections": false,
+      "has_execution_environment": false,
+      "has_freq_modes": false,
+      "has_geometry_validation": false,
+      "has_hessian": true,
+      "has_input_geometries": true,
+      "has_irc": false,
+      "has_output_geometries": false,
+      "has_parameters": false,
+      "has_path_search": false,
+      "has_results": false,
+      "has_scan": false,
+      "has_scf_stability": false,
+      "has_spin_diagnostic": false,
+      "has_wavefunction_diagnostic": false,
+      "irc_applicable": false,
+      "path_search_applicable": false,
+      "scan_applicable": false
+    },
+    "calculation": {
+      "calculation_ref": "calc_bfz6d34evyggcvj4sen7iycu5a",
+      "created_at": "2026-09-20T07:38:20.544393",
+      "quality": "raw",
+      "review": {
+        "note": null,
+        "reviewed_at": null,
+        "reviewer_kind": null,
+        "status": "not_reviewed"
+      },
+      "type": "freq"
+    },
+    "conformer": {
+      "conformer_group_label": "conformer_1",
+      "conformer_group_ref": "cg_xa4fq5r2lkxciwedz65h2huagu",
+      "conformer_observation_ref": "co_jxp4spolynij5hg4lnsn2tpy54"
+    },
+    "input_geometries": [
+      {
+        "geom_hash": "845870dd0c3b79bc51b1691499311fcf54d62dcf677149caa722685ba3d3412f",
+        "geometry_ref": "geom_htwxnpetxrh5lmvs2vt5renfjy",
+        "input_order": 1,
+        "natoms": 3,
+        "output_order": null,
+        "role": null,
+        "source": "deposited"
+      }
+    ],
+    "level_of_theory": {
+      "basis": "sto-3g",
+      "dispersion": null,
+      "display": "hf/sto-3g",
+      "label": null,
+      "level_of_theory_ref": "lot_sbjofmiyazlzjra5r5uhg6i4zy",
+      "method": "hf",
+      "solvent": null,
+      "spin_treatment": null
+    },
+    "literature": null,
+    "output_geometries": [],
+    "owner": {
+      "kind": "species_entry",
+      "species_entry": {
+        "canonical_smiles": "O",
+        "charge": 0,
+        "electronic_state_kind": "ground",
+        "formula": "H2O",
+        "inchi_key": "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+        "multiplicity": 1,
+        "species_entry_kind": "minimum",
+        "species_entry_label": null,
+        "species_entry_ref": "spe_l7nizgeya26rwptrrdbp3duztq",
+        "species_ref": "spc_kdncgcvv7jrvhvggxllsoj4ldm"
+      },
+      "transition_state_entry": null
+    },
+    "provenance": {
+      "converged": null,
+      "convergence_applicable": false,
+      "geometry_validation_applicable": false,
+      "geometry_validation_status": "not_present",
+      "has_result": false,
+      "result_applicable": true,
+      "scf_stability_status": "not_present"
+    },
+    "results": null,
+    "software_release": {
+      "software": "Psi4",
+      "software_release_ref": "srel_kkgfkhcl4x2rgm7pqqvyqroq5e",
+      "version": "1.11"
+    },
+    "workflow_tool_release": null
+  },
+  "request": {
+    "include": [
+      "input_geometries",
+      "output_geometries",
+      "results"
+    ],
+    "profile": "exploratory",
+    "profile_recommendation": "none",
+    "profile_release_ref": null
+  },
+  "review_summary": {
+    "approved": 0,
+    "deprecated": 0,
+    "not_reviewed": 1,
+    "rejected": 0,
+    "total": 1,
+    "under_review": 0
+  }
+}

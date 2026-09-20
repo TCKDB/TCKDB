@@ -1,4 +1,4 @@
-"""CLI entry point for the QCSchema importer (C-Q1).
+"""CLI entry point for the QCSchema importer and exporter (C-Q1, C-Q3).
 
     tckdb-qcschema import result.json [--smiles O] \
         [--species-entry-kind minimum] [--upload | --dry-run] \
@@ -6,11 +6,13 @@
 
     tckdb-qcschema report result.json [--smiles O] [--json]
 
+    tckdb-qcschema export <calculation_ref_or_id> [--out FILE] [--json]
+
 ``report`` runs the read + map stages only (no network, ever) and prints
-the mapping report; it is what ``--dry-run`` also uses internally. Only
-``import --upload`` contacts a live TCKDB instance. ``export`` (turning a
-stored calculation back into a QCSchema document) is C-Q3 and is not part
-of this module.
+the mapping report; it is what ``--dry-run`` also uses internally. ``import
+--upload`` and ``export`` are the only commands that contact a live TCKDB
+instance -- see :mod:`tckdb_qcschema.exporter` for what ``export`` supports
+and refuses.
 """
 
 from __future__ import annotations
@@ -63,6 +65,31 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[k.value for k in StationaryPointKind],
     )
     rep.add_argument("--json", action="store_true", help="Emit machine-readable JSON to stdout.")
+
+    exp = sub.add_parser(
+        "export",
+        help=(
+            "Read a stored sp or freq calculation back out as a QCSchema "
+            "v2 AtomicResult document."
+        ),
+    )
+    exp.add_argument(
+        "calculation_ref",
+        help=(
+            "A calc_... public ref, or an integer calculation_id. An "
+            "integer is required to export a freq (Hessian) record on a "
+            "deployment whose internal-id visibility policy hides "
+            "calculation_id from the scientific read -- see "
+            "tckdb_qcschema.exporter's module docstring."
+        ),
+    )
+    exp.add_argument("--out", help="Write the document to this path instead of stdout.")
+    exp.add_argument("--base-url", help="TCKDB base URL (else $TCKDB_BASE_URL).")
+    exp.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the document compactly (no indent) when printed to stdout.",
+    )
 
     return p
 
@@ -187,12 +214,42 @@ def _cmd_import(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_export(args: argparse.Namespace) -> int:
+    import os
+
+    from tckdb_client import TCKDBClient  # lazy
+
+    from .exporter import export_calculation
+
+    calculation_ref = args.calculation_ref
+    if calculation_ref.isdigit():
+        calculation_ref = int(calculation_ref)
+
+    base_url = args.base_url or os.environ.get("TCKDB_BASE_URL")
+    api_key = os.environ.get("TCKDB_API_KEY")
+    try:
+        with TCKDBClient(base_url, api_key=api_key) as client:
+            document = export_calculation(client, calculation_ref)
+    except QCSchemaAdapterError as exc:
+        return _emit_error(exc, as_json=args.json)
+
+    text = json.dumps(document) if args.json else json.dumps(document, indent=2)
+    if args.out:
+        Path(args.out).write_text(text + "\n")
+        print(f"wrote {args.out}")
+    else:
+        print(text)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "report":
         return _cmd_report(args)
     if args.command == "import":
         return _cmd_import(args)
+    if args.command == "export":
+        return _cmd_export(args)
     raise AssertionError(f"unreachable: unknown command {args.command!r}")  # pragma: no cover
 
 

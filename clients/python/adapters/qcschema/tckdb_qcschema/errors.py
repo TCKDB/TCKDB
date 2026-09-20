@@ -93,3 +93,49 @@ E_ARTIFACT_TOO_LARGE = "artifact_too_large"
 #: The artifact-search pre-check found an existing artifact with the same
 #: raw-file SHA-256 and ``--allow-duplicate`` was not passed.
 E_ALREADY_IMPORTED = "already_imported"
+
+# ---------------------------------------------------------------------------
+# Export (C-Q3)
+# ---------------------------------------------------------------------------
+
+#: A document whose top-level ``provenance.creator`` is exactly ``"TCKDB"``
+#: -- i.e. one this adapter itself exported -- is refused on import. Without
+#: this, an export could be re-imported and treated as independent evidence
+#: of a second ESS job, which it is not: it is TCKDB's own stored numbers
+#: reformatted. See ``exporter.py``'s ``provenance.creator="TCKDB"`` and the
+#: "reimport refused" note in the C-Q3 brief.
+E_TCKDB_EXPORT_REIMPORT_REFUSED = "tckdb_export_reimport_refused"
+
+#: The calculation's ``type`` is not one this adapter can export --
+#: currently only ``sp`` and ``freq`` (with a stored Hessian) are supported.
+#: ``opt`` is refused deliberately: no trajectory is stored, so relabelling
+#: a final energy as a single point would be a claim the record does not
+#: support.
+E_EXPORT_UNSUPPORTED_TYPE = "export_unsupported_type"
+
+#: An ``sp`` calculation has no recorded ``electronic_energy_hartree`` to
+#: export as ``return_result``.
+E_EXPORT_ENERGY_UNAVAILABLE = "export_energy_unavailable"
+
+#: A ``freq`` calculation carries no stored Hessian
+#: (``GET /calculations/{id}/hessian`` returned 404).
+E_EXPORT_HESSIAN_UNAVAILABLE = "export_hessian_unavailable"
+
+#: The calculation has no geometry this adapter can export a molecule from.
+E_EXPORT_GEOMETRY_UNAVAILABLE = "export_geometry_unavailable"
+
+#: The geometry's owning entry carries no resolvable charge/multiplicity
+#: (identity ``null`` or ambiguous across owners).
+E_EXPORT_IDENTITY_UNAVAILABLE = "export_identity_unavailable"
+
+#: The calculation carries no level of theory (method/basis) to export.
+E_EXPORT_LEVEL_OF_THEORY_UNAVAILABLE = "export_level_of_theory_unavailable"
+
+#: Exporting a ``freq`` record requires the integer ``calculation_id`` to
+#: call ``GET /calculations/{id}/hessian`` (a plain, non-scientific route
+#: that takes only the integer id, never a public ref). On a deployment
+#: whose internal-id visibility policy hides ``calculation_id`` from the
+#: scientific read, and when the caller supplied a ref rather than an int,
+#: there is no way to recover it -- refused rather than guessed. Pass the
+#: integer id directly (``export_calculation(client, 123)``) to avoid this.
+E_EXPORT_CALCULATION_ID_UNAVAILABLE = "export_calculation_id_unavailable"

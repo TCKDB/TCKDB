@@ -13,7 +13,11 @@ from __future__ import annotations
 import pytest
 
 from tckdb_qcschema.errors import QCSchemaAdapterError
-from tckdb_qcschema.hessian import pack_lower_triangle, reshape_full_matrix
+from tckdb_qcschema.hessian import (
+    pack_lower_triangle,
+    reshape_full_matrix,
+    unpack_lower_triangle,
+)
 
 #: A deliberately asymmetric-looking-if-mis-packed 2-atom (3N=6) matrix,
 #: every entry distinct so a transposition or a wrong traversal order is
@@ -72,3 +76,50 @@ def test_wrong_length_refuses_hessian_shape_invalid():
     with pytest.raises(QCSchemaAdapterError) as excinfo:
         pack_lower_triangle([1.0, 2.0, 3.0], _N)
     assert excinfo.value.code == "hessian_shape_invalid"
+
+
+def test_unpack_is_the_exact_inverse_of_pack():
+    """Pack then unpack a genuinely symmetric matrix -> the original, exactly (C-Q3).
+
+    Mutation this catches: unpacking in upper-triangle order (or any
+    traversal other than ``pack_lower_triangle``'s own) reproduces a
+    *different*, still-symmetric-looking matrix for this all-distinct-value
+    fixture, so a swapped unpack order is caught here even though both
+    orders would independently validate as "symmetric" -- exactly the
+    length-only-check blind spot ``test_pack_lower_triangle_matches_exact_row_major_lower_order``
+    already documents for packing.
+    """
+    matrix = _make_symmetric_matrix()
+    flat_full = _flatten_row_major(matrix)
+    packed = pack_lower_triangle(flat_full, _N)
+
+    unpacked = unpack_lower_triangle(packed, _N)
+
+    assert unpacked == flat_full
+    assert len(unpacked) == _DIM * _DIM
+
+
+def test_unpack_wrong_length_refuses():
+    with pytest.raises(ValueError):
+        unpack_lower_triangle([1.0, 2.0, 3.0], _N)
+
+
+def test_unpack_reconstructs_symmetry_even_from_a_not_quite_symmetric_pack():
+    """A packed lower triangle carries no independent upper-triangle values
+    to disagree with -- ``unpack_lower_triangle`` mirrors each packed value
+    to both sides by construction, so its output is symmetric by
+    construction too, regardless of what the *original* (pre-packing)
+    upper triangle happened to be. Pins that guarantee directly, since it
+    is exactly what makes the round-trip test's Hessian comparison valid
+    for a real ESS matrix whose reported upper/lower triangles are not
+    bit-identical.
+    """
+    matrix = _make_symmetric_matrix()
+    flat_full = _flatten_row_major(matrix)
+    packed = pack_lower_triangle(flat_full, _N)
+
+    unpacked = unpack_lower_triangle(packed, _N)
+
+    for row in range(_DIM):
+        for col in range(_DIM):
+            assert unpacked[row * _DIM + col] == unpacked[col * _DIM + row]
