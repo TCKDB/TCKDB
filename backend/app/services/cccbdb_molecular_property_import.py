@@ -547,7 +547,7 @@ def _prepare_one(
             ),
             None,
             None,
-            [],
+            None,
         )
 
     hint = _identity_hint(payload)

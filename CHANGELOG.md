@@ -125,10 +125,11 @@ wrapper over a contract that is itself still moving.
   attach target's species refuses with `observation_identity_hint_conflict`
   -- a stereochemistry-only difference is still accepted, since resolving
   that ambiguity is exactly what a curator attach is for.
-- `tckdb-client` 0.85.0 -> 0.87.1: the new species-entry observations read
-  has a typed `get_species_observations()` method (0.86.0 added the route
-  to the parity ledger as `raw_only`; 0.87.0 promoted it to `typed`); the
-  admin identity-attach route stays a curator-workflow `not_applicable`.
+- `tckdb-client` 0.86.0 -> 0.87.1: 0.87.0 adds the typed
+  `get_species_observations()` method for the new species-entry
+  observations read (the route entered the parity ledger as `raw_only`
+  earlier in this feature, without a bump); the admin identity-attach route
+  stays a curator-workflow `not_applicable`.
   0.87.1 regenerates `rejection_codes.py` for the new
   `observation_identity_hint_conflict` code.
 
