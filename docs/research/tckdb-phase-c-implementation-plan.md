@@ -50,8 +50,9 @@ and its Create schema; `_resolve_identity`
 extracted); `_assert_records_have_rights_basis`
 (`backend/app/services/release/curation.py:568`); `DECLARING_MODULES`
 (`backend/app/scientific_checks/declarations.py:1300`) and `_ACTIVE_RUBRICS`
-(`backend/app/services/machine_review/recipe.py:46`, whose change restales every
-stored machine review once); the calculation read routes
+(`backend/app/services/machine_review/recipe.py:46` — registering a rubric here
+does not, by itself, restale anything; see the C4 review-round-2 correction
+below for the mechanism that actually did, and the fix); the calculation read routes
 (`backend/app/api/routes/calculations.py`); archive `INCLUDED_TABLES`
 (`backend/app/services/archive/registry.py:18`).
 
@@ -368,8 +369,28 @@ Design.
   because findings are private.
 - Rubric `EvidenceRubric` (`backend/app/services/trust/models.py:260`) named
   `external_cp_comparison`, version 1, on thermo records, added to
-  `_ACTIVE_RUBRICS`; every stored machine review restales once and the plan
-  says so. Runner `backend/app/services/external_comparison/cp.py`: for a
+  `_ACTIVE_RUBRICS`.
+
+  **Review round 2 correction (2026-09-20).** The line above originally read
+  "every stored machine review restales once and the plan says so" — backwards.
+  Registering a rubric in `_ACTIVE_RUBRICS` restales nothing by itself: the
+  only currency consumer, `get_record_machine_review_currency_for_record`
+  (`backend/app/services/machine_review/query.py`), filters solely by
+  `(record_type, record_id)` — it has never looked at rubric or provider. What
+  actually restaled every thermo the runner touched was the runner itself:
+  each `record_machine_review` row `run_and_record` appended (provider
+  `tckdb.scientific_checks`) was newest by `reviewed_at` for that thermo, its
+  currency key never matched the active *reviewer* (LLM) recipe, and the
+  currency classifier — seeing it as the latest row, mismatched — reported
+  `stale` and demoted the thermo's true current reviewer-family review to
+  `historical`. HIGH-severity finding from that review; fixed by
+  `MachineReviewRecordFamily` (`backend/app/services/machine_review/query.py`),
+  which scopes every currency/latest-row read to one family (`reviewer` or
+  `scientific_check`) at a time, `reviewer` being the default every existing
+  consumer keeps. After the fix, neither registering the rubric nor running
+  the check restales the reviewer family, and running the reviewer-family
+  recipe never sees or restales a Cp comparison row. Runner
+  `backend/app/services/external_comparison/cp.py`: for a
   computed thermo with a NASA-7, NASA-9 or point representation and
   same-entry heat-capacity observations with `state_basis=ideal_gas`, evaluate
   Cp at each observed temperature with Cantera (lazy import; an absent engine

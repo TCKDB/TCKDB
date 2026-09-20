@@ -236,6 +236,8 @@ Design of `tckdb.deposit.v1`:
 | `3_results.md:43` transition-state entries with an imaginary mode, with a Hessian | `transition_state_evidence` |
 | `3_results.md:44`, `SI.md:29` spectrum-from-Hessian agreement table | `hessian_reanalysis` (B4) |
 | `SI.md:25` fixture mechanism provenance and Cantera version | `mechanism_fixture_provenance` |
+| (Phase C demonstration, not a Phase B skeleton line) computed-vs-observed Cp(T) per thermo, with every review-tier finding field | `experimental_cp_comparison` (Phase C-E4) |
+| (Phase C demonstration, not a Phase B skeleton line) ThermoML article custody: source, digest, parser/mapping versions | `thermoml_source_provenance` (Phase C-E4) |
 
 The two ethylene rows are served by the generalised generators (every species
 with a standing selection; every species entry with more than one thermo

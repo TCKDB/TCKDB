@@ -95,6 +95,8 @@ from app.services.machine_review.producer import (
     MachineReviewProductionError,
 )
 from app.services.machine_review.query import (
+    SCIENTIFIC_CHECK_PROVIDER,
+    MachineReviewRecordFamily,
     get_latest_record_machine_review_row,
     get_record_machine_review_currency_for_record,
     list_record_machine_review_rows_for_record,
@@ -145,6 +147,7 @@ __all__ = [
     "ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS",
     "MACHINE_REVIEW_CONTEXT_SCHEMA_VERSION",
     "MACHINE_REVIEW_V2_SCHEMA_VERSION",
+    "SCIENTIFIC_CHECK_PROVIDER",
     "SUPPORTED_RECORD_TYPES",
     "AuditRecordLink",
     "CuratorPriority",
@@ -173,6 +176,7 @@ __all__ = [
     "MachineReviewReReviewExecutionResult",
     "MachineReviewReReviewExecutionStatus",
     "MachineReviewReReviewPlan",
+    "MachineReviewRecordFamily",
     "MachineReviewRecordMapping",
     "MachineReviewRecordSummary",
     "MachineReviewResult",

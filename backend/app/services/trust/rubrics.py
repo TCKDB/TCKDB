@@ -3251,3 +3251,28 @@ def get_rubric_for_record_type(record_type: str) -> Optional[EvidenceRubric]:
     rather than the API failing.
     """
     return RUBRIC_REGISTRY.get(record_type)
+
+
+# ---------------------------------------------------------------------------
+# Review-tier rubrics (Phase C-E4)
+# ---------------------------------------------------------------------------
+#
+# Everything above this point evaluates the deterministic *computed-trust*
+# evidence completeness for a record (ADR 0008's structural tier) and is
+# reachable through RUBRIC_REGISTRY / get_rubric_for_record_type. The rubric
+# below is a different thing: it exists only to give the review-tier
+# external-Cp-comparison check
+# (``app.scientific_checks.external_comparison``,
+# ``app.services.external_comparison.cp``) a versioned name in the
+# machine-review currency recipe
+# (``app.services.machine_review.recipe._ACTIVE_RUBRICS``). It declares
+# ``checks=()`` deliberately: no computed-trust evaluator ever runs it, so it
+# is NOT added to RUBRIC_REGISTRY -- doing so would offer it to
+# get_rubric_for_record_type for the "thermo" record type, colliding with
+# COMPUTED_THERMO_V1's own meaning of that key.
+EXTERNAL_CP_COMPARISON_V1: EvidenceRubric = EvidenceRubric(
+    name="external_cp_comparison",
+    version=1,
+    record_type="thermo",
+    checks=(),
+)

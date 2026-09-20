@@ -41,6 +41,10 @@ GENERATORS: dict[str, Generator] = {
     "candidate_lineage": generators.candidate_lineage,
     "transition_state_evidence": generators.transition_state_evidence,
     "mechanism_fixture_provenance": generators.mechanism_fixture_provenance,
+    # Phase C-E4 (docs/research/tckdb-phase-c-implementation-plan.md C4): the
+    # review-tier external-Cp-comparison demonstration.
+    "experimental_cp_comparison": generators.experimental_cp_comparison,
+    "thermoml_source_provenance": generators.thermoml_source_provenance,
     # "hessian_reanalysis": added by B4b -- see the module docstring.
 }
 

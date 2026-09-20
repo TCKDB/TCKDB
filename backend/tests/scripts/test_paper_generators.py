@@ -102,6 +102,8 @@ def test_registry_covers_every_data_claim_and_is_callable():
         "candidate_lineage",
         "transition_state_evidence",
         "mechanism_fixture_provenance",
+        "experimental_cp_comparison",
+        "thermoml_source_provenance",
     }
     assert expected <= set(GENERATORS)
     for name, generator in GENERATORS.items():
@@ -206,3 +208,134 @@ def test_selected_thermo_is_empty_when_no_release_is_published(db_session):
     out = generators.selected_thermo_by_species(db_session)
     assert out["selections"] == len(out["selected_thermo"])
     assert SubmissionRecordType.thermo.value == "thermo"
+
+
+# ---------------------------------------------------------------------------
+# Phase C-E4 generators
+# ---------------------------------------------------------------------------
+
+
+def test_experimental_cp_comparison_reports_every_finding_field_with_no_ids(db_session):
+    from app.db.models.common import (
+        MolecularPropertyKind,
+        ObservedStateBasis,
+        ScientificOriginKind,
+    )
+    from app.db.models.molecular_property_observation import MolecularPropertyObservation
+    from app.services.external_comparison.cp import run_and_record
+    from tests.services.scientific_read._factories import attach_thermo_nasa
+
+    species = make_species(db_session, smiles="c1ccccc1O")
+    entry = make_species_entry(db_session, species=species)
+    thermo = make_thermo_scalar(
+        db_session, species_entry=entry, scientific_origin=ScientificOriginKind.computed
+    )
+    attach_thermo_nasa(db_session, thermo=thermo)
+    obs = MolecularPropertyObservation(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.experimental,
+        property_kind=MolecularPropertyKind.heat_capacity_cp,
+        scalar_value=95.0,
+        scalar_unit="J/mol/K",
+        temperature_k=298.15,
+        state_basis=ObservedStateBasis.ideal_gas,
+    )
+    db_session.add(obs)
+    db_session.flush()
+
+    run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    out = generators.experimental_cp_comparison(db_session)
+    row = next(c for c in out["comparisons"] if c["thermo_ref"] == thermo.public_ref)
+    assert row["species_ref"] == species.public_ref
+    assert row["species_entry_ref"] == entry.public_ref
+    assert row["finding_count"] == 1
+    (finding,) = row["findings"]
+    assert finding["temperature_k"] == pytest.approx(298.15)
+    assert finding["cp_observed_j_mol_k"] == pytest.approx(95.0)
+    assert finding["representation"] == "nasa7"
+    assert finding["comparability"] == "comparable"
+    assert "observation_ref" in finding
+
+    # Byte-stable and id-free, same as every other generator.
+    first = render_json(out)
+    second = render_json(generators.experimental_cp_comparison(db_session))
+    assert first == second
+
+    def _keys(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                yield key
+                yield from _keys(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from _keys(item)
+
+    offenders = {k for k in _keys(json.loads(first)) if k == "id" or k.endswith("_id")}
+    assert not offenders, offenders
+
+
+def test_thermoml_source_provenance_lists_custody_rows_with_counts(db_session):
+    from datetime import datetime as _dt
+
+    from app.db.models.common import ExternalSourceRecordKind
+    from app.db.models.external_source import ExternalSource, ExternalSourceRecord
+
+    source = ExternalSource(source_name="NIST ThermoML Archive", source_release="paper-generator-test")
+    db_session.add(source)
+    db_session.flush()
+    record = ExternalSourceRecord(
+        external_source_id=source.id,
+        record_kind=ExternalSourceRecordKind.thermoml_article,
+        source_uri="https://trc.nist.gov/ThermoML/paper_generator_test.xml",
+        source_record_key="10.1016/j.jct.2013.08.022#P1/V1",
+        retrieved_at=_dt(2026, 9, 1, 12, 0, 0),
+        content_sha256="b" * 64,
+        content_length=42,
+        raw_uri="artifacts/paper-generator-test",
+        parser_name="thermoml_cp_parser",
+        parser_version="1.0.0",
+        mapping_version="1.0.0",
+        mapping_report_json={"values_mapped": [1, 2, 3], "rejected": []},
+    )
+    db_session.add(record)
+    db_session.flush()
+
+    out = generators.thermoml_source_provenance(db_session)
+    row = next(r for r in out["thermoml_source_records"] if r["record_key"] == record.source_record_key)
+    assert row["source_name"] == "NIST ThermoML Archive"
+    assert row["content_sha256"] == "b" * 64
+    assert row["parser_version"] == "1.0.0"
+    assert row["mapping_report_counts"] == {"values_mapped": 3, "rejected": 0}
+
+    first = render_json(out)
+    second = render_json(generators.thermoml_source_provenance(db_session))
+    assert first == second
+
+    # MEDIUM finding, review round 2: test_no_generator_output_carries_a_
+    # database_id_key (above) runs write_expected_outputs on an EMPTY
+    # db_session, so every generator (this one included) produces an empty
+    # collection and the scan finds nothing to scan -- a vacuous pass that
+    # would not have caught this generator leaking a database id. This is
+    # the dedicated, populated-row scan the cp generator's own test already
+    # has (test_experimental_cp_comparison_reports_every_finding_field_with_
+    # no_ids, above), mirrored here with a real row on disk.
+    #
+    # The key/value form (not key-name-only, as the vacuous general test
+    # uses): a leaked database primary key is always a JSON integer, and
+    # this row's own ``schema_id`` field is a legitimate content string (an
+    # XSD/schema identifier from the ThermoML record, not a row id) that
+    # happens to end in ``_id`` -- a name-only scan would wrongly flag it.
+    def _int_id_like_offenders(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if (key == "id" or key.endswith("_id")) and isinstance(value, int):
+                    yield key
+                yield from _int_id_like_offenders(value)
+        elif isinstance(node, list):
+            for item in node:
+                yield from _int_id_like_offenders(item)
+
+    offenders = sorted(set(_int_id_like_offenders(json.loads(first))))
+    assert not offenders, offenders

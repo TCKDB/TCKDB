@@ -35,6 +35,7 @@ from app.services.trust.rubrics import (
     COMPUTED_THERMO_V1,
     COMPUTED_TRANSITION_STATE_V2,
     COMPUTED_TRANSPORT_V1,
+    EXTERNAL_CP_COMPARISON_V1,
 )
 
 #: Active machine-review prompt version (private constant; no config system yet).
@@ -43,6 +44,34 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # The deployed computed-trust rubrics whose versions form the machine-review
 # rubric recipe. Each is the single source of its own version — listed here only
 # to bind it into the recipe, never to restate a version number by hand.
+#
+# EXTERNAL_CP_COMPARISON_V1 (Phase C-E4) is not a computed-trust rubric --
+# it carries no checks and is never run by the trust evaluator (see its
+# definition in ``app.services.trust.rubrics``) -- but it is listed here for
+# the same reason every other entry is: so the review-tier external-Cp-
+# comparison runner (``app.services.external_comparison.cp.run_and_record``)
+# reads its rubric version from this one recipe rather than restating "1" by
+# hand. Adding it changes ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`` (below) by
+# one key; every currency-check call site in this package filters that dict
+# to the single rubric relevant to a record's own type
+# (``active_rubric_versions_for_record_type`` in ``admin_trigger.py``), so no
+# existing calculation/kinetics/thermo/statmech/transport/transition-state
+# review is restaled by this addition -- only a future external-Cp-comparison
+# review would ever compare against this key.
+#
+# That claim is about the rubric-version *dict*, and it held even before the
+# family fix below. What was never true, until
+# ``app.services.machine_review.query.MachineReviewRecordFamily`` existed, was
+# the companion claim a reader might assume: that running the Cp check
+# couldn't restale a thermo's existing *reviewer*-family review either. It
+# could and did -- the currency query loaded every row for a thermo
+# regardless of provider, so the Cp runner's own appended row (never matching
+# the reviewer recipe, always newest) demoted the true current reviewer
+# review to historical on every run. See the Phase C-E4 review round 2
+# correction in ``docs/research/tckdb-phase-c-implementation-plan.md`` C4.
+# ``get_record_machine_review_currency_for_record`` now defaults to the
+# ``reviewer`` family, so this file's calls (via ``admin_trigger.py``) are
+# unaffected by any Cp row and this second effect can no longer happen.
 _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
@@ -50,6 +79,7 @@ _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_STATMECH_V1,
     COMPUTED_TRANSPORT_V1,
     COMPUTED_TRANSITION_STATE_V2,
+    EXTERNAL_CP_COMPARISON_V1,
 )
 
 
