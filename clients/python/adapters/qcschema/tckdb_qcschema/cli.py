@@ -42,7 +42,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     imp.add_argument("--upload", action="store_true", help="POST to a live TCKDB API.")
     imp.add_argument("--dry-run", action="store_true", help="Build payload + keys without sending.")
-    imp.add_argument("--allow-duplicate", action="store_true", help="Bypass the raw-sha256 precheck refusal.")
+    imp.add_argument(
+        "--allow-duplicate",
+        action="store_true",
+        help=(
+            "Bypass the raw-sha256 precheck refusal AND mint a fresh "
+            "per-run idempotency-key nonce, so this run creates a genuine "
+            "second deposit instead of replaying the first one's response."
+        ),
+    )
     imp.add_argument("--base-url", help="TCKDB base URL (else $TCKDB_BASE_URL).")
     imp.add_argument("--json", action="store_true", help="Emit machine-readable JSON to stdout.")
 

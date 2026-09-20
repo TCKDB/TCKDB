@@ -31,7 +31,7 @@ per-row rejections within one article.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 
 import qcelemental
 
@@ -50,14 +50,23 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
 )
 from tckdb_schemas.enums import CalculationGeometryRole
-from tckdb_schemas.fragments.refs import LevelOfTheoryRef, SoftwareReleaseRef
+from tckdb_schemas.fragments.refs import (
+    LevelOfTheoryRef,
+    SoftwareReleaseRef,
+    WorkflowToolReleaseRef,
+)
 from tckdb_schemas.workflows.conformer_upload import (
     ConformerCalculationIn,
     ConformerUploadRequest,
 )
 
 from . import __version__ as _ADAPTER_VERSION
-from .errors import E_ENERGY_CONTRADICTION, E_SP_ENERGY_UNAVAILABLE, QCSchemaAdapterError
+from .errors import (
+    E_ENERGY_CONTRADICTION,
+    E_ESS_PROVENANCE_UNAVAILABLE,
+    E_SP_ENERGY_UNAVAILABLE,
+    QCSchemaAdapterError,
+)
 from .hessian import pack_lower_triangle
 from .molecule import BOHR_TO_ANGSTROM, resolve_identity, to_geometry_payload
 from .reader import QCRecord
@@ -65,6 +74,31 @@ from .reader import QCRecord
 #: Absolute tolerance, hartree, for comparing an independently supplied
 #: energy against ``properties.return_energy`` for the same record.
 _ENERGY_TOLERANCE_HARTREE = 1e-9
+
+#: The only ``provenance`` keys retained into
+#: ``parameters_json["tckdb_qcschema"]["provenance"]``. QCSchema's
+#: ``Provenance`` model accepts arbitrary extra keys, and real ESS/qcengine
+#: output routinely carries ``username`` and other operator-identifying
+#: fields (``cpu``, a free-text hostname string doubling as a personal
+#: workstation name, etc.) alongside the routine execution facts. Retention
+#: here is opt-in, not opt-out: a key not in this set is dropped, silently
+#: for the common case and reported under ``report.unsupported`` when it
+#: was actually present on this document (see ``_filter_provenance``) --
+#: not "everything except a denylist", so a future field this adapter has
+#: never seen is dropped by default rather than retained by default.
+_PROVENANCE_RETAINED_KEYS = frozenset(
+    {"routine", "hostname", "nthreads", "memory", "wall_time", "creator", "version"}
+)
+
+#: Timestamp field names this adapter recognises on a QCSchema
+#: ``provenance`` block, checked in this priority order. Not part of the
+#: QCSchema spec (``Provenance`` only standardises ``creator``/``version``/
+#: ``routine``); qcengine's own real output carries none of these in
+#: practice (measured against every fixture in this corpus), but a
+#: producer that does supply one should have it used instead of a
+#: wall-clock stamp taken at import time -- see
+#: ``_parameters_extracted_at``.
+_PROVENANCE_TIMESTAMP_KEYS = ("completed_at", "timestamp", "datetime", "date")
 
 _SPIN_TREATMENT_BY_REFERENCE = {
     "rhf": SpinTreatment.restricted,
@@ -137,35 +171,51 @@ def _atomic_view(record: QCRecord) -> dict:
 
 
 def _optimization_view(record: QCRecord) -> dict:
-    """Family-normalised view over an ``OptimizationResult`` in either family."""
+    """Family-normalised view over an ``OptimizationResult`` in either family.
+
+    ``provenance`` here is the *optimizer's* own top-level provenance (e.g.
+    geomeTRIC) -- never the ESS that actually computed the energies/
+    gradients the optimizer consumed. The ESS is named per-step, in each
+    trajectory entry's own ``provenance``; see ``trajectory_last_provenance``
+    and ``optimizer_program`` below, consumed by
+    ``_ess_software_release_for_optimization``.
+    """
     r = record.result
     if record.family == "v1":
         spec = r.input_specification
         energies = list(r.energies or [])
+        trajectory = list(r.trajectory or [])
+        last_step_provenance = _dict_of(trajectory[-1].provenance) if trajectory else None
         return dict(
             initial_molecule=r.initial_molecule,
             final_molecule=r.final_molecule,
-            n_steps=len(r.trajectory or []),
+            n_steps=len(trajectory),
             final_energy=energies[-1] if energies else None,
             step_energies=energies,
             method=spec.model.method,
             basis=getattr(spec.model, "basis", None),
             keywords=dict(spec.keywords or {}),
             provenance=_dict_of(r.provenance),
+            trajectory_last_provenance=last_step_provenance,
+            optimizer_program=dict(r.keywords or {}).get("program"),
         )
     inner_spec = r.input_data.specification.specification
     step_props = list(r.trajectory_properties or [])
     step_energies = [getattr(p, "return_energy", None) for p in step_props]
+    trajectory = list(r.trajectory_results or [])
+    last_step_provenance = _dict_of(trajectory[-1].provenance) if trajectory else None
     return dict(
         initial_molecule=r.input_data.initial_molecule,
         final_molecule=r.final_molecule,
-        n_steps=len(r.trajectory_results or []),
+        n_steps=len(trajectory),
         final_energy=step_energies[-1] if step_energies else None,
         step_energies=step_energies,
         method=inner_spec.model.method,
         basis=getattr(inner_spec.model, "basis", None),
         keywords=dict(inner_spec.keywords or {}),
         provenance=_dict_of(r.provenance),
+        trajectory_last_provenance=last_step_provenance,
+        optimizer_program=getattr(inner_spec, "program", None) or None,
     )
 
 
@@ -210,6 +260,63 @@ def _software_release(provenance: dict) -> SoftwareReleaseRef | None:
     return SoftwareReleaseRef(name=creator, version=provenance.get("version"))
 
 
+def _workflow_tool_release(provenance: dict) -> WorkflowToolReleaseRef | None:
+    creator = provenance.get("creator")
+    if not creator:
+        return None
+    return WorkflowToolReleaseRef(name=creator, version=provenance.get("version"))
+
+
+def _ess_software_release_for_optimization(
+    view: dict, report: MappingReport
+) -> tuple[SoftwareReleaseRef, str]:
+    """The ESS that computed an optimization's energies/gradients.
+
+    ``OptimizationResult.provenance`` (``view["provenance"]``) is the
+    *optimizer's* provenance (geomeTRIC, etc.) -- mapped separately as
+    ``workflow_tool_release`` by the caller. The ESS itself is named by the
+    last trajectory step's own ``provenance.creator``/``.version`` when a
+    trajectory is present; when protocols dropped the trajectory
+    (``trajectory_results: "none"`` or similar), the optimizer's own
+    ``keywords.program`` (v1) / ``specification.specification.program``
+    (v2) names the ESS *program* with no version to report.
+
+    :returns: ``(software_release, software_source)`` where
+        ``software_source`` records which of the two paths was used, for
+        ``parameters_json["tckdb_qcschema"]["software_source"]``.
+    :raises QCSchemaAdapterError: ``ess_provenance_unavailable`` when
+        neither source names a program.
+    """
+    last_step_provenance = view["trajectory_last_provenance"]
+    if last_step_provenance and last_step_provenance.get("creator"):
+        report.transformed.extend(
+            ["trajectory[-1].provenance.creator", "trajectory[-1].provenance.version"]
+        )
+        return (
+            SoftwareReleaseRef(
+                name=last_step_provenance["creator"],
+                version=last_step_provenance.get("version"),
+            ),
+            "trajectory[-1].provenance",
+        )
+
+    program = view.get("optimizer_program")
+    if program:
+        report.transformed.append("keywords.program")
+        report.unsupported.append(
+            "software_release.version (trajectory dropped by protocols; "
+            "only the program name survives)"
+        )
+        return SoftwareReleaseRef(name=program, version=None), "keywords.program"
+
+    raise QCSchemaAdapterError(
+        E_ESS_PROVENANCE_UNAVAILABLE,
+        "OptimizationResult names no ESS: its trajectory is empty "
+        "(dropped by protocols) and the optimizer's own input carries no "
+        "'program' keyword to fall back to.",
+    )
+
+
 def _level_of_theory(method: str, basis: str | None, keywords: dict) -> LevelOfTheoryRef:
     return LevelOfTheoryRef(
         method=method,
@@ -218,7 +325,68 @@ def _level_of_theory(method: str, basis: str | None, keywords: dict) -> LevelOfT
     )
 
 
+def _filter_provenance(provenance: dict, *, report: MappingReport) -> dict:
+    """Retain only :data:`_PROVENANCE_RETAINED_KEYS`; drop everything else.
+
+    Anything dropped that was actually present on this document (most
+    notably ``username``, but any other key outside the allowlist too) is
+    named in ``report.unsupported`` so the mapping report still accounts
+    for it -- dropped, not merely silent.
+    """
+    dropped = sorted(k for k in provenance if k not in _PROVENANCE_RETAINED_KEYS)
+    report.unsupported.extend(f"provenance.{k}" for k in dropped)
+    return {k: v for k, v in provenance.items() if k in _PROVENANCE_RETAINED_KEYS}
+
+
+def _parameters_extracted_at(provenance: dict) -> str | None:
+    """The document's own provenance timestamp, if it names one; else ``None``.
+
+    Never the wall clock: this is embedded in
+    ``parameters_json["tckdb_qcschema"]`` -> ``calculation.parameters_json``
+    on the emitted payload, and the backend hashes the whole canonical
+    request body per idempotency key (``backend/app/api/idempotency.py``).
+    A value that changes between two builds of the identical document (a
+    ``datetime.now()`` call, for instance) makes the payload a function of
+    *when it was built* rather than *what it was built from*, so a rerun of
+    the same document with a same idempotency key would be refused
+    ``idempotency_conflict`` instead of replaying -- breaking partial-run
+    recovery. QCSchema's ``Provenance`` model standardises no timestamp
+    field at all (only ``creator``/``version``/``routine`` are typed; see
+    ``_PROVENANCE_TIMESTAMP_KEYS``'s docstring) -- every real fixture in
+    this corpus has none, so this returns ``None`` (the field is then
+    omitted entirely, not set to ``null``) for all of them today.
+    """
+    for key in _PROVENANCE_TIMESTAMP_KEYS:
+        value = provenance.get(key)
+        if isinstance(value, str) and value:
+            try:
+                datetime.fromisoformat(value)
+            except ValueError:
+                continue
+            return value
+    return None
+
+
 def _tckdb_origin_block(record: QCRecord, driver: str | None) -> dict:
+    # origin_kind="imported" (not "executed"): this adapter is a generic
+    # reader of an already-completed QCSchema *document* handed to it from
+    # disk -- possibly the depositor's own just-finished job, possibly a
+    # QCArchive dump or a colleague's file years old. The adapter has no
+    # way to tell those apart, and "executed" (per
+    # tckdb_schemas.fragments.calculation_origin.CalculationOriginMetadata's
+    # own docstring) names the case where *this* pipeline directly
+    # orchestrated the ESS run (TCKDB's ARC adapter, reading output.yml
+    # produced by a run ARC itself drove) -- not "read a standalone result
+    # file". "imported" is explicitly "pulled from external source (e.g.
+    # literature DOI, published supporting information, prior database)",
+    # which is exactly this adapter's actual contract regardless of how
+    # fresh the file is. independent_ess_job=True is a separate, compatible
+    # claim: the document's own internal evidence (a validated Result with
+    # success=true, driver-consistent return_result/return_energy, real
+    # provenance.creator/version) is direct evidence an ESS job genuinely
+    # ran and was not copied/reused from another row -- only origin_kind
+    # ="reused_result" is incompatible with it (enforced by that fragment's
+    # own cross-field validator). See the PR body for the full reasoning.
     return {
         "origin_kind": "imported",
         "independent_ess_job": True,
@@ -235,6 +403,7 @@ def _tckdb_qcschema_block(
     *,
     driver: str | None,
     identity_source: str,
+    software_source: str,
     provenance: dict,
     raw_artifact_sha256: str,
     raw_artifact_filename: str,
@@ -253,7 +422,8 @@ def _tckdb_qcschema_block(
         "canonical_document_sha256": record.canonical_sha256,
         "bohr_to_angstrom": BOHR_TO_ANGSTROM,
         "identity_source": identity_source,
-        "provenance": provenance,
+        "software_source": software_source,
+        "provenance": _filter_provenance(provenance, report=report),
         "mapping_report": report.to_dict(),
     }
 
@@ -296,6 +466,7 @@ def build_conformer_upload_payload(
         payload, driver = _build_optimization(record, report)
 
     provenance = payload.pop("_provenance")
+    software_source = payload.pop("_software_source")
 
     # Identity resolution happens once, from the molecule that anchors the
     # whole record (the single AtomicResult molecule, or the optimization's
@@ -320,6 +491,7 @@ def build_conformer_upload_payload(
             record,
             driver=driver,
             identity_source=identity.source,
+            software_source=software_source,
             provenance=provenance,
             raw_artifact_sha256=raw_artifact_sha256,
             raw_artifact_filename=raw_artifact_filename,
@@ -327,9 +499,14 @@ def build_conformer_upload_payload(
         ),
     }
     payload["calculation"]["parameters_parser_version"] = _parser_version()
-    payload["calculation"]["parameters_extracted_at"] = datetime.now(
-        timezone.utc
-    ).isoformat()
+    # Deliberately NOT datetime.now(): the backend hashes the whole
+    # canonical request body per idempotency key, so a wall-clock stamp
+    # would make byte-identical reruns of the same document produce a
+    # different body and be refused idempotency_conflict instead of
+    # replaying. See _parameters_extracted_at's docstring.
+    extracted_at = _parameters_extracted_at(provenance)
+    if extracted_at is not None:
+        payload["calculation"]["parameters_extracted_at"] = extracted_at
 
     validated = ConformerUploadRequest.model_validate(payload)
     wire_payload = validated.model_dump(mode="json", exclude_none=True)
@@ -367,6 +544,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         input_geometries=[geometry],
         parameters=_parameter_observations(keywords) or None,
     )
+    software_source = "provenance"
     if keywords:
         report.transformed.append("keywords")
 
@@ -427,6 +605,7 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         "scientific_origin": ScientificOriginKind.computed,
         "_identity_molecule": molecule,
         "_provenance": provenance,
+        "_software_source": software_source,
     }
     return payload, driver
 
@@ -442,8 +621,17 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
     if initial_geometry.isotopes or final_geometry.isotopes:
         report.transformed.append("molecule.mass_numbers")
 
-    software_release = _software_release(provenance)
-    if software_release is not None:
+    # The ESS (Psi4, etc.) that computed the trajectory, not the optimizer
+    # that drove it -- see _ess_software_release_for_optimization's
+    # docstring. Raises ess_provenance_unavailable if neither the
+    # trajectory nor a program keyword survives to name it.
+    software_release, software_source = _ess_software_release_for_optimization(view, report)
+    # The optimizer itself (geomeTRIC, etc.) -- OptimizationResult.provenance
+    # is always present with a required .creator, so this is never None in
+    # practice, but stays Optional to match workflow_tool_release's own
+    # optional-on-the-wire contract.
+    workflow_tool_release = _workflow_tool_release(provenance)
+    if workflow_tool_release is not None:
         report.transformed.extend(["provenance.creator", "provenance.version"])
     level_of_theory = _level_of_theory(method, basis, keywords)
     report.transformed.extend(["model.method", "model.basis"])
@@ -471,6 +659,7 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
     calc_kwargs = dict(
         type=CalculationType.opt,
         software_release=software_release,
+        workflow_tool_release=workflow_tool_release,
         level_of_theory=level_of_theory,
         opt_result=opt_result,
         input_geometries=[initial_geometry],
@@ -490,6 +679,7 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
         "scientific_origin": ScientificOriginKind.computed,
         "_identity_molecule": view["final_molecule"],
         "_provenance": provenance,
+        "_software_source": software_source,
     }
     return payload, None
 

@@ -11,6 +11,8 @@ then reverted.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from tckdb_qcschema.errors import QCSchemaAdapterError
@@ -22,6 +24,9 @@ from tckdb_schemas.workflows.conformer_upload import ConformerUploadRequest
 from conftest import discover_corpus_cases, load_case
 
 CASES = discover_corpus_cases()
+ROUTE_CASES = [
+    case for case in CASES if load_case(case)[1]["outcome"] == "route"
+]
 
 
 def test_corpus_is_not_empty() -> None:
@@ -67,6 +72,7 @@ def test_corpus_case(case: str) -> None:
         # already validates internally, but the corpus test must not take
         # that validation on faith.
         ConformerUploadRequest.model_validate(payload)
+        _assert_pins(case, meta, payload)
         return
 
     if meta["outcome"] == "refusal":
@@ -86,3 +92,88 @@ def test_corpus_case(case: str) -> None:
         return
 
     pytest.fail(f"{case}: unknown meta['outcome']={meta['outcome']!r}")
+
+
+def _assert_pins(case: str, meta: dict, payload: dict) -> None:
+    """Assert the numeric/text pins named in ``meta["pins"]``, when present.
+
+    Makes the corpus test value-aware, not merely shape-aware: without
+    this, a mapped payload could have the right ``calculation.type`` and
+    still carry a silently wrong number (a shifted unit constant, a
+    mis-packed Hessian entry) for every real-Psi4 route case, and nothing
+    above would notice. Pins are optional per-case (``meta.get("pins")``)
+    so hand-derived and refusal fixtures need not carry any.
+    """
+    pins = meta.get("pins")
+    if not pins:
+        return
+    calc = payload["calculation"]
+
+    if "electronic_energy_hartree" in pins:
+        assert calc["sp_result"]["electronic_energy_hartree"] == pytest.approx(
+            pins["electronic_energy_hartree"], abs=1e-12
+        ), f"{case}: sp_result.electronic_energy_hartree pin mismatch"
+
+    if "final_energy_hartree" in pins:
+        assert calc["opt_result"]["final_energy_hartree"] == pytest.approx(
+            pins["final_energy_hartree"], abs=1e-12
+        ), f"{case}: opt_result.final_energy_hartree pin mismatch"
+
+    if "first_xyz_line" in pins:
+        xyz = calc["input_geometries"][0]["xyz_text"]
+        first_line = xyz.splitlines()[2]  # line 0 = atom count, line 1 = blank
+        assert first_line == pins["first_xyz_line"], (
+            f"{case}: input_geometries[0] first atom line pin mismatch: "
+            f"{first_line!r} != {pins['first_xyz_line']!r}"
+        )
+
+    if "output_first_xyz_line" in pins:
+        xyz = calc["output_geometries"][0]["geometry"]["xyz_text"]
+        first_line = xyz.splitlines()[2]
+        assert first_line == pins["output_first_xyz_line"], (
+            f"{case}: output_geometries[0] first atom line pin mismatch: "
+            f"{first_line!r} != {pins['output_first_xyz_line']!r}"
+        )
+
+    if "hessian_length" in pins:
+        lower_triangle = calc["hessian"]["lower_triangle_hartree_bohr2"]
+        assert len(lower_triangle) == pins["hessian_length"], (
+            f"{case}: hessian lower-triangle length pin mismatch"
+        )
+        assert lower_triangle[0] == pytest.approx(
+            pins["hessian_first_value"], abs=1e-15
+        ), f"{case}: hessian lower-triangle first value pin mismatch"
+
+
+@pytest.mark.parametrize("case", ROUTE_CASES)
+def test_route_case_payload_is_deterministic(case: str) -> None:
+    """Two independent builds of the same document produce byte-identical JSON.
+
+    Regression guard for a payload that is secretly a function of *when*
+    it was built rather than *what* it was built from (the wall-clock
+    ``parameters_extracted_at`` bug this replaces -- see
+    ``tests/test_uploader.py``'s partial-run-recovery test for the
+    idempotency-conflict consequence). The backend hashes the whole
+    canonical request body per idempotency key
+    (``backend/app/api/idempotency.py``), so two builds of the identical
+    document must be canonically identical or a same-key rerun is refused
+    ``idempotency_conflict`` instead of replaying.
+    """
+    raw, meta = load_case(case)
+    raw_sha256 = sha256_bytes(raw)
+    smiles_arg = meta.get("smiles_arg", "O")
+
+    def _build() -> dict:
+        record = read_document(raw)  # fresh QCRecord each time, not shared state
+        payload, _report = build_conformer_upload_payload(
+            record,
+            raw_bytes=raw,
+            raw_artifact_filename=f"{case}.qcschema.json",
+            raw_artifact_sha256=raw_sha256,
+            declared_smiles=smiles_arg,
+        )
+        return payload
+
+    first = json.dumps(_build(), sort_keys=True, separators=(",", ":"))
+    second = json.dumps(_build(), sort_keys=True, separators=(",", ":"))
+    assert first == second, f"{case}: two builds of the same document diverged"

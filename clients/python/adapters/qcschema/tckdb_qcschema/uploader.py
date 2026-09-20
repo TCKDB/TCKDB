@@ -25,6 +25,28 @@ courtesy, not a guarantee: two concurrent importers race past it, keys are
 per-user and time-limited, and TCKDB has no server-side content dedupe --
 see the plan's stated limits.
 
+``--allow-duplicate`` and idempotency keys
+-------------------------------------------
+Bypassing the precheck refusal is not, by itself, enough to actually
+create a second deposit: the two idempotency keys above are a pure
+function of ``record.canonical_sha256``, so a second run of the identical
+document -- precheck skipped or not -- would still send the *same* key
+with the *same* body, and the backend replays the first deposit's response
+rather than creating a new row (the same-key/same-body case in
+``backend/app/services/idempotency.py``). ``--allow-duplicate`` would
+bypass a refusal it never needed to reach and silently hand back the
+original deposit, which is not what the flag says it does.
+
+So ``upload_record`` mints a fresh, random per-run suffix (``nonce``,
+``uuid4().hex[:12]`` unless the caller supplies ``duplicate_nonce``
+explicitly -- tests do, for determinism) and appends it to *both* keys
+whenever ``allow_duplicate=True``: ``qcschema:<sha[:32]>:conformers:dup-
+<nonce>`` / ``...:artifact:dup-<nonce>``. Every run with the flag set gets
+its own keys, so every such run reaches the server as a genuinely new
+idempotency key and a genuinely new deposit -- never a replay. Without the
+flag, the keys stay exactly as documented above (stable, no nonce), which
+is what partial-run recovery below depends on.
+
 A partial prior run (conformer posted, artifact never reached the server)
 recovers on rerun because both POSTs are attempted every time with the
 same deterministic keys: the conformer POST replays (the server returns
@@ -36,6 +58,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import uuid
 from dataclasses import dataclass
 
 from .errors import E_ALREADY_IMPORTED, E_ARTIFACT_TOO_LARGE, QCSchemaAdapterError
@@ -64,12 +87,14 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def conformers_idempotency_key(canonical_sha256: str) -> str:
-    return f"qcschema:{canonical_sha256[:32]}:conformers"
+def conformers_idempotency_key(canonical_sha256: str, *, nonce: str | None = None) -> str:
+    suffix = f":dup-{nonce}" if nonce else ""
+    return f"qcschema:{canonical_sha256[:32]}:conformers{suffix}"
 
 
-def artifact_idempotency_key(canonical_sha256: str) -> str:
-    return f"qcschema:{canonical_sha256[:32]}:artifact"
+def artifact_idempotency_key(canonical_sha256: str, *, nonce: str | None = None) -> str:
+    suffix = f":dup-{nonce}" if nonce else ""
+    return f"qcschema:{canonical_sha256[:32]}:artifact{suffix}"
 
 
 @dataclass
@@ -116,6 +141,7 @@ def upload_record(
     artifact_filename: str,
     allow_duplicate: bool = False,
     dry_run: bool = False,
+    duplicate_nonce: str | None = None,
 ) -> UploadOutcome | dict:
     """Precheck, then POST the conformer and its raw-artifact sidecar.
 
@@ -124,6 +150,10 @@ def upload_record(
     :param dry_run: When True, build and validate keys without sending
         any request; returns a plan dict instead of an
         :class:`UploadOutcome`.
+    :param duplicate_nonce: Only consulted when ``allow_duplicate=True``.
+        Overrides the freshly-minted ``uuid4`` nonce with a caller-supplied
+        one -- for deterministic tests only; a real CLI invocation always
+        lets this default and mints its own.
     :raises QCSchemaAdapterError: ``artifact_too_large`` or
         ``already_imported``.
     """
@@ -136,8 +166,13 @@ def upload_record(
             bytes=raw_bytes_len,
         )
 
-    conformers_key = conformers_idempotency_key(record.canonical_sha256)
-    artifact_key = artifact_idempotency_key(record.canonical_sha256)
+    # See the "--allow-duplicate and idempotency keys" module docstring
+    # section: without a fresh nonce per run, --allow-duplicate would only
+    # skip the precheck refusal while still sending the same (key, body)
+    # pair, which the backend replays rather than duplicates.
+    nonce = (duplicate_nonce or uuid.uuid4().hex[:12]) if allow_duplicate else None
+    conformers_key = conformers_idempotency_key(record.canonical_sha256, nonce=nonce)
+    artifact_key = artifact_idempotency_key(record.canonical_sha256, nonce=nonce)
 
     if dry_run:
         return {

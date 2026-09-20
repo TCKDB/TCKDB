@@ -44,8 +44,14 @@ E_JOB_FAILED = "job_failed"
 #: ``reader.py``.
 E_SCHEMA_VERSION_FAMILY_MISMATCH = "schema_version_family_mismatch"
 
-#: A driver-gradient or driver-hessian ``properties.return_energy`` value
-#: contradicts an independently supplied energy for the same record.
+#: A driver-``energy`` document's ``properties.return_energy`` contradicts
+#: its own ``return_result`` for the same record (both are present, and
+#: disagree beyond ``_ENERGY_TOLERANCE_HARTREE``). Driver ``gradient`` and
+#: driver ``hessian`` never reach this check -- gradient has no independent
+#: energy to contradict return_result with (it maps ``return_energy``
+#: itself as the sp energy, or refuses ``sp_energy_unavailable`` if that is
+#: absent -- see below), and hessian carries no ``properties.return_energy``
+#: check at all today.
 E_ENERGY_CONTRADICTION = "energy_contradiction"
 
 #: A driver-gradient document has no ``properties.return_energy`` to map
@@ -73,6 +79,13 @@ E_NON_INTEGER_IDENTITY = "non_integer_identity"
 
 #: The recovered Hessian is not numerically symmetric within tolerance.
 E_HESSIAN_ASYMMETRIC = "hessian_asymmetric"
+
+#: An ``OptimizationResult`` names no ESS software: its trajectory was
+#: dropped by protocols (empty) *and* the optimizer's own input carries no
+#: ``program`` keyword to fall back to. There is no field left to name the
+#: program that actually computed the energies/gradients the optimizer
+#: consumed.
+E_ESS_PROVENANCE_UNAVAILABLE = "ess_provenance_unavailable"
 
 #: Raw artifact bytes exceed the 50 MB cap.
 E_ARTIFACT_TOO_LARGE = "artifact_too_large"
