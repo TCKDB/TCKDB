@@ -141,6 +141,46 @@ class ArticleBytes:
     member_paths: tuple[str, str]
 
 
+#: Placeholder JSON twin for a document that has none -- the MD5
+#: cross-check :func:`select_article` performs is an archive-specific
+#: integrity guard against the tarball's own embedded checksum; a
+#: standalone document (CLI ``--file`` or the upload route) has no JSON
+#: twin to cross-check against, and this constant documents that at the
+#: one place it is manufactured rather than at every call site.
+_NO_JSON_TWIN = b"{}"
+
+
+def build_standalone_article(xml_bytes: bytes, *, label: str) -> ArticleBytes:
+    """Wrap raw XML bytes with no JSON twin as an :class:`ArticleBytes`,
+    for a document that did not come from the pinned bulk archive.
+
+    Shared by the CLI's ``--file`` mode and the ``POST /uploads/thermoml``
+    route (Phase C-E6 review round 2, F8) -- previously each built its own
+    copy of this four-line construction, which could silently drift (e.g.
+    one computing ``json_sha256`` over different placeholder bytes than
+    the other).
+
+    :param xml_bytes: The document's raw bytes, exactly as read from disk
+        or decoded from the upload request.
+    :param label: A **display-only** string recorded as
+        ``member_paths[0]`` -- e.g. the local file path for the CLI, or
+        ``f"upload:{filename}"`` for the route. This is never a
+        retrievable location (unlike an archive member path, which names
+        a real position inside the pinned, digest-verified tarball) --
+        callers must not treat it as one. See
+        ``app.services.thermoml_cp_import._raw_uri_for``'s
+        ``allow_member_path_fallback`` parameter, which is ``False`` for
+        every :class:`ArticleBytes` this function builds.
+    """
+    return ArticleBytes(
+        xml=xml_bytes,
+        json_bytes=_NO_JSON_TWIN,
+        xml_sha256=hashlib.sha256(xml_bytes).hexdigest(),
+        json_sha256=hashlib.sha256(_NO_JSON_TWIN).hexdigest(),
+        member_paths=(label, ""),
+    )
+
+
 def _doi_prefix_suffix(doi: str) -> tuple[str, str]:
     prefix, sep, suffix = doi.partition("/")
     if not sep or not prefix or not suffix:
@@ -330,6 +370,7 @@ __all__ = [
     "ArticleIntegrityError",
     "ArticleNotFoundError",
     "UnverifiedUrlError",
+    "build_standalone_article",
     "fetch_archive",
     "select_article",
     "write_snapshot",

@@ -1990,6 +1990,57 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "reasons; archive recovery remains available. Reclassify before "
                 "exposing upload-equivalent export through an API."
             )),
+    ApiCode("thermoml_doi_conflict", 422, Surface.coded_exception,
+            "backend/app/api/routes/uploads.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /uploads/thermoml (Phase C-E6). context carries "
+                "declared_doi (the request's own doi field, if given) and "
+                "file_doi (the uploaded document's own Citation/sDOI) -- "
+                "the two things that disagreed. Raised via "
+                "ThermoMLDoiConflictError from app.services."
+                "thermoml_cp_import before anything is written."
+            )),
+    ApiCode("thermoml_file_too_large", 422, Surface.coded_exception,
+            "backend/app/api/routes/uploads.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /uploads/thermoml (Phase C-E6). Cap family (the "
+                "2026-08-18 precedent set by geometry_too_large et al.). "
+                "context carries max_bytes (the configured cap, reused "
+                "from app.services.artifact_storage.MAX_ARTIFACT_BYTES -- "
+                "no second size policy for one more upload route) and, "
+                "once decoded, given_bytes -- a property of the one file "
+                "the caller uploaded, not a measurement of how much data "
+                "exists server-side."
+            )),
+    ApiCode("thermoml_invalid_base64", 422, Surface.coded_exception,
+            "backend/app/api/routes/uploads.py",
+            note=(
+                "POST /uploads/thermoml (Phase C-E6). content_base64 did "
+                "not decode; raised before any size check that assumes "
+                "decoded bytes."
+            )),
+    ApiCode("thermoml_no_supported_content", 422, Surface.coded_exception,
+            "backend/app/api/routes/uploads.py",
+            note=(
+                "POST /uploads/thermoml (Phase C-E6). A schema-valid "
+                "ThermoML document mapped zero Cp(T) payloads (e.g. "
+                "liquid-only or mixture-only content) -- refused before "
+                "any custody, literature or object-store write, rather "
+                "than silently opening an empty submission. context.reasons "
+                "carries the mapping report's unsupported/rejected reasons."
+            ),
+            shape=Shape.relationship),
+    ApiCode("thermoml_schema_invalid", 422, Surface.coded_exception,
+            "backend/app/api/routes/uploads.py",
+            note=(
+                "POST /uploads/thermoml (Phase C-E6). The uploaded "
+                "document failed XSD validation "
+                "(app.importers.thermoml.validate.validate_bytes) and was "
+                "never parsed. detail carries the validator's own "
+                "messages."
+            )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),

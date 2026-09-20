@@ -147,9 +147,28 @@ def test_the_model_list_is_derived_and_not_empty():
     assert {"ThermoUploadRequest", "ConformerUploadRequest", "ComputedReactionUploadRequest"} <= names
 
 
+#: Phase C-E6's one deliberate exception: ``rights`` is *required* on
+#: ``ThermoMLUploadRequest``, not optional. Every other upload route can
+#: fall back on "attested later, at release time" because the underlying
+#: science already exists in TCKDB under someone's authority; this route's
+#: whole payload *is* a third-party document (a ThermoML XML file) the
+#: depositor is asserting the right to submit, with no NIST/TRC
+#: ``source_terms`` fallback the way the archive-sourced CLI path has. Its
+#: own required-ness is exercised by
+#: ``test_missing_rights_is_refused_by_ordinary_field_requiredness`` in
+#: ``backend/tests/api/test_api_thermoml_upload.py``, not here.
+_OPTIONAL_RIGHTS_EXEMPT = {"ThermoMLUploadRequest"}
+
+
 @pytest.mark.parametrize("model", [*_MODELS, BundleSubmissionMetadata], ids=lambda m: m.__name__)
 def test_every_upload_contract_exposes_rights(model):
     field = model.model_fields.get("rights")
     assert field is not None, f"{model.__name__} has no `rights` field"
-    assert field.default is None, f"{model.__name__}.rights must default to None (optional in v1)"
     assert "DepositRights" in repr(field.annotation)
+    if model.__name__ in _OPTIONAL_RIGHTS_EXEMPT:
+        assert field.is_required(), (
+            f"{model.__name__}.rights is listed as a deliberate "
+            "required-rights exception but is not actually required"
+        )
+        return
+    assert field.default is None, f"{model.__name__}.rights must default to None (optional in v1)"
