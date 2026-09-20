@@ -17,6 +17,7 @@ Correspondence (skeleton line -> generator) is in
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from collections import Counter
 from importlib import metadata
@@ -35,14 +36,17 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationType,
     DatasetReleaseStatus,
+    ExternalSourceRecordKind,
     RecordReviewStatus,
     ReleaseSelectionAction,
     SubmissionRecordType,
 )
 from app.db.models.dataset_release import DatasetRelease, ReleaseSelection
+from app.db.models.external_source import ExternalSourceRecord
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.network import Network
 from app.db.models.reaction import ChemReaction, ReactionEntry
+from app.db.models.record_machine_review import RecordMachineReviewRow
 from app.db.models.record_review import RecordReview
 from app.db.models.software import SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
@@ -50,6 +54,7 @@ from app.db.models.submission import Submission, SubmissionRecordLink
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.workflow import WorkflowToolRelease
+from app.services.external_comparison.cp import RUNNER_VERSION as EXTERNAL_CP_COMPARISON_RUNNER_VERSION
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -430,11 +435,125 @@ def mechanism_fixture_provenance(session: Session) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Phase C-E4 demonstration -- computed Cp against external ThermoML data
+# ---------------------------------------------------------------------------
+
+
+def experimental_cp_comparison(session: Session) -> dict[str, Any]:
+    """Latest ``external_cp_comparison_v1`` review-tier row per thermo record.
+
+    ``record_machine_review`` is a private, append-only table with no public
+    ref of its own (``docs/specs/record_machine_review_policy.md``), so this
+    reads it directly through the ORM the way every other generator reads its
+    tables, and renders only what a reader needs: the thermo and species it
+    is about (by public ref), the review's status and rubric version, and
+    every field of every per-observation finding -- decoded back out of the
+    finding's ``message`` (see ``app.services.external_comparison.cp``, whose
+    fixed :class:`~app.services.machine_review.schemas.MachineReviewFinding`
+    shape carries the full per-observation comparison as canonical JSON
+    there because it has no free-form numeric field of its own). No
+    accuracy threshold is applied here or anywhere upstream of it (ADR 0008;
+    ``docs/research/tckdb-phase-c-implementation-plan.md`` C4) -- this
+    generator reports residuals, never a verdict on them.
+    """
+    rows = list(
+        session.scalars(
+            select(RecordMachineReviewRow).where(
+                RecordMachineReviewRow.model == EXTERNAL_CP_COMPARISON_RUNNER_VERSION,
+                RecordMachineReviewRow.record_type == SubmissionRecordType.thermo,
+            )
+        )
+    )
+    latest_by_thermo_id: dict[int, RecordMachineReviewRow] = {}
+    for row in rows:
+        current = latest_by_thermo_id.get(row.record_id)
+        if current is None or (row.reviewed_at, row.id) > (current.reviewed_at, current.id):
+            latest_by_thermo_id[row.record_id] = row
+
+    comparisons: list[dict[str, Any]] = []
+    for thermo_id, row in latest_by_thermo_id.items():
+        thermo = session.get(Thermo, thermo_id)
+        if thermo is None:
+            continue
+        species_entry = thermo.species_entry
+        findings = []
+        for raw_finding in row.findings_json:
+            detail = json.loads(raw_finding["message"])
+            findings.append({"severity": raw_finding["severity"], **detail})
+        findings.sort(key=lambda f: (f["temperature_k"], f["observation_ref"]))
+        comparisons.append(
+            {
+                "thermo_ref": thermo.public_ref,
+                "species_ref": species_entry.species.public_ref,
+                "species_entry_ref": species_entry.public_ref,
+                "species_smiles": species_entry.species.smiles,
+                "status": row.status.value,
+                "rubric_versions": dict(row.rubric_versions_json),
+                "reviewed_at": row.reviewed_at,
+                "findings": findings,
+                "finding_count": len(findings),
+            }
+        )
+    comparisons.sort(key=lambda c: (c["species_ref"], c["thermo_ref"]))
+    return {"comparisons": comparisons, "thermo_count": len(comparisons)}
+
+
+def _mapping_report_counts(mapping_report: dict[str, Any] | None) -> dict[str, Any]:
+    """Collapse a mapping report to counts: list/dict length, scalar as-is."""
+    if not mapping_report:
+        return {}
+    return {
+        key: (len(value) if isinstance(value, (list, dict)) else value)
+        for key, value in sorted(mapping_report.items())
+    }
+
+
+def thermoml_source_provenance(session: Session) -> dict[str, Any]:
+    """Every ThermoML article custody row: source, digest, parser/mapping versions.
+
+    One row per ``external_source_record`` of kind ``thermoml_article`` --
+    the Phase C-E1 custody chain (C2 design note) an importer attaches
+    instead of the CCCBDB importer's flattened ``external_source_*``
+    columns. Reports the natural per-value ``source_record_key``, never the
+    row's internal id.
+    """
+    records = list(
+        session.scalars(
+            select(ExternalSourceRecord).where(
+                ExternalSourceRecord.record_kind == ExternalSourceRecordKind.thermoml_article
+            )
+        )
+    )
+    rows: list[dict[str, Any]] = []
+    for record in records:
+        source = record.external_source
+        rows.append(
+            {
+                "source_name": source.source_name,
+                "source_release": source.source_release,
+                "source_database_doi": source.source_database_doi,
+                "record_key": record.source_record_key,
+                "content_sha256": record.content_sha256,
+                "schema_id": record.schema_id,
+                "schema_valid": record.schema_valid,
+                "parser_name": record.parser_name,
+                "parser_version": record.parser_version,
+                "mapping_version": record.mapping_version,
+                "mapping_report_counts": _mapping_report_counts(record.mapping_report_json),
+            }
+        )
+    rows.sort(key=lambda r: r["record_key"])
+    return {"thermoml_source_records": rows, "record_count": len(rows)}
+
+
 __all__ = [
     "candidate_lineage",
     "corpus_counts",
+    "experimental_cp_comparison",
     "mechanism_fixture_provenance",
     "mechanism_roundtrip_counts",
     "selected_thermo_by_species",
+    "thermoml_source_provenance",
     "transition_state_evidence",
 ]

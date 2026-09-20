@@ -1,0 +1,511 @@
+"""Tests for the review-tier external-Cp-comparison runner (Phase C-E4).
+
+Before this runner existed, ``CheckTier.review`` (``app/scientific_checks/
+__init__.py``) had zero declared members and nothing in TCKDB compared a
+computed thermo record against an external observation -- confirmed by
+``git show main:backend/app/scientific_checks/declarations.py | grep -c
+'CheckTier.review'`` returning 0. This module is the red-to-green test for
+that gap: a species entry with a computed NASA-7 thermo and three
+``heat_capacity_cp`` observation rows yields one ``record_machine_review``
+row with three findings.
+
+Every test below is written to fail under a specific mutation (noted in each
+docstring), per the house rule against vacuous tests: a check that always
+passes proves nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from datetime import datetime
+
+import pytest
+from sqlalchemy import select
+
+from app.db.models.common import (
+    ExternalSourceRecordKind,
+    MolecularPropertyKind,
+    ObservedStateBasis,
+    ObservedUncertaintyAssessor,
+    ObservedUncertaintyKind,
+    ScientificOriginKind,
+)
+from app.db.models.external_source import ExternalSource, ExternalSourceRecord
+from app.db.models.molecular_property_observation import MolecularPropertyObservation
+from app.db.models.record_machine_review import RecordMachineReviewRow
+from app.db.models.thermo import Thermo
+from app.services.external_comparison.cp import (
+    ExternalCpComparisonConfigurationError,
+    compare_thermo_with_cp_observations,
+    run_and_record,
+)
+from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V1
+from tests.services.scientific_read._factories import (
+    attach_thermo_nasa,
+    attach_thermo_nasa9,
+    attach_thermo_points,
+    make_species,
+    make_species_entry,
+    make_thermo_scalar,
+)
+
+_R = 8.314462618  # J/(mol*K), CODATA molar gas constant.
+
+# The factory's default NASA-7 (see attach_thermo_nasa): a1..a5 = 3.5,0,0,0,0
+# (low range, T in [200, 1000)) and b1..b5 = 3.2,0,0,0,0 (high range, T in
+# [1000, 6000]). Both are T-independent, so the hand-calculated Cp is exact
+# at any temperature in each range -- not just at one sampled point.
+_CP_LOW_RANGE_J_MOL_K = 3.5 * _R
+_CP_HIGH_RANGE_J_MOL_K = 3.2 * _R
+
+
+def _make_thermo(session, *, smiles: str, tmin_k: float = 200.0, tmax_k: float = 6000.0) -> Thermo:
+    species = make_species(session, smiles=smiles)
+    entry = make_species_entry(session, species=species)
+    return make_thermo_scalar(
+        session,
+        species_entry=entry,
+        scientific_origin=ScientificOriginKind.computed,
+        tmin_k=tmin_k,
+        tmax_k=tmax_k,
+    )
+
+
+def _make_observation(
+    session,
+    *,
+    thermo: Thermo,
+    temperature_k: float,
+    scalar_value: float,
+    state_basis: ObservedStateBasis = ObservedStateBasis.ideal_gas,
+    pressure_bar: float | None = None,
+    uncertainty_kind: ObservedUncertaintyKind | None = None,
+    scalar_uncertainty: float | None = None,
+    uncertainty_coverage_factor: float | None = None,
+    uncertainty_assessor: ObservedUncertaintyAssessor | None = None,
+    method_note: str | None = None,
+    external_source_record: ExternalSourceRecord | None = None,
+) -> MolecularPropertyObservation:
+    obs = MolecularPropertyObservation(
+        species_entry_id=thermo.species_entry_id,
+        scientific_origin=ScientificOriginKind.experimental,
+        property_kind=MolecularPropertyKind.heat_capacity_cp,
+        scalar_value=scalar_value,
+        scalar_unit="J/mol/K",
+        scalar_uncertainty=scalar_uncertainty,
+        temperature_k=temperature_k,
+        pressure_bar=pressure_bar,
+        state_basis=state_basis,
+        uncertainty_kind=uncertainty_kind,
+        uncertainty_coverage_factor=uncertainty_coverage_factor,
+        uncertainty_assessor=uncertainty_assessor,
+        method_note=method_note,
+        external_source_record_id=(
+            external_source_record.id if external_source_record is not None else None
+        ),
+    )
+    session.add(obs)
+    session.flush()
+    return obs
+
+
+def _make_external_source_record(session, *, key: str) -> ExternalSourceRecord:
+    source = ExternalSource(source_name="NIST ThermoML Archive", source_release="test-release")
+    session.add(source)
+    session.flush()
+    record = ExternalSourceRecord(
+        external_source_id=source.id,
+        record_kind=ExternalSourceRecordKind.thermoml_article,
+        source_uri="https://trc.nist.gov/ThermoML/test.xml",
+        source_record_key=key,
+        retrieved_at=datetime(2026, 9, 1, 12, 0, 0),
+        content_sha256="a" * 64,
+        content_length=1234,
+        raw_uri="artifacts/test",
+        parser_name="thermoml_cp_parser",
+        parser_version="1.0.0",
+        mapping_version="1.0.0",
+    )
+    session.add(record)
+    session.flush()
+    return record
+
+
+# --------------------------------------------------------------------------- #
+# The reproduction test: one thermo + three observations -> one row, three
+# findings.
+# --------------------------------------------------------------------------- #
+
+
+def test_computed_thermo_with_three_cp_observations_yields_one_row_three_findings(db_session):
+    thermo = _make_thermo(db_session, smiles="c1ccccc1")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+    _make_observation(db_session, thermo=thermo, temperature_k=400.0, scalar_value=95.0)
+    _make_observation(db_session, thermo=thermo, temperature_k=500.0, scalar_value=105.0)
+
+    row = run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    assert isinstance(row, RecordMachineReviewRow)
+    assert row.record_id == thermo.id
+    assert len(row.findings_json) == 3
+
+    count = db_session.scalar(
+        select(RecordMachineReviewRow).where(RecordMachineReviewRow.record_id == thermo.id)
+    )
+    assert count is not None
+
+
+# --------------------------------------------------------------------------- #
+# NASA-7 Cp at a known T matches a hand-computed value.
+# Mutation: perturb one coefficient -> the hand-calc no longer matches -> red.
+# Mutation: use the wrong J/kmol->J/mol conversion -> off by 1000x -> red.
+# --------------------------------------------------------------------------- #
+
+
+def test_nasa7_cp_matches_hand_calculated_polynomial_value(db_session):
+    thermo = _make_thermo(db_session, smiles="CC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=0.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    assert result.representation == "nasa7"
+    (comparison,) = result.comparisons
+    assert comparison.cp_computed_j_mol_k == pytest.approx(_CP_LOW_RANGE_J_MOL_K, rel=1e-9)
+
+
+def test_nasa7_cp_in_high_temperature_range_matches_hand_calculated_value(db_session):
+    thermo = _make_thermo(db_session, smiles="CCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=1500.0, scalar_value=0.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.cp_computed_j_mol_k == pytest.approx(_CP_HIGH_RANGE_J_MOL_K, rel=1e-9)
+
+
+def test_j_per_kmol_k_to_j_per_mol_k_conversion_constant_is_one_over_1000():
+    """Direct guard on the named unit constant (mutation: swap 1000 for 1 -> red)."""
+    from app.services.external_comparison.cp import _J_PER_KMOL_K_TO_J_PER_MOL_K
+
+    assert _J_PER_KMOL_K_TO_J_PER_MOL_K == pytest.approx(1.0 / 1000.0)
+    # And exercised end-to-end: a deliberately wrong constant would make this fail.
+    assert 29071.02 * _J_PER_KMOL_K_TO_J_PER_MOL_K == pytest.approx(29.07102, rel=1e-6)
+
+
+# --------------------------------------------------------------------------- #
+# NASA-9.
+# --------------------------------------------------------------------------- #
+
+
+def test_nasa9_cp_matches_hand_calculated_polynomial_value(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCC")
+    intervals = attach_thermo_nasa9(db_session, thermo=thermo)
+    # attach_thermo_nasa9's first interval: a1..a7 = 1,2,3,4,5,6,7; T in [200, 1000).
+    t = 500.0
+    a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+    cp_over_r = a[0] * t**-2 + a[1] * t**-1 + a[2] + a[3] * t + a[4] * t**2 + a[5] * t**3 + a[6] * t**4
+    expected = cp_over_r * _R
+    _make_observation(db_session, thermo=thermo, temperature_k=t, scalar_value=0.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    assert result.representation == "nasa9"
+    (comparison,) = result.comparisons
+    assert comparison.cp_computed_j_mol_k == pytest.approx(expected, rel=1e-9)
+    assert len(intervals) == 2
+
+
+# --------------------------------------------------------------------------- #
+# Point representation compares only at an exact match.
+# Mutation: interpolate between neighboring points -> red (this test pins
+# "no exact match" to not_comparable, which an interpolating implementation
+# would violate).
+# --------------------------------------------------------------------------- #
+
+
+def test_point_representation_compares_only_at_exact_temperature_match(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCC")
+    attach_thermo_points(
+        db_session,
+        thermo=thermo,
+        temperatures_k=[300.0, 400.0, 500.0],
+        cp_j_mol_k=[90.0, 100.0, 110.0],
+    )
+    _make_observation(db_session, thermo=thermo, temperature_k=400.0, scalar_value=99.0)
+    _make_observation(db_session, thermo=thermo, temperature_k=350.0, scalar_value=95.0)  # no exact point
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    assert result.representation == "point"
+    by_t = {c.temperature_k: c for c in result.comparisons}
+
+    exact = by_t[400.0]
+    assert exact.comparability == "comparable"
+    assert exact.cp_computed_j_mol_k == pytest.approx(100.0)
+    assert exact.residual_j_mol_k == pytest.approx(100.0 - 99.0)
+
+    no_match = by_t[350.0]
+    assert no_match.comparability == "not_comparable"
+    assert no_match.comparability_reason == "no_exact_matching_point"
+    assert no_match.cp_computed_j_mol_k is None
+    assert no_match.residual_j_mol_k is None
+
+
+# --------------------------------------------------------------------------- #
+# real_gas rows are comparable with non_ideality: unquantified, carrying the
+# observed pressure, and still report a residual.
+# Mutation: mark them not_comparable instead -> red.
+# --------------------------------------------------------------------------- #
+
+
+def test_real_gas_observation_is_comparable_with_unquantified_non_ideality_and_pressure(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(
+        db_session,
+        thermo=thermo,
+        temperature_k=298.15,
+        scalar_value=80.0,
+        state_basis=ObservedStateBasis.real_gas,
+        pressure_bar=5.0,
+    )
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.state_basis == "real_gas"
+    assert comparison.non_ideality == "unquantified"
+    assert comparison.pressure_bar == pytest.approx(5.0)
+    assert comparison.comparability == "comparable"
+    assert comparison.residual_j_mol_k is not None
+    assert comparison.residual_j_mol_k == pytest.approx(_CP_LOW_RANGE_J_MOL_K - 80.0)
+
+
+def test_ideal_gas_observation_carries_no_non_ideality_flag(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(
+        db_session,
+        thermo=thermo,
+        temperature_k=298.15,
+        scalar_value=80.0,
+        state_basis=ObservedStateBasis.ideal_gas,
+    )
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.non_ideality is None
+    assert comparison.comparability == "comparable"
+
+
+# --------------------------------------------------------------------------- #
+# Temperature outside the NASA fit range -> not_comparable.
+# Mutation: extrapolate anyway -> red.
+# --------------------------------------------------------------------------- #
+
+
+def test_temperature_outside_nasa_fit_range_is_not_comparable(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo, t_low=200.0, t_mid=1000.0, t_high=2000.0)
+    _make_observation(db_session, thermo=thermo, temperature_k=2500.0, scalar_value=80.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.comparability == "not_comparable"
+    assert comparison.comparability_reason == "temperature_outside_fit_range"
+    assert comparison.t_in_range is False
+    assert comparison.cp_computed_j_mol_k is None
+    assert comparison.residual_j_mol_k is None
+
+
+# --------------------------------------------------------------------------- #
+# No mutation of thermo or observation columns after a run.
+# Mutation: have the runner set a status/flag on the observation or thermo
+# row -> red (this test reads every touched column back and diffs).
+# --------------------------------------------------------------------------- #
+
+
+def test_run_and_record_mutates_no_thermo_or_observation_column(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    obs = _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    before_thermo = {c.name: getattr(thermo, c.name) for c in Thermo.__table__.columns}
+    before_obs = {
+        c.name: getattr(obs, c.name) for c in MolecularPropertyObservation.__table__.columns
+    }
+
+    run_and_record(db_session, thermo.id)
+    db_session.flush()
+    db_session.expire(thermo)
+    db_session.expire(obs)
+
+    after_thermo = {c.name: getattr(thermo, c.name) for c in Thermo.__table__.columns}
+    after_obs = {c.name: getattr(obs, c.name) for c in MolecularPropertyObservation.__table__.columns}
+
+    assert after_thermo == before_thermo
+    assert after_obs == before_obs
+
+
+# --------------------------------------------------------------------------- #
+# The machine-review row carries the rubric version and a context hash that
+# changes when an observation is added.
+# Mutation: hard-code a constant hash -> red.
+# --------------------------------------------------------------------------- #
+
+
+def test_record_carries_rubric_version_and_context_hash_changes_with_observations(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    row_one = run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    rubric_key = f"{EXTERNAL_CP_COMPARISON_V1.name}_v{EXTERNAL_CP_COMPARISON_V1.version}"
+    assert row_one.rubric_versions_json == {
+        rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]
+    }
+    assert row_one.context_schema_version
+
+    _make_observation(db_session, thermo=thermo, temperature_k=400.0, scalar_value=90.0)
+    row_two = run_and_record(db_session, thermo.id)
+    db_session.flush()
+
+    assert row_two.context_hash != row_one.context_hash
+    assert len(row_two.findings_json) == 2
+
+
+# --------------------------------------------------------------------------- #
+# Cantera absent -> configuration error, no row.
+# --------------------------------------------------------------------------- #
+
+
+def test_missing_cantera_raises_configuration_error_and_writes_no_row(db_session, monkeypatch):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    monkeypatch.setitem(sys.modules, "cantera", None)
+
+    before = db_session.scalar(
+        select(RecordMachineReviewRow).where(RecordMachineReviewRow.record_id == thermo.id)
+    )
+    assert before is None
+
+    with pytest.raises(ExternalCpComparisonConfigurationError):
+        run_and_record(db_session, thermo.id)
+
+    after = db_session.scalar(
+        select(RecordMachineReviewRow).where(RecordMachineReviewRow.record_id == thermo.id)
+    )
+    assert after is None
+
+
+def test_point_representation_never_imports_cantera(db_session, monkeypatch):
+    """A tabulated-point thermo has no Cantera dependency at all."""
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCC")
+    attach_thermo_points(db_session, thermo=thermo, temperatures_k=[300.0], cp_j_mol_k=[90.0])
+    _make_observation(db_session, thermo=thermo, temperature_k=300.0, scalar_value=88.0)
+
+    monkeypatch.setitem(sys.modules, "cantera", None)
+    row = run_and_record(db_session, thermo.id)
+    assert len(row.findings_json) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Findings carry the custody ref and every required field, decodable from the
+# canonical JSON message.
+# --------------------------------------------------------------------------- #
+
+
+def test_finding_message_decodes_to_every_required_field_including_custody_ref(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    custody = _make_external_source_record(db_session, key="10.1016/j.jct.2013.08.022#P1/V1")
+    _make_observation(
+        db_session,
+        thermo=thermo,
+        temperature_k=298.15,
+        scalar_value=80.0,
+        uncertainty_kind=ObservedUncertaintyKind.expanded,
+        scalar_uncertainty=1.5,
+        uncertainty_coverage_factor=2.0,
+        uncertainty_assessor=ObservedUncertaintyAssessor.source_author,
+        method_note="statistical thermodynamics",
+        external_source_record=custody,
+    )
+
+    row = run_and_record(db_session, thermo.id)
+    (finding,) = row.findings_json
+    detail = json.loads(finding["message"])
+
+    assert detail["observation_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
+    assert detail["external_source_record_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
+    assert detail["temperature_k"] == pytest.approx(298.15)
+    assert detail["cp_observed_j_mol_k"] == pytest.approx(80.0)
+    assert detail["cp_computed_j_mol_k"] == pytest.approx(_CP_LOW_RANGE_J_MOL_K, rel=1e-9)
+    assert detail["uncertainty_kind"] == "expanded"
+    assert detail["uncertainty_coverage_factor"] == pytest.approx(2.0)
+    assert detail["uncertainty_assessor"] == "source_author"
+    assert detail["representation"] == "nasa7"
+    assert detail["comparability"] == "comparable"
+    assert detail["non_ideality"] is None
+    assert finding["severity"] == "info"
+    assert f"observation:{detail['observation_ref']}" in finding["evidence_keys"]
+
+
+def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    obs = _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.external_source_record_ref is None
+    assert str(obs.id) not in comparison.observation_ref
+    assert comparison.observation_ref == "heat_capacity_cp@298.15K=80"
+
+
+# --------------------------------------------------------------------------- #
+# Status is never one that implies approval, and is derived (not invented).
+# --------------------------------------------------------------------------- #
+
+
+def test_status_is_not_an_approval_signal(db_session):
+    from app.services.machine_review.schemas import MachineReviewStatus
+
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCC")
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    row = run_and_record(db_session, thermo.id)
+    # Every finding is severity=info (no ratio is ever judged), so the
+    # record-level status is whatever the shared derivation function maps
+    # an all-info finding set to -- this pins that value stays in sync
+    # with app.services.machine_review.derivation rather than being
+    # hand-picked here.
+    assert row.status is MachineReviewStatus.machine_screened_pass
+    assert row.status is not MachineReviewStatus.not_run
+    assert row.status is not MachineReviewStatus.machine_review_failed
+
+
+# --------------------------------------------------------------------------- #
+# Preconditions that are not findings.
+# --------------------------------------------------------------------------- #
+
+
+def test_non_computed_thermo_raises_value_error_not_a_finding(db_session):
+    species = make_species(db_session, smiles="CCCCCCCCCCCCCCCC")
+    entry = make_species_entry(db_session, species=species)
+    thermo = make_thermo_scalar(
+        db_session, species_entry=entry, scientific_origin=ScientificOriginKind.experimental
+    )
+    with pytest.raises(ValueError, match="computed"):
+        compare_thermo_with_cp_observations(db_session, thermo.id)
+
+
+def test_thermo_with_no_representation_raises_value_error(db_session):
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCC")
+    with pytest.raises(ValueError, match="no NASA-7, NASA-9, or tabulated-point"):
+        compare_thermo_with_cp_observations(db_session, thermo.id)

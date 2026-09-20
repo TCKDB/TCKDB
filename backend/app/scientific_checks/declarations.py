@@ -79,6 +79,7 @@ from app.scientific_checks import (
     collect_constraint_rejections,
     collect_registered_checks,
 )
+from app.scientific_checks import external_comparison as external_comparison_checks
 from app.services import (
     calculation_geometry_composition,
     charge_multiplicity_reconciliation,
@@ -1302,6 +1303,7 @@ DECLARING_MODULES: tuple[ModuleType, ...] = (
     chemistry_species,
     chemistry_units,
     charge_multiplicity_reconciliation,
+    external_comparison_checks,
     frequency_geometry_linearity,
     geometry_validation_service,
     reaction_atom_map_service,
