@@ -663,3 +663,31 @@ def test_pressure_source_recorded_constraint_vs_variable():
     no_pressure_result = _map("cp_ideal_gas_no_pressure.xml")
     for payload in no_pressure_result.payloads:
         assert payload.raw_payload_json["thermoml"]["pressure_source"] is None
+
+
+def test_identity_hint_uses_tckdb_key_names_and_keeps_thermoml_names():
+    """The resolver reads ``inchikey``; the source's element names survive
+    under ``thermoml_identifiers``. Renaming ``inchikey`` turns this red."""
+    from app.importers.thermoml.mapping import _identity_hint
+    from app.importers.thermoml.models import ThermoMLCompound
+
+    compound = ThermoMLCompound(
+        **{
+            **{f.name: None for f in ThermoMLCompound.__dataclass_fields__.values()},
+            "standard_inchi_key": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
+            "standard_inchi": "InChI=1S/C6H6/c1-2-4-6-5-3-1/h1-6H",
+            "smiles": ("c1ccccc1",),
+            "formula_molec": "C6H6",
+            "common_names": ("benzene",),
+            "cas_rn": "71-43-2",
+        }
+    )
+    hint = _identity_hint(compound)
+    assert hint["inchikey"] == "UHOVQNZJYSORNB-UHFFFAOYSA-N"
+    assert hint["inchi"].startswith("InChI=1S/C6H6")
+    assert hint["smiles"] == ["c1ccccc1"]
+    assert hint["formula"] == "C6H6"
+    assert hint["cas"] == "71-43-2"
+    assert hint["names"] == ["benzene"]
+    assert hint["thermoml_identifiers"]["sStandardInChIKey"] == hint["inchikey"]
+    assert "standard_inchi_key" not in hint

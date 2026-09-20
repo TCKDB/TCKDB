@@ -195,13 +195,28 @@ class ThermoMLMappingResult(BaseModel):
 
 
 def _identity_hint(compound: ThermoMLCompound) -> dict[str, Any]:
+    """The identity hint under TCKDB's own key names.
+
+    The persistence layer's identity resolver (shared with the CCCBDB
+    importer) reads ``hint["inchikey"]``; ThermoML's element names are kept
+    verbatim under ``thermoml_identifiers`` so nothing about the source is
+    lost, and nothing about TCKDB's vocabulary is dictated by the source.
+    """
     return {
-        "standard_inchi": compound.standard_inchi,
-        "standard_inchi_key": compound.standard_inchi_key,
+        "inchikey": compound.standard_inchi_key,
+        "inchi": compound.standard_inchi,
         "smiles": list(compound.smiles),
-        "formula_molec": compound.formula_molec,
-        "common_names": list(compound.common_names),
-        "cas_rn": compound.cas_rn,
+        "formula": compound.formula_molec,
+        "cas": compound.cas_rn,
+        "names": list(compound.common_names),
+        "thermoml_identifiers": {
+            "sStandardInChI": compound.standard_inchi,
+            "sStandardInChIKey": compound.standard_inchi_key,
+            "sSmiles": list(compound.smiles),
+            "sFormulaMolec": compound.formula_molec,
+            "sCommonName": list(compound.common_names),
+            "nCASRNum": compound.cas_rn,
+        },
     }
 
 

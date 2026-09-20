@@ -182,7 +182,7 @@ class TestJctTwoComponentsInOneArticle:
         result = _map_real_doi(self.DOI)
         assert len(result.payloads) == 122
         assert len(result.report.identity) == 2
-        keys = {ident["standard_inchi_key"] for ident in result.report.identity}
+        keys = {ident["inchikey"] for ident in result.report.identity}
         assert keys == {"DFRHTHSZMBROSH-UHFFFAOYSA-N", "KZPXREABEBSAQM-UHFFFAOYSA-N"}
 
     def test_state_basis_is_real_gas_pressure_constraint_sourced(self):
@@ -209,7 +209,7 @@ class TestTcaWaterMultiComponentBlocksSkipped:
     def test_single_water_payload(self):
         result = _map_real_doi(self.DOI)
         assert len(result.payloads) == 1
-        assert result.report.identity[0]["standard_inchi_key"] == "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
+        assert result.report.identity[0]["inchikey"] == "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
 
     def test_state_basis_real_gas_pressure_variable_sourced(self):
         result = _map_real_doi(self.DOI)
