@@ -19,7 +19,7 @@ Design contract
 
 * **Layering.** This module imports ``app.importers.thermoml``'s parser,
   mapper and validator (pure functions, no I/O) -- never its archive
-  fetcher, and never a per-family upload workflow module (this service
+  fetch/select functions, and never a per-family upload workflow module (this service
   composes lower-level primitives -- rights, submission, literature,
   identity -- directly). The importer package must never import this
   module back -- enforced by

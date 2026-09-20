@@ -347,7 +347,7 @@ Design.
   data license because the match is exact. Literature resolves through
   `resolve_or_create_literature` (`backend/app/services/literature_resolution.py:307`).
   The service imports the importer package's parser, mapper and validator
-  (pure functions, no I/O) but never its archive fetcher and never a
+  (pure functions, no I/O) but never its archive fetch/select functions and never a
   per-family upload workflow module; the importer package never imports the
   service back, mirroring the existing layering test. CLI
   `backend/scripts/thermoml_cp_import.py --doi … [--commit]`.

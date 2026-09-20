@@ -267,10 +267,21 @@ class TestDryRunVsCommit:
         import uuid
 
         from app.services.artifact_storage import (
+            S3_BUCKET,
+            _get_s3_client,
             content_addressed_key,
             delete_artifact_object,
             head_artifact_object,
         )
+
+        # Precondition, stated rather than implied: ``head_artifact_object``
+        # returns ``None`` for "absent" AND for "unreachable", so without a
+        # live object store the assertions below would be vacuously green.
+        # Fail loudly instead of passing having verified nothing.
+        try:
+            _get_s3_client().head_bucket(Bucket=S3_BUCKET)
+        except Exception as exc:  # any failure at all means "no store"
+            pytest.fail(f"object store unreachable; this test needs MinIO: {exc!r}")
 
         article = _fluoroethane_article_with_nonce(uuid.uuid4().hex)
         sha256 = article.xml_sha256
@@ -305,7 +316,11 @@ class TestDryRunVsCommit:
         finally:
             # Defensive: only fires if the guard regressed and the object
             # was actually written, so a red run of this test doesn't
-            # litter the shared local MinIO for the next one.
+            # litter the shared local MinIO for the next one. This is a
+            # deliberate exception to ``delete_artifact_object``'s "only
+            # ``hold_artifact_object`` may call this" contract: the key is
+            # nonce-unique, no row references it, and the transaction has
+            # been rolled back, so nothing can be orphaned by the delete.
             delete_artifact_object(sha256)
 
     def test_commit_persists_rows_with_new_columns_populated(self, db_session, curator):
