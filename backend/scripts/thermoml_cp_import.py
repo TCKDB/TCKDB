@@ -35,7 +35,6 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -47,9 +46,15 @@ from sqlalchemy.orm import Session
 from tckdb_schemas.rights import DepositRights
 
 from app.importers.thermoml import ARCHIVE_URL
-from app.importers.thermoml.archive import ArticleBytes, fetch_archive, select_article
+from app.importers.thermoml.archive import (
+    ArticleBytes,
+    build_standalone_article,
+    fetch_archive,
+    select_article,
+)
 from app.services.thermoml_cp_import import (
     ThermoMLDoiConflictError,
+    ThermoMLNoSupportedContentError,
     import_thermoml_cp_article,
     import_thermoml_cp_upload,
 )
@@ -167,21 +172,13 @@ def _ensure_actor(session: Session, username: str):
 def _article_from_file(path: Path) -> ArticleBytes:
     """Wrap a standalone ThermoML XML file as :class:`ArticleBytes`.
 
-    There is no JSON twin for a standalone file (that cross-check is a
-    bulk-archive-specific integrity guard -- see
-    ``app.importers.thermoml.archive.select_article``), so
-    ``json_bytes``/``json_sha256`` are placeholders and never consulted
-    by :func:`~app.services.thermoml_cp_import.import_thermoml_cp_upload`.
+    Thin wrapper over :func:`~app.importers.thermoml.archive.
+    build_standalone_article`, the helper shared with the
+    ``POST /uploads/thermoml`` route (Phase C-E6 review round 2, F8), so
+    the two never independently drift on how a from-scratch
+    :class:`ArticleBytes` gets built.
     """
-    xml_bytes = path.read_bytes()
-    placeholder_json = b"{}"
-    return ArticleBytes(
-        xml=xml_bytes,
-        json_bytes=placeholder_json,
-        xml_sha256=hashlib.sha256(xml_bytes).hexdigest(),
-        json_sha256=hashlib.sha256(placeholder_json).hexdigest(),
-        member_paths=(str(path), ""),
-    )
+    return build_standalone_article(path.read_bytes(), label=str(path))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,7 +238,10 @@ def main(argv: list[str] | None = None) -> int:
                     rights=rights,
                     commit=args.commit,
                 )
-            except ThermoMLDoiConflictError as exc:
+            except (
+                ThermoMLDoiConflictError,
+                ThermoMLNoSupportedContentError,
+            ) as exc:
                 _logger.error("%s", exc)
                 return 2
 

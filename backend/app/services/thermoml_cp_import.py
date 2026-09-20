@@ -82,18 +82,24 @@ Design contract
   cheap dedupe-key pre-check *before* any row is written, so it never races
   the per-row ``INSERT ... ON CONFLICT DO NOTHING`` that does the actual,
   authoritative dedupe.
-* **Two attestations, one standing.** ``open_upload_submission`` always
-  records the deposit's ``rights`` fragment as a ``depositor_agreement``
-  attestation (``app.services.rights.attest_from_deposit`` -- it has no
-  other basis to record). That is not the basis this deposit actually
+* **Two attestations, one standing -- archive path only.**
+  ``open_upload_submission`` always records the deposit's ``rights``
+  fragment as a ``depositor_agreement`` attestation
+  (``app.services.rights.attest_from_deposit`` -- it has no other basis to
+  record). On the archive path that is not the basis the deposit actually
   stands on: these rows were not licensed by a depositor's say-so, they
-  were taken from a source whose own published terms permit it. So this
-  service records a second, explicit ``source_terms`` attestation quoting
-  ``TERMS_TEXT`` verbatim right after -- it supersedes the automatic
-  ``depositor_agreement`` row, so the *standing* attestation for the
-  submission is ``source_terms``, honestly naming what license basis the
-  deposit is actually released under. Exactly one ``source_terms``
-  attestation is recorded per submission; never called twice.
+  were taken from NIST/TRC's own published terms. So
+  :func:`_open_submission_with_source_terms_attestation` records a second,
+  explicit ``source_terms`` attestation quoting ``TERMS_TEXT`` verbatim
+  right after -- it supersedes the automatic ``depositor_agreement`` row,
+  so the *standing* attestation for the submission is ``source_terms``.
+  Exactly one ``source_terms`` attestation is recorded per submission;
+  never called twice. **The upload path never does this** -- an uploaded
+  file's ``depositor_agreement`` (the caller's own ``DepositRights``) *is*
+  the basis it stands on, so it is the one and only attestation
+  recorded (:func:`_open_upload_submission_for_depositor`); a
+  ``source_terms`` row there would misattribute the deposit to a source
+  that never produced it.
 * **Reject, don't guess.** A schema-invalid document is never parsed
   (E2's ``validate_bytes`` already refuses it); this service does not
   create a custody row, a submission, or any observation for it.
@@ -222,10 +228,68 @@ _UPLOAD_DOI_FALLBACK_PREFIX = "upload"
 class ThermoMLDoiConflictError(ValueError):
     """A caller-supplied ``doi`` disagrees with the file's own ``sDOI``.
 
-    Raised by :func:`_resolve_upload_doi` (via
-    :func:`import_thermoml_cp_upload`) before anything is validated,
-    parsed or written -- reject, don't guess which one is right.
+    Raised by :func:`_resolve_upload_doi` (via :func:`import_thermoml_cp_
+    upload`'s ``resolve_doi`` closure) *after* the document has been
+    schema-validated and parsed (the file's own ``sDOI`` cannot be read
+    before that), but before anything is written -- reject, don't guess
+    which one is right.
+
+    :ivar declared_doi: The caller-supplied ``doi``, verbatim.
+    :ivar file_doi: The uploaded document's own ``Citation/sDOI``, verbatim.
+        Both are non-``None`` whenever this is raised (see
+        :func:`_resolve_upload_doi` -- it only raises when both are
+        present and disagree).
     """
+
+    def __init__(self, message: str, *, declared_doi: str, file_doi: str) -> None:
+        super().__init__(message)
+        self.declared_doi = declared_doi
+        self.file_doi = file_doi
+
+
+class ThermoMLNoSupportedContentError(ValueError):
+    """A schema-valid document mapped zero Cp(T) payloads.
+
+    Raised only on the **upload** path (:func:`import_thermoml_cp_upload`,
+    via ``_run_pipeline``'s ``refuse_when_unsupported=True``), and only
+    right after :func:`~app.importers.thermoml.mapping.map_document` --
+    before any custody row, literature row or object-store write. The
+    archive path (:func:`import_thermoml_cp_article`,
+    ``refuse_when_unsupported=False``) never raises this: an archive scan
+    across many DOIs has always completed normally with
+    ``inserted_count == 0`` for an article with no usable content (see
+    ``TestSMethodNameAllowlist.test_unknown_smethodname_string_is_rejected``),
+    and nothing in this change disturbs that -- only the upload route,
+    where a 422 response and a silently-populated custody trail would
+    disagree about whether anything happened, needed the harder refusal.
+
+    :ivar mapping_report: The full ``MappingReport`` dict (``transformed``,
+        ``retained_only``, ``unsupported``, ``rejected``, ``counts``) --
+        carried on the exception itself (not read off ``ThermoMLCpImport
+        Result``) because a raised exception never hands the caller that
+        result object.
+    :ivar reasons: Sorted, deduplicated ``reason`` strings pulled from
+        ``mapping_report["unsupported"]`` and ``["rejected"]`` -- the
+        list a caller actually wants to show, without re-deriving it.
+    """
+
+    def __init__(self, mapping_report: dict[str, Any]) -> None:
+        self.mapping_report = mapping_report
+        self.reasons = sorted(
+            {
+                str(entry.get("reason"))
+                for entry in (
+                    *mapping_report.get("unsupported", []),
+                    *mapping_report.get("rejected", []),
+                )
+                if entry.get("reason")
+            }
+        )
+        super().__init__(
+            "thermoml_no_supported_content: no mappable ideal-gas or "
+            "real-gas Cp(T) content was found in this document"
+        )
+
 
 _ACTION_WOULD_INSERT = "would_insert"
 _ACTION_INSERTED = "inserted"
@@ -278,7 +342,9 @@ class ObservationDisposition:
 
 @dataclass
 class ThermoMLCpImportResult:
-    """Aggregate report from one :func:`import_thermoml_cp_article` run."""
+    """Aggregate report from one :func:`import_thermoml_cp_article` (the
+    archive path) or :func:`import_thermoml_cp_upload` (the depositor
+    upload path) run -- both entry points return this same shape."""
 
     doi: str = ""
     schema_valid: bool = True
@@ -381,6 +447,7 @@ def _get_or_create_custody(
     commit: bool,
     source_uri: str,
     container_digest: str | None,
+    allow_member_path_fallback: bool,
 ) -> tuple[ExternalSourceRecord, bool, bool]:
     """Reuse the custody row for this ``(doi, content, parser, mapping)``
     identity if one already exists; otherwise insert one.
@@ -394,6 +461,9 @@ def _get_or_create_custody(
     ever ``True`` when a new row was created during a dry run (see
     :func:`_raw_uri_for`) -- an existing row needed no object-store call at
     all.
+
+    :param allow_member_path_fallback: Forwarded to :func:`_raw_uri_for`
+        -- ``True`` on the archive path, ``False`` on the upload path.
     """
 
     existing = session.scalar(
@@ -408,7 +478,9 @@ def _get_or_create_custody(
     if existing is not None:
         return existing, False, False
 
-    raw_uri, would_store = _raw_uri_for(article, commit=commit)
+    raw_uri, would_store = _raw_uri_for(
+        article, commit=commit, allow_member_path_fallback=allow_member_path_fallback
+    )
     row = ExternalSourceRecord(
         external_source_id=external_source.id,
         # Both channels snapshot the same document shape (a ThermoML
@@ -435,9 +507,12 @@ def _get_or_create_custody(
     return row, True, would_store
 
 
-def _raw_uri_for(article: ArticleBytes, *, commit: bool) -> tuple[str, bool]:
+def _raw_uri_for(
+    article: ArticleBytes, *, commit: bool, allow_member_path_fallback: bool
+) -> tuple[str, bool]:
     """The custody row's ``raw_uri``: a content-addressed object-store key
-    when the store is reachable, else the local snapshot member path.
+    when the store is reachable, else the local snapshot member path --
+    on the archive path only.
 
     Returns ``(raw_uri, would_store)``. In a dry run (``commit=False``)
     this **never** calls the object store: it computes the same
@@ -450,6 +525,21 @@ def _raw_uri_for(article: ArticleBytes, *, commit: bool) -> tuple[str, bool]:
     upload could append to; see ``_raise_write_refusal``/``record_refusal``
     in :mod:`app.services.artifact_storage`, which this function no longer
     reaches at all when ``commit`` is ``False``).
+
+    :param allow_member_path_fallback: ``True`` on the archive path only.
+        There, ``article.member_paths[0]`` is a real, meaningful location
+        -- the tar member path inside the pinned, digest-verified bulk
+        archive -- so falling back to it when the object store is down is
+        honest degraded provenance. On the upload path
+        (``allow_member_path_fallback=False``) there is no such fallback:
+        an uploaded document's ``member_paths`` is a synthetic label
+        (``f"upload:{filename}"``), not a retrievable location, and
+        writing it as ``raw_uri`` would point a reader at nothing (Phase
+        C-E6 review round 2, F5). So this re-raises
+        ``ArtifactStorageUnavailable`` instead of swallowing it -- the
+        exception has its own registered FastAPI handler
+        (``app.api.errors``, ``503 artifact_storage_unavailable``), so
+        letting it propagate is the correct refusal, not a gap.
     """
     from app.services.artifact_storage import (
         S3_BUCKET,
@@ -464,12 +554,13 @@ def _raw_uri_for(article: ArticleBytes, *, commit: bool) -> tuple[str, bool]:
 
     try:
         return store_artifact(article.xml, article.xml_sha256), False
-    except ArtifactStorageUnavailable as exc:
+    except ArtifactStorageUnavailable:
+        if not allow_member_path_fallback:
+            raise
         _logger.warning(
             "object store unavailable while snapshotting ThermoML article "
-            "xml_sha256=%s; falling back to the archive member path: %s",
+            "xml_sha256=%s; falling back to the archive member path",
             article.xml_sha256,
-            exc,
         )
         return article.member_paths[0], False
 
@@ -526,6 +617,10 @@ def _run_pipeline(
     custody_container_digest: str | None,
     open_submission: Callable[[Session], UploadSubmissionContext],
     resolve_doi: Callable[[Any], str],
+    refuse_when_unsupported: bool,
+    allow_member_path_fallback: bool,
+    literature_doi_fallback: str | None,
+    document_noun: str,
 ) -> None:
     """Shared validate -> parse -> map -> persist core for both public
     entry points (Phase C-E6). Mutates ``result`` in place.
@@ -536,6 +631,8 @@ def _run_pipeline(
     early themselves rather than falling through to their own
     commit/rollback trailer, so that rollback stays the *only* rollback
     call on this path (matching the pre-refactor behaviour exactly).
+    ``refuse_when_unsupported=True`` adds a second such early exit, this
+    time by raising rather than returning -- see that parameter.
 
     :param external_source_kwargs: Forwarded to
         :func:`_get_or_create_external_source` -- the NIST constants for
@@ -556,6 +653,44 @@ def _run_pipeline(
         upload path reconciles the caller's optional ``doi`` against the
         document's own ``sDOI`` (see :func:`_resolve_upload_doi`). May
         raise :class:`ThermoMLDoiConflictError`.
+    :param refuse_when_unsupported: ``True`` for the upload path only.
+        When the document is schema-valid but maps zero Cp(T) payloads,
+        raises :class:`ThermoMLNoSupportedContentError` immediately after
+        mapping and *before* any custody row, literature row or
+        object-store write -- a request the caller will see refused must
+        not leave a custody trail behind it (Phase C-E6 review round 2,
+        F1). ``False`` on the archive path preserves its original,
+        already-tested behaviour: an article with no usable content
+        completes normally (``inserted_count == 0``, custody still
+        recorded as "this article was checked"), because an archive scan
+        across many DOIs is not a single request a client can see
+        refused -- there is nothing for the depositor-facing inconsistency
+        this guards against to apply to.
+    :param allow_member_path_fallback: Forwarded to
+        :func:`_get_or_create_custody` / :func:`_raw_uri_for`. ``True`` on
+        the archive path (its ``member_paths`` names a real tar-member
+        location inside the pinned, digest-verified archive, so falling
+        back to it when the object store is down is honest degraded
+        provenance); ``False`` on the upload path (its ``member_paths``
+        is a synthetic label pointing at nothing, so an object-store
+        outage is refused instead -- see :func:`_raw_uri_for`, Phase C-E6
+        review round 2 F5).
+    :param literature_doi_fallback: The DOI used for literature
+        resolution when the document's own ``Citation/sDOI`` is absent.
+        The archive path passes its required, operator-supplied ``doi``;
+        the upload path passes its raw, optional ``doi`` argument
+        (*before* the synthetic content-digest fallback ``resolve_doi``
+        may substitute for record-keying -- that synthetic key is never a
+        real DOI and must never reach literature resolution). ``None``
+        propagates through to skip literature resolution entirely when
+        no DOI is available from either source (Phase C-E6 review round
+        2, F4).
+    :param document_noun: The word naming the thing that was ingested in
+        the ``ingestion_succeeded`` audit summary -- ``"article"`` on the
+        archive path (restoring C-E3's exact original wording, Phase C-E6
+        review round 2, F6) and ``"document"`` on the upload path (a
+        depositor's file is not "an article" in the bibliographic sense
+        the archive path's wording assumes).
     """
 
     schema_report = validate_bytes(article.xml)
@@ -575,6 +710,31 @@ def _run_pipeline(
     mapping_result = map_document(document, doi=doi)
     result.payload_count = len(mapping_result.payloads)
     result.mapping_report = mapping_result.report.model_dump(by_alias=True)
+    # The file's own citation (doi/title/year/journal/authors) is recorded
+    # here unconditionally, in the custody row's existing raw
+    # ``mapping_report_json`` field -- regardless of whether a
+    # ``literature`` row ends up created below. A depositor's file with a
+    # title but no DOI (or no citation at all) still has its citation text
+    # preserved as provenance, without inventing a manual literature
+    # record on their behalf (Phase C-E6 review round 2, F4).
+    result.mapping_report["citation"] = mapping_result.literature.model_dump(
+        mode="json"
+    )
+    # ``article.member_paths[0]`` -- the archive tar member path on the
+    # archive path, or the depositor's declared filename
+    # (``f"upload:{filename}"``) on the upload path -- is likewise
+    # recorded here unconditionally, so a claim that a filename is
+    # "recorded on the custody row" is actually true rather than aspirational
+    # (Phase C-E6 review round 2, F8; see ``ThermoMLUploadRequest.filename``).
+    result.mapping_report["source_label"] = article.member_paths[0]
+
+    if refuse_when_unsupported and result.payload_count == 0:
+        # Nothing has been written yet at this point -- no custody row,
+        # no literature row, no object-store call -- so this rollback is
+        # purely defensive (mirrors the schema-invalid early exit above)
+        # rather than undoing anything.
+        session.rollback()
+        raise ThermoMLNoSupportedContentError(result.mapping_report)
 
     external_source = _get_or_create_external_source(session, **external_source_kwargs)
     result.external_source_id = external_source.id
@@ -590,6 +750,7 @@ def _run_pipeline(
         commit=commit,
         source_uri=custody_source_uri,
         container_digest=custody_container_digest,
+        allow_member_path_fallback=allow_member_path_fallback,
     )
     result.external_source_record_id = custody.id
     result.external_source_record_created = custody_created
@@ -599,12 +760,23 @@ def _run_pipeline(
             f"raw_uri={custody.raw_uri}"
         )
 
+    # Literature is resolved by DOI only -- never by title alone, which
+    # crashes ``LiteratureUploadRequest``'s own validator (it requires
+    # either an identifier or *both* ``kind`` and ``title``, and this
+    # importer never determines a ``kind``). The file's own ``sDOI`` wins;
+    # the caller-supplied ``doi`` is the fallback when the file has none
+    # (Phase C-E6 review round 2, F4) -- this is the same "caller doi
+    # fills in when the file's citation has none" rule ``resolve_doi``
+    # already applies for record-keying, applied here to literature too.
+    # When neither is present, no literature row is created at all; the
+    # citation text is still preserved above, in the custody row.
+    literature_doi = mapping_result.literature.doi or literature_doi_fallback
     literature = None
-    if mapping_result.literature.doi or mapping_result.literature.title:
+    if literature_doi:
         literature = resolve_or_create_literature(
             session,
             LiteratureUploadRequest(
-                doi=mapping_result.literature.doi,
+                doi=literature_doi,
                 title=mapping_result.literature.title,
                 year=mapping_result.literature.year,
                 journal=mapping_result.literature.journal,
@@ -656,7 +828,7 @@ def _run_pipeline(
             session,
             submission_ctx,
             summary=(
-                f"Ingested ThermoML Cp(T) document DOI={doi} "
+                f"Ingested ThermoML Cp(T) {document_noun} DOI={doi} "
                 f"({result.inserted_count} row(s))."
             ),
         )
@@ -729,6 +901,10 @@ def import_thermoml_cp_article(
                 s, actor=actor, license_id=license_id, doi=doi
             ),
             resolve_doi=lambda _document: doi,
+            refuse_when_unsupported=False,
+            allow_member_path_fallback=True,
+            literature_doi_fallback=doi,
+            document_noun="article",
         )
     except Exception:
         session.rollback()
@@ -762,7 +938,9 @@ def _resolve_upload_doi(
     if explicit and document and explicit.casefold() != document.casefold():
         raise ThermoMLDoiConflictError(
             f"thermoml_doi_conflict: the supplied doi {explicit!r} does not "
-            f"match the uploaded file's own sDOI {document!r}"
+            f"match the uploaded file's own sDOI {document!r}",
+            declared_doi=explicit,
+            file_doi=document,
         )
     return explicit or document
 
@@ -827,9 +1005,14 @@ def import_thermoml_cp_upload(
         anything is written. When omitted, the file's own ``sDOI`` is used
         if present; when neither is present, a synthetic record-key basis
         derived from the content digest is used
-        (``f"upload:{article.xml_sha256[:16]}"``). Literature resolution
-        is unaffected by this parameter -- it always reads the file's own
-        citation block, never this argument.
+        (``f"upload:{article.xml_sha256[:16]}"``) -- never used for
+        literature resolution. Literature resolution reads the file's own
+        ``sDOI`` first and falls back to this argument when the file has
+        none (Phase C-E6 review round 2, F4); when neither is present, no
+        literature row is created, and no manual ``kind``+``title`` record
+        is fabricated on the depositor's behalf -- the file's citation
+        text (title/year/journal/authors), if any, is still preserved in
+        the custody row's ``mapping_report_json["citation"]``.
     :param actor: The depositor. Recorded as the submission's creator and
         the ``depositor_agreement`` attestor. No elevated role is
         required -- this is a standard upload, unlike the archive path's
@@ -870,6 +1053,10 @@ def import_thermoml_cp_upload(
                 s, actor=actor, rights=rights, doi_for_keying=result.doi
             ),
             resolve_doi=_resolve,
+            refuse_when_unsupported=True,
+            allow_member_path_fallback=False,
+            literature_doi_fallback=doi,
+            document_noun="document",
         )
     except Exception:
         session.rollback()
@@ -1034,6 +1221,7 @@ __all__ = [
     "ObservationDisposition",
     "ThermoMLCpImportResult",
     "ThermoMLDoiConflictError",
+    "ThermoMLNoSupportedContentError",
     "import_thermoml_cp_article",
     "import_thermoml_cp_upload",
 ]

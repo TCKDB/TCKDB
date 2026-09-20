@@ -23,6 +23,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+    SubmissionAuditEventKind,
     SubmissionSourceKind,
 )
 from app.db.models.external_source import ExternalSource, ExternalSourceRecord
@@ -31,7 +32,11 @@ from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.db.models.species import Species, SpeciesEntry
-from app.db.models.submission import Submission, SubmissionRecordLink
+from app.db.models.submission import (
+    Submission,
+    SubmissionAuditEvent,
+    SubmissionRecordLink,
+)
 from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.importers.thermoml import TERMS_TEXT
 from app.importers.thermoml.archive import ArticleBytes
@@ -655,6 +660,36 @@ class TestSubmissionAndRights:
         ).scalars().all()
         assert len(links) == 3
 
+    def test_ingestion_summary_says_article_on_the_archive_path(
+        self, db_session, curator
+    ):
+        """F6 (Phase C-E6 review round 2, LOW): the shared ``_run_pipeline``
+        core must not silently change C-E3's exact original audit-summary
+        wording for the archive path.
+
+        Mutation: hard-code ``document_noun="document"`` at the archive
+        path's ``_run_pipeline`` call site (instead of ``"article"``) --
+        this goes red.
+        """
+        result = import_thermoml_cp_article(
+            db_session,
+            article=_fluoroethane_article(),
+            doi=FLUOROETHANE_DOI,
+            actor=curator,
+            license_id=_LICENSE_ID,
+            commit=True,
+        )
+        event = db_session.execute(
+            select(SubmissionAuditEvent).where(
+                SubmissionAuditEvent.submission_id == result.submission_id,
+                SubmissionAuditEvent.event_kind
+                == SubmissionAuditEventKind.ingestion_succeeded,
+            )
+        ).scalar_one()
+        assert event.summary.startswith("Ingested ThermoML Cp(T) article "), (
+            event.summary
+        )
+
     def test_standing_attestation_is_source_terms_superseding_depositor_agreement(
         self, db_session, curator
     ):
@@ -984,6 +1019,33 @@ class TestUploadPath:
         assert standing.basis == RightsBasisKind.depositor_agreement
         assert standing.license_id == _UPLOAD_LICENSE_ID
 
+    def test_ingestion_summary_says_document_on_the_upload_path(
+        self, db_session, depositor
+    ):
+        """F6 (Phase C-E6 review round 2, LOW): the upload path's audit
+        summary says "document", not "article" -- a depositor's file is
+        not "an article" in the bibliographic sense the archive path's
+        wording assumes.
+        """
+        result = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        event = db_session.execute(
+            select(SubmissionAuditEvent).where(
+                SubmissionAuditEvent.submission_id == result.submission_id,
+                SubmissionAuditEvent.event_kind
+                == SubmissionAuditEventKind.ingestion_succeeded,
+            )
+        ).scalar_one()
+        assert event.summary.startswith("Ingested ThermoML Cp(T) document "), (
+            event.summary
+        )
+
     def test_observation_ref_is_none_on_dry_run(self, db_session, depositor):
         # A dry run's internal ``session.rollback()`` would also discard an
         # actor row created earlier in the same transaction if it had not
@@ -1191,3 +1253,64 @@ class TestCli:
                 )
             ).scalars().all()
             assert rows == []
+
+    def _titled_no_doi_fixture_path(self, tmp_path):
+        """F4 (Phase C-E6 review round 2): schema-valid, ``sTitle``
+        present, ``sDOI`` absent entirely (both are ``minOccurs="0"`` in
+        the XSD)."""
+        xml = _BENZENE_XML.replace("    <sDOI>{doi}</sDOI>\n", "").format(
+            doi="", inchikey=BENZENE_INCHIKEY, method_name="statistical thermodynamics"
+        )
+        path = tmp_path / "titled_no_doi.xml"
+        path.write_text(xml, encoding="utf-8")
+        return path
+
+    def test_cli_file_mode_titled_no_doi_no_caller_doi_exits_0(
+        self, tmp_path, db_engine, monkeypatch
+    ):
+        """A titled file with no ``sDOI`` and no ``--doi`` must not crash
+        the CLI (F4) -- literature resolution is simply skipped."""
+        from scripts import thermoml_cp_import as cli
+
+        fixture_path = self._titled_no_doi_fixture_path(tmp_path)
+        url = db_engine.url
+        monkeypatch.setenv("DB_USER", url.username or "tckdb")
+        monkeypatch.setenv("DB_PASSWORD", url.password or "tckdb")
+        monkeypatch.setenv("DB_HOST", url.host or "127.0.0.1")
+        monkeypatch.setenv("DB_PORT", str(url.port or 5432))
+        monkeypatch.setenv("DB_NAME", url.database)
+        monkeypatch.setattr(
+            "app.services.literature_resolution.fetch_doi_metadata",
+            lambda doi: None,
+        )
+
+        rc = cli.main(["--file", str(fixture_path), "--license", _LICENSE_ID])
+        assert rc == 0
+
+    def test_cli_file_mode_titled_no_doi_with_caller_doi_exits_0(
+        self, tmp_path, db_engine, monkeypatch
+    ):
+        """The same file, with ``--doi`` supplied, also succeeds -- the
+        caller's doi becomes the literature DOI (F4)."""
+        from scripts import thermoml_cp_import as cli
+
+        fixture_path = self._titled_no_doi_fixture_path(tmp_path)
+        url = db_engine.url
+        monkeypatch.setenv("DB_USER", url.username or "tckdb")
+        monkeypatch.setenv("DB_PASSWORD", url.password or "tckdb")
+        monkeypatch.setenv("DB_HOST", url.host or "127.0.0.1")
+        monkeypatch.setenv("DB_PORT", str(url.port or 5432))
+        monkeypatch.setenv("DB_NAME", url.database)
+        monkeypatch.setattr(
+            "app.services.literature_resolution.fetch_doi_metadata",
+            lambda doi: None,
+        )
+
+        rc = cli.main(
+            [
+                "--file", str(fixture_path),
+                "--doi", "10.1016/cli-caller-doi",
+                "--license", _LICENSE_ID,
+            ]
+        )
+        assert rc == 0
