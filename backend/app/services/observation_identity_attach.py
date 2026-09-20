@@ -47,7 +47,6 @@ from sqlalchemy.orm import Session
 from app.api.errors import not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
-    SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionRecordType,
 )

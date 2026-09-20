@@ -44,8 +44,8 @@ from app.db.models.common import (
 from app.services.deposit.build import (
     ObservationRightsBasisIncompatibleError,
     ObservationRightsBasisMissingError,
-    write_deposit,
     _assert_observations_have_rights_basis,
+    write_deposit,
 )
 from app.services.release.curation import add_selection, publish_release
 from app.services.release.manifest import freeze_manifest
