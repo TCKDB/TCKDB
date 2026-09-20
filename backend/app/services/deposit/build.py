@@ -676,7 +676,9 @@ def _assert_observations_have_rights_basis(
 
     for pair in sorted(pairs, key=lambda p: p[1]):
         _, observation_id = pair
-        named = ref_by_id.get(observation_id) or f"observation {observation_id}"
+        # public_ref is NOT NULL as of d2f4a7c1b8e6; every row in `rows`
+        # carries one, so there is no id-fallback case to name here.
+        named = ref_by_id[observation_id]
         links = rights.get(pair, [])
         if not links:
             raise ObservationRightsBasisMissingError(

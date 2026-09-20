@@ -1322,10 +1322,12 @@ def attach_energy_correction_scheme_provenance(
 class AdminObservationIdentityAttachRequest(BaseModel):
     """Body for ``POST /admin/observations/{ref}/identity``.
 
-    ``species_entry_ref`` must be the unique ground-state, minimum-energy
-    entry of its species -- see
-    ``app/services/observation_identity_attach.py`` for the ambiguity rule
-    and its rationale.
+    ``species_entry_ref`` must be a ground-state, minimum-energy entry of
+    its species; it no longer has to be the *unique* such entry -- see
+    ``app/services/observation_identity_attach.py`` for the target rule
+    and its rationale. The observation must also be linked to a submission
+    (every imported observation is), so the attach has somewhere to record
+    the curation fact.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1357,9 +1359,10 @@ def attach_observation_identity_endpoint(
 
     Curator or admin only. Refuses (422) when the observation already
     carries an identity -- correction is supersession, not update, see
-    ADR 0003 and the service's module docstring -- or when the target
-    species entry is not the unique ground-state minimum entry of its
-    species. 404 for an unknown observation or species entry.
+    ADR 0003 and the service's module docstring -- when the target species
+    entry is not a ground-state minimum entry of its species, or when the
+    observation is linked to no submission (nowhere to record the curation
+    fact). 404 for an unknown observation or species entry.
     """
     obs = attach_observation_identity(
         session,

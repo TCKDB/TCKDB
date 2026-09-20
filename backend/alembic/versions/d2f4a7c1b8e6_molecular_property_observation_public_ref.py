@@ -25,6 +25,22 @@ validation still take locks; schedule the upgrade during a low-traffic
 window. As of this revision the table is CCCBDB-importer-sized (not yet
 ThermoML-scale), so this is expected to be fast in practice.
 
+Review round 2 adds a second, independent change riding the same revision
+(the revision is still in-flight/unmerged, so this is an in-place edit, not
+a new revision -- see ``.claude/rules/migration-rules.md``): one new
+``submission_audit_event_kind`` enum member, ``observation_identity_attached``,
+for the curator identity-attach service (``app/services/
+observation_identity_attach.py``) to record its curation fact as a
+``SubmissionAuditEvent`` rather than by mutating the observation's
+``raw_payload_json`` (a provenance column that must stay byte-identical
+across a later curation act). ``ALTER TYPE ... ADD VALUE`` cannot be
+undone short of rebuilding the enum type (same limitation documented in
+``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``, the precedent
+for this addition); this revision's ``downgrade()`` still reverses the
+``public_ref`` column, index and function, but the enum member is left in
+an otherwise-harmless state: an unused value in a Postgres enum type costs
+nothing and never gets written by code below the previous revision.
+
 Revision ID: d2f4a7c1b8e6
 Revises: 0b4a3afabfd3
 Create Date: 2026-09-20
@@ -100,9 +116,26 @@ def upgrade() -> None:
     op.alter_column(_TABLE, "public_ref", existing_type=sa.String(length=40), nullable=False)
     op.create_index(op.f(_INDEX), _TABLE, ["public_ref"], unique=True)
 
+    # Curator identity-attach records its curation fact as a
+    # SubmissionAuditEvent (app/services/observation_identity_attach.py)
+    # instead of mutating raw_payload_json.
+    op.execute(
+        "ALTER TYPE submission_audit_event_kind "
+        "ADD VALUE IF NOT EXISTS 'observation_identity_attached'"
+    )
+
 
 def downgrade() -> None:
-    """Remove public refs; downgrade discards refs minted after this upgrade."""
+    """Remove public refs; downgrade discards refs minted after this upgrade.
+
+    The ``observation_identity_attached`` enum member added in ``upgrade()``
+    is NOT removed: PostgreSQL cannot drop a single value from an enum type
+    without rebuilding it, the same limitation documented in
+    ``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``. Leaving it in
+    place is harmless -- an unreferenced enum value is inert -- so this
+    downgrade still reverses everything that can be reversed rather than
+    refusing outright.
+    """
     op.drop_index(op.f(_INDEX), table_name=_TABLE)
     op.drop_column(_TABLE, "public_ref")
     op.execute(f"DROP FUNCTION IF EXISTS public.{_REF_FUNCTION}()")

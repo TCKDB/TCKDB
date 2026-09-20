@@ -1524,14 +1524,30 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Correction is supersession (ADR 0003): deposit a corrected "
                 "observation instead of repointing this row."
             )),
-    ApiCode("observation_identity_ambiguous_entry", 422, Surface.message_prefix,
+    ApiCode("observation_identity_attach_requires_submission", 422, Surface.message_prefix,
             "backend/app/services/observation_identity_attach.py",
             shape=Shape.relationship,
             note=(
-                "The attach target is not the unique ground-state, "
-                "minimum-energy entry of its species -- an observation "
-                "carries no stereo/excited-state resolution of its own, so "
-                "attaching it to an ambiguous target would silently claim "
+                "A curator attach succeeded validation but the observation "
+                "is linked to no submission, so there is nowhere to record "
+                "the curation fact as a SubmissionAuditEvent -- the attach "
+                "is refused rather than silently proceeding without an "
+                "audit trail."
+            )),
+    ApiCode("observation_identity_target_not_ground_state_minimum", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "Review round 2 (Phase C-E5): renamed from "
+                "observation_identity_ambiguous_entry and the rule relaxed "
+                "-- the target no longer has to be the *unique* "
+                "ground-state minimum entry of its species (that refused "
+                "precisely the isomer-ambiguity case this tool exists for; "
+                "the curator's choice of which entry IS the "
+                "disambiguation), only a ground-state minimum entry at "
+                "all. An observation carries no stereo/excited-state "
+                "resolution of its own, so attaching it to a non-minimum "
+                "or non-ground-state target would silently claim "
                 "specificity the source data does not have."
             )),
     ApiCode("observation_rights_basis_incompatible", 422, Surface.message_prefix,

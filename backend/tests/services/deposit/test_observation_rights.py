@@ -29,17 +29,29 @@ proceed.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+from sqlalchemy import select
 
 from app.db.models.app_user import AppUser
-from app.db.models.common import AppUserRole, SubmissionKind, SubmissionRecordType
+from app.db.models.common import (
+    AppUserRole,
+    RightsBasisKind,
+    SubmissionKind,
+    SubmissionRecordType,
+)
 from app.services.deposit.build import (
     ObservationRightsBasisIncompatibleError,
     ObservationRightsBasisMissingError,
+    write_deposit,
     _assert_observations_have_rights_basis,
 )
 from app.services.release.curation import add_selection, publish_release
+from app.services.release.manifest import freeze_manifest
+from app.services.rights import record_attestation
 from app.services.submission import create_submission, link_records
+from scripts.paper.registry import GENERATORS
 from tests.services.release._attest import deposit_and_attest
 from tests.services.scientific_read._factories import (
     make_observation,
@@ -47,6 +59,14 @@ from tests.services.scientific_read._factories import (
     make_species_entry,
     next_inchi_key,
 )
+
+_BACKEND_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = _BACKEND_ROOT.parent
+_GENERATOR_DIR = _BACKEND_ROOT / "scripts" / "paper"
+
+
+def _allowlist(session) -> list[str]:
+    return sorted(session.scalars(select(AppUser.username)))
 
 
 @pytest.fixture
@@ -214,4 +234,113 @@ def test_an_identity_unresolved_observation_is_unreachable_by_scope(
     make_observation(db_session, species_entry=None)
 
     # No raise: nothing to look up, by construction.
+    _assert_observations_have_rights_basis(db_session, draft_release)
+
+
+# ---------------------------------------------------------------------------
+# The gate is actually wired into write_deposit (review round 2, F1)
+#
+# Every test above calls ``_assert_observations_have_rights_basis`` directly.
+# That alone cannot catch the wiring itself going missing: deleting the call
+# site in ``write_deposit`` (app/services/deposit/build.py, right before
+# ``write_archive(...)``) left every one of those tests green, because none
+# of them ever runs ``write_deposit``. These two do.
+# ---------------------------------------------------------------------------
+
+
+def test_write_deposit_refuses_an_unattested_in_scope_observation(
+    db_session, draft_release, curator, thermo_candidates, species_entry, tmp_path
+):
+    _cover_species_entry_as_a_release_subject(
+        db_session, draft_release, curator, thermo_candidates, species_entry
+    )
+    make_observation(db_session, species_entry=species_entry)
+    freeze_manifest(db_session, draft_release, created_by=curator.id)
+
+    with pytest.raises(
+        ObservationRightsBasisMissingError, match="^observation_rights_basis_missing:"
+    ):
+        write_deposit(
+            db_session,
+            release_tag=draft_release.tag,
+            output_dir=tmp_path / "out",
+            author_accounts=_allowlist(db_session),
+            repo_root=_REPO_ROOT,
+            generators=GENERATORS,
+            generator_dir=_GENERATOR_DIR,
+            require_clean_tree=False,
+            require_exact_tag=False,
+        )
+    assert not (tmp_path / "out").exists(), "a refused build leaves nothing behind"
+
+
+def test_write_deposit_builds_over_an_attested_in_scope_observation(
+    db_session, draft_release, curator, thermo_candidates, species_entry, tmp_path
+):
+    """The positive case: a compatibly-attested in-scope observation does not block."""
+    _cover_species_entry_as_a_release_subject(
+        db_session, draft_release, curator, thermo_candidates, species_entry
+    )
+    obs = make_observation(db_session, species_entry=species_entry)
+    deposit_and_attest(
+        db_session,
+        depositor=curator,
+        records=[(SubmissionRecordType.molecular_property_observation, obs.id)],
+        license_id="CC-BY-4.0",
+    )
+    freeze_manifest(db_session, draft_release, created_by=curator.id)
+
+    result = write_deposit(
+        db_session,
+        release_tag=draft_release.tag,
+        output_dir=tmp_path / "out",
+        author_accounts=_allowlist(db_session),
+        repo_root=_REPO_ROOT,
+        generators=GENERATORS,
+        generator_dir=_GENERATOR_DIR,
+        require_clean_tree=False,
+        require_exact_tag=False,
+    )
+    assert result.path.exists()
+
+
+# ---------------------------------------------------------------------------
+# licenses_match is basis-agnostic (review round 2, F3): a source_terms
+# attestation must pass the gate exactly like a depositor_agreement one.
+# Forcing ``basis is RightsBasisKind.depositor_agreement`` in the gate would
+# leave this test the only thing catching it.
+# ---------------------------------------------------------------------------
+
+
+def test_a_source_terms_attestation_under_a_matching_license_passes(
+    db_session, draft_release, curator, thermo_candidates, species_entry
+):
+    _cover_species_entry_as_a_release_subject(
+        db_session, draft_release, curator, thermo_candidates, species_entry
+    )
+    obs = make_observation(db_session, species_entry=species_entry)
+    submission = create_submission(
+        db_session,
+        created_by=curator.id,
+        submission_kind=SubmissionKind.other,
+        title="source-terms attested deposit",
+    )
+    link_records(
+        db_session,
+        submission=submission,
+        records=[
+            (SubmissionRecordType.molecular_property_observation, obs.id, None)
+        ],
+    )
+    record_attestation(
+        db_session,
+        submission=submission,
+        license_id="CC-BY-4.0",
+        basis=RightsBasisKind.source_terms,
+        actor=curator,
+        source_terms="NIST ThermoML Archive terms of use permit redistribution.",
+    )
+
+    # No raise: a source_terms attestation under a matching license passes
+    # the gate exactly as a depositor_agreement one does.
     _assert_observations_have_rights_basis(db_session, draft_release)

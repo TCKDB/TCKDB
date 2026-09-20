@@ -12,35 +12,57 @@ row is the wrong data, and it is superseded by depositing a corrected
 observation, exactly like every other scientific record in this codebase --
 not edited in place.
 
-Ambiguity rule (mirrors the resolver's own "one species, one ground-state
-minimum entry" contract): the target must be *the* unique ground-state,
-minimum-energy entry of its species. An observation reporting an
-experimental gas-phase property carries no stereochemical or
-electronic-excited-state resolution of its own, so attaching it to a target
-that is not uniquely identifiable as the ground-state minimum for its
-species would silently claim more specificity than the source data
-supports. A species with two (or zero) entries meeting that description has
-no unambiguous target and the attach is refused.
+Target rule (revised Phase C-E5 review round 2): the target must be a
+ground-state, minimum-energy entry of its species (``kind=minimum`` and
+``electronic_state_kind=ground``) -- but it no longer has to be the *unique*
+such entry. The original rule refused precisely the isomer-ambiguity case
+this tool exists for (see the model's module docstring: "often genuinely
+ambiguous (isomers)"): a species with two ground-state minimum entries
+(e.g. a cis/trans pair) could never take a curator attach at all, because a
+curator's whole job here *is* to pick between them. The curator naming one
+specific entry **is** the disambiguation a machine resolver could not
+perform -- requiring uniqueness on top of that duplicated the resolver's own
+conservatism in the one place a human was already supplying it. What is
+still refused is a target that is not itself a ground-state minimum entry:
+an observation reporting an experimental gas-phase property carries no
+stereochemical or electronic-excited-state resolution of its own, so
+attaching it to an excited-state or non-minimum target would silently claim
+specificity the source data does not have.
+
+The curation fact is recorded as a :class:`~app.db.models.submission.
+SubmissionAuditEvent` on the submission the observation is linked to via
+``submission_record_link`` (every imported observation is linked to the
+submission that deposited it) -- never in ``raw_payload_json``, which is
+provenance (the archive's forensic/round-trip copy of what was deposited)
+and must stay byte-identical across a later curation act. An observation
+with no submission link has nowhere honest to record the curation fact and
+the attach is refused rather than silently skipping the record.
 """
 
 from __future__ import annotations
-
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
 from app.db.models.app_user import AppUser
-from app.db.models.common import SpeciesEntryStateKind, StationaryPointKind
+from app.db.models.common import (
+    SpeciesEntryStateKind,
+    StationaryPointKind,
+    SubmissionActorKind,
+    SubmissionAuditEventKind,
+    SubmissionRecordType,
+)
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.db.models.species import SpeciesEntry
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.scientific_read.handles import (
     parse_handle,
     resolve_species_entry_handle,
 )
+from app.services.submission import _resolve_actor_kind, append_audit_event
 
 
 def _resolve_observation(
@@ -79,31 +101,48 @@ def _resolve_observation(
     return obs
 
 
-def _assert_unique_ground_state_minimum_entry(
-    session: Session, target: SpeciesEntry
-) -> None:
-    """Refuse an attach target that is not uniquely its species' ground-state
-    minimum entry.
+def _assert_ground_state_minimum_entry(target: SpeciesEntry) -> None:
+    """Refuse an attach target that is not itself a ground-state minimum entry.
 
-    :raises ValueError: 422 ``observation_identity_ambiguous_entry``.
+    See the module docstring: uniqueness across the species is no longer
+    required, only that the target itself is a ``kind=minimum``,
+    ``electronic_state_kind=ground`` entry.
+
+    :raises ValueError: 422 ``observation_identity_target_not_ground_state_minimum``.
     """
-    candidates = session.scalars(
-        select(SpeciesEntry).where(
-            SpeciesEntry.species_id == target.species_id,
-            SpeciesEntry.kind == StationaryPointKind.minimum,
-            SpeciesEntry.electronic_state_kind == SpeciesEntryStateKind.ground,
-        )
-    ).all()
-    candidate_ids = {row.id for row in candidates}
-    if len(candidate_ids) != 1 or target.id not in candidate_ids:
+    if (
+        target.kind is not StationaryPointKind.minimum
+        or target.electronic_state_kind is not SpeciesEntryStateKind.ground
+    ):
         raise ValueError(
-            "observation_identity_ambiguous_entry: an observation can only be "
-            "attached to the unique ground-state, minimum-energy entry of a "
-            f"species; this species has {len(candidate_ids)} entry/entries "
-            "meeting that description, so the target is ambiguous. Curate the "
-            "species entries first, or attach to a species with exactly one "
-            "ground-state minimum entry."
+            "observation_identity_target_not_ground_state_minimum: an "
+            "observation can only be attached to a ground-state, "
+            "minimum-energy entry of a species; this entry is "
+            f"kind={target.kind.value!r} "
+            f"electronic_state_kind={target.electronic_state_kind.value!r}. "
+            "An observation carries no stereochemical or excited-state "
+            "resolution of its own, so it cannot be attached to a target "
+            "that is not a ground-state minimum."
         )
+
+
+def _linked_submission_id(session: Session, observation_id: int) -> int | None:
+    """The submission ``observation_id`` is linked to, if any.
+
+    An observation may in principle be linked to more than one submission
+    (the link table has no such constraint); this takes the earliest, which
+    is the one that actually deposited the row.
+    """
+    return session.scalar(
+        select(SubmissionRecordLink.submission_id)
+        .where(
+            SubmissionRecordLink.record_type
+            == SubmissionRecordType.molecular_property_observation,
+            SubmissionRecordLink.record_id == observation_id,
+        )
+        .order_by(SubmissionRecordLink.id.asc())
+        .limit(1)
+    )
 
 
 def attach_observation_identity(
@@ -123,9 +162,10 @@ def attach_observation_identity(
     :param observation_handle: integer id or ``mpo_...`` public ref of the
         observation to attach.
     :param species_entry_ref: public ref (``spe_...``) of the target species
-        entry. Must be the unique ground-state minimum entry of its species.
-    :param actor: the curator performing the attach. Recorded by username,
-        never by row id.
+        entry. Must be a ground-state minimum entry of its species -- see
+        the module docstring for why uniqueness is not required.
+    :param actor: the curator performing the attach. Recorded by username
+        on the submission audit event, never by row id.
     :param note: optional curator note, recorded alongside the actor.
     :raises NotFoundError: 404 for an unknown observation or species entry.
     :raises ValueError: 422 ``invalid_handle`` / ``handle_type_mismatch`` for
@@ -133,8 +173,11 @@ def attach_observation_identity(
         422 ``observation_identity_already_set`` if the observation already
         carries an identity (correction is supersession -- see module
         docstring -- not a repoint here);
-        422 ``observation_identity_ambiguous_entry`` if the target is not
-        the unique ground-state minimum entry of its species.
+        422 ``observation_identity_target_not_ground_state_minimum`` if the
+        target is not a ground-state minimum entry of its species;
+        422 ``observation_identity_attach_requires_submission`` if the
+        observation is linked to no submission, so there is nowhere honest
+        to record the curation fact.
     """
     obs = _resolve_observation(session, observation_handle)
 
@@ -151,20 +194,37 @@ def attach_observation_identity(
     if target is None:  # pragma: no cover — resolve_species_entry_handle already 404s
         raise not_found("species_entry", ref=species_entry_ref)
 
-    _assert_unique_ground_state_minimum_entry(session, target)
+    _assert_ground_state_minimum_entry(target)
+
+    submission_id = _linked_submission_id(session, obs.id)
+    if submission_id is None:
+        raise ValueError(
+            "observation_identity_attach_requires_submission: this "
+            "observation is linked to no submission, so there is nowhere "
+            "to record the curation fact. Link the observation to a "
+            "submission before attaching an identity to it."
+        )
+    submission = session.get(Submission, submission_id)
+    assert submission is not None  # FK-guaranteed by submission_record_link
 
     obs.species_entry_id = target.id
-
-    payload = dict(obs.raw_payload_json) if obs.raw_payload_json else {}
-    payload["identity_attachment"] = {
-        "actor": actor.username,
-        "note": note,
-        "species_entry_ref": target.public_ref,
-        "attached_at": datetime.now(timezone.utc).isoformat(),
-    }
-    obs.raw_payload_json = payload
-
     session.flush()
+
+    append_audit_event(
+        session,
+        submission=submission,
+        event_kind=SubmissionAuditEventKind.observation_identity_attached,
+        actor_kind=_resolve_actor_kind(actor),
+        actor_user_id=actor.id,
+        details_json={
+            "observation_ref": obs.public_ref,
+            "species_entry_ref": target.public_ref,
+            "actor_username": actor.username,
+            "note": note,
+            "previous_species_entry_ref": None,
+        },
+    )
+
     return obs
 
 

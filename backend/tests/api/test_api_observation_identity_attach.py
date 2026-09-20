@@ -7,17 +7,32 @@ existing admin-route testing pattern (``test_admin_energy_correction_scheme_
 provenance.py``): the ``client`` fixture's default actor is role=user (the
 403 path), ``login_as`` swaps roles, and ``anon_client`` exercises the
 anonymous 401 path.
+
+Review round 2: the target rule relaxed (any ground-state minimum entry is
+a legal target, not only the unique one -- F4) and the curation fact moved
+from ``raw_payload_json`` to a ``SubmissionAuditEvent`` (F5), which also
+means every successful-attach test now has to link its observation to a
+submission first, the way a real deposit does.
 """
 
 from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
-from app.db.models.common import SpeciesEntryStateKind, StationaryPointKind
+from app.db.models.common import (
+    SpeciesEntryStateKind,
+    StationaryPointKind,
+    SubmissionAuditEventKind,
+    SubmissionKind,
+    SubmissionRecordType,
+)
+from app.db.models.submission import SubmissionAuditEvent
+from app.services.submission import create_submission, link_records
 from tests.services.scientific_read._factories import (
     make_observation,
     make_species,
@@ -42,6 +57,50 @@ def anon_client(db_session: Session):
 def _entry(db_session, *, prefix: str = "SEATTACH"):
     species = make_species(db_session, smiles="CCO", inchi_key=next_inchi_key(prefix))
     return species, make_species_entry(db_session, species)
+
+
+def _link_to_submission(db_session, obs, *, created_by: int):
+    """Link ``obs`` to a fresh submission, the way a real deposit does.
+
+    The attach service refuses (``observation_identity_attach_requires_
+    submission``) an observation with no such link, since it has nowhere
+    honest to record the curation fact.
+    """
+    submission = create_submission(
+        db_session,
+        created_by=created_by,
+        submission_kind=SubmissionKind.other,
+        title="observation-identity-attach test deposit",
+    )
+    link_records(
+        db_session,
+        submission=submission,
+        records=[
+            (SubmissionRecordType.molecular_property_observation, obs.id, None)
+        ],
+    )
+    return submission
+
+
+def _audit_events(db_session, submission_id: int) -> list[SubmissionAuditEvent]:
+    return list(
+        db_session.scalars(
+            select(SubmissionAuditEvent)
+            .where(SubmissionAuditEvent.submission_id == submission_id)
+            .order_by(SubmissionAuditEvent.id)
+        )
+    )
+
+
+def _attach_events(db_session, submission_id: int) -> list[SubmissionAuditEvent]:
+    """Only the ``observation_identity_attached`` events -- ``create_submission``
+    itself already logs a ``submission_created`` event on the same submission.
+    """
+    return [
+        event
+        for event in _audit_events(db_session, submission_id)
+        if event.event_kind == SubmissionAuditEventKind.observation_identity_attached
+    ]
 
 
 def test_attach_requires_auth(anon_client, db_session):
@@ -70,6 +129,8 @@ def test_curator_attaches_an_unresolved_observation(
 ):
     _, entry = _entry(db_session)
     obs = make_observation(db_session, species_entry=None)
+    submission = _link_to_submission(db_session, obs, created_by=_api_curator_user)
+    raw_payload_before = obs.raw_payload_json
     login_as(_api_curator_user)
 
     resp = client.post(
@@ -83,16 +144,27 @@ def test_curator_attaches_an_unresolved_observation(
 
     db_session.refresh(obs)
     assert obs.species_entry_id == entry.id
-    assert obs.raw_payload_json["identity_attachment"]["actor"] == "testcurator"
-    assert (
-        obs.raw_payload_json["identity_attachment"]["note"] == "matched by formula"
-    )
-    assert "id" not in obs.raw_payload_json["identity_attachment"]
+    # raw_payload_json is provenance (the archive's forensic/round-trip copy
+    # of what was deposited) and must stay byte-identical across a later
+    # curation act -- the curation fact is recorded elsewhere (below), not
+    # by mutating this column.
+    assert obs.raw_payload_json == raw_payload_before
+
+    events = _attach_events(db_session, submission.id)
+    assert len(events) == 1
+    event = events[0]
+    assert event.details_json["observation_ref"] == obs.public_ref
+    assert event.details_json["species_entry_ref"] == entry.public_ref
+    assert event.details_json["actor_username"] == "testcurator"
+    assert event.details_json["note"] == "matched by formula"
+    assert event.details_json["previous_species_entry_ref"] is None
+    assert "id" not in event.details_json
 
 
 def test_admin_can_also_attach(client, db_session, login_as, _api_admin_user):
     _, entry = _entry(db_session)
     obs = make_observation(db_session, species_entry=None)
+    _link_to_submission(db_session, obs, created_by=_api_admin_user)
     login_as(_api_admin_user)
 
     resp = client.post(
@@ -115,7 +187,15 @@ def test_second_attach_refuses_already_set(
     assert "observation_identity_already_set" in resp.text
 
 
-def test_ambiguous_target_refuses(client, db_session, login_as, _api_curator_user):
+def test_curator_may_choose_among_ambiguous_entries(
+    client, db_session, login_as, _api_curator_user
+):
+    """Review round 2 (F4): the original ambiguity rule refused precisely
+    the isomer-ambiguity case this tool exists for. A species with two
+    ground-state minimum entries (a cis/trans pair) is now a legal target
+    for either one -- the curator's choice of which entry IS the
+    disambiguation a machine resolver could not make.
+    """
     species, entry_a = _entry(db_session, prefix="SEAMBIG")
     entry_b = make_species_entry(
         db_session,
@@ -125,19 +205,23 @@ def test_ambiguous_target_refuses(client, db_session, login_as, _api_curator_use
         stereo_label="cis",
     )
     obs = make_observation(db_session, species_entry=None)
+    submission = _link_to_submission(db_session, obs, created_by=_api_curator_user)
     login_as(_api_curator_user)
 
     resp = client.post(
-        _url(obs.public_ref), json={"species_entry_ref": entry_a.public_ref}
-    )
-    assert resp.status_code == 422, resp.text
-    assert "observation_identity_ambiguous_entry" in resp.text
-
-    resp_b = client.post(
         _url(obs.public_ref), json={"species_entry_ref": entry_b.public_ref}
     )
-    assert resp_b.status_code == 422, resp_b.text
-    assert "observation_identity_ambiguous_entry" in resp_b.text
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["species_entry_ref"] == entry_b.public_ref
+
+    db_session.refresh(obs)
+    assert obs.species_entry_id == entry_b.id
+
+    events = _attach_events(db_session, submission.id)
+    assert len(events) == 1
+    assert events[0].details_json["species_entry_ref"] == entry_b.public_ref
+    # entry_a (the other ground-state minimum entry) was never touched.
+    assert entry_a.id != entry_b.id
 
 
 def test_non_ground_state_target_refuses(
@@ -158,7 +242,56 @@ def test_non_ground_state_target_refuses(
         _url(obs.public_ref), json={"species_entry_ref": excited_entry.public_ref}
     )
     assert resp.status_code == 422, resp.text
-    assert "observation_identity_ambiguous_entry" in resp.text
+    assert "observation_identity_target_not_ground_state_minimum" in resp.text
+
+
+def test_single_excited_state_entry_species_refuses(
+    client, db_session, login_as, _api_curator_user
+):
+    """F7: a species with exactly one entry, and that entry excited-state,
+    used to slip past the old (pre-F4) ambiguity guard's deleted-clause
+    mutation because every other fixture species had two entries. This
+    pins the target-validity check on a single-entry species directly.
+    """
+    species = make_species(
+        db_session, smiles="CC=O", inchi_key=next_inchi_key("SESINGLEEXC")
+    )
+    excited_entry = make_species_entry(
+        db_session,
+        species,
+        kind=StationaryPointKind.minimum,
+        electronic_state_kind=SpeciesEntryStateKind.excited,
+        electronic_state_label="A",
+    )
+    obs = make_observation(db_session, species_entry=None)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        _url(obs.public_ref), json={"species_entry_ref": excited_entry.public_ref}
+    )
+    assert resp.status_code == 422, resp.text
+    assert "observation_identity_target_not_ground_state_minimum" in resp.text
+
+
+def test_attach_refuses_an_observation_linked_to_no_submission(
+    client, db_session, login_as, _api_curator_user
+):
+    """F5: no submission link means nowhere honest to record the curation
+    fact, so the attach is refused rather than silently proceeding without
+    an audit trail.
+    """
+    _, entry = _entry(db_session)
+    obs = make_observation(db_session, species_entry=None)
+    login_as(_api_curator_user)
+
+    resp = client.post(
+        _url(obs.public_ref), json={"species_entry_ref": entry.public_ref}
+    )
+    assert resp.status_code == 422, resp.text
+    assert "observation_identity_attach_requires_submission" in resp.text
+
+    db_session.refresh(obs)
+    assert obs.species_entry_id is None
 
 
 def test_404_for_unknown_observation(client, db_session, login_as, _api_curator_user):
@@ -186,8 +319,6 @@ def test_404_for_unknown_species_entry(
 
 
 def test_attach_never_creates_a_species(client, db_session, login_as, _api_curator_user):
-    from sqlalchemy import func, select
-
     from app.db.models.species import Species, SpeciesEntry
 
     before_species = db_session.scalar(select(func.count()).select_from(Species))
@@ -195,6 +326,7 @@ def test_attach_never_creates_a_species(client, db_session, login_as, _api_curat
 
     _, entry = _entry(db_session)
     obs = make_observation(db_session, species_entry=None)
+    _link_to_submission(db_session, obs, created_by=_api_curator_user)
     login_as(_api_curator_user)
 
     resp = client.post(

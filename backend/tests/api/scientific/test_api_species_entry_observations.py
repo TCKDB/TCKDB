@@ -92,6 +92,31 @@ def test_empty_when_entry_has_no_observations(client, db_session):
     assert body["records"] == []
 
 
+def test_only_returns_observations_for_the_requested_entry(client, db_session):
+    """The service's query pins ``species_entry_id`` -- deleting that filter
+    left every route test green (all 21 of them use exactly one entry with
+    observations). Three rows: one on the requested entry, one on an
+    unrelated second entry, and one identity-unresolved (``species_entry_id
+    IS NULL``, structurally unreachable). Only the first may come back.
+    """
+    _, entry = _entry(db_session)
+    other_species = make_species(
+        db_session, smiles="CCN", inchi_key=next_inchi_key("SEOBSOTHER")
+    )
+    other_entry = make_species_entry(db_session, other_species)
+
+    wanted = make_observation(db_session, species_entry=entry)
+    make_observation(db_session, species_entry=other_entry)
+    make_observation(db_session, species_entry=None)
+
+    resp = client.get(_url(entry.id))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["pagination"]["total"] == 1
+    assert len(body["records"]) == 1
+    assert body["records"][0]["observation_ref"] == wanted.public_ref
+
+
 def test_rejects_client_sort(client, db_session):
     _, entry = _entry(db_session)
     resp = client.get(_url(entry.id, sort="created_at"))

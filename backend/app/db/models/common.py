@@ -1289,6 +1289,7 @@ class SubmissionAuditEventKind(str, Enum):
     submission_superseded = "submission_superseded"
     status_changed = "status_changed"
     public_visibility_changed = "public_visibility_changed"
+    observation_identity_attached = "observation_identity_attached"
 
 
 class RightsBasisKind(str, Enum):
