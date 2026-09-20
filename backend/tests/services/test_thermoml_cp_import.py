@@ -1,4 +1,5 @@
-"""Tests for the ThermoML Cp(T) persistence service + CLI (Phase C-E3).
+"""Tests for the ThermoML Cp(T) persistence service + CLI (Phase C-E3,
+C-E6).
 
 Uses the per-test transactional ``db_session`` fixture so every test rolls
 back at teardown. DOI metadata lookup is always monkeypatched -- this
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import select
+from tckdb_schemas.rights import DepositRights
 
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
@@ -34,7 +36,13 @@ from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.importers.thermoml import TERMS_TEXT
 from app.importers.thermoml.archive import ArticleBytes
 from app.services.rights import standing_attestation
-from app.services.thermoml_cp_import import import_thermoml_cp_article
+from app.services.thermoml_cp_import import (
+    UPLOAD_SOURCE_NAME,
+    UPLOAD_SOURCE_RELEASE,
+    ThermoMLDoiConflictError,
+    import_thermoml_cp_article,
+    import_thermoml_cp_upload,
+)
 
 FIXTURES = Path(__file__).resolve().parents[2] / "app" / "importers" / "thermoml" / "fixtures"
 
@@ -777,6 +785,236 @@ class TestSMethodNameAllowlist:
 
 
 # ---------------------------------------------------------------------------
+# Upload path (Phase C-E6): anyone may ingest a ThermoML file, not only the
+# NIST archive. ``import_thermoml_cp_upload`` shares the validate -> parse
+# -> map -> persist core with ``import_thermoml_cp_article`` above but
+# differs in custody (depositor-upload channel, not NIST) and rights
+# (the caller's own ``DepositRights``, not a ``source_terms`` attestation).
+# ---------------------------------------------------------------------------
+
+
+_UPLOAD_LICENSE_ID = "CC0-1.0"
+
+
+def _upload_rights(*, source_terms: str | None = None) -> DepositRights:
+    return DepositRights(
+        license=_UPLOAD_LICENSE_ID,
+        depositor_attests_right_to_license=True,
+        source_terms=source_terms,
+    )
+
+
+@pytest.fixture
+def depositor(db_session) -> AppUser:
+    """A plain ``user``-role account -- the upload path (unlike the
+    archive path's ``source_terms`` attestation) needs no elevated role;
+    it is a standard upload."""
+    user = AppUser(username="thermoml_depositor_test", role=AppUserRole.user)
+    db_session.add(user)
+    db_session.flush()
+    return user
+
+
+class TestUploadPath:
+    def test_upload_persists_rows_with_depositor_custody_not_nist(
+        self, db_session, depositor
+    ):
+        """The custody row for an uploaded document must name the
+        depositor-upload channel, never NIST.
+
+        Mutation: pass ``name=SOURCE_NAME, release=SOURCE_RELEASE`` (the
+        NIST constants) instead of ``UPLOAD_SOURCE_NAME``/
+        ``UPLOAD_SOURCE_RELEASE`` in ``import_thermoml_cp_upload``'s
+        ``external_source_kwargs`` -- this assertion goes red because the
+        row's ``source_name`` would then read "NIST TRC ThermoML
+        Archive".
+        """
+        result = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        assert result.inserted_count == 1
+        source = db_session.get(ExternalSource, result.external_source_id)
+        assert source.source_name == UPLOAD_SOURCE_NAME
+        assert source.source_release == UPLOAD_SOURCE_RELEASE
+        assert source.source_name != "NIST TRC ThermoML Archive"
+
+        custody = db_session.get(
+            ExternalSourceRecord, result.external_source_record_id
+        )
+        # No bulk-archive container to cite -- honest absence, not the
+        # archive's SHA-256.
+        assert custody.container_digest is None
+        assert custody.source_uri == "tckdb:depositor-upload"
+
+    def test_upload_dry_run_writes_nothing_to_db_or_object_store(
+        self, db_session, depositor
+    ):
+        before_rows = db_session.execute(
+            select(MolecularPropertyObservation)
+        ).scalars().all()
+        before_sources = db_session.execute(select(ExternalSource)).scalars().all()
+
+        result = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=False,
+        )
+        assert result.would_insert_count == 1
+        assert result.inserted_count == 0
+        assert any(
+            "object store not written" in w for w in result.warnings
+        )
+
+        after_rows = db_session.execute(
+            select(MolecularPropertyObservation)
+        ).scalars().all()
+        after_sources = db_session.execute(select(ExternalSource)).scalars().all()
+        assert after_rows == before_rows
+        assert after_sources == before_sources
+
+    def test_doi_taken_from_file_sdoi_when_not_supplied(self, db_session, depositor):
+        result = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=None,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        assert result.doi == BENZENE_DOI
+        row = db_session.execute(
+            select(MolecularPropertyObservation).where(
+                MolecularPropertyObservation.external_source_doi == BENZENE_DOI
+            )
+        ).scalar_one()
+        assert row is not None
+
+    def test_doi_conflict_is_refused_before_anything_is_written(
+        self, db_session, depositor
+    ):
+        before = db_session.execute(select(ExternalSource)).scalars().all()
+        with pytest.raises(ThermoMLDoiConflictError):
+            import_thermoml_cp_upload(
+                db_session,
+                article=_benzene_article(),  # sDOI = BENZENE_DOI
+                doi="10.1000/not-the-same-doi",
+                actor=depositor,
+                rights=_upload_rights(),
+                commit=True,
+            )
+        after = db_session.execute(select(ExternalSource)).scalars().all()
+        assert after == before
+        rows = db_session.execute(
+            select(MolecularPropertyObservation)
+        ).scalars().all()
+        assert rows == []
+
+    def test_second_upload_of_identical_bytes_is_all_duplicate_no_second_submission(
+        self, db_session, depositor
+    ):
+        article = _benzene_article()
+        first = import_thermoml_cp_upload(
+            db_session,
+            article=article,
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        assert first.inserted_count == 1
+        assert first.submission_id is not None
+
+        second = import_thermoml_cp_upload(
+            db_session,
+            article=article,
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        assert second.inserted_count == 0
+        assert second.duplicate_count == 1
+        # No new submission opened for an all-duplicate run.
+        assert second.submission_id is None
+        assert second.submission_ref is None
+
+    def test_upload_rights_is_depositor_agreement_only_no_source_terms(
+        self, db_session, depositor
+    ):
+        """Unlike the archive path, an uploaded file's submission stands
+        on the depositor's own ``DepositRights`` recorded as an ordinary
+        ``depositor_agreement`` -- never a fabricated ``source_terms`` row
+        (there is no third-party source these bytes were taken under).
+
+        Mutation: call ``_open_submission_with_source_terms_attestation``
+        (the archive path's helper) instead of
+        ``_open_upload_submission_for_depositor`` inside
+        ``import_thermoml_cp_upload`` -- this goes red because a
+        ``source_terms`` row would then exist.
+        """
+        result = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        submission = db_session.get(Submission, result.submission_id)
+        assert submission.source_kind == SubmissionSourceKind.api
+
+        attestations = db_session.execute(
+            select(SubmissionRightsAttestation).where(
+                SubmissionRightsAttestation.submission_id == submission.id
+            )
+        ).scalars().all()
+        assert len(attestations) == 1
+        assert attestations[0].basis == RightsBasisKind.depositor_agreement
+
+        standing = standing_attestation(db_session, submission_id=submission.id)
+        assert standing is not None
+        assert standing.basis == RightsBasisKind.depositor_agreement
+        assert standing.license_id == _UPLOAD_LICENSE_ID
+
+    def test_observation_ref_is_none_on_dry_run(self, db_session, depositor):
+        # A dry run's internal ``session.rollback()`` would also discard an
+        # actor row created earlier in the same transaction if it had not
+        # yet been committed -- one call per test/actor combination, like
+        # every other dry-run test in this module.
+        dry = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=False,
+        )
+        assert dry.dispositions[0].action == "would_insert"
+        assert dry.dispositions[0].observation_ref is None
+
+    def test_observation_ref_is_set_on_commit(self, db_session, depositor):
+        committed = import_thermoml_cp_upload(
+            db_session,
+            article=_benzene_article(),
+            doi=BENZENE_DOI,
+            actor=depositor,
+            rights=_upload_rights(),
+            commit=True,
+        )
+        assert committed.dispositions[0].action == "inserted"
+        assert committed.dispositions[0].observation_ref is not None
+        assert committed.dispositions[0].observation_ref.startswith("mpo_")
+
+
+# ---------------------------------------------------------------------------
 # Layering
 # ---------------------------------------------------------------------------
 
@@ -841,3 +1079,115 @@ class TestCli:
             ]
         )
         assert rc == 2
+
+    def test_cli_file_and_archive_mutually_exclusive_exits_2(self, tmp_path):
+        """``--file``/``--archive`` are an argparse
+        ``mutually_exclusive_group(required=True)`` -- argparse itself
+        refuses this, before any of this module's own code runs.
+
+        Mutation: change the group back to two independent optional
+        arguments (drop the mutually-exclusive group) -- this goes red
+        because argparse would then accept both flags together.
+        """
+        from scripts.thermoml_cp_import import main
+
+        archive_path = tmp_path / "a.tgz"
+        file_path = tmp_path / "f.xml"
+        file_path.write_bytes(b"<DataReport/>")
+        with pytest.raises(SystemExit) as exc_info:
+            main(
+                [
+                    "--archive", str(archive_path),
+                    "--file", str(file_path),
+                    "--license", _LICENSE_ID,
+                ]
+            )
+        assert exc_info.value.code == 2
+
+    def test_cli_neither_archive_nor_file_exits_2(self):
+        from scripts.thermoml_cp_import import main
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--license", _LICENSE_ID])
+        assert exc_info.value.code == 2
+
+    def test_cli_archive_without_doi_exits_2(self, tmp_path):
+        from scripts import thermoml_cp_import as cli
+
+        with pytest.raises(SystemExit) as exc_info:
+            cli.main(
+                [
+                    "--archive", str(tmp_path / "a.tgz"),
+                    "--license", _LICENSE_ID,
+                ]
+            )
+        assert exc_info.value.code == 2
+
+    def test_cli_file_missing_returns_2(self, tmp_path):
+        from scripts import thermoml_cp_import as cli
+
+        rc = cli.main(
+            [
+                "--file", str(tmp_path / "does-not-exist.xml"),
+                "--license", _LICENSE_ID,
+            ]
+        )
+        assert rc == 2
+
+    def test_cli_file_mode_dry_run_persists_nothing(
+        self, tmp_path, db_engine, monkeypatch
+    ):
+        """``--file`` runs the real ``import_thermoml_cp_upload`` pipeline
+        against a real DB connection in dry-run mode (default, no
+        ``--commit``), which rolls back internally -- proving the CLI
+        wires the upload path end to end, not just that argparse accepts
+        the flag.
+
+        Mutation: have the ``--file`` branch call
+        ``import_thermoml_cp_article`` (the archive function, which
+        requires a ``str`` doi and would TypeError on ``doi=None``, or
+        silently use the wrong custody path) instead of
+        ``import_thermoml_cp_upload`` -- this goes red (non-zero exit or
+        wrong behaviour).
+        """
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+
+        from scripts import thermoml_cp_import as cli
+
+        fixture_path = tmp_path / "benzene.xml"
+        fixture_path.write_text(
+            _BENZENE_XML.format(
+                doi=BENZENE_DOI,
+                inchikey=BENZENE_INCHIKEY,
+                method_name="statistical thermodynamics",
+            ),
+            encoding="utf-8",
+        )
+
+        url = db_engine.url
+        monkeypatch.setenv("DB_USER", url.username or "tckdb")
+        monkeypatch.setenv("DB_PASSWORD", url.password or "tckdb")
+        monkeypatch.setenv("DB_HOST", url.host or "127.0.0.1")
+        monkeypatch.setenv("DB_PORT", str(url.port or 5432))
+        monkeypatch.setenv("DB_NAME", url.database)
+        monkeypatch.setattr(
+            "app.services.literature_resolution.fetch_doi_metadata",
+            lambda doi: None,
+        )
+
+        rc = cli.main(
+            [
+                "--file", str(fixture_path),
+                "--license", _LICENSE_ID,
+            ]
+        )
+        assert rc == 0
+
+        with Session(db_engine) as session:
+            rows = session.execute(
+                select(MolecularPropertyObservation).where(
+                    MolecularPropertyObservation.external_source_doi == BENZENE_DOI
+                )
+            ).scalars().all()
+            assert rows == []

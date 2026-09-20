@@ -1,20 +1,41 @@
 """CLI: fetch-verify -> select -> validate -> parse -> map -> persist one
-ThermoML archive article's heat-capacity rows.
+ThermoML article's heat-capacity rows -- either selected from the pinned
+NIST bulk archive (``--archive``/``--doi``) or a standalone ThermoML file
+anyone can hand it directly (``--file``, Phase C-E6: "let anyone ingest a
+ThermoML file, not only the NIST archive").
 
 Default behavior is a dry-run preview -- the full pipeline runs inside one
 transaction, which is rolled back at the end regardless of outcome. Pass
 ``--commit`` to persist.
 
+``--archive`` and ``--file`` are mutually exclusive (argparse enforces
+this before any code here runs). ``--doi`` is required with ``--archive``
+(it selects which article inside the bulk tarball) and optional with
+``--file``: it overrides the file's own ``sDOI`` citation field only when
+the file carries none; a ``--doi`` that disagrees with the file's own
+``sDOI`` is refused (:class:`~app.services.thermoml_cp_import.
+ThermoMLDoiConflictError`) before anything is written.
+
+Custody differs between the two modes -- see
+``app/services/thermoml_cp_import.py``'s module docstring for the full
+design: ``--archive`` custody names NIST/TRC and stands on a
+``source_terms`` attestation quoting NIST's published terms; ``--file``
+custody names the depositor-upload channel and stands on the operator's
+own ``--license`` agreement (recorded as an ordinary
+``depositor_agreement`` attestation, never NIST's terms).
+
 Exit codes:
 
     0 -- dry-run or commit finished. Inspect the printed summary +
         ``dispositions`` for per-row outcomes.
-    2 -- argument / configuration error.
+    2 -- argument / configuration error, or a doi conflict
+        (``thermoml_doi_conflict``).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
@@ -23,10 +44,15 @@ from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from tckdb_schemas.rights import DepositRights
 
 from app.importers.thermoml import ARCHIVE_URL
-from app.importers.thermoml.archive import fetch_archive, select_article
-from app.services.thermoml_cp_import import import_thermoml_cp_article
+from app.importers.thermoml.archive import ArticleBytes, fetch_archive, select_article
+from app.services.thermoml_cp_import import (
+    ThermoMLDoiConflictError,
+    import_thermoml_cp_article,
+    import_thermoml_cp_upload,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -35,27 +61,46 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="thermoml_cp_import",
         description=(
-            "Persist one NIST TRC ThermoML Archive article's heat-capacity "
-            "Cp(T) observations: fetch/verify the pinned archive, select "
-            "and schema-validate the article, parse and map it, then write "
-            "the observation rows, a source-custody row, and a submission "
-            "carrying a source_terms rights attestation."
+            "Persist one ThermoML article's heat-capacity Cp(T) "
+            "observations: validate, parse and map it, then write the "
+            "observation rows, a source-custody row, and a submission "
+            "carrying a rights attestation. Source is either the pinned "
+            "NIST TRC ThermoML Archive (--archive/--doi) or a standalone "
+            "file (--file)."
         ),
     )
-    p.add_argument(
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
         "--archive",
         type=Path,
-        required=True,
+        default=None,
         help=(
             "Path to a local ThermoML.v2020-09-30.tgz. If it does not "
             f"exist yet, it is fetched from the single pinned URL "
-            f"({ARCHIVE_URL})."
+            f"({ARCHIVE_URL}). Requires --doi. Mutually exclusive with "
+            "--file."
+        ),
+    )
+    mode.add_argument(
+        "--file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a standalone ThermoML XML document to persist "
+            "directly -- not selected from the NIST archive (Phase "
+            "C-E6). Custody names the depositor-upload channel, not "
+            "NIST. Mutually exclusive with --archive."
         ),
     )
     p.add_argument(
         "--doi",
-        required=True,
-        help="The article's own DOI, e.g. 10.1016/j.jct.2013.08.022",
+        default=None,
+        help=(
+            "The article's own DOI, e.g. 10.1016/j.jct.2013.08.022. "
+            "Required with --archive. Optional with --file: overrides "
+            "the file's own sDOI only when the file has none; a value "
+            "that disagrees with the file's own sDOI is refused."
+        ),
     )
     p.add_argument(
         "--license",
@@ -119,35 +164,86 @@ def _ensure_actor(session: Session, username: str):
     return user
 
 
+def _article_from_file(path: Path) -> ArticleBytes:
+    """Wrap a standalone ThermoML XML file as :class:`ArticleBytes`.
+
+    There is no JSON twin for a standalone file (that cross-check is a
+    bulk-archive-specific integrity guard -- see
+    ``app.importers.thermoml.archive.select_article``), so
+    ``json_bytes``/``json_sha256`` are placeholders and never consulted
+    by :func:`~app.services.thermoml_cp_import.import_thermoml_cp_upload`.
+    """
+    xml_bytes = path.read_bytes()
+    placeholder_json = b"{}"
+    return ArticleBytes(
+        xml=xml_bytes,
+        json_bytes=placeholder_json,
+        xml_sha256=hashlib.sha256(xml_bytes).hexdigest(),
+        json_sha256=hashlib.sha256(placeholder_json).hexdigest(),
+        member_paths=(str(path), ""),
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_arg_parser()
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    if not args.archive.exists():
+    if args.archive is not None and args.doi is None:
+        parser.error("--doi is required with --archive")
+
+    if args.archive is not None:
+        if not args.archive.exists():
+            try:
+                fetch_archive(ARCHIVE_URL, args.archive)
+            except Exception as exc:
+                _logger.error("failed to fetch archive: %s", exc)
+                return 2
+
         try:
-            fetch_archive(ARCHIVE_URL, args.archive)
+            article = select_article(args.archive, args.doi)
         except Exception as exc:
-            _logger.error("failed to fetch archive: %s", exc)
+            _logger.error("failed to select article for DOI %s: %s", args.doi, exc)
             return 2
 
-    try:
-        article = select_article(args.archive, args.doi)
-    except Exception as exc:
-        _logger.error("failed to select article for DOI %s: %s", args.doi, exc)
-        return 2
+        engine = create_engine(_database_url(), future=True)
+        with Session(engine) as session:
+            actor = _ensure_actor(session, args.actor)
+            result = import_thermoml_cp_article(
+                session,
+                article=article,
+                doi=args.doi,
+                actor=actor,
+                license_id=args.license_id,
+                commit=args.commit,
+            )
+    else:
+        assert args.file is not None  # argparse mutually-exclusive-group(required=True)
+        if not args.file.exists():
+            _logger.error("file not found: %s", args.file)
+            return 2
 
-    engine = create_engine(_database_url(), future=True)
-    with Session(engine) as session:
-        actor = _ensure_actor(session, args.actor)
-        result = import_thermoml_cp_article(
-            session,
-            article=article,
-            doi=args.doi,
-            actor=actor,
-            license_id=args.license_id,
-            commit=args.commit,
+        article = _article_from_file(args.file)
+        rights = DepositRights(
+            license=args.license_id,
+            depositor_attests_right_to_license=True,
         )
+
+        engine = create_engine(_database_url(), future=True)
+        with Session(engine) as session:
+            actor = _ensure_actor(session, args.actor)
+            try:
+                result = import_thermoml_cp_upload(
+                    session,
+                    article=article,
+                    doi=args.doi,
+                    actor=actor,
+                    rights=rights,
+                    commit=args.commit,
+                )
+            except ThermoMLDoiConflictError as exc:
+                _logger.error("%s", exc)
+                return 2
 
     summary = {"commit": args.commit, **result.to_json()}
     summary_text = json.dumps(summary, indent=2, sort_keys=True)

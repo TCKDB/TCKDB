@@ -14,6 +14,46 @@ adds what the CCCBDB path does not need: a source-custody row
 and a submission wrapper with a ``source_terms`` rights attestation quoting
 NIST/TRC's own terms verbatim.
 
+Two public entry points, one shared core (Phase C-E6)
+-------------------------------------------------------
+
+:func:`import_thermoml_cp_article` (the original, C-E3) persists one
+article selected from the pinned NIST bulk archive. :func:`import_
+thermoml_cp_upload` (C-E6) persists one ThermoML document *anyone*
+uploaded directly -- a CLI ``--file`` or the ``POST /uploads/thermoml``
+route -- never fetched from NIST. Both validate -> parse -> map -> persist
+through the same private ``_run_pipeline`` core; they differ only in
+**custody** (who/where the bytes came from) and **rights** (whose
+agreement the deposit stands on):
+
+* Archive: ``external_source`` names NIST/TRC; the custody row's
+  ``container_digest`` is the pinned archive's own SHA-256; the standing
+  rights attestation is an explicit ``source_terms`` row quoting NIST's
+  published terms verbatim (see ``_open_submission_with_source_terms_
+  attestation``) -- nobody at deposit time "agreed" to license these rows,
+  they were taken under a source's own terms.
+* Upload: ``external_source`` names the depositor-upload *channel*
+  (``UPLOAD_SOURCE_NAME`` -- one shared row; *who* uploaded is recorded on
+  the submission itself, not the source), there is no bulk-container
+  digest to cite (``container_digest=None`` -- honest: there is no
+  container), and the standing rights attestation is the caller-supplied
+  ``DepositRights`` recorded as an ordinary ``depositor_agreement`` (see
+  ``_open_upload_submission_for_depositor``) -- never NIST's
+  ``source_terms``, because this deposit did not come from NIST.
+
+``doi`` is also handled differently: the archive path always receives an
+operator-known DOI (the operator picked that specific article to fetch).
+The upload path's ``doi`` is optional -- taken from the file's own
+``sDOI`` citation element when the caller does not supply one, refused
+with :class:`ThermoMLDoiConflictError` when both are present and disagree,
+and falls back to a content-digest-derived synthetic key
+(``"upload:<sha256[:16]>"``) when neither is available, so every custody
+row and dedupe key still has *something* stable to key on. Literature
+resolution is unaffected by this: it always reads the file's own
+``sDOI``/title/etc. (``mapping_result.literature``), never the caller's
+``doi`` argument -- an uploaded file with no citation of its own resolves
+no literature row, exactly as ``map_document`` already produces.
+
 Design contract
 ----------------
 
@@ -70,6 +110,7 @@ Design contract
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -152,6 +193,40 @@ _PARSER_NAME = "thermoml"
 #: element (which is per-document, not per-schema-file).
 _SCHEMA_ID = f"ThermoML.xsd v4.0 sha256:{XSD_SHA256}"
 
+#: Custody identity for the depositor-upload channel (Phase C-E6) -- one
+#: shared ``external_source`` row for every direct upload, as opposed to
+#: the NIST bulk-archive row above (``SOURCE_NAME``/``SOURCE_RELEASE``).
+#: *Who* uploaded a given document is already recorded on the submission
+#: itself (``created_by``, and the ``depositor_agreement`` attestation
+#: carrying their ``rights``) -- this row names the *channel* a document
+#: arrived through, not the individual depositor, mirroring how
+#: ``SOURCE_NAME``/``SOURCE_RELEASE`` name the NIST *database*, not the
+#: NIST staff member who curated a given article into it.
+UPLOAD_SOURCE_NAME = "TCKDB depositor ThermoML upload"
+UPLOAD_SOURCE_RELEASE = "v1"
+
+#: Recorded as ``external_source_record.source_uri`` for an uploaded
+#: document. Not a fetched URL -- there is nothing to fetch, the bytes
+#: arrived in the request/CLI argument -- but the column is ``NOT NULL``,
+#: and a constant here (rather than, say, the object-store key duplicated
+#: from ``raw_uri``) makes the two custody channels distinguishable by
+#: ``source_uri`` alone at a glance.
+UPLOAD_SOURCE_URI = "tckdb:depositor-upload"
+
+#: Prefix for the synthetic record-key basis used when an uploaded
+#: document carries no DOI at all (neither caller-supplied nor the file's
+#: own ``sDOI``) -- see :func:`_resolve_upload_doi`.
+_UPLOAD_DOI_FALLBACK_PREFIX = "upload"
+
+
+class ThermoMLDoiConflictError(ValueError):
+    """A caller-supplied ``doi`` disagrees with the file's own ``sDOI``.
+
+    Raised by :func:`_resolve_upload_doi` (via
+    :func:`import_thermoml_cp_upload`) before anything is validated,
+    parsed or written -- reject, don't guess which one is right.
+    """
+
 _ACTION_WOULD_INSERT = "would_insert"
 _ACTION_INSERTED = "inserted"
 _ACTION_DUPLICATE = "duplicate"
@@ -182,6 +257,12 @@ class ObservationDisposition:
     species_entry_id: int | None
     action: str
     warnings: list[str] = field(default_factory=list)
+    #: The inserted row's public ref (``mpo_...``), set only when
+    #: ``action == "inserted"`` (a real commit). ``None`` for a dry-run
+    #: ``would_insert`` -- no row exists yet to have a ref -- and for
+    #: ``duplicate``/``skipped``. Added for Phase C-E6 so the upload route
+    #: can report per-row outcomes without ever naming a database id.
+    observation_ref: str | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -191,6 +272,7 @@ class ObservationDisposition:
             "species_entry_id": self.species_entry_id,
             "action": self.action,
             "warnings": list(self.warnings),
+            "observation_ref": self.observation_ref,
         }
 
 
@@ -210,12 +292,19 @@ class ThermoMLCpImportResult:
     ambiguous_identity_count: int = 0
     not_found_identity_count: int = 0
     submission_id: int | None = None
+    submission_ref: str | None = None
     external_source_id: int | None = None
     external_source_record_id: int | None = None
     external_source_record_created: bool = False
     literature_id: int | None = None
     warnings: list[str] = field(default_factory=list)
     dispositions: list[ObservationDisposition] = field(default_factory=list)
+    #: {transformed, retained_only, unsupported, rejected, counts} from
+    #: ``app.importers.thermoml.mapping.MappingReport``, added for Phase
+    #: C-E6 so a caller (route or CLI) can report *why* zero rows mapped
+    #: without re-running the mapper. ``None`` only when the document was
+    #: schema-invalid (never reached the mapper at all).
+    mapping_report: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -231,12 +320,14 @@ class ThermoMLCpImportResult:
             "ambiguous_identity_count": self.ambiguous_identity_count,
             "not_found_identity_count": self.not_found_identity_count,
             "submission_id": self.submission_id,
+            "submission_ref": self.submission_ref,
             "external_source_id": self.external_source_id,
             "external_source_record_id": self.external_source_record_id,
             "external_source_record_created": self.external_source_record_created,
             "literature_id": self.literature_id,
             "warnings": list(self.warnings),
             "dispositions": [d.to_json() for d in self.dispositions],
+            "mapping_report": self.mapping_report,
         }
 
 
@@ -245,21 +336,33 @@ class ThermoMLCpImportResult:
 # ---------------------------------------------------------------------------
 
 
-def _get_or_create_external_source(session: Session) -> ExternalSource:
+def _get_or_create_external_source(
+    session: Session,
+    *,
+    name: str,
+    release: str,
+    database_doi: str | None = None,
+    terms_url: str | None = None,
+    terms_text: str | None = None,
+) -> ExternalSource:
+    """Get-or-create keyed on ``(name, release)`` -- shared by both the
+    NIST-archive channel (Phase C-E3) and the depositor-upload channel
+    (Phase C-E6); which constants a caller passes is what distinguishes
+    them (see module docstring)."""
     existing = session.scalar(
         select(ExternalSource).where(
-            ExternalSource.source_name == SOURCE_NAME,
-            ExternalSource.source_release == SOURCE_RELEASE,
+            ExternalSource.source_name == name,
+            ExternalSource.source_release == release,
         )
     )
     if existing is not None:
         return existing
     row = ExternalSource(
-        source_name=SOURCE_NAME,
-        source_release=SOURCE_RELEASE,
-        source_database_doi=SOURCE_DATABASE_DOI,
-        terms_url=TERMS_URL,
-        terms_text=TERMS_TEXT,
+        source_name=name,
+        source_release=release,
+        source_database_doi=database_doi,
+        terms_url=terms_url,
+        terms_text=terms_text,
     )
     session.add(row)
     session.flush()
@@ -276,6 +379,8 @@ def _get_or_create_custody(
     mapping_report_json: dict[str, Any],
     retrieved_at: datetime,
     commit: bool,
+    source_uri: str,
+    container_digest: str | None,
 ) -> tuple[ExternalSourceRecord, bool, bool]:
     """Reuse the custody row for this ``(doi, content, parser, mapping)``
     identity if one already exists; otherwise insert one.
@@ -306,14 +411,18 @@ def _get_or_create_custody(
     raw_uri, would_store = _raw_uri_for(article, commit=commit)
     row = ExternalSourceRecord(
         external_source_id=external_source.id,
+        # Both channels snapshot the same document shape (a ThermoML
+        # DataReport for one article), whether it came from the NIST bulk
+        # archive or was uploaded directly -- see the C-E6 PR description
+        # for why this is not a new ``ExternalSourceRecordKind`` member.
         record_kind=ExternalSourceRecordKind.thermoml_article,
-        source_uri=ARCHIVE_URL,
+        source_uri=source_uri,
         source_record_key=doi,
         retrieved_at=retrieved_at,
         content_sha256=article.xml_sha256,
         content_length=len(article.xml),
         raw_uri=raw_uri,
-        container_digest=ARCHIVE_SHA256,
+        container_digest=container_digest,
         schema_id=_SCHEMA_ID,
         schema_valid=schema_valid,
         parser_name=_PARSER_NAME,
@@ -404,6 +513,155 @@ def _payload_to_row_kwargs(
 # ---------------------------------------------------------------------------
 
 
+def _run_pipeline(
+    session: Session,
+    *,
+    article: ArticleBytes,
+    result: ThermoMLCpImportResult,
+    actor: AppUser,
+    commit: bool,
+    retrieved_at: datetime,
+    external_source_kwargs: dict[str, Any],
+    custody_source_uri: str,
+    custody_container_digest: str | None,
+    open_submission: Callable[[Session], UploadSubmissionContext],
+    resolve_doi: Callable[[Any], str],
+) -> None:
+    """Shared validate -> parse -> map -> persist core for both public
+    entry points (Phase C-E6). Mutates ``result`` in place.
+
+    Returns (after a single ``session.rollback()``) without persisting
+    anything when the document is schema-invalid -- callers check
+    ``result.schema_valid`` immediately after calling this and return
+    early themselves rather than falling through to their own
+    commit/rollback trailer, so that rollback stays the *only* rollback
+    call on this path (matching the pre-refactor behaviour exactly).
+
+    :param external_source_kwargs: Forwarded to
+        :func:`_get_or_create_external_source` -- the NIST constants for
+        the archive path, the upload-channel constants for the upload
+        path.
+    :param custody_source_uri: ``external_source_record.source_uri`` for
+        the new custody row, if one is created.
+    :param custody_container_digest: ``external_source_record.
+        container_digest`` -- the pinned archive's SHA-256 for the archive
+        path, ``None`` for the upload path (there is no container).
+    :param open_submission: Called (at most once, only when at least one
+        row would newly insert) to open the submission wrapper and record
+        its rights attestation. Differs by path -- see module docstring.
+    :param resolve_doi: Called with the parsed document to produce the
+        DOI/record-key basis for :func:`~app.importers.thermoml.mapping.
+        map_document` and the custody row. The archive path ignores its
+        argument and returns the operator-supplied DOI unchanged; the
+        upload path reconciles the caller's optional ``doi`` against the
+        document's own ``sDOI`` (see :func:`_resolve_upload_doi`). May
+        raise :class:`ThermoMLDoiConflictError`.
+    """
+
+    schema_report = validate_bytes(article.xml)
+    result.schema_valid = schema_report.valid
+    if not schema_report.valid:
+        result.warnings.append(
+            "schema-invalid document, never parsed: "
+            + "; ".join(schema_report.errors)
+        )
+        session.rollback()
+        return
+
+    document = parse_thermoml_document(article.xml)
+    doi = resolve_doi(document)
+    result.doi = doi
+
+    mapping_result = map_document(document, doi=doi)
+    result.payload_count = len(mapping_result.payloads)
+    result.mapping_report = mapping_result.report.model_dump(by_alias=True)
+
+    external_source = _get_or_create_external_source(session, **external_source_kwargs)
+    result.external_source_id = external_source.id
+
+    custody, custody_created, custody_would_store = _get_or_create_custody(
+        session,
+        external_source=external_source,
+        article=article,
+        doi=doi,
+        schema_valid=schema_report.valid,
+        mapping_report_json=result.mapping_report,
+        retrieved_at=retrieved_at,
+        commit=commit,
+        source_uri=custody_source_uri,
+        container_digest=custody_container_digest,
+    )
+    result.external_source_record_id = custody.id
+    result.external_source_record_created = custody_created
+    if custody_would_store:
+        result.warnings.append(
+            "dry run: object store not written; would_store "
+            f"raw_uri={custody.raw_uri}"
+        )
+
+    literature = None
+    if mapping_result.literature.doi or mapping_result.literature.title:
+        literature = resolve_or_create_literature(
+            session,
+            LiteratureUploadRequest(
+                doi=mapping_result.literature.doi,
+                title=mapping_result.literature.title,
+                year=mapping_result.literature.year,
+                journal=mapping_result.literature.journal,
+            ),
+        )
+        result.literature_id = literature.id
+
+    # Resolve identity + build row kwargs for every payload, and
+    # pre-check the dedupe key (read-only) so we know *before* opening
+    # a submission whether this run will actually deposit anything new.
+    prepared: list[tuple[Any, Any, dict[str, Any], int | None]] = []
+    for payload in mapping_result.payloads:
+        identity = resolve_identity(payload, session)
+        row_kwargs = _payload_to_row_kwargs(
+            payload,
+            species_entry_id=identity.species_entry_id,
+            created_by=actor.id,
+            literature_id=(literature.id if literature is not None else None),
+            external_source_record_id=custody.id,
+        )
+        existing_id = _existing_dedupe_id(session, row_kwargs)
+        prepared.append((payload, identity, row_kwargs, existing_id))
+
+    would_insert_count = sum(
+        1 for *_rest, existing_id in prepared if existing_id is None
+    )
+
+    submission_ctx: UploadSubmissionContext | None = None
+    if would_insert_count > 0:
+        submission_ctx = open_submission(session)
+        result.submission_id = submission_ctx.submission_id
+        result.submission_ref = submission_ctx.submission.public_ref
+
+    for payload, identity, row_kwargs, _existing_id in prepared:
+        disposition = _insert_one(
+            session,
+            row_kwargs=row_kwargs,
+            submission_ctx=submission_ctx,
+            commit=commit,
+            identity_status=identity.status,
+            warnings=list(identity.warnings),
+            payload=payload,
+        )
+        result.dispositions.append(disposition)
+        _bump_counters(result, disposition)
+
+    if submission_ctx is not None and commit:
+        mark_upload_ingested(
+            session,
+            submission_ctx,
+            summary=(
+                f"Ingested ThermoML Cp(T) document DOI={doi} "
+                f"({result.inserted_count} row(s))."
+            ),
+        )
+
+
 def import_thermoml_cp_article(
     session: Session,
     *,
@@ -414,7 +672,8 @@ def import_thermoml_cp_article(
     commit: bool = False,
     retrieved_at: datetime | None = None,
 ) -> ThermoMLCpImportResult:
-    """Validate, parse, map and persist one ThermoML article's Cp(T) rows.
+    """Validate, parse, map and persist one ThermoML article's Cp(T) rows,
+    selected from the pinned NIST bulk archive (Phase C-E3).
 
     :param session: An open SQLAlchemy session. Per-row inserts use a
         SAVEPOINT so one bad row never breaks the outer transaction.
@@ -439,112 +698,185 @@ def import_thermoml_cp_article(
         back; ``True`` commits on success, rolls back on error.
     :param retrieved_at: When the article bytes were fetched. Defaults to
         now (naive UTC, matching the column type).
+
+    See :func:`import_thermoml_cp_upload` for the Phase C-E6 sibling that
+    persists a directly-uploaded document instead (custody names the
+    depositor-upload channel, not NIST; rights stand on the caller's own
+    ``DepositRights``, not a ``source_terms`` attestation).
     """
 
     result = ThermoMLCpImportResult(doi=doi)
     retrieved_at = retrieved_at or _now_naive_utc()
 
     try:
-        schema_report = validate_bytes(article.xml)
-        result.schema_valid = schema_report.valid
-        if not schema_report.valid:
-            result.warnings.append(
-                "schema-invalid document, never parsed: "
-                + "; ".join(schema_report.errors)
-            )
-            session.rollback()
-            return result
-
-        document = parse_thermoml_document(article.xml)
-        mapping_result = map_document(document, doi=doi)
-        result.payload_count = len(mapping_result.payloads)
-
-        external_source = _get_or_create_external_source(session)
-        result.external_source_id = external_source.id
-
-        custody, custody_created, custody_would_store = _get_or_create_custody(
+        _run_pipeline(
             session,
-            external_source=external_source,
             article=article,
-            doi=doi,
-            schema_valid=schema_report.valid,
-            mapping_report_json=mapping_result.report.model_dump(by_alias=True),
-            retrieved_at=retrieved_at,
+            result=result,
+            actor=actor,
             commit=commit,
+            retrieved_at=retrieved_at,
+            external_source_kwargs={
+                "name": SOURCE_NAME,
+                "release": SOURCE_RELEASE,
+                "database_doi": SOURCE_DATABASE_DOI,
+                "terms_url": TERMS_URL,
+                "terms_text": TERMS_TEXT,
+            },
+            custody_source_uri=ARCHIVE_URL,
+            custody_container_digest=ARCHIVE_SHA256,
+            open_submission=lambda s: _open_submission_with_source_terms_attestation(
+                s, actor=actor, license_id=license_id, doi=doi
+            ),
+            resolve_doi=lambda _document: doi,
         )
-        result.external_source_record_id = custody.id
-        result.external_source_record_created = custody_created
-        if custody_would_store:
-            result.warnings.append(
-                "dry run: object store not written; would_store "
-                f"raw_uri={custody.raw_uri}"
-            )
-
-        literature = None
-        if mapping_result.literature.doi or mapping_result.literature.title:
-            literature = resolve_or_create_literature(
-                session,
-                LiteratureUploadRequest(
-                    doi=mapping_result.literature.doi,
-                    title=mapping_result.literature.title,
-                    year=mapping_result.literature.year,
-                    journal=mapping_result.literature.journal,
-                ),
-            )
-            result.literature_id = literature.id
-
-        # Resolve identity + build row kwargs for every payload, and
-        # pre-check the dedupe key (read-only) so we know *before* opening
-        # a submission whether this run will actually deposit anything new.
-        prepared: list[tuple[Any, Any, dict[str, Any], int | None]] = []
-        for payload in mapping_result.payloads:
-            identity = resolve_identity(payload, session)
-            row_kwargs = _payload_to_row_kwargs(
-                payload,
-                species_entry_id=identity.species_entry_id,
-                created_by=actor.id,
-                literature_id=(literature.id if literature is not None else None),
-                external_source_record_id=custody.id,
-            )
-            existing_id = _existing_dedupe_id(session, row_kwargs)
-            prepared.append((payload, identity, row_kwargs, existing_id))
-
-        would_insert_count = sum(
-            1 for *_rest, existing_id in prepared if existing_id is None
-        )
-
-        submission_ctx: UploadSubmissionContext | None = None
-        if would_insert_count > 0:
-            submission_ctx = _open_submission_with_source_terms_attestation(
-                session, actor=actor, license_id=license_id, doi=doi
-            )
-            result.submission_id = submission_ctx.submission_id
-
-        for payload, identity, row_kwargs, _existing_id in prepared:
-            disposition = _insert_one(
-                session,
-                row_kwargs=row_kwargs,
-                submission_ctx=submission_ctx,
-                commit=commit,
-                identity_status=identity.status,
-                warnings=list(identity.warnings),
-                payload=payload,
-            )
-            result.dispositions.append(disposition)
-            _bump_counters(result, disposition)
-
-        if submission_ctx is not None and commit:
-            mark_upload_ingested(
-                session,
-                submission_ctx,
-                summary=(
-                    f"Ingested ThermoML Cp(T) article DOI={doi} "
-                    f"({result.inserted_count} row(s))."
-                ),
-            )
     except Exception:
         session.rollback()
         raise
+
+    if not result.schema_valid:
+        return result
+
+    if commit:
+        session.commit()
+    else:
+        session.rollback()
+
+    return result
+
+
+def _resolve_upload_doi(
+    explicit_doi: str | None, document_doi: str | None
+) -> str | None:
+    """Reconcile a caller-supplied ``doi`` with the uploaded file's own
+    ``sDOI`` citation field.
+
+    :returns: The DOI to use for record-keying, or ``None`` when neither
+        is present (the caller falls back to a content-digest-derived
+        key -- see :func:`import_thermoml_cp_upload`).
+    :raises ThermoMLDoiConflictError: Both are present and disagree
+        (compared case-insensitively, whitespace-trimmed).
+    """
+    explicit = explicit_doi.strip() if explicit_doi else None
+    document = document_doi.strip() if document_doi else None
+    if explicit and document and explicit.casefold() != document.casefold():
+        raise ThermoMLDoiConflictError(
+            f"thermoml_doi_conflict: the supplied doi {explicit!r} does not "
+            f"match the uploaded file's own sDOI {document!r}"
+        )
+    return explicit or document
+
+
+def _open_upload_submission_for_depositor(
+    session: Session,
+    *,
+    actor: AppUser,
+    rights: DepositRights,
+    doi_for_keying: str,
+) -> UploadSubmissionContext:
+    """Open the submission wrapper for a depositor-uploaded ThermoML file
+    (Phase C-E6).
+
+    Unlike :func:`_open_submission_with_source_terms_attestation`, no
+    second attestation is recorded here: ``open_upload_submission``
+    already records ``rights`` as a ``depositor_agreement`` attestation,
+    and that *is* the basis this deposit stands on -- there is no
+    third-party source (NIST or otherwise) whose terms it was taken
+    under. Recording a ``source_terms`` row here would misattribute a
+    depositor's own upload to a source that never produced it.
+    """
+    return open_upload_submission(
+        session,
+        created_by=actor.id,
+        kind=SubmissionKind.other,
+        rights=rights,
+        title=f"ThermoML Cp(T) file upload (doi={doi_for_keying})",
+    )
+
+
+def import_thermoml_cp_upload(
+    session: Session,
+    *,
+    article: ArticleBytes,
+    doi: str | None,
+    actor: AppUser,
+    rights: DepositRights,
+    commit: bool = False,
+    retrieved_at: datetime | None = None,
+) -> ThermoMLCpImportResult:
+    """Validate, parse, map and persist one depositor-uploaded ThermoML
+    document's Cp(T) rows (Phase C-E6) -- the source-neutral sibling of
+    :func:`import_thermoml_cp_article` that lets anyone ingest a ThermoML
+    file, not only the pinned NIST archive.
+
+    Shares the validate -> parse -> map -> persist core with the archive
+    path (:func:`_run_pipeline`); differs in custody and rights -- see the
+    module docstring for the full comparison.
+
+    :param session: An open SQLAlchemy session. Per-row inserts use a
+        SAVEPOINT so one bad row never breaks the outer transaction.
+    :param article: The uploaded document's bytes, wrapped as
+        :class:`~app.importers.thermoml.archive.ArticleBytes`. There is no
+        JSON twin to cross-check for an upload (unlike the archive path);
+        only ``xml``/``xml_sha256`` are read from it. Callers pass
+        ``json_bytes=b"{}"`` (or any placeholder) and a synthetic
+        ``member_paths``.
+    :param doi: Optional. When given, must agree with the file's own
+        ``sDOI`` citation element (case/whitespace-insensitive) or the
+        import is refused with :class:`ThermoMLDoiConflictError` *before*
+        anything is written. When omitted, the file's own ``sDOI`` is used
+        if present; when neither is present, a synthetic record-key basis
+        derived from the content digest is used
+        (``f"upload:{article.xml_sha256[:16]}"``). Literature resolution
+        is unaffected by this parameter -- it always reads the file's own
+        citation block, never this argument.
+    :param actor: The depositor. Recorded as the submission's creator and
+        the ``depositor_agreement`` attestor. No elevated role is
+        required -- this is a standard upload, unlike the archive path's
+        curator-only ``source_terms`` attestation.
+    :param rights: The depositor's own rights agreement. Required --
+        unlike the archive path, there is no third-party source terms to
+        fall back on if this is absent.
+    :param commit: ``False`` (default) runs the full pipeline and rolls
+        back; ``True`` commits on success, rolls back on error.
+    :param retrieved_at: When the bytes were received. Defaults to now
+        (naive UTC, matching the column type).
+    :raises ThermoMLDoiConflictError: See ``doi`` above. Raised before any
+        row is validated as schema-valid content, so nothing is written.
+    """
+
+    result = ThermoMLCpImportResult(doi=doi or "")
+    retrieved_at = retrieved_at or _now_naive_utc()
+
+    def _resolve(document: Any) -> str:
+        resolved = _resolve_upload_doi(doi, document.citation.doi)
+        return resolved or f"{_UPLOAD_DOI_FALLBACK_PREFIX}:{article.xml_sha256[:16]}"
+
+    try:
+        _run_pipeline(
+            session,
+            article=article,
+            result=result,
+            actor=actor,
+            commit=commit,
+            retrieved_at=retrieved_at,
+            external_source_kwargs={
+                "name": UPLOAD_SOURCE_NAME,
+                "release": UPLOAD_SOURCE_RELEASE,
+            },
+            custody_source_uri=UPLOAD_SOURCE_URI,
+            custody_container_digest=None,
+            open_submission=lambda s: _open_upload_submission_for_depositor(
+                s, actor=actor, rights=rights, doi_for_keying=result.doi
+            ),
+            resolve_doi=_resolve,
+        )
+    except Exception:
+        session.rollback()
+        raise
+
+    if not result.schema_valid:
+        return result
 
     if commit:
         session.commit()
@@ -613,18 +945,23 @@ def _insert_one(
     payload,
 ) -> ObservationDisposition:
     savepoint = session.begin_nested()
+    observation_ref: str | None = None
     try:
         stmt = (
             pg_insert(MolecularPropertyObservation)
             .values(**row_kwargs)
             .on_conflict_do_nothing(constraint=_DEDUPE_CONSTRAINT_NAME)
-            .returning(MolecularPropertyObservation.id)
+            .returning(
+                MolecularPropertyObservation.id,
+                MolecularPropertyObservation.public_ref,
+            )
         )
-        inserted_id = session.execute(stmt).scalar_one_or_none()
-        if inserted_id is None:
+        inserted_row = session.execute(stmt).one_or_none()
+        if inserted_row is None:
             action = _ACTION_DUPLICATE
             savepoint.rollback()
         else:
+            inserted_id, inserted_ref = inserted_row
             if commit:
                 assert submission_ctx is not None, (
                     "a row was inserted but no submission was opened to "
@@ -638,6 +975,12 @@ def _insert_one(
                     record_id=inserted_id,
                 )
                 action = _ACTION_INSERTED
+                # Only a real, committed insert gets to report its ref --
+                # a dry-run's row is rolled back below and a later real
+                # insert would mint a *different* random public_ref, so
+                # showing this one here would promise a stability the
+                # rolled-back row never had.
+                observation_ref = inserted_ref
                 savepoint.commit()
             else:
                 action = _ACTION_WOULD_INSERT
@@ -658,6 +1001,7 @@ def _insert_one(
         species_entry_id=row_kwargs.get("species_entry_id"),
         action=action,
         warnings=warnings,
+        observation_ref=observation_ref,
     )
 
 
@@ -684,7 +1028,12 @@ def _bump_counters(
 
 
 __all__ = [
+    "UPLOAD_SOURCE_NAME",
+    "UPLOAD_SOURCE_RELEASE",
+    "UPLOAD_SOURCE_URI",
     "ObservationDisposition",
     "ThermoMLCpImportResult",
+    "ThermoMLDoiConflictError",
     "import_thermoml_cp_article",
+    "import_thermoml_cp_upload",
 ]
