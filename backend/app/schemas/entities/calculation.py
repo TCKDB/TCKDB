@@ -28,6 +28,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    HessianSource,
     IRCDirection,
     PathSearchMethod,
     ValidationStatus,
@@ -299,6 +300,26 @@ class CalculationFreqModeRead(ORMBaseSchema):
 
 class CalculationFreqResultRead(CalculationFreqResultBase, ORMBaseSchema):
     modes: list[CalculationFreqModeRead] = []
+
+
+class CalculationHessianRead(ORMBaseSchema):
+    """The stored Cartesian Hessian for a calculation (``calc_hessian``).
+
+    Read-only: mirrors ``app.db.models.calculation.CalculationHessian``
+    exactly, returning the packed lower triangle (including the diagonal)
+    verbatim -- no re-derivation, no unit conversion. ``geometry_id`` binds
+    the matrix to the exact :class:`~app.db.models.geometry.Geometry` row
+    it was computed at, following the same convention as
+    :class:`CalculationInputGeometryBase`/:class:`CalculationOutputGeometryBase`.
+    """
+
+    calculation_id: int
+    geometry_id: int
+    natoms: int
+    lower_triangle_hartree_bohr2: list[float]
+    source: HessianSource
+    parser_version: str | None = None
+    note: str | None = None
 
 
 class CalculationScanCoordinateUpdate(SchemaBase):

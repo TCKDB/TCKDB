@@ -927,6 +927,38 @@ class TestCalculationPointSeries:
         assert result["owner"]["kind"] == "transition_state_entry"
 
 
+class TestCalculationHessian:
+    """``get_calculation_hessian`` — GET /calculations/{id}/hessian."""
+
+    def test_path_and_parsed_body(self):
+        body = {
+            "calculation_id": 7,
+            "geometry_id": 11,
+            "natoms": 3,
+            "lower_triangle_hartree_bohr2": [0.1, 0.2, 0.3],
+            "source": "uploaded",
+            "parser_version": None,
+            "note": None,
+        }
+        handler, seen = _capture(body)
+        client, _ = make_client(handler)
+
+        result = client.get_calculation_hessian(7)
+
+        assert _path_of(str(seen[0].url)).endswith("/calculations/7/hessian")
+        assert result == body
+
+    def test_not_found_raises(self):
+        from tckdb_client.errors import TCKDBHTTPError
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, json={"code": "hessian_not_found", "detail": "not found"})
+
+        client, _ = make_client(handler)
+        with pytest.raises(TCKDBHTTPError):
+            client.get_calculation_hessian(999)
+
+
 # ---------------------------------------------------------------------------
 # Artifacts, exports, vocabularies
 # ---------------------------------------------------------------------------

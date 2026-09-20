@@ -1,0 +1,144 @@
+{
+  "additional_calculations": [],
+  "applied_energy_corrections": [],
+  "calculation": {
+    "constraints": [],
+    "hessian": {
+      "geometry": {
+        "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162194\nH -0.0000000000 0.7906895713 0.5437010614\nH 0.0000000000 -0.7906895713 0.5437010614"
+      },
+      "lower_triangle_hartree_bohr2": [
+        -0.001533616561028961,
+        -8.737286211463203e-16,
+        0.8021239379775073,
+        1.4833876214144673e-16,
+        -1.4050129468809127e-12,
+        0.5827986875604894,
+        0.0007668082761478207,
+        5.682243628359333e-16,
+        3.3040345939609687e-16,
+        0.006098341409520036,
+        4.608724409817341e-16,
+        -0.4010619689863606,
+        -0.19540786542935437,
+        -5.365647387001824e-16,
+        0.42584908608434247,
+        3.6195081268463314e-16,
+        -0.3111290831516951,
+        -0.2913993437739081,
+        -4.0526282938502907e-16,
+        0.2532684742848867,
+        0.27263235556480975,
+        0.0007668082842456417,
+        3.055042580358807e-16,
+        -4.787422029120707e-16,
+        -0.006865149685804924,
+        7.569230135687274e-17,
+        4.331201795988308e-17,
+        0.006098341402048513,
+        4.128562118182208e-16,
+        -0.40106196899042973,
+        0.1954078654242083,
+        -3.1659638840717374e-17,
+        -0.024787117091742715,
+        0.05786060886980296,
+        -3.8119657427404216e-16,
+        0.42584908607829186,
+        -5.102895878630909e-16,
+        0.31112908315331517,
+        -0.2913993437662819,
+        7.485939297826159e-17,
+        -0.0578606088667383,
+        0.018766988201729076,
+        4.35430213113324e-16,
+        -0.25326847428320476,
+        0.27263235555559195
+      ],
+      "source": "uploaded"
+    },
+    "input_geometries": [
+      {
+        "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162194\nH -0.0000000000 0.7906895713 0.5437010614\nH 0.0000000000 -0.7906895713 0.5437010614"
+      }
+    ],
+    "level_of_theory": {
+      "basis": "sto-3g",
+      "method": "hf"
+    },
+    "output_geometries": [],
+    "parameters_json": {
+      "tckdb_origin": {
+        "independent_ess_job": true,
+        "origin_kind": "imported",
+        "producer": "tckdb-qcschema/0.2.0",
+        "reason": "Imported from a MolSSI QCSchema atomic document (family=v1, driver=hessian)."
+      },
+      "tckdb_qcschema": {
+        "adapter_version": "0.2.0",
+        "bohr_to_angstrom": 0.52917721067,
+        "canonical_document_sha256": "4251a9f47d3727436eff514c42c0ed58aa59b530c656f0c37ba113d7f4a4a417",
+        "driver": "hessian",
+        "identity_source": "depositor_declared",
+        "mapping_report": {
+          "rejected": [],
+          "retained_only": [],
+          "transformed": [
+            "molecule.geometry",
+            "provenance.creator",
+            "provenance.version",
+            "model.method",
+            "model.basis",
+            "return_result",
+            "--smiles",
+            "molecule.molecular_charge",
+            "molecule.molecular_multiplicity"
+          ],
+          "unsupported": [
+            "stdout",
+            "provenance.cpu",
+            "provenance.module",
+            "provenance.qcengine_version",
+            "provenance.username"
+          ]
+        },
+        "model_family": "v1",
+        "provenance": {
+          "creator": "Psi4",
+          "hostname": "archlinux",
+          "memory": 25.564,
+          "nthreads": 12,
+          "routine": "psi4.schema_runner.run_qcschema",
+          "version": "1.11",
+          "wall_time": 1.2279760837554932
+        },
+        "qcelemental_version": "0.51.2",
+        "raw_artifact_filename": "hessian_v1.qcschema.json",
+        "raw_artifact_sha256": "1edac17be79b381771fb6c8889ec147bdbaaf12fbb6403a3d9052b6b1196522e",
+        "record_kind": "atomic",
+        "schema_name": "qcschema_output",
+        "schema_version": 1,
+        "software_source": "provenance"
+      }
+    },
+    "parameters_parser_version": "tckdb-qcschema/0.2.0;qcelemental/0.51.2",
+    "quality": "raw",
+    "software_release": {
+      "name": "Psi4",
+      "version": "1.11"
+    },
+    "type": "freq"
+  },
+  "geometry": {
+    "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162194\nH -0.0000000000 0.7906895713 0.5437010614\nH 0.0000000000 -0.7906895713 0.5437010614"
+  },
+  "scientific_origin": "computed",
+  "species_entry": {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "molecule_kind": "molecule",
+    "multiplicity": 1,
+    "smiles": "O",
+    "species_entry_kind": "minimum",
+    "stereo_kind": "unspecified"
+  }
+}

@@ -1216,6 +1216,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "re-pointing that gate at the new shape rather than "
                 "deleting it."
             )),
+    ApiCode("hessian_not_found", 404, Surface.coded_exception,
+            "backend/app/api/routes/calculations.py"),
     ApiCode("idempotency_conflict", 409, Surface.response_literal,
             "backend/app/api/errors.py",
             shape=Shape.relationship),

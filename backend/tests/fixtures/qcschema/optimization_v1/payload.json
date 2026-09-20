@@ -1,0 +1,112 @@
+{
+  "additional_calculations": [],
+  "applied_energy_corrections": [],
+  "calculation": {
+    "constraints": [],
+    "input_geometries": [
+      {
+        "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0685162195\nH 0.0000000000 0.7906895713 0.5437010613\nH 0.0000000000 -0.7906895713 0.5437010613"
+      }
+    ],
+    "level_of_theory": {
+      "basis": "sto-3g",
+      "method": "hf"
+    },
+    "opt_result": {
+      "converged": true,
+      "final_energy_hartree": -74.96599012188283,
+      "n_steps": 5
+    },
+    "output_geometries": [
+      {
+        "geometry": {
+          "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0842433051\nH -0.0000000000 0.7580719744 0.5515646041\nH 0.0000000000 -0.7580719744 0.5515646041"
+        },
+        "role": "final"
+      }
+    ],
+    "parameters_json": {
+      "tckdb_origin": {
+        "independent_ess_job": true,
+        "origin_kind": "imported",
+        "producer": "tckdb-qcschema/0.2.0",
+        "reason": "Imported from a MolSSI QCSchema optimization document (family=v1, driver=n/a)."
+      },
+      "tckdb_qcschema": {
+        "adapter_version": "0.2.0",
+        "bohr_to_angstrom": 0.52917721067,
+        "canonical_document_sha256": "441a83d395301227d00cc12f530e3fd7627c34a6b41345a71be1242da8a7e064",
+        "driver": null,
+        "identity_source": "depositor_declared",
+        "mapping_report": {
+          "rejected": [],
+          "retained_only": [
+            "energies (per-step)",
+            "trajectory"
+          ],
+          "transformed": [
+            "initial_molecule.geometry",
+            "final_molecule.geometry",
+            "trajectory[-1].provenance.creator",
+            "trajectory[-1].provenance.version",
+            "provenance.creator",
+            "provenance.version",
+            "model.method",
+            "model.basis",
+            "success",
+            "trajectory (length)",
+            "trajectory[-1].properties.return_energy",
+            "--smiles",
+            "molecule.molecular_charge",
+            "molecule.molecular_multiplicity"
+          ],
+          "unsupported": [
+            "stdout",
+            "provenance.cpu",
+            "provenance.qcengine_version",
+            "provenance.username"
+          ]
+        },
+        "model_family": "v1",
+        "provenance": {
+          "creator": "geomeTRIC",
+          "hostname": "archlinux",
+          "routine": "geometric.run_json.geometric_run_json",
+          "version": "1.1.1",
+          "wall_time": 5.048005819320679
+        },
+        "qcelemental_version": "0.51.2",
+        "raw_artifact_filename": "optimization_v1.qcschema.json",
+        "raw_artifact_sha256": "b8e0088697c0a1402ec2231ceaf25299cbe85ebb5eadd4af977e51969ba9cbba",
+        "record_kind": "optimization",
+        "schema_name": "qcschema_optimization_output",
+        "schema_version": 1,
+        "software_source": "trajectory[-1].provenance"
+      }
+    },
+    "parameters_parser_version": "tckdb-qcschema/0.2.0;qcelemental/0.51.2",
+    "quality": "raw",
+    "software_release": {
+      "name": "Psi4",
+      "version": "1.11"
+    },
+    "type": "opt",
+    "workflow_tool_release": {
+      "name": "geomeTRIC",
+      "version": "1.1.1"
+    }
+  },
+  "geometry": {
+    "xyz_text": "3\n\nO 0.0000000000 0.0000000000 -0.0842433051\nH -0.0000000000 0.7580719744 0.5515646041\nH 0.0000000000 -0.7580719744 0.5515646041"
+  },
+  "scientific_origin": "computed",
+  "species_entry": {
+    "charge": 0,
+    "electronic_state_kind": "ground",
+    "molecule_kind": "molecule",
+    "multiplicity": 1,
+    "smiles": "O",
+    "species_entry_kind": "minimum",
+    "stereo_kind": "unspecified"
+  }
+}

@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 104 |
+| typed | 105 |
 | raw_only | 107 |
 | not_applicable | 44 |
-| **total** | **255** |
+| **total** | **256** |
 
 ## Typed coverage
 
@@ -26,6 +26,7 @@ A first-class client method exists for these operations.
 | `POST /api/v1/bundles/dry-run` | yes | `bundle_dry_run` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
 | `POST /api/v1/bundles/submit` | yes | `bundle_submit` | — | `examples/submit_bundle.py` | `tests/test_client.py` |
 | `POST /api/v1/calculations/{calculation_id}/artifacts` | yes | `upload_artifacts` | — | — | `tests/test_upload_artifacts_batch.py` |
+| `GET /api/v1/calculations/{calculation_id}/hessian` | yes | `get_calculation_hessian` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/health` | yes | `health` | — | — | `tests/test_client.py` |
 | `POST /api/v1/jobs/computed-reaction` | yes | `enqueue_job` | — | — | `tests/test_typed_parity_methods.py` |
 | `POST /api/v1/jobs/conformer` | yes | `enqueue_job` | — | — | `tests/test_typed_parity_methods.py` |
