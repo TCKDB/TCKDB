@@ -2026,10 +2026,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "POST /uploads/thermoml (Phase C-E6). A schema-valid "
                 "ThermoML document mapped zero Cp(T) payloads (e.g. "
-                "liquid-only or mixture-only content) -- refused rather "
-                "than silently opening an empty submission. detail lists "
-                "the mapping report's unsupported/rejected reasons."
-            )),
+                "liquid-only or mixture-only content) -- refused before "
+                "any custody, literature or object-store write, rather "
+                "than silently opening an empty submission. context.reasons "
+                "carries the mapping report's unsupported/rejected reasons."
+            ),
+            shape=Shape.relationship),
     ApiCode("thermoml_schema_invalid", 422, Surface.coded_exception,
             "backend/app/api/routes/uploads.py",
             note=(

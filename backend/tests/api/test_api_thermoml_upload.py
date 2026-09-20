@@ -369,9 +369,11 @@ class TestCodedRefusals:
 
         Mutation: move the ``payload_count == 0`` check in
         ``_run_pipeline`` back to after ``_get_or_create_custody`` (i.e.
-        restore the old post-hoc check) -- every ``before == after``
-        assertion below goes red because the custody/literature rows and
-        the object-store write happen again.
+        restore the old post-hoc check) -- the ``head_artifact_object``
+        assertion goes red because the object-store write happens again.
+        The row-count assertions stay green under that mutation, since the
+        refusal path rolls the flushed rows back; they pin the committed
+        state, not the ordering.
         """
 
         def _count(model) -> int:

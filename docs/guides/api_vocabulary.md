@@ -834,7 +834,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermoml_doi_conflict` | a relationship — read `context` |
 | `thermoml_file_too_large` | a relationship — read `context` |
 | `thermoml_invalid_base64` | a thing |
-| `thermoml_no_supported_content` | a thing |
+| `thermoml_no_supported_content` | a relationship — read `context` |
 | `thermoml_schema_invalid` | a thing |
 | `too_many_element_symbols` | a relationship — read `context` |
 | `transition_state_charge_mismatch` | a relationship — read `context` |

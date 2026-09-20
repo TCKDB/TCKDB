@@ -49,10 +49,11 @@ with :class:`ThermoMLDoiConflictError` when both are present and disagree,
 and falls back to a content-digest-derived synthetic key
 (``"upload:<sha256[:16]>"``) when neither is available, so every custody
 row and dedupe key still has *something* stable to key on. Literature
-resolution is unaffected by this: it always reads the file's own
-``sDOI``/title/etc. (``mapping_result.literature``), never the caller's
-``doi`` argument -- an uploaded file with no citation of its own resolves
-no literature row, exactly as ``map_document`` already produces.
+resolution is by DOI only: the file's own ``sDOI`` when present, else the
+caller's ``doi`` on the upload path (``literature_doi_fallback``); the
+synthetic key never reaches literature. A file with neither resolves no
+literature row, and its citation block is kept verbatim in the custody
+row's ``mapping_report_json["citation"]``.
 
 Design contract
 ----------------
@@ -1024,8 +1025,9 @@ def import_thermoml_cp_upload(
         back; ``True`` commits on success, rolls back on error.
     :param retrieved_at: When the bytes were received. Defaults to now
         (naive UTC, matching the column type).
-    :raises ThermoMLDoiConflictError: See ``doi`` above. Raised before any
-        row is validated as schema-valid content, so nothing is written.
+    :raises ThermoMLDoiConflictError: See ``doi`` above. Raised after the
+        bytes are schema-validated and parsed (the file's ``sDOI`` cannot be
+        read earlier) and before any row is written or stored.
     """
 
     result = ThermoMLCpImportResult(doi=doi or "")
