@@ -1067,7 +1067,13 @@ class ObservationRecord(TypedDict, total=False):
     Identity is resolved by construction: every row on this surface was
     found by its owning species entry, so unresolved observations
     (nullable ``species_entry_id`` on the backend) are structurally
-    unreachable and there is no separate identity-status field.
+    unreachable -- there is no *status* field asking "does this row have an
+    identity". ``identity_basis`` (review round 3, R2) answers the
+    different question of *how* it got one: an importer's automatic
+    single-InChIKey match (``"external_identifier_match"``) or a curator's
+    later judgement call through the identity-attach service
+    (``"curator_attached"``). See
+    ``app.db.models.common.ObservationIdentityBasis`` on the backend.
     """
 
     observation_ref: Required[str]
@@ -1088,6 +1094,7 @@ class ObservationRecord(TypedDict, total=False):
     literature_ref: str | None
     reference_label: str | None
     external_source: JSONDict | None
+    identity_basis: Required[str]
     review: Required[JSONDict]
 
 

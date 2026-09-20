@@ -1553,7 +1553,11 @@ class TCKDBClient:
         rejected server-side (v0), so this method does not accept one.
         Identity is resolved by construction: every record returned here
         was found by its owning species entry, so there is no separate
-        identity-status field.
+        identity *status* field asking whether a row has one. Each record's
+        ``identity_basis`` instead says *how* it got one: an importer's
+        automatic single-InChIKey match (``"external_identifier_match"``)
+        or a curator's later judgement call through the identity-attach
+        service (``"curator_attached"``).
         """
         path = f"/scientific/species-entries/{species_entry_id}/observations"
         params = {

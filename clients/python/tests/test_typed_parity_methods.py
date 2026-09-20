@@ -1354,6 +1354,7 @@ class TestSpeciesObservations:
             "scalar_value": 1.85,
             "scalar_unit": "D",
             "scientific_origin": "experimental",
+            "identity_basis": "external_identifier_match",
             "review": {"status": "not_reviewed"},
         }
         handler, _ = _capture(_envelope([record]))
