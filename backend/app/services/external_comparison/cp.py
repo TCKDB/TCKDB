@@ -275,7 +275,7 @@ def _resolve_evaluator(thermo: Thermo) -> tuple[str, _Evaluator]:
     if thermo.points:
         return "point", _build_point_evaluator(list(thermo.points))
     raise ValueError(
-        f"compare_thermo_with_cp_observations: thermo {thermo.public_ref!r} has no "
+        f"cannot compare Cp for thermo {thermo.public_ref!r}: it has no "
         "NASA-7, NASA-9, or tabulated-point representation to compare against"
     )
 
@@ -377,10 +377,12 @@ def compare_thermo_with_cp_observations(session: Session, thermo_id: int) -> Com
     """
     thermo = session.get(Thermo, thermo_id)
     if thermo is None:
-        raise ValueError(f"compare_thermo_with_cp_observations: no thermo with id {thermo_id!r}")
+        # The id stays out of the message: callers name the thermo by public
+        # ref, and a row id in user-facing text is a catalogued house defect.
+        raise ValueError("cannot compare Cp: the requested thermo does not exist")
     if thermo.scientific_origin is not ScientificOriginKind.computed:
         raise ValueError(
-            "compare_thermo_with_cp_observations requires a computed thermo record "
+            "cannot compare Cp: this requires a computed thermo record "
             f"({thermo.public_ref} has scientific_origin={thermo.scientific_origin.value!r})"
         )
 
