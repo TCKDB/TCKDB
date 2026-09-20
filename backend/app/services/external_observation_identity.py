@@ -16,6 +16,15 @@ entries -- leaves ``species_entry_id=None`` and records why in
 ``warnings``. Never creates a species. Never resolves by name, CAS,
 formula or SMILES (those are proposal-only signals, surfaced as
 warnings).
+
+:func:`ground_state_minimum_entries_for_species` is the shared definition
+of "compatible entry" behind that rule (Phase C-E5 review round 2). It has
+a second caller with a different consequence drawn from the same query:
+the curator-only ``attach_observation_identity`` service
+(``app/services/observation_identity_attach.py``) accepts *any* member of
+that set as a legal attach target, not only a species where it has exactly
+one member -- a curator naming one specific entry is itself the isomer
+disambiguation this module's automatic resolver refuses to guess at.
 """
 
 from __future__ import annotations
@@ -46,6 +55,29 @@ class IdentityResolution:
     species_entry_id: int | None
     status: str
     warnings: tuple[str, ...] = ()
+
+
+def ground_state_minimum_entries_for_species(
+    session: Session, species_id: int
+) -> list[SpeciesEntry]:
+    """Every ground-state, minimum-energy entry of one species.
+
+    ``kind=minimum`` and ``electronic_state_kind=ground`` -- the shared
+    definition of "the entry kind identity resolution treats as
+    matchable". Used here to require *exactly one* such entry before
+    resolving automatically, and by the curator identity-attach service to
+    accept *any* such entry as a legal attach target.
+    """
+    return list(
+        session.scalars(
+            select(SpeciesEntry).where(
+                SpeciesEntry.species_id == species_id,
+                SpeciesEntry.kind == StationaryPointKind.minimum,
+                SpeciesEntry.electronic_state_kind
+                    == SpeciesEntryStateKind.ground,
+            )
+        ).all()
+    )
 
 
 def identity_hint(payload: MolecularPropertyObservationCreate) -> dict:
@@ -128,14 +160,9 @@ def resolve_identity(
         )
 
     species = species_rows[0]
-    compatible_entries = session.scalars(
-        select(SpeciesEntry).where(
-            SpeciesEntry.species_id == species.id,
-            SpeciesEntry.kind == StationaryPointKind.minimum,
-            SpeciesEntry.electronic_state_kind
-                == SpeciesEntryStateKind.ground,
-        )
-    ).all()
+    compatible_entries = ground_state_minimum_entries_for_species(
+        session, species.id
+    )
     if not compatible_entries:
         return IdentityResolution(
             species_entry_id=None,
@@ -168,6 +195,7 @@ __all__ = [
     "IDENTITY_SKIPPED",
     "IDENTITY_UNRESOLVED",
     "IdentityResolution",
+    "ground_state_minimum_entries_for_species",
     "identity_hint",
     "resolve_identity",
 ]

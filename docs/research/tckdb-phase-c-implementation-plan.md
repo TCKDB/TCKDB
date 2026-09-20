@@ -361,6 +361,12 @@ Design.
 - Later attachment: a curator-only `attach_observation_identity` service and
   admin route that refuses a second assignment (correction is supersession).
   Optional for the demonstration, whose species resolves by InChIKey.
+  Review round 2 (C-E5): unlike the automatic resolver above, the curator
+  attach does not require the target species to have a *unique*
+  ground-state minimum entry -- any ground-state minimum entry of its
+  species is a legal target, because the curator naming one specific entry
+  is itself the isomer disambiguation the automatic resolver refuses to
+  guess at.
 
 ## C4 — the cross-check in the review tier and the paper surface
 

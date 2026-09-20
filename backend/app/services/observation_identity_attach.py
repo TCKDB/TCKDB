@@ -47,8 +47,6 @@ from sqlalchemy.orm import Session
 from app.api.errors import not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
-    SpeciesEntryStateKind,
-    StationaryPointKind,
     SubmissionActorKind,
     SubmissionAuditEventKind,
     SubmissionRecordType,
@@ -58,6 +56,9 @@ from app.db.models.molecular_property_observation import (
 )
 from app.db.models.species import SpeciesEntry
 from app.db.models.submission import Submission, SubmissionRecordLink
+from app.services.external_observation_identity import (
+    ground_state_minimum_entries_for_species,
+)
 from app.services.scientific_read.handles import (
     parse_handle,
     resolve_species_entry_handle,
@@ -101,19 +102,23 @@ def _resolve_observation(
     return obs
 
 
-def _assert_ground_state_minimum_entry(target: SpeciesEntry) -> None:
-    """Refuse an attach target that is not itself a ground-state minimum entry.
+def _assert_ground_state_minimum_entry(session: Session, target: SpeciesEntry) -> None:
+    """Refuse an attach target that is not a ground-state minimum entry of
+    its species.
 
-    See the module docstring: uniqueness across the species is no longer
-    required, only that the target itself is a ``kind=minimum``,
-    ``electronic_state_kind=ground`` entry.
+    Uses the same shared definition
+    (:func:`~app.services.external_observation_identity.
+    ground_state_minimum_entries_for_species`) as the automatic resolver's
+    "compatible entry" test, so the two never drift apart -- but,
+    per the module docstring, this only checks *membership* in that set,
+    not uniqueness within it.
 
     :raises ValueError: 422 ``observation_identity_target_not_ground_state_minimum``.
     """
-    if (
-        target.kind is not StationaryPointKind.minimum
-        or target.electronic_state_kind is not SpeciesEntryStateKind.ground
-    ):
+    candidates = ground_state_minimum_entries_for_species(
+        session, target.species_id
+    )
+    if target.id not in {row.id for row in candidates}:
         raise ValueError(
             "observation_identity_target_not_ground_state_minimum: an "
             "observation can only be attached to a ground-state, "
@@ -194,7 +199,7 @@ def attach_observation_identity(
     if target is None:  # pragma: no cover — resolve_species_entry_handle already 404s
         raise not_found("species_entry", ref=species_entry_ref)
 
-    _assert_ground_state_minimum_entry(target)
+    _assert_ground_state_minimum_entry(session, target)
 
     submission_id = _linked_submission_id(session, obs.id)
     if submission_id is None:
