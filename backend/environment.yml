@@ -107,6 +107,14 @@ dependencies:
   # YAML I/O (ARC output.yml ingest, config).
   - pyyaml=6.0.3
 
+  # XML/XSD validation for the ThermoML Cp importer
+  # (app/importers/thermoml/validate.py). Imported lazily inside
+  # validate_bytes(), so nothing else in the app needs it -- but the
+  # deployed image installs from this file with no per-extra pip step,
+  # so it has to be listed here for that path to work (same reasoning
+  # as the openai pip entry below).
+  - lxml=6.1.3
+
   # pip-only deps (not packaged on conda-forge).
   - pip
   - pip:

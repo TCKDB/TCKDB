@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Schema-valid TWO-component
+  PureOrMixtureData block: our mapper only supports single-component
+  blocks, so this must be recorded as unsupported ("multi-component"). No
+  values from any real article. See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>Fluid Phase Equilib.</sPubName>
+    <yrPubYr>2013</yrPubYr>
+    <sTitle>Fixture: mixture heat capacities (invented values, unsupported component count)</sTitle>
+    <sDOI>10.1016/j.fluid.2013.xxxxxx</sDOI>
+  </Citation>
+  <Compound>
+    <nCompIndex>1</nCompIndex>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+    <sSmiles>CCF</sSmiles>
+  </Compound>
+  <Compound>
+    <nCompIndex>2</nCompIndex>
+    <sStandardInChI>InChI=1S/H2O/h1H2</sStandardInChI>
+    <sStandardInChIKey>XLYOFNOQVPJJNP-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>water</sCommonName>
+    <sFormulaMolec>H2O</sFormulaMolec>
+    <sSmiles>O</sSmiles>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <nCompIndex>1</nCompIndex>
+    </Component>
+    <Component>
+      <nCompIndex>2</nCompIndex>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Flow calorimetry</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Liquid</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+    </Property>
+    <PhaseID>
+      <ePhase>Liquid</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <Variable>
+      <nVarNumber>2</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eComponentComposition>Mole fraction</eComponentComposition>
+        </VariableType>
+        <nCompIndex>1</nCompIndex>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>298.15</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <VariableValue>
+        <nVarNumber>2</nVarNumber>
+        <nVarValue>0.5000</nVarValue>
+        <nVarDigits>4</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>120.00</nPropValue>
+        <nPropDigits>5</nPropDigits>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>

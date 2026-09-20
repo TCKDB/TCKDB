@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Single-component Gas-phase Cp block
+  whose Property-MethodID carries a Prediction (ePredictionType
+  "Statistical mechanics") instead of an eMethodName/sMethodName: this
+  must map to scientific_origin=computed, method_note carrying the
+  prediction type verbatim. No values from any real article.
+  See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>J. Chem. Eng. Data</sPubName>
+    <yrPubYr>2018</yrPubYr>
+    <sTitle>Fixture: predicted ideal-gas heat capacities (invented values)</sTitle>
+    <sDOI>10.1021/acs.jced.8xxxxxx</sDOI>
+  </Citation>
+  <Compound>
+    <nCompIndex>1</nCompIndex>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+    <sSmiles>CCF</sSmiles>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <nCompIndex>1</nCompIndex>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <Prediction>
+              <ePredictionType>Statistical mechanics</ePredictionType>
+              <sPredictionMethodName>rigid-rotor harmonic-oscillator</sPredictionMethodName>
+            </Prediction>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Ideal gas</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+    </Property>
+    <PhaseID>
+      <ePhase>Ideal gas</ePhase>
+    </PhaseID>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>298.15</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>57.90</nPropValue>
+        <nPropDigits>4</nPropDigits>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>

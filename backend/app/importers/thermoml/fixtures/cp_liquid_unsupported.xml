@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Hand-authored ThermoML 4.0 fixture. Schema-valid single-component Cp block
+  in the Liquid phase: our mapper only supports "Ideal gas" and "Gas", so
+  this block must be recorded as unsupported. No values from any real
+  article. See fixtures/README.md.
+-->
+<DataReport xmlns="http://www.iupac.org/namespaces/ThermoML"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://www.iupac.org/namespaces/ThermoML ../schema/ThermoML.xsd">
+  <Version>
+    <nVersionMajor>4</nVersionMajor>
+    <nVersionMinor>0</nVersionMinor>
+  </Version>
+  <Citation>
+    <sAuthor>Doe, J.</sAuthor>
+    <sPubName>J. Chem. Thermodyn.</sPubName>
+    <yrPubYr>2014</yrPubYr>
+    <sTitle>Fixture: liquid-phase heat capacities (invented values, unsupported phase)</sTitle>
+    <sDOI>10.1016/j.jct.2014.xxxxxx</sDOI>
+  </Citation>
+  <Compound>
+    <nCompIndex>1</nCompIndex>
+    <sStandardInChI>InChI=1S/C2H5F/c1-2-3/h2H2,1H3</sStandardInChI>
+    <sStandardInChIKey>UHCBBWUQDAVSMS-UHFFFAOYSA-N</sStandardInChIKey>
+    <sCommonName>fluoroethane</sCommonName>
+    <sFormulaMolec>C2H5F</sFormulaMolec>
+    <sSmiles>CCF</sSmiles>
+  </Compound>
+  <PureOrMixtureData>
+    <nPureOrMixtureDataNumber>1</nPureOrMixtureDataNumber>
+    <Component>
+      <nCompIndex>1</nCompIndex>
+    </Component>
+    <Property>
+      <nPropNumber>1</nPropNumber>
+      <Property-MethodID>
+        <PropertyGroup>
+          <HeatCapacityAndDerivedProp>
+            <ePropName>Molar heat capacity at constant pressure, J/K/mol</ePropName>
+            <eMethodName>Small sample (50 mg) DSC</eMethodName>
+          </HeatCapacityAndDerivedProp>
+        </PropertyGroup>
+      </Property-MethodID>
+      <PropPhaseID>
+        <ePropPhase>Liquid</ePropPhase>
+      </PropPhaseID>
+      <ePresentation>Direct value, X</ePresentation>
+    </Property>
+    <PhaseID>
+      <ePhase>Liquid</ePhase>
+    </PhaseID>
+    <Constraint>
+      <nConstraintNumber>1</nConstraintNumber>
+      <ConstraintID>
+        <ConstraintType>
+          <ePressure>Pressure, kPa</ePressure>
+        </ConstraintType>
+      </ConstraintID>
+      <nConstraintValue>101.325</nConstraintValue>
+      <nConstrDigits>6</nConstrDigits>
+    </Constraint>
+    <Variable>
+      <nVarNumber>1</nVarNumber>
+      <VariableID>
+        <VariableType>
+          <eTemperature>Temperature, K</eTemperature>
+        </VariableType>
+      </VariableID>
+    </Variable>
+    <NumValues>
+      <VariableValue>
+        <nVarNumber>1</nVarNumber>
+        <nVarValue>250.00</nVarValue>
+        <nVarDigits>5</nVarDigits>
+      </VariableValue>
+      <PropertyValue>
+        <nPropNumber>1</nPropNumber>
+        <nPropValue>98.40</nPropValue>
+        <nPropDigits>4</nPropDigits>
+      </PropertyValue>
+    </NumValues>
+  </PureOrMixtureData>
+</DataReport>
