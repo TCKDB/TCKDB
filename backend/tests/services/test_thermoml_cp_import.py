@@ -23,14 +23,17 @@ from app.db.models.common import (
     StereoKind,
     SubmissionSourceKind,
 )
-from app.db.models.external_source import ExternalSourceRecord
+from app.db.models.external_source import ExternalSource, ExternalSourceRecord
+from app.db.models.literature import Literature
 from app.db.models.molecular_property_observation import (
     MolecularPropertyObservation,
 )
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.submission import Submission, SubmissionRecordLink
 from app.db.models.submission_rights import SubmissionRightsAttestation
+from app.importers.thermoml import TERMS_TEXT
 from app.importers.thermoml.archive import ArticleBytes
+from app.services.rights import standing_attestation
 from app.services.thermoml_cp_import import import_thermoml_cp_article
 
 FIXTURES = Path(__file__).resolve().parents[2] / "app" / "importers" / "thermoml" / "fixtures"
@@ -61,6 +64,20 @@ def _article_from_xml(xml_bytes: bytes, *, member_stub: str = "10.1016/fixture")
 
 def _fluoroethane_article() -> ArticleBytes:
     return _article_from_xml((FIXTURES / "cp_gas_single_component.xml").read_bytes())
+
+
+def _fluoroethane_article_with_nonce(nonce: str) -> ArticleBytes:
+    """Same fixture, with a unique XML comment spliced in right after the
+    declaration so the content -- and its SHA-256 -- is unique to one test
+    run. Used only where a test needs a content-addressed object-store key
+    nobody else (this file's own other tests, or a concurrent pytest run
+    against the same shared local MinIO) could plausibly also write, so a
+    "does this key exist" check is not a false-positive risk.
+    """
+    xml = (FIXTURES / "cp_gas_single_component.xml").read_text(encoding="utf-8")
+    header, _, rest = xml.partition("\n")
+    xml = f"{header}\n<!-- test-nonce: {nonce} -->\n{rest}"
+    return _article_from_xml(xml.encode("utf-8"))
 
 
 _BENZENE_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -237,6 +254,60 @@ class TestDryRunVsCommit:
         assert result.would_insert_count == 3
         assert result.inserted_count == 0
 
+    def test_dry_run_does_not_write_to_object_store(self, db_session, curator):
+        """A dry run (``commit=False``) must never upload the article bytes
+        to S3/MinIO -- only ``commit=True`` may. ``_raw_uri_for`` computes
+        the would-be content-addressed key locally instead.
+
+        Mutation: in ``_raw_uri_for``, make the ``if not commit:`` guard
+        unconditional again (always calling ``store_artifact`` regardless
+        of ``commit``) -- goes red because ``head_artifact_object`` then
+        finds the object the dry run was never supposed to write.
+        """
+        import uuid
+
+        from app.services.artifact_storage import (
+            content_addressed_key,
+            delete_artifact_object,
+            head_artifact_object,
+        )
+
+        article = _fluoroethane_article_with_nonce(uuid.uuid4().hex)
+        sha256 = article.xml_sha256
+        assert head_artifact_object(sha256) is None, (
+            "unique nonce content already had an object in the local store "
+            "-- this should be statistically impossible; investigate before "
+            "trusting this test"
+        )
+
+        try:
+            result = import_thermoml_cp_article(
+                db_session,
+                article=article,
+                doi=FLUOROETHANE_DOI,
+                actor=curator,
+                license_id=_LICENSE_ID,
+                commit=False,
+            )
+
+            assert head_artifact_object(sha256) is None, (
+                "dry run wrote to the object store"
+            )
+
+            # The dry run rolls back the whole transaction (including the
+            # custody row), so the would-be URI is only recoverable from
+            # the result's own warnings, not by re-fetching the row.
+            would_store_warnings = [
+                w for w in result.warnings if "would_store" in w and "dry run" in w
+            ]
+            assert len(would_store_warnings) == 1
+            assert content_addressed_key(sha256) in would_store_warnings[0]
+        finally:
+            # Defensive: only fires if the guard regressed and the object
+            # was actually written, so a red run of this test doesn't
+            # litter the shared local MinIO for the next one.
+            delete_artifact_object(sha256)
+
     def test_commit_persists_rows_with_new_columns_populated(self, db_session, curator):
         result = import_thermoml_cp_article(
             db_session,
@@ -323,10 +394,64 @@ class TestSchemaInvalidDocument:
 # ---------------------------------------------------------------------------
 
 
+_IDEMPOTENCY_TABLES: tuple[tuple[str, type], ...] = (
+    ("molecular_property_observation", MolecularPropertyObservation),
+    ("external_source_record", ExternalSourceRecord),
+    ("external_source", ExternalSource),
+    ("submission", Submission),
+    ("submission_rights_attestation", SubmissionRightsAttestation),
+    ("submission_record_link", SubmissionRecordLink),
+    ("literature", Literature),
+    ("species", Species),
+    ("app_user", AppUser),
+)
+
+
+def _table_counts(db_session) -> dict[str, int]:
+    return {
+        name: len(db_session.execute(select(model)).all())
+        for name, model in _IDEMPOTENCY_TABLES
+    }
+
+
 class TestIdempotency:
     def test_second_run_is_all_duplicate_no_new_custody_or_submission(
         self, db_session, curator
     ):
+        """A second run of an already-fully-ingested article touches none of
+        the nine tables a run can write to.
+
+        Mutation table (one mutation per table this reproves is unchanged
+        on a second run -- see the module docstring's dedupe-key
+        pre-check design):
+
+        - ``molecular_property_observation``, ``submission``,
+          ``submission_rights_attestation``, ``submission_record_link``:
+          make ``_existing_dedupe_id`` always ``return None`` (as if the
+          pre-check were broken). The authoritative
+          ``ON CONFLICT DO NOTHING`` still stops a duplicate row, but the
+          now-wrong ``would_insert_count`` opens a *second* submission (and
+          its attestations) with nothing to link -- goes red on
+          ``submission``/``submission_rights_attestation`` (and, had
+          anything actually inserted, ``submission_record_link`` too).
+        - ``external_source_record``: in ``_get_or_create_custody``, drop
+          the ``if existing is not None: return existing, False, False``
+          early return so it always inserts. Goes red on
+          ``external_source_record`` doubling.
+        - ``external_source``: in ``_get_or_create_external_source``, drop
+          its analogous early return. Goes red on ``external_source``
+          doubling.
+        - ``literature``: in ``app.services.literature_resolution.
+          resolve_or_create_literature``, skip the existing-DOI lookup so
+          it always creates. Goes red on ``literature`` doubling -- this
+          service calls it unconditionally on every run, dedupe-key
+          pre-check or not.
+        - ``species``, ``app_user``: this service never writes either
+          table on any path (see ``test_never_creates_a_species`` above);
+          included here as a standing regression tripwire rather than a
+          distinct mutation, since there is no code path in this service
+          that could touch them.
+        """
         first = import_thermoml_cp_article(
             db_session,
             article=_fluoroethane_article(),
@@ -337,10 +462,7 @@ class TestIdempotency:
         )
         assert first.inserted_count == 3
 
-        custody_count_before = len(
-            db_session.execute(select(ExternalSourceRecord)).all()
-        )
-        submission_count_before = len(db_session.execute(select(Submission)).all())
+        before = _table_counts(db_session)
 
         second = import_thermoml_cp_article(
             db_session,
@@ -355,12 +477,12 @@ class TestIdempotency:
         assert second.duplicate_count == 3
         assert all(d.action == "duplicate" for d in second.dispositions)
 
-        custody_count_after = len(
-            db_session.execute(select(ExternalSourceRecord)).all()
-        )
-        submission_count_after = len(db_session.execute(select(Submission)).all())
-        assert custody_count_after == custody_count_before
-        assert submission_count_after == submission_count_before
+        after = _table_counts(db_session)
+        assert after == before, {
+            name: (before[name], after[name])
+            for name in before
+            if before[name] != after[name]
+        }
 
         rows = db_session.execute(
             select(MolecularPropertyObservation)
@@ -509,6 +631,78 @@ class TestSubmissionAndRights:
             )
         ).scalars().all()
         assert len(links) == 3
+
+    def test_standing_attestation_is_source_terms_superseding_depositor_agreement(
+        self, db_session, curator
+    ):
+        """Two attestations are recorded per submission (module docstring,
+        'Two attestations, one standing'): ``open_upload_submission``'s own
+        ``depositor_agreement`` row, then an explicit ``source_terms`` row
+        that supersedes it and becomes standing.
+
+        Three independently load-bearing facts, each with its own mutation:
+
+        1. ``standing_attestation()`` -- the same reader the release layer
+           uses -- returns the ``source_terms`` row, not the
+           ``depositor_agreement`` one.
+           Mutation: comment out the explicit ``record_attestation(...,
+           basis=RightsBasisKind.source_terms, ...)`` call in
+           ``_open_submission_with_source_terms_attestation`` -- goes red
+           because the standing row is then ``depositor_agreement``.
+        2. The standing row's ``source_terms`` text equals ``TERMS_TEXT``
+           verbatim (not just "contains ThermoML" as the older assertion
+           checked).
+           Mutation: pass ``source_terms=TERMS_TEXT[:-1]`` instead of
+           ``TERMS_TEXT`` to that same call -- goes red on the equality
+           check.
+        3. The ``depositor_agreement`` row is retained (never deleted) and
+           the ``source_terms`` row's ``supersedes_attestation_id`` points
+           at it.
+           Mutation: pass ``rights=None`` to ``open_upload_submission`` in
+           ``_open_submission_with_source_terms_attestation`` -- no
+           ``depositor_agreement`` row is ever created, so it goes red on
+           the "exactly one depositor_agreement row" assertion.
+        """
+        result = import_thermoml_cp_article(
+            db_session,
+            article=_fluoroethane_article(),
+            doi=FLUOROETHANE_DOI,
+            actor=curator,
+            license_id=_LICENSE_ID,
+            commit=True,
+        )
+        submission = db_session.get(Submission, result.submission_id)
+
+        attestations = db_session.execute(
+            select(SubmissionRightsAttestation)
+            .where(SubmissionRightsAttestation.submission_id == submission.id)
+            .order_by(SubmissionRightsAttestation.id)
+        ).scalars().all()
+
+        depositor_rows = [
+            a for a in attestations if a.basis == RightsBasisKind.depositor_agreement
+        ]
+        source_terms_rows = [
+            a for a in attestations if a.basis == RightsBasisKind.source_terms
+        ]
+        assert len(depositor_rows) == 1
+        assert len(source_terms_rows) == 1
+        depositor_row = depositor_rows[0]
+        source_terms_row = source_terms_rows[0]
+
+        # (3) depositor_agreement retained; source_terms names it as the one
+        # it supersedes.
+        assert source_terms_row.supersedes_attestation_id == depositor_row.id
+
+        # (2) verbatim text, not a substring match.
+        assert source_terms_row.source_terms == TERMS_TEXT
+
+        # (1) the standing-attestation reader (what the release layer
+        # actually asks) names the source_terms row.
+        standing = standing_attestation(db_session, submission_id=submission.id)
+        assert standing is not None
+        assert standing.id == source_terms_row.id
+        assert standing.basis == RightsBasisKind.source_terms
 
     def test_literature_resolved_by_doi(self, db_session, curator):
         result = import_thermoml_cp_article(

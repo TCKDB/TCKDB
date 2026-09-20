@@ -17,12 +17,15 @@ NIST/TRC's own terms verbatim.
 Design contract
 ----------------
 
-* **Layering.** This module imports ``app.importers.thermoml`` (the pure
-  parse/validate/map package). The importer package must never import this
+* **Layering.** This module imports ``app.importers.thermoml``'s parser,
+  mapper and validator (pure functions, no I/O) -- never its archive
+  fetcher, and never a per-family upload workflow module (this service
+  composes lower-level primitives -- rights, submission, literature,
+  identity -- directly). The importer package must never import this
   module back -- enforced by
-  ``backend/tests/importers/thermoml/test_layering.py`` and mirrored here by
-  ``test_service_does_not_import_parsers_or_fetchers`` in this service's own
-  test module.
+  ``backend/tests/importers/thermoml/test_layering.py`` and mirrored here
+  by ``test_service_does_not_import_upload_workflows`` in this service's
+  own test module.
 * **Custody is get-or-create.** ``external_source`` is keyed on
   ``(source_name, source_release)``; ``external_source_record`` is keyed on
   ``(external_source_id, source_record_key, content_sha256, parser_version,
@@ -56,7 +59,12 @@ Design contract
   create a custody row, a submission, or any observation for it.
 * **Dry-run by default.** ``commit=False`` runs the full pipeline inside
   the caller's transaction without committing. ``commit=True`` commits on
-  success and rolls back on unexpected error.
+  success and rolls back on unexpected error. A dry run never writes to
+  the object store either: ``_raw_uri_for`` computes the would-be
+  content-addressed URI locally and reports it via a
+  ``ThermoMLCpImportResult.warnings`` entry instead of calling
+  ``app.services.artifact_storage.store_artifact``; only ``commit=True``
+  actually uploads.
 """
 
 from __future__ import annotations
@@ -101,6 +109,8 @@ from app.importers.thermoml.mapping import map_document
 from app.importers.thermoml.parser import parse_thermoml_document
 from app.importers.thermoml.validate import validate_bytes
 from app.services.external_observation_identity import (
+    IDENTITY_AMBIGUOUS,
+    IDENTITY_NOT_FOUND,
     IDENTITY_RESOLVED,
     resolve_identity,
 )
@@ -145,8 +155,17 @@ _SCHEMA_ID = f"ThermoML.xsd v4.0 sha256:{XSD_SHA256}"
 _ACTION_WOULD_INSERT = "would_insert"
 _ACTION_INSERTED = "inserted"
 _ACTION_DUPLICATE = "duplicate"
-_ACTION_INVALID = "invalid"
 _ACTION_SKIPPED = "skipped"
+
+#: No ``_ACTION_INVALID`` here, unlike ``app.services.
+#: cccbdb_molecular_property_import``: that importer validates raw
+#: untyped dicts at the service layer and can meet a row that fails
+#: pydantic validation. ``mapping_result.payloads`` here is already a
+#: ``list[MolecularPropertyObservationCreate]`` built by ``app.importers.
+#: thermoml.mapping.map_document`` -- a row that fails mapping/validation
+#: never becomes a payload in the first place (it is dropped and reported
+#: in ``mapping_result.report`` instead), so this service's per-payload
+#: loop has no "invalid" outcome to represent.
 
 
 def _now_naive_utc() -> datetime:
@@ -185,7 +204,6 @@ class ThermoMLCpImportResult:
     would_insert_count: int = 0
     inserted_count: int = 0
     duplicate_count: int = 0
-    invalid_count: int = 0
     skipped_count: int = 0
     resolved_identity_count: int = 0
     unresolved_identity_count: int = 0
@@ -207,7 +225,6 @@ class ThermoMLCpImportResult:
             "would_insert_count": self.would_insert_count,
             "inserted_count": self.inserted_count,
             "duplicate_count": self.duplicate_count,
-            "invalid_count": self.invalid_count,
             "skipped_count": self.skipped_count,
             "resolved_identity_count": self.resolved_identity_count,
             "unresolved_identity_count": self.unresolved_identity_count,
@@ -258,7 +275,8 @@ def _get_or_create_custody(
     schema_valid: bool,
     mapping_report_json: dict[str, Any],
     retrieved_at: datetime,
-) -> tuple[ExternalSourceRecord, bool]:
+    commit: bool,
+) -> tuple[ExternalSourceRecord, bool, bool]:
     """Reuse the custody row for this ``(doi, content, parser, mapping)``
     identity if one already exists; otherwise insert one.
 
@@ -266,6 +284,11 @@ def _get_or_create_custody(
     with the same parser/mapping version finds and reuses this row instead
     of appending a duplicate; a changed parser or mapping version misses and
     appends a new one, as the model's docstring promises.
+
+    Returns ``(record, created, would_store)``. ``would_store`` is only
+    ever ``True`` when a new row was created during a dry run (see
+    :func:`_raw_uri_for`) -- an existing row needed no object-store call at
+    all.
     """
 
     existing = session.scalar(
@@ -278,8 +301,9 @@ def _get_or_create_custody(
         )
     )
     if existing is not None:
-        return existing, False
+        return existing, False, False
 
+    raw_uri, would_store = _raw_uri_for(article, commit=commit)
     row = ExternalSourceRecord(
         external_source_id=external_source.id,
         record_kind=ExternalSourceRecordKind.thermoml_article,
@@ -288,7 +312,7 @@ def _get_or_create_custody(
         retrieved_at=retrieved_at,
         content_sha256=article.xml_sha256,
         content_length=len(article.xml),
-        raw_uri=_raw_uri_for(article),
+        raw_uri=raw_uri,
         container_digest=ARCHIVE_SHA256,
         schema_id=_SCHEMA_ID,
         schema_valid=schema_valid,
@@ -299,21 +323,38 @@ def _get_or_create_custody(
     )
     session.add(row)
     session.flush()
-    return row, True
+    return row, True, would_store
 
 
-def _raw_uri_for(article: ArticleBytes) -> str:
+def _raw_uri_for(article: ArticleBytes, *, commit: bool) -> tuple[str, bool]:
     """The custody row's ``raw_uri``: a content-addressed object-store key
     when the store is reachable, else the local snapshot member path.
 
-    Never blocks the import on the object store being down -- storing the
-    bytes is best-effort provenance, not a precondition for recording that
-    the article was seen and parsed.
+    Returns ``(raw_uri, would_store)``. In a dry run (``commit=False``)
+    this **never** calls the object store: it computes the same
+    content-addressed key :func:`~app.services.artifact_storage.
+    store_artifact` would use, entirely locally, and returns it with
+    ``would_store=True``. Only ``commit=True`` actually uploads -- storing
+    the bytes is best-effort provenance, not a precondition for recording
+    that the article was seen and parsed, and a preview run must leave no
+    trace in the object store (or in the capacity-refusal log a failed
+    upload could append to; see ``_raise_write_refusal``/``record_refusal``
+    in :mod:`app.services.artifact_storage`, which this function no longer
+    reaches at all when ``commit`` is ``False``).
     """
-    from app.services.artifact_storage import ArtifactStorageUnavailable, store_artifact
+    from app.services.artifact_storage import (
+        S3_BUCKET,
+        ArtifactStorageUnavailable,
+        content_addressed_key,
+        store_artifact,
+    )
+
+    if not commit:
+        key = content_addressed_key(article.xml_sha256)
+        return f"s3://{S3_BUCKET}/{key}", True
 
     try:
-        return store_artifact(article.xml, article.xml_sha256)
+        return store_artifact(article.xml, article.xml_sha256), False
     except ArtifactStorageUnavailable as exc:
         _logger.warning(
             "object store unavailable while snapshotting ThermoML article "
@@ -321,7 +362,7 @@ def _raw_uri_for(article: ArticleBytes) -> str:
             article.xml_sha256,
             exc,
         )
-        return article.member_paths[0]
+        return article.member_paths[0], False
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +462,7 @@ def import_thermoml_cp_article(
         external_source = _get_or_create_external_source(session)
         result.external_source_id = external_source.id
 
-        custody, custody_created = _get_or_create_custody(
+        custody, custody_created, custody_would_store = _get_or_create_custody(
             session,
             external_source=external_source,
             article=article,
@@ -429,9 +470,15 @@ def import_thermoml_cp_article(
             schema_valid=schema_report.valid,
             mapping_report_json=mapping_result.report.model_dump(by_alias=True),
             retrieved_at=retrieved_at,
+            commit=commit,
         )
         result.external_source_record_id = custody.id
         result.external_source_record_created = custody_created
+        if custody_would_store:
+            result.warnings.append(
+                "dry run: object store not written; would_store "
+                f"raw_uri={custody.raw_uri}"
+            )
 
         literature = None
         if mapping_result.literature.doi or mapping_result.literature.title:
@@ -619,9 +666,9 @@ def _bump_counters(
 ) -> None:
     if disposition.identity_status == IDENTITY_RESOLVED:
         result.resolved_identity_count += 1
-    elif disposition.identity_status == "ambiguous":
+    elif disposition.identity_status == IDENTITY_AMBIGUOUS:
         result.ambiguous_identity_count += 1
-    elif disposition.identity_status == "not_found":
+    elif disposition.identity_status == IDENTITY_NOT_FOUND:
         result.not_found_identity_count += 1
     else:
         result.unresolved_identity_count += 1
@@ -632,8 +679,6 @@ def _bump_counters(
         result.inserted_count += 1
     elif disposition.action == _ACTION_DUPLICATE:
         result.duplicate_count += 1
-    elif disposition.action == _ACTION_INVALID:
-        result.invalid_count += 1
     elif disposition.action == _ACTION_SKIPPED:
         result.skipped_count += 1
 
