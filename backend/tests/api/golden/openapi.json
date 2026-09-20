@@ -507,6 +507,55 @@
         "title": "AdminMachineReviewRunResponse",
         "type": "object"
       },
+      "AdminObservationIdentityAttachRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``POST /admin/observations/{ref}/identity``.\n\n``species_entry_ref`` must be the unique ground-state, minimum-energy\nentry of its species -- see\n``app/services/observation_identity_attach.py`` for the ambiguity rule\nand its rationale.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "species_entry_ref": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Species Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_entry_ref"
+        ],
+        "title": "AdminObservationIdentityAttachRequest",
+        "type": "object"
+      },
+      "AdminObservationIdentityAttachResponse": {
+        "additionalProperties": false,
+        "description": "The observation's own ref plus the identity it now carries.",
+        "properties": {
+          "observation_ref": {
+            "title": "Observation Ref",
+            "type": "string"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "observation_ref",
+          "species_entry_ref"
+        ],
+        "title": "AdminObservationIdentityAttachResponse",
+        "type": "object"
+      },
       "AdminRunFakeMachineReviewResponse": {
         "additionalProperties": false,
         "description": "Admin-only response for an explicitly invoked fake machine-review run.\n\nMirrors :class:`~app.services.machine_review.MachineReviewOrchestrationResult`\none-for-one. ``extra=\"forbid\"`` so it can carry no mutation instruction; it\nreports an outcome, it does not perform one. No public ``trust.machine_review``.",
@@ -23188,6 +23237,226 @@
         "title": "ModuleDescription",
         "type": "object"
       },
+      "MolecularPropertyKind": {
+        "description": "Molecular-property observation kinds (CCCBDB Schema Gap 1).\n\nScalar/vector/tensor properties that don't belong on ``thermo``,\n``statmech``, or ``transport``. Names are machine tokens, not\ndisplay labels (see feedback_enum_values memory).",
+        "enum": [
+          "dipole_moment",
+          "quadrupole_moment",
+          "polarizability",
+          "polarizability_iso",
+          "ionization_energy",
+          "electron_affinity",
+          "proton_affinity",
+          "enthalpy_of_formation",
+          "atomization_energy",
+          "homo_energy",
+          "lumo_energy",
+          "homo_lumo_gap",
+          "rotational_constant",
+          "spectroscopic_constant",
+          "heat_capacity_cp",
+          "other"
+        ],
+        "title": "MolecularPropertyKind",
+        "type": "string"
+      },
+      "MolecularPropertyObservationRecord": {
+        "description": "One molecular-property observation, scoped to a species entry.",
+        "properties": {
+          "external_source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservationExternalSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "literature_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Literature Ref"
+          },
+          "method_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method Note"
+          },
+          "observation_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Ref"
+          },
+          "pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure Bar"
+          },
+          "property_kind": {
+            "$ref": "#/components/schemas/MolecularPropertyKind"
+          },
+          "property_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Label"
+          },
+          "reference_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Label"
+          },
+          "review": {
+            "$ref": "#/components/schemas/RecordReviewBadge"
+          },
+          "scalar_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scalar Unit"
+          },
+          "scalar_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scalar Value"
+          },
+          "scientific_origin": {
+            "$ref": "#/components/schemas/ScientificOriginKind"
+          },
+          "state_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedStateBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_label_raw": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Label Raw"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature K"
+          },
+          "tensor": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tensor"
+          },
+          "uncertainty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservationUncertainty"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "vector": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vector"
+          },
+          "wavelength_nm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wavelength Nm"
+          }
+        },
+        "required": [
+          "property_kind",
+          "scientific_origin",
+          "review"
+        ],
+        "title": "MolecularPropertyObservationRecord",
+        "type": "object"
+      },
       "MoleculeKind": {
         "enum": [
           "molecule",
@@ -28894,6 +29163,190 @@
         ],
         "title": "NetworkUploadSpeciesLinkPayload",
         "type": "object"
+      },
+      "ObservationExternalSource": {
+        "description": "Where this observation's bytes came from.\n\nTwo provenance shapes coexist on the underlying table (see\n``app/db/models/molecular_property_observation.py`` and\n``app/db/models/external_source.py``): legacy CCCBDB rows carry\nflattened ``external_source_*`` columns with no schema identifier /\n``mapping_version``; new rows (Phase C-E1 onward) cite an\n``external_source_record`` custody row that carries those two plus a\ncontent digest. This fragment is the union of both — whichever fields\nthe row's provenance shape actually has are populated, the rest are\n``null``.\n\n``schema_label`` mirrors the ORM column ``external_source_record.\nschema_id`` under a different wire name on purpose: the column holds a\nfree-text schema identifier (e.g. ``\"thermoml.v1\"``), not a database\nprimary key, but any field ending in ``_id``/``_ids`` is stripped from\nevery public response by the Phase D internal-ID policy\n(``app/services/scientific_read/internal_ids.py::is_internal_id_key``).\nNaming it ``schema_id`` on the wire would silently vanish it from every\nunauthenticated response.",
+        "properties": {
+          "content_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Sha256"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "mapping_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mapping Version"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "parser_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parser Version"
+          },
+          "record_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Record Key"
+          },
+          "release": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release"
+          },
+          "schema_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema Label"
+          }
+        },
+        "title": "ObservationExternalSource",
+        "type": "object"
+      },
+      "ObservationUncertainty": {
+        "description": "Typed uncertainty on ``scalar_value`` (Phase C-E1 contract).\n\n``kind`` may be ``None`` even when ``value`` is present: legacy\nCCCBDB-imported rows carry a bare ``scalar_uncertainty`` with no stated\nmeaning (see the model's ``ck_mpo_uncertainty_kind_iff_value`` CHECK,\nwhich only requires the pairing for ``heat_capacity_cp`` rows). A present\n``kind`` with no ``value`` never occurs.",
+        "properties": {
+          "assessor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedUncertaintyAssessor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Factor"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ObservedUncertaintyKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "level_of_confidence_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level Of Confidence Pct"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "ObservationUncertainty",
+        "type": "object"
+      },
+      "ObservedStateBasis": {
+        "description": "Physical-state basis an experimental observation is referenced to.\n\nDistinct from :class:`PhaseKind` -- that enum names the phase of a\n*computed* thermochemistry record; this one names whether an\n*experimental* gas-phase measurement was reported on an ideal-gas or\na real-gas basis, which the CCCBDB/ThermoML source states directly.",
+        "enum": [
+          "ideal_gas",
+          "real_gas"
+        ],
+        "title": "ObservedStateBasis",
+        "type": "string"
+      },
+      "ObservedUncertaintyAssessor": {
+        "description": "Who assessed an observation's uncertainty: the source's original\nauthor, or a later evaluator (e.g. a compilation/review editor).",
+        "enum": [
+          "source_author",
+          "source_evaluator"
+        ],
+        "title": "ObservedUncertaintyAssessor",
+        "type": "string"
+      },
+      "ObservedUncertaintyKind": {
+        "description": "Meaning of ``molecular_property_observation.scalar_uncertainty``.\n\nOne-to-one with ThermoML's per-value uncertainty fields\n(``vDataUncertaintyType`` sub-elements): a standard deviation, an\nexpanded interval at a stated coverage factor, or a combined\n(multi-source) variant of either. Deliberately has no \"unspecified\"\nmember (DR-0007) -- an uncertainty whose kind was not stated is\nabsent, not an enum value pretending to carry meaning it doesn't have.",
+        "enum": [
+          "standard",
+          "expanded",
+          "combined_standard",
+          "combined_expanded"
+        ],
+        "title": "ObservedUncertaintyKind",
+        "type": "string"
       },
       "OptResultPayload": {
         "additionalProperties": false,
@@ -37178,6 +37631,35 @@
           "pagination"
         ],
         "title": "ScientificSpeciesCalculationsSearchResponse",
+        "type": "object"
+      },
+      "ScientificSpeciesObservationsResponse": {
+        "description": "Response envelope for GET .../species-entries/{id}/observations.",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/MolecularPropertyObservationRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_observation__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "ScientificSpeciesObservationsResponse",
         "type": "object"
       },
       "ScientificSpeciesSearchResponse": {
@@ -51169,6 +51651,52 @@
         "title": "RequestEcho",
         "type": "object"
       },
+      "app__schemas__reads__scientific_observation__RequestEcho": {
+        "description": "Echo of the parsed request for the observations-by-entry read.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "title": "Filter",
+            "type": "object"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "sort"
+        ],
+        "title": "RequestEcho",
+        "type": "object"
+      },
       "app__schemas__reads__scientific_provenance__RequestEcho": {
         "description": "Echo of the parsed query.",
         "properties": {
@@ -53530,6 +54058,123 @@
           }
         },
         "summary": "Run Machine Review For Submission Endpoint",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/observations/{observation_ref}/identity": {
+      "post": {
+        "description": "Attach a species-entry identity to an unresolved observation.\n\nCurator or admin only. Refuses (422) when the observation already\ncarries an identity -- correction is supersession, not update, see\nADR 0003 and the service's module docstring -- or when the target\nspecies entry is not the unique ground-state minimum entry of its\nspecies. 404 for an unknown observation or species entry.",
+        "operationId": "attach_observation_identity_endpoint_api_v1_admin_observations__observation_ref__identity_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "observation_ref",
+            "required": true,
+            "schema": {
+              "title": "Observation Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminObservationIdentityAttachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminObservationIdentityAttachResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Observation Identity Endpoint",
         "tags": [
           "admin"
         ]
@@ -77266,6 +77911,190 @@
           }
         },
         "summary": "Species Calculations Search Post",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species-entries/{species_entry_id}/observations": {
+      "get": {
+        "description": "Return molecular-property observations for a species entry.\n\nPath handle is the species-entry resource: an integer\n``species_entry.id`` or a public ref starting with ``spe_``. A\nwrong-prefix ref returns 422; an unknown entry returns 404.\n``sort=`` is rejected (v0). ``property_kind=`` filters to one\n``MolecularPropertyKind`` token (422 ``invalid_property_kind`` for an\nunknown one).\n\nUnlike its ``statmech`` / ``transport`` siblings on this router, an\nobservation is not a candidate product with review-rank selection\nsemantics — it is a raw external observation, so there is no\n``collapse`` / ``selection_policy`` and no ``include=trust`` /\n``include=assessments``. Identity is resolved by construction: every\nrecord returned here was found by its ``species_entry_id``, so an\nidentity-unresolved observation (nullable ``species_entry_id``) is\nstructurally unreachable through this route. See\n``app/services/scientific_read/observations.py``.",
+        "operationId": "species_observations_api_v1_scientific_species_entries__species_entry_id__observations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "species_entry_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Species Entry Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "property_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Property Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificSpeciesObservationsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Species Observations",
         "tags": [
           "scientific"
         ]

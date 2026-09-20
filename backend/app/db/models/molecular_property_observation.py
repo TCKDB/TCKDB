@@ -53,7 +53,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql.elements import conv
 
-from app.db.base import Base, CreatedByMixin, TimestampMixin
+from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     MolecularPropertyKind,
     ObservedStateBasis,
@@ -71,11 +71,18 @@ if TYPE_CHECKING:
     from app.db.models.workflow import WorkflowToolRelease
 
 
-class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin):
+class MolecularPropertyObservation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One molecular-property observation with full external provenance.
 
     See module docstring for the rationale behind nullable
     ``species_entry_id`` and the JSONB vector/tensor fields.
+
+    ``public_ref`` (prefix ``mpo_``, Phase C-E5) was added by migration
+    ``d2f4a7c1b8e6`` — an already-deployed table, so the column was added
+    and backfilled in place rather than folded into the initial schema.
+    See that revision and ``app/services/public_refs.py`` for the
+    opaque-ref rationale (two rows with identical scalar bytes from two
+    distinct import events must stay separately citable).
     """
 
     __tablename__ = "molecular_property_observation"

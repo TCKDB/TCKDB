@@ -1250,6 +1250,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py"),
     ApiCode("invalid_pagination", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
+    ApiCode("invalid_property_kind", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/observations.py",
+            note=(
+                "GET /scientific/species-entries/{id}/observations?property_kind= "
+                "was given a token that is not a MolecularPropertyKind member."
+            )),
     ApiCode("invalid_range", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/analytics.py",
             shape=Shape.relationship),
@@ -1508,6 +1514,57 @@ CATALOGUE: tuple[ApiCode, ...] = (
             note=(
                 "The repository root is not a git checkout. "
                 "Raised by the publication-deposit builder (backend/scripts/ops/build_publication_deposit.py) or the deposit service it wraps, an operator CLI with no HTTP route. No request can receive it. Catalogued so a client can import the spelling and so the closure guard checks it still exists; reclassify before exposing deposit building through an API."
+            )),
+    ApiCode("observation_identity_already_set", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.thing,
+            note=(
+                "A curator tried to attach a species-entry identity to a "
+                "molecular_property_observation that already carries one. "
+                "Correction is supersession (ADR 0003): deposit a corrected "
+                "observation instead of repointing this row."
+            )),
+    ApiCode("observation_identity_ambiguous_entry", 422, Surface.message_prefix,
+            "backend/app/services/observation_identity_attach.py",
+            shape=Shape.relationship,
+            note=(
+                "The attach target is not the unique ground-state, "
+                "minimum-energy entry of its species -- an observation "
+                "carries no stereo/excited-state resolution of its own, so "
+                "attaching it to an ambiguous target would silently claim "
+                "specificity the source data does not have."
+            )),
+    ApiCode("observation_rights_basis_incompatible", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "A molecular-property observation about a species the release "
+                "covers is licensed under a deposit attested for a different "
+                "data_license than the release being deposited. Raised by the "
+                "publication-deposit builder (backend/scripts/ops/"
+                "build_publication_deposit.py) or the deposit service it wraps, "
+                "an operator CLI with no HTTP route. No request can receive it. "
+                "Catalogued so a client can import the spelling and so the "
+                "closure guard checks it still exists; reclassify before "
+                "exposing deposit building through an API. Sibling of "
+                "rights_basis_incompatible (backend/app/services/release/"
+                "curation.py) applied to a record type that is never a release "
+                "selection candidate -- molecular_property_observation is not "
+                "in SELECTABLE_RECORD_TYPES or CANDIDATE_SOURCES, so the "
+                "publish-time gate in curation.py structurally cannot see one; "
+                "this is the gate for the one place an observation does travel "
+                "under a release's name, the evidence archive bundled into its "
+                "deposit."
+            )),
+    ApiCode("observation_rights_basis_missing", 422, Surface.message_prefix,
+            "backend/app/services/deposit/build.py",
+            reach=Reach.guard, shape=Shape.relationship,
+            note=(
+                "A molecular-property observation about a species the release "
+                "covers is linked to no submission, or to one with no standing "
+                "rights attestation. Same operator-CLI-only reach and "
+                "reclassify-before-exposing note as "
+                "observation_rights_basis_incompatible above."
             )),
     ApiCode("offset_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",

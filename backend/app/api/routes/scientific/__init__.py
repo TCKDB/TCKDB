@@ -14,6 +14,7 @@ Sub-routers:
     species_subresources.router
                             → /scientific/species-entries/{id}/statmech
                               /scientific/species-entries/{id}/transport
+                              /scientific/species-entries/{id}/observations
     provenance.router       → /scientific/reaction-entries/{id}/full
     thermo_search.router    → /scientific/thermo/search (GET, POST)
     kinetics_search.router  → /scientific/kinetics/search (GET, POST)

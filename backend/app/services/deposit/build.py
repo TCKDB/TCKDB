@@ -33,8 +33,11 @@ untracked files are logged, never refused), no exact tag on HEAD,
 an ``"unknown"`` package version, a database whose Alembic revision is not
 the script head, a release that does not verify, an account outside the
 author allowlist, an actor reference resolving outside it, a non-empty
-output directory. Refusal messages name usernames only -- never an email or
-a database id.
+output directory, or a molecular-property observation about one of the
+release's covered species with no rights basis compatible with the
+release's ``data_license`` (Phase C-E5; see
+:func:`_assert_observations_have_rights_basis`). Refusal messages name
+usernames only -- never an email or a database id.
 
 No HTTP: the release is read from the database through
 :func:`app.services.release.manifest.load_manifest` and
@@ -67,13 +70,18 @@ from sqlalchemy.orm import Session
 
 from app.db.base import Base
 from app.db.models.app_user import AppUser
-from app.db.models.common import DatasetReleaseStatus
+from app.db.models.common import DatasetReleaseStatus, SubmissionRecordType
 from app.db.models.dataset_release import DatasetRelease, ReleaseManifest
+from app.db.models.molecular_property_observation import (
+    MolecularPropertyObservation,
+)
 from app.services.archive import verify_archive, write_archive
 from app.services.deposit.expected_outputs import Generator, write_expected_outputs
 from app.services.release import versions
-from app.services.release.artifacts import canonical_json
+from app.services.release.artifacts import canonical_json, release_record_universe
 from app.services.release.manifest import load_manifest, verify_release
+from app.services.release.record_rights import linked_rights
+from app.services.rights import licenses_match
 
 DEPOSIT_SCHEMA = "tckdb.deposit.v1"
 MANIFEST_NAME = "MANIFEST.json"
@@ -189,6 +197,23 @@ class OutputNotEmptyError(DepositError):
     """The output directory already has content."""
 
     exit_code = 6
+
+
+class ObservationRightsBasisMissingError(DepositError):
+    """A covered observation is linked to no submission, or none attested.
+
+    Same family as :class:`ReleaseNotPublishableError` -- both mean "this
+    release cannot be deposited yet" -- so both exit 2. See
+    :func:`_assert_observations_have_rights_basis`.
+    """
+
+    exit_code = 2
+
+
+class ObservationRightsBasisIncompatibleError(DepositError):
+    """A covered observation's deposit is attested under a different license."""
+
+    exit_code = 2
 
 
 # ---------------------------------------------------------------------------
@@ -582,6 +607,102 @@ def _reproduce_document(*, tag: str, source: SourceBinding, archive_member: str)
     ).encode("utf-8")
 
 
+def _assert_observations_have_rights_basis(
+    session: Session, release: DatasetRelease
+) -> None:
+    """Refuse to bundle the evidence archive over an unattested observation.
+
+    Phase C-E5. ``molecular_property_observation`` is not in
+    ``SELECTABLE_RECORD_TYPES`` or ``CANDIDATE_SOURCES``
+    (``app/db/models/dataset_release.py`` /
+    ``app/services/release/records.py``), so the frozen release artifacts
+    (``selected_records.ndjson`` / ``candidate_records.ndjson``) never
+    carry an observation row -- :func:`app.services.release.curation.
+    publish_release`'s rights gate, which walks exactly that candidate set,
+    structurally cannot see one. There is nothing to gate there; adding a
+    check that can never fire would be the vacuous-pass the codebase
+    explicitly avoids elsewhere.
+
+    The place an observation *does* travel out under a release's name is
+    here: ``write_deposit`` bundles the full ``tckdb.archive.v1`` evidence
+    archive -- every table, unconditionally -- into one release's deposit
+    (see the module docstring), and nothing before this checked that the
+    observations inside it are licensed compatibly with ``release.
+    data_license``. That is the real gap C-E5 was opened to close.
+
+    **Scope, stated and chosen deliberately narrow.** The archive is a full
+    database dump; it has no concept of "this release's data" to filter by.
+    Gating on literally every observation row in the database, whatever
+    species it is about, would make one release's deposit refuse over data
+    that release makes no claim about. Instead this walks
+    :func:`~app.services.release.artifacts.release_record_universe` for
+    *this* release, takes the ``species_entry`` subjects it actually
+    covers (the same subjects ``render_artifacts`` resolves identity for),
+    and requires a compatible rights basis only for observations attached
+    to one of those species entries. An observation about a species this
+    release never selected or candidated evidence for is bundled as raw
+    archive bytes regardless (the archive's own byte-exact, no-redaction
+    contract, unchanged) but is not asserted, by inclusion in *this*
+    deposit, to be licensed under *this* release's terms.
+
+    :raises ObservationRightsBasisMissingError: an in-scope observation is
+        linked to no submission, or to one with no standing attestation.
+    :raises ObservationRightsBasisIncompatibleError: an in-scope
+        observation's deposit is attested under a different license.
+    """
+    universe = release_record_universe(session, release)
+    species_entry_ids = sorted(
+        subject_id
+        for subject_type, subject_id in universe.subject_pairs
+        if subject_type is SubmissionRecordType.species_entry
+    )
+    if not species_entry_ids:
+        return
+
+    rows = session.scalars(
+        select(MolecularPropertyObservation).where(
+            MolecularPropertyObservation.species_entry_id.in_(species_entry_ids)
+        )
+    ).all()
+    if not rows:
+        return
+
+    ref_by_id = {row.id: row.public_ref for row in rows}
+    pairs = {
+        (SubmissionRecordType.molecular_property_observation, row.id)
+        for row in rows
+    }
+    rights = linked_rights(session, pairs=pairs)
+
+    for pair in sorted(pairs, key=lambda p: p[1]):
+        _, observation_id = pair
+        named = ref_by_id.get(observation_id) or f"observation {observation_id}"
+        links = rights.get(pair, [])
+        if not links:
+            raise ObservationRightsBasisMissingError(
+                f"observation_rights_basis_missing: {named} is a molecular-property "
+                f"observation about a species release {release.tag!r} covers, but it "
+                "is linked to no submission, so nobody has agreed to license it. "
+                "Attach it to a submission and record a rights attestation before "
+                "depositing this release's evidence archive."
+            )
+        for link in links:
+            if link.attestation is None:
+                raise ObservationRightsBasisMissingError(
+                    f"observation_rights_basis_missing: deposit {link.submission_ref} "
+                    f"of {named} carries no rights attestation. Record one before "
+                    "depositing this release's evidence archive."
+                )
+            if not licenses_match(link.attestation.license_id, release.data_license):
+                raise ObservationRightsBasisIncompatibleError(
+                    f"observation_rights_basis_incompatible: deposit "
+                    f"{link.submission_ref} of {named} is attested under "
+                    f"{link.attestation.license_id!r}, and release {release.tag!r} "
+                    f"publishes under {release.data_license!r}. Compatibility is an "
+                    "exact, case-insensitive match of license identifiers."
+                )
+
+
 def write_deposit(
     session: Session,
     *,
@@ -636,6 +757,8 @@ def write_deposit(
         for member, content in release_members:
             _write(output_dir, member.path, content)
             members.append(member)
+
+        _assert_observations_have_rights_basis(session, release)
 
         archive_member_path = f"archive/{release.tag}.archive.tar"
         archive_path = output_dir / archive_member_path

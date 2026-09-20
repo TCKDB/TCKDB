@@ -9,19 +9,24 @@ DR-0028 Req 2 keeps internal ids out of what they are shown, and
 ``public_ref`` is the identifier every scientific read route already answers
 to. This module is the one place that crosses from one to the other.
 
-Sixteen of the eighteen :class:`SubmissionRecordType` members name a table
-carrying :class:`~app.db.base.PublicRefMixin`. Two do not:
+Seventeen of the eighteen :class:`SubmissionRecordType` members name a table
+carrying :class:`~app.db.base.PublicRefMixin`. One does not:
 ``applied_energy_correction`` (``AppliedEnergyCorrection`` has no
-``public_ref`` column) and ``molecular_property_observation``
-(``MolecularPropertyObservation`` likewise -- Phase C-E1 added the enum
-member without a public ref; C5's read route is expected to address
-observations by entry + property kind, not by their own ref). Both cases
-mean there is nothing to return and callers get ``None`` rather than a
-fabricated value or a stringified id. That is the same refusal
-:mod:`app.services.scientific_read.supersession` makes about
+``public_ref`` column). That means there is nothing to return and callers
+get ``None`` rather than a fabricated value or a stringified id. That is the
+same refusal :mod:`app.services.scientific_read.supersession` makes about
 ``applied_energy_correction``, for the same reason -- giving a table a
 public ref is the prerequisite for naming its rows, not something a caller
 may work around.
+
+``molecular_property_observation`` (``MolecularPropertyObservation``) used to
+be the second exception -- Phase C-E1 added the enum member without a public
+ref. Phase C-E5 gave the table ``public_ref`` (migration ``d2f4a7c1b8e6``,
+``mpo_`` prefix) alongside its first public read
+(``GET /scientific/species-entries/{id}/observations``), so it now resolves
+through this module like every other ref-bearing type; nothing here had to
+change to pick that up, since the set below is derived from the column, not
+retyped.
 
 The mapping from record type to table is not written here -- it is
 :data:`app.services.record_models.RECORD_MODELS`, filtered. Writing it out

@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 105 |
-| raw_only | 107 |
-| not_applicable | 44 |
-| **total** | **256** |
+| raw_only | 108 |
+| not_applicable | 45 |
+| **total** | **258** |
 
 ## Typed coverage
 
@@ -263,6 +263,12 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | `GET /api/v1/scientific/releases/{release_handle}/manifest` | yes | — | — | — | — |
 | `GET /api/v1/scientific/releases/{release_handle}/selections` | yes | — | — | — | — |
 
+> Species-entry molecular-property-observation subresource (Phase C-E5). Unlike its statmech/transport siblings there is no broad search endpoint to point a future typed method at -- this is the only public read of molecular_property_observation today. Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/species-entries/{species_entry_id}/observations` | yes | — | — | — | — |
+
 > Species-entry statmech subresource; the equivalent query is search_statmech(species_entry_ref=...), which also carries evidence and provenance. Reachable via get_json().
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
@@ -328,21 +334,11 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `GET /api/v1/admin/users` | yes | — | — | — | — |
 | `PATCH /api/v1/admin/users/{user_id}/role` | yes | — | — | — | — |
 
-> Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
-
-| Operation | raw HTTP | typed client | iterator | example | contract test |
-|---|---|---|---|---|---|
-| `GET /api/v1/auth/api-keys` | yes | — | — | — | — |
-| `POST /api/v1/auth/api-keys` | yes | — | — | — | — |
-| `DELETE /api/v1/auth/api-keys/{key_id}` | yes | — | — | — | — |
-| `POST /api/v1/auth/login` | yes | — | — | — | — |
-| `POST /api/v1/auth/logout` | yes | — | — | — | — |
-| `POST /api/v1/auth/register` | yes | — | — | — | — |
-
 > Curator/reviewer workflow. Driving review state from a producer-side upload client would let a contributor grade their own submission.
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
+| `POST /api/v1/admin/observations/{observation_ref}/identity` | yes | — | — | — | — |
 | `POST /api/v1/conformer-groups/{conformer_group_id}/selections` | yes | — | — | — | — |
 | `POST /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/evaluate` | yes | — | — | — | — |
 | `GET /api/v1/curation/reproducibility-assessments/{record_type}/{record_id}/latest` | yes | — | — | — | — |
@@ -366,3 +362,14 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/supersede` | yes | — | — | — | — |
+
+> Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/auth/api-keys` | yes | — | — | — | — |
+| `POST /api/v1/auth/api-keys` | yes | — | — | — | — |
+| `DELETE /api/v1/auth/api-keys/{key_id}` | yes | — | — | — | — |
+| `POST /api/v1/auth/login` | yes | — | — | — | — |
+| `POST /api/v1/auth/logout` | yes | — | — | — | — |
+| `POST /api/v1/auth/register` | yes | — | — | — | — |

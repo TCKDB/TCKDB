@@ -131,37 +131,37 @@ def test_every_record_type_is_accounted_for():
     """
     no_public_ref_column = {
         SubmissionRecordType.applied_energy_correction,
-        SubmissionRecordType.molecular_property_observation,
     }
 
     assert REF_BEARING_RECORD_TYPES | no_public_ref_column == set(SubmissionRecordType)
     assert REF_BEARING_RECORD_TYPES & no_public_ref_column == set()
 
 
-def test_molecular_property_observation_has_no_ref_and_none_is_invented(db_session):
-    """``MolecularPropertyObservation`` carries no ``public_ref`` column
-    either (Phase C-E1) -- same refusal, same reason, as
-    ``applied_energy_correction`` above.
+def test_molecular_property_observation_now_resolves_a_real_ref(db_session):
+    """Phase C-E5 gave ``molecular_property_observation`` a ``public_ref``
+    (migration ``d2f4a7c1b8e6``) -- it is no longer the second exception
+    alongside ``applied_energy_correction`` (see the module docstring's
+    history note). Membership here is derived from the column, so this
+    started passing the moment the mixin was added, with no edit to
+    ``record_refs.py`` itself.
     """
-    assert (
-        SubmissionRecordType.molecular_property_observation
-        not in REF_BEARING_RECORD_TYPES
-    )
+    from tests.services.scientific_read._factories import make_observation
+
+    obs = make_observation(db_session, species_entry=None)
+
+    assert SubmissionRecordType.molecular_property_observation in REF_BEARING_RECORD_TYPES
     assert (
         resolve_record_public_ref(
             db_session,
             record_type=SubmissionRecordType.molecular_property_observation,
-            record_id=1,
+            record_id=obs.id,
         )
-        is None
+        == obs.public_ref
     )
-    assert (
-        resolve_record_public_refs(
-            db_session,
-            [(SubmissionRecordType.molecular_property_observation, 1)],
-        )
-        == {}
-    )
+    assert resolve_record_public_refs(
+        db_session,
+        [(SubmissionRecordType.molecular_property_observation, obs.id)],
+    ) == {(SubmissionRecordType.molecular_property_observation, obs.id): obs.public_ref}
 
 
 @pytest.mark.parametrize("record_count", [1, 8])

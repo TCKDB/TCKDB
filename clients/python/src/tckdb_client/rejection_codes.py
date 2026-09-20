@@ -137,6 +137,7 @@ class RejectionCode(str, Enum):
     INVALID_HANDLE = "invalid_handle"
     INVALID_IDEMPOTENCY_KEY = "invalid_idempotency_key"
     INVALID_PAGINATION = "invalid_pagination"
+    INVALID_PROPERTY_KIND = "invalid_property_kind"
     INVALID_RANGE = "invalid_range"
     INVALID_STRUCTURE_QUERY = "invalid_structure_query"
     INVALID_TEMPERATURE_RANGE = "invalid_temperature_range"
@@ -172,6 +173,8 @@ class RejectionCode(str, Enum):
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
     NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
     NON_FINITE_VALUE = "non_finite_value"
+    OBSERVATION_IDENTITY_ALREADY_SET = "observation_identity_already_set"
+    OBSERVATION_IDENTITY_AMBIGUOUS_ENTRY = "observation_identity_ambiguous_entry"
     OFFSET_TOO_LARGE = "offset_too_large"
     OWNER_MISSING = "owner_missing"
     PARAMETER_VALUE_REQUIRES_KEY = "parameter_value_requires_key"
@@ -319,6 +322,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.INVALID_CURSOR,
         RejectionCode.INVALID_HANDLE,
         RejectionCode.INVALID_PAGINATION,
+        RejectionCode.INVALID_PROPERTY_KIND,
         RejectionCode.INVALID_RANGE,
         RejectionCode.INVALID_STRUCTURE_QUERY,
         RejectionCode.INVALID_TEMPERATURE_RANGE,
@@ -349,6 +353,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.NETWORK_KINETICS_RATE_UNITS_MISSING,
         RejectionCode.NETWORK_STATE_KEY_UNDECLARED,
         RejectionCode.NON_FINITE_VALUE,
+        RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET,
+        RejectionCode.OBSERVATION_IDENTITY_AMBIGUOUS_ENTRY,
         RejectionCode.OFFSET_TOO_LARGE,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY,
@@ -522,6 +528,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.INVALID_HANDLE: frozenset({422}),
     RejectionCode.INVALID_IDEMPOTENCY_KEY: frozenset({400}),
     RejectionCode.INVALID_PAGINATION: frozenset({422}),
+    RejectionCode.INVALID_PROPERTY_KIND: frozenset({422}),
     RejectionCode.INVALID_RANGE: frozenset({422}),
     RejectionCode.INVALID_STRUCTURE_QUERY: frozenset({422}),
     RejectionCode.INVALID_TEMPERATURE_RANGE: frozenset({422}),
@@ -557,6 +564,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
     RejectionCode.NETWORK_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
+    RejectionCode.OBSERVATION_IDENTITY_ALREADY_SET: frozenset({422}),
+    RejectionCode.OBSERVATION_IDENTITY_AMBIGUOUS_ENTRY: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
     RejectionCode.PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),

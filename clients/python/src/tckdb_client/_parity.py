@@ -730,6 +730,15 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
     ),
     (
         "GET",
+        "/api/v1/scientific/species-entries/{species_entry_id}/observations",
+        "Species-entry molecular-property-observation subresource "
+        "(Phase C-E5). Unlike its statmech/transport siblings there is no "
+        "broad search endpoint to point a future typed method at -- this "
+        "is the only public read of molecular_property_observation today. "
+        "Reachable via get_json().",
+    ),
+    (
+        "GET",
         "/api/v1/scientific/network-kinetics/{network_kinetics_ref_or_id}",
         "Single-record read of a row already returned in full by "
         "search_network_kinetics(network_kinetics_ref=...). Reachable via "
@@ -865,6 +874,7 @@ _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
         ("GET", "/api/v1/record-reviews/queue"),
         ("GET", "/api/v1/record-reviews/{record_type}/{record_id}"),
         ("PATCH", "/api/v1/record-reviews/{record_type}/{record_id}"),
+        ("POST", "/api/v1/admin/observations/{observation_ref}/identity"),
         ("GET", "/api/v1/species-entries/{species_entry_id}/reviews"),
         ("POST", "/api/v1/species-entries/{species_entry_id}/reviews"),
         ("POST", "/api/v1/conformer-groups/{conformer_group_id}/selections"),

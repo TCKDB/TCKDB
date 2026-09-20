@@ -100,6 +100,10 @@ PREFIXES: dict[str, str] = {
     # Rights basis of a deposit (B1). Opaque: an attestation is an event by
     # an actor, and a correction is a new event that supersedes it.
     "SubmissionRightsAttestation": "sra",
+    # Molecular-property observation (Phase C-E5). Opaque: two rows with
+    # identical scalar bytes from two distinct import/attach events must
+    # stay separately citable -- same reasoning as CalculationArtifact.
+    "MolecularPropertyObservation": "mpo",
 }
 
 # Classes whose ref is content-derived from existing identity columns.
@@ -539,6 +543,9 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
     from app.db.models.kinetics import Kinetics
     from app.db.models.level_of_theory import LevelOfTheory
     from app.db.models.literature import Literature
+    from app.db.models.molecular_property_observation import (
+        MolecularPropertyObservation,
+    )
     from app.db.models.reaction import ChemReaction, ReactionEntry
     from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
     from app.db.models.software import Software, SoftwareRelease
@@ -575,6 +582,7 @@ def backfill_public_refs(session: Session) -> dict[str, int]:
         FrequencyScaleFactor, EnergyCorrectionScheme,
         Submission,
         RecordReproducibilityAssessment,
+        MolecularPropertyObservation,
     ]
 
     counts: dict[str, int] = {}

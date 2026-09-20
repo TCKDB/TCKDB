@@ -61,10 +61,10 @@ Three things are deliberately absent:
 | Kind of token | Count | Read from |
 | --- | --- | --- |
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
-| Identifier prefixes | 36 | `backend/app/services/public_refs.py` |
+| Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 190 | `backend/app/api/code_catalogue.py` |
-| **total** | **478** | |
+| Refusal codes a caller can receive | 193 | `backend/app/api/code_catalogue.py` |
+| **total** | **482** | |
 
 ## How a record is named
 
@@ -94,7 +94,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `wfr_` | workflow tool release | yes |
 | `wft_` | workflow tool | yes |
 
-### Opaque prefixes (24)
+### Opaque prefixes (25)
 
 | Prefix | Names a | Same on every instance? |
 | --- | --- | --- |
@@ -106,6 +106,7 @@ Nothing in the string says which kind you are holding, which is why this table e
 | `cpol_` | curation policy | no — one row, one database |
 | `gasch_` | group additivity scheme | no — one row, one database |
 | `kin_` | kinetics | no — one row, one database |
+| `mpo_` | molecular property observation | no — one row, one database |
 | `net_` | network | no — one row, one database |
 | `nkin_` | network kinetics | no — one row, one database |
 | `nsolve_` | network solve | no — one row, one database |
@@ -700,7 +701,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (139 codes)
+### HTTP 422 (142 codes)
 
 | Code | Names |
 | --- | --- |
@@ -745,6 +746,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `invalid_cursor` | a thing |
 | `invalid_handle` | a thing |
 | `invalid_pagination` | a thing |
+| `invalid_property_kind` | a thing |
 | `invalid_range` | a relationship — read `context` |
 | `invalid_structure_query` | a thing |
 | `invalid_temperature_range` | a relationship — read `context` |
@@ -775,6 +777,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `network_kinetics_rate_units_missing` | a thing |
 | `network_state_key_undeclared` | a thing |
 | `non_finite_value` | a thing |
+| `observation_identity_already_set` | a thing |
+| `observation_identity_ambiguous_entry` | a relationship — read `context` |
 | `offset_too_large` | a relationship — read `context` |
 | `parameter_value_requires_key` | a thing |
 | `post_search_fields_must_be_in_body` | a thing |

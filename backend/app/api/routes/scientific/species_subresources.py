@@ -1,18 +1,29 @@
 """Species-entry-scoped scientific subresource reads.
 
-Two thin list endpoints that mirror
+Three thin list endpoints that mirror
 ``GET /scientific/species-entries/{id}/thermo``:
 
 - ``GET /scientific/species-entries/{species_entry_id}/statmech``
 - ``GET /scientific/species-entries/{species_entry_id}/transport``
+- ``GET /scientific/species-entries/{species_entry_id}/observations``
 
-They close the species-centered read asymmetry: thermo already had a
-per-entry read while statmech / transport only had record-grain detail
-+ broad search. Each returns the existing statmech / transport search
-response envelope with records pinned to the species entry. Both expose
-opt-in compact ``include=assessments`` summaries; their existing
+The first two close the species-centered read asymmetry: thermo already
+had a per-entry read while statmech / transport only had record-grain
+detail + broad search. Each returns the existing statmech / transport
+search response envelope with records pinned to the species entry. Both
+expose opt-in compact ``include=assessments`` summaries; their existing
 ``include=trust`` policy remains unchanged (trust is opt-in only and
 ``include=all`` does not surface either token).
+
+``observations`` (Phase C-E5) is the first public read of
+``molecular_property_observation`` — until this route, no read route named
+that table at all (grep-verified: no ``molecular_property`` hit anywhere
+under ``app/api``). Unlike its two siblings above, it is not a candidate
+*product* with review-rank-selection semantics — it is a raw external
+observation — so it carries no ``include=trust`` / ``include=assessments``
+and no ``collapse`` / ``selection_policy`` knob. It still shares the same
+review-badge, pagination and disclosure-envelope machinery (see
+``app/services/scientific_read/observations.py``).
 
 The path parameter accepts either the integer ``species_entry.id`` or
 a public ref of the form ``spe_…`` (the historical ``{species_entry_id}``
@@ -38,6 +49,9 @@ from app.api.routes.scientific._response import (
 )
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode, SelectionPolicy
+from app.schemas.reads.scientific_observation import (
+    ScientificSpeciesObservationsResponse,
+)
 from app.schemas.reads.scientific_statmech_search import (
     ScientificStatmechSearchResponse,
 )
@@ -45,6 +59,10 @@ from app.schemas.reads.scientific_transport_search import (
     ScientificTransportSearchResponse,
 )
 from app.services.scientific_read.handles import resolve_species_entry_handle
+from app.services.scientific_read.internal_ids import (
+    apply_internal_ids_visibility,
+)
+from app.services.scientific_read.observations import get_species_observations
 from app.services.scientific_read.public_assessments import (
     attach_statmech_assessments,
     attach_transport_assessments,
@@ -179,3 +197,56 @@ def species_transport(
         table=TRANSPORT_RECORD_SECTIONS,
         scope=SEARCH_SCOPE,
     )
+
+
+@router.get(
+    "/{species_entry_id}/observations",
+    response_model=ScientificSpeciesObservationsResponse,
+)
+def species_observations(
+    species_entry_id: str = Path(..., min_length=1, max_length=64),
+    session: Session = Depends(get_db),
+    property_kind: str | None = Query(None),
+    min_review_status: RecordReviewStatus | None = Query(None),
+    include_rejected: bool = Query(False),
+    include_deprecated: bool = Query(False),
+    sort: str | None = Query(None),
+    include: list[str] | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Return molecular-property observations for a species entry.
+
+    Path handle is the species-entry resource: an integer
+    ``species_entry.id`` or a public ref starting with ``spe_``. A
+    wrong-prefix ref returns 422; an unknown entry returns 404.
+    ``sort=`` is rejected (v0). ``property_kind=`` filters to one
+    ``MolecularPropertyKind`` token (422 ``invalid_property_kind`` for an
+    unknown one).
+
+    Unlike its ``statmech`` / ``transport`` siblings on this router, an
+    observation is not a candidate product with review-rank selection
+    semantics — it is a raw external observation, so there is no
+    ``collapse`` / ``selection_policy`` and no ``include=trust`` /
+    ``include=assessments``. Identity is resolved by construction: every
+    record returned here was found by its ``species_entry_id``, so an
+    identity-unresolved observation (nullable ``species_entry_id``) is
+    structurally unreachable through this route. See
+    ``app/services/scientific_read/observations.py``.
+    """
+    resolved_species_entry_id = resolve_species_entry_handle(
+        session, species_entry_id
+    )
+    payload = get_species_observations(
+        session,
+        species_entry_id=resolved_species_entry_id,
+        property_kind=property_kind,
+        include=parse_include(include),
+        min_review_status=min_review_status,
+        include_rejected=include_rejected,
+        include_deprecated=include_deprecated,
+        sort=sort,
+        offset=offset,
+        limit=limit,
+    )
+    return apply_internal_ids_visibility(payload)
