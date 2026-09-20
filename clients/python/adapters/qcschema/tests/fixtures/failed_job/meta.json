@@ -1,0 +1,15 @@
+{
+  "outcome": "refusal",
+  "expected": "job_failed",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "d3f6005e10f575e0b69eea0931dbf9e4ace06d8953e66b12714304eafd6a79ed",
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "level": "hf/sto-3g",
+  "molecule": "water, standard experimental geometry",
+  "note": "genuine qcengine FailedOperation from a nonexistent basis set"
+}

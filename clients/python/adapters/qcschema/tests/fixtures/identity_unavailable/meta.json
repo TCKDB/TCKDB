@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "identity_unavailable",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "6e0de7881187c554a4a03d52b7713343c1228a96123eb2bb1b991adad7f30743",
+  "smiles_arg": null,
+  "generator": "reuses energy_v1.json verbatim (no identifiers.smiles); imported with no --smiles",
+  "qcelemental": "0.51.2"
+}

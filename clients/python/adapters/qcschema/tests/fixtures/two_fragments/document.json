@@ -1,0 +1,179 @@
+{
+  "id": null,
+  "schema_name": "qcschema_output",
+  "schema_version": 1,
+  "molecule": {
+    "schema_name": "qcschema_molecule",
+    "schema_version": 2,
+    "validated": true,
+    "symbols": [
+      "O",
+      "H",
+      "H",
+      "He"
+    ],
+    "geometry": [
+      0.0,
+      0.0,
+      -0.1294768898299175,
+      -4.574627521173546e-17,
+      1.49418674,
+      1.0274461001700823,
+      4.574627521173546e-17,
+      -1.49418674,
+      1.0274461001700823,
+      50.0,
+      0.0,
+      0.0
+    ],
+    "name": "H2O",
+    "molecular_charge": 0.0,
+    "molecular_multiplicity": 1.0,
+    "masses": [
+      15.99491461957,
+      1.00782503223,
+      1.00782503223,
+      4.00260325413
+    ],
+    "real": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "atom_labels": [
+      "",
+      "",
+      ""
+    ],
+    "atomic_numbers": [
+      8,
+      1,
+      1,
+      2
+    ],
+    "mass_numbers": [
+      16,
+      1,
+      1,
+      4
+    ],
+    "fragments": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        3
+      ]
+    ],
+    "fragment_charges": [
+      0.0,
+      0.0
+    ],
+    "fragment_multiplicities": [
+      1,
+      1
+    ],
+    "fix_com": false,
+    "fix_orientation": false,
+    "provenance": {
+      "creator": "QCElemental",
+      "version": "0.51.2",
+      "routine": "qcelemental.molparse.from_schema"
+    },
+    "extras": {}
+  },
+  "driver": "energy",
+  "model": {
+    "method": "hf",
+    "basis": "sto-3g"
+  },
+  "keywords": {},
+  "protocols": {
+    "wavefunction": "none",
+    "stdout": true,
+    "error_correction": {
+      "default_policy": true,
+      "policies": null
+    },
+    "native_files": "none"
+  },
+  "extras": {
+    "qcvars": {
+      "CURRENT ENERGY": -74.96475172227183,
+      "CURRENT REFERENCE ENERGY": -74.96475172227183,
+      "DD SOLVATION ENERGY": 0.0,
+      "HF KINETIC ENERGY": 74.495952920649,
+      "HF POTENTIAL ENERGY": -149.46070464292086,
+      "HF TOTAL ENERGY": -74.96475172227184,
+      "HF VIRIAL RATIO": 2.0062929432169585,
+      "NUCLEAR REPULSION ENERGY": 8.801465577999224,
+      "ONE-ELECTRON ENERGY": -121.67648088066743,
+      "PCM POLARIZATION ENERGY": 0.0,
+      "PE ENERGY": 0.0,
+      "SCF ITERATION ENERGY": -74.96475172227183,
+      "SCF ITERATIONS": 6.0,
+      "SCF TOTAL ENERGY": -74.96475172227183,
+      "TWO-ELECTRON ENERGY": 37.91026358039637,
+      "CURRENT DIPOLE": [
+        0.0,
+        0.0,
+        0.6565114487890633
+      ],
+      "SCF DIPOLE": [
+        0.0,
+        0.0,
+        0.6565114487890633
+      ],
+      "SCF TOTAL ENERGIES": [
+        -74.12096770683897,
+        -74.91008507817264,
+        -74.96364594406342,
+        -74.96467399515313,
+        -74.9647503163819,
+        -74.96475171037281,
+        -74.96475172227183
+      ]
+    }
+  },
+  "provenance": {
+    "creator": "Psi4",
+    "version": "1.11",
+    "routine": "psi4.schema_runner.run_qcschema",
+    "module": "scf",
+    "cpu": "12th Gen Intel(R) Core(TM) i7-12700KF",
+    "username": "calvin",
+    "memory": 25.564,
+    "wall_time": 2.1200902462005615,
+    "nthreads": 12,
+    "qcengine_version": "0.51.0",
+    "hostname": "archlinux"
+  },
+  "properties": {
+    "calcinfo_nbasis": 7,
+    "calcinfo_nmo": 7,
+    "calcinfo_nalpha": 5,
+    "calcinfo_nbeta": 5,
+    "calcinfo_natom": 3,
+    "nuclear_repulsion_energy": 8.801465577999224,
+    "return_energy": -74.96475172227183,
+    "scf_one_electron_energy": -121.67648088066743,
+    "scf_two_electron_energy": 37.91026358039637,
+    "scf_dipole_moment": [
+      0.0,
+      0.0,
+      0.6565114487890633
+    ],
+    "scf_total_energy": -74.96475172227183,
+    "scf_iterations": 6
+  },
+  "wavefunction": null,
+  "return_result": -74.96475172227183,
+  "stdout": "\n    -----------------------------------------------------------------------\n          Psi4: An Open-Source Ab Initio Electronic Structure Package\n                               Psi4 1.11 release\n\n                         Git: Rev {} zzzzzzz \n\n\n    D. G. A. Smith, L. A. Burns, A. C. Simmonett, R. M. Parrish,\n    M. C. Schieber, R. Galvelis, P. Kraus, H. Kruse, R. Di Remigio,\n    A. Alenaizan, A. M. James, S. Lehtola, J. P. Misiewicz, M. Scheurer,\n    R. A. Shaw, J. B. Schriber, Y. Xie, Z. L. Glick, D. A. Sirianni,\n    J. S. O'Brien, J. M. Waldrop, A. Kumar, E. G. Hohenstein,\n    B. P. Pritchard, B. R. Brooks, H. F. Schaefer III, A. Yu. Sokolov,\n    K. Patkowski, A. E. DePrince III, U. Bozkaya, R. A. King,\n    F. A. Evangelista, J. M. Turney, T. D. Crawford, C. D. Sherrill,\n    J. Chem. Phys. 152(18) 184108 (2020). https://doi.org/10.1063/5.0006002\n\n                            Additional Code Authors\n    E. T. Seidl, C. L. Janssen, E. F. Valeev, M. L. Leininger,\n    J. F. Gonthier, R. M. Richard, H. R. McAlexander, M. Saitow, X. Wang,\n    P. Verma, M. H. Lechner, A. Jiang, S. Behnle, A. G. Heide,\n    M. F. Herbst, D. L. Poole, T. Gy\u0151ri, E. C. Mitchell, J. P. Pederson,\n    and A. M. Wallace\n\n             Previous Authors, Complete List of Code Contributors,\n                       and Citations for Specific Modules\n    https://github.com/psi4/psi4/blob/master/codemeta.json\n    https://github.com/psi4/psi4/graphs/contributors\n    https://psicode.org/psi4manual/master/introduction.html#citing-psifour\n\n    -----------------------------------------------------------------------\n\n\n    Psi4 started on: Saturday, 19 September 2026 11:56PM\n\n    Process ID: 2954269\n    Host:       archlinux\n    PSIDATADIR: /home/calvin/miniforge3/envs/tckdb_qcschema_psi4/share/psi4\n    Memory:     25.6 GiB\n    Threads:    12\n    Addons:     a\u0336d\u0336c\u0336c\u0336, a\u0336m\u0336b\u0336i\u0336t\u0336, b\u0336s\u0336e\u0336, c\u0336c\u0336t\u03363\u0336, c\u0336f\u0336o\u0336u\u0336r\u0336, c\u0336h\u0336e\u0336m\u0336p\u0336s\u03362\u0336, c\u0336p\u0336p\u0336e\u0336, d\u0336d\u0336x\u0336,\n                d\u0336f\u0336t\u0336d\u03363\u0336, d\u0336f\u0336t\u0336d\u03364\u0336, dkh, ecpint, einsums, f\u0336o\u0336r\u0336t\u0336e\u0336, gauxc, g\u0336c\u0336p\u0336,\n                g\u0336d\u0336m\u0336a\u0336, geometric, g\u0336p\u0336u\u0336_\u0336d\u0336f\u0336c\u0336c\u0336, i\u0336n\u0336t\u0336e\u0336g\u0336r\u0336a\u0336t\u0336o\u0336r\u0336x\u0336x\u0336, i\u0336p\u0336i\u0336,\n                l\u0336i\u0336b\u0336e\u0336f\u0336p\u0336, m\u0336d\u0336i\u0336, m\u0336p\u03362\u0336d\u0336, m\u0336r\u0336c\u0336c\u0336, ooo, o\u0336p\u0336e\u0336n\u0336f\u0336e\u0336r\u0336m\u0336i\u0336o\u0336n\u0336p\u0336s\u0336i\u03364\u0336,\n                pcmsolver, p\u0336s\u0336i\u03364\u0336f\u0336o\u0336c\u0336k\u0336c\u0336i\u0336, p\u0336s\u0336i\u0336x\u0336a\u0336s\u0336, p\u0336y\u0336e\u0336i\u0336n\u0336s\u0336u\u0336m\u0336s\u0336, r\u0336e\u0336s\u0336p\u0336,\n                s\u0336i\u0336m\u0336i\u0336n\u0336t\u0336, s\u0336n\u0336s\u0336m\u0336p\u03362\u0336, v\u03362\u0336r\u0336d\u0336m\u0336_\u0336c\u0336a\u0336s\u0336s\u0336c\u0336f\u0336\n\n  ==> Input QCSchema <==\n\n--------------------------------------------------------------------------\n{'id': None,\n 'molecule': {'extras': {},\n              'fix_com': False,\n              'fix_orientation': False,\n              'geometry': [0.0, 0.0, -0.12947689, 0.0, 1.49418674, 1.0274461, 0.0, -1.49418674, 1.0274461],\n              'molecular_charge': 0.0,\n              'molecular_multiplicity': 1.0,\n              'name': 'H2O',\n              'provenance': {'creator': 'QCElemental',\n                             'routine': 'qcelemental.molparse.from_schema',\n                             'version': '0.51.2'},\n              'schema_name': 'qcschema_molecule',\n              'schema_version': 3,\n              'symbols': ['O', 'H', 'H'],\n              'validated': True},\n 'provenance': {'creator': 'QCElemental', 'routine': 'qcelemental.models.v1.results', 'version': '0.51.2'},\n 'schema_name': 'qcschema_atomic_input',\n 'schema_version': 2,\n 'specification': {'driver': 'energy',\n                   'extras': {},\n                   'keywords': {},\n                   'model': {'basis': 'sto-3g', 'method': 'hf'},\n                   'program': '',\n                   'protocols': {'error_correction': {'default_policy': True, 'policies': None},\n                                 'native_files': 'none',\n                                 'schema_name': 'qcschema_atomic_protocols',\n                                 'stdout': True,\n                                 'wavefunction': 'none'},\n                   'schema_name': 'qcschema_atomic_specification'}}\n--------------------------------------------------------------------------\n\nScratch directory: /tmp/tmpxsn0h8kr_psi_scratch/\n   => Libint2 <=\n\n    Primary   basis highest AM E, G, H:  7, 6, 3\n    Auxiliary basis highest AM E, G, H:  7, 7, 4\n    Onebody   basis highest AM E, G, H:  -, -, -\n    Solid Harmonics ordering:            Gaussian\n\n*** tstart() called on archlinux\n*** at Sat Sep 19 23:56:02 2026\n\n   => Loading Basis Set <=\n\n    Name: STO-3G\n    Role: ORBITAL\n    Keyword: BASIS\n    atoms 1   entry O          line    81 file /home/calvin/miniforge3/envs/tckdb_qcschema_psi4/share/psi4/basis/sto-3g.gbs \n    atoms 2-3 entry H          line    19 file /home/calvin/miniforge3/envs/tckdb_qcschema_psi4/share/psi4/basis/sto-3g.gbs \n\n\n         ---------------------------------------------------------\n                                   SCF\n               by Justin Turney, Rob Parrish, Andy Simmonett\n                          and Daniel G. A. Smith\n                              RHF Reference\n                       12 Threads,  26177 MiB Core\n         ---------------------------------------------------------\n\n  ==> Geometry <==\n\n    Molecular point group: c2v\n    Full point group: C2v\n\n    Geometry (in Bohr), charge = 0, multiplicity = 1:\n\n       Center              X                  Y                   Z               Mass       \n    ------------   -----------------  -----------------  -----------------  -----------------\n         O            0.000000000000     0.000000000000    -0.129476889830    15.994914619570\n         H           -0.000000000000     1.494186740000     1.027446100170     1.007825032230\n         H            0.000000000000    -1.494186740000     1.027446100170     1.007825032230\n\n  Running in c2v symmetry.\n\n  Rotational constants: A =     25.12555  B =     13.37733  C =      8.72955 [cm^-1]\n  Rotational constants: A = 753245.06959  B = 401042.16955  C = 261705.25556 [MHz]\n  Nuclear repulsion =    8.801465577999224\n\n  Charge       = 0\n  Multiplicity = 1\n  Electrons    = 10\n  Nalpha       = 5\n  Nbeta        = 5\n\n  ==> Algorithm <==\n\n  SCF Algorithm Type is DF.\n  DIIS enabled.\n  MOM disabled.\n  Fractional occupation disabled.\n  Guess Type is SAD.\n  Energy threshold   = 1.00e-06\n  Density threshold  = 1.00e-06\n  Integral threshold = 1.00e-12\n\n  ==> Primary Basis <==\n\n  Basis Set: STO-3G\n    Blend: STO-3G\n    Number of shells: 5\n    Number of basis functions: 7\n    Number of Cartesian functions: 7\n    Spherical Harmonics?: true\n    Max angular momentum: 1\n\n   => Loading Basis Set <=\n\n    Name: (STO-3G AUX)\n    Role: JKFIT\n    Keyword: DF_BASIS_SCF\n    atoms 1   entry O          line   318 file /home/calvin/miniforge3/envs/tckdb_qcschema_psi4/share/psi4/basis/def2-universal-jkfit.gbs \n    atoms 2-3 entry H          line    18 file /home/calvin/miniforge3/envs/tckdb_qcschema_psi4/share/psi4/basis/def2-universal-jkfit.gbs \n\n  ==> Integral Setup <==\n\n  DFHelper Memory: AOs need 0.000 GiB; user supplied 19.173 GiB. \n  SCF_SUBTYPE=INCORE selected. In-core MEM_DF algorithm will be used.\n  Using in-core AOs.\n\n  ==> MemDFJK: Density-Fitted J/K Matrices <==\n\n    J tasked:                   Yes\n    K tasked:                   Yes\n    wK tasked:                   No\n    OpenMP threads:              12\n    Memory [MiB]:             19633\n    Algorithm:                 Core\n    Schwarz Cutoff:           1E-12\n    Mask sparsity (%):       0.0000\n    Fitting Condition:        1E-10\n\n   => Auxiliary Basis Set <=\n\n  Basis Set: (STO-3G AUX)\n    Blend: DEF2-UNIVERSAL-JKFIT\n    Number of shells: 37\n    Number of basis functions: 113\n    Number of Cartesian functions: 133\n    Spherical Harmonics?: true\n    Max angular momentum: 4\n\n  Minimum eigenvalue in the overlap matrix is 3.3961511492E-01.\n  Reciprocal condition number of the overlap matrix is 2.0004236313E-01.\n    Using symmetric orthogonalization.\n\n  ==> Pre-Iterations <==\n\n  SCF Guess: Superposition of Atomic Densities via on-the-fly atomic UHF (no occupation information).\n\n   -------------------------\n    Irrep   Nso     Nmo    \n   -------------------------\n     A1         4       4 \n     A2         0       0 \n     B1         1       1 \n     B2         2       2 \n   -------------------------\n    Total       7       7\n   -------------------------\n\n  ==> Iterations <==\n\n                           Total Energy        Delta E     RMS |[F,P]|\n\n   @DF-RHF iter SAD:   -74.12096770683897   -7.41210e+01   0.00000e+00 \n   @DF-RHF iter   1:   -74.91008507817264   -7.89117e-01   5.60342e-02 DIIS/ADIIS\n   @DF-RHF iter   2:   -74.96364594406342   -5.35609e-02   9.06749e-03 DIIS/ADIIS\n   @DF-RHF iter   3:   -74.96467399515313   -1.02805e-03   2.00880e-03 DIIS/ADIIS\n   @DF-RHF iter   4:   -74.96475031638190   -7.63212e-05   2.03825e-04 DIIS/ADIIS\n   @DF-RHF iter   5:   -74.96475171037281   -1.39399e-06   2.01452e-05 DIIS\n   @DF-RHF iter   6:   -74.96475172227183   -1.18990e-08   2.38229e-07 DIIS\n  Energy and wave function converged.\n\n\n  ==> Post-Iterations <==\n\n    Orbital Energies [Eh]\n    ---------------------\n\n    Doubly Occupied:                                                      \n\n       1A1   -20.247493     2A1    -1.247793     1B2    -0.595851  \n       3A1    -0.447885     1B1    -0.388958  \n\n    Virtual:                                                              \n\n       4A1     0.564174     2B2     0.693044  \n\n    Final Occupation by Irrep:\n             A1    A2    B1    B2 \n    DOCC [     3,    0,    1,    1 ]\n    NA   [     3,    0,    1,    1 ]\n    NB   [     3,    0,    1,    1 ]\n\n  @DF-RHF Final Energy:   -74.96475172227183\n\n   => Energetics <=\n\n    Nuclear Repulsion Energy =              8.8014655779992239\n    One-Electron Energy =                -121.6764808806674267\n    Two-Electron Energy =                  37.9102635803963679\n    Total Energy =                        -74.9647517222718420\n\nComputation Completed\n\n\nProperties will be evaluated at   0.000000,   0.000000,   0.000000 [a0]\n\nProperties computed using the SCF density matrix\n\n\n Multipole Moments:\n\n ------------------------------------------------------------------------------------\n     Multipole            Electronic (a.u.)      Nuclear  (a.u.)        Total (a.u.)\n ------------------------------------------------------------------------------------\n\n L = 1.  Multiply by 2.5417464519 to convert [e a0] to [Debye]\n Dipole X            :          0.0000000            0.0000000            0.0000000\n Dipole Y            :          0.0000000            0.0000000            0.0000000\n Dipole Z            :         -0.3625656            1.0190771            0.6565114\n Magnitude           :                                                    0.6565114\n\n ------------------------------------------------------------------------------------\n\n*** tstop() called on archlinux at Sat Sep 19 23:56:03 2026\nModule time:\n\tuser time   =       0.28 seconds =       0.00 minutes\n\tsystem time =       0.07 seconds =       0.00 minutes\n\ttotal time  =          1 seconds =       0.02 minutes\nTotal time:\n\tuser time   =       0.28 seconds =       0.00 minutes\n\tsystem time =       0.07 seconds =       0.00 minutes\n\ttotal time  =          1 seconds =       0.02 minutes\n\n    Psi4 stopped on: Saturday, 19 September 2026 11:56PM\n    Psi4 wall time for execution: 0:00:00.33\n\n*** Psi4 exiting successfully. Buy a developer a beer!\n",
+  "stderr": null,
+  "native_files": {},
+  "success": true,
+  "error": null
+}

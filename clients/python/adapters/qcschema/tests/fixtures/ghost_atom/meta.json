@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "ghost_atoms_unsupported",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "363b9488c2a9de25fccccfcb8ed4b426e9fbb59be3049f3d1c2d9d6e3678f23c",
+  "generator": "hand-derived from raw_out/energy_v1.json or energy_v2.json",
+  "qcelemental": "0.51.2",
+  "edit": "molecule.real[0] set to false"
+}

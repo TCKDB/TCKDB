@@ -1,0 +1,19 @@
+{
+  "outcome": "route",
+  "expected": "freq",
+  "family": "v1",
+  "driver": "hessian",
+  "raw_sha256": "1edac17be79b381771fb6c8889ec147bdbaaf12fbb6403a3d9052b6b1196522e",
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "level": "hf/sto-3g",
+  "molecule": "water, standard experimental geometry",
+  "pins": {
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194",
+    "hessian_length": 45,
+    "hessian_first_value": -0.001533616561028961
+  }
+}

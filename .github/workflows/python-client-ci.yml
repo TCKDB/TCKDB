@@ -67,8 +67,16 @@ jobs:
           # not skip them quietly -- it fails collection. Development uses the
           # conda rdkit; this job has no conda, hence the wheel.
           python -m pip install rdkit
+          # QCSchema adapter dependency, pinned exactly (see
+          # clients/python/adapters/qcschema/pyproject.toml). Installed here
+          # rather than into a dedicated env: unlike CHEMKIN's rdkit, plain
+          # `pip install qcelemental==0.51.2` has no compiled/system
+          # dependency this job lacks, so it needs no separate environment --
+          # only fixture *generation* (a real Psi4 run) does, documented in
+          # tests/fixtures/README.md.
+          python -m pip install "qcelemental==0.51.2"
 
-      # Three invocations, not one, and the reason is not taste.
+      # Four invocations, not one, and the reason is not taste.
       #
       # `testpaths = ["tests"]` in clients/python/pyproject.toml means a bare
       # `pytest` there sees only tests/ -- which is how 54 CHEMKIN adapter
@@ -82,7 +90,7 @@ jobs:
       # process the second shadows the first and the ~30 client tests that do
       # `from conftest import make_client` fail at import. Until that is
       # fixed, the suites are separate processes and
-      # backend/tests/scripts/test_gate_coverage.py is what stops a fourth
+      # backend/tests/scripts/test_gate_coverage.py is what stops a fifth
       # one from being added without a step to run it.
       - name: Run Python client tests
         working-directory: clients/python
@@ -91,6 +99,10 @@ jobs:
       - name: Run CHEMKIN adapter tests
         working-directory: clients/python
         run: python -m pytest adapters/chemkin/tests
+
+      - name: Run QCSchema adapter tests
+        working-directory: clients/python
+        run: python -m pytest adapters/qcschema/tests
 
       # The wire contract every client and the backend share. Two workflows
       # installed this package; neither ran its tests, so 38 round-trip and

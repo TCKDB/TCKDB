@@ -1,0 +1,18 @@
+{
+  "outcome": "route",
+  "expected": "sp",
+  "family": "v2",
+  "driver": "energy",
+  "raw_sha256": "78d53638e7434a146810b86f588b9430603087702517e02fddb212018a642329",
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "level": "hf/sto-3g",
+  "molecule": "water, standard experimental geometry",
+  "pins": {
+    "electronic_energy_hartree": -74.96475172227183,
+    "first_xyz_line": "O 0.0000000000 0.0000000000 -0.0685162194"
+  }
+}

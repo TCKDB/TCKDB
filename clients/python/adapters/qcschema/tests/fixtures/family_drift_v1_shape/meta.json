@@ -1,0 +1,10 @@
+{
+  "outcome": "refusal",
+  "expected": "schema_version_family_mismatch",
+  "family": "v1",
+  "driver": "energy",
+  "raw_sha256": "276f7cbfc2f84e9c2b2b3562db0df559d0682f045a2ad570d6f9819d3ebc2baa",
+  "generator": "hand-derived from tests/fixtures/energy_v1/document.json",
+  "edit": "schema_version changed from 1 to 2 AND schema_name changed from 'qcschema_output' to 'qcschema_atomic_result' on a v1-shaped (no input_data) document -- impersonating v2's declared pair entirely, not just one field of it",
+  "qcelemental": "0.51.2"
+}
