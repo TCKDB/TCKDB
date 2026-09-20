@@ -153,3 +153,102 @@ def test_legacy_upgrade_backfills_existing_rows():
             )
             conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
         admin.dispose()
+
+
+def _public_ref_column_present(engine) -> bool:
+    with engine.begin() as conn:
+        count = conn.scalar(
+            text(
+                "SELECT count(*) FROM information_schema.columns "
+                "WHERE table_name = 'molecular_property_observation' "
+                "AND column_name = 'public_ref'"
+            )
+        )
+    return bool(count)
+
+
+def test_downgrade_refuses_when_identity_attached_event_rows_exist():
+    """Phase C-E5 review round 3 (R4). ``downgrade()`` adds the
+    ``observation_identity_attached`` value to ``submission_audit_event_kind``
+    in ``upgrade()`` and cannot remove it (Postgres cannot drop a single enum
+    value without rebuilding the type). A pre-revision ORM has no
+    ``SubmissionAuditEventKind`` member for that value and cannot decode a
+    ``submission_audit_event`` row carrying it -- so the downgrade must
+    refuse outright when such a row exists (mirrors
+    ``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``'s refusal
+    style), and must still succeed, reversing the column/index/function,
+    when no such row exists.
+    """
+    from conftest import _database_url, _db_env, scratch_database_name
+
+    db_name = scratch_database_name("mpo_pubref_downgrade")
+    admin = create_engine(_database_url("postgres"), isolation_level="AUTOCOMMIT")
+    engine = None
+    try:
+        with admin.connect() as conn:
+            conn.execute(text(f'CREATE DATABASE "{db_name}"'))
+        env = _db_env(db_name)
+        root = Path(__file__).resolve().parents[2]
+        subprocess.run(
+            ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", _MIGRATION.revision],
+            cwd=root, env=env, check=True,
+        )
+        engine = create_engine(_database_url(db_name))
+
+        with engine.begin() as conn:
+            user_id = conn.scalar(
+                text(
+                    "INSERT INTO app_user (username) VALUES "
+                    "('mpo_migration_downgrade_test') RETURNING id"
+                )
+            )
+            submission_id = conn.scalar(
+                text(
+                    "INSERT INTO submission (created_by, submission_kind, public_ref) "
+                    "VALUES (:uid, 'other', 'sub_mpomigrationdowngradetest01') "
+                    "RETURNING id"
+                ),
+                {"uid": user_id},
+            )
+            conn.execute(
+                text(
+                    "INSERT INTO submission_audit_event "
+                    "(submission_id, actor_kind, event_kind) "
+                    "VALUES (:sid, 'curator', 'observation_identity_attached')"
+                ),
+                {"sid": submission_id},
+            )
+
+        # With the offending row present, downgrade must refuse and leave
+        # the column/index/function untouched.
+        refused = subprocess.run(
+            ["conda", "run", "-n", "tckdb_env", "alembic", "downgrade", _MIGRATION.parent],
+            cwd=root, env=env, capture_output=True, text=True,
+        )
+        assert refused.returncode != 0, refused.stdout + refused.stderr
+        assert "observation_identity_attached" in (refused.stdout + refused.stderr)
+        assert _public_ref_column_present(engine)
+
+        # Remove the offending row; downgrade must now succeed cleanly.
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "DELETE FROM submission_audit_event "
+                    "WHERE event_kind = 'observation_identity_attached'"
+                )
+            )
+        subprocess.run(
+            ["conda", "run", "-n", "tckdb_env", "alembic", "downgrade", _MIGRATION.parent],
+            cwd=root, env=env, check=True,
+        )
+        assert not _public_ref_column_present(engine)
+    finally:
+        if engine:
+            engine.dispose()
+        with admin.connect() as conn:
+            conn.execute(
+                text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=:n"),
+                {"n": db_name},
+            )
+            conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
+        admin.dispose()

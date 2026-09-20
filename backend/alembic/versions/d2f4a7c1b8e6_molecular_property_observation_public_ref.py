@@ -36,10 +36,18 @@ observation_identity_attach.py``) to record its curation fact as a
 across a later curation act). ``ALTER TYPE ... ADD VALUE`` cannot be
 undone short of rebuilding the enum type (same limitation documented in
 ``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``, the precedent
-for this addition); this revision's ``downgrade()`` still reverses the
-``public_ref`` column, index and function, but the enum member is left in
-an otherwise-harmless state: an unused value in a Postgres enum type costs
-nothing and never gets written by code below the previous revision.
+for this addition).
+
+Review round 3 (R4) corrects a false claim the previous paragraph made here:
+an unreferenced enum value is harmless, but this revision's ``downgrade()``
+used to reverse the ``public_ref`` column, index and function unconditionally
+-- including when ``submission_audit_event`` rows already carry
+``event_kind='observation_identity_attached'``. Those rows are NOT harmless
+to leave behind: a pre-revision ORM has no ``SubmissionAuditEventKind``
+member for that value and cannot decode them. Following the
+``a7b8c9d0e1f2`` precedent's refusal style, ``downgrade()`` now checks for
+such rows first and refuses the downgrade outright when any exist; it only
+proceeds with the column/index/function reversal when none do.
 
 Revision ID: d2f4a7c1b8e6
 Revises: 0b4a3afabfd3
@@ -131,11 +139,37 @@ def downgrade() -> None:
     The ``observation_identity_attached`` enum member added in ``upgrade()``
     is NOT removed: PostgreSQL cannot drop a single value from an enum type
     without rebuilding it, the same limitation documented in
-    ``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``. Leaving it in
-    place is harmless -- an unreferenced enum value is inert -- so this
-    downgrade still reverses everything that can be reversed rather than
-    refusing outright.
+    ``a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py``. An
+    *unreferenced* enum value is harmless to leave behind, but a
+    *referenced* one is not: a pre-revision ORM has no
+    ``SubmissionAuditEventKind`` member for ``observation_identity_attached``
+    and cannot decode a ``submission_audit_event`` row carrying it. Following
+    the ``a7b8c9d0e1f2`` precedent's refusal, this downgrade checks for such
+    rows first and refuses outright when any exist (Phase C-E5 review round
+    3, R4) -- it only reverses the ``public_ref`` column, index and function
+    when none do.
     """
+    bind = op.get_bind()
+    (attached_event_count,) = bind.execute(
+        sa.text(
+            "SELECT count(*) FROM submission_audit_event "
+            "WHERE event_kind = 'observation_identity_attached'"
+        )
+    ).one()
+    if attached_event_count:
+        raise NotImplementedError(
+            "Downgrade refused: "
+            f"{attached_event_count} submission_audit_event row(s) carry "
+            "event_kind='observation_identity_attached', a value this "
+            "revision added to the submission_audit_event_kind enum type and "
+            "cannot remove (PostgreSQL cannot drop a single enum value "
+            "without rebuilding the type -- same limitation as "
+            "a7b8c9d0e1f2_add_llm_precheck_recorded_audit_event.py). A "
+            "pre-revision ORM has no SubmissionAuditEventKind member for it "
+            "and cannot decode these rows, so downgrading now would strand "
+            "them. Resolve the offending rows (e.g. delete them, if they "
+            "are disposable in this environment) before downgrading."
+        )
     op.drop_index(op.f(_INDEX), table_name=_TABLE)
     op.drop_column(_TABLE, "public_ref")
     op.execute(f"DROP FUNCTION IF EXISTS public.{_REF_FUNCTION}()")
