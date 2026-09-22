@@ -3276,3 +3276,11 @@ EXTERNAL_CP_COMPARISON_V1: EvidenceRubric = EvidenceRubric(
     record_type="thermo",
     checks=(),
 )
+
+# Phase D recipes are advisory only, deliberately outside RUBRIC_REGISTRY.
+# V1 remains a historical recipe; no persisted row is rewritten.
+EXTERNAL_CP_COMPARISON_V2 = EvidenceRubric(name="external_cp_comparison", version=2, record_type="thermo", checks=())
+THERMO_CONSISTENCY_V1 = EvidenceRubric(name="thermo_consistency", version=1, record_type="thermo", checks=())
+THERMO_KINETICS_CONSISTENCY_V1 = EvidenceRubric(
+    name="thermo_kinetics_consistency", version=1, record_type="kinetics", checks=(),
+)

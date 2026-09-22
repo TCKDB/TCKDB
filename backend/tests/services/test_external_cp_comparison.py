@@ -29,6 +29,7 @@ from app.db.models.common import (
     ObservedStateBasis,
     ObservedUncertaintyAssessor,
     ObservedUncertaintyKind,
+    PhaseKind,
     ScientificOriginKind,
 )
 from app.db.models.external_source import ExternalSource, ExternalSourceRecord
@@ -50,7 +51,7 @@ from app.services.machine_review.rereview import (
     plan_record_machine_rereview,
 )
 from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
-from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V1
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V2
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
     attach_thermo_nasa9,
@@ -73,13 +74,23 @@ _CP_HIGH_RANGE_J_MOL_K = 3.2 * _R
 def _make_thermo(session, *, smiles: str, tmin_k: float = 200.0, tmax_k: float = 6000.0) -> Thermo:
     species = make_species(session, smiles=smiles)
     entry = make_species_entry(session, species=species)
-    return make_thermo_scalar(
+    thermo = make_thermo_scalar(
         session,
         species_entry=entry,
         scientific_origin=ScientificOriginKind.computed,
         tmin_k=tmin_k,
         tmax_k=tmax_k,
     )
+
+    # Only ``phase`` is set here: heat-capacity applicability requires the
+    # gas phase but never a reference pressure (decided 2026-09-23, see
+    # engine.gas_state_reason's ``quantity="cp"`` branch) -- Cp is
+    # pressure-independent. Leaving reference_pressure_bar unset by default
+    # is deliberate: it exercises that every Cp comparison in this file
+    # works without one, matching this runner's pre-D2 applicability.
+    thermo.phase = PhaseKind.gas
+    session.flush()
+    return thermo
 
 
 def _make_observation(
@@ -399,6 +410,53 @@ def test_real_gas_observation_is_comparable_with_unquantified_non_ideality_and_p
     assert comparison.residual_j_mol_k == pytest.approx(_CP_LOW_RANGE_J_MOL_K - 80.0)
 
 
+def test_null_reference_pressure_still_yields_a_cp_residual(db_session):
+    """Decision (2026-09-23): reference pressure cannot change a heat
+    capacity, so a thermo with no recorded ``reference_pressure_bar`` must
+    still produce a comparable Cp residual (the pre-D2 behaviour, restored
+    here after D2 briefly required a pressure for every applicability
+    check). ``_make_thermo`` sets no reference pressure by default -- see
+    its docstring -- so this only asserts the value explicitly stays None
+    and the comparison still succeeds.
+
+    Mutation: reintroduce a reference-pressure requirement into
+    ``engine.gas_state_reason(..., quantity="cp")`` -> ``comparability``
+    goes to ``not_comparable`` and this goes red.
+    """
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCCCCC")
+    assert thermo.reference_pressure_bar is None
+    attach_thermo_nasa(db_session, thermo=thermo)
+    _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
+
+    result = compare_thermo_with_cp_observations(db_session, thermo.id)
+    (comparison,) = result.comparisons
+    assert comparison.comparability == "comparable"
+    assert comparison.residual_j_mol_k == pytest.approx(_CP_LOW_RANGE_J_MOL_K - 80.0)
+
+
+def test_null_reference_pressure_leaves_entropy_comparison_unavailable(db_session):
+    """Companion to the Cp test above: entropy still needs a reference
+    pressure (it is baked into the entropy coefficient), so the D1
+    thermo-consistency check must keep reporting it unavailable when the
+    thermo carries no ``reference_pressure_bar`` -- even though the same
+    record's Cp comparisons now succeed (decision, 2026-09-23).
+    """
+    from app.services.consistency.thermo import compare_thermo
+
+    thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCCCCCCCCCCC")
+    assert thermo.reference_pressure_bar is None
+    thermo.s298_j_mol_k = 200.0
+    attach_thermo_nasa(db_session, thermo=thermo)
+    db_session.flush()
+
+    result = compare_thermo(thermo, temperature_grid=[298.15])
+    rows = [json.loads(f.message) for f in result.findings if '"quantity"' in f.message]
+    s_rows = [r for r in rows if r["quantity"] == "s"]
+    assert s_rows
+    assert all(r["reason"] == "missing_or_invalid_reference_pressure" for r in s_rows)
+    assert all(r["residual"] is None for r in s_rows)
+
+
 def test_ideal_gas_observation_carries_no_non_ideality_flag(db_session):
     thermo = _make_thermo(db_session, smiles="CCCCCCC")
     attach_thermo_nasa(db_session, thermo=thermo)
@@ -479,7 +537,7 @@ def test_record_carries_rubric_version_and_context_hash_changes_with_observation
     row_one = run_and_record(db_session, thermo.id)
     db_session.flush()
 
-    rubric_key = f"{EXTERNAL_CP_COMPARISON_V1.name}_v{EXTERNAL_CP_COMPARISON_V1.version}"
+    rubric_key = f"{EXTERNAL_CP_COMPARISON_V2.name}_v{EXTERNAL_CP_COMPARISON_V2.version}"
     assert row_one.rubric_versions_json == {
         rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]
     }
@@ -557,7 +615,8 @@ def test_finding_message_decodes_to_every_required_field_including_custody_ref(d
     (finding,) = row.findings_json
     detail = json.loads(finding["message"])
 
-    assert detail["observation_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
+    assert detail["observation_ref"].startswith("mpo_")
+    assert detail["scalar_uncertainty"] == 1.5
     assert detail["external_source_record_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
     assert detail["temperature_k"] == pytest.approx(298.15)
     assert detail["cp_observed_j_mol_k"] == pytest.approx(80.0)
@@ -594,7 +653,7 @@ def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_ses
     attach_thermo_nasa(db_session, thermo=thermo)
     long_key = "10.1016/j.jct.2013.08.022#" + "P" * 2000
     custody = _make_external_source_record(db_session, key=long_key)
-    _make_observation(
+    obs = _make_observation(
         db_session,
         thermo=thermo,
         temperature_k=298.15,
@@ -608,16 +667,28 @@ def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_ses
     assert len(finding["message"].encode("utf-8")) <= 1000
 
     detail = json.loads(finding["message"])
-    # The message's copy is bounded and carries a truncation marker...
-    assert len(detail["observation_ref"]) < len(long_key)
-    assert detail["observation_ref"] != long_key
+    # observation_ref is always the observation's own short public ref
+    # (never the custody key), so it is untouched by the long key -- the
+    # long key only reaches external_source_record_ref, and that copy
+    # inside message is bounded with a truncation marker.
+    assert detail["observation_ref"] == obs.public_ref
+    assert len(detail["external_source_record_ref"]) < len(long_key)
+    assert detail["external_source_record_ref"] != long_key
     # ...but evidence_keys still carries the full, untruncated key, so exact
     # matching against the custody row's own key is never degraded.
-    assert f"observation:{long_key}" in finding["evidence_keys"]
+    assert f"observation:{detail['observation_ref']}" in finding["evidence_keys"]
     assert f"external_source_record:{long_key}" in finding["evidence_keys"]
 
 
-def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(db_session):
+def test_observation_without_custody_gets_its_public_ref_never_the_db_id(db_session):
+    """``observation_ref`` is ``obs.public_ref`` -- opaque, never the row id.
+
+    Pre-D2 this was a content-derived label built from temperature and
+    value (``heat_capacity_cp@{t}K={v}``); the D2 rewrite switched to the
+    observation's own ``mpo_``-prefixed public ref (Phase C-E5), which is
+    an opaque random token, not content-derived -- this test (and its
+    name) pin that current behaviour rather than the stale pre-D2 claim.
+    """
     thermo = _make_thermo(db_session, smiles="CCCCCCCCCCCCCC")
     attach_thermo_nasa(db_session, thermo=thermo)
     obs = _make_observation(db_session, thermo=thermo, temperature_k=298.15, scalar_value=80.0)
@@ -625,10 +696,13 @@ def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(
     result = compare_thermo_with_cp_observations(db_session, thermo.id)
     (comparison,) = result.comparisons
     assert comparison.external_source_record_ref is None
-    assert str(obs.id) not in comparison.observation_ref
-    # !r (full repr), not :g (6 sig figs) -- see _observation_ref's docstring:
-    # two distinct observations agreeing to 6 sig figs must not collide.
-    assert comparison.observation_ref == "heat_capacity_cp@298.15K=80.0"
+    assert comparison.observation_ref.startswith("mpo_")
+    assert comparison.observation_ref == obs.public_ref
+    # Deliberately no "str(obs.id) not in observation_ref" assertion: a public
+    # ref is lowercase base32, so a small decimal id is a substring of a correct
+    # ref by chance (measured: an id of 2-7 collides about 55% of the time, 22
+    # about 2.6%). The equality above already fails for any ref derived from the
+    # row id, and it can only fail for that reason.
 
 
 # --------------------------------------------------------------------------- #

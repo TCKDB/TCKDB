@@ -1,54 +1,14 @@
-"""Compare a computed thermo record's heat capacity with external observations.
+"""D2: computed Cp against stored external observations.
 
-This is the runner behind the first ``review``-tier scientific check
-(:mod:`app.scientific_checks.external_comparison`,
-``docs/research/tckdb-phase-c-implementation-plan.md`` C4). Per ADR 0008 the
-``review`` tier never blocks an upload, carries no error-envelope code, and
-has no approval effect: :func:`compare_thermo_with_cp_observations` is pure
-(no writes) and :func:`run_and_record` appends exactly one
-``record_machine_review`` row through the existing persistence helper. Nothing
-here mutates ``thermo``, ``molecular_property_observation``, or any other
-scientific record.
+The Phase C preference order (NASA7, NASA9, exact points) remains this
+check's contract. D1 separately compares every fit without choosing one.
+Cantera 3.2.0 preserves the recorded reference pressure; unsupported state
+and units remain unavailable. Real-gas observations retain unquantified
+non-ideality. Values and supplied uncertainty are informational only.
 
-What is compared
------------------
-A thermo with ``scientific_origin=computed`` and a NASA-7
-(:class:`~app.db.models.thermo.ThermoNASA`), NASA-9
-(:class:`~app.db.models.thermo.ThermoNASA9Interval`), or tabulated-point
-(:class:`~app.db.models.thermo.ThermoPoint`) representation, against every
-``molecular_property_observation`` row on the same ``species_entry`` with
-``property_kind=heat_capacity_cp``. NASA representations are evaluated with
-Cantera (lazy import — an absent engine is a configuration error, never a
-finding, see :class:`ExternalCpComparisonConfigurationError`); a point
-representation is compared only at an exactly matching temperature, with no
-Cantera dependency. Preference order when a thermo carries more than one
-representation is NASA-7, then NASA-9, then point.
-
-No ratio is judged and no threshold is applied anywhere in this module: a
-finding always reports the residual and lets a human curator judge it.
-``real_gas``-basis observations (``ObservedStateBasis.real_gas``) are still
-compared, flagged ``non_ideality: "unquantified"`` with the observation's own
-recorded pressure alongside the residual (Phase C amendment to the
-implementation plan's C2 "State" bullet); ``not_comparable`` is reserved for a
-temperature outside the fit's range, or (for a point representation) no
-exactly matching stored point.
-
-Observation and custody references
------------------------------------
-``molecular_property_observation`` does not carry a
-:class:`~app.db.base.PublicRefMixin` public ref (Phase C-E1 did not add one,
-and this change may not add a migration), so :func:`_observation_ref` cites
-the linked ``external_source_record.source_record_key`` (the natural,
-content-derived per-value key ThermoML custody rows carry, see the C2 design
-note) when custody exists, and otherwise a deterministic
-``property@temperature=value`` label built from the same fields that
-participate in the observation's own dedupe key. Neither branch ever
-surfaces ``molecular_property_observation.id``.
-
-Units
------
-Cantera's ``cp_mole`` is J/(kmol*K); TCKDB stores and reports J/(mol*K)
-everywhere. The single conversion point is :data:`_J_PER_KMOL_K_TO_J_PER_MOL_K`.
+The pure read and append wrapper are separate. Rubric v2 hashes actual
+inputs and custody, leaves historical rows intact, and reads only this
+runner in the scientific-check family. Observation citations use public refs.
 """
 
 from __future__ import annotations
@@ -56,6 +16,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Callable
 
 from sqlalchemy import select
@@ -64,7 +25,9 @@ from sqlalchemy.orm import Session
 from app.db.models.common import MolecularPropertyKind, ObservedStateBasis, ScientificOriginKind
 from app.db.models.molecular_property_observation import MolecularPropertyObservation
 from app.db.models.record_machine_review import RecordMachineReviewRow
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoNASA9Interval, ThermoPoint
+from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.services.consistency import engine
+from app.services.consistency.core import encoded, finding, snapshot, thermo_inputs
 from app.services.machine_review.context_hash import (
     MachineReviewEvidenceContext,
     build_machine_review_context_hash,
@@ -78,6 +41,7 @@ from app.services.machine_review.query import (
     SCIENTIFIC_CHECK_PROVIDER,
     MachineReviewRecordFamily,
     get_latest_record_machine_review_row,
+    get_record_machine_review_currency_for_record,
 )
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.recipe import (
@@ -89,20 +53,13 @@ from app.services.machine_review.schemas import (
     MachineReviewFinding,
     MachineReviewSeverity,
 )
-from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V1
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V2
 
 #: Cantera's ``ThermoPhase.cp_mole`` is J/(kmol*K); TCKDB's fixed unit for
 #: this quantity is J/(mol*K) (unit policy, ``docs/unit_policy.md``). The one
 #: conversion point -- see ``test_j_per_kmol_k_to_j_per_mol_k_constant`` for
 #: the mutation guard (a wrong constant must fail the NASA-7 hand-calc check).
 _J_PER_KMOL_K_TO_J_PER_MOL_K = 1.0 / 1000.0
-
-#: A neutral, real periodic-table element used only to satisfy Cantera's
-#: element bookkeeping when building a throwaway single-species ideal-gas
-#: ``Solution``. ``cp_mole`` for a single species depends only on its NASA
-#: polynomial, never on this placeholder composition, and no reaction or
-#: elemental-balance check ever runs against this solution.
-_PLACEHOLDER_ELEMENT = "Ar"
 
 #: Model/prompt-version identity for this deterministic runner. There is no
 #: LLM prompt involved, so this single string stands in for both the
@@ -120,9 +77,8 @@ _MESSAGE_METHOD_NOTE_MAX_CHARS = 120
 _MESSAGE_MAX_BYTES = 1000
 #: Deterministic bound on each ref string embedded in ``message`` (never on
 #: ``evidence_keys``, which keeps the untruncated value for exact matching).
-#: ``observation_ref`` and ``external_source_record_ref`` are the same
-#: content-derived, externally-sourced ``source_record_key`` when custody
-#: exists, and that key has no length limit in the DB (``Text`` column) --
+#: ``external_source_record_ref`` is an externally supplied source key
+#: with no length limit in the DB (``Text`` column) --
 #: so an unbounded key can otherwise push ``message`` past its 1000-char
 #: schema limit (``MachineReviewFinding.message``) and make the whole run
 #: raise instead of recording a finding.
@@ -130,14 +86,7 @@ _MESSAGE_REF_MAX_CHARS = 120
 _TRUNCATION_MARKER = "...(truncated)"
 
 
-class ExternalCpComparisonConfigurationError(RuntimeError):
-    """Cantera is required to evaluate a NASA representation and is absent.
-
-    Never raised for a scientific reason -- an absent optional dependency is
-    a deployment configuration problem, not a finding about the record, so it
-    is never wrapped into a :class:`~app.services.machine_review.schemas.
-    MachineReviewFinding` or a ``record_machine_review`` row.
-    """
+ExternalCpComparisonConfigurationError = engine.ConfigurationError
 
 
 @dataclass(frozen=True)
@@ -149,9 +98,10 @@ class CpObservationComparison:
     temperature_k: float
     pressure_bar: float | None
     state_basis: str | None
-    cp_observed_j_mol_k: float
+    cp_observed_j_mol_k: float | None
     cp_computed_j_mol_k: float | None
     residual_j_mol_k: float | None
+    scalar_uncertainty: float | None
     uncertainty_kind: str | None
     uncertainty_coverage_factor: float | None
     uncertainty_level_of_confidence_pct: float | None
@@ -171,6 +121,7 @@ class ComparisonResult:
     thermo: Thermo
     representation: str
     comparisons: tuple[CpObservationComparison, ...]
+    inputs_json: str
 
 
 # ---------------------------------------------------------------------------
@@ -179,19 +130,11 @@ class ComparisonResult:
 
 # ``(cp_j_mol_k, in_range) | None`` isn't expressible as a single alias
 # without importing typing.Optional gymnastics; spelled out at each use site.
-_Evaluator = Callable[[float], tuple[float | None, bool]]
+_Evaluator = Callable[[float], tuple[float | None, bool, str | None]]
 
 
 def _import_cantera():
-    try:
-        import cantera as ct
-    except Exception as exc:  # pragma: no cover - exercised via monkeypatch
-        raise ExternalCpComparisonConfigurationError(
-            "Cantera is required for the external Cp comparison runner. "
-            "Install the 'chemkin' extra: pip install 'tckdb-backend[chemkin]' "
-            "(or `mamba install -n tckdb_env -c conda-forge cantera`)."
-        ) from exc
-    return ct
+    return engine.cantera()
 
 
 def _nasa7_complete(nasa: ThermoNASA) -> bool:
@@ -201,62 +144,38 @@ def _nasa7_complete(nasa: ThermoNASA) -> bool:
     return all(v is not None for v in bounds + low + high)
 
 
-def _build_nasa7_evaluator(nasa: ThermoNASA) -> _Evaluator:
-    ct = _import_cantera()
-    t_low, t_mid, t_high = nasa.t_low, nasa.t_mid, nasa.t_high
-    # TCKDB convention: a1..a7 is the LOW-temperature interval, b1..b7 the
-    # HIGH-temperature interval (see the same convention documented at
-    # ``app.services.scientific_read.chemkin_serialize._nasa_card``, which
-    # this mirrors). Cantera's ``NasaPoly2`` coeffs array is
-    # ``[Tmid] + high(7) + low(7)``.
-    high = [nasa.b1, nasa.b2, nasa.b3, nasa.b4, nasa.b5, nasa.b6, nasa.b7]
-    low = [nasa.a1, nasa.a2, nasa.a3, nasa.a4, nasa.a5, nasa.a6, nasa.a7]
-    poly = ct.NasaPoly2(t_low, t_high, ct.one_atm, [t_mid, *high, *low])
-    species = ct.Species("X", {_PLACEHOLDER_ELEMENT: 1})
-    species.thermo = poly
-    gas = ct.Solution(thermo="ideal-gas", species=[species])
-
-    def evaluate(temperature_k: float) -> tuple[float | None, bool]:
-        if not (t_low <= temperature_k <= t_high):
-            return None, False
-        gas.TP = temperature_k, ct.one_atm
-        return gas.cp_mole * _J_PER_KMOL_K_TO_J_PER_MOL_K, True
-
+def _build_nasa7_evaluator(thermo: Thermo) -> _Evaluator:
+    _import_cantera()
+    def evaluate(temperature_k):
+        poly, reason = engine.polynomial(thermo, "nasa7", temperature_k, quantity="cp")
+        if reason:
+            return None, False, reason
+        value = poly.cp(temperature_k) * _J_PER_KMOL_K_TO_J_PER_MOL_K
+        return (value, True, None) if isfinite(value) else (None, False, "nonfinite_engine_result")
     return evaluate
 
 
-def _build_nasa9_evaluator(intervals: list[ThermoNASA9Interval]) -> _Evaluator:
-    ct = _import_cantera()
-    ordered = sorted(intervals, key=lambda iv: iv.interval_index)
-    t_low = min(iv.t_min_k for iv in ordered)
-    t_high = max(iv.t_max_k for iv in ordered)
-    coeffs: list[float] = [float(len(ordered))]
-    for iv in ordered:
-        coeffs.extend(
-            [iv.t_min_k, iv.t_max_k, iv.a1, iv.a2, iv.a3, iv.a4, iv.a5, iv.a6, iv.a7, iv.a8, iv.a9]
-        )
-    poly = ct.Nasa9PolyMultiTempRegion(t_low, t_high, ct.one_atm, coeffs)
-    species = ct.Species("X", {_PLACEHOLDER_ELEMENT: 1})
-    species.thermo = poly
-    gas = ct.Solution(thermo="ideal-gas", species=[species])
-
-    def evaluate(temperature_k: float) -> tuple[float | None, bool]:
-        if not (t_low <= temperature_k <= t_high):
-            return None, False
-        gas.TP = temperature_k, ct.one_atm
-        return gas.cp_mole * _J_PER_KMOL_K_TO_J_PER_MOL_K, True
-
+def _build_nasa9_evaluator(thermo: Thermo) -> _Evaluator:
+    _import_cantera()
+    def evaluate(temperature_k):
+        poly, reason = engine.polynomial(thermo, "nasa9", temperature_k, quantity="cp")
+        if reason:
+            return None, False, reason
+        value = poly.cp(temperature_k) * _J_PER_KMOL_K_TO_J_PER_MOL_K
+        return (value, True, None) if isfinite(value) else (None, False, "nonfinite_engine_result")
     return evaluate
 
 
 def _build_point_evaluator(points: list[ThermoPoint]) -> _Evaluator:
     by_temperature = {p.temperature_k: p.cp_j_mol_k for p in points}
 
-    def evaluate(temperature_k: float) -> tuple[float | None, bool]:
+    def evaluate(temperature_k: float) -> tuple[float | None, bool, str | None]:
         cp = by_temperature.get(temperature_k)
         if cp is None:
-            return None, False
-        return cp, True
+            return None, False, "no_exact_matching_point"
+        if not isfinite(cp):
+            return None, False, "nonfinite_point_value"
+        return cp, True, None
 
     return evaluate
 
@@ -269,9 +188,9 @@ def _resolve_evaluator(thermo: Thermo) -> tuple[str, _Evaluator]:
     precondition failure, not a finding -- when none is usable.
     """
     if thermo.nasa is not None and _nasa7_complete(thermo.nasa):
-        return "nasa7", _build_nasa7_evaluator(thermo.nasa)
+        return "nasa7", _build_nasa7_evaluator(thermo)
     if thermo.nasa9_intervals:
-        return "nasa9", _build_nasa9_evaluator(list(thermo.nasa9_intervals))
+        return "nasa9", _build_nasa9_evaluator(thermo)
     if thermo.points:
         return "point", _build_point_evaluator(list(thermo.points))
     raise ValueError(
@@ -286,19 +205,8 @@ def _resolve_evaluator(thermo: Thermo) -> tuple[str, _Evaluator]:
 
 
 def _observation_ref(observation: MolecularPropertyObservation) -> str:
-    """A content-derived, id-free label for one observation.
-
-    Custody-backed observations get the custody row's own natural key
-    (globally unique by construction). The fallback label for an
-    uncustodied observation uses ``!r`` (full ``repr`` precision, matching
-    :func:`_context_note`'s hashed fields) rather than ``:g`` -- two
-    observations that agree to 6 significant figures but differ beyond that
-    would otherwise format to the same ``:g``-truncated label despite being
-    distinct rows.
-    """
-    if observation.external_source_record is not None:
-        return observation.external_source_record.source_record_key
-    return f"heat_capacity_cp@{observation.temperature_k!r}K={observation.scalar_value!r}"
+    """Cite the participating observation by its stable public reference."""
+    return observation.public_ref
 
 
 def _external_source_record_ref(observation: MolecularPropertyObservation) -> str | None:
@@ -316,10 +224,23 @@ def _compare_one(
     observation: MolecularPropertyObservation,
     representation: str,
     evaluate: _Evaluator,
+    applicability_reason: str | None = None,
 ) -> CpObservationComparison:
     temperature_k = observation.temperature_k
     cp_observed = observation.scalar_value
-    cp_computed, usable = evaluate(temperature_k)
+    reason = applicability_reason
+    if cp_observed is None or not isfinite(cp_observed):
+        reason = "missing_or_nonfinite_observation_scalar"
+        cp_observed = None
+    elif temperature_k is None or not isfinite(temperature_k) or temperature_k <= 0:
+        reason = "missing_or_invalid_observation_temperature"
+    elif observation.scalar_unit != "J/mol/K":
+        reason = "unsupported_or_missing_observation_unit"
+    elif observation.state_basis not in (ObservedStateBasis.ideal_gas, ObservedStateBasis.real_gas):
+        reason = "missing_or_incompatible_observation_state"
+    cp_computed, usable, evaluation_reason = (
+        evaluate(temperature_k) if reason is None else (None, False, reason)
+    )
 
     state_basis = observation.state_basis
     non_ideality = "unquantified" if state_basis is ObservedStateBasis.real_gas else None
@@ -331,7 +252,7 @@ def _compare_one(
         t_in_range = True if representation != "point" else None
     else:
         comparability = "not_comparable"
-        comparability_reason = (
+        comparability_reason = reason or evaluation_reason or (
             "no_exact_matching_point" if representation == "point" else "temperature_outside_fit_range"
         )
         cp_computed = None
@@ -347,6 +268,7 @@ def _compare_one(
         cp_observed_j_mol_k=cp_observed,
         cp_computed_j_mol_k=cp_computed,
         residual_j_mol_k=residual,
+        scalar_uncertainty=observation.scalar_uncertainty,
         uncertainty_kind=(
             observation.uncertainty_kind.value if observation.uncertainty_kind is not None else None
         ),
@@ -375,32 +297,44 @@ def compare_thermo_with_cp_observations(session: Session, thermo_id: int) -> Com
     :class:`ExternalCpComparisonConfigurationError` if a NASA representation
     is present but Cantera is not installed. Neither is a finding.
     """
-    thermo = session.get(Thermo, thermo_id)
-    if thermo is None:
-        # The id stays out of the message: callers name the thermo by public
-        # ref, and a row id in user-facing text is a catalogued house defect.
-        raise ValueError("cannot compare Cp: the requested thermo does not exist")
-    if thermo.scientific_origin is not ScientificOriginKind.computed:
-        raise ValueError(
-            "cannot compare Cp: this requires a computed thermo record "
-            f"({thermo.public_ref} has scientific_origin={thermo.scientific_origin.value!r})"
-        )
-
-    representation, evaluate = _resolve_evaluator(thermo)
-
-    observations = list(
-        session.scalars(
-            select(MolecularPropertyObservation)
-            .where(
-                MolecularPropertyObservation.species_entry_id == thermo.species_entry_id,
-                MolecularPropertyObservation.property_kind == MolecularPropertyKind.heat_capacity_cp,
+    with session.no_autoflush:
+        thermo = session.get(Thermo, thermo_id)
+        if thermo is None:
+            # The id stays out of the message: callers name the thermo by public
+            # ref, and a row id in user-facing text is a catalogued house defect.
+            raise ValueError("cannot compare Cp: the requested thermo does not exist")
+        if thermo.scientific_origin is not ScientificOriginKind.computed:
+            raise ValueError(
+                "cannot compare Cp: this requires a computed thermo record "
+                f"({thermo.public_ref} has scientific_origin={thermo.scientific_origin.value!r})"
             )
-            .order_by(MolecularPropertyObservation.id)
-        )
-    )
 
-    comparisons = tuple(_compare_one(observation, representation, evaluate) for observation in observations)
-    return ComparisonResult(thermo=thermo, representation=representation, comparisons=comparisons)
+        representation, evaluate = _resolve_evaluator(thermo)
+
+        observations = list(
+            session.scalars(
+                select(MolecularPropertyObservation)
+                .where(
+                    MolecularPropertyObservation.species_entry_id == thermo.species_entry_id,
+                    MolecularPropertyObservation.property_kind == MolecularPropertyKind.heat_capacity_cp,
+                )
+                .order_by(MolecularPropertyObservation.id)
+            )
+        )
+
+        comparisons = tuple(
+            _compare_one(observation, representation, evaluate, engine.gas_state_reason(thermo, quantity="cp"))
+            for observation in observations
+        )
+        inputs = {
+            "thermo": thermo_inputs(thermo), "representation": representation,
+            "observations": sorted((snapshot(o, ("external_source_record", "literature")) for o in observations), key=encoded),
+            "sources": sorted((snapshot(o.external_source_record.external_source) for o in observations
+                               if o.external_source_record is not None), key=encoded),
+            "engine": f"cantera/{engine.ENGINE_VERSION}" if representation != "point" else "exact-points/1",
+            "units": "J/mol/K;bar;K",
+        }
+        return ComparisonResult(thermo=thermo, representation=representation, comparisons=comparisons, inputs_json=encoded(inputs))
 
 
 # ---------------------------------------------------------------------------
@@ -439,6 +373,7 @@ def _finding_payload(comparison: CpObservationComparison) -> dict:
         "cp_observed_j_mol_k": comparison.cp_observed_j_mol_k,
         "cp_computed_j_mol_k": comparison.cp_computed_j_mol_k,
         "residual_j_mol_k": comparison.residual_j_mol_k,
+        "scalar_uncertainty": comparison.scalar_uncertainty,
         "uncertainty_kind": comparison.uncertainty_kind,
         "uncertainty_coverage_factor": comparison.uncertainty_coverage_factor,
         "uncertainty_level_of_confidence_pct": comparison.uncertainty_level_of_confidence_pct,
@@ -493,22 +428,12 @@ def _finding_from_comparison(comparison: CpObservationComparison, thermo: Thermo
     )
 
 
-def _context_note(comparison: CpObservationComparison) -> str:
-    """One order-insensitive evidence-context token per observation.
 
-    Folds in the observation ref, its value, and (when custody-backed) the
-    custody row's content digest and parser/mapping versions -- so the
-    context hash changes whenever an observation is added, removed, or
-    reparsed under a new importer version, and never on wall-clock data.
-    """
-    parts = [
-        f"observation:{comparison.observation_ref}",
-        f"cp_observed_j_mol_k:{comparison.cp_observed_j_mol_k!r}",
-        f"temperature_k:{comparison.temperature_k!r}",
-    ]
-    if comparison.external_source_record_ref is not None:
-        parts.append(f"external_source_record:{comparison.external_source_record_ref}")
-    return "|".join(parts)
+def findings_for_result(result):
+    """No observations is an explicit unavailable finding, never an empty pass."""
+    if not result.comparisons:
+        return (finding(result.thermo, {"reason": "no_cp_observations"}, [result.thermo.public_ref]),)
+    return tuple(_finding_from_comparison(c, result.thermo) for c in result.comparisons)
 
 
 def run_and_record(
@@ -533,7 +458,7 @@ def run_and_record(
     result = compare_thermo_with_cp_observations(session, thermo_id)
     thermo = result.thermo
 
-    findings = tuple(_finding_from_comparison(c, thermo) for c in result.comparisons)
+    findings = findings_for_result(result)
     status = derive_machine_review_status(findings, MachineReviewOutcome.completed)
     reviewed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -548,17 +473,16 @@ def run_and_record(
         record_id=thermo.id,
     )
 
-    notes = tuple(sorted(_context_note(c) for c in result.comparisons))
     context = MachineReviewEvidenceContext(
         record_type="thermo",
         record_ref=thermo.public_ref,
-        rubric_name=EXTERNAL_CP_COMPARISON_V1.name,
-        rubric_version=EXTERNAL_CP_COMPARISON_V1.version,
-        notes=(*notes, f"representation:{result.representation}"),
+        rubric_name=EXTERNAL_CP_COMPARISON_V2.name,
+        rubric_version=EXTERNAL_CP_COMPARISON_V2.version,
+        notes=(result.inputs_json,),
     )
     digest = build_machine_review_context_hash(context)
 
-    rubric_key = public_rubric_name(EXTERNAL_CP_COMPARISON_V1)
+    rubric_key = public_rubric_name(EXTERNAL_CP_COMPARISON_V2)
     rubric_versions = {rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]}
 
     return create_record_machine_review_row(
@@ -573,11 +497,11 @@ def run_and_record(
 
 
 def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordMachineReviewRow | None:
-    """Return the current external-Cp-comparison row for one thermo, or ``None``.
+    """Return the latest recorded external-Cp-comparison row for one thermo, or ``None``.
 
     Reads its own family (:attr:`~app.services.machine_review.query.
     MachineReviewRecordFamily.scientific_check`) and model
-    (:data:`RUNNER_VERSION`), so "the current Cp comparison for this thermo"
+    (:data:`RUNNER_VERSION`), so "the latest recorded Cp comparison for this thermo"
     is a well-defined notion independent of any reviewer-family (LLM /
     fake-provider) row that may also exist for the same ``(thermo, "thermo")``
     key. Callers that want the latest Cp comparison (the CLI, the paper
@@ -595,6 +519,22 @@ def latest_cp_comparison_for_thermo(session: Session, thermo_id: int) -> RecordM
     )
 
 
+def cp_comparison_currency(session, thermo_id):
+    """Re-read live inputs; latest recorded alone does not establish currency."""
+    result = compare_thermo_with_cp_observations(session, thermo_id)
+    rubric = EXTERNAL_CP_COMPARISON_V2
+    digest = build_machine_review_context_hash(MachineReviewEvidenceContext(
+        record_type="thermo", record_ref=result.thermo.public_ref,
+        rubric_name=rubric.name, rubric_version=rubric.version, notes=(result.inputs_json,),
+    ))
+    key = public_rubric_name(rubric)
+    return get_record_machine_review_currency_for_record(
+        session, record_type="thermo", record_id=thermo_id, current_context=digest,
+        active_prompt_version=RUNNER_VERSION, active_rubric_versions={key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[key]},
+        family=MachineReviewRecordFamily.scientific_check, model=RUNNER_VERSION,
+    )
+
+
 __all__ = [
     "PROVIDER",
     "RUNNER_VERSION",
@@ -602,6 +542,7 @@ __all__ = [
     "CpObservationComparison",
     "ExternalCpComparisonConfigurationError",
     "compare_thermo_with_cp_observations",
+    "cp_comparison_currency",
     "latest_cp_comparison_for_thermo",
     "run_and_record",
 ]
