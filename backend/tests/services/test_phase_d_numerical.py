@@ -393,10 +393,12 @@ def test_unbalanced_charge_is_visible_even_when_elements_balance():
         ReactionEntryStructureParticipant(species_entry_id=ion.species_entry_id,
                                           species_entry=ion.species_entry, role="product", participant_index=1),
     ]
-    common = dict(reaction_entry_id=1, reaction_entry=entry, model_kind="modified_arrhenius",
-                  a=1.0, n=0.0, ea_kj_mol=0.0, a_units="per_s", is_third_body=False,
-                  tmin_k=200, tmax_k=3000, pressure_context="high_p_limit",
-                  degeneracy_convention="already_applied")
+    common = {
+        "reaction_entry_id": 1, "reaction_entry": entry, "model_kind": "modified_arrhenius",
+        "a": 1.0, "n": 0.0, "ea_kj_mol": 0.0, "a_units": "per_s", "is_third_body": False,
+        "tmin_k": 200, "tmax_k": 3000, "pressure_context": "high_p_limit",
+        "degeneracy_convention": "already_applied",
+    }
     forward = Kinetics(id=1, public_ref="kin_charge_f", direction="forward", **common)
     reverse = Kinetics(id=2, public_ref="kin_charge_r", direction="reverse", **common)
 
