@@ -11,7 +11,15 @@ from app.services.consistency import engine
 from app.services.consistency.core import currency, latest_recorded, thermo_inputs
 from app.services.consistency.service import compare, current, invoke
 from app.services.external_comparison import cp
+from app.services.machine_review.context_hash import MachineReviewContextDigest
+from app.services.machine_review.persistence import create_record_machine_review_row
+from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name
+from app.services.machine_review.rereview import (
+    MachineReviewReReviewDecision,
+    plan_record_machine_rereview,
+)
+from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
 from tests.services.scientific_read._factories import attach_thermo_nasa, attach_thermo_points
 from tests.services.test_external_cp_comparison import _make_external_source_record, _make_observation, _make_thermo
 
@@ -236,6 +244,129 @@ def test_nonfinite_inputs_remain_hashable_and_unavailable_without_flushing(db_se
     assert json.loads(result.findings[0].message)["residual_j_mol_k"] is None
     assert "nonfinite_float" in result.inputs_json
     assert observation in db_session.dirty
+
+
+# --------------------------------------------------------------------------- #
+# Review round 2, part E: the two new advisory checks (D1 thermo-consistency
+# and D3 thermo-kinetics) must not restale a record's current reviewer-family
+# review, the exact defect that bit the external-Cp check in Phase C (see
+# test_external_cp_comparison.py::
+# test_recording_a_cp_comparison_does_not_restale_the_reviewer_familys_current_review).
+# Both new checks share the same append-only ``record_machine_review`` and
+# the same ``get_record_machine_review_currency_for_record`` classifier, so
+# the same class of bug -- a differently-keyed row read as "the latest" and
+# demoting a genuine reviewer pass -- was equally possible here and had no
+# regression test pinning it shut.
+# --------------------------------------------------------------------------- #
+
+
+def _seed_reviewer_review(session, *, record_type, record_id, record_ref):
+    """A fake "current" reviewer-family (LLM) review, recorded before either
+    new check ever runs -- mirrors test_external_cp_comparison.py's fixture.
+    """
+    digest = MachineReviewContextDigest(context_hash="e" * 64, context_schema_version="v1")
+    prompt_version = "reviewer_prompt_v9"
+    rubric_versions = {"computed_thermo_v1": "1"}
+    create_record_machine_review_row(
+        session,
+        record_type=record_type,
+        record_id=record_id,
+        review=RecordMachineReview(
+            record_type=record_type,
+            record_ref=record_ref,
+            status=ServiceMachineReviewStatus.machine_screened_pass,
+            reviewed_at=datetime(2026, 9, 1, 0, 0, 0),
+            record_id=record_id,
+        ),
+        context_digest=digest,
+        prompt_version=prompt_version,
+        rubric_versions=rubric_versions,
+    )
+    session.flush()
+    return digest, prompt_version, rubric_versions
+
+
+def test_thermo_consistency_check_does_not_restale_the_reviewer_familys_current_review(db_session):
+    thermo, _, _ = setup_records(db_session)
+    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+        db_session, record_type="thermo", record_id=thermo.id, record_ref=thermo.public_ref,
+    )
+
+    def _plan():
+        return plan_record_machine_rereview(
+            db_session, record_type="thermo", record_id=thermo.id,
+            current_context=digest, active_prompt_version=prompt_version,
+            active_rubric_versions=rubric_versions,
+        )
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+    _, row = invoke(db_session, commit=True, **request(thermo, "thermo"))
+    db_session.flush()
+    assert row is not None
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+
+def test_thermo_kinetics_check_does_not_restale_the_reviewer_familys_current_review_on_the_kinetics_record(
+    db_session,
+):
+    from app.db.models.common import (
+        ArrheniusAUnits,
+        KineticsDegeneracyConvention,
+        KineticsDirection,
+        PhaseKind,
+        PressureContext,
+    )
+    from tests.services.scientific_read._factories import (
+        make_chem_reaction,
+        make_kinetics,
+        make_reaction_entry,
+        make_species,
+        make_species_entry,
+        make_thermo_scalar,
+    )
+
+    species = [make_species(db_session, smiles="[H][H]"), make_species(db_session, smiles="[H]", multiplicity=2)]
+    entries = [make_species_entry(db_session, species=s) for s in species]
+    reaction = make_chem_reaction(db_session, reactants=[species[0]], products=[species[1], species[1]])
+    reaction_entry = make_reaction_entry(db_session, reaction=reaction,
+                                         reactant_entries=[entries[0]], product_entries=[entries[1], entries[1]])
+    thermos = []
+    for entry in entries:
+        thermo = make_thermo_scalar(db_session, species_entry=entry)
+        thermo.phase, thermo.reference_pressure_bar = PhaseKind.gas, 1.0
+        attach_thermo_nasa(db_session, thermo=thermo)
+        thermos.append(thermo)
+    forward = make_kinetics(db_session, reaction_entry=reaction_entry, direction=KineticsDirection.forward,
+                            a_units=ArrheniusAUnits.per_s, pressure_context=PressureContext.high_p_limit)
+    reverse = make_kinetics(db_session, reaction_entry=reaction_entry, direction=KineticsDirection.reverse,
+                            a_units=ArrheniusAUnits.m3_mol_s, pressure_context=PressureContext.high_p_limit)
+    for rate in (forward, reverse):
+        rate.degeneracy_convention = KineticsDegeneracyConvention.already_applied
+    db_session.flush()
+
+    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+        db_session, record_type="kinetics", record_id=forward.id, record_ref=forward.public_ref,
+    )
+
+    def _plan():
+        return plan_record_machine_rereview(
+            db_session, record_type="kinetics", record_id=forward.id,
+            current_context=digest, active_prompt_version=prompt_version,
+            active_rubric_versions=rubric_versions,
+        )
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+    args = {"check": "thermo-kinetics", "target_ref": forward.public_ref, "reverse_kinetics_ref": reverse.public_ref,
+            "thermo_mapping": {e.public_ref: t.public_ref for e, t in zip(entries, thermos, strict=True)},
+            "temperature_grid": [500]}
+    _, row = invoke(db_session, commit=True, **args)
+    db_session.flush()
+    assert row is not None and row.record_id == forward.id
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
 
 
 def test_no_observations_is_visible_and_large_engine_values_are_unavailable(db_session):
