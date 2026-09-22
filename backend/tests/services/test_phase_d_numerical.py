@@ -435,10 +435,11 @@ def test_unbalanced_isotope_conversion_is_unavailable():
     mapping[2].species_entry.species.smiles = "[2H]"
     rows = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "rate_units")
     assert len(rows) == 1
-    # Review round 2: name the expected reason -- "reason is not None" alone
-    # is also satisfied by "unbalanced_stoichiometry" (element counts don't
-    # collapse isotope-vs-not the way element_counts_from_smiles does), so
-    # it does not actually pin which guard fired.
+    # Review round 2: name the expected reason. "reason is not None" alone does
+    # not say which guard fired, and a future guard returning some other reason
+    # would satisfy it silently. (element_counts_from_smiles does collapse
+    # isotopes -- '[2H]' and '[H]' both count as one H -- so stoichiometry
+    # balances here and only the isotope guard can fire today.)
     assert rows[0]["reason"] == "isotope_specific_equilibrium_unsupported"
     assert "k_forward" not in rows[0]
 

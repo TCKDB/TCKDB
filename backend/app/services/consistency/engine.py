@@ -15,7 +15,7 @@ def cantera():
         raise ConfigurationError(
             f"Cantera {ENGINE_VERSION} is required for advisory NASA/rate evaluation. "
             "Install the 'chemkin' extra: pip install 'tckdb-backend[chemkin]' "
-            "(or `mamba install -n tckdb_env -c conda-forge cantera`)."
+            f"(or `mamba install -n tckdb_env -c conda-forge cantera={ENGINE_VERSION}`)."
         ) from exc
     if ct.__version__ != ENGINE_VERSION:
         raise ConfigurationError(f"Cantera {ENGINE_VERSION} is required; found {ct.__version__}")

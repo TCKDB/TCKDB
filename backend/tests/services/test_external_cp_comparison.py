@@ -698,7 +698,11 @@ def test_observation_without_custody_gets_its_public_ref_never_the_db_id(db_sess
     assert comparison.external_source_record_ref is None
     assert comparison.observation_ref.startswith("mpo_")
     assert comparison.observation_ref == obs.public_ref
-    assert str(obs.id) not in comparison.observation_ref
+    # Deliberately no "str(obs.id) not in observation_ref" assertion: a public
+    # ref is lowercase base32, so a small decimal id is a substring of a correct
+    # ref by chance (measured: an id of 2-7 collides about 55% of the time, 22
+    # about 2.6%). The equality above already fails for any ref derived from the
+    # row id, and it can only fail for that reason.
 
 
 # --------------------------------------------------------------------------- #

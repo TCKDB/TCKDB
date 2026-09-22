@@ -7,7 +7,7 @@ Companions: [Implementation register](tckdb-phase-d-implementation-plan.md),
 
 Baseline `5988fbb890674eddb1819a164079612b0e79aff1`; migration head
 `d2f4a7c1b8e6`; installed/locked Cantera 3.2.0. Implementation landed as
-commit `f606fae7` (PR #518) and, after independent review round 2, is
+PR #518 and, after independent review round 2, is
 merged to `main`; it has not been deployed to the hosted Pi. D0–D3 are
 implemented; D7 verification results appear below. D4–D6 and normalized
 experimental H/G remain held by the programme's reference-basis decision.
@@ -117,7 +117,7 @@ without a concrete target; exact-identity lookup reported absent/UNKNOWN, and
 source references confirmed pytest-only invocation. The index reports bounded
 process enumeration, so zero reported affected processes is not proof that no
 execution path exists. This analysis was completed before the implementing
-commit (`f606fae7`) landed; the independent review round 2 that followed the
+implementing commit landed; the independent review round 2 that followed the
 commit is recorded in the pull request, not re-run here.
 
 ## Limits and remaining holds

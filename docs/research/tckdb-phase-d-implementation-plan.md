@@ -133,7 +133,7 @@ The fresh CLI is authoritative because the MCP server retains stale index metada
 Cp functions report LOW; the declarations module is HIGH because shared catalogue
 consumers depend on it. Constant-symbol UNKNOWN results were corroborated by
 source references in recipe, runner and register. Complete, untruncated graph
-change analysis was required, and completed, before commit `f606fae7` landed;
+change analysis was required, and completed, before the implementing commit landed;
 this is a delivery record of that gate, not a still-pending one now that the
 commit (and its review round 2 follow-up) exist.
 
