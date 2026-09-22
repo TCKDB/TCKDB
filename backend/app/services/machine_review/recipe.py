@@ -47,19 +47,29 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # rubric recipe. Each is the single source of its own version — listed here only
 # to bind it into the recipe, never to restate a version number by hand.
 #
-# EXTERNAL_CP_COMPARISON_V1 (Phase C-E4) is not a computed-trust rubric --
-# it carries no checks and is never run by the trust evaluator (see its
-# definition in ``app.services.trust.rubrics``) -- but it is listed here for
-# the same reason every other entry is: so the review-tier external-Cp-
-# comparison runner (``app.services.external_comparison.cp.run_and_record``)
-# reads its rubric version from this one recipe rather than restating "1" by
-# hand. Adding it changes ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`` (below) by
-# one key; every currency-check call site in this package filters that dict
-# to the single rubric relevant to a record's own type
+# EXTERNAL_CP_COMPARISON_V2 (Phase C-E4, bumped to v2 in Phase D's review
+# round 2 -- see docs/research/tckdb-phase-d-verification.md) is not a
+# computed-trust rubric -- it carries no checks and is never run by the trust
+# evaluator (see its definition in ``app.services.trust.rubrics``) -- but it
+# is listed here for the same reason every other entry is: so the
+# review-tier external-Cp-comparison runner
+# (``app.services.external_comparison.cp.run_and_record``) reads its rubric
+# version from this one recipe rather than restating a version number by
+# hand. THERMO_CONSISTENCY_V1 and THERMO_KINETICS_CONSISTENCY_V1 (Phase D's
+# D1/D3 advisory checks, ``app.services.consistency``) are the same kind of
+# entry for the same reason. Adding any of these three changes
+# ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`` (below) by one key each; every
+# currency-check call site in this package filters that dict to the single
+# rubric relevant to a record's own type
 # (``active_rubric_versions_for_record_type`` in ``admin_trigger.py``), so no
 # existing calculation/kinetics/thermo/statmech/transport/transition-state
-# review is restaled by this addition -- only a future external-Cp-comparison
-# review would ever compare against this key.
+# review is restaled by any of them -- only a future run of that same
+# advisory check would ever compare against its own key. The v1->v2 bump is
+# safe by the same argument that made adding v1 safe: it is still one key in
+# this dict, still filtered to its own record type, and a rubric-version
+# change is exactly the mechanism that is supposed to make a check's own
+# past rows read as stale against its own current recipe -- it does not
+# touch any other rubric's key or any other record's currency.
 #
 # That claim is about the rubric-version *dict*, and it held even before the
 # family fix below. What was never true, until
@@ -73,7 +83,19 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # correction in ``docs/research/tckdb-phase-c-implementation-plan.md`` C4.
 # ``get_record_machine_review_currency_for_record`` now defaults to the
 # ``reviewer`` family, so this file's calls (via ``admin_trigger.py``) are
-# unaffected by any Cp row and this second effect can no longer happen.
+# unaffected by any Cp row and this second effect can no longer happen. The
+# same family separation is what makes the D1/D3 restale regression tests in
+# ``tests/services/test_phase_d_persistence.py`` pass.
+#
+# ``cp.RUNNER_VERSION`` (``"external_cp_comparison_v1"``) deliberately still
+# reads "v1" even though it now stamps the v2 rubric above -- that is not
+# drift. ``RUNNER_VERSION`` is the runner's own identity (the ``model``
+# under which its rows are recorded and looked up by
+# ``latest_cp_comparison_for_thermo``); the rubric version is a separate axis
+# that already carries "has this record's comparison gone stale" via the
+# currency check, so bumping it needs no matching bump to the runner
+# identity, and NOT bumping it keeps every already-recorded v1-era row
+# discoverable under the same ``model`` as the runner's newest rows.
 _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,

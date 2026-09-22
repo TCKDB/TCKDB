@@ -6,11 +6,12 @@ Companions: [Implementation register](tckdb-phase-d-implementation-plan.md),
 ## Scope and baseline
 
 Baseline `5988fbb890674eddb1819a164079612b0e79aff1`; migration head
-`d2f4a7c1b8e6`; installed/locked Cantera 3.2.0. Implementation is local,
-not committed, merged or deployed. D0–D3 are implemented; D7 verification
-results appear below. D4–D6 and normalized experimental H/G remain held by
-the programme's reference-basis decision. No first-paper claim or corpus
-freeze changes.
+`d2f4a7c1b8e6`; installed/locked Cantera 3.2.0. Implementation landed as
+commit `f606fae7` (PR #518) and, after independent review round 2, is
+merged to `main`; it has not been deployed to the hosted Pi. D0–D3 are
+implemented; D7 verification results appear below. D4–D6 and normalized
+experimental H/G remain held by the programme's reference-basis decision.
+No first-paper claim or corpus freeze changes.
 
 ## What changed
 
@@ -115,12 +116,17 @@ comparison modules. A name-only lookup for the paper test reported CRITICAL
 without a concrete target; exact-identity lookup reported absent/UNKNOWN, and
 source references confirmed pytest-only invocation. The index reports bounded
 process enumeration, so zero reported affected processes is not proof that no
-execution path exists. No commit was made.
+execution path exists. This analysis was completed before the implementing
+commit (`f606fae7`) landed; the independent review round 2 that followed the
+commit is recorded in the pull request, not re-run here.
 
 ## Limits and remaining holds
 
-- D1 conservatively requires recorded gas phase/reference pressure for Cp as
-  well as entropy. Points are never interpolated or extrapolated.
+- D1 conservatively requires recorded gas phase for both Cp and entropy, but
+  requires a recorded reference pressure only for entropy (decided
+  2026-09-23, review round 2): a reference pressure cannot change a heat
+  capacity, so Cp comparisons proceed without one while entropy comparisons
+  still report it unavailable. Points are never interpolated or extrapolated.
 - D2 keeps Phase C's NASA7 → NASA9 → point preference; use D1 to expose
   disagreement between fits.
 - D3 requires explicit high-pressure-limit, direction and degeneracy
