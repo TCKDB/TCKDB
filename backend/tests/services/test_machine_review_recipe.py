@@ -26,7 +26,9 @@ from app.services.trust.rubrics import (
     COMPUTED_THERMO_V1,
     COMPUTED_TRANSITION_STATE_V2,
     COMPUTED_TRANSPORT_V1,
-    EXTERNAL_CP_COMPARISON_V1,
+    EXTERNAL_CP_COMPARISON_V2,
+    THERMO_CONSISTENCY_V1,
+    THERMO_KINETICS_CONSISTENCY_V1,
 )
 
 _ACTIVE_RUBRICS = (
@@ -39,7 +41,9 @@ _ACTIVE_RUBRICS = (
     # Phase C-E4: not a computed-trust rubric (checks=()), but it is part of
     # the machine-review recipe -- see the comment on _ACTIVE_RUBRICS in
     # app.services.machine_review.recipe.
-    EXTERNAL_CP_COMPARISON_V1,
+    EXTERNAL_CP_COMPARISON_V2,
+    THERMO_CONSISTENCY_V1,
+    THERMO_KINETICS_CONSISTENCY_V1,
 )
 
 

@@ -17,6 +17,8 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
+from app.services.consistency.kinetics import compare_kinetics
+from app.services.consistency.thermo import compare_thermo
 from app.services.external_comparison.cp import compare_thermo_with_cp_observations
 
 CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
@@ -43,7 +45,7 @@ CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
         "payload at upload time and this check runs later, against data the "
         "depositor never supplied. So the consequence is the review tier: one "
         "append-only, rubric-versioned ``record_machine_review`` row "
-        "(rubric ``external_cp_comparison``, version 1) that a curator may "
+        "(rubric ``external_cp_comparison``, version 2) that a curator may "
         "read and act on, with no accuracy threshold authorized anywhere in "
         "this check -- picking one is out of scope for this change and is "
         "recorded as a hold point in the C4 plan."
@@ -63,4 +65,23 @@ CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
     escape_hatch=None,
 )
 
-__all__ = ["CHECK_EXTERNAL_CP_COMPARISON"]
+__all__ = ["CHECK_EXTERNAL_CP_COMPARISON", "CHECK_THERMO_CONSISTENCY", "CHECK_THERMO_KINETICS_CONSISTENCY"]
+
+# Explicit Phase D triggers share the review-only registry, never the upload path.
+
+CHECK_THERMO_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=1, code=None,
+    asserts="Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.",
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
+    adr="0008", enforced_by=(PythonCheck(compare_thermo, note="Explicit Phase D CLI/service invocation only."),),
+    escape_hatch=None,
+)
+CHECK_THERMO_KINETICS_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=2, code=None,
+    asserts="Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.",
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
+    adr="0008", enforced_by=(PythonCheck(compare_kinetics, note="Explicit Phase D CLI/service invocation only."),),
+    escape_hatch=None,
+)

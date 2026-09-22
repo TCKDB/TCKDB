@@ -219,6 +219,7 @@ def test_experimental_cp_comparison_reports_every_finding_field_with_no_ids(db_s
     from app.db.models.common import (
         MolecularPropertyKind,
         ObservedStateBasis,
+        PhaseKind,
         ScientificOriginKind,
     )
     from app.db.models.molecular_property_observation import MolecularPropertyObservation
@@ -230,6 +231,8 @@ def test_experimental_cp_comparison_reports_every_finding_field_with_no_ids(db_s
     thermo = make_thermo_scalar(
         db_session, species_entry=entry, scientific_origin=ScientificOriginKind.computed
     )
+    thermo.phase = PhaseKind.gas
+    thermo.reference_pressure_bar = 1.0
     attach_thermo_nasa(db_session, thermo=thermo)
     obs = MolecularPropertyObservation(
         species_entry_id=entry.id,

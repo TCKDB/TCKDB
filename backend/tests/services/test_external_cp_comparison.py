@@ -29,6 +29,7 @@ from app.db.models.common import (
     ObservedStateBasis,
     ObservedUncertaintyAssessor,
     ObservedUncertaintyKind,
+    PhaseKind,
     ScientificOriginKind,
 )
 from app.db.models.external_source import ExternalSource, ExternalSourceRecord
@@ -50,7 +51,7 @@ from app.services.machine_review.rereview import (
     plan_record_machine_rereview,
 )
 from app.services.machine_review.schemas import MachineReviewStatus as ServiceMachineReviewStatus
-from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V1
+from app.services.trust.rubrics import EXTERNAL_CP_COMPARISON_V2
 from tests.services.scientific_read._factories import (
     attach_thermo_nasa,
     attach_thermo_nasa9,
@@ -73,13 +74,18 @@ _CP_HIGH_RANGE_J_MOL_K = 3.2 * _R
 def _make_thermo(session, *, smiles: str, tmin_k: float = 200.0, tmax_k: float = 6000.0) -> Thermo:
     species = make_species(session, smiles=smiles)
     entry = make_species_entry(session, species=species)
-    return make_thermo_scalar(
+    thermo = make_thermo_scalar(
         session,
         species_entry=entry,
         scientific_origin=ScientificOriginKind.computed,
         tmin_k=tmin_k,
         tmax_k=tmax_k,
     )
+
+    thermo.phase = PhaseKind.gas
+    thermo.reference_pressure_bar = 1.0
+    session.flush()
+    return thermo
 
 
 def _make_observation(
@@ -479,7 +485,7 @@ def test_record_carries_rubric_version_and_context_hash_changes_with_observation
     row_one = run_and_record(db_session, thermo.id)
     db_session.flush()
 
-    rubric_key = f"{EXTERNAL_CP_COMPARISON_V1.name}_v{EXTERNAL_CP_COMPARISON_V1.version}"
+    rubric_key = f"{EXTERNAL_CP_COMPARISON_V2.name}_v{EXTERNAL_CP_COMPARISON_V2.version}"
     assert row_one.rubric_versions_json == {
         rubric_key: ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[rubric_key]
     }
@@ -557,7 +563,8 @@ def test_finding_message_decodes_to_every_required_field_including_custody_ref(d
     (finding,) = row.findings_json
     detail = json.loads(finding["message"])
 
-    assert detail["observation_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
+    assert detail["observation_ref"].startswith("mpo_")
+    assert detail["scalar_uncertainty"] == 1.5
     assert detail["external_source_record_ref"] == "10.1016/j.jct.2013.08.022#P1/V1"
     assert detail["temperature_k"] == pytest.approx(298.15)
     assert detail["cp_observed_j_mol_k"] == pytest.approx(80.0)
@@ -613,7 +620,7 @@ def test_a_long_custody_key_does_not_blow_the_findings_message_size_limit(db_ses
     assert detail["observation_ref"] != long_key
     # ...but evidence_keys still carries the full, untruncated key, so exact
     # matching against the custody row's own key is never degraded.
-    assert f"observation:{long_key}" in finding["evidence_keys"]
+    assert f"observation:{detail['observation_ref']}" in finding["evidence_keys"]
     assert f"external_source_record:{long_key}" in finding["evidence_keys"]
 
 
@@ -625,10 +632,10 @@ def test_observation_without_custody_gets_a_content_derived_ref_never_the_db_id(
     result = compare_thermo_with_cp_observations(db_session, thermo.id)
     (comparison,) = result.comparisons
     assert comparison.external_source_record_ref is None
-    assert str(obs.id) not in comparison.observation_ref
+    assert comparison.observation_ref.startswith("mpo_")
     # !r (full repr), not :g (6 sig figs) -- see _observation_ref's docstring:
     # two distinct observations agreeing to 6 sig figs must not collide.
-    assert comparison.observation_ref == "heat_capacity_cp@298.15K=80.0"
+    assert comparison.observation_ref == obs.public_ref
 
 
 # --------------------------------------------------------------------------- #
