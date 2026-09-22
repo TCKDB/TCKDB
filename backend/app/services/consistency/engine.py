@@ -12,15 +12,39 @@ def cantera():
     try:
         import cantera as ct
     except Exception as exc:
-        raise ConfigurationError("Cantera 3.2.0 is required for advisory NASA/rate evaluation") from exc
+        raise ConfigurationError(
+            f"Cantera {ENGINE_VERSION} is required for advisory NASA/rate evaluation. "
+            "Install the 'chemkin' extra: pip install 'tckdb-backend[chemkin]' "
+            "(or `mamba install -n tckdb_env -c conda-forge cantera`)."
+        ) from exc
     if ct.__version__ != ENGINE_VERSION:
         raise ConfigurationError(f"Cantera {ENGINE_VERSION} is required; found {ct.__version__}")
     return ct
 
 
-def gas_state_reason(thermo):
+#: Neutral reference pressure (bar) supplied to Cantera's NASA-polynomial
+#: constructors only when ``quantity="cp"`` and the record has none. Cp is
+#: pressure-independent for these polynomials -- Cantera returns the same
+#: ``cp`` at 1e5, 101325 and 2.5e5 Pa (verified 2026-09-23) -- so the exact
+#: value is inert; it exists only to satisfy the constructor's signature.
+_NEUTRAL_REFERENCE_PRESSURE_BAR = 1.0
+
+
+def gas_state_reason(thermo, *, quantity=None):
+    """Applicability gate, split per quantity (decided 2026-09-23).
+
+    ``reference_pressure_bar`` fixes the standard-state pressure baked into
+    the entropy coefficient, so a missing/invalid value makes any entropy
+    comparison unavailable. Heat capacity does not depend on the reference
+    pressure at all, so ``quantity="cp"`` skips that check -- only the gas
+    phase requirement applies. Every other caller (entropy, and the full
+    thermo used by the D3 kinetics/equilibrium comparison) keeps requiring
+    a valid reference pressure via the default ``quantity=None``.
+    """
     if thermo.phase != "gas":
         return "missing_or_incompatible_gas_phase"
+    if quantity == "cp":
+        return None
     p = thermo.reference_pressure_bar
     if p is None or not isfinite(p) or p <= 0:
         return "missing_or_invalid_reference_pressure"
@@ -38,21 +62,29 @@ def fit_names(thermo):
     return names
 
 
-def polynomial(thermo, representation, temperature):
+def polynomial(thermo, representation, temperature, *, quantity=None):
     """Return (Cantera species thermo, reason), without extrapolating across gaps.
 
     At a NASA9 shared boundary the upper interval owns the temperature, as
     in Cantera's multi-region model. NASA7's midpoint belongs to the low range.
     Each NASA9 region is passed separately to avoid implicitly bridging gaps.
+
+    ``quantity`` is forwarded to :func:`gas_state_reason`: with
+    ``quantity="cp"`` a missing ``reference_pressure_bar`` is not an
+    applicability failure, and :data:`_NEUTRAL_REFERENCE_PRESSURE_BAR`
+    stands in purely to satisfy the polynomial constructor.
     """
     ct = cantera()
-    reason = gas_state_reason(thermo)
+    reason = gas_state_reason(thermo, quantity=quantity)
     if reason:
         return None, reason
     if ((thermo.tmin_k is not None and temperature < thermo.tmin_k)
             or (thermo.tmax_k is not None and temperature > thermo.tmax_k)):
         return None, "temperature_outside_record_range"
-    pressure = thermo.reference_pressure_bar * 100000.0
+    reference_pressure_bar = thermo.reference_pressure_bar
+    if reference_pressure_bar is None:
+        reference_pressure_bar = _NEUTRAL_REFERENCE_PRESSURE_BAR
+    pressure = reference_pressure_bar * 100000.0
     if representation == "nasa7":
         nasa = thermo.nasa
         values = [getattr(nasa, f"{prefix}{i}") for prefix in ("a", "b") for i in range(1, 8)]
@@ -93,7 +125,7 @@ def evaluate(thermo, representation, temperature, quantity):
     if representation == "s298":
         value = thermo.s298_j_mol_k if temperature == 298.15 and quantity == "s" else None
         return value, None if value is not None else "no_exact_s298_value"
-    poly, reason = polynomial(thermo, representation, temperature)
+    poly, reason = polynomial(thermo, representation, temperature, quantity=quantity)
     if reason:
         return None, reason
     value = getattr(poly, quantity)(temperature) / 1000.0

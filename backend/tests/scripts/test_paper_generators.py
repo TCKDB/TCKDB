@@ -231,8 +231,10 @@ def test_experimental_cp_comparison_reports_every_finding_field_with_no_ids(db_s
     thermo = make_thermo_scalar(
         db_session, species_entry=entry, scientific_origin=ScientificOriginKind.computed
     )
+    # No reference_pressure_bar: heat-capacity applicability needs the gas
+    # phase only, never a reference pressure (decided 2026-09-23; Cp is
+    # pressure-independent). See engine.gas_state_reason's quantity="cp".
     thermo.phase = PhaseKind.gas
-    thermo.reference_pressure_bar = 1.0
     attach_thermo_nasa(db_session, thermo=thermo)
     obs = MolecularPropertyObservation(
         species_entry_id=entry.id,

@@ -157,7 +157,10 @@ rdkit = [
 # without it — only CHEMKIN serialization and its tests require it.
 # conda/mamba developers get it from environment.yml and do not need this.
 chemkin = [
-    "cantera>=3.0",
+    # Pinned exactly (not >=) to match app.services.consistency.engine's
+    # runtime version check -- ENGINE_VERSION -- so an environment that
+    # installs from this extra always satisfies that check.
+    "cantera==3.2.0",
 ]
 # lxml powers the ThermoML importer's XSD validation
 # (`app/importers/thermoml/validate.py`), which imports it lazily

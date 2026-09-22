@@ -2,6 +2,8 @@
 
 import builtins
 import json
+import sys
+import types
 from math import exp, log
 
 import pytest
@@ -19,8 +21,8 @@ R = 8.31446261815324
 AVOGADRO = 6.02214076e23
 
 
-def _thermo(key=1, *, cp_r=3.5, entropy_constant=2.0, pressure=1.0, smiles="[H][H]"):
-    species = Species(id=key, public_ref=f"sp_test_{key}", smiles=smiles, charge=0)
+def _thermo(key=1, *, cp_r=3.5, entropy_constant=2.0, pressure=1.0, smiles="[H][H]", charge=0):
+    species = Species(id=key, public_ref=f"sp_test_{key}", smiles=smiles, charge=charge)
     entry = SpeciesEntry(id=key, public_ref=f"spe_test_{key}", species_id=key, species=species)
     row = Thermo(
         id=key, public_ref=f"th_test_{key}", species_entry_id=key, species_entry=entry,
@@ -150,10 +152,66 @@ def test_neighbour_comparison_requires_exact_points_and_preserves_pressure():
     assert all(r["reason"] == "no_exact_matching_point" and r["residual"] is None for r in missed)
 
 
+def test_neighbour_comparison_across_species_entries_is_unavailable():
+    """Review round 2, guard #2: ``different_species_entries`` had no test.
+
+    Two species entries (keys 1 and 2, distinct ``species_entry_id``) with
+    matching exact points at the same temperature -- if this guard were
+    deleted the residual would read 0 (a spurious pass comparing one
+    species' Cp/S against another's), instead of the unavailable reason.
+    """
+    left = _thermo(1)
+    right = _thermo(2)
+    right.public_ref = "th_test_2_neighbour"
+    same_point = {"temperature_k": 500.0, "cp_j_mol_k": 3.5 * R, "s_j_mol_k": R * (3.5 * log(500.0) + 2.0)}
+    left.points = [ThermoPoint(**same_point)]
+    right.points = [ThermoPoint(**same_point)]
+
+    rows = _details(compare_thermo(left, comparison=right, temperature_grid=[500.0]), "residual")
+    assert rows
+    assert all(r["reason"] == "different_species_entries" for r in rows)
+    assert all(r["residual"] is None for r in rows)
+
+
+def test_temperature_outside_record_range_is_visible_even_within_fit_bounds():
+    """Review round 2, guard #4: the record's own tmin_k/tmax_k, independent
+    of the NASA fit's own [t_low, t_high]. Here the fit bounds are [200,
+    3000] but the record's tmin_k is narrowed to 500, and 300 K sits inside
+    the fit's bounds -- so only the record-range guard, not the fit-range
+    guard, can catch it.
+    """
+    thermo = _thermo()
+    thermo.tmin_k = 500.0
+    poly, reason = engine.polynomial(thermo, "nasa7", 300.0)
+    assert poly is None
+    assert reason == "temperature_outside_record_range"
+
+
+def test_mismatched_cantera_version_is_a_configuration_error(monkeypatch):
+    """Review round 2, guard #5: no test exercised the runtime version pin."""
+    fake_cantera = types.SimpleNamespace(__version__="3.1.0")
+    monkeypatch.setitem(sys.modules, "cantera", fake_cantera)
+    with pytest.raises(engine.ConfigurationError, match="3.2.0"):
+        engine.cantera()
+
+
+def test_thermo_with_only_a_fit_and_no_points_or_s298_is_unavailable():
+    """Review round 2, guard #6: ``no_comparison_pairs_or_temperatures``.
+
+    A single NASA-7 fit and nothing else gives exactly one representation
+    per quantity, so there is no pair to compare and no exact point/s298
+    temperature to grid on -- the defence against a silent empty-set pass.
+    """
+    thermo = _thermo()  # NASA-7 only: no points, no s298
+    rows = _details(compare_thermo(thermo), "quantity")
+    assert len(rows) == 2
+    assert {r["quantity"] for r in rows} == {"cp", "s"}
+    assert all(r["reason"] == "no_comparison_pairs_or_temperatures" for r in rows)
+
+
 @pytest.mark.parametrize("field,value,reason", [
     ("phase", None, "missing_or_incompatible_gas_phase"),
     ("phase", "liquid", "missing_or_incompatible_gas_phase"),
-    ("reference_pressure_bar", None, "missing_or_invalid_reference_pressure"),
 ])
 def test_thermo_missing_state_remains_visible(field, value, reason):
     thermo = _thermo()
@@ -163,16 +221,41 @@ def test_thermo_missing_state_remains_visible(field, value, reason):
     assert all(r["reason"] == reason and r["residual"] is None for r in rows)
 
 
+def test_missing_reference_pressure_blocks_entropy_but_not_heat_capacity():
+    """Decision (2026-09-23): a missing ``reference_pressure_bar`` makes
+    entropy unavailable (it fixes the standard-state pressure baked into
+    the entropy coefficient) but must not block heat capacity, since
+    Cantera returns an identical Cp at any reference pressure. Was one
+    undifferentiated case in ``test_thermo_missing_state_remains_visible``
+    above until the D2/D1 pressure-applicability split (review round 2).
+    """
+    thermo = _thermo()
+    thermo.reference_pressure_bar = None
+    thermo.points = [ThermoPoint(temperature_k=500, cp_j_mol_k=30, s_j_mol_k=100)]
+    rows = _details(compare_thermo(thermo), "residual")
+    cp_rows = [r for r in rows if r["quantity"] == "cp"]
+    s_rows = [r for r in rows if r["quantity"] == "s"]
+    assert cp_rows and s_rows
+    assert all(r["reason"] is None and r["residual"] is not None for r in cp_rows)
+    assert all(r["reason"] == "missing_or_invalid_reference_pressure" and r["residual"] is None for r in s_rows)
+
+
 def test_unsupported_wilhoit_and_missing_uncertainty_remain_visible():
     thermo = _thermo()
     thermo.nasa = None
     thermo.wilhoit = ThermoWilhoit()
     thermo.points = [ThermoPoint(temperature_k=500, cp_j_mol_k=30)]
+    thermo.s298_uncertainty_j_mol_k = 0.75
     result = compare_thermo(thermo)
     assert all(r["reason"] == "unsupported_representation" for r in _details(result, "residual"))
     metadata = _details(result, "input")
-    assert metadata[0]["s298_uncertainty_j_mol_k"] is None
-    assert metadata[0]["fit_and_point_uncertainty"] is None
+    # s298_uncertainty_j_mol_k is a real field read off ``thermo`` -- pin a
+    # non-None value so this actually exercises the pass-through rather than
+    # merely confirming an unset default. fit_and_point_uncertainty is a
+    # hardcoded ``None`` placeholder in thermo.py's payload (no fit/point
+    # uncertainty is modeled yet), so asserting it is None can never fail
+    # and is not checked here -- see thermo.py's finding payload.
+    assert metadata[0]["s298_uncertainty_j_mol_k"] == pytest.approx(0.75)
 
 
 def _reaction(*, pressure=1.0, reverse_scale=1.0, reverse_units="m3_mol_s"):
@@ -260,6 +343,70 @@ def test_incomplete_mapping_and_unbalanced_stoichiometry_are_visible():
     assert _details(unbalanced, "rate_units")[0]["reason"] == "unbalanced_stoichiometry"
 
 
+@pytest.mark.parametrize("degeneracy", [1.0, 2.0, 6.0])
+def test_not_applied_degeneracy_convention_scales_forward_rate_exactly(degeneracy):
+    """Review round 2, guard #1: ``record.degeneracy`` multiplying the rate
+    factor in ``kinetics._rate`` had no test. Compare against an
+    "already_applied" baseline (no multiplier at all) built from the same
+    fixture, so the ratio pins the multiplier exactly, not just "changed".
+    """
+    baseline_forward, baseline_reverse, baseline_mapping = _reaction()
+    baseline = _details(
+        compare_kinetics(baseline_forward, baseline_reverse, baseline_mapping, temperature_grid=[500]),
+        "k_forward",
+    )[0]
+
+    forward, reverse, mapping = _reaction()
+    forward.degeneracy_convention = "not_applied"
+    forward.degeneracy = degeneracy
+    scaled = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "k_forward")[0]
+
+    assert scaled["k_forward"] == pytest.approx(degeneracy * baseline["k_forward"], rel=1e-12)
+
+
+def test_not_applied_degeneracy_with_no_value_is_missing_or_invalid():
+    """Review round 2, guard #1 (second half): ``not_applied`` with no
+    supplied degeneracy must be a named unavailable reason, not a silent
+    fall-through (e.g. treating a missing degeneracy as a no-op factor).
+    """
+    forward, reverse, mapping = _reaction()
+    forward.degeneracy_convention = "not_applied"
+    forward.degeneracy = None
+    rows = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "rate_units")
+    assert len(rows) == 1
+    assert rows[0]["reason"] == "missing_or_invalid_degeneracy"
+    assert "k_forward" not in rows[0]
+
+
+def test_unbalanced_charge_is_visible_even_when_elements_balance():
+    """Review round 2, guard #3: the charge term in the stoichiometric
+    balance. H -> H+ has matching element counts (one H each side) but a
+    net charge of +1 -- only the charge accumulator, not the per-element
+    balance, can catch this.
+    """
+    molecule = _thermo(1, cp_r=2, entropy_constant=0, smiles="[H]", charge=0)
+    ion = _thermo(2, cp_r=2, entropy_constant=0, smiles="[H+]", charge=1)
+    entry = ReactionEntry(id=1, public_ref="re_charge")
+    entry.structure_participants = [
+        ReactionEntryStructureParticipant(species_entry_id=molecule.species_entry_id,
+                                          species_entry=molecule.species_entry, role="reactant", participant_index=1),
+        ReactionEntryStructureParticipant(species_entry_id=ion.species_entry_id,
+                                          species_entry=ion.species_entry, role="product", participant_index=1),
+    ]
+    common = dict(reaction_entry_id=1, reaction_entry=entry, model_kind="modified_arrhenius",
+                  a=1.0, n=0.0, ea_kj_mol=0.0, a_units="per_s", is_third_body=False,
+                  tmin_k=200, tmax_k=3000, pressure_context="high_p_limit",
+                  degeneracy_convention="already_applied")
+    forward = Kinetics(id=1, public_ref="kin_charge_f", direction="forward", **common)
+    reverse = Kinetics(id=2, public_ref="kin_charge_r", direction="reverse", **common)
+
+    mapping = {molecule.species_entry_id: molecule, ion.species_entry_id: ion}
+    rows = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "rate_units")
+    assert len(rows) == 1
+    assert rows[0]["reason"] == "unbalanced_stoichiometry"
+    assert "k_forward" not in rows[0]
+
+
 def test_thermo_kinetics_domain_and_reference_pressure_mismatch_are_visible():
     forward, reverse, mapping = _reaction()
     out_of_range = compare_kinetics(forward, reverse, mapping, temperature_grid=[100])
@@ -286,7 +433,11 @@ def test_unbalanced_isotope_conversion_is_unavailable():
     mapping[2].species_entry.species.smiles = "[2H]"
     rows = _details(compare_kinetics(forward, reverse, mapping, temperature_grid=[500]), "rate_units")
     assert len(rows) == 1
-    assert rows[0]["reason"] is not None
+    # Review round 2: name the expected reason -- "reason is not None" alone
+    # is also satisfied by "unbalanced_stoichiometry" (element counts don't
+    # collapse isotope-vs-not the way element_counts_from_smiles does), so
+    # it does not actually pin which guard fired.
+    assert rows[0]["reason"] == "isotope_specific_equilibrium_unsupported"
     assert "k_forward" not in rows[0]
 
 

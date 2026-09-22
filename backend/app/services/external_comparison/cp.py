@@ -147,7 +147,7 @@ def _nasa7_complete(nasa: ThermoNASA) -> bool:
 def _build_nasa7_evaluator(thermo: Thermo) -> _Evaluator:
     _import_cantera()
     def evaluate(temperature_k):
-        poly, reason = engine.polynomial(thermo, "nasa7", temperature_k)
+        poly, reason = engine.polynomial(thermo, "nasa7", temperature_k, quantity="cp")
         if reason:
             return None, False, reason
         value = poly.cp(temperature_k) * _J_PER_KMOL_K_TO_J_PER_MOL_K
@@ -158,7 +158,7 @@ def _build_nasa7_evaluator(thermo: Thermo) -> _Evaluator:
 def _build_nasa9_evaluator(thermo: Thermo) -> _Evaluator:
     _import_cantera()
     def evaluate(temperature_k):
-        poly, reason = engine.polynomial(thermo, "nasa9", temperature_k)
+        poly, reason = engine.polynomial(thermo, "nasa9", temperature_k, quantity="cp")
         if reason:
             return None, False, reason
         value = poly.cp(temperature_k) * _J_PER_KMOL_K_TO_J_PER_MOL_K
@@ -322,8 +322,10 @@ def compare_thermo_with_cp_observations(session: Session, thermo_id: int) -> Com
             )
         )
 
-        comparisons = tuple(_compare_one(observation, representation, evaluate, engine.gas_state_reason(thermo))
-                            for observation in observations)
+        comparisons = tuple(
+            _compare_one(observation, representation, evaluate, engine.gas_state_reason(thermo, quantity="cp"))
+            for observation in observations
+        )
         inputs = {
             "thermo": thermo_inputs(thermo), "representation": representation,
             "observations": sorted((snapshot(o, ("external_source_record", "literature")) for o in observations), key=encoded),
