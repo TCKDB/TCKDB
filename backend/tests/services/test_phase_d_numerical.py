@@ -8,6 +8,7 @@ from math import exp, log
 
 import pytest
 
+from app.db.models.common import PhaseKind
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticipant
 from app.db.models.species import Species, SpeciesEntry
@@ -210,15 +211,50 @@ def test_thermo_with_only_a_fit_and_no_points_or_s298_is_unavailable():
 
 
 @pytest.mark.parametrize("field,value,reason", [
-    ("phase", None, "missing_or_incompatible_gas_phase"),
-    ("phase", "liquid", "missing_or_incompatible_gas_phase"),
+    # A phase never recorded (documented on Thermo.phase as unspecified,
+    # never as non-gas -- backend/app/db/models/thermo.py) is a different
+    # situation from a phase explicitly recorded as one this check does
+    # not support, and must not collapse to the same reason (decided
+    # 2026-09-23; see engine.gas_state_reason and engine.SUPPORTED_PHASES).
+    ("phase", None, "phase_not_recorded"),
+    ("phase", "liquid", "non_gas_phase_unsupported"),
 ])
-def test_thermo_missing_state_remains_visible(field, value, reason):
+def test_thermo_missing_or_unsupported_phase_remains_visible(field, value, reason):
+    """Each parametrize case pins a distinct reason token, so this goes red
+    under the mutation that collapses ``phase_not_recorded`` and
+    ``non_gas_phase_unsupported`` back into one shared reason -- whichever
+    single token the collapse picks, at least one of the two cases here
+    expects the other and fails.
+    """
     thermo = _thermo()
     setattr(thermo, field, value)
     thermo.points = [ThermoPoint(temperature_k=500, cp_j_mol_k=30, s_j_mol_k=100)]
     rows = _details(compare_thermo(thermo), "residual")
     assert all(r["reason"] == reason and r["residual"] is None for r in rows)
+
+
+def test_supported_phases_constant_is_what_the_check_consults(monkeypatch):
+    """``gas_state_reason`` must read ``engine.SUPPORTED_PHASES`` rather than
+    compare against a hardcoded phase value, so widening scope later is a
+    one-line change to the constant (decided 2026-09-23).
+
+    Mutation: hardcode ``if thermo.phase != PhaseKind.gas`` in
+    ``gas_state_reason`` instead of consulting the constant -- monkeypatching
+    ``SUPPORTED_PHASES`` then no longer changes the outcome, and the
+    previously-refused liquid-phase record stays unavailable instead of
+    becoming comparable, so this goes red.
+    """
+    thermo = _thermo()
+    thermo.phase = PhaseKind.liquid
+    thermo.points = [ThermoPoint(temperature_k=500, cp_j_mol_k=30, s_j_mol_k=100)]
+
+    rows = _details(compare_thermo(thermo), "residual")
+    assert all(r["reason"] == "non_gas_phase_unsupported" and r["residual"] is None for r in rows)
+
+    monkeypatch.setattr(engine, "SUPPORTED_PHASES", frozenset({PhaseKind.gas, PhaseKind.liquid}))
+
+    rows = _details(compare_thermo(thermo), "residual")
+    assert any(r["reason"] is None and r["residual"] is not None for r in rows)
 
 
 def test_missing_reference_pressure_blocks_entropy_but_not_heat_capacity():

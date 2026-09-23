@@ -1,7 +1,17 @@
 """The pinned Cantera boundary. No local NASA or rate polynomial evaluator."""
 from math import isfinite
 
+from app.db.models.common import PhaseKind
+
 ENGINE_VERSION = "3.2.0"
+
+#: Phases these advisory NASA/rate consistency checks support today (decided
+#: 2026-09-23). A record whose phase is outside this set is declared out of
+#: scope -- never refused as though the phase were incompatible, and never
+#: silently treated as gas. Widening support to another phase is a one-line
+#: addition here; :func:`gas_state_reason` reads this constant and nowhere
+#: else compares ``thermo.phase`` against a hardcoded value.
+SUPPORTED_PHASES = frozenset({PhaseKind.gas})
 
 
 class ConfigurationError(RuntimeError):
@@ -36,13 +46,25 @@ def gas_state_reason(thermo, *, quantity=None):
     ``reference_pressure_bar`` fixes the standard-state pressure baked into
     the entropy coefficient, so a missing/invalid value makes any entropy
     comparison unavailable. Heat capacity does not depend on the reference
-    pressure at all, so ``quantity="cp"`` skips that check -- only the gas
-    phase requirement applies. Every other caller (entropy, and the full
-    thermo used by the D3 kinetics/equilibrium comparison) keeps requiring
-    a valid reference pressure via the default ``quantity=None``.
+    pressure at all, so ``quantity="cp"`` skips that check -- only the phase
+    requirement applies. Every other caller (entropy, and the full thermo
+    used by the D3 kinetics/equilibrium comparison) keeps requiring a valid
+    reference pressure via the default ``quantity=None``.
+
+    Phase scope is declared, not implied (decided 2026-09-23): a record
+    whose phase was never recorded (``phase is None``, documented on
+    ``Thermo.phase`` as unspecified, never as non-gas) is out of scope for a
+    different reason than a record explicitly recorded as a phase this check
+    does not support -- these checks support :data:`SUPPORTED_PHASES` only.
+    Collapsing the two into one reason would make an unspecified record look
+    like a positive claim of an incompatible phase, and would make a
+    genuinely incompatible record look like it was merely never recorded.
+    Neither is compared under a gas assumption.
     """
-    if thermo.phase != "gas":
-        return "missing_or_incompatible_gas_phase"
+    if thermo.phase is None:
+        return "phase_not_recorded"
+    if thermo.phase not in SUPPORTED_PHASES:
+        return "non_gas_phase_unsupported"
     if quantity == "cp":
         return None
     p = thermo.reference_pressure_bar
