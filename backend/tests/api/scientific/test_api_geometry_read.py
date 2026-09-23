@@ -68,6 +68,37 @@ def test_get_geometry_by_ref_returns_symbols_and_coords(client, db_session):
     assert "geometry_id" not in body
 
 
+def test_get_geometry_atoms_carry_isotope_mass_number(client, db_session):
+    """Issue #512: a deuterium label deposited on one atom is served back
+    per atom, and the unlabelled atoms in the same geometry read null
+    rather than some substituted standard nuclide."""
+    geom = make_geometry(db_session, natoms=3)
+    rows = [
+        ("O", 0.0, 0.0, 0.0, None),
+        ("D", 0.0, 0.76, 0.58, 2),
+        ("H", 0.0, -0.76, 0.58, None),
+    ]
+    for idx, (sym, x, y, z, isotope) in enumerate(rows, start=1):
+        db_session.add(
+            GeometryAtom(
+                geometry_id=geom.id,
+                atom_index=idx,
+                element=sym,
+                x=x,
+                y=y,
+                z=z,
+                isotope_mass_number=isotope,
+            )
+        )
+    db_session.flush()
+
+    resp = client.get(f"/api/v1/scientific/geometries/{geom.public_ref}")
+    assert resp.status_code == 200
+    atoms = resp.json()["atoms"]
+    assert [a["isotope_mass_number"] for a in atoms] == [None, 2, None]
+    assert [a["element"] for a in atoms] == ["O", "D", "H"]
+
+
 def test_get_geometry_by_integer_id_still_works(client, db_session):
     geom = _seed_geometry(db_session)
     resp = client.get(f"/api/v1/scientific/geometries/{geom.id}")
