@@ -271,7 +271,7 @@ class ThermoRecord(BaseModel):
     reference_pressure_bar: float | None = Field(default=None, exclude=True)
     enthalpy_reference_kind: EnthalpyReferenceKind | None = Field(default=None, exclude=True)
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def reference(self) -> ThermoReference:
         return ThermoReference(
