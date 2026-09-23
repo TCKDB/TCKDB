@@ -78,6 +78,13 @@ name: uptime-check
 #   takes the outage alerts down with it.
 #
 # SETUP
+#   gh variable set TCKDB_STATUS_URL --repo TCKDB/TCKDB \
+#     --body "https://your-deployment.example/api/v1/status"
+#   (no default on purpose -- issue #521. This repository is public, and a
+#   baked-in host would mean every fork's copy of this job polls one
+#   operator's deployment. Unset it and the job says so and exits cleanly,
+#   which is what a fork with no deployment of its own gets by default.)
+#
 #   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB
 #   (the same topic the Pi-side checker publishes to, so both classes of alarm
 #   land in one place)
@@ -114,7 +121,11 @@ jobs:
           # safe habit is not to put them anywhere that gets echoed.
           NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
           HEARTBEAT_URL: ${{ secrets.TCKDB_DEPLOYMENT_HEARTBEAT_URL }}
-          STATUS_URL: https://tckdb.homecalvin.com/api/v1/status
+          # No default (issue #521): this repository is public, and a
+          # baked-in host would mean every fork's copy of this job polls one
+          # operator's deployment. A repository variable, not a secret --
+          # the status URL is not sensitive.
+          STATUS_URL: ${{ vars.TCKDB_STATUS_URL }}
           # Overridable so the shell below can be executed against a local
           # stand-in and the pushes it sends can be asserted on. The Pi-side
           # checker has always had TCKDB_NTFY_SERVER for the same reason; this
@@ -123,6 +134,11 @@ jobs:
           NTFY_SERVER: https://ntfy.sh
         run: |
           set -uo pipefail
+
+          if [ -z "${STATUS_URL:-}" ]; then
+            echo "::notice::TCKDB_STATUS_URL is not configured (repository variable); nothing to probe. Expected on a fork with no deployment of its own; see this workflow's SETUP comment to configure one."
+            exit 0
+          fi
 
           if [ -z "${NTFY_TOPIC}" ]; then
             echo "::warning::TCKDB_NTFY_TOPIC is not set; probing without alerting."

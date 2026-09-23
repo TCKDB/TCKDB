@@ -23,8 +23,8 @@ Type=oneshot
 # deliberate. This unit cannot do its job without the topic, so a missing file
 # SHOULD stop it and fire OnFailure=; the OnFailure unit needs the `-` because
 # it is the thing that has to survive that exact failure in order to report it.
-EnvironmentFile=/home/calvin/.config/tckdb-alert.env
-ExecStart=/home/calvin/repos/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
+EnvironmentFile=/home/YOUR_USER/.config/tckdb-alert.env
+ExecStart=/home/YOUR_USER/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
 
 # The script exits 1 when the deployment is unhealthy. That is information,
 # not a unit failure -- without this, systemd marks the unit failed and the
@@ -39,4 +39,4 @@ ExecStart=/home/calvin/repos/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
 # Do not add it.
 SuccessExitStatus=0 1
 
-User=calvin
+User=YOUR_USER

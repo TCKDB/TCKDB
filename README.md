@@ -30,12 +30,16 @@ Documentation website: <https://calvinp0.github.io/tckdbv2/>
 
 **Just want to see what's in it?** Open
 [`examples/clients/explore_tckdb.ipynb`](examples/clients/explore_tckdb.ipynb) —
-a read-only tour of the live hosted instance at <https://tckdb.homecalvin.com>.
-It needs no account, no API key and no local database, and it renders on GitHub
-with its outputs already filled in, so you can read it without running anything.
-It looks up species, pulls their thermodynamics, evaluates the stored NASA
-polynomials back into Cp(T)/H(T)/S(T), checks them against NIST-JANAF values, and
-shows the calculations and trust evidence behind each number.
+a read-only tour of a live TCKDB deployment. It needs no account, no API key and
+no local database, and it renders on GitHub with its outputs already filled in
+from one such run, so you can read it without running anything. Running it
+yourself (or reusing the plain `requests` calls in
+[`explore_tckdb.py`](examples/clients/explore_tckdb.py)) points it at whichever
+deployment you set `TCKDB_BASE_URL` to — yours, a colleague's, or a public one
+someone else hosts; there is no default. It looks up species, pulls their
+thermodynamics, evaluates the stored NASA polynomials back into
+Cp(T)/H(T)/S(T), checks them against NIST-JANAF values, and shows the
+calculations and trust evidence behind each number.
 
 Choose the path that matches what you are trying to do:
 

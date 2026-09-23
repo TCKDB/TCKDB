@@ -83,7 +83,7 @@ function furtherEvidenceSummary(text: string): HTMLElement {
  * A fully-populated calculation record: a `freq` calculation with a real
  * dependency edge to its parent `opt` (modelled on the live
  * calc_afsfe4g5xtgiq2yjnutaham5iy -> calc_rypxkxvsku5x2nk6sqbhhmfcla
- * `freq_on` edge measured against https://tckdb.homecalvin.com). Every
+ * `freq_on` edge measured against a hosted TCKDB deployment). Every
  * `available_sections` flag defaults `true` except the ones a `freq`
  * calculation genuinely never has (`has_scan`, `has_irc`, `has_path_search`,
  * `has_execution_environment`), so both the "expand and fetch" branch and

@@ -34,7 +34,14 @@
 # database and cannot be satisfied by accident.
 set -euo pipefail
 
-DEST=/home/calvin/tckdb_backups
+# No default (issue #521): this script is public, and a path under one
+# operator's home directory would mean every copy of it defaults to that
+# operator's backup location.
+if [[ -z "${TCKDB_BACKUP_DEST:-}" ]]; then
+    echo "error: TCKDB_BACKUP_DEST is not set (directory to write backups to)" >&2
+    exit 1
+fi
+DEST="$TCKDB_BACKUP_DEST"
 CONTAINER=tckdbv2-db-1
 SOURCE_DB=tckdb
 # Scratch databases on any TCKDB host must match tckdb_test* by convention.

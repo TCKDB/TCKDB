@@ -12,7 +12,7 @@ import { levelOfTheorySchema } from "./scientificSchemas"
 // - GET /scientific/energy-correction-schemes/{ref}   (already shipped)
 // - GET /scientific/frequency-scale-factors/{ref}     (already shipped)
 //
-// Shapes measured live against https://tckdb.homecalvin.com, 2026-09-09,
+// Shapes measured live against a hosted TCKDB deployment, 2026-09-09,
 // cross-checked against `backend/app/schemas/reads/scientific_level_of_
 // theory.py`, `scientific_level_of_theory_search.py`,
 // `scientific_energy_correction_scheme.py`, `scientific_frequency_scale_

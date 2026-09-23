@@ -20,6 +20,15 @@ PAYLOAD = b"Gaussian 16 output, verbatim\n"
 DIGEST = hashlib.sha256(PAYLOAD).hexdigest()
 
 
+@pytest.fixture(autouse=True)
+def _base_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``--base-url`` has no default (issue #521); every call below omits
+    it and relies on ``TCKDB_BASE_URL`` instead, set once here so each test
+    can stay focused on what it actually exercises. Tests below that care
+    about the omitted-entirely case unset this themselves."""
+    monkeypatch.setenv("TCKDB_BASE_URL", "http://test.local/api/v1")
+
+
 class _FakeClient:
     """Records what it was asked for and returns canned bytes."""
 
@@ -323,3 +332,35 @@ def test_the_missing_credential_message_never_echoes_what_was_passed(
     err = capsys.readouterr().err
     assert secret not in err
     assert "TCKDB_API_KEY" in err
+
+
+def test_missing_base_url_is_a_clear_error_and_makes_no_request(
+    monkeypatch, tmp_path, capsys
+):
+    """Omitting both ``--base-url`` and ``TCKDB_BASE_URL`` must fail with an
+    actionable message naming both ways to supply it -- and must never
+    construct a client or make a request to anywhere, least of all a
+    hardcoded default host (issue #521)."""
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test")
+    monkeypatch.delenv("TCKDB_BASE_URL", raising=False)
+
+    constructed = {"n": 0}
+
+    class _ExplodingClient:
+        def __init__(self, *args, **kwargs):
+            constructed["n"] += 1
+            raise AssertionError(
+                "TCKDBClient must never be constructed without a base_url"
+            )
+
+    monkeypatch.setattr(cli, "TCKDBClient", _ExplodingClient)
+
+    rc = cli.main_tckdb(
+        ["download", "artifact", DIGEST, "-o", str(tmp_path / "x")]
+    )
+
+    assert rc == cli.EXIT_FAILURES
+    assert constructed["n"] == 0
+    err = capsys.readouterr().err
+    assert "--base-url" in err
+    assert "TCKDB_BASE_URL" in err
