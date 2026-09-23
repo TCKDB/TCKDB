@@ -805,7 +805,13 @@ def test_run_one_job_links_records_and_initializes_not_reviewed(
     assert SubmissionAuditEventKind.ingestion_succeeded in kinds
 
 
-def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, db_engine, _api_test_user):
+#: Bound on how long the parent waits for the child's claim-committed
+#: sentinel before failing loudly. See the comment at the wait loop below
+#: for why this needs to be generous rather than tight.
+_CLAIM_SENTINEL_TIMEOUT_S = 60.0
+
+
+def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, db_engine, _api_test_user, tmp_path):
     """A separately running worker claims, is terminated, then recovers once."""
     from app.db.models.species import Species, SpeciesEntry
     from app.db.models.thermo import Thermo
@@ -841,6 +847,11 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
         job_id = job.id
         submission_id = submission.id
 
+    # A sentinel file the child touches itself, right after its claim commits.
+    # See the wait loop below for why the parent watches this instead of
+    # polling the job row's status.
+    claim_sentinel = tmp_path / "claim_committed"
+
     child_env = os.environ.copy()
     child_env.update(
         {
@@ -849,6 +860,7 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
             "DB_PASSWORD": "tckdb",
             "DB_HOST": "127.0.0.1",
             "DB_PORT": "5432",
+            "TCKDB_TEST_CLAIM_SENTINEL": str(claim_sentinel),
         }
     )
     child = None
@@ -857,19 +869,56 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
             [
                 sys.executable,
                 "-c",
-                "from app.api.deps import SessionLocal; from app.workers.upload_worker import _claim_one_job; import time; s=SessionLocal(); s.begin(); j=_claim_one_job(s); s.commit(); time.sleep(60)",
+                "import os; from pathlib import Path; "
+                "from app.api.deps import SessionLocal; from app.workers.upload_worker import _claim_one_job; "
+                "import time; s=SessionLocal(); s.begin(); j=_claim_one_job(s); s.commit(); "
+                "Path(os.environ['TCKDB_TEST_CLAIM_SENTINEL']).write_text('claimed'); "
+                "time.sleep(60)",
             ],
             cwd=str(Path(__file__).resolve().parents[2]),
             env=child_env,
         )
-        for _ in range(200):
-            with worker_db.begin():
-                worker_db.expire_all()
-                if worker_db.get(UploadJob, job_id).status is UploadJobStatus.processing:
-                    break
-            time.sleep(0.05)
-        else:
-            pytest.fail("child worker did not commit its claim")
+        # Deterministic barrier: wait for the child's *own* signal that its
+        # claim committed, instead of racing a fixed, small DB-status poll
+        # budget against however long the child's interpreter startup and
+        # import chain take to get CPU time on a loaded machine. Reproduced
+        # under real full-gate contention (a stress run with concurrent
+        # gates and CPU-bound competitors): the old ``for _ in range(200):
+        # ... time.sleep(0.05)`` (a 10s budget) hit "child worker did not
+        # commit its claim" even though the child would have committed
+        # shortly after -- it simply had not been scheduled long enough
+        # to import its dependencies and connect yet. A ``Path.exists()``
+        # check is a local stat() call: it does not compete with the child
+        # (or anything else) for a Postgres connection or CPU, so raising
+        # the ceiling here costs nothing in the common, fast case -- the
+        # loop still returns the instant the file appears. It is bounded
+        # and fails loudly (not silently) if the child never gets there.
+        deadline = time.monotonic() + _CLAIM_SENTINEL_TIMEOUT_S
+        while True:
+            if claim_sentinel.exists():
+                break
+            if child.poll() is not None:
+                pytest.fail(
+                    f"child worker exited (code {child.returncode}) before committing its claim"
+                )
+            if time.monotonic() >= deadline:
+                pytest.fail(
+                    f"child worker did not commit its claim within {_CLAIM_SENTINEL_TIMEOUT_S:.0f}s"
+                )
+            time.sleep(0.02)
+
+        # The sentinel proves *a* claim committed; confirm it was *this*
+        # job's -- ``_claim_one_job`` claims the globally oldest eligible
+        # row, and this assertion is what would catch it having claimed
+        # something else.
+        with worker_db.begin():
+            worker_db.expire_all()
+            claimed_status = worker_db.get(UploadJob, job_id).status
+        assert claimed_status is UploadJobStatus.processing, (
+            f"child worker signalled a claim, but job {job_id} is {claimed_status!r} "
+            "-- it must have claimed a different job"
+        )
+
         child.terminate()
         child.wait(timeout=10)
         with worker_db.begin():
