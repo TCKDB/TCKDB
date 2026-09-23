@@ -52,8 +52,14 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     without content. Declared fit/point-only records need no h298 scalar.
     Null is absence of knowledge, not an unspecified enum member. There is
     no origin default and no backfill: existing rows remain undeclared.
-    The NOT VALID migration CHECK preserves those rows, including immutable
-    approved science, while governing new inserts and updates.
+    The rule is enforced by a trigger (``trg_guard_thermo_enthalpy_reference``,
+    migration ``e7b1c9d4a632``), not a CHECK constraint: it fires only when
+    an insert or update actually writes ``h298_kj_mol`` or
+    ``enthalpy_reference_kind``, so legacy undeclared rows stay writable on
+    every other column, including immutable approved science and the
+    public-ref backfill. A CHECK -- even ``NOT VALID`` -- would revalidate
+    on every subsequent update to those rows regardless of which columns it
+    touched, freezing them instead of merely leaving them undeclared.
 
     Other reference-state semantics:
 
@@ -232,10 +238,10 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
-        CheckConstraint(
-            "h298_kj_mol IS NULL OR enthalpy_reference_kind IS NOT NULL",
-            name="h298_requires_enthalpy_reference",
-        ),
+        # h298_kj_mol requires enthalpy_reference_kind: enforced by the
+        # trigger described above, not a CheckConstraint here -- see the
+        # class docstring for why a CHECK cannot express "only when this
+        # write actually touches one of these two columns".
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
         CheckConstraint("tmax_k IS NULL OR tmax_k > 0", name="tmax_k_gt_0"),
         CheckConstraint(

@@ -3388,7 +3388,6 @@ Table thermo {
 
   checks {
     `enthalpy_formation_0k_uncertainty_kj_mol IS NULL OR enthalpy_formation_0k_uncertainty_kj_mol >= 0` [name: 'ck_thermo_enthalpy_formation_0k_uncertainty_ge_0']
-    `h298_kj_mol IS NULL OR enthalpy_reference_kind IS NOT NULL` [name: 'ck_thermo_h298_requires_enthalpy_reference']
     `h298_uncertainty_kj_mol IS NULL OR h298_uncertainty_kj_mol >= 0` [name: 'ck_thermo_h298_uncertainty_ge_0']
     `s298_uncertainty_j_mol_k IS NULL OR s298_uncertainty_j_mol_k >= 0` [name: 'ck_thermo_s298_uncertainty_ge_0']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_thermo_tmax_k_gt_0']

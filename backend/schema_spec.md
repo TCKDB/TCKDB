@@ -1759,7 +1759,16 @@ separate, existing meaning.
 
 The two-layer rule deliberately is not a scalar iff constraint:
 
-- The database CHECK is `h298_kj_mol IS NULL OR enthalpy_reference_kind IS NOT NULL`.
+- The database rule is `h298_kj_mol IS NULL OR enthalpy_reference_kind IS NOT NULL`,
+  enforced by `trg_guard_thermo_enthalpy_reference` rather than a CHECK. The
+  trigger fires only when an insert or update actually writes
+  `h298_kj_mol` or `enthalpy_reference_kind` (compared against the
+  pre-update row with `IS DISTINCT FROM`), so a write to any other column
+  on a legacy undeclared row is unaffected. A CHECK, even `NOT VALID`, was
+  tried first and rejected: Postgres revalidates a `NOT VALID` CHECK on
+  every subsequent update regardless of which columns it touches, which
+  would have frozen every legacy undeclared row against unrelated writes
+  such as the public-ref backfill.
 - Every deposit workflow requires the declaration for any h298 scalar, point
   enthalpy, Wilhoit h0, or NASA-7/NASA-9 block, and refuses a declaration when
   none of that content exists. Cp/entropy-only deposits leave it null.
@@ -1769,10 +1778,12 @@ The two-layer rule deliberately is not a scalar iff constraint:
 Absence is absence: null means the source did not declare the reference.
 `EnthalpyReferenceKind` has exactly one member and no `unspecified` member.
 No default depends on origin, software, magnitude, or another row. Legacy
-rows are not backfilled, including approved immutable rows. The migration
-adds the CHECK as `NOT VALID`, preserving legacy nulls while enforcing new
-inserts and updates. It must not later be validated by inferring references
-or by using the accepted-science repair mechanism.
+rows are not backfilled, including approved immutable rows, and the trigger
+does not freeze them: any column other than the two it guards remains
+writable, and a legacy row may later gain a declaration through an update
+that sets `enthalpy_reference_kind` (which the trigger then validates
+against the row's current `h298_kj_mol`). It must not later be validated by
+inferring references or by using the accepted-science repair mechanism.
 
 Sensible increments such as H(T)-H(0) and absolute quantum-chemistry
 enthalpies belong in `molecular_property_observation`, with their stated
