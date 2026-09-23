@@ -16732,7 +16732,7 @@
         "type": "string"
       },
       "GeometryAtomPayload": {
-        "description": "One atom row inside a geometry's coordinate payload.",
+        "description": "One atom row inside a geometry's coordinate payload.\n\n``isotope_mass_number`` mirrors ``GeometryAtomBase.isotope_mass_number``\n(the upload payload's own field, see\n``app.schemas.entities.geometry.GeometryAtomBase``): ``None`` means the\nelement's most abundant natural isotope, *not* \"unrecorded\" — every atom\ndeposited before atom-resolved isotope support is by definition an\nordinary isotopologue, so this is never ambiguous. A caller that needs to\ntell an isotopologue apart from the unlabelled species reads this field\nper atom rather than guessing from ``element`` alone (a ``D``/``T``\nsymbol already implies a non-standard nuclide; an ordinary symbol with a\nnon-null value here does too).",
         "properties": {
           "atom_index": {
             "title": "Atom Index",
@@ -16741,6 +16741,17 @@
           "element": {
             "title": "Element",
             "type": "string"
+          },
+          "isotope_mass_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Mass Number"
           },
           "x": {
             "title": "X",

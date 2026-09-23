@@ -72,8 +72,8 @@ def get_geometry(
     - Missing row: 404.
 
     The response includes the geometry's natoms / geom_hash, an
-    ordered list of atom rows (element + x/y/z, sorted by
-    ``atom_index``), the parallel ``symbols`` + ``coords`` shape for
+    ordered list of atom rows (element + x/y/z + isotope_mass_number,
+    sorted by ``atom_index``), the parallel ``symbols`` + ``coords`` shape for
     convenience, the original ``xyz_text`` blob if persisted, and a
     compact provenance summary listing every calculation that
     consumed or produced this geometry.
@@ -148,7 +148,12 @@ def get_geometry(
         coords=[[a.x, a.y, a.z] for a in atoms],
         atoms=[
             GeometryAtomPayload(
-                atom_index=a.atom_index, element=elem, x=a.x, y=a.y, z=a.z
+                atom_index=a.atom_index,
+                element=elem,
+                x=a.x,
+                y=a.y,
+                z=a.z,
+                isotope_mass_number=a.isotope_mass_number,
             )
             for a, elem in zip(atoms, elements, strict=False)
         ],
