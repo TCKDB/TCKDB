@@ -63,6 +63,13 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     Other reference-state semantics:
 
+    * ``enthalpy_reference_kind`` declares which reference every enthalpy on
+      this record uses. ``formation_298k`` is the standard enthalpy of
+      formation at 298.15 K; an enthalpy at any other temperature is that
+      value plus the species' own enthalpy increment from 298.15 K, with the
+      elemental term not reevaluated. ``NULL`` means the reference was never
+      recorded -- it is never inferred from a value, a producer or a
+      neighbouring row, and never backfilled.
     * ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of
       formation and standard entropy at 298.15 K.
     * ``enthalpy_formation_0k_kj_mol`` is the 0 K standard formation

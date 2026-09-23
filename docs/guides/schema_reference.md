@@ -2703,6 +2703,7 @@ the gap.
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
+| `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `s298_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `h298_uncertainty_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
@@ -2807,7 +2808,7 @@ the gap.
 
 **Role:** role not stated on the model
 
-**Purpose:** Tabulated thermo values at a specific temperature.
+**Purpose:** Tabulated standard-state thermo values at a specific temperature.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
