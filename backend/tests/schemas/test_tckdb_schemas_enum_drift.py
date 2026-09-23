@@ -19,6 +19,7 @@ from app.db.models import common as db_enums
 # (backend_enum, wire_enum) pairs to compare. Mirrors the audited
 # upload-facing enum closure documented in tckdb_schemas/enums.py.
 ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
+    (db_enums.EnthalpyReferenceKind, wire_enums.EnthalpyReferenceKind),
     (db_enums.ActivationEnergyUnits, wire_enums.ActivationEnergyUnits),
     (db_enums.AppliedCorrectionComponentKind, wire_enums.AppliedCorrectionComponentKind),
     (db_enums.ArrheniusAUnits, wire_enums.ArrheniusAUnits),

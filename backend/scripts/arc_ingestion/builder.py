@@ -303,6 +303,7 @@ def _build_species_payload(
     sp_info: SpeciesInfo,
     run: ARCRunData,
     include_artifacts: bool = True,
+    enthalpy_reference_kind: str | None = None,
 ) -> dict:
     """Build a BundleSpeciesIn dict for one species."""
     # Use SMILES from YAML data if available, otherwise from restart/input
@@ -355,8 +356,15 @@ def _build_species_payload(
     # Thermo
     thermo = None
     if sp_info.yaml_data and sp_info.yaml_data.thermo:
+        if enthalpy_reference_kind != "formation_from_elements_298k":
+            raise ValueError(
+                "ARC output does not declare an enthalpy basis. Configure "
+                "enthalpy_reference_kind=formation_from_elements_298k explicitly "
+                "before building thermo; other quantities belong in molecular_property_observation."
+            )
         t = sp_info.yaml_data.thermo
         thermo_dict: dict = {
+            "enthalpy_reference_kind": enthalpy_reference_kind,
             "h298_kj_mol": t.h298_kj_mol,
             "s298_j_mol_k": t.s298_j_mol_k,
             "tmin_k": t.tmin_k,
@@ -493,7 +501,10 @@ def _build_kinetics_payload(
     return payload
 
 
-def build_payload(run: ARCRunData, arc_dir: "Path | str", include_artifacts: bool = True) -> dict:
+def build_payload(
+    run: ARCRunData, arc_dir: "Path | str", include_artifacts: bool = True,
+    *, enthalpy_reference_kind: str | None = None,
+) -> dict:
     """Build the full ComputedReactionUploadRequest dict from ARC run data.
 
     Returns a dict that can be passed to
@@ -519,7 +530,7 @@ def build_payload(run: ARCRunData, arc_dir: "Path | str", include_artifacts: boo
             raise ValueError(f"Species '{label}' referenced in reaction but not found.")
         if not sp_info.converged:
             print(f"  Warning: species '{label}' did not converge, including anyway.")
-        species_payloads.append(_build_species_payload(label, sp_info, run, include_artifacts))
+        species_payloads.append(_build_species_payload(label, sp_info, run, include_artifacts, enthalpy_reference_kind))
 
     # Build TS payload
     ts_payload = None

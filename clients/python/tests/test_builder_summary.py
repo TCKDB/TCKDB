@@ -84,7 +84,7 @@ def species_upload() -> ComputedSpeciesUpload:
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            h298_kj_mol=-241.8, s298_j_mol_k=188.8,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8, s298_j_mol_k=188.8,
             source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
         ),
         statmech=Statmech(
@@ -145,7 +145,7 @@ def reaction_upload() -> ComputedReactionUpload:
         species_calculations={ch3_sp: list(ch3), h_sp: list(h), ch4_sp: list(ch4)},
         species_thermo={
             ch4_sp: Thermo.nasa(
-                coeffs_low=[0.5] + [0.0] * 6,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
                 coeffs_high=[0.5] + [0.0] * 6,
                 t_low=200, t_mid=1000, t_high=5000,
                 h298_kj_mol=-74.6, s298_j_mol_k=186.3,

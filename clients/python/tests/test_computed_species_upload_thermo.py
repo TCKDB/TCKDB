@@ -76,7 +76,7 @@ def test_accepts_scalar_thermo(water_species, calc_trio):
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            h298_kj_mol=-241.8,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
             s298_j_mol_k=188.8,
             source_calculations={"opt": opt, "freq": freq, "sp": sp},
         ),
@@ -95,7 +95,7 @@ def test_accepts_nasa_thermo(water_species, calc_trio):
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.nasa(
-            coeffs_low=[0.5] + [0.0] * 6,
+            enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
             coeffs_high=[0.5] + [0.0] * 6,
             t_low=200, t_mid=1000, t_high=5000,
             h298_kj_mol=-241.8,
@@ -119,7 +119,7 @@ def test_accepts_points_thermo(water_species, calc_trio):
                 {"temperature_k": 298.15, "cp_j_mol_k": 33.6, "h_kj_mol": 0.0},
                 {"temperature_k": 500.0, "cp_j_mol_k": 35.2},
             ],
-            tmin_k=200, tmax_k=1000,
+            enthalpy_reference_kind="formation_from_elements_298k", tmin_k=200, tmax_k=1000,
             source_calculations={"sp": sp},
         ),
     )
@@ -138,7 +138,7 @@ def test_source_calculations_resolve_to_local_keys(water_species, calc_trio):
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            h298_kj_mol=-241.8,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
             source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
         ),
     )
@@ -172,7 +172,7 @@ def test_source_calc_outside_upload_rejected(water_species, calc_trio):
             calculations=[opt, freq],
             primary_calculation=opt,
             thermo=Thermo.scalar(
-                h298_kj_mol=-241.8,
+                enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
                 source_calculations={"sp": floating},
             ),
         )
@@ -213,7 +213,7 @@ def test_to_payload_deterministic(water_species, calc_trio):
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.nasa(
-            coeffs_low=[0.5] + [0.0] * 6,
+            enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
             coeffs_high=[0.5] + [0.0] * 6,
             t_low=200, t_mid=1000, t_high=5000,
             source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
@@ -232,7 +232,7 @@ def test_snapshot_structural(water_species, calc_trio):
         calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.nasa(
-            coeffs_low=[0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
+            enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
             coeffs_high=[0.5, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0],
             t_low=200, t_mid=1000, t_high=5000,
             h298_kj_mol=-241.8, s298_j_mol_k=188.8,
@@ -287,7 +287,7 @@ def test_duplicate_role_with_distinct_calcs_emits_both(water_species, calc_trio)
         calculations=[opt, freq, sp, sp2],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            h298_kj_mol=-241.8,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
             source_calculations={"sp": [sp, sp2]},
         ),
     )

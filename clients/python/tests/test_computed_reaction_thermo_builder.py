@@ -73,7 +73,7 @@ def basic_upload(ts_geom, ch4, ch3):
         source_calculations={"ts_energy": ts_opt},
     )
     thermo = Thermo.nasa(
-        coeffs_low=[0.5] + [0.0] * 6,
+        enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
         coeffs_high=[0.5] + [0.0] * 6,
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-74.6, s298_j_mol_k=186.3,
@@ -130,7 +130,7 @@ def test_thermo_attaches_to_species_without_calculations(ts_geom, ch4, ch3):
     sr = _gaussian()
     lot = _b3lyp()
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
-    thermo = Thermo.scalar(h298_kj_mol=-74.6)
+    thermo = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6)
     rxn = ChemReaction(
         reactants=[ch3], products=[ch4],
         transition_state=TransitionState(charge=0, multiplicity=2, geometry=ts_geom),
@@ -155,7 +155,7 @@ def test_species_not_in_reaction_rejected(ts_geom, ch4, ch3):
     lot = _b3lyp()
     extra = Species(smiles="O", charge=0, multiplicity=1, label="H2O")
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
-    thermo = Thermo.scalar(h298_kj_mol=0.0)
+    thermo = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0)
     rxn = ChemReaction(
         reactants=[ch3], products=[ch4],
         transition_state=TransitionState(charge=0, multiplicity=2, geometry=ts_geom),
@@ -199,7 +199,7 @@ def test_thermo_source_outside_same_species_bucket_rejected(
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
     # Thermo attached to ch4 but sourced from ch3's opt — wrong bucket.
     bad_thermo = Thermo.scalar(
-        h298_kj_mol=0.0,
+        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
         source_calculations={"opt": ch3_opt},
     )
     rxn = ChemReaction(
@@ -225,7 +225,7 @@ def test_thermo_source_inside_same_species_accepted(ts_geom, ch4, ch3):
     )
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
     good_thermo = Thermo.scalar(
-        h298_kj_mol=0.0,
+        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
         source_calculations={"opt": ch4_opt, "sp": ch4_sp},
     )
     rxn = ChemReaction(
@@ -254,7 +254,7 @@ def test_thermo_source_outside_upload_rejected(ts_geom, ch4, ch3):
     floating = Calculation.opt(sr, lot, output_geometry=g, converged=True)
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
     thermo = Thermo.scalar(
-        h298_kj_mol=0.0,
+        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
         source_calculations={"opt": floating},
     )
     rxn = ChemReaction(

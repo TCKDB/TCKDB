@@ -165,7 +165,7 @@ def test_a_thermo_citing_another_species_statmech_is_coded(client, db_session) -
 
     resp = client.post(
         _THERMO,
-        json={
+        json={"enthalpy_reference_kind": "formation_from_elements_298k",
             "species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 146.7,
@@ -197,7 +197,7 @@ def test_a_thermo_citing_its_own_statmech_is_accepted(client, db_session) -> Non
 
     resp = client.post(
         _THERMO,
-        json={
+        json={"enthalpy_reference_kind": "formation_from_elements_298k",
             "species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 146.7,

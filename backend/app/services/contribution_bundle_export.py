@@ -329,6 +329,8 @@ def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
         "scientific_origin": thermo.scientific_origin.value,
         "phase": thermo.phase.value if thermo.phase is not None else None,
         "reference_pressure_bar": thermo.reference_pressure_bar,
+        "enthalpy_reference_kind": (thermo.enthalpy_reference_kind.value
+                                    if thermo.enthalpy_reference_kind is not None else None),
         "enthalpy_formation_0k_kj_mol": thermo.enthalpy_formation_0k_kj_mol,
         "enthalpy_formation_0k_uncertainty_kj_mol": thermo.enthalpy_formation_0k_uncertainty_kj_mol,
         "h298_kj_mol": thermo.h298_kj_mol,

@@ -588,7 +588,7 @@ def _statmech(kind: str, n_imag: int) -> StatmechUploadRequest:
 
 def _thermo(kind: str, n_imag: int) -> ThermoUploadRequest:
     return ThermoUploadRequest(
-        species_entry={**_SPECIES_ENTRY, "species_entry_kind": kind},
+        enthalpy_reference_kind="formation_from_elements_298k", species_entry={**_SPECIES_ENTRY, "species_entry_kind": kind},
         h298_kj_mol=1.0,
         calculations=[_keyed_calc(n_imag)],
     )

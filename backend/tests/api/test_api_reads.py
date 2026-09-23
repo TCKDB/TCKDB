@@ -56,7 +56,7 @@ def _reaction_payload() -> dict:
 
 
 def _thermo_payload() -> dict:
-    return {
+    return {"enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
         "scientific_origin": "computed",
         "h298_kj_mol": 217.998,

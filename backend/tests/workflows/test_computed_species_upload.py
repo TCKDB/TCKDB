@@ -866,7 +866,7 @@ def _bundle_with_thermo() -> ComputedSpeciesUploadRequest:
                 ],
             }
         ],
-        thermo={
+        thermo={"enthalpy_reference_kind": "formation_from_elements_298k",
             "h298_kj_mol": -241.8,
             "s298_j_mol_k": 188.8,
             "tmin_k": 200.0,
@@ -956,7 +956,7 @@ def _bundle_multi_conformer_thermo_statmech() -> ComputedSpeciesUploadRequest:
     return ComputedSpeciesUploadRequest(
         species_entry={"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
         conformers=[_conf(0), _conf(1)],
-        thermo={
+        thermo={"enthalpy_reference_kind": "formation_from_elements_298k",
             "h298_kj_mol": 146.7,
             "s298_j_mol_k": 194.2,
             "source_calculations": [

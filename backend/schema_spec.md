@@ -1740,3 +1740,43 @@ Notes:
 - `submission`, `submission_audit_event`, and `submission_record_link` are the moderation/publication layer for all contributed records
 - `record_reproducibility_assessment` is an append-only curation projection of reproducibility evidence, separate from approval and trust
 - `curation_policy`, `dataset_release`, `release_selection`, `release_manifest` and `release_artifact` are the curated-release overlay: an attributed, append-only selection among coexisting candidates plus the immutable checksummed manifest that makes it citable — none of them writes to a scientific product table
+
+## Enthalpy reference declaration (2026-09-23)
+
+`thermo.enthalpy_reference_kind = formation_from_elements_298k` declares
+standard enthalpy of formation at 298.15 K: one mole of the species formed
+from elements in their reference forms, whose formation enthalpies are zero.
+At another temperature, H(T) is that formation energy plus the species' own
+enthalpy increment from 298.15 K. The elemental term remains pinned at
+298.15 K; it is not recomputed against the elements at T.
+
+The declaration covers `h298_kj_mol`, `thermo_point.h_kj_mol`, Wilhoit
+`h0_kj_mol`, and the NASA-7/NASA-9 enthalpy integration constants. A point's
+`g_kj_mol` means H(T) - T*S(T), on the same reference zero, with entropy
+converted to kJ/(mol*K). It is not a formation Gibbs energy recomputed
+against elemental entropies. `enthalpy_formation_0k_kj_mol` retains its
+separate, existing meaning.
+
+The two-layer rule deliberately is not a scalar iff constraint:
+
+- The database CHECK is `h298_kj_mol IS NULL OR enthalpy_reference_kind IS NOT NULL`.
+- Every deposit workflow requires the declaration for any h298 scalar, point
+  enthalpy, Wilhoit h0, or NASA-7/NASA-9 block, and refuses a declaration when
+  none of that content exists. Cp/entropy-only deposits leave it null.
+- Declared fit-only and point-only records are valid without h298. No scalar
+  is evaluated from a fit and stored as though the depositor supplied it.
+
+Absence is absence: null means the source did not declare the reference.
+`EnthalpyReferenceKind` has exactly one member and no `unspecified` member.
+No default depends on origin, software, magnitude, or another row. Legacy
+rows are not backfilled, including approved immutable rows. The migration
+adds the CHECK as `NOT VALID`, preserving legacy nulls while enforcing new
+inserts and updates. It must not later be validated by inferring references
+or by using the accepted-science repair mechanism.
+
+Sensible increments such as H(T)-H(0) and absolute quantum-chemistry
+enthalpies belong in `molecular_property_observation`, with their stated
+property label, state, temperature, pressure and uncertainty meaning.
+CCCBDB's explicitly labelled H(298.15)-H(0) is routed to an observation
+payload with its source datum and identity hint intact. ARC requires an
+explicit adapter configuration; its output does not establish a basis.

@@ -83,6 +83,7 @@ def build_experimental_species_payload(
         species_entry_payload=species_entry_payload,
         species_entry_payload_is_valid=species_valid,
         thermo_payload=thermo_payload,
+        molecular_property_observation_payloads=_enthalpy_observations(record),
         thermo_payload_is_valid=thermo_valid,
         statmech_payload=statmech_payload,
         statmech_payload_is_valid=statmech_valid,
@@ -90,3 +91,35 @@ def build_experimental_species_payload(
         external_source=external_source,
         warnings=warnings,
     )
+
+
+def _enthalpy_observations(record: CCCBDBExperimentalSpeciesRecord) -> list[dict]:
+    """Route explicitly labelled sensible increments without relabelling them."""
+    from app.schemas.entities.molecular_property_observation import MolecularPropertyObservationCreate
+
+    meta = record.source_metadata
+    observations = []
+    for value in record.thermo.values:
+        if value.property_kind != "h_298_minus_h_0":
+            continue
+        observation = MolecularPropertyObservationCreate(
+            scientific_origin="experimental",
+            property_kind="other",
+            property_label="H(298.15 K) - H(0 K), sensible enthalpy increment",
+            scalar_value=value.value,
+            scalar_unit="kJ/mol",
+            scalar_uncertainty=value.uncertainty,
+            temperature_k=298.15,
+            external_source_name=meta.source,
+            external_source_release=meta.source_release,
+            external_source_doi=meta.source_database_doi,
+            external_source_url=meta.source_url,
+            external_source_record_key=meta.source_record_key,
+            external_source_parser_version=meta.parser_version,
+            raw_payload_json={
+                "identity_hint": record.identity.model_dump(mode="json"),
+                "datum": value.model_dump(mode="json"),
+            },
+        )
+        observations.append(observation.model_dump(mode="json"))
+    return observations

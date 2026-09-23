@@ -120,6 +120,9 @@ class RejectionCode(str, Enum):
     ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET = "energy_correction_scheme_software_already_set"
     ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET = "energy_correction_scheme_workflow_tool_release_already_set"
     ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
+    ENTHALPY_DECLARATION_ABSENT = "enthalpy_declaration_absent"
+    ENTHALPY_DECLARATION_WITHOUT_CONTENT = "enthalpy_declaration_without_content"
+    ENTHALPY_QUANTITY_NOT_STORABLE_HERE = "enthalpy_quantity_not_storable_here"
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
     EXPORT_SEED_EMPTY = "export_seed_empty"
     EXPORT_SEED_UNRESOLVED = "export_seed_unresolved"
@@ -316,6 +319,9 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
+        RejectionCode.ENTHALPY_DECLARATION_ABSENT,
+        RejectionCode.ENTHALPY_DECLARATION_WITHOUT_CONTENT,
+        RejectionCode.ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
         RejectionCode.EXPORT_ALL_CAP_EXCEEDED,
         RejectionCode.EXPORT_SEED_EMPTY,
         RejectionCode.EXPORT_SEED_UNRESOLVED,
@@ -525,6 +531,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET: frozenset({409}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_WORKFLOW_TOOL_RELEASE_ALREADY_SET: frozenset({409}),
     RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE: frozenset({409}),
+    RejectionCode.ENTHALPY_DECLARATION_ABSENT: frozenset({422}),
+    RejectionCode.ENTHALPY_DECLARATION_WITHOUT_CONTENT: frozenset({422}),
+    RejectionCode.ENTHALPY_QUANTITY_NOT_STORABLE_HERE: frozenset({422}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
     RejectionCode.EXPORT_SEED_UNRESOLVED: frozenset({422}),

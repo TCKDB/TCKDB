@@ -85,6 +85,7 @@ def build_thermo_payload(
         # Preserve the card phase; an unrecognized token remains unknown.
         "phase": {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper()),
         "reference_pressure_bar": 1.01325,
+        "enthalpy_reference_kind": "formation_from_elements_298k",
         "nasa": _nasa_payload(entry),
         "tmin_k": entry.t_low,
         "tmax_k": entry.t_high,

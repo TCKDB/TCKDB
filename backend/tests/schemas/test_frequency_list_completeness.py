@@ -653,7 +653,7 @@ def _thermo_request(frequencies: list[float]):
     from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 
     return ThermoUploadRequest(
-        species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
         h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         calculations=_product_upload_calculations(frequencies),

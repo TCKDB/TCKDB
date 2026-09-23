@@ -21,6 +21,7 @@ from tckdb_schemas.stationary_point import (
 )
 
 from app.db.models.common import (
+    EnthalpyReferenceKind,
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
@@ -204,6 +205,7 @@ class ThermoUploadRequest(SchemaBase):
     # as ``gas @ 1 bar`` would reintroduce the ambiguity this schema removes.
     # Explicit values are always honored regardless of origin; for legacy
     # 1 atm data set ``reference_pressure_bar=1.01325``.
+    enthalpy_reference_kind: EnthalpyReferenceKind | str | None = None
     reference_pressure_bar: float | None = Field(default=None, gt=0)
     phase: PhaseKind | None = None
 

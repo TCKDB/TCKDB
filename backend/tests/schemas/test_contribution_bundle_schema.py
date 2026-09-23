@@ -30,7 +30,7 @@ EXAMPLES_DIR = REPO_ROOT / "examples" / "bundles"
 
 
 def _thermo_upload() -> dict:
-    return {
+    return {"enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1},
         "scientific_origin": "computed",
         "h298_kj_mol": -241.8,

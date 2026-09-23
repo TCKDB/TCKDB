@@ -125,7 +125,7 @@ from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
-from app.workflows.thermo import assert_thermo_role_matches_calculation_type
+from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 
 #: How a computed-species bundle declares a name in the conformer
 #: namespace, phrased as the object of the remedy sentence in
@@ -247,6 +247,7 @@ def _build_synthetic_thermo_upload_request(
         ),
         phase=thermo_in.phase,
         reference_pressure_bar=thermo_in.reference_pressure_bar,
+        enthalpy_reference_kind=thermo_in.enthalpy_reference_kind,
         enthalpy_formation_0k_kj_mol=thermo_in.enthalpy_formation_0k_kj_mol,
         enthalpy_formation_0k_uncertainty_kj_mol=thermo_in.enthalpy_formation_0k_uncertainty_kj_mol,
         h298_kj_mol=thermo_in.h298_kj_mol,
@@ -829,6 +830,7 @@ def _persist_thermo_block(
         return None, []
 
     thermo_in = request.thermo
+    assert_enthalpy_reference(thermo_in)
 
     # Resolve source_calculations by local key with role/type checks.
     resolved_sources: list[ThermoSourceCalculationCreate] = []

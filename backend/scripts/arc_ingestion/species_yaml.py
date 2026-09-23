@@ -35,7 +35,12 @@ class ThermoPoint:
 
 @dataclass
 class SpeciesThermo:
-    """Thermochemistry data extracted from an ARC species YAML."""
+    """Thermochemistry extracted without asserting its enthalpy reference.
+
+    ARC YAML does not state a basis. The adapter caller must explicitly
+    configure enthalpy_reference_kind before builder.py emits thermo.
+    Neither the software name nor these numbers establishes that basis.
+    """
 
     h298_kj_mol: float
     s298_j_mol_k: float

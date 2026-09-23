@@ -97,7 +97,7 @@ def _computed_species_payload_with_thermo_and_statmech() -> dict:
                 ],
             }
         ],
-        "thermo": {
+        "thermo": {"enthalpy_reference_kind": "formation_from_elements_298k",
             "h298_kj_mol": 217.998,
             "source_calculations": [
                 {"calculation_key": "sp0", "role": "sp"},

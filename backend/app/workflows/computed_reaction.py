@@ -142,7 +142,7 @@ from app.services.statmech_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
-from app.workflows.thermo import assert_thermo_role_matches_calculation_type
+from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 
 #: How a computed-reaction bundle declares a name in the calculation
 #: namespace, phrased as the object of the remedy sentence in
@@ -1039,6 +1039,7 @@ def persist_computed_reaction_upload(
                 sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
             )
             t = sp.thermo
+            assert_enthalpy_reference(t)
 
             # Per-thermo provenance overrides the bundle-level default.
             # The bundle value describes the run; a species whose thermo
@@ -1143,6 +1144,7 @@ def persist_computed_reaction_upload(
                 ),
                 phase=t.phase,
                 reference_pressure_bar=t.reference_pressure_bar,
+                enthalpy_reference_kind=t.enthalpy_reference_kind,
                 enthalpy_formation_0k_kj_mol=t.enthalpy_formation_0k_kj_mol,
                 enthalpy_formation_0k_uncertainty_kj_mol=t.enthalpy_formation_0k_uncertainty_kj_mol,
                 h298_kj_mol=t.h298_kj_mol,

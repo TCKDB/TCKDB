@@ -52,7 +52,7 @@ _FREQ_SCALE_FACTOR = {
 
 
 def _thermo(**overrides) -> ThermoUploadRequest:
-    base: dict = {
+    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": dict(_SPECIES_ENTRY),
         "scientific_origin": "computed",
         "h298_kj_mol": -241.8,

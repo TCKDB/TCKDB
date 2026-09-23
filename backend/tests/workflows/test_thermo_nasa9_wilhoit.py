@@ -84,6 +84,7 @@ def _wilhoit_block() -> dict:
 
 def _request(smiles: str = "O", **overrides) -> ThermoUploadRequest:
     base: dict = {
+        "enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
         "scientific_origin": "computed",
     }

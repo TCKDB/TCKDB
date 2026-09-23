@@ -35,7 +35,7 @@ _FSF = {
 
 
 def _thermo_payload(**overrides) -> dict:
-    base: dict = {
+    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
         "scientific_origin": "computed",
         "h298_kj_mol": 217.998,

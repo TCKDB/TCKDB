@@ -41,7 +41,7 @@ def _opt() -> Calculation:
 
 class TestThermoScalar:
     def test_h298_only_ok(self):
-        t = Thermo.scalar(h298_kj_mol=-74.6)
+        t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6)
         assert t.h298_kj_mol == -74.6
         assert t.s298_j_mol_k is None
         assert t._kind == "scalar"
@@ -56,18 +56,18 @@ class TestThermoScalar:
 
     def test_temperature_bounds_must_be_positive(self):
         with pytest.raises(TCKDBBuilderValidationError):
-            Thermo.scalar(h298_kj_mol=0.0, tmin_k=0)
+            Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, tmin_k=0)
         with pytest.raises(TCKDBBuilderValidationError):
-            Thermo.scalar(h298_kj_mol=0.0, tmax_k=-1)
+            Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, tmax_k=-1)
 
     def test_tmin_must_be_le_tmax(self):
         with pytest.raises(TCKDBBuilderValidationError):
-            Thermo.scalar(h298_kj_mol=0.0, tmin_k=2000, tmax_k=300)
+            Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, tmin_k=2000, tmax_k=300)
 
     def test_to_payload_emits_only_supplied_keys(self):
-        t = Thermo.scalar(h298_kj_mol=-74.6, tmax_k=2000)
+        t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6, tmax_k=2000)
         payload = t.to_payload()
-        assert payload == {"h298_kj_mol": -74.6, "tmax_k": 2000.0}
+        assert payload == {"enthalpy_reference_kind": "formation_from_elements_298k", "h298_kj_mol": -74.6, "tmax_k": 2000.0}
 
 
 # --- Thermo.nasa ------------------------------------------------------
@@ -80,7 +80,7 @@ class TestThermoNasa:
 
     def test_nasa_happy_path(self, coeffs):
         t = Thermo.nasa(
-            coeffs_low=coeffs, coeffs_high=coeffs,
+            enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs, coeffs_high=coeffs,
             t_low=200, t_mid=1000, t_high=5000,
             h298_kj_mol=-74.6,
         )
@@ -96,13 +96,13 @@ class TestThermoNasa:
     def test_coeffs_must_be_length_7(self, coeffs):
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=[1.0, 2.0],
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[1.0, 2.0],
                 coeffs_high=coeffs,
                 t_low=200, t_mid=1000, t_high=5000,
             )
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=coeffs,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs,
                 coeffs_high=[1.0],
                 t_low=200, t_mid=1000, t_high=5000,
             )
@@ -110,7 +110,7 @@ class TestThermoNasa:
     def test_coeffs_must_be_numeric(self, coeffs):
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=["zero"] + [1.0] * 6,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=["zero"] + [1.0] * 6,
                 coeffs_high=coeffs,
                 t_low=200, t_mid=1000, t_high=5000,
             )
@@ -118,25 +118,25 @@ class TestThermoNasa:
     def test_temperatures_must_be_ordered(self, coeffs):
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=coeffs, coeffs_high=coeffs,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs, coeffs_high=coeffs,
                 t_low=1000, t_mid=500, t_high=5000,
             )
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=coeffs, coeffs_high=coeffs,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs, coeffs_high=coeffs,
                 t_low=200, t_mid=1000, t_high=900,
             )
 
     def test_temperatures_must_be_positive(self, coeffs):
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.nasa(
-                coeffs_low=coeffs, coeffs_high=coeffs,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs, coeffs_high=coeffs,
                 t_low=0, t_mid=1000, t_high=5000,
             )
 
     def test_to_payload_emits_nasa_block(self, coeffs):
         t = Thermo.nasa(
-            coeffs_low=coeffs, coeffs_high=coeffs,
+            enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=coeffs, coeffs_high=coeffs,
             t_low=200, t_mid=1000, t_high=5000,
         )
         payload = t.to_payload()
@@ -156,7 +156,7 @@ class TestThermoPoints:
                 {"temperature_k": 298.15, "cp_j_mol_k": 35.3, "h_kj_mol": 0.0},
                 {"temperature_k": 500.0, "cp_j_mol_k": 46.0},
             ],
-            tmin_k=200, tmax_k=2000,
+            enthalpy_reference_kind="formation_from_elements_298k", tmin_k=200, tmax_k=2000,
         )
         assert t._kind == "points"
         assert len(t.point_table) == 2
@@ -183,7 +183,7 @@ class TestThermoPoints:
     def test_to_payload_emits_points(self):
         t = Thermo.points(
             [{"temperature_k": 298.15, "h_kj_mol": 0.0}],
-        )
+         enthalpy_reference_kind="formation_from_elements_298k")
         payload = t.to_payload()
         assert payload["points"] == [
             {"temperature_k": 298.15, "h_kj_mol": 0.0}
@@ -197,7 +197,7 @@ class TestThermoSourceCalculations:
     def test_dict_form(self):
         opt = _opt()
         t = Thermo.scalar(
-            h298_kj_mol=0.0,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
             source_calculations={"opt": opt, "sp": opt},
         )
         assert [r for r, _ in t.source_calculations_iter()] == ["opt", "sp"]
@@ -210,7 +210,7 @@ class TestThermoSourceCalculations:
             electronic_energy_hartree=-1.0,
         )
         t = Thermo.scalar(
-            h298_kj_mol=0.0,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
             source_calculations={"sp": [opt, sp]},
         )
         assert [r for r, _ in t.source_calculations_iter()] == ["sp", "sp"]
@@ -218,7 +218,7 @@ class TestThermoSourceCalculations:
     def test_list_of_tuples_form(self):
         opt = _opt()
         t = Thermo.scalar(
-            h298_kj_mol=0.0,
+            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
             source_calculations=[("opt", opt), ("freq", opt), ("sp", opt)],
         )
         roles = [r for r, _ in t.source_calculations_iter()]
@@ -228,14 +228,14 @@ class TestThermoSourceCalculations:
         opt = _opt()
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.scalar(
-                h298_kj_mol=0.0,
+                enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
                 source_calculations={"made_up_role": opt},
             )
 
     def test_non_calculation_value_rejected(self):
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.scalar(
-                h298_kj_mol=0.0,
+                enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
                 source_calculations={"opt": "not a calc"},  # type: ignore[dict-item]
             )
 
@@ -243,14 +243,14 @@ class TestThermoSourceCalculations:
         opt = _opt()
         with pytest.raises(TCKDBBuilderValidationError):
             Thermo.scalar(
-                h298_kj_mol=0.0,
+                enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0,
                 source_calculations=[("opt", opt, "extra")],  # type: ignore[list-item]
             )
 
     def test_to_payload_omits_source_calculations_by_default(self):
         """``BundleThermoIn`` does not carry the field; default emit drops it."""
         opt = _opt()
-        t = Thermo.scalar(h298_kj_mol=0.0, source_calculations={"opt": opt})
+        t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, source_calculations={"opt": opt})
         assert "source_calculations" not in t.to_payload()
 
     def test_to_payload_emits_source_calculations_when_opted_in(self):
@@ -258,7 +258,7 @@ class TestThermoSourceCalculations:
         a key lookup so ``calculation_key`` values resolve into the
         bundle's global namespace."""
         opt = _opt()
-        t = Thermo.scalar(h298_kj_mol=0.0, source_calculations={"opt": opt})
+        t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, source_calculations={"opt": opt})
         payload = t.to_payload(
             allow_source_calculations=True,
             calc_key_lookup=lambda calc: "calc_1" if calc is opt else "???",
@@ -271,6 +271,6 @@ class TestThermoSourceCalculations:
         """Emitting sources without a lookup is a programming error —
         the assembler must always pass its KeyMinter.lookup."""
         opt = _opt()
-        t = Thermo.scalar(h298_kj_mol=0.0, source_calculations={"opt": opt})
+        t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0.0, source_calculations={"opt": opt})
         with pytest.raises(TCKDBBuilderValidationError):
             t.to_payload(allow_source_calculations=True)

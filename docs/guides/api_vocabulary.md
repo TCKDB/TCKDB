@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 200 | `backend/app/api/code_catalogue.py` |
-| **total** | **489** | |
+| Refusal codes a caller can receive | 203 | `backend/app/api/code_catalogue.py` |
+| **total** | **492** | |
 
 ## How a record is named
 
@@ -701,7 +701,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (149 codes)
+### HTTP 422 (152 codes)
 
 | Code | Names |
 | --- | --- |
@@ -733,6 +733,9 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
 | `cursor_query_mismatch` | a relationship — read `context` |
+| `enthalpy_declaration_absent` | a relationship — read `context` |
+| `enthalpy_declaration_without_content` | a relationship — read `context` |
+| `enthalpy_quantity_not_storable_here` | a relationship — read `context` |
 | `export_all_cap_exceeded` | a relationship — read `context` |
 | `export_seed_empty` | a thing |
 | `export_seed_unresolved` | a thing |

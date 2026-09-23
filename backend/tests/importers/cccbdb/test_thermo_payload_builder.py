@@ -42,10 +42,20 @@ class TestH2Thermo:
         assert points[0]["temperature_k"] == pytest.approx(298.15)
         assert points[0]["cp_j_mol_k"] == pytest.approx(28.836)
 
-    def test_h_298_minus_h_0_lands_on_same_point(self, h2_record):
-        payload, *_ = _build(h2_record)
-        point = payload["points"][0]
-        assert point["h_kj_mol"] == pytest.approx(8.468)
+    def test_sensible_increment_is_routed_to_observation(self, h2_record):
+        from app.importers.cccbdb.builders.experimental_species_payload import build_experimental_species_payload
+
+        result = build_experimental_species_payload(h2_record)
+        assert "h_kj_mol" not in result.thermo_payload["points"][0]
+        assert result.thermo_payload["enthalpy_reference_kind"] == "formation_from_elements_298k"
+        observation, = result.molecular_property_observation_payloads
+        assert observation["scalar_value"] == pytest.approx(8.468)
+        assert observation["scalar_unit"] == "kJ/mol"
+        assert observation["temperature_k"] == 298.15
+        assert observation["property_kind"] == "other"
+        assert "sensible enthalpy increment" in observation["property_label"]
+        assert observation["raw_payload_json"]["datum"]["property_kind"] == "h_298_minus_h_0"
+        assert observation["external_source_record_key"] == h2_record.source_metadata.source_record_key
 
     def test_hf_0_preserved_in_unparsed(self, h2_record):
         payload, warnings, _refs, unparsed = _build(h2_record)

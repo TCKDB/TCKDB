@@ -40,7 +40,7 @@ def _h2_conformer_payload() -> dict:
 
 
 def _thermo_payload() -> dict:
-    return {
+    return {"enthalpy_reference_kind": "formation_from_elements_298k",
         "species_entry": {"smiles": "[H][H]", "charge": 0, "multiplicity": 1},
         "h298_kj_mol": 0.0,
         "s298_j_mol_k": 130.68,

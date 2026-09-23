@@ -145,7 +145,7 @@ def test_dry_run_thermo_existing_species_classifies_as_reuse(db_engine) -> None:
         # Seed the same water species via a real upload — this creates the
         # species, species_entry, and one thermo row.
         seed = ThermoUploadRequest(
-            species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+            enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
             h298_kj_mol=-241.8,
             s298_j_mol_k=188.8,

@@ -797,7 +797,7 @@ def test_non_finite_value_fails_diagnosably_not_as_a_500(db_session):
     from app.services.release.artifacts import NonFiniteValueError, canonical_json
 
     with pytest.raises(NonFiniteValueError, match="non_finite_value") as excinfo:
-        canonical_json({"record": {"h298_kj_mol": float("nan")}})
+        canonical_json({"record": {"enthalpy_reference_kind": "formation_from_elements_298k", "h298_kj_mol": float("nan")}})
     # The message locates the offending value so a curator can find the record.
     assert "$.record.h298_kj_mol" in str(excinfo.value)
 

@@ -171,6 +171,15 @@ class SupersessionNotice(TypedDict):
     chain_length: Required[int]
 
 
+class ThermoReference(TypedDict):
+    """Recorded reference state; unknown concepts remain explicit nulls."""
+
+    phase: str | None
+    reference_pressure_bar: float | None
+    enthalpy_reference_kind: str | None
+    enthalpy_quantity: str
+
+
 class ThermoDetailRecord(TypedDict, total=False):
     """One thermo wire block, from the subresource or nested in a search row.
 
@@ -191,6 +200,7 @@ class ThermoDetailRecord(TypedDict, total=False):
     by name.
     """
 
+    reference: Required[ThermoReference]
     thermo_ref: Required[str]
     scientific_origin: Required[str]
     model_kind: Required[str]
@@ -939,6 +949,7 @@ class KineticsAnalyticsRecord(TypedDict, total=False):
 
 
 class ThermoAnalyticsRecord(TypedDict, total=False):
+    reference: Required[ThermoReference]
     thermo_ref: Required[str]
     species_entry_ref: Required[str]
     scientific_origin: Required[str]

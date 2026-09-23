@@ -29,7 +29,7 @@ from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.schemas.workflows.contribution_bundle import BundleSubmissionMetadata
 from tests.api.test_api_transport_upload import _transport_payload
 
-_THERMO = {
+_THERMO = {"enthalpy_reference_kind": "formation_from_elements_298k",
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
     "scientific_origin": "computed",
     "h298_kj_mol": 217.998,

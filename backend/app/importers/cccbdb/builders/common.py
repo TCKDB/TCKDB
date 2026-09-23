@@ -102,6 +102,7 @@ class BuildResult(BaseModel):
 
     species_entry_payload: dict[str, Any] | None = None
     species_entry_payload_is_valid: bool = False
+    molecular_property_observation_payloads: list[dict[str, Any]] = Field(default_factory=list)
     thermo_payload: dict[str, Any] | None = None
     # ``ThermoUploadRequest`` requires ``species_entry``; this flag
     # mirrors ``species_entry_payload_is_valid`` so a downstream

@@ -289,7 +289,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
         },
         species_thermo={
             ch3: Thermo.nasa(
-                coeffs_low=[3.5] + [0.0] * 6,
+                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[3.5] + [0.0] * 6,
                 coeffs_high=[3.5] + [0.0] * 6,
                 t_low=200, t_mid=1000, t_high=5000,
                 h298_kj_mol=146.7,

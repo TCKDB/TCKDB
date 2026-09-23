@@ -3592,6 +3592,20 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -15514,6 +15528,14 @@
           "other"
         ],
         "title": "EnergyZeroConvention",
+        "type": "string"
+      },
+      "EnthalpyReferenceKind": {
+        "description": "Formation zero with elemental reference enthalpies pinned at 298.15 K.\n\nH(T) = formation enthalpy at 298.15 K + the species enthalpy increment\nfrom 298.15 K. The elemental term is not reevaluated at T. Absence is\nnull, never an unspecified enum member. No basis may be inferred.",
+        "enum": [
+          "formation_from_elements_298k"
+        ],
+        "title": "EnthalpyReferenceKind",
         "type": "string"
       },
       "EnvironmentClosureEntry": {
@@ -44415,6 +44437,20 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -45798,6 +45834,16 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -46117,16 +46163,6 @@
             ],
             "title": "Nasa9"
           },
-          "phase": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PhaseKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "points": {
             "anyOf": [
               {
@@ -46144,16 +46180,9 @@
           "provenance": {
             "$ref": "#/components/schemas/ThermoProvenance"
           },
-          "reference_pressure_bar": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Pressure Bar"
+          "reference": {
+            "$ref": "#/components/schemas/ThermoReference",
+            "readOnly": true
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
@@ -46240,9 +46269,55 @@
           "model_kind",
           "review",
           "evidence_completeness",
-          "provenance"
+          "provenance",
+          "reference"
         ],
         "title": "ThermoRecord",
+        "type": "object"
+      },
+      "ThermoReference": {
+        "description": "Declared quantity and standard state; null means not recorded.",
+        "properties": {
+          "enthalpy_quantity": {
+            "title": "Enthalpy Quantity",
+            "type": "string"
+          },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
+          }
+        },
+        "required": [
+          "enthalpy_quantity"
+        ],
+        "title": "ThermoReference",
         "type": "object"
       },
       "ThermoSearchRecord": {
@@ -46719,6 +46794,20 @@
               }
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
           },
           "existing_statmech_id": {
             "anyOf": [

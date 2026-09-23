@@ -172,7 +172,7 @@ class TestDirectUploadsCreateNotReviewedSubmissions:
     ):
         resp = client.post(
             "/api/v1/uploads/thermo",
-            json={
+            json={"enthalpy_reference_kind": "formation_from_elements_298k",
                 "species_entry": {
                     "smiles": "[H]",
                     "charge": 0,
@@ -390,7 +390,7 @@ class TestRecordReviewApi:
     def _seed_thermo(self, client) -> int:
         resp = client.post(
             "/api/v1/uploads/thermo",
-            json={
+            json={"enthalpy_reference_kind": "formation_from_elements_298k",
                 "species_entry": {
                     "smiles": "[H]",
                     "charge": 0,
@@ -592,7 +592,7 @@ class TestReviewRowSaysWhereItsRecordCanBeSeen:
     def _seed_thermo(self, client) -> int:
         resp = client.post(
             "/api/v1/uploads/thermo",
-            json={
+            json={"enthalpy_reference_kind": "formation_from_elements_298k",
                 "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
                 "scientific_origin": "computed",
                 "h298_kj_mol": 217.998,

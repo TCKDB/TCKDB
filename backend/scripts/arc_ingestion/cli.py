@@ -44,6 +44,10 @@ def main(argv: list[str] | None = None) -> None:
         help="Pretty-print the JSON output (default: True).",
     )
 
+    parser.add_argument(
+        "--enthalpy-reference-kind", choices=["formation_from_elements_298k"],
+        help="Explicit depositor declaration required when the run carries thermo.",
+    )
     args = parser.parse_args(argv)
 
     arc_dir: Path = args.arc_dir.resolve()
@@ -80,7 +84,7 @@ def main(argv: list[str] | None = None) -> None:
         print(f"    {label}: {status}", file=sys.stderr)
 
     print("\nBuilding payload...", file=sys.stderr)
-    payload = build_payload(run_data, arc_dir)
+    payload = build_payload(run_data, arc_dir, enthalpy_reference_kind=args.enthalpy_reference_kind)
 
     if args.validate:
         print("Validating against schema...", file=sys.stderr)

@@ -70,7 +70,7 @@ def _isolated_session(db_engine) -> Iterator[Session]:
 def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
     """Persist one thermo row via the real upload workflow and return its id."""
     request = ThermoUploadRequest(
-        species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
         h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
@@ -88,7 +88,7 @@ def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
 def _seed_nasa9_thermo(session: Session, *, smiles: str, note: str) -> int:
     """Persist a NASA-9 (2-interval) thermo and return its id."""
     request = ThermoUploadRequest(
-        species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
         nasa9_intervals=[
             {
@@ -231,7 +231,7 @@ def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None
     """Provenance refs reconstructed when the source row carries them."""
     with _isolated_session(db_engine) as session:
         request = ThermoUploadRequest(
-            species_entry={"smiles": "CO", "charge": 0, "multiplicity": 1},
+            enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "CO", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
             h298_kj_mol=-200.7,
             s298_j_mol_k=239.7,

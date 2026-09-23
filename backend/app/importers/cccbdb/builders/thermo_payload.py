@@ -9,7 +9,7 @@ Field mapping from Phase 1 ``property_kind`` tokens:
 * ``cp_298``            → ``thermo.points[T=298.15].cp_j_mol_k``
 * ``hf_0``              → no first-class field; preserved as warning +
   external_source.unparsed.
-* ``h_298_minus_h_0``   → ``thermo.points[T=298.15].h_kj_mol``
+* ``h_298_minus_h_0``   -> molecular_property_observation (sensible increment).
 
 Per-value references (``Gurvich``, ``TRC``, ``Pedley``, …) have no
 first-class home on ``ThermoUploadRequest`` or ``ThermoPointCreate``,
@@ -59,6 +59,7 @@ def build_thermo_payload(
     hf_298 = by_kind.get("hf_298")
     if hf_298 is not None:
         payload["h298_kj_mol"] = hf_298.value
+        payload["enthalpy_reference_kind"] = "formation_from_elements_298k"
         if hf_298.uncertainty is not None:
             payload["h298_uncertainty_kj_mol"] = hf_298.uncertainty
 
@@ -86,13 +87,13 @@ def build_thermo_payload(
             "in external_source.unparsed"
         )
 
-    return payload
+    return payload if any(k in payload for k in ("h298_kj_mol", "s298_j_mol_k", "points")) else None
 
 
 def _build_points(
     by_kind: dict[str, CCCBDBThermoValue],
 ) -> list[dict[str, Any]]:
-    """Collapse ``cp_298`` and ``h_298_minus_h_0`` into one 298.15 K point.
+    """Build a heat-capacity point; sensible increments are observations.
 
     ``ThermoPointCreate`` enforces uniqueness on ``temperature_k`` via
     a validator on ``ThermoCreate``, so we must merge any 298.15 K
@@ -103,9 +104,6 @@ def _build_points(
     cp = by_kind.get("cp_298")
     if cp is not None:
         point_298["cp_j_mol_k"] = cp.value
-    h_diff = by_kind.get("h_298_minus_h_0")
-    if h_diff is not None:
-        point_298["h_kj_mol"] = h_diff.value
 
     points: list[dict[str, Any]] = []
     if point_298:
