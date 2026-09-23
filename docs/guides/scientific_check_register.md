@@ -867,7 +867,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `compare_thermo` — `backend/app/services/consistency/thermo.py::compare_thermo`
-  *Explicit Phase D CLI/service invocation only.*
+  *Explicit Phase D CLI/service invocation only. Scope is gas phase only (app.services.consistency.engine.SUPPORTED_PHASES, decided 2026-09-23): a record whose phase is recorded as something else, or was never recorded at all, is reported unavailable, not refused and not assumed gas.*
 
 **Escape hatch.** None.
 
@@ -887,7 +887,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `compare_kinetics` — `backend/app/services/consistency/kinetics.py::compare_kinetics`
-  *Explicit Phase D CLI/service invocation only.*
+  *Explicit Phase D CLI/service invocation only. Scope is gas phase only (app.services.consistency.engine.SUPPORTED_PHASES, decided 2026-09-23): a thermo record whose phase is recorded as something else, or was never recorded at all, is reported unavailable, not refused and not assumed gas.*
 
 **Escape hatch.** None.
 
@@ -909,7 +909,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `compare_thermo_with_cp_observations` — `backend/app/services/external_comparison/cp.py::compare_thermo_with_cp_observations`
-  *Runs only from the admin/CLI trigger (app.services.external_comparison.cp.run_and_record via backend/scripts/run_external_cp_comparison.py), never from the upload path.*
+  *Runs only from the admin/CLI trigger (app.services.external_comparison.cp.run_and_record via backend/scripts/run_external_cp_comparison.py), never from the upload path. Scope is gas phase only (app.services.consistency.engine.SUPPORTED_PHASES, decided 2026-09-23): a record whose phase is recorded as something else, or was never recorded at all, is reported unavailable, not refused and not assumed gas.*
 
 **Escape hatch.** None.
 
