@@ -64,11 +64,11 @@ meaning of the uncertainty separately.
 
 ## State fields, and what leaving them out means
 
-| Field | Effect if you omit it |
-| --- | --- |
-| `phase` | The record does not say which phase it describes. |
-| `reference_pressure_bar` | Entropy comparisons against other records become unavailable, because the standard-state pressure convention is built into the entropy. Heat-capacity comparisons are unaffected, since reference pressure cannot change a heat capacity. |
-| `enthalpy_reference_kind` | Refused when the record carries an enthalpy; required to be absent when it does not. |
+| Field | Effect if you omit it | What is true of a record that predates this rule |
+| --- | --- | --- |
+| `phase` | The record does not say which phase it describes. | Same as omitting it today: null, unenforced, nothing retroactive. |
+| `reference_pressure_bar` | Entropy comparisons against other records become unavailable, because the standard-state pressure convention is built into the entropy. Heat-capacity comparisons are unaffected, since reference pressure cannot change a heat capacity. | Same as omitting it today: null, unenforced, nothing retroactive. |
+| `enthalpy_reference_kind` | Refused when the record carries an enthalpy; required to be absent when it does not. | A record deposited before this rule existed, carrying an enthalpy with no declaration, is left exactly as deposited. It is not rewritten and not frozen: every column other than `h298_kj_mol` and `enthalpy_reference_kind` stays writable, and an update that only *adds* the declaration is accepted. Only a write that sets `h298_kj_mol` or changes `enthalpy_reference_kind` without leaving the row in a valid combination is refused — the same rule a new record gets, applied only at the moment either of those two columns is actually written. |
 
 A null in any of these means the deposit did not state it. It never means a
 default was assumed.
@@ -103,6 +103,17 @@ Omit the declaration for entropy and heat-capacity-only records.
 Thermo accepts only formation_298k enthalpies. Deposit sensible
 increments and absolute enthalpies through the molecular_property_observation
 route instead.
+```
+
+**`enthalpy_reference_kind_unrecognized`**
+
+A near-miss of the one legal value — wrong case, stray whitespace — is a
+typo, not a different quantity, so it gets its own message rather than the
+`enthalpy_quantity_not_storable_here` refusal above:
+
+```
+'<value>' is not a recognized enthalpy_reference_kind -- did you mean
+'formation_298k'? Matching is exact and case-sensitive.
 ```
 
 The Python client refuses the same cases when you build the payload, before
@@ -161,11 +172,29 @@ no declaration:
 
 If a producer has not been told which convention it emits, the honest move is
 for that producer to refuse to build the thermo block rather than send an
-enthalpy with no declaration. The adapters shipped here behave that way.
+enthalpy with no declaration. The ARC and SDF adapters shipped here behave
+that way: pass no `enthalpy_reference_kind` and either refuses before it
+builds a thermo block. The CHEMKIN adapter is the one exception, and
+deliberately so: CHEMKIN's NASA-7 thermodynamic format is
+formation-referenced by definition, so that adapter asserts the declaration
+unconditionally rather than asking the depositor to configure it — see
+`clients/python/adapters/chemkin/tckdb_chemkin/payloads.py`. That is not a
+guess the way it would be for a source whose convention the adapter cannot
+actually know.
+
+A depositor who mistypes the one legal value — wrong case, stray whitespace —
+gets a distinct refusal telling them so (`enthalpy_reference_kind_unrecognized`),
+rather than being pointed at the observation route as though they had named a
+different quantity.
 
 ## Records that predate this rule
 
 Records deposited before the declaration existed carry no reference, and they
-are not being rewritten. A read reports the reference as not recorded, and the
-consistency checks leave those records out rather than assume a convention for
-them.
+are not being rewritten. A read reports the reference as not recorded.
+
+The consistency checks (D0–D3, `backend/app/services/consistency/`) do not
+examine `enthalpy_reference_kind` or any enthalpy field at all — they check
+Cp and entropy representations, not enthalpy. So this rule currently has no
+automated consistency check of its own: a record's declared (or undeclared)
+reference is not something D0–D3 look at, whether the record predates this
+rule or not.

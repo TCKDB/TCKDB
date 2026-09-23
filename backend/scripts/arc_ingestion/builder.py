@@ -14,6 +14,8 @@ import base64
 import hashlib
 from pathlib import Path
 
+from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
+
 from app.chemistry.species import derive_term_symbol
 
 from .arkane_conformer_parser import ArkaneConformer, parse_arkane_conformer_from_file
@@ -356,12 +358,6 @@ def _build_species_payload(
     # Thermo
     thermo = None
     if sp_info.yaml_data and sp_info.yaml_data.thermo:
-        if enthalpy_reference_kind != "formation_298k":
-            raise ValueError(
-                "ARC output does not declare an enthalpy basis. Configure "
-                "enthalpy_reference_kind=formation_298k explicitly "
-                "before building thermo; other quantities belong in molecular_property_observation."
-            )
         t = sp_info.yaml_data.thermo
         thermo_dict: dict = {
             "enthalpy_reference_kind": enthalpy_reference_kind,
@@ -403,6 +399,14 @@ def _build_species_payload(
 
         if run.energy_correction_note:
             thermo_dict["note"] = run.energy_correction_note
+
+        # Same shared rule the server and the Python client enforce
+        # (tckdb_schemas.enthalpy_reference), not a bespoke check with its
+        # own wording -- see docs/guides/depositing_a_thermo_record.md.
+        error = enthalpy_reference_error(thermo_dict)
+        if error is not None:
+            code, message = error
+            raise ValueError(f"{code}: {message}")
 
         thermo = thermo_dict
 

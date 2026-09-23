@@ -1,14 +1,24 @@
-"""SDF adapters require a depositor declaration, independently of software labels."""
+"""SDF adapters require a depositor declaration, independently of software labels.
+
+The refusal comes from the same shared rule
+(``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``) the server
+and the Python client enforce, not a bespoke check with its own wording --
+see ``docs/guides/depositing_a_thermo_record.md``.
+"""
 
 import pytest
 
 from scripts.parse_sdf_to_bundle import sdf_to_bundle
 
 
-@pytest.mark.parametrize("reference", [None, "absolute_quantum_enthalpy"])
-def test_sdf_requires_explicit_adapter_declaration(reference):
-    with pytest.raises(ValueError, match="SDF input does not declare"):
-        sdf_to_bundle("rxn_146", enthalpy_reference_kind=reference)
+def test_sdf_requires_explicit_adapter_declaration():
+    with pytest.raises(ValueError, match="enthalpy_declaration_absent"):
+        sdf_to_bundle("rxn_146", enthalpy_reference_kind=None)
+
+
+def test_sdf_refuses_a_reference_other_than_formation_298k():
+    with pytest.raises(ValueError, match="enthalpy_quantity_not_storable_here"):
+        sdf_to_bundle("rxn_146", enthalpy_reference_kind="absolute_quantum_enthalpy")
 
 
 def test_sdf_emits_configured_reference():

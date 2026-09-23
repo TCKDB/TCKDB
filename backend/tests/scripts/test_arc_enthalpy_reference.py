@@ -1,4 +1,10 @@
-"""ARC numbers are not evidence of an enthalpy convention."""
+"""ARC numbers are not evidence of an enthalpy convention.
+
+The refusal comes from the same shared rule
+(``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``) the server
+and the Python client enforce, not a bespoke check with its own wording --
+see ``docs/guides/depositing_a_thermo_record.md``.
+"""
 
 from types import SimpleNamespace
 
@@ -24,11 +30,16 @@ def _inputs(monkeypatch):
     return species, run
 
 
-@pytest.mark.parametrize("reference", [None, "absolute_quantum_enthalpy"])
-def test_arc_requires_explicit_adapter_declaration(monkeypatch, reference):
+def test_arc_requires_explicit_adapter_declaration(monkeypatch):
     species, run = _inputs(monkeypatch)
-    with pytest.raises(ValueError, match="ARC output does not declare"):
-        builder._build_species_payload("H", species, run, False, reference)
+    with pytest.raises(ValueError, match="enthalpy_declaration_absent"):
+        builder._build_species_payload("H", species, run, False, None)
+
+
+def test_arc_refuses_a_reference_other_than_formation_298k(monkeypatch):
+    species, run = _inputs(monkeypatch)
+    with pytest.raises(ValueError, match="enthalpy_quantity_not_storable_here"):
+        builder._build_species_payload("H", species, run, False, "absolute_quantum_enthalpy")
 
 
 def test_arc_emits_configured_reference_without_changing_numbers(monkeypatch):

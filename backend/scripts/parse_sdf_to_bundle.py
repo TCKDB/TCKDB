@@ -18,6 +18,8 @@ import json
 import re
 from pathlib import Path
 
+from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
+
 _CALMOLK_TO_JMOLK = 4.184
 _KJMOL_TO_HARTREE = 1.0 / 2625.5
 
@@ -171,12 +173,6 @@ def _build_species(mol: dict, key: str, enthalpy_reference_kind: str | None) -> 
 
     # Thermo
     if mol["thermo_class"] == "NASA" and mol["H298_kJmol"] is not None:
-        if enthalpy_reference_kind != "formation_298k":
-            raise ValueError(
-                "SDF input does not declare an enthalpy reference; configure "
-                "enthalpy_reference_kind=formation_298k explicitly. "
-                "Other enthalpy quantities belong in molecular_property_observation."
-            )
         s298_j_mol_k = None
         if mol["S298_value"] is not None:
             if "cal" in mol["S298_units"]:
@@ -196,6 +192,14 @@ def _build_species(mol: dict, key: str, enthalpy_reference_kind: str | None) -> 
         nasa = _parse_nasa(mol["polynomials"])
         if nasa:
             thermo["nasa"] = nasa
+
+        # Same shared rule the server and the Python client enforce
+        # (tckdb_schemas.enthalpy_reference), not a bespoke check with its
+        # own wording -- see docs/guides/depositing_a_thermo_record.md.
+        error = enthalpy_reference_error(thermo)
+        if error is not None:
+            code, message = error
+            raise ValueError(f"{code}: {message}")
 
         species["thermo"] = thermo
 
