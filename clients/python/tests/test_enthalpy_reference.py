@@ -29,3 +29,11 @@ def test_builder_refuses_unused_reference():
 def test_builder_refuses_nonformation_quantity():
     with pytest.raises(TCKDBBuilderValidationError, match="molecular_property_observation"):
         Thermo.scalar(h298_kj_mol=20, enthalpy_reference_kind="sensible_increment")
+
+
+def test_builder_flags_a_typo_of_the_legal_value_distinctly():
+    """A wrongly-capitalised near-miss is a typo, not a different quantity
+    -- it must not get the same 'go elsewhere' refusal as a genuinely
+    unsupported reference kind (see test_builder_refuses_nonformation_quantity)."""
+    with pytest.raises(TCKDBBuilderValidationError, match="enthalpy_reference_kind_unrecognized"):
+        Thermo.scalar(h298_kj_mol=20, enthalpy_reference_kind="Formation_298k")

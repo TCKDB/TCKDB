@@ -9,6 +9,7 @@ from tckdb_schemas.enums import EnthalpyReferenceKind
 W_ENTHALPY_DECLARATION_ABSENT = "enthalpy_declaration_absent"
 W_ENTHALPY_DECLARATION_WITHOUT_CONTENT = "enthalpy_declaration_without_content"
 W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE = "enthalpy_quantity_not_storable_here"
+W_ENTHALPY_REFERENCE_KIND_UNRECOGNIZED = "enthalpy_reference_kind_unrecognized"
 
 def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
     """Return a refusal code/message, or None for a coherent declaration.
@@ -21,6 +22,18 @@ def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
 
     reference = get(payload, "enthalpy_reference_kind")
     if reference is not None and reference != EnthalpyReferenceKind.formation_298k:
+        # A near-miss of the one legal value (wrong case, stray whitespace)
+        # is a typo, not a depositor naming some other quantity -- pointing
+        # a typo at molecular_property_observation is wrong advice, so it
+        # gets its own outcome rather than falling through to the "not
+        # storable here" refusal below.
+        canonical = EnthalpyReferenceKind.formation_298k.value
+        if isinstance(reference, str) and reference.strip().lower() == canonical:
+            return (
+                W_ENTHALPY_REFERENCE_KIND_UNRECOGNIZED,
+                f"'{reference}' is not a recognized enthalpy_reference_kind -- did you mean "
+                f"'{canonical}'? Matching is exact and case-sensitive.",
+            )
         return (
             W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
             "Thermo accepts only formation_298k enthalpies. "
