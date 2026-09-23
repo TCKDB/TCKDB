@@ -524,3 +524,121 @@ def test_get_geometry_submission_null_when_producers_disagree(
     )
     assert response.submission_id is None
     assert response.submission_ref is None
+
+
+# ---------------------------------------------------------------------------
+# Isotopes (issue #512)
+# ---------------------------------------------------------------------------
+
+
+def test_get_geometry_deuterium_label_round_trips(db_session):
+    """An atom deposited with a deuterium label reads back with the label.
+
+    ``element`` keeps the depositor's own ``D`` symbol (never collapsed
+    to ``H``, see ``GeometryAtom.element``'s docstring) and
+    ``isotope_mass_number`` carries the explicit mass number 2 through
+    to the scientific read, matching what the upload payload accepted.
+    """
+    geom = make_geometry(db_session, natoms=1, xyz_text="D 0 0 0")
+    db_session.add(
+        GeometryAtom(
+            geometry_id=geom.id,
+            atom_index=1,
+            element="D",
+            x=0.0,
+            y=0.0,
+            z=0.0,
+            isotope_mass_number=2,
+        )
+    )
+    db_session.flush()
+
+    response = get_geometry(
+        db_session, geometry_handle=geom.public_ref, request=GeometryReadRequest()
+    )
+    assert len(response.atoms) == 1
+    assert response.atoms[0].element == "D"
+    assert response.atoms[0].isotope_mass_number == 2
+
+
+def test_get_geometry_unlabelled_twin_reads_isotope_null(db_session):
+    """The unlabelled twin of a deuterium-labelled atom reads back null.
+
+    ``None`` means "the element's most abundant natural isotope" — not
+    "unrecorded" (see ``GeometryAtom.isotope_mass_number``'s docstring) —
+    so an ordinary hydrogen atom, deposited with no isotope label at
+    all, must read back ``isotope_mass_number is None`` rather than
+    some substituted standard nuclide.
+    """
+    geom = make_geometry(db_session, natoms=1, xyz_text="H 0 0 0")
+    db_session.add(
+        GeometryAtom(
+            geometry_id=geom.id,
+            atom_index=1,
+            element="H",
+            x=0.0,
+            y=0.0,
+            z=0.0,
+            isotope_mass_number=None,
+        )
+    )
+    db_session.flush()
+
+    response = get_geometry(
+        db_session, geometry_handle=geom.public_ref, request=GeometryReadRequest()
+    )
+    assert len(response.atoms) == 1
+    assert response.atoms[0].element == "H"
+    assert response.atoms[0].isotope_mass_number is None
+
+
+def test_get_geometry_mixed_isotope_labels_preserve_atom_order(db_session):
+    """A geometry mixing labelled and unlabelled atoms preserves both, in order.
+
+    HDO: atom 1 is a standard oxygen (null), atom 2 is a deuterium-labelled
+    hydrogen (mass 2), atom 3 is an ordinary unlabelled hydrogen (null).
+    The per-atom isotope must line up with ``atom_index``, not get
+    reordered or collapsed to a single geometry-wide value.
+    """
+    geom = make_geometry(
+        db_session, natoms=3, xyz_text="O 0 0 0\nD 0 .76 .58\nH 0 -.76 .58"
+    )
+    rows = [
+        GeometryAtom(
+            geometry_id=geom.id,
+            atom_index=1,
+            element="O",
+            x=0.0,
+            y=0.0,
+            z=0.0,
+            isotope_mass_number=None,
+        ),
+        GeometryAtom(
+            geometry_id=geom.id,
+            atom_index=2,
+            element="D",
+            x=0.0,
+            y=0.76,
+            z=0.58,
+            isotope_mass_number=2,
+        ),
+        GeometryAtom(
+            geometry_id=geom.id,
+            atom_index=3,
+            element="H",
+            x=0.0,
+            y=-0.76,
+            z=0.58,
+            isotope_mass_number=None,
+        ),
+    ]
+    for r in rows:
+        db_session.add(r)
+    db_session.flush()
+
+    response = get_geometry(
+        db_session, geometry_handle=geom.public_ref, request=GeometryReadRequest()
+    )
+    assert [a.atom_index for a in response.atoms] == [1, 2, 3]
+    assert [a.element for a in response.atoms] == ["O", "D", "H"]
+    assert [a.isotope_mass_number for a in response.atoms] == [None, 2, None]

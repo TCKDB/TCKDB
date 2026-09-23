@@ -48,13 +48,26 @@ class RequestEcho(ProfiledRequestEcho):
 
 
 class GeometryAtomPayload(BaseModel):
-    """One atom row inside a geometry's coordinate payload."""
+    """One atom row inside a geometry's coordinate payload.
+
+    ``isotope_mass_number`` mirrors ``GeometryAtomBase.isotope_mass_number``
+    (the upload payload's own field, see
+    ``app.schemas.entities.geometry.GeometryAtomBase``): ``None`` means the
+    element's most abundant natural isotope, *not* "unrecorded" — every atom
+    deposited before atom-resolved isotope support is by definition an
+    ordinary isotopologue, so this is never ambiguous. A caller that needs to
+    tell an isotopologue apart from the unlabelled species reads this field
+    per atom rather than guessing from ``element`` alone (a ``D``/``T``
+    symbol already implies a non-standard nuclide; an ordinary symbol with a
+    non-null value here does too).
+    """
 
     atom_index: int
     element: str
     x: float
     y: float
     z: float
+    isotope_mass_number: int | None = None
 
 
 class GeometryProvenanceCalcLink(BaseModel):
