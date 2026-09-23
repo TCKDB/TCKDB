@@ -91,7 +91,7 @@ def test_nasa9_cantera_multiple_intervals(db_session):
     replay = _thermo_to_upload(row)["nasa9_intervals"]
     assert replay == intervals
     selected = SelectedThermo(row, None, [], "nasa9", RecordReviewStatus.not_reviewed,
-                              enthalpy_reference_kind="formation_from_elements_298k", nasa9_intervals=row.nasa9_intervals).to_dict()
+                              nasa9_intervals=row.nasa9_intervals).to_dict()
     assert selected["nasa9"] == intervals
 
     def model(items):
@@ -121,7 +121,10 @@ def test_wilhoit_rmg_reference_and_optional_constants(db_session, constants):
             "a0": 1.2, "a1": -0.3, "a2": 0.7, "a3": -0.2, "h0_kj_mol": None, "s0_j_mol_k": None}
     if constants:
         data.update(h0_kj_mol=-123.456, s0_j_mol_k=12.345)
-    row = persist_thermo_upload(db_session, ThermoUploadRequest(species_entry=IDENTITY, wilhoit=data))
+    row = persist_thermo_upload(db_session, ThermoUploadRequest(
+        species_entry=IDENTITY, wilhoit=data,
+        enthalpy_reference_kind="formation_from_elements_298k" if constants else None,
+    ))
     replay = _thermo_to_upload(row)["wilhoit"]
     assert replay == data
     selected = SelectedThermo(row, None, [], "wilhoit", RecordReviewStatus.not_reviewed,

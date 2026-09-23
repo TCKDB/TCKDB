@@ -64,7 +64,9 @@ _PARSE_ERRORS: dict[str, str] = {}
 
 for _rxn_id in _RXN_IDS:
     try:
-        _BUNDLES[_rxn_id] = sdf_to_bundle(_rxn_id)
+        _BUNDLES[_rxn_id] = sdf_to_bundle(
+            _rxn_id, enthalpy_reference_kind="formation_from_elements_298k",
+        )
     except Exception as e:
         _PARSE_ERRORS[_rxn_id] = str(e)
 
@@ -72,6 +74,11 @@ for _rxn_id in _RXN_IDS:
 # ==========================================================================
 # Parametrized bundle upload test
 # ==========================================================================
+
+
+def test_all_bulk_fixtures_parse_with_explicit_reference():
+    assert _PARSE_ERRORS == {}
+    assert len(_BUNDLES) == len(_RXN_IDS)
 
 
 class TestBulkBundleUploads:

@@ -949,7 +949,6 @@ class KineticsAnalyticsRecord(TypedDict, total=False):
 
 
 class ThermoAnalyticsRecord(TypedDict, total=False):
-    reference: Required[ThermoReference]
     thermo_ref: Required[str]
     species_entry_ref: Required[str]
     scientific_origin: Required[str]

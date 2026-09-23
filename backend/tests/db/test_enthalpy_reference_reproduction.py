@@ -1,4 +1,8 @@
-"""Pre-change probes for the enthalpy reference declaration."""
+"""Keep the approved-row immutability probe after introducing declarations.
+
+The original pre-change probe and its passing result are recorded in the
+verification report; its fixture now supplies the required declaration.
+"""
 
 import pytest
 from sqlalchemy import text
@@ -14,7 +18,7 @@ from tests.services.scientific_read._factories import (
 )
 
 
-def test_undeclared_scalar_is_currently_storable_and_approved_row_is_immutable(db_session):
+def test_declared_thermo_remains_immutable_after_approval(db_session):
     species = make_species(db_session, inchi_key=next_inchi_key("ENTHREF"))
     entry = make_species_entry(db_session, species)
     thermo = make_thermo_scalar(db_session, species_entry=entry)

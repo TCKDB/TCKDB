@@ -1,19 +1,21 @@
 """Parse an SDF file + kinetics CSV into a ComputedReactionUploadRequest payload.
 
 Usage:
-    python scripts/parse_sdf_to_bundle.py kfir_rxn_2 --json
+    python scripts/parse_sdf_to_bundle.py kfir_rxn_2 --json \
+        --enthalpy-reference-kind formation_from_elements_298k
 
 Or import as a library:
     from scripts.parse_sdf_to_bundle import sdf_to_bundle
-    payload = sdf_to_bundle("kfir_rxn_2", sdf_dir, csv_path)
+    payload = sdf_to_bundle("kfir_rxn_2", sdf_dir, csv_path,
+                            enthalpy_reference_kind="formation_from_elements_298k")
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import re
-import sys
 from pathlib import Path
 
 _CALMOLK_TO_JMOLK = 4.184
@@ -122,7 +124,7 @@ def _parse_nasa(polynomials_str: str) -> dict | None:
     }
 
 
-def _build_species(mol: dict, key: str) -> dict:
+def _build_species(mol: dict, key: str, enthalpy_reference_kind: str | None) -> dict:
     """Build a BundleSpeciesIn dict from a parsed SDF molecule."""
     lot_dft = {"method": mol["lot_method"] or "unknown", "basis": mol["lot_basis"]}
     software = {"name": "Gaussian", "version": "16"}
@@ -169,6 +171,12 @@ def _build_species(mol: dict, key: str) -> dict:
 
     # Thermo
     if mol["thermo_class"] == "NASA" and mol["H298_kJmol"] is not None:
+        if enthalpy_reference_kind != "formation_from_elements_298k":
+            raise ValueError(
+                "SDF input does not declare an enthalpy reference; configure "
+                "enthalpy_reference_kind=formation_from_elements_298k explicitly. "
+                "Other enthalpy quantities belong in molecular_property_observation."
+            )
         s298_j_mol_k = None
         if mol["S298_value"] is not None:
             if "cal" in mol["S298_units"]:
@@ -177,6 +185,7 @@ def _build_species(mol: dict, key: str) -> dict:
                 s298_j_mol_k = mol["S298_value"]
 
         thermo = {
+            "enthalpy_reference_kind": enthalpy_reference_kind,
             "h298_kj_mol": mol["H298_kJmol"],
             "tmin_k": mol["Tmin_value"],
             "tmax_k": mol["Tmax_value"],
@@ -300,12 +309,15 @@ def sdf_to_bundle(
     rxn_id: str,
     sdf_dir: str | Path = _SDF_DIR,
     csv_path: str | Path = _CSV_PATH,
+    *,
+    enthalpy_reference_kind: str | None = None,
 ) -> dict:
     """Parse an SDF file + kinetics CSV into a bundle payload dict.
 
     :param rxn_id: Reaction ID (e.g., "kfir_rxn_2").
     :param sdf_dir: Directory containing SDF files.
     :param csv_path: Path to kinetics CSV.
+    :param enthalpy_reference_kind: Depositor declaration; never inferred from the SDF or software.
     :returns: Dict compatible with ComputedReactionUploadRequest.
     """
     sdf_path = Path(sdf_dir) / f"{rxn_id}.sdf"
@@ -344,7 +356,7 @@ def sdf_to_bundle(
         if smiles not in species_by_smiles:
             key_counter += 1
             key = f"sp{key_counter}"
-            species_by_smiles[smiles] = _build_species(mol, key)
+            species_by_smiles[smiles] = _build_species(mol, key, enthalpy_reference_kind)
         return species_by_smiles[smiles]["key"]
 
     reactant_keys = [_get_key(mol) for mol in reactants]
@@ -385,14 +397,15 @@ def sdf_to_bundle(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python parse_sdf_to_bundle.py <rxn_id> [--json]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("rxn_id")
+    parser.add_argument("--json", action="store_true")
+    parser.add_argument("--enthalpy-reference-kind", choices=["formation_from_elements_298k"])
+    args = parser.parse_args()
+    rxn_id = args.rxn_id
+    bundle = sdf_to_bundle(rxn_id, enthalpy_reference_kind=args.enthalpy_reference_kind)
 
-    rxn_id = sys.argv[1]
-    bundle = sdf_to_bundle(rxn_id)
-
-    if "--json" in sys.argv:
+    if args.json:
         print(json.dumps(bundle, indent=2))
     else:
         n_sp = len(bundle["species"])

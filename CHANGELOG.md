@@ -30,6 +30,8 @@ dataset must never require a code release.
   legacy data step. Workflows enforce whole-record content/declaration pairing.
 - Producers: declared CHEMKIN formation convention, explicit ARC configuration,
   and CCCBDB sensible increments routed to molecular-property observations.
+- tckdb-chemkin 0.4.0 declares the supported format's formation convention.
+  ARC fit-only input leaves an absent H298 scalar null.
 
 ## Maturity and version policy
 

@@ -63,6 +63,18 @@ class TestH2Thermo:
         assert unparsed["hf_0"]["canonical_units"] == "kJ/mol"
         assert any("hf_0" in w for w in warnings)
 
+    def test_sensible_increment_only_returns_observation_not_empty_thermo(self, h2_record):
+        from app.importers.cccbdb.builders.experimental_species_payload import build_experimental_species_payload
+
+        record = h2_record.model_copy(deep=True)
+        record.thermo.values = [value for value in record.thermo.values if value.property_kind == "h_298_minus_h_0"]
+        result = build_experimental_species_payload(record)
+        assert result.thermo_payload is None
+        assert result.thermo_payload_is_valid is False
+        observation, = result.molecular_property_observation_payloads
+        assert observation["scalar_value"] == pytest.approx(8.468)
+        assert "H(298.15 K) - H(0 K)" in observation["property_label"]
+
     def test_per_value_refs_preserved(self, h2_record):
         _, _, refs, _ = _build(h2_record)
         assert refs["hf_298"]["reference_label"] == "Gurvich"

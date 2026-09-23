@@ -37,3 +37,21 @@ def test_arc_emits_configured_reference_without_changing_numbers(monkeypatch):
     assert payload["thermo"]["enthalpy_reference_kind"] == "formation_from_elements_298k"
     assert payload["thermo"]["h298_kj_mol"] == 0
     assert payload["thermo"]["nasa"]["a6"] == 1
+
+
+def test_arc_fit_only_does_not_fabricate_h298(monkeypatch):
+    from scripts.arc_ingestion.species_yaml import _parse_thermo
+
+    def polynomial(low, high):
+        return {"Tmin": {"value": low}, "Tmax": {"value": high},
+                "coeffs": {"class": "np_array", "object": [1] * 7}}
+
+    species, run = _inputs(monkeypatch)
+    species.yaml_data.thermo = _parse_thermo({"thermo": {
+        "Tmin": {"value": 200}, "Tmax": {"value": 3000},
+        "polynomials": {"polynomial1": polynomial(200, 1000), "polynomial2": polynomial(1000, 3000)},
+    }})
+    payload = builder._build_species_payload("H", species, run, False, "formation_from_elements_298k")
+    assert payload["thermo"]["h298_kj_mol"] is None
+    assert payload["thermo"]["nasa"]["a6"] == 1
+    assert payload["thermo"]["enthalpy_reference_kind"] == "formation_from_elements_298k"
