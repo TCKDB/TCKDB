@@ -87,10 +87,10 @@ describe("thermoRecordSchema's `levels` field", () => {
 
 describe("thermo state and 0 K custody", () => {
     it.each([
-        { phase: null, reference_pressure_bar: null },
-        { phase: "gas", reference_pressure_bar: 1 },
-        { phase: "liquid", reference_pressure_bar: 1.01325 },
-    ])("preserves $phase / $reference_pressure_bar without defaults", async (state) => {
+        { phase: null, reference_pressure_bar: null, enthalpy_reference_kind: null },
+        { phase: "gas", reference_pressure_bar: 1, enthalpy_reference_kind: "formation_298k" },
+        { phase: "liquid", reference_pressure_bar: 1.01325, enthalpy_reference_kind: null },
+    ])("preserves $phase / $reference_pressure_bar / $enthalpy_reference_kind without defaults", async (state) => {
         const values = { ...state, enthalpy_formation_0k_kj_mol: 0, enthalpy_formation_0k_uncertainty_kj_mol: 0.125 }
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([minimalRecord(values)]))))
         const response = await loadEntryThermo(entryRef)
