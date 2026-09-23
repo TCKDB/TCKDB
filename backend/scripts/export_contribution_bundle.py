@@ -47,6 +47,7 @@ from app.schemas.workflows.contribution_bundle import (
 from app.services.contribution_bundle_export import (
     DEFAULT_INSTANCE_NAME,
     ContributionBundleExportError,
+    ThermoBundleExport,
     deposit_rights_for_records,
     export_kinetics_bundle,
     export_thermo_bundle,
@@ -165,7 +166,9 @@ def _write_bundle(bundle: ContributionBundleV0, output: Path) -> None:
     )
 
 
-def _export(session: Session, args: argparse.Namespace) -> ContributionBundleV0:
+def _export(
+    session: Session, args: argparse.Namespace
+) -> ThermoBundleExport | ContributionBundleV0:
     exporter_label = _resolve_exporter_label(args.exporter_label)
     if args.kind == "thermo":
         # The bundle carries the rights fragment the source deposit stands
@@ -220,12 +223,32 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with Session(engine) as session:
             try:
-                bundle = _export(session, args)
+                result = _export(session, args)
             except ContributionBundleExportError as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 1
     finally:
         engine.dispose()
+
+    if isinstance(result, ThermoBundleExport):
+        # Report every legacy row the exporter could not carry forward
+        # unchanged, named by its public ref, before touching the bundle
+        # (or the lack of one) itself.
+        for omission in result.omissions:
+            print(
+                f"note: {omission.action} {omission.ref}: {omission.detail}",
+                file=sys.stderr,
+            )
+        if result.bundle is None:
+            print(
+                "error: every selected thermo record was omitted (see the "
+                "notes above); nothing left to export.",
+                file=sys.stderr,
+            )
+            return 1
+        bundle = result.bundle
+    else:
+        bundle = result
 
     _write_bundle(bundle, args.output)
 

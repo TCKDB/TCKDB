@@ -29,9 +29,18 @@ def iter_thermo_contract_inventory(session: Session) -> Iterator[dict]:
     for thermo in session.scalars(statement).yield_per(200):
         creation_errors = []
         try:
-            _thermo_to_upload(thermo)
+            payload, omission = _thermo_to_upload(thermo)
         except ContributionBundleExportError as exc:
             creation_errors.append(str(exc))
+        else:
+            # A legacy undeclared-enthalpy row inside a NASA/NASA-9 fit is
+            # omitted rather than raised (see BundleExportOmission) -- still
+            # a genuine "cannot be created/exported" fact for this
+            # inventory. A pruned scalar/point/Wilhoit enthalpy is not: that
+            # row still produces a valid payload, just without the
+            # enthalpy, so it is not counted as an incompatibility here.
+            if payload is None and omission is not None:
+                creation_errors.append(f"{omission.action}: {omission.detail}")
         export_errors = thermo_chemkin_incompatibilities(thermo, thermo.nasa)
         if creation_errors or export_errors:
             yield {

@@ -164,13 +164,18 @@ def test_export_thermo_bundle_validates_and_carries_thermo_only(db_engine) -> No
     with _isolated_session(db_engine) as session:
         thermo_id = _seed_thermo(session, smiles="O", note="export-thermo-1")
 
-        bundle = export_thermo_bundle(
+        result = export_thermo_bundle(
             session,
             thermo_ids=[thermo_id],
             title="Thermo bundle test",
             summary="Single thermo record exported for tests.",
             exporter_label="tester",
         )
+
+    # A declared record has nothing to report.
+    assert result.omissions == []
+    bundle = result.bundle
+    assert bundle is not None
 
     # Re-validate by serializing through the schema; round-trip must hold.
     payload = bundle.model_dump(mode="json")
@@ -207,13 +212,18 @@ def test_export_thermo_bundle_round_trips_nasa9(db_engine) -> None:
     """
     with _isolated_session(db_engine) as session:
         thermo_id = _seed_nasa9_thermo(session, smiles="O", note="export-nasa9")
-        bundle = export_thermo_bundle(
+        result = export_thermo_bundle(
             session,
             thermo_ids=[thermo_id],
             title="NASA-9 export",
             summary="NASA-9 thermo exported for tests.",
             exporter_label="tester",
         )
+
+    # Declared, so there is nothing to report and the fit exports intact.
+    assert result.omissions == []
+    bundle = result.bundle
+    assert bundle is not None
 
     # Re-validates as a full ContributionBundleV0 (the same validators a real
     # upload hits) — proves the reconstructed payload is well-formed.
@@ -242,7 +252,7 @@ def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None
         thermo = persist_thermo_upload(session, request)
         session.flush()
 
-        bundle = export_thermo_bundle(
+        result = export_thermo_bundle(
             session,
             thermo_ids=[thermo.id],
             title="Thermo provenance",
@@ -250,6 +260,9 @@ def test_export_thermo_bundle_carries_provenance_when_present(db_engine) -> None
             exporter_label="tester",
         )
 
+    assert result.omissions == []
+    bundle = result.bundle
+    assert bundle is not None
     upload = bundle.records.thermo_uploads[0]
     assert upload.software_release is not None
     assert upload.software_release.name == "Gaussian"
@@ -574,13 +587,16 @@ def test_exported_bundle_has_no_raw_secrets(db_engine) -> None:
         thermo_id = _seed_thermo(session, smiles="N#N", note="leak-check")
         kinetics_id = _seed_kinetics(session, note="leak-check-kin")
 
-        thermo_bundle = export_thermo_bundle(
+        thermo_result = export_thermo_bundle(
             session,
             thermo_ids=[thermo_id],
             title="leak check",
             summary="ensure exporter does not emit credential field names",
             exporter_label="tester",
         )
+        assert thermo_result.omissions == []
+        thermo_bundle = thermo_result.bundle
+        assert thermo_bundle is not None
         kinetics_bundle = export_kinetics_bundle(
             session,
             kinetics_ids=[kinetics_id],

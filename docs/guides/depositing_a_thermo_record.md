@@ -198,3 +198,15 @@ Cp and entropy representations, not enthalpy. So this rule currently has no
 automated consistency check of its own: a record's declared (or undeclared)
 reference is not something D0–D3 look at, whether the record predates this
 rule or not.
+
+If one of these records is later exported as a contribution bundle
+(`scripts/export_contribution_bundle.py`, see
+`docs/contribution-bundles/v0-format.md`), the exporter never re-emits an
+undeclared enthalpy next to a declaration of `null` — that shape is exactly
+what this page says the import route refuses. A scalar, point, or Wilhoit
+enthalpy with no declaration is dropped from the export (the rest of the
+record is unaffected); a NASA-7/NASA-9 fit with no declaration is left out
+of the bundle entirely, since its coefficients cannot be exported without
+the enthalpy they encode. Either way the export reports what it changed or
+left out, naming the record by its public ref, rather than doing it
+silently.

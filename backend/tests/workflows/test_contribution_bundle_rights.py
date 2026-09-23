@@ -106,9 +106,12 @@ def test_export_carries_the_same_fragment_and_round_trips(db_session):
         exporter_label="round-tripper",
         rights=fragment,
     )
-    assert exported.submission.rights == bundle.submission.rights
+    assert exported.omissions == []
+    exported_bundle = exported.bundle
+    assert exported_bundle is not None
+    assert exported_bundle.submission.rights == bundle.submission.rights
     # …and through JSON, the way the CLI writes it.
-    again = ContributionBundleV0.model_validate(exported.model_dump(mode="json"))
+    again = ContributionBundleV0.model_validate(exported_bundle.model_dump(mode="json"))
     assert again.submission.rights == bundle.submission.rights
 
 

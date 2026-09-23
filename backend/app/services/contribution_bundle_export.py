@@ -22,11 +22,16 @@ packaging, public API routes. The service is consumed by the
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+from tckdb_schemas.enthalpy_reference import (
+    W_ENTHALPY_DECLARATION_ABSENT,
+    enthalpy_reference_error,
+)
 from tckdb_schemas.rights import DepositRights
 
 from app.db.models.common import (
@@ -83,6 +88,134 @@ class ContributionBundleExportError(ValueError):
 
 
 # ---------------------------------------------------------------------------
+# Undeclared legacy enthalpy: report a gap, never emit a broken bundle
+# ---------------------------------------------------------------------------
+#
+# A thermo row deposited before the enthalpy-reference-declaration rule
+# existed can carry an enthalpy (a 298 K scalar, a NASA/NASA-9 fit, a
+# Wilhoit h0, or point enthalpies) with no ``enthalpy_reference_kind``
+# declared. The DB never backfills a declaration onto such a row (see
+# ``e7b1c9d4a632``'s docstring), and the upload workflow's own rule
+# (``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``, the same
+# function ``app.workflows.thermo.assert_enthalpy_reference`` calls) refuses
+# to import that exact shape. Reusing it here -- rather than re-deriving
+# "does this row have enthalpy content" independently -- is deliberate: the
+# export's notion of "undeclared" can never drift from the importer's.
+#
+# Mirrors the ``ExportGap`` precedent in
+# ``app.services.scientific_read.export``: report what could not be carried
+# forward, named by public ref, instead of silently dropping it or emitting
+# something the importer refuses.
+
+
+@dataclass(frozen=True)
+class BundleExportOmission:
+    """A thermo record (or one of its enthalpy values) left out of a bundle.
+
+    :param action: ``"record_omitted"`` -- the whole record was left out of
+        the bundle, because its enthalpy lives inside a NASA-7/NASA-9 fit.
+        Those coefficients are mandatory together (``ThermoNASACreate`` /
+        ``ThermoNASA9IntervalCreate`` require every ``a``/``b`` coefficient,
+        the enthalpy term included), so there is no way to drop only the
+        enthalpy without destroying the whole fit -- and a fit-only record's
+        fit *is* its entire scientific content.
+        ``"enthalpy_pruned"`` -- the record was still exported, with its
+        undeclared enthalpy value(s) dropped (298 K scalar, point
+        enthalpies, and/or a Wilhoit ``h0_kj_mol``, each independently
+        optional); entropy, heat capacity and every other field are
+        unaffected.
+    :param ref: The record's public ref (``thermo.public_ref``) -- never a
+        row id, so the report stays meaningful outside this DB instance.
+    :param detail: Human-readable reason.
+    """
+
+    action: str
+    ref: str
+    detail: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"action": self.action, "ref": self.ref, "detail": self.detail}
+
+
+@dataclass
+class ThermoBundleExport:
+    """Result of :func:`export_thermo_bundle`.
+
+    ``bundle`` is ``None`` only when every selected thermo record was
+    omitted entirely (see ``omissions``) and nothing legitimate remains to
+    export -- callers should treat that the same as any other export
+    failure, using ``omissions`` to explain why.
+    """
+
+    bundle: ContributionBundleV0 | None
+    omissions: list[BundleExportOmission] = field(default_factory=list)
+
+
+def _thermo_export_disposition(
+    payload: dict[str, Any],
+) -> tuple[str, str] | None:
+    """Decide how an undeclared legacy enthalpy affects export of ``payload``.
+
+    Returns ``None`` when there is nothing to do: the payload declares its
+    enthalpy reference, or carries no enthalpy content at all. Otherwise
+    returns ``(action, detail)`` -- see :class:`BundleExportOmission`.
+
+    :raises ContributionBundleExportError: ``payload`` fails the shared rule
+        for a reason other than a missing declaration (e.g. a declared but
+        unrecognized ``enthalpy_reference_kind``). A row read back out of
+        this DB should never hit those -- the enum only ever stores
+        ``formation_298k`` and the DB trigger refuses a declaration with no
+        content -- so this is a defensive "do not silently export something
+        broken", not an expected path.
+    """
+    error = enthalpy_reference_error(payload)
+    if error is None:
+        return None
+    code, message = error
+    if code != W_ENTHALPY_DECLARATION_ABSENT:
+        raise ContributionBundleExportError(
+            f"thermo_upload_incompatible: unexpected enthalpy_reference_error "
+            f"outcome ({code}): {message}"
+        )
+    if payload.get("nasa") is not None or payload.get("nasa9_intervals"):
+        return (
+            "record_omitted",
+            "carries a NASA fit enthalpy with no enthalpy_reference_kind "
+            "declared -- a legacy shape predating the declaration rule "
+            "that the import workflow refuses. A NASA-7/NASA-9 fit's "
+            "coefficients are mandatory together, so the enthalpy cannot "
+            "be dropped without destroying the whole fit; the record is "
+            "omitted from this bundle.",
+        )
+    return (
+        "enthalpy_pruned",
+        "carries a 298 K scalar, point, and/or Wilhoit enthalpy with no "
+        "enthalpy_reference_kind declared -- a legacy shape predating the "
+        "declaration rule that the import workflow refuses. The enthalpy "
+        "value(s) were dropped from this export; entropy, heat capacity "
+        "and other fields are unaffected.",
+    )
+
+
+def _prune_undeclared_enthalpy(payload: dict[str, Any]) -> None:
+    """Drop the optional enthalpy sub-values ``_thermo_export_disposition``
+    identified as this record's ONLY enthalpy content, in place.
+
+    Never touches ``nasa`` / ``nasa9_intervals`` -- callers only reach this
+    for the ``"enthalpy_pruned"`` disposition, which never fires when either
+    is present.
+    """
+    payload["h298_kj_mol"] = None
+    payload["h298_uncertainty_kj_mol"] = None
+    wilhoit = payload.get("wilhoit")
+    if wilhoit is not None:
+        payload["wilhoit"] = {**wilhoit, "h0_kj_mol": None}
+    points = payload.get("points")
+    if points:
+        payload["points"] = [{**p, "h_kj_mol": None} for p in points]
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -106,11 +239,16 @@ def export_thermo_bundle(
         BundleSubmissionSourceKind.local_bundle
     ),
     rights: DepositRights | None = None,
-) -> ContributionBundleV0:
+) -> ThermoBundleExport:
     """Export selected thermo rows as a validated thermo contribution bundle.
 
     :param session: Active read-only SQLAlchemy session.
     :param thermo_ids: One or more local ``thermo.id`` values to export.
+    :returns: A :class:`ThermoBundleExport`. ``omissions`` is non-empty when
+        one or more selected rows carried a legacy undeclared enthalpy (see
+        :class:`BundleExportOmission`); ``bundle`` is ``None`` only when
+        every selected row was omitted outright and nothing remains to
+        export.
     :raises ContributionBundleExportError: If any id is missing or any
         required dependency cannot be reconstructed.
     """
@@ -120,13 +258,23 @@ def export_thermo_bundle(
         )
 
     thermo_rows = _load_thermo_rows(session, thermo_ids)
-    thermo_uploads = [_thermo_to_upload(row) for row in thermo_rows]
 
+    thermo_uploads: list[dict[str, Any]] = []
+    omissions: list[BundleExportOmission] = []
     local_refs: dict[str, BundleLocalRefEntry] = {}
     for row in thermo_rows:
+        payload, omission = _thermo_to_upload(row)
+        if omission is not None:
+            omissions.append(omission)
+        if payload is None:
+            continue
+        thermo_uploads.append(payload)
         _record_thermo_local_refs(local_refs, row)
 
-    return _build_and_validate_bundle(
+    if not thermo_uploads:
+        return ThermoBundleExport(bundle=None, omissions=omissions)
+
+    bundle = _build_and_validate_bundle(
         bundle_kind=BundleKind.thermo,
         thermo_uploads=thermo_uploads,
         kinetics_uploads=[],
@@ -145,6 +293,7 @@ def export_thermo_bundle(
         schema_version=schema_version,
         software_version=software_version,
     )
+    return ThermoBundleExport(bundle=bundle, omissions=omissions)
 
 
 def export_kinetics_bundle(
@@ -317,12 +466,21 @@ def _load_kinetics_rows(session: Session, ids: Iterable[int]) -> list[Kinetics]:
 # ---------------------------------------------------------------------------
 
 
-def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
+def _thermo_to_upload(
+    thermo: Thermo,
+) -> tuple[dict[str, Any] | None, BundleExportOmission | None]:
     """Reconstruct an upload-equivalent thermo dict from a ``Thermo`` row.
 
-    Returned as a plain ``dict`` so the bundle's ``ContributionBundleV0``
-    constructor runs the full nested upload validators (the same ones a
-    real API upload would hit).
+    Returns ``(payload, omission)``. ``payload`` is ``None`` only when the
+    row's enthalpy could not be represented at all (see
+    ``_thermo_export_disposition``); the caller must not add it to the
+    bundle. ``omission`` is set whenever the row's legacy undeclared
+    enthalpy changed what was exported, whether or not ``payload`` is
+    ``None``.
+
+    Otherwise returned as a plain ``dict`` so the bundle's
+    ``ContributionBundleV0`` constructor runs the full nested upload
+    validators (the same ones a real API upload would hit).
     """
     payload: dict[str, Any] = {
         "species_entry": _species_entry_payload(thermo.species_entry),
@@ -365,13 +523,42 @@ def _thermo_to_upload(thermo: Thermo) -> dict[str, Any]:
     if workflow_tool is not None:
         payload["workflow_tool_release"] = workflow_tool
 
+    # Legacy rows may carry an enthalpy with no reference declared -- a
+    # shape the DB never backfills and the import workflow refuses. Export
+    # it verbatim and this same server hands back a bundle it will not
+    # re-accept; see BundleExportOmission for the two dispositions.
+    omission: BundleExportOmission | None = None
+    disposition = _thermo_export_disposition(payload)
+    if disposition is not None:
+        action, detail = disposition
+        if action == "record_omitted":
+            return None, BundleExportOmission(
+                action=action, ref=thermo.public_ref, detail=detail
+            )
+        _prune_undeclared_enthalpy(payload)
+        omission = BundleExportOmission(action=action, ref=thermo.public_ref, detail=detail)
+
     try:
         ThermoUploadRequest.model_validate(payload)
     except ValidationError as exc:
+        if omission is not None:
+            # Pruning the undeclared enthalpy left nothing scientifically
+            # meaningful behind (e.g. h298 was this record's only content)
+            # -- omit the whole record rather than export an empty shell
+            # the schema itself refuses.
+            return None, BundleExportOmission(
+                action="record_omitted",
+                ref=thermo.public_ref,
+                detail=(
+                    f"{omission.detail} After dropping the undeclared "
+                    f"enthalpy, nothing scientifically meaningful remained "
+                    f"to export: {exc}"
+                ),
+            )
         raise ContributionBundleExportError(
             f"thermo_upload_incompatible: {thermo.public_ref}: {exc}"
         ) from exc
-    return payload
+    return payload, omission
 
 
 def _thermo_point_payload(point: ThermoPoint) -> dict[str, Any]:
