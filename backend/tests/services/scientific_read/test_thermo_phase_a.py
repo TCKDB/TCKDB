@@ -37,13 +37,9 @@ def test_zero_kelvin_custody(db_session, state):
     selected = SelectedThermo(thermo, None, [], "scalar", RecordReviewStatus.not_reviewed).to_dict()
     replay = ThermoUploadRequest.model_validate(_thermo_to_upload(thermo)).model_dump(mode="json")
     for projection in (read, search):
-        assert {key: projection["reference"][key] for key in state} == state
-        assert "enthalpy_reference_kind" in projection["reference"]
-        assert projection["reference"]["enthalpy_reference_kind"] is None
-        assert "not recorded" in projection["reference"]["enthalpy_quantity"]
-        assert {key: projection[key] for key in values if key not in state} == {
-            key: value for key, value in values.items() if key not in state
-        }
+        assert {key: projection[key] for key in values} == values
+        assert "enthalpy_reference_kind" in projection
+        assert projection["enthalpy_reference_kind"] is None
     for projection in (selected, replay):
         assert {key: projection[key] for key in values} == values
 

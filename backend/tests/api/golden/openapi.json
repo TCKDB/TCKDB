@@ -46098,6 +46098,16 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
           },
@@ -46163,6 +46173,16 @@
             ],
             "title": "Nasa9"
           },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PhaseKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "points": {
             "anyOf": [
               {
@@ -46180,9 +46200,16 @@
           "provenance": {
             "$ref": "#/components/schemas/ThermoProvenance"
           },
-          "reference": {
-            "$ref": "#/components/schemas/ThermoReference",
-            "readOnly": true
+          "reference_pressure_bar": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Pressure Bar"
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
@@ -46269,55 +46296,9 @@
           "model_kind",
           "review",
           "evidence_completeness",
-          "provenance",
-          "reference"
+          "provenance"
         ],
         "title": "ThermoRecord",
-        "type": "object"
-      },
-      "ThermoReference": {
-        "description": "Declared quantity and standard state; null means not recorded.",
-        "properties": {
-          "enthalpy_quantity": {
-            "title": "Enthalpy Quantity",
-            "type": "string"
-          },
-          "enthalpy_reference_kind": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EnthalpyReferenceKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "phase": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PhaseKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reference_pressure_bar": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reference Pressure Bar"
-          }
-        },
-        "required": [
-          "enthalpy_quantity"
-        ],
-        "title": "ThermoReference",
         "type": "object"
       },
       "ThermoSearchRecord": {

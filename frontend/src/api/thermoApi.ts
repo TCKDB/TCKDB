@@ -217,6 +217,10 @@ const thermoRecordSchema = z.object({
     supersession: supersessionSchema.nullable().optional(),
     phase: z.enum(['gas', 'liquid', 'solid', 'aqueous']).nullable().optional(),
     reference_pressure_bar: z.number().nullable().optional(),
+    // Declared reference for every enthalpy this record carries -- `null`
+    // means the deposit did not state one. A plain sibling field, restored
+    // from a short-lived `reference: {...}` grouping (reverted).
+    enthalpy_reference_kind: z.enum(['formation_298k']).nullable().optional(),
     enthalpy_formation_0k_kj_mol: z.number().nullable().optional(),
     enthalpy_formation_0k_uncertainty_kj_mol: z.number().nullable().optional(),
     h298_kj_mol: z.number().nullable().optional(),

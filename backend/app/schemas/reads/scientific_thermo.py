@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field
 
 from app.db.models.common import (
     EnthalpyReferenceKind,
@@ -237,15 +237,6 @@ class GroupAdditivityBlock(BaseModel):
     components: list[GroupAdditivityComponentBlock] = Field(default_factory=list)
 
 
-class ThermoReference(BaseModel):
-    """Declared quantity and standard state; null means not recorded."""
-
-    phase: PhaseKind | None = None
-    reference_pressure_bar: float | None = None
-    enthalpy_reference_kind: EnthalpyReferenceKind | None = None
-    enthalpy_quantity: str
-
-
 class ThermoRecord(BaseModel):
     """One thermo record returned by the thermo endpoint.
 
@@ -267,25 +258,12 @@ class ThermoRecord(BaseModel):
     #: ``null`` on a current record — and always computed, never behind an
     #: ``include=`` token. See :class:`SupersessionNotice`.
     supersession: SupersessionNotice | None = None
-    phase: PhaseKind | None = Field(default=None, exclude=True)
-    reference_pressure_bar: float | None = Field(default=None, exclude=True)
-    enthalpy_reference_kind: EnthalpyReferenceKind | None = Field(default=None, exclude=True)
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def reference(self) -> ThermoReference:
-        return ThermoReference(
-            phase=self.phase,
-            reference_pressure_bar=self.reference_pressure_bar,
-            enthalpy_reference_kind=self.enthalpy_reference_kind,
-            enthalpy_quantity=(
-                "Standard formation enthalpy at 298.15 K plus the species enthalpy increment; "
-                "the elemental reference term stays at 298.15 K."
-                if self.enthalpy_reference_kind is not None
-                else "The enthalpy reference was not recorded."
-            ),
-        )
-
+    phase: PhaseKind | None = None
+    reference_pressure_bar: float | None = None
+    #: Declared reference for every enthalpy this record carries; ``null``
+    #: means the deposit did not state one. See
+    #: ``docs/guides/depositing_a_thermo_record.md``.
+    enthalpy_reference_kind: EnthalpyReferenceKind | None = None
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
     h298_kj_mol: float | None = None
