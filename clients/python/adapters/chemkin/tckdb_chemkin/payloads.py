@@ -85,6 +85,12 @@ def build_thermo_payload(
         # Preserve the card phase; an unrecognized token remains unknown.
         "phase": {"G": "gas", "L": "liquid", "S": "solid"}.get(entry.phase.upper()),
         "reference_pressure_bar": 1.01325,
+        # CHEMKIN's NASA-7 thermodynamic format is formation-referenced by
+        # definition (the polynomial's constant of integration IS the
+        # standard enthalpy of formation at 298.15 K -- see the NASA-7
+        # spec and every CHEMKIN/Cantera/Arkane consumer of it); asserting
+        # the declaration here is not a guess the way it would be for a
+        # source whose convention this adapter cannot actually know.
         "enthalpy_reference_kind": "formation_298k",
         "nasa": _nasa_payload(entry),
         "tmin_k": entry.t_low,

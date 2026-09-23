@@ -150,6 +150,15 @@ def test_thermo_nasa_payload_high_low_mapping(built):
     assert nasa["b7"] == pytest.approx(15.06)
 
 
+def test_thermo_payload_declares_formation_298k_enthalpy_reference(built):
+    """CHEMKIN NASA-7 is formation-referenced by definition (payloads.py
+    comment); this pins that the adapter actually asserts it, so deleting
+    the line does not silently ship an undeclared enthalpy."""
+    assert built.thermo, "fixture produced no thermo payloads"
+    for payload in built.thermo:
+        assert payload["enthalpy_reference_kind"] == "formation_298k"
+
+
 def test_transport_payload(built):
     h2o = next(p for p in built.transport if p["species_entry"]["smiles"] == canon("O"))
     assert h2o["sigma_angstrom"] == pytest.approx(2.605)
