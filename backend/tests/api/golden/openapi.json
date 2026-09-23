@@ -3592,6 +3592,20 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -15514,6 +15528,14 @@
           "other"
         ],
         "title": "EnergyZeroConvention",
+        "type": "string"
+      },
+      "EnthalpyReferenceKind": {
+        "description": "Formation zero with elemental reference enthalpies pinned at 298.15 K.\n\nH(T) = formation enthalpy at 298.15 K + the species enthalpy increment\nfrom 298.15 K. The elemental term is not reevaluated at T. Absence is\nnull, never an unspecified enum member. No basis may be inferred.",
+        "enum": [
+          "formation_298k"
+        ],
+        "title": "EnthalpyReferenceKind",
         "type": "string"
       },
       "EnvironmentClosureEntry": {
@@ -44415,6 +44437,20 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -45798,6 +45834,16 @@
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
           },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "h298_kj_mol": {
             "anyOf": [
               {
@@ -46051,6 +46097,16 @@
               }
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
@@ -46719,6 +46775,20 @@
               }
             ],
             "title": "Enthalpy Formation 0K Uncertainty Kj Mol"
+          },
+          "enthalpy_reference_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnthalpyReferenceKind"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enthalpy Reference Kind"
           },
           "existing_statmech_id": {
             "anyOf": [

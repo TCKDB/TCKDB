@@ -199,6 +199,14 @@ class ThermoDetailRecord(TypedDict, total=False):
     provenance: Required[JSONDict]
     supersession: SupersessionNotice | None
     thermo_id: int
+    # Declared reference for every enthalpy this record carries, and the
+    # standard-state it is referenced to. Plain sibling fields -- not a
+    # nested ``reference`` block, which existed only briefly and was
+    # reverted (unrelated to and unannounced alongside the enthalpy
+    # declaration itself).
+    phase: str | None
+    reference_pressure_bar: float | None
+    enthalpy_reference_kind: str | None
     h298_kj_mol: float | None
     s298_j_mol_k: float | None
     h298_uncertainty_kj_mol: float | None

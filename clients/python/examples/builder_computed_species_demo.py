@@ -127,7 +127,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedSpeciesUpload:
     # block's source choice explicit at the call site.
     sources = SourceCalculations(opt=opt, freq=freq, sp=sp)
     thermo = Thermo.nasa(
-        coeffs_low=[3.5] + [0.0] * 6,
+        enthalpy_reference_kind="formation_298k", coeffs_low=[3.5] + [0.0] * 6,
         coeffs_high=[3.5] + [0.0] * 6,
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-234.0, s298_j_mol_k=281.6,

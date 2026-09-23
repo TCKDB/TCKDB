@@ -106,7 +106,7 @@ _SPECIES = {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}
 
 
 def _thermo(**overrides) -> dict:
-    body: dict = {
+    body: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": _SPECIES,
         "scientific_origin": "computed",
         "h298_kj_mol": 146.7,

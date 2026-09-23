@@ -150,7 +150,7 @@ class TestHappyPath:
             _calc("freq0", calc_type="freq", artifacts=[_freq_log_artifact()]),
             _calc("sp0", calc_type="sp"),
         ]
-        payload["thermo"] = {
+        payload["thermo"] = {"enthalpy_reference_kind": "formation_298k",
             "h298_kj_mol": 217.998,
             "source_calculations": [
                 {"calculation_key": "sp0", "role": "sp"},
@@ -191,7 +191,7 @@ class TestValidationRejections:
 
     def test_undeclared_thermo_source_key_returns_422(self, client):
         payload = _hydrogen_bundle_payload()
-        payload["thermo"] = {
+        payload["thermo"] = {"enthalpy_reference_kind": "formation_298k",
             "h298_kj_mol": 1.0,
             "source_calculations": [
                 {"calculation_key": "ghost", "role": "sp"},
@@ -280,7 +280,7 @@ class TestRoleTypeCompatibility:
         payload["conformers"][0]["additional_calculations"] = [
             _calc("freq0", calc_type="freq")
         ]
-        payload["thermo"] = {
+        payload["thermo"] = {"enthalpy_reference_kind": "formation_298k",
             "h298_kj_mol": 1.0,
             "source_calculations": [
                 {"calculation_key": "freq0", "role": "opt"},

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
+    EnthalpyReferenceKind,
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
@@ -37,9 +38,38 @@ if TYPE_CHECKING:
 class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """Thermochemistry records for a species entry.
 
-    Reference-state semantics (added 2026-07-15). The scalar and fitted
-    values on this row are standard-state quantities:
+    Enthalpy reference decision (2026-09-23): a declared enthalpy is the
+    standard formation enthalpy at 298.15 K plus the species' own enthalpy
+    increment from 298.15 K. Elements in their reference forms have zero
+    formation enthalpy; their term stays pinned at 298.15 K, not at T.
+    The parent declaration covers h298, point h, Wilhoit h0 and NASA-7/9
+    enthalpy constants. The separately named 0 K formation value is unchanged.
+    Sensible increments and absolute quantum enthalpies belong in
+    molecular_property_observation, not here.
 
+    Two-layer enforcement: the database requires a declaration for h298;
+    workflows require it for any enthalpy content and refuse declarations
+    without content. Declared fit/point-only records need no h298 scalar.
+    Null is absence of knowledge, not an unspecified enum member. There is
+    no origin default and no backfill: existing rows remain undeclared.
+    The rule is enforced by a trigger (``trg_guard_thermo_enthalpy_reference``,
+    migration ``e7b1c9d4a632``), not a CHECK constraint: it fires only when
+    an insert or update actually writes ``h298_kj_mol`` or
+    ``enthalpy_reference_kind``, so legacy undeclared rows stay writable on
+    every other column, including immutable approved science and the
+    public-ref backfill. A CHECK -- even ``NOT VALID`` -- would revalidate
+    on every subsequent update to those rows regardless of which columns it
+    touched, freezing them instead of merely leaving them undeclared.
+
+    Other reference-state semantics:
+
+    * ``enthalpy_reference_kind`` declares which reference every enthalpy on
+      this record uses. ``formation_298k`` is the standard enthalpy of
+      formation at 298.15 K; an enthalpy at any other temperature is that
+      value plus the species' own enthalpy increment from 298.15 K, with the
+      elemental term not reevaluated. ``NULL`` means the reference was never
+      recorded -- it is never inferred from a value, a producer or a
+      neighbouring row, and never backfilled.
     * ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of
       formation and standard entropy at 298.15 K.
     * ``enthalpy_formation_0k_kj_mol`` is the 0 K standard formation
@@ -105,6 +135,10 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         BigInteger,
         ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
+    )
+
+    enthalpy_reference_kind: Mapped[Optional[EnthalpyReferenceKind]] = mapped_column(
+        SAEnum(EnthalpyReferenceKind, name="enthalpy_reference_kind"), nullable=True
     )
 
     h298_kj_mol: Mapped[Optional[float]] = mapped_column(Double, nullable=True)
@@ -211,6 +245,10 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     )
 
     __table_args__ = (
+        # h298_kj_mol requires enthalpy_reference_kind: enforced by the
+        # trigger described above, not a CheckConstraint here -- see the
+        # class docstring for why a CHECK cannot express "only when this
+        # write actually touches one of these two columns".
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),
         CheckConstraint("tmax_k IS NULL OR tmax_k > 0", name="tmax_k_gt_0"),
         CheckConstraint(
@@ -234,7 +272,13 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
 
 class ThermoPoint(Base):
-    """Tabulated thermo values at a specific temperature."""
+    """Tabulated standard-state thermo values at a specific temperature.
+
+    h_kj_mol uses the parent's declared formation zero with the elemental
+    term pinned at 298.15 K; it is not H(T)-H(0). g_kj_mol is H(T)-T*S(T)
+    on that same zero (S converted from J/(mol*K) to kJ/(mol*K)). Legacy
+    undeclared rows do not establish either quantity's reference zero.
+    """
 
     __tablename__ = "thermo_point"
 

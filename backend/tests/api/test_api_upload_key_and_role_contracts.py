@@ -406,7 +406,7 @@ class TestTheConformerNamespaceIsNotTheLabel:
 
 
 def _thermo_payload(smiles: str, **overrides) -> dict:
-    base: dict = {
+    base: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
         "scientific_origin": "computed",
         "h298_kj_mol": -83.7,
@@ -527,7 +527,7 @@ class TestOptimisationMayServeTheSinglePointRole:
 
     def test_bundle_thermo_sp_role_accepts_an_opt_calculation(self, client):
         payload = _bundle_payload(
-            thermo={
+            thermo={"enthalpy_reference_kind": "formation_298k",
                 "h298_kj_mol": 217.998,
                 "source_calculations": [
                     {"calculation_key": "opt0", "role": "sp"}
@@ -1170,7 +1170,7 @@ class TestSpeciesBundleConformerSourceKeys:
     def test_the_rule_reaches_thermos_nested_corrections_too(self, client):
         """Two lists of corrections in this bundle, one rule."""
         payload = _bundle_payload(
-            thermo={
+            thermo={"enthalpy_reference_kind": "formation_298k",
                 "h298_kj_mol": 217.998,
                 "applied_energy_corrections": [
                     _aec_total(source_conformer_key="not-a-conformer")
@@ -1188,7 +1188,7 @@ class TestSpeciesBundleConformerSourceKeys:
         self, client, db_session
     ):
         payload = _bundle_payload(
-            thermo={
+            thermo={"enthalpy_reference_kind": "formation_298k",
                 "h298_kj_mol": 217.998,
                 "applied_energy_corrections": [
                     _aec_total(source_conformer_key="c0")

@@ -757,7 +757,7 @@ def make_thermo_scalar(
     a source calculation. See ``ThermoProvenance`` (issue #284).
     """
     t = Thermo(
-        species_entry_id=species_entry.id,
+        enthalpy_reference_kind="formation_298k", species_entry_id=species_entry.id,
         scientific_origin=scientific_origin,
         h298_kj_mol=h298_kj_mol,
         s298_j_mol_k=s298_j_mol_k,

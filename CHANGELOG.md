@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Enthalpy reference declaration (2026-09-23)
+
+- tckdb-schemas 0.47.0 and tckdb-client 0.89.0: explicit enthalpy references,
+  fit-only deposits, builder refusals, and grouped thermo reference reads.
+- Database: nullable reference enum and an unvalidated scalar CHECK; no
+  legacy data step. Workflows enforce whole-record content/declaration pairing.
+- Producers: declared CHEMKIN formation convention, explicit ARC/SDF configuration,
+  and CCCBDB sensible increments routed to molecular-property observations.
+- tckdb-chemkin 0.4.0 declares the supported format's formation convention.
+  ARC fit-only input leaves an absent H298 scalar null.
+
 ## Maturity and version policy
 
 TCKDB is **pre-1.0**. Until 1.0:

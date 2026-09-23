@@ -718,7 +718,7 @@ def test_transport_job_is_marked_failed_when_attempts_exhausted(
 
 def _thermo_job_payload() -> dict:
     """Minimal valid thermo upload payload for worker-submission tests."""
-    return {
+    return {"enthalpy_reference_kind": "formation_298k",
         "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
         "scientific_origin": "computed",
         "h298_kj_mol": 217.998,

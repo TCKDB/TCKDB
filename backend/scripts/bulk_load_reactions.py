@@ -118,6 +118,8 @@ def load_reactions(
     session,
     rxn_ids: list[str],
     user_id: int,
+    *,
+    enthalpy_reference_kind: str | None = None,
 ) -> dict:
     """Load reactions into the database. Returns stats."""
     from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
@@ -138,7 +140,7 @@ def load_reactions(
 
         try:
             # Parse SDF → bundle dict
-            bundle_dict = sdf_to_bundle(rxn_id)
+            bundle_dict = sdf_to_bundle(rxn_id, enthalpy_reference_kind=enthalpy_reference_kind)
 
             if not bundle_dict.get("kinetics"):
                 stats["skipped"] += 1
@@ -205,6 +207,7 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Load only first N reactions")
     parser.add_argument("--ids", nargs="+", help="Load specific reaction IDs")
     parser.add_argument("--no-migrate", action="store_true", help="Skip Alembic migration")
+    parser.add_argument("--enthalpy-reference-kind", required=True, choices=["formation_298k"])
     args = parser.parse_args()
 
     # Setup DB
@@ -231,7 +234,9 @@ def main():
         user_id = ensure_test_user(session)
         session.commit()
 
-        stats = load_reactions(session, rxn_ids, user_id)
+        stats = load_reactions(
+            session, rxn_ids, user_id, enthalpy_reference_kind=args.enthalpy_reference_kind,
+        )
 
         print("\n--- Load Complete ---")
         print(f"  Total:   {stats['total']}")

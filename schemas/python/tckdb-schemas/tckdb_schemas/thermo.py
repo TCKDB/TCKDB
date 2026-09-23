@@ -13,7 +13,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import PhaseKind, ScientificOriginKind
+from tckdb_schemas.enums import EnthalpyReferenceKind, PhaseKind, ScientificOriginKind
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +230,8 @@ class ThermoStateFields(SchemaBase):
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     phase: PhaseKind | None = None
+    # Other declared quantities are routed by the backend, never coerced.
+    enthalpy_reference_kind: EnthalpyReferenceKind | str | None = None
     reference_pressure_bar: float | None = Field(default=None, gt=0)
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = Field(default=None, ge=0)

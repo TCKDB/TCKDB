@@ -1086,6 +1086,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "registration does not already disclose by refusing at "
                 "all -- and that argument covers this endpoint only."
             )),
+    ApiCode("enthalpy_declaration_absent", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
+            shape=Shape.relationship),
+    ApiCode("enthalpy_declaration_without_content", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
+            shape=Shape.relationship),
+    ApiCode("enthalpy_quantity_not_storable_here", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
+            shape=Shape.relationship),
+    ApiCode("enthalpy_reference_kind_unrecognized", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
+            shape=Shape.relationship),
     ApiCode("energy_correction_scheme_identity_conflict", 409, Surface.message_prefix,
             "backend/app/api/routes/admin.py",
             shape=Shape.relationship,

@@ -473,6 +473,7 @@ def get_species_thermo(
             supersession=supersessions.get(t.id),
             phase=t.phase,
             reference_pressure_bar=t.reference_pressure_bar,
+            enthalpy_reference_kind=t.enthalpy_reference_kind,
             enthalpy_formation_0k_kj_mol=t.enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=t.enthalpy_formation_0k_uncertainty_kj_mol,
             h298_kj_mol=t.h298_kj_mol,

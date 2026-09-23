@@ -64,7 +64,9 @@ _PARSE_ERRORS: dict[str, str] = {}
 
 for _rxn_id in _RXN_IDS:
     try:
-        _BUNDLES[_rxn_id] = sdf_to_bundle(_rxn_id)
+        _BUNDLES[_rxn_id] = sdf_to_bundle(
+            _rxn_id, enthalpy_reference_kind="formation_298k",
+        )
     except Exception as e:
         _PARSE_ERRORS[_rxn_id] = str(e)
 
@@ -72,6 +74,11 @@ for _rxn_id in _RXN_IDS:
 # ==========================================================================
 # Parametrized bundle upload test
 # ==========================================================================
+
+
+def test_all_bulk_fixtures_parse_with_explicit_reference():
+    assert _PARSE_ERRORS == {}
+    assert len(_BUNDLES) == len(_RXN_IDS)
 
 
 class TestBulkBundleUploads:
@@ -145,7 +152,7 @@ class TestScenario3_ThermoOnly:
     """Upload thermo from literature — no conformers or calculations."""
 
     def test_nasa_thermo_from_literature(self, client):
-        resp = client.post("/api/v1/uploads/thermo", json={
+        resp = client.post("/api/v1/uploads/thermo", json={"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1},
             "scientific_origin": "experimental",
             "h298_kj_mol": -241.826,

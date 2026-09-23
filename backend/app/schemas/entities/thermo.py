@@ -19,6 +19,7 @@ from tckdb_schemas.thermo import (
 )
 
 from app.db.models.common import (
+    EnthalpyReferenceKind,
     PhaseKind,
     ScientificOriginKind,
     ThermoCalculationRole,
@@ -187,6 +188,7 @@ class ThermoBase(BaseModel):
         default=None, ge=0
     )
 
+    enthalpy_reference_kind: EnthalpyReferenceKind | None = None
     reference_pressure_bar: float | None = None
     phase: PhaseKind | None = None
 
@@ -264,6 +266,7 @@ class ThermoUpdate(SchemaBase):
         default=None, ge=0
     )
 
+    enthalpy_reference_kind: EnthalpyReferenceKind | None = None
     reference_pressure_bar: float | None = None
     phase: PhaseKind | None = None
 

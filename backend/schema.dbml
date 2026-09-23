@@ -185,6 +185,10 @@ enum EnergyZeroConvention {
   other
 }
 
+enum EnthalpyReferenceKind {
+  formation_298k
+}
+
 enum ExternalSourceRecordKind {
   thermoml_article
   cccbdb_page
@@ -3359,6 +3363,7 @@ Table thermo {
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
+  enthalpy_reference_kind EnthalpyReferenceKind
   h298_kj_mol double
   s298_j_mol_k double
   h298_uncertainty_kj_mol double
@@ -3477,7 +3482,7 @@ Table thermo_point {
     (temperature_k, thermo_id) [pk]
   }
 
-  Note: 'Tabulated thermo values at a specific temperature.'
+  Note: 'Tabulated standard-state thermo values at a specific temperature.'
 }
 
 Table thermo_source_calculation {

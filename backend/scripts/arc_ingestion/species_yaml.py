@@ -35,9 +35,14 @@ class ThermoPoint:
 
 @dataclass
 class SpeciesThermo:
-    """Thermochemistry data extracted from an ARC species YAML."""
+    """Thermochemistry extracted without asserting its enthalpy reference.
 
-    h298_kj_mol: float
+    ARC YAML does not state a basis. The adapter caller must explicitly
+    configure enthalpy_reference_kind before builder.py emits thermo.
+    Neither the software name nor these numbers establishes that basis.
+    """
+
+    h298_kj_mol: float | None
     s298_j_mol_k: float
     tmin_k: float
     tmax_k: float
@@ -113,7 +118,8 @@ def _parse_thermo(data: dict) -> SpeciesThermo | None:
     tmax_k = _get_scalar_value(thermo_node["Tmax"])
 
     # Thermo data (H298, S298, Cp)
-    h298_kj_mol = 0.0
+    # A NASA-only file supplies no H298 scalar. Do not manufacture one.
+    h298_kj_mol = None
     s298_j_mol_k = 0.0
     points: list[ThermoPoint] = []
 

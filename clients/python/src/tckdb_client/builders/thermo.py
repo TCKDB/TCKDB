@@ -26,6 +26,7 @@ from enum import Enum
 import math
 
 from pydantic import ValidationError
+from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -186,6 +187,7 @@ class Thermo:
     it today (see module docstring).
     """
 
+    enthalpy_reference_kind: str | None = None
     phase: str | None | _Omitted = _Omitted.value
     reference_pressure_bar: float | None | _Omitted = _Omitted.value
     enthalpy_formation_0k_kj_mol: float | None = None
@@ -224,6 +226,14 @@ class Thermo:
         return self._kind
 
     def __post_init__(self) -> None:
+        error = enthalpy_reference_error({
+            "enthalpy_reference_kind": self.enthalpy_reference_kind,
+            "h298_kj_mol": self.h298_kj_mol,
+            "nasa": self.nasa_block,
+            "points": self.point_table,
+        })
+        if error is not None:
+            raise TCKDBBuilderValidationError(f"{error[0]}: {error[1]}")
         try:
             state = {name: getattr(self, name) for name in (
                 "phase", "reference_pressure_bar", "enthalpy_formation_0k_kj_mol",
@@ -271,6 +281,7 @@ class Thermo:
     def scalar(
         cls,
         *,
+        enthalpy_reference_kind: str | None = None,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -304,6 +315,7 @@ class Thermo:
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,
+            enthalpy_reference_kind=enthalpy_reference_kind,
             enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
             h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
@@ -330,6 +342,7 @@ class Thermo:
         t_low: float,
         t_mid: float,
         t_high: float,
+        enthalpy_reference_kind: str | None = None,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -401,6 +414,7 @@ class Thermo:
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,
+            enthalpy_reference_kind=enthalpy_reference_kind,
             enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
             h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
@@ -426,6 +440,7 @@ class Thermo:
         *,
         tmin_k: float | None = None,
         tmax_k: float | None = None,
+        enthalpy_reference_kind: str | None = None,
         phase: str | None | _Omitted = _Omitted.value,
         reference_pressure_bar: float | None | _Omitted = _Omitted.value,
         enthalpy_formation_0k_kj_mol: float | None = None,
@@ -485,6 +500,7 @@ class Thermo:
         out = cls(
             phase=phase,
             reference_pressure_bar=reference_pressure_bar,
+            enthalpy_reference_kind=enthalpy_reference_kind,
             enthalpy_formation_0k_kj_mol=enthalpy_formation_0k_kj_mol,
             enthalpy_formation_0k_uncertainty_kj_mol=enthalpy_formation_0k_uncertainty_kj_mol,
             h298_uncertainty_kj_mol=h298_uncertainty_kj_mol,
@@ -534,7 +550,7 @@ class Thermo:
           calc namespace without any ``id()`` use.
         """
         out: dict[str, Any] = {}
-        for name in ("phase", "reference_pressure_bar"):
+        for name in ("phase", "reference_pressure_bar", "enthalpy_reference_kind"):
             value = getattr(self, name)
             if value is not _Omitted.value:
                 out[name] = value

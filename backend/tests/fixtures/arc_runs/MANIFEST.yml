@@ -1,3 +1,5 @@
+# Thermo test deposits explicitly declare formation_298k.
+# This is fixture adapter configuration, not evidence inferred from ARC output.yml.
 # ARC run fixtures — provenance of each extracted scenario.
 #
 # Each entry records WHERE the scenario came from on the original contributor's

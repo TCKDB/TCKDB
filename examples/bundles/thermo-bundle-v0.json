@@ -38,7 +38,8 @@
         "s298_uncertainty_j_mol_k": 0.2,
         "tmin_k": 200.0,
         "tmax_k": 3000.0,
-        "note": "water reference (illustrative)"
+        "note": "water reference (illustrative)",
+        "enthalpy_reference_kind": "formation_298k"
       }
     ],
     "kinetics_uploads": []

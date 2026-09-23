@@ -423,7 +423,7 @@ def test_the_thermo_root_already_answered_404_for_the_same_condition(
     """
     refused = client.post(
         _THERMO,
-        json={
+        json={"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 146.7,
@@ -437,7 +437,7 @@ def test_the_thermo_root_already_answered_404_for_the_same_condition(
 
     accepted = client.post(
         _THERMO,
-        json={
+        json={"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[CH3]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 146.7,

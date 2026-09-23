@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-client"
-version = "0.88.0"
+version = "0.90.0"
 description = "Synchronous Python HTTP client and scientific upload builders for the TCKDB API."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -49,7 +49,7 @@ dependencies = [
     # No upper bound here on purpose: whether these two packages should be
     # pinned in lockstep is the coupling question tracked in #112, and
     # guessing at it in a dependency line is how the 0.10.0 floor survived.
-    "tckdb-schemas>=0.46.0",
+    "tckdb-schemas>=0.47.0",
 ]
 
 [project.optional-dependencies]

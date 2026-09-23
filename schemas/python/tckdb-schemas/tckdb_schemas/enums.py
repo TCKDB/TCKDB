@@ -103,6 +103,17 @@ class ScientificOriginKind(str, Enum):
     estimated = "estimated"
 
 
+class EnthalpyReferenceKind(str, Enum):
+    """Formation zero with elemental reference enthalpies pinned at 298.15 K.
+
+    H(T) = formation enthalpy at 298.15 K + the species enthalpy increment
+    from 298.15 K. The elemental term is not reevaluated at T. Absence is
+    null, never an unspecified enum member. No basis may be inferred.
+    """
+
+    formation_298k = "formation_298k"
+
+
 class PhaseKind(str, Enum):
     """Physical phase a thermochemistry record is referenced to.
 

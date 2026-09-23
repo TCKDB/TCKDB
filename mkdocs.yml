@@ -70,6 +70,7 @@ nav:
       - Public Identifiers: specs/public_identifier_policy.md
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
   - Guides:
+      - Depositing a Thermo Record: guides/depositing_a_thermo_record.md
       - Query Cookbook: guides/scientific_query_cookbook.md
       - Schema Reference: guides/schema_reference.md
       - Public Hosted Querying: guides/public_hosted_querying.md

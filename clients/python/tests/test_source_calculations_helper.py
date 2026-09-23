@@ -223,7 +223,7 @@ def test_thermo_accepts_source_calculations_directly(calc_trio):
     opt, freq, sp = calc_trio
     sources = SourceCalculations(opt=opt, freq=freq, sp=sp)
     thermo = Thermo.scalar(
-        h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         source_calculations=sources,
     )
@@ -234,7 +234,7 @@ def test_thermo_accepts_only_subset(calc_trio):
     opt, freq, sp = calc_trio
     sources = SourceCalculations(opt=opt, freq=freq, sp=sp)
     thermo = Thermo.scalar(
-        h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         source_calculations=sources.only("opt", "freq"),
     )
@@ -292,17 +292,17 @@ def test_existing_dict_shape_still_works(calc_trio):
     legacy shapes keep working alongside the helper."""
     opt, freq, sp = calc_trio
     thermo_dict = Thermo.scalar(
-        h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         source_calculations={"opt": opt, "freq": freq, "sp": sp},
     )
     thermo_dict_list = Thermo.scalar(
-        h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         source_calculations={"opt": [opt], "freq": [freq, sp]},
     )
     thermo_pairs = Thermo.scalar(
-        h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
     )

@@ -223,6 +223,7 @@ def _process_one_run(
     user_id: int,
     include_artifacts: bool,
     arc_repo_dir: Path | None = None,
+    enthalpy_reference_kind: str | None = None,
 ) -> tuple[str, str, str | None]:
     """Extract, build, and persist one ARC run in its own DB session.
 
@@ -263,7 +264,8 @@ def _process_one_run(
             if not has_xyz and not is_monoatomic:
                 return (run_name, "skipped", None)
 
-        payload = build_payload(run_data, run_dir, include_artifacts=include_artifacts)
+        payload = build_payload(run_data, run_dir, include_artifacts=include_artifacts,
+                                enthalpy_reference_kind=enthalpy_reference_kind)
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request, created_by=user_id)
         session.commit()
@@ -292,6 +294,7 @@ def load_arc_runs(
     workers: int = 1,
     include_artifacts: bool = True,
     arc_repo_dir: Path | None = None,
+    enthalpy_reference_kind: str | None = None,
 ) -> dict:
     """Extract, build, and persist each ARC run. Returns stats."""
     progress = load_progress()
@@ -370,7 +373,7 @@ def load_arc_runs(
     if workers > 1:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(_process_one_run, d, user_id, include_artifacts, arc_repo_dir): d.name
+                executor.submit(_process_one_run, d, user_id, include_artifacts, arc_repo_dir, enthalpy_reference_kind): d.name
                 for d in remaining
             }
             for future in as_completed(futures):
@@ -378,7 +381,7 @@ def load_arc_runs(
                 _handle_result(run_name, status, error_msg)
     else:
         for arc_dir in remaining:
-            run_name, status, error_msg = _process_one_run(arc_dir, user_id, include_artifacts, arc_repo_dir)
+            run_name, status, error_msg = _process_one_run(arc_dir, user_id, include_artifacts, arc_repo_dir, enthalpy_reference_kind)
             _handle_result(run_name, status, error_msg)
 
     # Final progress bar at 100%
@@ -428,6 +431,8 @@ def main():
     parser.add_argument("--arc-repo", type=Path, default=None, metavar="PATH",
                         help="Path to the ARC source repository (used to read data/freq_scale_factors.yml "
                              "for frequency scale factor citations)")
+    parser.add_argument("--enthalpy-reference-kind", choices=["formation_298k"],
+                        help="Explicit declaration required for ARC thermo deposits.")
     args = parser.parse_args()
 
     src = args.src.resolve()
@@ -494,7 +499,7 @@ def main():
         engine.dispose()
 
     stats = load_arc_runs(run_dirs, user_id, workers=workers, include_artifacts=include_artifacts,
-                          arc_repo_dir=arc_repo_dir)
+                          arc_repo_dir=arc_repo_dir, enthalpy_reference_kind=args.enthalpy_reference_kind)
 
     print("\n--- Load Complete ---")
     print(f"  Total runs:    {stats['total']}")

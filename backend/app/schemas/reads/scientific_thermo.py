@@ -10,6 +10,7 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
+    EnthalpyReferenceKind,
     GroupAdditivityComponentKind,
     PhaseKind,
     RecordReviewStatus,
@@ -259,6 +260,10 @@ class ThermoRecord(BaseModel):
     supersession: SupersessionNotice | None = None
     phase: PhaseKind | None = None
     reference_pressure_bar: float | None = None
+    #: Declared reference for every enthalpy this record carries; ``null``
+    #: means the deposit did not state one. See
+    #: ``docs/guides/depositing_a_thermo_record.md``.
+    enthalpy_reference_kind: EnthalpyReferenceKind | None = None
     enthalpy_formation_0k_kj_mol: float | None = None
     enthalpy_formation_0k_uncertainty_kj_mol: float | None = None
     h298_kj_mol: float | None = None

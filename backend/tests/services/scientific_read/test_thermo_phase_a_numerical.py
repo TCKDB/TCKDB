@@ -51,8 +51,10 @@ def test_nasa7_cantera_and_printed_precision(db_session, tmp_path, analytical):
             **{f"a{i}": c for i, c in enumerate(low, 1)},
             **{f"b{i}": c for i, c in enumerate(high, 1)}}
     row = persist_thermo_upload(db_session, ThermoUploadRequest(
-        species_entry=IDENTITY, nasa=data, phase="gas", reference_pressure_bar=1.01325))
-    replay = _thermo_to_upload(row)["nasa"]
+        enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, nasa=data, phase="gas", reference_pressure_bar=1.01325))
+    replay, omission = _thermo_to_upload(row)
+    assert omission is None
+    replay = replay["nasa"]
     assert replay == data
     source, restored = nasa7_model(data), nasa7_model(replay)
     selected = SelectedThermo(row, row.nasa, [], "nasa", RecordReviewStatus.not_reviewed)
@@ -87,8 +89,10 @@ def test_nasa9_cantera_multiple_intervals(db_session):
     intervals = [interval(1, 200, 1000), interval(2, 1000, 3000)]
     for i, item in enumerate(intervals):
         item.update(a1=100 + i, a2=-3 - i, a3=3.5 + i, a4=1e-5, a8=-1234, a9=4)
-    row = persist_thermo_upload(db_session, ThermoUploadRequest(species_entry=IDENTITY, nasa9_intervals=intervals))
-    replay = _thermo_to_upload(row)["nasa9_intervals"]
+    row = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, nasa9_intervals=intervals))
+    replay, omission = _thermo_to_upload(row)
+    assert omission is None
+    replay = replay["nasa9_intervals"]
     assert replay == intervals
     selected = SelectedThermo(row, None, [], "nasa9", RecordReviewStatus.not_reviewed,
                               nasa9_intervals=row.nasa9_intervals).to_dict()
@@ -121,8 +125,13 @@ def test_wilhoit_rmg_reference_and_optional_constants(db_session, constants):
             "a0": 1.2, "a1": -0.3, "a2": 0.7, "a3": -0.2, "h0_kj_mol": None, "s0_j_mol_k": None}
     if constants:
         data.update(h0_kj_mol=-123.456, s0_j_mol_k=12.345)
-    row = persist_thermo_upload(db_session, ThermoUploadRequest(species_entry=IDENTITY, wilhoit=data))
-    replay = _thermo_to_upload(row)["wilhoit"]
+    row = persist_thermo_upload(db_session, ThermoUploadRequest(
+        species_entry=IDENTITY, wilhoit=data,
+        enthalpy_reference_kind="formation_298k" if constants else None,
+    ))
+    replay, omission = _thermo_to_upload(row)
+    assert omission is None
+    replay = replay["wilhoit"]
     assert replay == data
     selected = SelectedThermo(row, None, [], "wilhoit", RecordReviewStatus.not_reviewed,
                               wilhoit=row.wilhoit).to_dict()["wilhoit"]

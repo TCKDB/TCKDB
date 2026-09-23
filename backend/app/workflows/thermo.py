@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
 
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
@@ -287,6 +288,16 @@ def _resolve_statmech_id(
     return statmech.id
 
 
+def assert_enthalpy_reference(payload: object) -> None:
+    """Check the whole deposit; a SQL CHECK cannot inspect child tables."""
+    error = enthalpy_reference_error(payload)
+    if error is not None:
+        code, message = error
+        raise CodedValueError(
+            code, message, context={"field": "enthalpy_reference_kind"}, message_prefix=False
+        )
+
+
 def persist_thermo_upload(
     session: Session,
     request: ThermoUploadRequest,
@@ -311,6 +322,7 @@ def persist_thermo_upload(
         belong to the thermo target's species entry, or if an applied
         correction's ``source_calculation_key`` does not resolve.
     """
+    assert_enthalpy_reference(request)
     species_entry = resolve_species_entry(
         session, request.species_entry, created_by=created_by
     )

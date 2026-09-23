@@ -750,7 +750,7 @@ def test_computed_species_sidecar_is_discovered_and_replayed(tmp_path: Path) -> 
     payload = {
         "species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1},
         "conformers": [{"key": "c0", "geometry": {"xyz_text": "..."}}],
-        "thermo": {"h298_kj_mol": -241.8},
+        "thermo": {"enthalpy_reference_kind": "formation_298k", "h298_kj_mol": -241.8},
     }
     sp, _ = _write_computed_species_sidecar(tmp_path, payload=payload)
 

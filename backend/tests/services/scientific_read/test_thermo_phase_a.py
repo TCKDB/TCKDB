@@ -35,15 +35,21 @@ def test_zero_kelvin_custody(db_session, state):
                              request=ThermoReadRequest()).records[0].model_dump(mode="json")
     search = search_thermo(db_session, ThermoSearchRequest(smiles="O")).records[0].thermo.model_dump(mode="json")
     selected = SelectedThermo(thermo, None, [], "scalar", RecordReviewStatus.not_reviewed).to_dict()
-    replay = ThermoUploadRequest.model_validate(_thermo_to_upload(thermo)).model_dump(mode="json")
-    for projection in (read, search, selected, replay):
+    payload, omission = _thermo_to_upload(thermo)
+    assert omission is None
+    replay = ThermoUploadRequest.model_validate(payload).model_dump(mode="json")
+    for projection in (read, search):
+        assert {key: projection[key] for key in values} == values
+        assert "enthalpy_reference_kind" in projection
+        assert projection["enthalpy_reference_kind"] is None
+    for projection in (selected, replay):
         assert {key: projection[key] for key in values} == values
 
 
 def test_historical_incomplete_thermo_readable_but_not_replayable(db_session):
     from app.db.models.thermo import ThermoNASA
 
-    thermo = persist_thermo_upload(db_session, ThermoUploadRequest(species_entry=IDENTITY, h298_kj_mol=0))
+    thermo = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, h298_kj_mol=0))
     db_session.add(ThermoNASA(thermo_id=thermo.id, a1=3.5))
     db_session.flush()
     db_session.expire_all()
@@ -100,7 +106,7 @@ def test_inventory_reports_pending_incompatible_jobs_without_rewriting(db_sessio
     from app.db.models.common import UploadJobKind, UploadJobStatus
     from app.db.models.upload_job import UploadJob
 
-    payload = {"species_entry": IDENTITY, "nasa": {}}
+    payload = {"enthalpy_reference_kind": "formation_298k", "species_entry": IDENTITY, "nasa": {}}
     job = UploadJob(kind=UploadJobKind.thermo, status=UploadJobStatus.queued, payload=payload)
     db_session.add(job)
     db_session.flush()

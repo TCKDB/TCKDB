@@ -225,7 +225,7 @@ def test_species_statmech_alongside_thermo(ts_geom, ch4, ch3):
         reaction=rxn,
         calculations=[ts_opt],
         species_calculations={ch4: [ch4_opt]},
-        species_thermo={ch4: Thermo.scalar(h298_kj_mol=-74.6)},
+        species_thermo={ch4: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6)},
         species_statmech={ch4: Statmech(external_symmetry=12, point_group="Td")},
     ).to_payload()
     ch4_block = next(sp for sp in payload["species"] if sp["key"] == "ch4")

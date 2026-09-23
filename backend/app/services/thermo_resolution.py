@@ -121,6 +121,7 @@ def resolve_thermo_upload(
             request.enthalpy_formation_0k_uncertainty_kj_mol
         ),
         reference_pressure_bar=request.reference_pressure_bar,
+        enthalpy_reference_kind=request.enthalpy_reference_kind,
         phase=request.phase,
         tmin_k=request.tmin_k,
         tmax_k=request.tmax_k,
@@ -166,6 +167,7 @@ def persist_thermo(
             thermo_create.enthalpy_formation_0k_uncertainty_kj_mol
         ),
         reference_pressure_bar=thermo_create.reference_pressure_bar,
+        enthalpy_reference_kind=thermo_create.enthalpy_reference_kind,
         phase=thermo_create.phase,
         tmin_k=thermo_create.tmin_k,
         tmax_k=thermo_create.tmax_k,

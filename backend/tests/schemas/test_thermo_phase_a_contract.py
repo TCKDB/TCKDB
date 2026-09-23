@@ -42,7 +42,7 @@ def test_zero_kelvin_is_content(schema, value):
 def test_nonfinite_scalar_refused(schema, value, field):
     extra = {"species_entry": IDENTITY} if schema is ThermoUploadRequest else {}
     with pytest.raises(ValidationError):
-        schema(**extra, **{"h298_kj_mol": 0, field: value})
+        schema(**extra, **{"enthalpy_reference_kind": "formation_298k", "h298_kj_mol": 0, field: value})
 
 
 @pytest.mark.parametrize("schema", [ThermoUploadRequest, ThermoInBundle, BundleThermoIn])
@@ -95,11 +95,11 @@ def test_strict_create_permissive_historical_fragments():
 ])
 def test_nasa9_invalid_coverage(intervals):
     with pytest.raises(ValidationError):
-        ThermoUploadRequest(species_entry=IDENTITY, nasa9_intervals=intervals)
+        ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, nasa9_intervals=intervals)
 
 
 def test_nasa9_index_order_and_auxiliary_points():
-    record = ThermoUploadRequest(species_entry=IDENTITY,
+    record = ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY,
                                 nasa9_intervals=[interval(2, 1000, 3000), interval(1, 200, 1000)],
                                 points=[{"temperature_k": 298, "h_kj_mol": -1}])
     assert len(record.nasa9_intervals) == 2

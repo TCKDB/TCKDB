@@ -183,6 +183,44 @@ Family rules for v0:
   **must not** contain any `thermo_uploads`.
 - Mixed bundles are explicitly rejected.
 
+### Exporting legacy thermo rows (undeclared enthalpy)
+
+`ThermoUploadRequest.enthalpy_reference_kind` declares what an exported
+enthalpy means (see `docs/guides/depositing_a_thermo_record.md` and
+`schema_spec.md` § "Enthalpy reference declaration"). A thermo row deposited
+before that field existed can carry an enthalpy with no declaration; the DB
+never backfills one onto such a row, and the import workflow refuses to
+accept that exact shape on the way back in
+(`tckdb_schemas.enthalpy_reference.enthalpy_reference_error`).
+`app.services.contribution_bundle_export.export_thermo_bundle` (used by
+`scripts/export_contribution_bundle.py`) therefore never emits
+`enthalpy_reference_kind: null` next to a real enthalpy. Instead it applies
+one of two dispositions per legacy row, chosen by where the enthalpy lives:
+
+- **298 K scalar, tabulated point enthalpies, or a Wilhoit `h0_kj_mol`** —
+  each is an independently optional field, so only the enthalpy value(s)
+  are dropped from the export. Entropy, heat capacity, temperature range,
+  and every other field on the record are carried over unchanged, and the
+  record re-imports normally (now with no enthalpy content and no
+  declaration, which is a self-consistent shape).
+- **A NASA-7 or NASA-9 fit** — `ThermoNASACreate` /
+  `ThermoNASA9IntervalCreate` require every coefficient, the enthalpy term
+  included, so there is no way to drop only the enthalpy without destroying
+  the whole fit. Since the fit is the record's entire scientific content,
+  the record is left out of the bundle entirely rather than exported
+  mutilated.
+
+Either way the change is **reported, never silent**: `export_thermo_bundle`
+returns a `ThermoBundleExport(bundle, omissions)` instead of a bare bundle.
+Each `BundleExportOmission` names the affected record by its `public_ref`
+(never a database row id) and states which disposition applied and why.
+`bundle` is `None` only when every selected thermo row was omitted outright
+and nothing legitimate remains to export. The CLI prints one `note:` line
+per omission to stderr, and an `error:` line if nothing was left to write.
+
+A record that already carries a declaration is completely unaffected by
+this and exports (and re-imports) exactly as described above.
+
 ### `local_refs`
 
 A map from a bundle-local reference key to a small descriptor.

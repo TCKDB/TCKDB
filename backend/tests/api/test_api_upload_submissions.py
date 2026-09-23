@@ -243,7 +243,7 @@ class TestIdempotentReplayDoesNotDuplicateSubmission:
     def test_replay_returns_same_submission_without_new_rows(
         self, client, db_session
     ):
-        payload = {
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,

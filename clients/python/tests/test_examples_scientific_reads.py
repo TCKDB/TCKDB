@@ -271,7 +271,7 @@ def test_print_thermo_record_leads_with_refs():
     module = _load_module()
     record = {
         "species": {"species_entry_id": 31, "species_entry_ref": "spe_def"},
-        "thermo": {
+        "thermo": {"enthalpy_reference_kind": "formation_298k",
             "thermo_id": 7,
             "thermo_ref": "thm_xyz",
             "model_kind": "scalar",
