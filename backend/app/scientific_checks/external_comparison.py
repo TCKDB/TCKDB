@@ -58,7 +58,11 @@ CHECK_EXTERNAL_CP_COMPARISON = ScientificCheck(
                 "Runs only from the admin/CLI trigger "
                 "(app.services.external_comparison.cp.run_and_record via "
                 "backend/scripts/run_external_cp_comparison.py), never from "
-                "the upload path."
+                "the upload path. Scope is gas phase only "
+                "(app.services.consistency.engine.SUPPORTED_PHASES, decided "
+                "2026-09-23): a record whose phase is recorded as something "
+                "else, or was never recorded at all, is reported unavailable, "
+                "not refused and not assumed gas."
             ),
         ),
     ),
@@ -74,7 +78,16 @@ CHECK_THERMO_CONSISTENCY = ScientificCheck(
     asserts="Compare every supplied NASA Cp/entropy fit with exact points, s298 and explicitly named neighbours.",
     tier=CheckTier.review, channel=CodeChannel.none,
     tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(compare_thermo, note="Explicit Phase D CLI/service invocation only."),),
+    adr="0008", enforced_by=(PythonCheck(
+        compare_thermo,
+        note=(
+            "Explicit Phase D CLI/service invocation only. Scope is gas "
+            "phase only (app.services.consistency.engine.SUPPORTED_PHASES, "
+            "decided 2026-09-23): a record whose phase is recorded as "
+            "something else, or was never recorded at all, is reported "
+            "unavailable, not refused and not assumed gas."
+        ),
+    ),),
     escape_hatch=None,
 )
 CHECK_THERMO_KINETICS_CONSISTENCY = ScientificCheck(
@@ -82,6 +95,15 @@ CHECK_THERMO_KINETICS_CONSISTENCY = ScientificCheck(
     asserts="Compare explicitly supplied opposite elementary rates with equilibrium from explicitly mapped NASA thermo.",
     tier=CheckTier.review, channel=CodeChannel.none,
     tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
-    adr="0008", enforced_by=(PythonCheck(compare_kinetics, note="Explicit Phase D CLI/service invocation only."),),
+    adr="0008", enforced_by=(PythonCheck(
+        compare_kinetics,
+        note=(
+            "Explicit Phase D CLI/service invocation only. Scope is gas "
+            "phase only (app.services.consistency.engine.SUPPORTED_PHASES, "
+            "decided 2026-09-23): a thermo record whose phase is recorded as "
+            "something else, or was never recorded at all, is reported "
+            "unavailable, not refused and not assumed gas."
+        ),
+    ),),
     escape_hatch=None,
 )
