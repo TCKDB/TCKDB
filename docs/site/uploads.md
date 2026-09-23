@@ -28,6 +28,9 @@ the database records still need parsed scientific content:
 A workflow adapter is usually responsible for turning tool output into
 the TCKDB upload shape.
 
+For what one record type must contain, what belongs elsewhere and what is
+refused, see [Depositing a Thermo Record](../guides/depositing_a_thermo_record.md).
+
 ## Useful References
 
 - [Admin auth quickstart](../deployment/admin_auth_quickstart.md)
