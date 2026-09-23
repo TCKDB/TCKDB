@@ -34,3 +34,5 @@ the TCKDB upload shape.
 - [TCKDB client v0 spec](../specs/tckdb-client-v0-spec.md)
 - [ARC adapter spec](../specs/arc-tckdb-adapter-v0-spec.md)
 - [Contribution bundle format](../contribution-bundles/v0-format.md)
+- [Schema reference](../guides/schema_reference.md) -- what every table and
+  column means, generated from the models
