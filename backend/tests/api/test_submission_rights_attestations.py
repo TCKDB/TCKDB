@@ -15,7 +15,7 @@ from sqlalchemy import select
 from app.db.models.app_user import AppUser
 from app.db.models.submission_rights import SubmissionRightsAttestation
 
-_THERMO = {"enthalpy_reference_kind": "formation_from_elements_298k",
+_THERMO = {"enthalpy_reference_kind": "formation_298k",
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
     "scientific_origin": "computed",
     "h298_kj_mol": 217.998,

@@ -5,7 +5,7 @@ import pytest
 from tckdb_client.builders.thermo import Thermo
 from tckdb_client.builders.validation import TCKDBBuilderValidationError
 
-REFERENCE = "formation_from_elements_298k"
+REFERENCE = "formation_298k"
 
 
 @pytest.mark.parametrize("kwargs", [

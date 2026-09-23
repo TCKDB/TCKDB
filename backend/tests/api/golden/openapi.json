@@ -15533,7 +15533,7 @@
       "EnthalpyReferenceKind": {
         "description": "Formation zero with elemental reference enthalpies pinned at 298.15 K.\n\nH(T) = formation enthalpy at 298.15 K + the species enthalpy increment\nfrom 298.15 K. The elemental term is not reevaluated at T. Absence is\nnull, never an unspecified enum member. No basis may be inferred.",
         "enum": [
-          "formation_from_elements_298k"
+          "formation_298k"
         ],
         "title": "EnthalpyReferenceKind",
         "type": "string"

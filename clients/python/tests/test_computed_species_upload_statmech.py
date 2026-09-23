@@ -159,7 +159,7 @@ def test_statmech_optional_keeps_payload_shape(water_species, calc_trio):
 def test_thermo_and_statmech_coexist(water_species, calc_trio):
     opt, freq, sp = calc_trio
     thermo = Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
     )
     sm = Statmech(

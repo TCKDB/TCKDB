@@ -4,7 +4,7 @@ Owner decision: 2026-09-23. The owner revised the original scalar iff proposal t
 
 ## Enthalpy reference declaration (2026-09-23)
 
-`thermo.enthalpy_reference_kind = formation_from_elements_298k` declares
+`thermo.enthalpy_reference_kind = formation_298k` declares
 standard enthalpy of formation at 298.15 K: one mole of the species formed
 from elements in their reference forms, whose formation enthalpies are zero.
 At another temperature, H(T) is that formation energy plus the species' own

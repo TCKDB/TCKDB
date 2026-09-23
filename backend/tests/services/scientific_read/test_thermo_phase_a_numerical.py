@@ -51,7 +51,7 @@ def test_nasa7_cantera_and_printed_precision(db_session, tmp_path, analytical):
             **{f"a{i}": c for i, c in enumerate(low, 1)},
             **{f"b{i}": c for i, c in enumerate(high, 1)}}
     row = persist_thermo_upload(db_session, ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=IDENTITY, nasa=data, phase="gas", reference_pressure_bar=1.01325))
+        enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, nasa=data, phase="gas", reference_pressure_bar=1.01325))
     replay = _thermo_to_upload(row)["nasa"]
     assert replay == data
     source, restored = nasa7_model(data), nasa7_model(replay)
@@ -87,7 +87,7 @@ def test_nasa9_cantera_multiple_intervals(db_session):
     intervals = [interval(1, 200, 1000), interval(2, 1000, 3000)]
     for i, item in enumerate(intervals):
         item.update(a1=100 + i, a2=-3 - i, a3=3.5 + i, a4=1e-5, a8=-1234, a9=4)
-    row = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_from_elements_298k", species_entry=IDENTITY, nasa9_intervals=intervals))
+    row = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, nasa9_intervals=intervals))
     replay = _thermo_to_upload(row)["nasa9_intervals"]
     assert replay == intervals
     selected = SelectedThermo(row, None, [], "nasa9", RecordReviewStatus.not_reviewed,
@@ -123,7 +123,7 @@ def test_wilhoit_rmg_reference_and_optional_constants(db_session, constants):
         data.update(h0_kj_mol=-123.456, s0_j_mol_k=12.345)
     row = persist_thermo_upload(db_session, ThermoUploadRequest(
         species_entry=IDENTITY, wilhoit=data,
-        enthalpy_reference_kind="formation_from_elements_298k" if constants else None,
+        enthalpy_reference_kind="formation_298k" if constants else None,
     ))
     replay = _thermo_to_upload(row)["wilhoit"]
     assert replay == data

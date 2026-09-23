@@ -231,7 +231,7 @@ def test_reaction_bundle_thermo_records_its_source_calculations(client, db_sessi
     nothing in the payload to suggest it had been.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "s298_j_mol_k": 114.7,
         "h298_uncertainty_kj_mol": 0.006,
@@ -274,7 +274,7 @@ def test_reaction_bundle_thermo_source_role_must_match_calculation_type(client):
     because three copies of one rule can disagree about one deposit.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "source_calculations": [{"calculation_key": "h-freq", "role": "sp"}],
     }
@@ -292,7 +292,7 @@ def test_reaction_bundle_thermo_source_must_belong_to_its_own_species(client):
     species entry each calculation landed on.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "source_calculations": [{"calculation_key": "h2-sp", "role": "sp"}],
     }
@@ -309,7 +309,7 @@ def test_reaction_bundle_thermo_source_must_belong_to_its_own_species(client):
 def test_reaction_bundle_thermo_source_key_must_exist(client):
     """A typo is refused at the schema seam, where it can name the key."""
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "source_calculations": [{"calculation_key": "h-spp", "role": "sp"}],
     }
@@ -337,11 +337,11 @@ def test_reaction_bundle_thermo_provenance_overrides_the_bundle_default(
     """
     bundle = _reaction_bundle()
     bundle["analysis_software_release"] = {"name": "Arkane", "version": "3.1.0"}
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "software_release": {"name": "MultiWell", "version": "2023"},
     }
-    bundle["species"][1]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k", "h298_kj_mol": 0.0}
+    bundle["species"][1]["thermo"] = {"enthalpy_reference_kind": "formation_298k", "h298_kj_mol": 0.0}
 
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 201, resp.text[:800]
@@ -358,7 +358,7 @@ def test_reaction_bundle_thermo_provenance_overrides_the_bundle_default(
 def test_reaction_bundle_thermo_records_its_literature(client, db_session):
     """A thermo value taken from a paper can name the paper on this route."""
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "scientific_origin": "experimental",
         "h298_kj_mol": 217.998,
         "literature": {
@@ -385,7 +385,7 @@ def test_a_calculation_still_owns_one_thermo_role_once(client):
     about the table constraint they both write into.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "source_calculations": [
             {"calculation_key": "h-sp", "role": "sp"},
@@ -410,7 +410,7 @@ def test_calculation_rows_are_shared_not_duplicated_by_thermo_links(
     not mint a second calculation to hang the link off.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": 217.998,
         "source_calculations": [{"calculation_key": "h-sp", "role": "sp"}],
     }
@@ -456,7 +456,7 @@ class TestSpeciesBundleLevelWorkflowTool:
     def test_thermo_inherits_the_bundle_level_tool(self, client, db_session):
         bundle = _species_bundle(
             workflow_tool_release=dict(_ARC),
-            thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
+            thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
         )
         resp = client.post("/api/v1/uploads/computed-species", json=bundle)
         assert resp.status_code == 201, resp.text[:800]
@@ -481,7 +481,7 @@ class TestSpeciesBundleLevelWorkflowTool:
         """Fallback, not replacement — the block that speaks wins."""
         bundle = _species_bundle(
             workflow_tool_release=dict(_ARC),
-            thermo={"enthalpy_reference_kind": "formation_from_elements_298k",
+            thermo={"enthalpy_reference_kind": "formation_298k",
                 "scientific_origin": "computed",
                 "h298_kj_mol": 218.0,
                 "workflow_tool_release": {"name": "Arkane", "version": "3.2"},
@@ -513,7 +513,7 @@ class TestSpeciesBundleLevelWorkflowTool:
         """The 201 body used to report the filled-in field as missing."""
         bundle = _species_bundle(
             workflow_tool_release=dict(_ARC),
-            thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
+            thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
             statmech={"external_symmetry": 1, "statmech_treatment": "rrho"},
         )
         resp = client.post("/api/v1/uploads/computed-species", json=bundle)
@@ -527,7 +527,7 @@ class TestSpeciesBundleLevelWorkflowTool:
     def test_a_bundle_that_names_no_tool_still_warns(self, client):
         """The red half: silence is still reported as silence."""
         bundle = _species_bundle(
-            thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
+            thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
         )
         resp = client.post("/api/v1/uploads/computed-species", json=bundle)
         assert resp.status_code == 201, resp.text[:800]
@@ -546,7 +546,7 @@ class TestSpeciesBundleLevelWorkflowTool:
         """
         bundle = _species_bundle(
             note="this note goes nowhere",
-            thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
+            thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0},
         )
         resp = client.post("/api/v1/uploads/computed-species", json=bundle)
         assert resp.status_code == 201, resp.text[:800]

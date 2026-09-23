@@ -2,12 +2,12 @@
 
 Usage:
     python scripts/parse_sdf_to_bundle.py kfir_rxn_2 --json \
-        --enthalpy-reference-kind formation_from_elements_298k
+        --enthalpy-reference-kind formation_298k
 
 Or import as a library:
     from scripts.parse_sdf_to_bundle import sdf_to_bundle
     payload = sdf_to_bundle("kfir_rxn_2", sdf_dir, csv_path,
-                            enthalpy_reference_kind="formation_from_elements_298k")
+                            enthalpy_reference_kind="formation_298k")
 """
 
 from __future__ import annotations
@@ -171,10 +171,10 @@ def _build_species(mol: dict, key: str, enthalpy_reference_kind: str | None) -> 
 
     # Thermo
     if mol["thermo_class"] == "NASA" and mol["H298_kJmol"] is not None:
-        if enthalpy_reference_kind != "formation_from_elements_298k":
+        if enthalpy_reference_kind != "formation_298k":
             raise ValueError(
                 "SDF input does not declare an enthalpy reference; configure "
-                "enthalpy_reference_kind=formation_from_elements_298k explicitly. "
+                "enthalpy_reference_kind=formation_298k explicitly. "
                 "Other enthalpy quantities belong in molecular_property_observation."
             )
         s298_j_mol_k = None
@@ -400,7 +400,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("rxn_id")
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--enthalpy-reference-kind", choices=["formation_from_elements_298k"])
+    parser.add_argument("--enthalpy-reference-kind", choices=["formation_298k"])
     args = parser.parse_args()
     rxn_id = args.rxn_id
     bundle = sdf_to_bundle(rxn_id, enthalpy_reference_kind=args.enthalpy_reference_kind)

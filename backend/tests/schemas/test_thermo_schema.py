@@ -122,7 +122,7 @@ class TestThermoSourceCalculation:
 class TestThermoCreate:
     def test_valid_with_all_children(self) -> None:
         t = ThermoCreate(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry_id=1,
+            enthalpy_reference_kind="formation_298k", species_entry_id=1,
             scientific_origin=ScientificOriginKind.computed,
             h298_kj_mol=-50.0,
             s298_j_mol_k=200.0,
@@ -193,7 +193,7 @@ class TestThermoCreate:
 
     def test_valid_with_uncertainty(self) -> None:
         t = ThermoCreate(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry_id=1,
+            enthalpy_reference_kind="formation_298k", species_entry_id=1,
             scientific_origin=ScientificOriginKind.computed,
             h298_kj_mol=-50.0,
             h298_uncertainty_kj_mol=2.5,

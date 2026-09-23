@@ -230,7 +230,7 @@ def _species_block(
         }
     )
     if include_thermo:
-        block["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        block["thermo"] = {"enthalpy_reference_kind": "formation_298k",
             "h298_kj_mol": -10.0,
             "s298_j_mol_k": 200.0,
             "tmin_k": 100.0,

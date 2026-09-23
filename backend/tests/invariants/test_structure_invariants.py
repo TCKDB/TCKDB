@@ -474,7 +474,7 @@ def test_thermo_upload_schema_rejects_source_calc_key_with_no_declared_calc() ->
     blocks dangling calculation references at the gate."""
     with pytest.raises(ValidationError, match="undefined calculation_key"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+            enthalpy_reference_kind="formation_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
             h298_kj_mol=-241.8,
             calculations=[],

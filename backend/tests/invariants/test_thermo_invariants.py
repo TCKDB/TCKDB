@@ -244,7 +244,7 @@ _SPECIES_ENTRY = {"smiles": "O", "charge": 0, "multiplicity": 1}
 
 
 def _thermo_request(**overrides) -> ThermoUploadRequest:
-    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    base: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": dict(_SPECIES_ENTRY),
         "scientific_origin": "computed",
         "h298_kj_mol": -241.8,
@@ -262,12 +262,12 @@ def test_nasa_schema_enforces_t_low_lt_t_mid_lt_t_high() -> None:
     nasa = dict(_WATER_NASA)
     nasa["t_mid"] = nasa["t_low"]
     with pytest.raises(ValidationError, match="t_mid must be greater than t_low"):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
     nasa = dict(_WATER_NASA)
     nasa["t_high"] = nasa["t_mid"]
     with pytest.raises(ValidationError, match="t_high must be greater than t_mid"):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
 
 # ---------------------------------------------------------------------------

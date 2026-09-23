@@ -16,7 +16,7 @@ branch_labels = None
 depends_on = None
 
 _reference = postgresql.ENUM(
-    "formation_from_elements_298k", name="enthalpy_reference_kind", create_type=False
+    "formation_298k", name="enthalpy_reference_kind", create_type=False
 )
 
 

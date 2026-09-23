@@ -39,7 +39,7 @@
         "tmin_k": 200.0,
         "tmax_k": 3000.0,
         "note": "water reference (illustrative)",
-        "enthalpy_reference_kind": "formation_from_elements_298k"
+        "enthalpy_reference_kind": "formation_298k"
       }
     ],
     "kinetics_uploads": []

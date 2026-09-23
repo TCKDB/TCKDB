@@ -47,7 +47,7 @@ class TestH2Thermo:
 
         result = build_experimental_species_payload(h2_record)
         assert "h_kj_mol" not in result.thermo_payload["points"][0]
-        assert result.thermo_payload["enthalpy_reference_kind"] == "formation_from_elements_298k"
+        assert result.thermo_payload["enthalpy_reference_kind"] == "formation_298k"
         observation, = result.molecular_property_observation_payloads
         assert observation["scalar_value"] == pytest.approx(8.468)
         assert observation["scalar_unit"] == "kJ/mol"

@@ -488,7 +488,7 @@ class TestReactionUpload:
 
 class TestThermoUpload:
     def test_success(self, client):
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,
@@ -527,7 +527,7 @@ class TestThermoUpload:
         """DR-0028: existing_calculation_id wired through the API produces a
         201, with the thermo attached to the same species entry."""
         species_entry_id, calc_id = self._seed_calc(client, calc_type="sp")
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "CC", "charge": 0, "multiplicity": 1},
             "scientific_origin": "computed",
             "h298_kj_mol": -83.7,
@@ -547,7 +547,7 @@ class TestThermoUpload:
         was to assert while the refusal carried the generic
         ``resource_not_found`` with an empty ``context``.
         """
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,
@@ -578,7 +578,7 @@ class TestThermoUpload:
         # Seed a calc owned by a CC species, then upload thermo for a
         # different species (H) that references it.
         _, calc_id = self._seed_calc(client, calc_type="sp")
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,
@@ -603,7 +603,7 @@ class TestThermoUpload:
 
     def test_existing_calc_role_type_mismatch_returns_422(self, client):
         _, freq_calc_id = self._seed_calc(client, calc_type="freq")
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "CC", "charge": 0, "multiplicity": 1},
             "scientific_origin": "computed",
             "h298_kj_mol": -83.7,
@@ -617,7 +617,7 @@ class TestThermoUpload:
         assert "incompatible" in resp.json()["detail"]
 
     def test_both_reference_fields_set_returns_422(self, client):
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,
@@ -633,7 +633,7 @@ class TestThermoUpload:
         assert resp.status_code == 422
 
     def test_neither_reference_field_set_returns_422(self, client):
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,
@@ -686,7 +686,7 @@ class TestUploadIdempotency:
     def test_repeated_thermo_creates_separate_records(self, client):
         """Two identical thermo uploads should create separate thermo records
         for the same species entry."""
-        payload = {"enthalpy_reference_kind": "formation_from_elements_298k",
+        payload = {"enthalpy_reference_kind": "formation_298k",
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
             "h298_kj_mol": 217.998,

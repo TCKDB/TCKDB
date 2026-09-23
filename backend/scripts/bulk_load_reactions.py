@@ -207,7 +207,7 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="Load only first N reactions")
     parser.add_argument("--ids", nargs="+", help="Load specific reaction IDs")
     parser.add_argument("--no-migrate", action="store_true", help="Skip Alembic migration")
-    parser.add_argument("--enthalpy-reference-kind", required=True, choices=["formation_from_elements_298k"])
+    parser.add_argument("--enthalpy-reference-kind", required=True, choices=["formation_298k"])
     args = parser.parse_args()
 
     # Setup DB

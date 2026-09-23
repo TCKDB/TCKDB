@@ -29,7 +29,7 @@ already use, so a value coming from any of those needs no conversion.
 Because of that, a deposit carrying any enthalpy must say so:
 
 ```json
-{ "enthalpy_reference_kind": "formation_from_elements_298k" }
+{ "enthalpy_reference_kind": "formation_298k" }
 ```
 
 That is the only accepted value today. "Any enthalpy" means any of these:
@@ -83,7 +83,7 @@ client, so all three say the same thing.
 
 ```
 Enthalpy content requires enthalpy_reference_kind. Declare
-formation_from_elements_298k only when the source states that convention;
+formation_298k only when the source states that convention;
 other enthalpy quantities belong in molecular_property_observation.
 ```
 
@@ -100,7 +100,7 @@ Omit the declaration for entropy and heat-capacity-only records.
 **`enthalpy_quantity_not_storable_here`**
 
 ```
-Thermo accepts only formation_from_elements_298k enthalpies. Deposit sensible
+Thermo accepts only formation_298k enthalpies. Deposit sensible
 increments and absolute enthalpies through the molecular_property_observation
 route instead.
 ```
@@ -117,7 +117,7 @@ A scalar deposit with an enthalpy:
 {
   "h298_kj_mol": -74.6,
   "s298_j_mol_k": 186.25,
-  "enthalpy_reference_kind": "formation_from_elements_298k",
+  "enthalpy_reference_kind": "formation_298k",
   "phase": "gas",
   "reference_pressure_bar": 1.0
 }
@@ -130,7 +130,7 @@ it, and do not compute one from the fit:
 ```json
 {
   "nasa": { "...": "coefficients and temperature ranges" },
-  "enthalpy_reference_kind": "formation_from_elements_298k",
+  "enthalpy_reference_kind": "formation_298k",
   "phase": "gas",
   "reference_pressure_bar": 1.0
 }

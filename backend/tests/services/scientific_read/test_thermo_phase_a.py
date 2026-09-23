@@ -51,7 +51,7 @@ def test_zero_kelvin_custody(db_session, state):
 def test_historical_incomplete_thermo_readable_but_not_replayable(db_session):
     from app.db.models.thermo import ThermoNASA
 
-    thermo = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_from_elements_298k", species_entry=IDENTITY, h298_kj_mol=0))
+    thermo = persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, h298_kj_mol=0))
     db_session.add(ThermoNASA(thermo_id=thermo.id, a1=3.5))
     db_session.flush()
     db_session.expire_all()
@@ -108,7 +108,7 @@ def test_inventory_reports_pending_incompatible_jobs_without_rewriting(db_sessio
     from app.db.models.common import UploadJobKind, UploadJobStatus
     from app.db.models.upload_job import UploadJob
 
-    payload = {"enthalpy_reference_kind": "formation_from_elements_298k", "species_entry": IDENTITY, "nasa": {}}
+    payload = {"enthalpy_reference_kind": "formation_298k", "species_entry": IDENTITY, "nasa": {}}
     job = UploadJob(kind=UploadJobKind.thermo, status=UploadJobStatus.queued, payload=payload)
     db_session.add(job)
     db_session.flush()

@@ -71,7 +71,7 @@ def _ga_payload(**scheme_overrides) -> dict:
 
 
 def _estimated_request(**overrides) -> ThermoUploadRequest:
-    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    base: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": dict(_SPECIES_ENTRY),
         "scientific_origin": "estimated",
         "h298_kj_mol": -84.0,
@@ -218,7 +218,7 @@ def test_ga_rejected_on_non_estimated_origin():
     """A GA breakdown may only attach to scientific_origin='estimated'."""
     with pytest.raises(ValidationError, match="scientific_origin='estimated'"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-84.0,
             group_additivity=_ga_payload(),
@@ -235,7 +235,7 @@ def test_service_guard_rejects_ga_on_non_estimated_thermo(db_session):
     computed = persist_thermo_upload(
         db_session,
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "N", "charge": 0, "multiplicity": 1},
+            enthalpy_reference_kind="formation_298k", species_entry={"smiles": "N", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
             h298_kj_mol=-45.9,
             s298_j_mol_k=192.8,
@@ -297,7 +297,7 @@ def test_ga_requires_at_least_one_component():
     """An empty component list is rejected at the payload level."""
     with pytest.raises(ValidationError, match="at least one component"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="estimated",
             h298_kj_mol=-84.0,
             group_additivity={
@@ -342,7 +342,7 @@ def test_thermo_read_ga_block_null_for_non_estimated(db_session):
     thermo = persist_thermo_upload(
         db_session,
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+            enthalpy_reference_kind="formation_298k", species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
             scientific_origin="computed",
             h298_kj_mol=-241.8,
             s298_j_mol_k=188.8,

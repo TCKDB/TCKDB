@@ -1433,7 +1433,7 @@
           }
         ],
         "s298_j_mol_k": 239.44758574584654,
-        "enthalpy_reference_kind": "formation_from_elements_298k"
+        "enthalpy_reference_kind": "formation_298k"
       }
     },
     {
@@ -2037,7 +2037,7 @@
           }
         ],
         "s298_j_mol_k": 233.51962810315206,
-        "enthalpy_reference_kind": "formation_from_elements_298k"
+        "enthalpy_reference_kind": "formation_298k"
       }
     },
     {
@@ -2641,7 +2641,7 @@
           }
         ],
         "s298_j_mol_k": 218.78801248254476,
-        "enthalpy_reference_kind": "formation_from_elements_298k"
+        "enthalpy_reference_kind": "formation_298k"
       }
     },
     {
@@ -3252,7 +3252,7 @@
           }
         ],
         "s298_j_mol_k": 236.81389710783773,
-        "enthalpy_reference_kind": "formation_from_elements_298k"
+        "enthalpy_reference_kind": "formation_298k"
       }
     }
   ],

@@ -143,7 +143,7 @@ def test_computed_species_thermo_source_calcs_produce_no_warning(
         species=water_species, calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
+            enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
             source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
         ),
     )
@@ -205,7 +205,7 @@ def test_computed_reaction_species_thermo_source_calcs_report_not_emitted():
     ts_opt = Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)
     _ch3, ch4, rxn = _basic_reaction(ts_geom)
     thermo = Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6,
         source_calculations={"opt": ch4_opt},
     )
     upload = ComputedReactionUpload(
@@ -234,7 +234,7 @@ def test_computed_reaction_thermo_without_source_calcs_is_clean():
     upload = ComputedReactionUpload(
         reaction=rxn,
         calculations=[ts_opt],
-        species_thermo={ch4: Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6)},
+        species_thermo={ch4: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6)},
     )
     assert upload.emission_diagnostics() == []
 
@@ -380,7 +380,7 @@ def test_client_warn_on_dropped_fields_silent_when_no_diagnostics(
         species=water_species, calculations=[opt, freq, sp],
         primary_calculation=opt,
         thermo=Thermo.scalar(
-            enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
+            enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
             source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
         ),
     )

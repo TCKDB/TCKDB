@@ -152,7 +152,7 @@ def _standalone_statmech_payload(**overrides) -> dict:
 
 
 def _thermo_payload(smiles: str, **overrides) -> dict:
-    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    base: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
         "scientific_origin": "computed",
         "h298_kj_mol": -83.7,

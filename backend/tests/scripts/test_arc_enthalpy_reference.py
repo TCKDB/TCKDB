@@ -33,8 +33,8 @@ def test_arc_requires_explicit_adapter_declaration(monkeypatch, reference):
 
 def test_arc_emits_configured_reference_without_changing_numbers(monkeypatch):
     species, run = _inputs(monkeypatch)
-    payload = builder._build_species_payload("H", species, run, False, "formation_from_elements_298k")
-    assert payload["thermo"]["enthalpy_reference_kind"] == "formation_from_elements_298k"
+    payload = builder._build_species_payload("H", species, run, False, "formation_298k")
+    assert payload["thermo"]["enthalpy_reference_kind"] == "formation_298k"
     assert payload["thermo"]["h298_kj_mol"] == 0
     assert payload["thermo"]["nasa"]["a6"] == 1
 
@@ -51,7 +51,7 @@ def test_arc_fit_only_does_not_fabricate_h298(monkeypatch):
         "Tmin": {"value": 200}, "Tmax": {"value": 3000},
         "polynomials": {"polynomial1": polynomial(200, 1000), "polynomial2": polynomial(1000, 3000)},
     }})
-    payload = builder._build_species_payload("H", species, run, False, "formation_from_elements_298k")
+    payload = builder._build_species_payload("H", species, run, False, "formation_298k")
     assert payload["thermo"]["h298_kj_mol"] is None
     assert payload["thermo"]["nasa"]["a6"] == 1
-    assert payload["thermo"]["enthalpy_reference_kind"] == "formation_from_elements_298k"
+    assert payload["thermo"]["enthalpy_reference_kind"] == "formation_298k"

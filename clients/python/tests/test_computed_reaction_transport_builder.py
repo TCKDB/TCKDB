@@ -194,7 +194,7 @@ def test_transport_alongside_thermo_and_statmech(ts_geom, ch4, ch3):
         reaction=rxn,
         calculations=[ts_opt],
         species_calculations={ch4: [ch4_opt]},
-        species_thermo={ch4: Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6)},
+        species_thermo={ch4: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6)},
         species_statmech={ch4: Statmech(external_symmetry=12, point_group="Td")},
         species_transport={ch4: Transport(sigma_angstrom=3.8, epsilon_over_k_k=141.4)},
     ).to_payload()

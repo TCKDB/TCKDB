@@ -119,7 +119,7 @@ def test_dependency_key_must_resolve():
 
 def test_thermo_source_key_must_resolve():
     payload = _bundle(
-        thermo={"enthalpy_reference_kind": "formation_from_elements_298k",
+        thermo={"enthalpy_reference_kind": "formation_298k",
             "h298_kj_mol": -100.0,
             "source_calculations": [
                 {"calculation_key": "ghost", "role": "opt"},
@@ -219,7 +219,7 @@ def test_empty_conformers_rejected():
 
 
 def test_thermo_unique_source_calculation_pairs():
-    thermo = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    thermo = {"enthalpy_reference_kind": "formation_298k",
         "h298_kj_mol": -100.0,
         "source_calculations": [
             {"calculation_key": "opt0", "role": "opt"},
@@ -239,4 +239,4 @@ def test_thermo_requires_scientific_content():
 
 def test_thermo_temperature_range():
     with pytest.raises(ValidationError):
-        ThermoInBundle(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=1.0, tmin_k=500.0, tmax_k=300.0)
+        ThermoInBundle(enthalpy_reference_kind="formation_298k", h298_kj_mol=1.0, tmin_k=500.0, tmax_k=300.0)

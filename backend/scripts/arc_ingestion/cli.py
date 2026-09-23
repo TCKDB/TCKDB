@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> None:
     )
 
     parser.add_argument(
-        "--enthalpy-reference-kind", choices=["formation_from_elements_298k"],
+        "--enthalpy-reference-kind", choices=["formation_298k"],
         help="Explicit depositor declaration required when the run carries thermo.",
     )
     args = parser.parse_args(argv)

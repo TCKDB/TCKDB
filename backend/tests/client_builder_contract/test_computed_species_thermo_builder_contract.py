@@ -82,7 +82,7 @@ def _upload_with(thermo: Thermo, water: Species, calc_trio) -> ComputedSpeciesUp
 def test_scalar_thermo_payload_validates(water, calc_trio):
     opt, freq, sp = calc_trio
     thermo = Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         s298_j_mol_k=188.8,
         tmin_k=200, tmax_k=2000,
         source_calculations={"opt": opt, "freq": freq, "sp": sp},
@@ -102,7 +102,7 @@ def test_scalar_thermo_payload_validates(water, calc_trio):
 def test_nasa_thermo_payload_validates(water, calc_trio):
     opt, freq, sp = calc_trio
     thermo = Thermo.nasa(
-        enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
+        enthalpy_reference_kind="formation_298k", coeffs_low=[0.5, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0],
         coeffs_high=[0.5, 0.2, 0.0, 0.0, 0.0, 0.0, 0.0],
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-241.8,
@@ -129,7 +129,7 @@ def test_points_thermo_payload_validates(water, calc_trio):
              "s_j_mol_k": 188.8},
             {"temperature_k": 500.0, "cp_j_mol_k": 35.2, "h_kj_mol": 10.0},
         ],
-        enthalpy_reference_kind="formation_from_elements_298k", tmin_k=200, tmax_k=1000,
+        enthalpy_reference_kind="formation_298k", tmin_k=200, tmax_k=1000,
         source_calculations={"sp": sp},
     )
     upload = _upload_with(thermo, water, calc_trio)
@@ -150,7 +150,7 @@ def test_source_calculations_survive_round_trip(water, calc_trio):
     Pydantic validation and ``model_dump``."""
     opt, freq, sp = calc_trio
     thermo = Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8,
         source_calculations=[("opt", opt), ("freq", freq), ("sp", sp)],
     )
     upload = _upload_with(thermo, water, calc_trio)
@@ -177,7 +177,7 @@ def test_source_calculations_survive_round_trip(water, calc_trio):
 def test_to_payload_twice_is_byte_stable_post_validation(water, calc_trio):
     opt, freq, sp = calc_trio
     thermo = Thermo.nasa(
-        enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
+        enthalpy_reference_kind="formation_298k", coeffs_low=[0.5] + [0.0] * 6,
         coeffs_high=[0.5] + [0.0] * 6,
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-241.8,

@@ -186,7 +186,7 @@ enum EnergyZeroConvention {
 }
 
 enum EnthalpyReferenceKind {
-  formation_from_elements_298k
+  formation_298k
 }
 
 enum ExternalSourceRecordKind {

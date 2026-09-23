@@ -29,7 +29,7 @@ def test_frozen_zero_kelvin_and_null_state_survive_new_uploads(
     candidate = next(json.loads(line) for line in frozen["candidate_records.ndjson"][0].splitlines()
                      if json.loads(line)["record_ref"] == row.public_ref)
     assert {key: candidate["record"][key] for key in values} == values
-    persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_from_elements_298k", species_entry=IDENTITY, h298_kj_mol=-123))
+    persist_thermo_upload(db_session, ThermoUploadRequest(enthalpy_reference_kind="formation_298k", species_entry=IDENTITY, h298_kj_mol=-123))
     from app.services.release import versions
     monkeypatch.setattr(versions, "backend_version", lambda: "999")
     db_session.expire_all()

@@ -28,7 +28,7 @@ def test_migration_preserves_legacy_null_and_enforces_new_scalars(db_session, mo
     # Transactional DDL: rollback by the fixture restores the original schema.
     old_id = db_session.scalar(text(
         "INSERT INTO thermo (public_ref, species_entry_id, scientific_origin, h298_kj_mol, enthalpy_reference_kind) "
-        "VALUES (:ref, :entry, 'computed', 42, 'formation_from_elements_298k') RETURNING id"
+        "VALUES (:ref, :entry, 'computed', 42, 'formation_298k') RETURNING id"
     ), {"entry": entry.id, "ref": "th_" + uuid4().hex[:26]})
     if approved:
         _approve(db_session, SubmissionRecordType.thermo, old_id, _actor(db_session))
@@ -48,7 +48,7 @@ def test_migration_preserves_legacy_null_and_enforces_new_scalars(db_session, mo
         ), {"entry": entry.id, "ref": "th_" + uuid4().hex[:26]})
     db_session.execute(text(
         "INSERT INTO thermo (public_ref, species_entry_id, scientific_origin, enthalpy_reference_kind) "
-        "VALUES (:ref, :entry, 'computed', 'formation_from_elements_298k')"
+        "VALUES (:ref, :entry, 'computed', 'formation_298k')"
     ), {"entry": entry.id, "ref": "th_" + uuid4().hex[:26]})
     migration.downgrade()
     assert db_session.scalar(text("SELECT count(*) FROM pg_type WHERE typname='enthalpy_reference_kind'")) == 0

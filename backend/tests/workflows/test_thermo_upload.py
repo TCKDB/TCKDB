@@ -82,7 +82,7 @@ def _thermo_request(**overrides) -> ThermoUploadRequest:
     Overrides replace top-level fields; pass ``species_entry={"smiles":...}``
     to target a different species.
     """
-    base: dict = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    base: dict = {"enthalpy_reference_kind": "formation_298k",
         "species_entry": dict(_SPECIES_ENTRY),
         "scientific_origin": "computed",
         "h298_kj_mol": -241.8,
@@ -188,7 +188,7 @@ def test_persist_thermo_upload_creates_and_links_nasa_row(db_conn) -> None:
     with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
-            _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=_nasa_block()),
+            _thermo_request(enthalpy_reference_kind="formation_298k", nasa=_nasa_block()),
         )
 
         nasa_rows = session.scalars(
@@ -445,7 +445,7 @@ def test_nasa_rejects_t_mid_not_greater_than_t_low() -> None:
     nasa = _nasa_block()
     nasa["t_mid"] = nasa["t_low"]  # violates t_mid > t_low
     with pytest.raises(ValidationError, match="t_mid must be greater than t_low"):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
 
 def test_nasa_rejects_t_high_not_greater_than_t_mid() -> None:
@@ -453,7 +453,7 @@ def test_nasa_rejects_t_high_not_greater_than_t_mid() -> None:
     nasa = _nasa_block()
     nasa["t_high"] = nasa["t_mid"]
     with pytest.raises(ValidationError, match="t_high must be greater than t_mid"):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
 
 def test_nasa_rejects_non_positive_t_low() -> None:
@@ -461,7 +461,7 @@ def test_nasa_rejects_non_positive_t_low() -> None:
     nasa = _nasa_block()
     nasa["t_low"] = 0.0
     with pytest.raises(ValidationError):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
 
 # --- B4: all-or-none temperature bounds ------------------------------------
@@ -477,7 +477,7 @@ def test_nasa_rejects_partial_temperature_bounds(missing_fields: tuple[str, ...]
     for field in missing_fields:
         nasa[field] = None
     with pytest.raises(ValidationError, match="Input should be a valid number"):
-        _thermo_request(enthalpy_reference_kind="formation_from_elements_298k", nasa=nasa)
+        _thermo_request(enthalpy_reference_kind="formation_298k", nasa=nasa)
 
 
 # --- B5: duplicate thermo points -------------------------------------------
@@ -628,7 +628,7 @@ def test_scalar_only_thermo_upload_is_valid(db_conn) -> None:
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                 scientific_origin="computed",
                 h298_kj_mol=-200.7,
                 s298_j_mol_k=239.7,
@@ -653,7 +653,7 @@ def test_nasa_only_thermo_upload_is_valid(db_conn) -> None:
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                 scientific_origin="computed",
                 nasa=_nasa_block(),
             ),
@@ -681,7 +681,7 @@ def test_points_only_thermo_upload_is_valid(db_conn) -> None:
             ThermoUploadRequest(
                 species_entry=dict(distinct),
                 scientific_origin="computed",
-                enthalpy_reference_kind="formation_from_elements_298k",
+                enthalpy_reference_kind="formation_298k",
                 points=_thermo_points(),
             ),
         )
@@ -728,7 +728,7 @@ def test_thermo_upload_persists_source_calculations_via_upload(db_conn) -> None:
     ``thermo_source_calculation`` with the right (calculation_id, role)."""
     distinct = {"smiles": "CCCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-125.7,
         calculations=[
@@ -761,7 +761,7 @@ def test_thermo_upload_with_multiple_source_calculations_and_roles(db_conn) -> N
     """Multiple inline calcs with distinct roles persist as distinct rows."""
     distinct = {"smiles": "c1ccccc1", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=82.9,
         calculations=[
@@ -805,7 +805,7 @@ def test_applied_correction_source_calculation_key_resolves_to_id(db_conn) -> No
     """
     distinct = {"smiles": "CCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-104.0,
         calculations=[
@@ -852,7 +852,7 @@ def test_schema_rejects_source_calculation_with_undefined_key() -> None:
     schema-validation time — before any DB work happens."""
     with pytest.raises(ValidationError, match="undefined calculation_key"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             calculations=[
@@ -868,7 +868,7 @@ def test_schema_rejects_duplicate_calculation_keys() -> None:
     """Duplicate calculation keys are rejected by the schema."""
     with pytest.raises(ValidationError, match="unique keys"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             calculations=[
@@ -882,7 +882,7 @@ def test_schema_rejects_duplicate_source_calculation_pairs_on_upload() -> None:
     """Duplicate (calculation_key, role) pairs are rejected on upload."""
     with pytest.raises(ValidationError, match=r"unique by .calculation_key"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             calculations=[
@@ -900,7 +900,7 @@ def test_schema_rejects_applied_correction_with_undefined_source_calc_key() -> N
     declared calculation — no silent provenance loss."""
     with pytest.raises(ValidationError, match="does not reference a declared"):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             calculations=[],  # intentionally no declared calculations
@@ -964,7 +964,7 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
 
     distinct = {"smiles": "CCCCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-146.8,
         note="wrong-owner-sentinel",
@@ -1128,7 +1128,7 @@ def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
         )
 
         request = ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
             scientific_origin="computed",
             h298_kj_mol=-83.7,
             source_calculations=[
@@ -1178,7 +1178,7 @@ def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
         persist_thermo_upload(
             session,
             ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                 scientific_origin="computed",
                 h298_kj_mol=-47.5,
                 source_calculations=[
@@ -1215,7 +1215,7 @@ def test_thermo_upload_mixed_inline_and_existing_calc_references(db_conn) -> Non
         ).all())
 
         request = ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
             scientific_origin="computed",
             h298_kj_mol=-235.3,
             calculations=[
@@ -1267,7 +1267,7 @@ def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
 
     distinct = {"smiles": "CN", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-30.0,
         source_calculations=[
@@ -1306,7 +1306,7 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
             )
 
             request = ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(species_b),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(species_b),
                 scientific_origin="computed",
                 h298_kj_mol=217.998,
                 source_calculations=[
@@ -1339,7 +1339,7 @@ def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_conn) -> None:
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
-                    enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                    enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                     scientific_origin="computed",
                     h298_kj_mol=-104.0,
                     source_calculations=[
@@ -1364,7 +1364,7 @@ def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_conn) -> None:
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
-                    enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                    enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                     scientific_origin="computed",
                     h298_kj_mol=-272.6,
                     source_calculations=[
@@ -1384,7 +1384,7 @@ def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_conn) -> Non
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
-                    enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                    enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                     scientific_origin="computed",
                     h298_kj_mol=-90.0,
                     calculations=[
@@ -1404,7 +1404,7 @@ def test_schema_rejects_both_calculation_key_and_existing_id_set() -> None:
         ValidationError, match="exactly one of calculation_key or "
     ):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             calculations=[
@@ -1426,7 +1426,7 @@ def test_schema_rejects_neither_calculation_key_nor_existing_id_set() -> None:
         ValidationError, match="exactly one of calculation_key or "
     ):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             source_calculations=[
@@ -1439,7 +1439,7 @@ def test_schema_rejects_existing_calculation_id_zero_or_negative() -> None:
     """existing_calculation_id must be a positive integer (gt=0)."""
     with pytest.raises(ValidationError):
         ThermoUploadRequest(
-            enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+            enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
             scientific_origin="computed",
             h298_kj_mol=-100.0,
             source_calculations=[
@@ -1464,7 +1464,7 @@ def test_schema_allows_role_composite_with_any_calc_type(db_conn) -> None:
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                 scientific_origin="computed",
                 h298_kj_mol=-205.0,
                 source_calculations=[
@@ -1536,7 +1536,7 @@ def test_thermo_upload_defaults_reference_pressure_and_phase(db_conn) -> None:
     """Omitting reference pressure / phase applies the IUPAC 1 bar, gas defaults."""
     distinct = {"smiles": "CCCCCCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-187.8,
     )
@@ -1573,7 +1573,7 @@ def test_non_computed_origin_does_not_default_phase_or_pressure(
     stamped gas @ 1 bar. Only computed uploads get the QC defaults; other
     origins leave phase/reference_pressure_bar unset unless provided."""
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "O=C=O", "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_298k", species_entry={"smiles": "O=C=O", "charge": 0, "multiplicity": 1},
         scientific_origin=origin,
         h298_kj_mol=-393.5,
         s298_j_mol_k=213.8,
@@ -1591,7 +1591,7 @@ def test_non_computed_origin_does_not_default_phase_or_pressure(
 def test_computed_origin_defaults_phase_and_pressure(db_conn) -> None:
     """A computed upload without phase/pressure defaults to gas @ 1 bar."""
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "CCCCCCCCCCC", "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_298k", species_entry={"smiles": "CCCCCCCCCCC", "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
         h298_kj_mol=-270.8,
     )
@@ -1610,7 +1610,7 @@ def test_explicit_reference_state_honored_for_experimental_origin(
     """Explicit phase/pressure are honored regardless of origin: an
     experimental liquid record keeps its own values, not the QC defaults."""
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry={"smiles": "OCCO", "charge": 0, "multiplicity": 1},
+        enthalpy_reference_kind="formation_298k", species_entry={"smiles": "OCCO", "charge": 0, "multiplicity": 1},
         scientific_origin="experimental",
         h298_kj_mol=-460.0,
         phase=PhaseKind.liquid.value,
@@ -1630,7 +1630,7 @@ def test_explicit_none_phase_honored_for_computed_origin() -> None:
     overwritten with gas): model_fields_set distinguishes omitted from
     explicitly-provided-None."""
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_SPECIES_ENTRY),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(_SPECIES_ENTRY),
         scientific_origin="computed",
         h298_kj_mol=-241.8,
         phase=None,
@@ -1652,7 +1652,7 @@ def test_thermo_upload_links_existing_statmech(db_conn) -> None:
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
-                enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                 scientific_origin="computed",
                 h298_kj_mol=-155.0,
                 existing_statmech_id=statmech.id,
@@ -1682,7 +1682,7 @@ def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
-                    enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(distinct),
+                    enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
                     scientific_origin="computed",
                     h298_kj_mol=-155.0,
                     existing_statmech_id=999_999_999,
@@ -1721,7 +1721,7 @@ def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
-                    enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(species_b),
+                    enthalpy_reference_kind="formation_298k", species_entry=dict(species_b),
                     scientific_origin="computed",
                     h298_kj_mol=146.7,
                     existing_statmech_id=statmech_a.id,

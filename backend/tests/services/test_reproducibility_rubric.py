@@ -976,7 +976,7 @@ def test_non_calculation_is_capped_at_described_and_preserves_source_roles(
         objects=objects,
     )
     thermo = Thermo(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry_id=calculation.species_entry_id,
+        enthalpy_reference_kind="formation_298k", species_entry_id=calculation.species_entry_id,
         scientific_origin=ScientificOriginKind.computed,
         h298_kj_mol=-10.0,
         created_by=_api_test_user,
@@ -1026,7 +1026,7 @@ def test_target_and_direct_source_mutations_change_context_hash(
         objects=objects,
     )
     thermo = Thermo(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry_id=calculation.species_entry_id,
+        enthalpy_reference_kind="formation_298k", species_entry_id=calculation.species_entry_id,
         scientific_origin=ScientificOriginKind.computed,
         h298_kj_mol=-10.0,
         created_by=_api_test_user,

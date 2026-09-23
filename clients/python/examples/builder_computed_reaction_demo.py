@@ -197,7 +197,7 @@ def build_upload(artifact_paths: dict[str, Path]) -> ComputedReactionUpload:
             # reaction path but not emitted on the wire — the demo
             # exercises that diagnostic.
             ch4: Thermo.nasa(
-                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
+                enthalpy_reference_kind="formation_298k", coeffs_low=[0.5] + [0.0] * 6,
                 coeffs_high=[0.5] + [0.0] * 6,
                 t_low=200, t_mid=1000, t_high=5000,
                 h298_kj_mol=-74.6, s298_j_mol_k=186.3,

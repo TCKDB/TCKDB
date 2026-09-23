@@ -117,7 +117,7 @@ def _make_thermo_with_sources_pointing_to_species_calcs() -> ComputedReactionUpl
         sr, lot, output_geometry=ts_geom, converged=True, label="ts opt",
     )
     thermo = Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6, s298_j_mol_k=186.3,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6, s298_j_mol_k=186.3,
         source_calculations={"opt": ch4_opt, "sp": ch4_sp},
     )
     kin = Kinetics.modified_arrhenius(A=1e10, A_units="per_s", n=0, Ea=0)
@@ -147,7 +147,7 @@ def _make_thermo_with_sources_pointing_to_species_calcs() -> ComputedReactionUpl
 @pytest.fixture
 def nasa_thermo() -> Thermo:
     return Thermo.nasa(
-        enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
+        enthalpy_reference_kind="formation_298k", coeffs_low=[0.5] + [0.0] * 6,
         coeffs_high=[0.5] + [0.0] * 6,
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-74.6, s298_j_mol_k=186.3,
@@ -158,7 +158,7 @@ def nasa_thermo() -> Thermo:
 @pytest.fixture
 def scalar_thermo() -> Thermo:
     return Thermo.scalar(
-        enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6, s298_j_mol_k=186.3, tmin_k=200, tmax_k=2000,
+        enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6, s298_j_mol_k=186.3, tmin_k=200, tmax_k=2000,
     )
 
 
@@ -170,7 +170,7 @@ def points_thermo() -> Thermo:
              "s_j_mol_k": 186.3},
             {"temperature_k": 500.0, "cp_j_mol_k": 46.0, "h_kj_mol": 10.0},
         ],
-        enthalpy_reference_kind="formation_from_elements_298k", tmin_k=200, tmax_k=1000,
+        enthalpy_reference_kind="formation_298k", tmin_k=200, tmax_k=1000,
     )
 
 

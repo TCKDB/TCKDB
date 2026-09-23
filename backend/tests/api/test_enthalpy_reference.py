@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.db.models.thermo import Thermo
 from tests.api.test_api_bundle_thermo_and_scf_provenance import _reaction_bundle, _species_bundle
 
-REFERENCE = "formation_from_elements_298k"
+REFERENCE = "formation_298k"
 NASA = {"t_low": 200, "t_mid": 1000, "t_high": 3000,
         **{f"{prefix}{i}": 1.0 for prefix in ("a", "b") for i in range(1, 8)}}
 

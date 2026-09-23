@@ -9,7 +9,7 @@ from app.api.error_contract import CodedValueError
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.workflows.thermo import assert_enthalpy_reference, persist_thermo_upload
 
-REFERENCE = "formation_from_elements_298k"
+REFERENCE = "formation_298k"
 
 
 @pytest.mark.parametrize("content", [

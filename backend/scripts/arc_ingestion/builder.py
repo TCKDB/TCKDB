@@ -356,10 +356,10 @@ def _build_species_payload(
     # Thermo
     thermo = None
     if sp_info.yaml_data and sp_info.yaml_data.thermo:
-        if enthalpy_reference_kind != "formation_from_elements_298k":
+        if enthalpy_reference_kind != "formation_298k":
             raise ValueError(
                 "ARC output does not declare an enthalpy basis. Configure "
-                "enthalpy_reference_kind=formation_from_elements_298k explicitly "
+                "enthalpy_reference_kind=formation_298k explicitly "
                 "before building thermo; other quantities belong in molecular_property_observation."
             )
         t = sp_info.yaml_data.thermo

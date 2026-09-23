@@ -71,7 +71,7 @@ def test_thermo_upload_preserves_nasa_coefficients_and_tabulated_points(
     suite is here to catch.
     """
     request = ThermoUploadRequest(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry=dict(_THERMO_SPECIES),
+        enthalpy_reference_kind="formation_298k", species_entry=dict(_THERMO_SPECIES),
         scientific_origin="computed",
         h298_kj_mol=-255.0,
         s298_j_mol_k=322.9,

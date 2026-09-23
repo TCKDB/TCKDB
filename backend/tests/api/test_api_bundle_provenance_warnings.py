@@ -134,7 +134,7 @@ def _species_bundle(**overrides) -> dict:
 def test_species_bundle_thermo_without_provenance_is_annotated(client: TestClient):
     """The headline gap for the species route's thermo."""
     bundle = _species_bundle(
-        thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0}
+        thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "computed", "h298_kj_mol": 218.0}
     )
     resp = client.post("/api/v1/uploads/computed-species", json=bundle)
     assert resp.status_code == 201, resp.text[:800]
@@ -151,7 +151,7 @@ def test_species_bundle_thermo_without_provenance_is_annotated(client: TestClien
 def test_species_bundle_thermo_with_provenance_is_not_annotated(client: TestClient):
     """The control. Supplying it must silence exactly these warnings."""
     bundle = _species_bundle(
-        thermo={"enthalpy_reference_kind": "formation_from_elements_298k",
+        thermo={"enthalpy_reference_kind": "formation_298k",
             "scientific_origin": "computed",
             "h298_kj_mol": 218.0,
             "software_release": _ANALYSIS_SOFTWARE,
@@ -221,7 +221,7 @@ def test_a_non_computed_species_bundle_product_wants_literature_instead(
     paper it came out of.
     """
     bundle = _species_bundle(
-        thermo={"enthalpy_reference_kind": "formation_from_elements_298k", "scientific_origin": "experimental", "h298_kj_mol": 218.0}
+        thermo={"enthalpy_reference_kind": "formation_298k", "scientific_origin": "experimental", "h298_kj_mol": 218.0}
     )
     resp = client.post("/api/v1/uploads/computed-species", json=bundle)
     assert resp.status_code == 201, resp.text[:800]
@@ -330,11 +330,11 @@ def test_reaction_bundle_warnings_name_the_species_they_concern(client: TestClie
     unnamed warnings would collapse to one entry.
     """
     bundle = _reaction_bundle()
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "scientific_origin": "computed",
         "h298_kj_mol": 218.0,
     }
-    bundle["species"][1]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][1]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "scientific_origin": "computed",
         "h298_kj_mol": 0.0,
     }
@@ -394,7 +394,7 @@ def test_bundle_level_provenance_silences_the_per_species_warning(
         analysis_software_release=_ANALYSIS_SOFTWARE,
         workflow_tool_release=_WTR,
     )
-    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_from_elements_298k",
+    bundle["species"][0]["thermo"] = {"enthalpy_reference_kind": "formation_298k",
         "scientific_origin": "computed",
         "h298_kj_mol": 218.0,
     }

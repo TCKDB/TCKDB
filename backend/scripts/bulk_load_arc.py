@@ -431,7 +431,7 @@ def main():
     parser.add_argument("--arc-repo", type=Path, default=None, metavar="PATH",
                         help="Path to the ARC source repository (used to read data/freq_scale_factors.yml "
                              "for frequency scale factor citations)")
-    parser.add_argument("--enthalpy-reference-kind", choices=["formation_from_elements_298k"],
+    parser.add_argument("--enthalpy-reference-kind", choices=["formation_298k"],
                         help="Explicit declaration required for ARC thermo deposits.")
     args = parser.parse_args()
 

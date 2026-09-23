@@ -20,10 +20,10 @@ def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
         return obj.get(key) if isinstance(obj, Mapping) else getattr(obj, key, None)
 
     reference = get(payload, "enthalpy_reference_kind")
-    if reference is not None and reference != EnthalpyReferenceKind.formation_from_elements_298k:
+    if reference is not None and reference != EnthalpyReferenceKind.formation_298k:
         return (
             W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
-            "Thermo accepts only formation_from_elements_298k enthalpies. "
+            "Thermo accepts only formation_298k enthalpies. "
             "Deposit sensible increments and absolute enthalpies through "
             "the molecular_property_observation route instead.",
         )
@@ -38,7 +38,7 @@ def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
         return (
             W_ENTHALPY_DECLARATION_ABSENT,
             "Enthalpy content requires enthalpy_reference_kind. Declare "
-            "formation_from_elements_298k only when the source states that convention; "
+            "formation_298k only when the source states that convention; "
             "other enthalpy quantities belong in molecular_property_observation.",
         )
     if reference is not None and not content:

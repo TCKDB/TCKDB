@@ -441,7 +441,7 @@ def _make_thermo(
     """Build a thermo row with configurable representation evidence."""
     entry = species_entry or _make_species_entry(db_session, _make_species(db_session))
     thermo = Thermo(
-        enthalpy_reference_kind="formation_from_elements_298k", species_entry_id=entry.id,
+        enthalpy_reference_kind="formation_298k", species_entry_id=entry.id,
         scientific_origin=ScientificOriginKind.computed,
         h298_kj_mol=-50.0 if scalar else None,
         s298_j_mol_k=220.0 if scalar else None,

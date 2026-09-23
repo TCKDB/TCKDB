@@ -21,10 +21,10 @@ def test_builder_omission_null_and_zero_kelvin(schema):
 
 
 @pytest.mark.parametrize("factory", [
-    lambda: Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=float("nan")),
-    lambda: Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=0, reference_pressure_bar=float("inf")),
+    lambda: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=float("nan")),
+    lambda: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=0, reference_pressure_bar=float("inf")),
     lambda: Thermo.points([{"temperature_k": 298}]),
-    lambda: Thermo.nasa(enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[float("inf")]*7, coeffs_high=[0]*7,
+    lambda: Thermo.nasa(enthalpy_reference_kind="formation_298k", coeffs_low=[float("inf")]*7, coeffs_high=[0]*7,
                         t_low=200, t_mid=1000, t_high=3000),
 ])
 def test_builder_invalid_content(factory):

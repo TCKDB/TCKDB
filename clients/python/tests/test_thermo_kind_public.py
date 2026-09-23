@@ -45,12 +45,12 @@ WATER_XYZ = (
 
 
 def test_scalar_thermo_kind():
-    assert Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6).kind == "scalar"
+    assert Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6).kind == "scalar"
 
 
 def test_nasa_thermo_kind():
     t = Thermo.nasa(
-        enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
+        enthalpy_reference_kind="formation_298k", coeffs_low=[0.5] + [0.0] * 6,
         coeffs_high=[0.5] + [0.0] * 6,
         t_low=200, t_mid=1000, t_high=5000,
         h298_kj_mol=-74.6,
@@ -64,7 +64,7 @@ def test_points_thermo_kind():
             {"temperature_k": 298.15, "cp_j_mol_k": 33.6, "h_kj_mol": 0.0},
             {"temperature_k": 500.0, "cp_j_mol_k": 35.2},
         ],
-     enthalpy_reference_kind="formation_from_elements_298k")
+     enthalpy_reference_kind="formation_298k")
     assert t.kind == "points"
 
 
@@ -72,13 +72,13 @@ def test_bare_thermo_kind_is_generic():
     """The bare constructor (reserved for internals/tests) reports
     ``"generic"`` — the sentinel the summary code degrades to when
     a thermo block isn't built through a factory."""
-    assert Thermo(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6).kind == "generic"
+    assert Thermo(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6).kind == "generic"
 
 
 def test_thermo_kind_is_read_only():
     """``kind`` is a property — assignment should fail at the
     interpreter level, keeping the factory tag a single source of truth."""
-    t = Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-74.6)
+    t = Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-74.6)
     with pytest.raises(AttributeError):
         t.kind = "nasa"  # type: ignore[misc]
 
@@ -105,10 +105,10 @@ def _make_species_upload(thermo: Thermo | None) -> ComputedSpeciesUpload:
 @pytest.mark.parametrize(
     "thermo_factory, expected_kind",
     [
-        (lambda: Thermo.scalar(enthalpy_reference_kind="formation_from_elements_298k", h298_kj_mol=-241.8, s298_j_mol_k=188.8), "scalar"),
+        (lambda: Thermo.scalar(enthalpy_reference_kind="formation_298k", h298_kj_mol=-241.8, s298_j_mol_k=188.8), "scalar"),
         (
             lambda: Thermo.nasa(
-                enthalpy_reference_kind="formation_from_elements_298k", coeffs_low=[0.5] + [0.0] * 6,
+                enthalpy_reference_kind="formation_298k", coeffs_low=[0.5] + [0.0] * 6,
                 coeffs_high=[0.5] + [0.0] * 6,
                 t_low=200, t_mid=1000, t_high=5000,
                 h298_kj_mol=-241.8,
@@ -121,7 +121,7 @@ def _make_species_upload(thermo: Thermo | None) -> ComputedSpeciesUpload:
                     {"temperature_k": 298.15, "cp_j_mol_k": 33.6, "h_kj_mol": 0.0},
                     {"temperature_k": 500.0, "cp_j_mol_k": 35.2},
                 ],
-             enthalpy_reference_kind="formation_from_elements_298k"),
+             enthalpy_reference_kind="formation_298k"),
             "points",
         ),
     ],

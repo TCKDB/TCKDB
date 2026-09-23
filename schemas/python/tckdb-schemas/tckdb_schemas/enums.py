@@ -111,7 +111,7 @@ class EnthalpyReferenceKind(str, Enum):
     null, never an unspecified enum member. No basis may be inferred.
     """
 
-    formation_from_elements_298k = "formation_from_elements_298k"
+    formation_298k = "formation_298k"
 
 
 class PhaseKind(str, Enum):

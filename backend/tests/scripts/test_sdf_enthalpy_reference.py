@@ -12,7 +12,7 @@ def test_sdf_requires_explicit_adapter_declaration(reference):
 
 
 def test_sdf_emits_configured_reference():
-    bundle = sdf_to_bundle("rxn_146", enthalpy_reference_kind="formation_from_elements_298k")
+    bundle = sdf_to_bundle("rxn_146", enthalpy_reference_kind="formation_298k")
     thermos = [species["thermo"] for species in bundle["species"] if "thermo" in species]
     assert thermos
-    assert all(thermo["enthalpy_reference_kind"] == "formation_from_elements_298k" for thermo in thermos)
+    assert all(thermo["enthalpy_reference_kind"] == "formation_298k" for thermo in thermos)

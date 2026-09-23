@@ -59,7 +59,7 @@ def build_thermo_payload(
     hf_298 = by_kind.get("hf_298")
     if hf_298 is not None:
         payload["h298_kj_mol"] = hf_298.value
-        payload["enthalpy_reference_kind"] = "formation_from_elements_298k"
+        payload["enthalpy_reference_kind"] = "formation_298k"
         if hf_298.uncertainty is not None:
             payload["h298_uncertainty_kj_mol"] = hf_298.uncertainty
 
