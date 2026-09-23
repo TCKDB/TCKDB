@@ -28,7 +28,7 @@ dataset must never require a code release.
   fit-only deposits, builder refusals, and grouped thermo reference reads.
 - Database: nullable reference enum and an unvalidated scalar CHECK; no
   legacy data step. Workflows enforce whole-record content/declaration pairing.
-- Producers: declared CHEMKIN formation convention, explicit ARC configuration,
+- Producers: declared CHEMKIN formation convention, explicit ARC/SDF configuration,
   and CCCBDB sensible increments routed to molecular-property observations.
 - tckdb-chemkin 0.4.0 declares the supported format's formation convention.
   ARC fit-only input leaves an absent H298 scalar null.

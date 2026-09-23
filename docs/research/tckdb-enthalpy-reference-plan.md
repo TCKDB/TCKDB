@@ -40,7 +40,10 @@ enthalpies belong in `molecular_property_observation`, with their stated
 property label, state, temperature, pressure and uncertainty meaning.
 CCCBDB's explicitly labelled H(298.15)-H(0) is routed to an observation
 payload with its source datum and identity hint intact. ARC requires an
-explicit adapter configuration; its output does not establish a basis.
+explicit adapter configuration; its output does not establish a basis. The
+SDF adapter likewise requires explicit `enthalpy_reference_kind` configuration
+(or `--enthalpy-reference-kind` on its CLI); H298 and software labels do not
+establish a zero. Recorded test fixtures supply their convention explicitly.
 
 ## Reproduction before implementation
 
