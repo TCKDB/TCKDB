@@ -71,6 +71,7 @@ nav:
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
   - Guides:
       - Query Cookbook: guides/scientific_query_cookbook.md
+      - Schema Reference: guides/schema_reference.md
       - Public Hosted Querying: guides/public_hosted_querying.md
       - Workflow Tool Reads: guides/workflow_tool_scientific_reads.md
       - Demo Data Details: guides/scientific_read_demo_data.md
