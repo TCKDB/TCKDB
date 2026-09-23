@@ -726,7 +726,6 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
     assert push.get("branches") == ["main"]
     assert set(push.get("paths", [])) == {
         "frontend/**",
-        "docs/deployment/frontend-pi.md",
         ".github/workflows/build-frontend-image.yml",
     }
     assert "workflow_dispatch" in triggers

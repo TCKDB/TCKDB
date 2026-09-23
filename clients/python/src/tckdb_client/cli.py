@@ -240,7 +240,13 @@ def main(argv: list[str] | None = None) -> int:
 # above, which remain ``tckdb-replay``'s exactly as before.
 ##############################################################################
 
-DEFAULT_BASE_URL = "https://tckdb.homecalvin.com/api/v1"
+#: No default on purpose (issue #521): a fresh install of this client must
+#: never talk to somebody else's server just because the caller forgot to
+#: say which deployment they mean. ``--base-url`` and ``TCKDB_BASE_URL``
+#: are the two ways to say it; ``_resolve_base_url`` is where "neither was
+#: given" turns into a clear, actionable error instead of a silent request
+#: to a hardcoded host.
+BASE_URL_ENV_VAR = "TCKDB_BASE_URL"
 #: Order matters only for readability; the server does not care.
 DEFAULT_INCLUDE = ["species", "kinetics", "transition_states", "networks"]
 
@@ -256,6 +262,24 @@ _REF_RE = re.compile(r"^(rxe_|rxn_)[A-Za-z0-9]+$")
 #: never vanish into a retry that quietly falls back to the server's
 #: default include set with exit 0.
 _FORWARD_COMPAT_INCLUDE_TOKENS = frozenset({"networks"})
+
+
+def _resolve_base_url(cli_value: str | None) -> str | None:
+    """``--base-url`` wins; otherwise fall back to ``TCKDB_BASE_URL``.
+
+    Returns ``None`` when neither is set -- there is no third source, and
+    deliberately no hardcoded host to fall back to (issue #521). Callers
+    must turn a ``None`` here into ``_MISSING_BASE_URL`` before making any
+    request, rather than let it flow into ``TCKDBClient`` and produce a
+    confusing "base_url must be a non-empty string" from a lower layer.
+    """
+    return cli_value or os.environ.get(BASE_URL_ENV_VAR)
+
+
+_MISSING_BASE_URL = (
+    f"error: no TCKDB base URL configured. Pass --base-url, or set the "
+    f"{BASE_URL_ENV_VAR} environment variable."
+)
 
 
 def _validate_reaction_ref(value: str) -> str:
@@ -343,8 +367,9 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
     )
     artifact_parser.add_argument(
         "--base-url",
-        default=DEFAULT_BASE_URL,
-        help=f"API root. Default: {DEFAULT_BASE_URL}",
+        default=None,
+        help="API root. Required: pass this or set "
+        f"{BASE_URL_ENV_VAR}. No default -- see issue #521.",
     )
     artifact_parser.add_argument(
         "--api-key-env",
@@ -368,8 +393,9 @@ def _build_tckdb_parser() -> argparse.ArgumentParser:
     )
     reaction_parser.add_argument(
         "--base-url",
-        default=DEFAULT_BASE_URL,
-        help=f"API root. Default: {DEFAULT_BASE_URL}",
+        default=None,
+        help="API root. Required: pass this or set "
+        f"{BASE_URL_ENV_VAR}. No default -- see issue #521.",
     )
     reaction_parser.add_argument(
         "--include",
@@ -852,9 +878,12 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
         )
         return EXIT_FAILURES
 
-    client = TCKDBClient(
-        base_url=args.base_url, api_key=api_key, timeout=args.timeout
-    )
+    base_url = _resolve_base_url(args.base_url)
+    if not base_url:
+        print(_MISSING_BASE_URL, file=sys.stderr)
+        return EXIT_FAILURES
+
+    client = TCKDBClient(base_url=base_url, api_key=api_key, timeout=args.timeout)
 
     # Only ask the archive what the file is called when the caller has not
     # already said. `--output` is an answer; a lookup to second-guess it
@@ -916,8 +945,13 @@ def _cmd_download_artifact(args: argparse.Namespace) -> int:
 
 
 def _cmd_get_reaction(args: argparse.Namespace) -> int:
+    base_url = _resolve_base_url(args.base_url)
+    if not base_url:
+        print(_MISSING_BASE_URL, file=sys.stderr)
+        return EXIT_FAILURES
+
     include = _flatten_include_groups(args.include) if args.include else list(DEFAULT_INCLUDE)
-    client = TCKDBClient(base_url=args.base_url, timeout=args.timeout)
+    client = TCKDBClient(base_url=base_url, timeout=args.timeout)
     try:
         if args.ref.startswith("rxn_"):
             try:

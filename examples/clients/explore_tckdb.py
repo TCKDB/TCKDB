@@ -3,9 +3,10 @@
 Read-only. Every request here is an anonymous GET against the public
 scientific read API; nothing in this file can modify the database.
 
-Run it directly to print a tour of what a deployment holds::
+Run it directly to print a tour of what a deployment holds. ``TCKDB_BASE_URL``
+is required -- there is no default, so a fresh checkout of this file can
+never point at somebody else's server::
 
-    python examples/clients/explore_tckdb.py
     TCKDB_BASE_URL=http://localhost:8000/api/v1 python examples/clients/explore_tckdb.py
 
 The notebook alongside this file is the version to hand to a colleague: it
@@ -35,7 +36,10 @@ from typing import Any, Iterable
 
 import requests
 
-DEFAULT_BASE_URL = "https://tckdb.homecalvin.com/api/v1"
+#: No default (issue #521): this example is public, and a hardcoded host
+#: would mean every copy of it sends its requests to one operator's
+#: deployment unless the reader happens to notice and override it.
+BASE_URL_ENV_VAR = "TCKDB_BASE_URL"
 TIMEOUT_S = 30
 
 #: How many times to wait out a 429 before giving up.
@@ -87,8 +91,18 @@ class TCKDBError(RuntimeError):
 
 
 def base_url() -> str:
-    """The deployment to talk to; override with ``TCKDB_BASE_URL``."""
-    return os.environ.get("TCKDB_BASE_URL", DEFAULT_BASE_URL).rstrip("/")
+    """The deployment to talk to; set with ``TCKDB_BASE_URL``.
+
+    No default. Raises ``SystemExit`` with a clear, actionable message
+    rather than silently talking to a hardcoded host (issue #521).
+    """
+    value = os.environ.get(BASE_URL_ENV_VAR)
+    if not value:
+        raise SystemExit(
+            f"error: {BASE_URL_ENV_VAR} is not set. Point it at a TCKDB "
+            f"deployment, e.g. {BASE_URL_ENV_VAR}=http://localhost:8000/api/v1"
+        )
+    return value.rstrip("/")
 
 
 def _retry_after_seconds(response: requests.Response, envelope: dict) -> float:

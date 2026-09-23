@@ -15,7 +15,7 @@ describe("distance", () => {
 
     it("6-decimal coordinates from the live record (geom_qcnisbgb4abax5oxym3dtjxu34, C-H1)", () => {
         // C at the origin, H1 at (-0, 1.078957, 0) — measured live 2026-08-30
-        // against https://tckdb.homecalvin.com/geometries/geom_qcnisbgb4abax5oxym3dtjxu34.
+        // against a hosted deployment's /geometries/geom_qcnisbgb4abax5oxym3dtjxu34 page.
         const C = { x: 0.0, y: 0.0, z: 0.0 }
         const H1 = { x: -0.0, y: 1.078957, z: 0.0 }
         expect(distance(C, H1)).toBeCloseTo(1.078957, 12)

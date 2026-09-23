@@ -158,6 +158,25 @@ def test_a_checker_that_cannot_start_sends_no_ping(fake_host, run_alert_check):
     )
 
 
+def test_missing_status_url_refuses_to_run(fake_host, run_alert_check):
+    """TCKDB_STATUS_URL has no default (issue #521): a public copy of this
+    script must never guess at a host to poll, so an unset URL is the same
+    class of failure as an unset topic -- refuse before a verdict exists,
+    say why, and ping nothing."""
+    fake_host.set_status(HEALTHY)
+    proc = run_alert_check(
+        env_overrides={
+            "TCKDB_STATUS_URL": "",
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        }
+    )
+    assert proc.returncode == 2
+    assert "TCKDB_STATUS_URL" in proc.stderr
+    assert deadman_pings(fake_host) == [], (
+        "a checker that refused to run must stay silent so its silence is the alarm"
+    )
+
+
 def test_ping_failure_is_reported_rather_than_swallowed(fake_host, run_alert_check):
     """If even the heartbeat cannot be sent, say so in the journal.
 

@@ -37,7 +37,7 @@ function page() {
 /**
  * A 5-atom CH4 geometry (modelled on the shape of the live
  * geom_qcnisbgb4abax5oxym3dtjxu34 / geom_or52ifyemdi3eewsjym2fuvo3a
- * fixtures measured against https://tckdb.homecalvin.com). Provenance is
+ * fixtures measured against a hosted TCKDB deployment). Provenance is
  * deliberately built with TWO producers and THREE consumers, in an order
  * that is not alphabetical by ref and not identical between the two
  * lists — a single-edge fixture cannot distinguish "read this row's own

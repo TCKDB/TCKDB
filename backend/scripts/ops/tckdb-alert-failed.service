@@ -22,7 +22,7 @@ Type=oneshot
 # died of the same cause, systemd logged `resources` for this one, and no push
 # was sent. Verified, not assumed: `systemd-run --wait -p EnvironmentFile=/no
 # /bin/sh -c 'echo ran'` never runs the command, and the same with `-/no` does.
-EnvironmentFile=-/home/calvin/.config/tckdb-alert.env
+EnvironmentFile=-/home/YOUR_USER/.config/tckdb-alert.env
 
 # %i is not available on a non-templated OnFailure unit, so the failing unit is
 # named literally. If you rename tckdb-alert.service, rename it here too.
@@ -47,7 +47,7 @@ EnvironmentFile=-/home/calvin/.config/tckdb-alert.env
 # is password-equivalent; it does not belong in a log any more than it belongs
 # in this file.
 ExecStart=/bin/sh -c 'if [ -z "${TCKDB_NTFY_TOPIC:-}" ]; then \
-  echo "TCKDB_NTFY_TOPIC is unset (missing or incomplete /home/calvin/.config/tckdb-alert.env), so the health checker failed AND this alert cannot be delivered to anyone. Nothing was pushed." >&2; \
+  echo "TCKDB_NTFY_TOPIC is unset (missing or incomplete /home/YOUR_USER/.config/tckdb-alert.env), so the health checker failed AND this alert cannot be delivered to anyone. Nothing was pushed." >&2; \
   exit 78; \
 fi; \
 curl -sS --fail --max-time 20 -o /dev/null \
@@ -57,4 +57,4 @@ curl -sS --fail --max-time 20 -o /dev/null \
   -d "tckdb-alert.service failed on $(hostname). The health checker is not running, so TCKDB is now unmonitored from this host and its silence means nothing. Diagnose: systemctl status tckdb-alert.service; journalctl -u tckdb-alert -n 50" \
   "${TCKDB_NTFY_SERVER:-https://ntfy.sh}/${TCKDB_NTFY_TOPIC}"'
 
-User=calvin
+User=YOUR_USER
