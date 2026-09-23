@@ -7,7 +7,7 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //
 // Read off `CALCULATION_RECORD_SECTIONS` in
 // backend/app/api/routes/scientific/_response.py:149 (measured 2026-08-29,
-// live against https://tckdb.homecalvin.com). 19 public tokens; a 20th,
+// live against a hosted TCKDB deployment). 19 public tokens; a 20th,
 // `internal_ids`, exists but must never be requested by this client (it only
 // widens the response when the deployment allows internal ids, which this
 // public client has no use for). `trust` is a further, separate opt-in

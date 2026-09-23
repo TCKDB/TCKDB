@@ -263,6 +263,28 @@ def _require_tools() -> None:
     assert not missing, f"cannot exercise the probe without: {', '.join(missing)}"
 
 
+def test_an_unconfigured_status_url_skips_cleanly(probe_script) -> None:
+    """No ``TCKDB_STATUS_URL`` repository variable (issue #521): the job must
+    not probe a hardcoded host, and must not fail either -- a fork with no
+    deployment of its own gets a clean skip, not a red run."""
+    completed = subprocess.run(
+        ["bash", str(probe_script)],
+        env={
+            "PATH": "/usr/bin:/bin:/usr/local/bin",
+            "STATUS_URL": "",
+            "NTFY_TOPIC": "",
+            "NTFY_SERVER": "http://127.0.0.1:1",
+            "HEARTBEAT_URL": "",
+        },
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert completed.returncode == 0
+    assert "TCKDB_STATUS_URL" in completed.stdout
+
+
 def test_a_well_deployment_pings_success_and_only_success(probe_script) -> None:
     hits, code = _run(probe_script, "ok")
     assert hits == ["/hb"]

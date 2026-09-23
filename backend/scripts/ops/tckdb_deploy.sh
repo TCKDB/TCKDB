@@ -35,8 +35,11 @@ CONTAINER="${TCKDB_CONTAINER:-tckdb-api}"
 API_PORT="${TCKDB_API_PORT:-8010}"
 DB_CONTAINER="${TCKDB_DB_CONTAINER:-tckdbv2-db-1}"
 DB_NETWORK="${TCKDB_DB_NETWORK:-tckdbv2_default}"
-ENV_FILE="${TCKDB_ENV_FILE:-/home/calvin/repos/tckdbv2/.env.pi}"
-BACKUP_DIR="${TCKDB_BACKUP_DIR:-/home/calvin/backups}"
+# No default for either path (issue #521): this script is public, and a
+# path under one operator's home directory would mean every copy of it
+# defaults to that operator's environment file and backup location.
+ENV_FILE="${TCKDB_ENV_FILE:-}"
+BACKUP_DIR="${TCKDB_BACKUP_DIR:-}"
 STATUS_URL="${TCKDB_LOCAL_STATUS_URL:-http://127.0.0.1:${API_PORT}/api/v1/status}"
 
 die() { echo "error: $*" >&2; exit 1; }
@@ -46,6 +49,8 @@ running_image() {
 }
 
 if [[ "${1:-}" == "--check" ]]; then
+    # Read-only, and touches neither the env file nor the backup dir, so it
+    # does not require either to be set.
     check_body="$(curl -s "$STATUS_URL" 2>/dev/null)"
     echo "container:      $(running_image)"
     echo "systemd uvicorn: $(systemctl is-active tckdb-api.service 2>/dev/null || echo n/a)"
@@ -60,6 +65,9 @@ if [[ "${1:-}" == "--check" ]]; then
     fi
     exit 0
 fi
+
+[[ -z "$ENV_FILE" ]] && die "TCKDB_ENV_FILE is not set (path to this host's env file, e.g. .env.pi)"
+[[ -z "$BACKUP_DIR" ]] && die "TCKDB_BACKUP_DIR is not set (directory to write pre-deploy backups to)"
 
 TAG="${1:-}"
 [[ -z "$TAG" ]] && die "usage: $0 <tag>|--check   (tag e.g. sha-<commit> or v1.2.3)"

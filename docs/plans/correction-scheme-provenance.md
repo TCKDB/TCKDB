@@ -701,8 +701,8 @@ depositor-typed labels on public pages. What this plan changes:
 
 ## 9. The live archive today — data, not design input
 
-Everything in this section is a measurement of one deployment (the Pi,
-`https://tckdb.homecalvin.com`) and of one producer's data files. Per
+Everything in this section is a measurement of one deployment (the Pi)
+and of one producer's data files. Per
 `feedback_tckdb_is_sovereign` it is recorded so the rulings can be
 audited and the data can be fixed — **not** as justification for any
 shape in §3–§7. Nothing above depends on it.

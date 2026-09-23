@@ -88,7 +88,7 @@ row inside `NetworkSection` on `ReactionEntryPage.tsx`
 (`frontend/src/pages/ReactionEntryPage.tsx:349`), showing name, `net_…` ref as
 plain `<code>`, T/P range, channel count, review pill — no link, because
 there is nowhere to link to. `/networks/:ref` does not exist as a route.
-Every number below is a live measurement against `https://tckdb.homecalvin.com`,
+Every number below is a live measurement against a hosted TCKDB deployment,
 anonymous, taken 2026-09-08, against the single network in the archive:
 `net_o6bt63kjeyvhvxx26w6kdi433a` ("hydrazine").
 
@@ -528,7 +528,7 @@ chart on the site, so no new scale primitives are needed. Table-behind-
 
 ## 8. Verification log
 
-Requests made against `https://tckdb.homecalvin.com/api/v1`, anonymous,
+Requests made against a hosted TCKDB deployment's `/api/v1`, anonymous,
 2026-09-08: `GET /scientific/networks/net_o6bt63kjeyvhvxx26w6kdi433a?include=states,channels,kinetics`;
 `GET /scientific/networks/search` (unfiltered, confirms `422 missing_filter`);
 `GET /scientific/network-kinetics/search?network_ref=…&limit=5`;

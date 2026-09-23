@@ -274,7 +274,7 @@ files are world-readable:
 install -m 600 /dev/null ~/.config/tckdb-alert.env
 cat > ~/.config/tckdb-alert.env <<'EOF'
 TCKDB_NTFY_TOPIC=tckdb-your-random-topic-here
-TCKDB_STATUS_URL=https://tckdb.homecalvin.com/api/v1/status
+TCKDB_STATUS_URL=https://tckdb.example.com/api/v1/status
 EOF
 ```
 

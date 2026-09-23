@@ -1,6 +1,6 @@
 # Depositor text safety — implementation plan
 
-Status: draft for owner ruling. Base: `main` at `1643d4d1`. Measured 2026-09-09 against the live archive (`https://tckdb.homecalvin.com`, anonymous, read-only GET) and the `main` worktree checkout.
+Status: draft for owner ruling. Base: `main` at `1643d4d1`. Measured 2026-09-09 against the live archive (a hosted TCKDB deployment, anonymous, read-only GET) and the `main` worktree checkout.
 
 ## 1. The gap, restated precisely
 

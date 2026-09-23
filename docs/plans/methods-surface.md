@@ -48,7 +48,7 @@ the *content* below the identity block.
 
 ## 2. Measured facts
 
-All against the live archive (`https://tckdb.homecalvin.com`, anonymous,
+All against the live archive (a hosted TCKDB deployment, anonymous,
 2026-09-08) and the code at the base commit above. §2.1–2.4 restate v1's
 findings, corrected where this revision's direction makes them wrong;
 §2.5–2.7 are new.

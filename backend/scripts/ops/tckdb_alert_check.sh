@@ -53,7 +53,11 @@
 #      TCKDB_DEADMAN_URL to its ping URL.
 #
 # ENVIRONMENT
-#   TCKDB_STATUS_URL   default https://tckdb.homecalvin.com/api/v1/status
+#   TCKDB_STATUS_URL   required -- no default on purpose; this script is
+#                      public, and a baked-in host would mean every copy of
+#                      it polls one operator's deployment until told
+#                      otherwise (see issue #521). e.g.
+#                      https://tckdb.example.com/api/v1/status
 #   TCKDB_NTFY_TOPIC   required -- no default on purpose; a guessable topic
 #                      leaks your operational state to anyone who subscribes
 #   TCKDB_NTFY_SERVER  default https://ntfy.sh
@@ -111,10 +115,15 @@ on_exit() {
 }
 trap on_exit EXIT
 
-STATUS_URL="${TCKDB_STATUS_URL:-https://tckdb.homecalvin.com/api/v1/status}"
+STATUS_URL="${TCKDB_STATUS_URL:-}"
 NTFY_SERVER="${TCKDB_NTFY_SERVER:-https://ntfy.sh}"
 STATE_FILE="${TCKDB_STATE_FILE:-$HOME/.cache/tckdb-alert-state}"
 DEADMAN_URL="${TCKDB_DEADMAN_URL:-}"
+
+if [[ -z "${TCKDB_STATUS_URL:-}" ]]; then
+    echo "TCKDB_STATUS_URL is not set; refusing to run." >&2
+    exit 2
+fi
 
 if [[ -z "${TCKDB_NTFY_TOPIC:-}" ]]; then
     echo "TCKDB_NTFY_TOPIC is not set; refusing to run." >&2

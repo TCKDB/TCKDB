@@ -389,8 +389,8 @@ describe("ThermoCpChart — no data anywhere", () => {
 // `--type-label-transform` (design-system.css) is `uppercase` -- correct
 // for the X title ("Temperature (K)", ordinary prose) but not for this Y
 // title, whose own text is `` `Cp (${cpUnitLabel(unit)})` `` -- "Cp
-// (J/mol·K)" read "CP (J/MOL·K)" on the live page (confirmed:
-// https://tckdb.homecalvin.com/species-entries/spe_3agdbqfdhkd4yf4seviawkdpla/thermo).
+// (J/mol·K)" read "CP (J/MOL·K)" on the live page (confirmed on a hosted
+// deployment's /species-entries/spe_3agdbqfdhkd4yf4seviawkdpla/thermo page).
 // A `textContent` assertion cannot see this (the DOM text is still
 // correctly-cased; only the COMPUTED style differs) -- this asserts
 // `getComputedStyle`, per `vite.config.ts`'s `test.css: true`.

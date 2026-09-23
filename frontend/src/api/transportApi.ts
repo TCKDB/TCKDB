@@ -3,7 +3,7 @@ import { levelOfTheorySchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 // ---------------------------------------------------------------------------
-// Shape notes (measured 2026-08-29 against https://tckdb.homecalvin.com,
+// Shape notes (measured 2026-08-29 against a hosted TCKDB deployment,
 // backend/app/schemas/reads/scientific_transport.py and
 // backend/app/services/scientific_read/{transport,species_transport}.py):
 //
