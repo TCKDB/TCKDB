@@ -588,6 +588,17 @@ def _species_thermo_block(
         "thermo_ref": thermo.public_ref,
         "review_status": status_by_id[chosen[0]].value,
         "scientific_origin": thermo.scientific_origin.value,
+        # ``NULL`` here means the reference was never recorded (a legacy
+        # deposit predating the declaration rule), never that it is a
+        # formation quantity by default -- see Thermo.enthalpy_reference_kind
+        # and _delta_h298 below, the one place this repo currently sums
+        # h298 values across records and therefore the one place mixing
+        # bases silently would be wrong.
+        "enthalpy_reference_kind": (
+            thermo.enthalpy_reference_kind.value
+            if thermo.enthalpy_reference_kind is not None
+            else None
+        ),
         "h298_kj_mol": thermo.h298_kj_mol,
         "s298_j_mol_k": thermo.s298_j_mol_k,
         "h298_uncertainty_kj_mol": thermo.h298_uncertainty_kj_mol,
@@ -869,7 +880,13 @@ class MLReactionRecord:
                             is unavailable). ``kinetics[].ea_kj_mol`` is the separate
                             *Arrhenius* activation energy and is not the same quantity.
     ``dh`` (kcal/mol)       ``delta_h298_kj_mol`` (÷ 4.184 for kcal; ΣH298(products) −
-                            ΣH298(reactants) from selected thermo)
+                            ΣH298(reactants) from selected thermo; ``null`` when a
+                            participant has no candidate thermo, OR when the
+                            contributing thermo terms do not all declare the same
+                            ``enthalpy_reference_kind`` -- including any term left
+                            over from before that declaration was required, which
+                            declares none at all. See ``export_summary.counts``'s
+                            ``delta_h298_declined_*`` fields for why, in aggregate.)
     reactant xyz            geometry of each reactant ``species_entry`` (fetch via the
                             species export using ``reactant_refs``; not inlined here)
     ts xyz                  ``transition_state.geometry`` (elements + coords)
@@ -1172,33 +1189,78 @@ def _ts_and_barrier(
     return ts_block, barrier
 
 
+#: ``_delta_h298`` decline reasons, surfaced only as an ``export_summary``
+#: count (see ``_stream_reactions``) -- never invented as a new per-record
+#: JSON field, matching how every other missing term in this module (the
+#: barrier, the TS block) is represented: the value is simply ``null``.
+DELTA_H298_UNRECORDED_REFERENCE = "enthalpy_reference_unrecorded"
+DELTA_H298_MIXED_REFERENCE = "enthalpy_reference_mixed"
+
+
 def _delta_h298(
     session: Session,
     *,
     reactant_ids: list[int],
     product_ids: list[int],
     min_review_status: RecordReviewStatus | None,
-) -> float | None:
-    """ΣH298(products) − ΣH298(reactants) from selected thermo (RDB7 ``dh``)."""
+) -> tuple[float | None, str | None]:
+    """ΣH298(products) − ΣH298(reactants) from selected thermo (RDB7 ``dh``).
 
-    def _sum(ids: list[int]) -> float | None:
-        total = 0.0
+    Declines -- returns ``(None, reason)`` -- instead of summing across
+    mixed or unrecorded enthalpy bases. Every contributing thermo term must
+    declare ``enthalpy_reference_kind`` (see ``Thermo.enthalpy_reference_kind``):
+    a record deposited before that rule existed carries an enthalpy with no
+    declaration, and TCKDB never backfills one, so an undeclared enthalpy
+    means the reference was never recorded, not that it defaults to a
+    formation quantity. Summing it in with declared terms would be wrong by
+    a large, plausible-looking amount with nothing to flag it.
+
+    The check requires every contributing term to declare the *same*
+    reference, not merely *some* reference: two terms each declaring a
+    different basis would be exactly as wrong to sum as an undeclared one,
+    only less visibly so. ``formation_298k`` is the only value the schema
+    accepts today, so "all declared" and "all the same" coincide -- but the
+    stricter check is the one that stays correct if a second value is ever
+    added, and costs nothing while there is only one.
+
+    :returns: ``(delta_h298_kj_mol, None)`` when every term shares one
+        declared reference; ``(None, None)`` for the pre-existing "a term
+        has no thermo candidate at all" gap; ``(None,
+        DELTA_H298_UNRECORDED_REFERENCE)`` when a contributing term's
+        reference was never recorded; ``(None, DELTA_H298_MIXED_REFERENCE)``
+        when contributing terms declare more than one distinct reference.
+    """
+
+    def _blocks(ids: list[int]) -> list[dict] | None:
+        blocks: list[dict] = []
         for se_id in ids:
             block = _species_thermo_block(
                 session, se_id, min_review_status=min_review_status
             )
             if block is None or block.get("h298_kj_mol") is None:
                 return None
-            total += block["h298_kj_mol"]
-        return total
+            blocks.append(block)
+        return blocks
 
     if not reactant_ids or not product_ids:
-        return None
-    reactant_sum = _sum(reactant_ids)
-    product_sum = _sum(product_ids)
-    if reactant_sum is None or product_sum is None:
-        return None
-    return product_sum - reactant_sum
+        return None, None
+    reactant_blocks = _blocks(reactant_ids)
+    product_blocks = _blocks(product_ids)
+    if reactant_blocks is None or product_blocks is None:
+        return None, None
+
+    reference_kinds = {
+        block.get("enthalpy_reference_kind")
+        for block in reactant_blocks + product_blocks
+    }
+    if None in reference_kinds:
+        return None, DELTA_H298_UNRECORDED_REFERENCE
+    if len(reference_kinds) > 1:
+        return None, DELTA_H298_MIXED_REFERENCE
+
+    reactant_sum = sum(block["h298_kj_mol"] for block in reactant_blocks)
+    product_sum = sum(block["h298_kj_mol"] for block in product_blocks)
+    return product_sum - reactant_sum, None
 
 
 def _build_reaction_record(
@@ -1208,13 +1270,24 @@ def _build_reaction_record(
     filters: MLFilters,
     lot_cache: dict[int, dict | None],
     geom_cache: dict[int, _GeometryPayload],
-) -> MLReactionRecord | None:
+) -> tuple[MLReactionRecord | None, str | None]:
+    """Build one reaction record.
+
+    :returns: ``(record, delta_h298_decline_reason)`` -- the second element
+        is the reason ``_delta_h298`` declined (see
+        ``DELTA_H298_UNRECORDED_REFERENCE`` / ``DELTA_H298_MIXED_REFERENCE``),
+        or ``None`` when ``dh`` was computed or was null for an unrelated,
+        pre-existing cause. It is aggregated into ``export_summary`` by
+        ``_stream_reactions``, never emitted on the record itself -- the
+        record's own ``delta_h298_kj_mol`` stays a plain ``null`` like every
+        other value this module cannot produce.
+    """
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:  # pragma: no cover - race with delete
-        return None
+        return None, None
     reaction = session.get(ChemReaction, entry.reaction_id)
     if reaction is None:  # pragma: no cover - FK guarantees presence
-        return None
+        return None, None
     review_status = _reaction_entry_review(session, reaction_entry_id)
 
     family = None
@@ -1266,14 +1339,14 @@ def _build_reaction_record(
         lot_cache=lot_cache,
         geom_cache=geom_cache,
     )
-    delta_h = _delta_h298(
+    delta_h, delta_h_decline_reason = _delta_h298(
         session,
         reactant_ids=reactant_ids,
         product_ids=product_ids,
         min_review_status=filters.min_review_status,
     )
 
-    return MLReactionRecord(
+    record = MLReactionRecord(
         reaction_entry=entry,
         reaction=reaction,
         reaction_family=family,
@@ -1287,6 +1360,7 @@ def _build_reaction_record(
         delta_h298_kj_mol=delta_h,
         transition_state=ts_block,
     )
+    return record, delta_h_decline_reason
 
 
 def iter_ml_reactions_ndjson(
@@ -1362,18 +1436,24 @@ def _stream_reactions(
     geom_cache: dict[int, _GeometryPayload] = {}
     n_reactions = 0
     n_skipped_untrusted = 0
+    n_delta_h298_unrecorded_reference = 0
+    n_delta_h298_mixed_reference = 0
 
     for re_id in reaction_entry_ids:
         if _reaction_entry_review(session, re_id) not in visible:
             n_skipped_untrusted += 1
             continue
-        record = _build_reaction_record(
+        record, delta_h_decline_reason = _build_reaction_record(
             session,
             re_id,
             filters=filters,
             lot_cache=lot_cache,
             geom_cache=geom_cache,
         )
+        if delta_h_decline_reason == DELTA_H298_UNRECORDED_REFERENCE:
+            n_delta_h298_unrecorded_reference += 1
+        elif delta_h_decline_reason == DELTA_H298_MIXED_REFERENCE:
+            n_delta_h298_mixed_reference += 1
         if record is not None:
             n_reactions += 1
             yield _dumps(record.to_ndjson()) + "\n"
@@ -1387,6 +1467,16 @@ def _stream_reactions(
             "counts": {
                 "records": n_reactions,
                 "skipped_below_min_review_status": n_skipped_untrusted,
+                # Why delta_h298_kj_mol came back null on some record(s)
+                # beyond the pre-existing "no thermo candidate at all" gap
+                # (which this export has never separately counted): at
+                # least one contributing thermo term's enthalpy reference
+                # was never recorded, or contributing terms declared more
+                # than one distinct reference. See _delta_h298.
+                "delta_h298_declined_unrecorded_reference": (
+                    n_delta_h298_unrecorded_reference
+                ),
+                "delta_h298_declined_mixed_reference": n_delta_h298_mixed_reference,
             },
         }
     ) + "\n"
@@ -1410,6 +1500,8 @@ def _resolve_lot_ref(session: Session, lot_ref: str | None) -> int | None:
 __all__ = [
     "DEFAULT_ALL_CAP",
     "DEFAULT_MIN_REVIEW_STATUS",
+    "DELTA_H298_MIXED_REFERENCE",
+    "DELTA_H298_UNRECORDED_REFERENCE",
     "HARTREE_TO_KJ_MOL",
     "ML_EXPORT_SCHEMA",
     "MLEnergyRecord",

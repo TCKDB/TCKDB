@@ -2815,9 +2815,9 @@ the gap.
 | `thermo_id` | BIGINT | no | — | thermo.id | — | not documented |
 | `temperature_k` | DOUBLE PRECISION | no | — | — | — | not documented |
 | `cp_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
-| `h_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `h_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h_kj_mol`` is the tabulated enthalpy at ``temperature_k``, on the same reference zero the parent ``thermo`` row's ``enthalpy_reference_kind`` declares: for ``formation_298k``, the standard formation enthalpy at 298.15 K plus the species' own enthalpy increment from 298.15 K to ``temperature_k``, with the elemental term pinned at 298.15 K and not reevaluated at T -- so this is not ``H(T) - H(0)``. A parent record whose reference is undeclared (legacy, predating the declaration rule) leaves this value's reference zero unestablished; ``h_kj_mol`` carries no declaration of its own, it is governed entirely by the parent's. |
 | `s_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | not documented |
-| `g_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `g_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``g_kj_mol`` is the Gibbs free energy at ``temperature_k`` on that same zero, ``H(T) - T*S(T)`` (entropy converted from J/(mol*K) to kJ/(mol*K)); it inherits the same parent-governed, possibly-undeclared reference zero as ``h_kj_mol``. |
 
 ### `thermo_source_calculation`
 

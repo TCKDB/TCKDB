@@ -274,10 +274,20 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 class ThermoPoint(Base):
     """Tabulated standard-state thermo values at a specific temperature.
 
-    h_kj_mol uses the parent's declared formation zero with the elemental
-    term pinned at 298.15 K; it is not H(T)-H(0). g_kj_mol is H(T)-T*S(T)
-    on that same zero (S converted from J/(mol*K) to kJ/(mol*K)). Legacy
-    undeclared rows do not establish either quantity's reference zero.
+    * ``h_kj_mol`` is the tabulated enthalpy at ``temperature_k``, on the
+      same reference zero the parent ``thermo`` row's
+      ``enthalpy_reference_kind`` declares: for ``formation_298k``, the
+      standard formation enthalpy at 298.15 K plus the species' own
+      enthalpy increment from 298.15 K to ``temperature_k``, with the
+      elemental term pinned at 298.15 K and not reevaluated at T -- so this
+      is not ``H(T) - H(0)``. A parent record whose reference is undeclared
+      (legacy, predating the declaration rule) leaves this value's
+      reference zero unestablished; ``h_kj_mol`` carries no declaration of
+      its own, it is governed entirely by the parent's.
+    * ``g_kj_mol`` is the Gibbs free energy at ``temperature_k`` on that
+      same zero, ``H(T) - T*S(T)`` (entropy converted from J/(mol*K) to
+      kJ/(mol*K)); it inherits the same parent-governed, possibly-undeclared
+      reference zero as ``h_kj_mol``.
     """
 
     __tablename__ = "thermo_point"

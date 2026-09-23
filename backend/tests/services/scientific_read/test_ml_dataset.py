@@ -8,8 +8,10 @@ builders in ``app.services.scientific_read.ml_dataset`` directly against a
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
+from sqlalchemy import text
 
 from app.db.models.common import (
     CalculationGeometryRole,
@@ -367,6 +369,35 @@ def _reactant_with_energy(db_session, smiles, energy_hartree, lot, *, h298=None)
     return entry
 
 
+def _reactant_with_legacy_undeclared_h298(db_session, smiles, energy_hartree, lot, *, h298):
+    """Like ``_reactant_with_energy``, but the thermo row predates the
+    enthalpy-reference-declaration rule: ``h298_kj_mol`` is set with no
+    ``enthalpy_reference_kind`` declared. Only reachable by disabling the
+    guard trigger for the insert -- mirrors ``_legacy_scalar_thermo`` in
+    ``tests/services/test_contribution_bundle_export_enthalpy_reference.py``.
+    """
+    entry = _reactant_with_energy(db_session, smiles, energy_hartree, lot, h298=None)
+    db_session.execute(
+        text("ALTER TABLE thermo DISABLE TRIGGER trg_guard_thermo_enthalpy_reference")
+    )
+    try:
+        thermo_id = db_session.scalar(
+            text(
+                "INSERT INTO thermo "
+                "(public_ref, species_entry_id, scientific_origin, h298_kj_mol) "
+                "VALUES (:ref, :entry, 'computed', :h298) RETURNING id"
+            ),
+            {"entry": entry.id, "ref": "th_" + uuid4().hex[:26], "h298": h298},
+        )
+    finally:
+        db_session.execute(
+            text("ALTER TABLE thermo ENABLE TRIGGER trg_guard_thermo_enthalpy_reference")
+        )
+    db_session.flush()
+    _approve(db_session, SubmissionRecordType.thermo, thermo_id)
+    return entry
+
+
 def test_reaction_export_rdb7_shape_and_barrier(db_session):
     lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
     e_a = _reactant_with_energy(db_session, "C", -40.0, lot, h298=-74.6)
@@ -658,3 +689,110 @@ def test_reaction_export_trust_gate(db_session):
     parsed = _parse(lines)
     assert not [p for p in parsed if p["record_type"] == "ml_reaction"]
     assert parsed[-1]["counts"]["skipped_below_min_review_status"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Reaction export -- delta_h298 declines across an unrecorded/mixed
+# enthalpy reference (issue #519, second half)
+# ---------------------------------------------------------------------------
+
+
+def test_reaction_export_delta_h298_null_when_reference_unrecorded(db_session):
+    """One participant carries a legacy thermo row (h298 set, no declared
+    ``enthalpy_reference_kind``) predating the declaration rule. The export
+    must decline to sum across it rather than silently returning a number
+    computed on an unknown basis -- the barrier (an independent, purely
+    electronic quantity) is unaffected."""
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    e_a = _reactant_with_energy(db_session, "C", -40.0, lot, h298=-74.6)
+    # Legacy: h298 present, reference never recorded.
+    e_b = _reactant_with_legacy_undeclared_h298(
+        db_session, "O", -75.0, lot, h298=-241.8
+    )
+    e_c = _reactant_with_energy(db_session, "CO", -115.05, lot, h298=-201.0)
+
+    chem = make_chem_reaction(
+        db_session, reactants=[e_a.species, e_b.species], products=[e_c.species]
+    )
+    rxn_entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[e_a, e_b],
+        product_entries=[e_c],
+    )
+    _approve(db_session, SubmissionRecordType.reaction_entry, rxn_entry.id)
+
+    ts = make_transition_state(db_session, reaction_entry=rxn_entry)
+    tse = make_transition_state_entry(db_session, transition_state=ts)
+    ts_geo = make_geometry(db_session, natoms=2)
+    attach_geometry_atoms(
+        db_session,
+        geometry=ts_geo,
+        symbols=["C", "O"],
+        coords=[[0.0, 0.0, 0.0], [0.0, 0.0, 1.4]],
+    )
+    ts_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        transition_state_entry_id=tse.id,
+        lot_id=lot.id,
+    )
+    attach_input_geometry(db_session, calculation=ts_calc, geometry=ts_geo)
+    attach_sp_result(
+        db_session, calculation=ts_calc, electronic_energy_hartree=-114.95
+    )
+
+    lines = list(
+        iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref])
+    )
+    parsed = _parse(lines)
+    (record,) = [p for p in parsed if p["record_type"] == "ml_reaction"]
+
+    # The naive, buggy sum would be -201.0 - (-74.6 - 241.8) == 115.4; the
+    # export must decline instead.
+    assert record["delta_h298_kj_mol"] is None
+
+    # The electronic barrier does not depend on thermo at all and is
+    # unaffected by the undeclared reference.
+    assert record["barrier"] is not None
+    assert record["barrier"]["electronic_forward_kj_mol"] == pytest.approx(
+        0.05 * HARTREE_TO_KJ_MOL
+    )
+
+    summary = parsed[-1]
+    assert summary["record_type"] == "export_summary"
+    assert summary["counts"]["delta_h298_declined_unrecorded_reference"] == 1
+    assert summary["counts"]["delta_h298_declined_mixed_reference"] == 0
+
+
+def test_reaction_export_delta_h298_computed_when_every_term_declares(db_session):
+    """Sanity counterpart: when every contributing thermo term declares the
+    same reference, delta_h298 is computed exactly as before and the new
+    decline counters stay at zero."""
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    e_a = _reactant_with_energy(db_session, "C", -40.0, lot, h298=-74.6)
+    e_b = _reactant_with_energy(db_session, "O", -75.0, lot, h298=-241.8)
+    e_c = _reactant_with_energy(db_session, "CO", -115.05, lot, h298=-201.0)
+
+    chem = make_chem_reaction(
+        db_session, reactants=[e_a.species, e_b.species], products=[e_c.species]
+    )
+    rxn_entry = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[e_a, e_b],
+        product_entries=[e_c],
+    )
+    _approve(db_session, SubmissionRecordType.reaction_entry, rxn_entry.id)
+
+    lines = list(
+        iter_ml_reactions_ndjson(db_session, reaction_refs=[rxn_entry.public_ref])
+    )
+    parsed = _parse(lines)
+    (record,) = [p for p in parsed if p["record_type"] == "ml_reaction"]
+
+    assert record["delta_h298_kj_mol"] == pytest.approx(-201.0 - (-74.6 - 241.8))
+
+    summary = parsed[-1]
+    assert summary["counts"]["delta_h298_declined_unrecorded_reference"] == 0
+    assert summary["counts"]["delta_h298_declined_mixed_reference"] == 0
