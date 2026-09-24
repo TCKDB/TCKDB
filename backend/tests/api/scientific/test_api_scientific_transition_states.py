@@ -511,6 +511,130 @@ def test_ts_detail_available_sections_present(client, db_session):
     assert sections["has_geometries"] is False
 
 
+# ---------------------------------------------------------------------------
+# available_sections audit (issue #534 — same tautology/mismatch class #268
+# and #533 fixed on the conformer surfaces, audited here on both TS
+# surfaces)
+# ---------------------------------------------------------------------------
+
+
+def test_ts_detail_available_sections_has_entries_false_when_no_entries(
+    client, db_session
+):
+    """The concept-surface counterpart of ``test_ts_detail_available_sections_present``'s
+    ``has_entries is True`` — a TS concept with zero entries is the case
+    that flag must be able to say ``False`` about. Without this fixture the
+    True case above proves nothing (it would read True whether the flag
+    were measured or hardcoded)."""
+    _, _, ts, entries = _make_reaction_with_ts(db_session, n_entries=0)
+    assert entries == []
+    body = client.get(_ts_detail_url(ts.public_ref)).json()
+    assert body["record"]["available_sections"]["has_entries"] is False
+
+
+def test_ts_detail_available_sections_has_review_false_despite_entry_review(
+    client, db_session
+):
+    """The bug this closes (#534): the concept-grain flag used to count
+    reviews of ``transition_state_entry`` rows, while ``include=review``'s
+    body on this surface only ever returns reviews of the TS concept
+    itself (``_build_review_history(..., transition_state, ts.id)``). A
+    review on a child entry must not make this flag True — the body it
+    is supposed to describe stays empty."""
+    _, _, ts, entries = _make_reaction_with_ts(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=entries[0].id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(_ts_detail_url(ts.public_ref, include="review")).json()
+    assert body["record"]["review_history"] == []
+    assert body["record"]["available_sections"]["has_review"] is False
+
+
+def test_ts_detail_available_sections_has_review_true_matches_body(
+    client, db_session
+):
+    """Same request shape as the false case above, but the review is on
+    the TS concept itself rather than an entry — the flag must flip to
+    True and agree with the now non-empty body. Under the old (buggy)
+    code this flag stayed False here, because it never looked at
+    ``transition_state``-scoped reviews at all."""
+    _, _, ts, entries = _make_reaction_with_ts(db_session)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state,
+        record_id=ts.id,
+        status=RecordReviewStatus.approved,
+    )
+    body = client.get(_ts_detail_url(ts.public_ref, include="review")).json()
+    assert body["record"]["review_history"], (
+        "fixture must actually carry a review — a flag assertion over an "
+        "empty body proves nothing"
+    )
+    assert body["record"]["available_sections"]["has_review"] is True
+
+
+def test_ts_detail_available_sections_all_five_flags_measured(
+    client, db_session
+):
+    """One fixture where every one of the five flags is independently
+    true, cross-checked against the include block it corresponds to."""
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+
+    _, _, ts, entries = _make_reaction_with_ts(db_session, n_entries=2)
+    tse = entries[0]
+    lot = make_lot(db_session)
+    calc = _attach_calc(
+        db_session, tse=tse, calc_type=CalculationType.opt, lot=lot
+    )
+    geom = make_geometry(db_session, natoms=4)
+    db_session.add(
+        CalculationOutputGeometry(
+            calculation_id=calc.id,
+            output_order=1,
+            geometry_id=geom.id,
+            role=CalculationGeometryRole.final,
+        )
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state,
+        record_id=ts.id,
+        status=RecordReviewStatus.approved,
+    )
+    db_session.add(
+        TransitionStateValidationEvidence(
+            transition_state_entry_id=tse.id,
+            kind="irc",
+            passed=True,
+            rationale="forward and reverse endpoints match participants",
+            reconstruction_calculation_id=calc.id,
+        )
+    )
+    db_session.flush()
+    body = client.get(
+        _ts_detail_url(
+            ts.public_ref,
+            include="entries,calculations,geometries,review,validation_evidence",
+        )
+    ).json()
+    record = body["record"]
+    assert record["available_sections"] == {
+        "has_entries": True,
+        "has_calculations": True,
+        "has_geometries": True,
+        "has_review": True,
+        "has_validation_evidence": True,
+    }
+    assert len(record["entries"]) == 2
+    assert len(record["calculations"]) == 1
+    assert len(record["geometries"]) == 1
+    assert len(record["review_history"]) == 1
+    assert len(record["validation_evidence"]) == 2  # one wrapper per entry
+
+
 def test_ts_detail_include_entries(client, db_session):
     _, _, ts, entries = _make_reaction_with_ts(db_session, n_entries=2)
     body = client.get(_ts_detail_url(ts.public_ref, include="entries")).json()
@@ -855,6 +979,99 @@ def test_tse_detail_include_review(client, db_session):
     rh = body["record"]["review_history"]
     assert rh is not None
     assert rh[0]["status"] == "under_review"
+
+
+# ---------------------------------------------------------------------------
+# available_sections audit (issue #534 — entry-grain has_entries tautology)
+# ---------------------------------------------------------------------------
+
+
+def test_tse_detail_available_sections_has_entries_false_for_sole_entry(
+    client, db_session
+):
+    """The identical tautology #268/#533 fixed on the conformer-observation
+    surface: ``include=entries`` on this surface always returns a
+    non-empty list — this record's own entry is a member of its own TS by
+    construction — so "is the raw list non-empty" can never be False.
+    A TS with exactly one entry is the "genuinely absent" case for this
+    flag: requesting ``include=entries`` returns nothing the client does
+    not already know from ``record.transition_state_entry``."""
+    _, _, _ts, entries = _make_reaction_with_ts(db_session, n_entries=1)
+    body = client.get(_tse_detail_url(entries[0].public_ref)).json()
+    assert body["record"]["available_sections"]["has_entries"] is False
+
+
+def test_tse_detail_available_sections_has_entries_true_with_siblings(
+    client, db_session
+):
+    """Same request shape as the sole-entry case above, but a second entry
+    under the same TS — ``has_entries`` must flip to True for both
+    members, and ``include=entries`` genuinely returns more than the
+    requesting record."""
+    _, _, _ts, entries = _make_reaction_with_ts(db_session, n_entries=2)
+    for e in entries:
+        body = client.get(_tse_detail_url(e.public_ref)).json()
+        assert body["record"]["available_sections"]["has_entries"] is True
+
+
+def test_tse_detail_available_sections_all_five_flags_measured(
+    client, db_session
+):
+    """One fixture where every one of the five flags on the entry-grained
+    surface is independently true, cross-checked against the include
+    block it corresponds to."""
+    from app.db.models.transition_state import TransitionStateValidationEvidence
+
+    _, _, _ts, entries = _make_reaction_with_ts(db_session, n_entries=2)
+    tse = entries[0]
+    lot = make_lot(db_session)
+    calc = _attach_calc(
+        db_session, tse=tse, calc_type=CalculationType.opt, lot=lot
+    )
+    geom = make_geometry(db_session, natoms=4)
+    db_session.add(
+        CalculationOutputGeometry(
+            calculation_id=calc.id,
+            output_order=1,
+            geometry_id=geom.id,
+            role=CalculationGeometryRole.final,
+        )
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_id=tse.id,
+        status=RecordReviewStatus.under_review,
+    )
+    db_session.add(
+        TransitionStateValidationEvidence(
+            transition_state_entry_id=tse.id,
+            kind="irc",
+            passed=True,
+            rationale="forward and reverse endpoints match participants",
+            reconstruction_calculation_id=calc.id,
+        )
+    )
+    db_session.flush()
+    body = client.get(
+        _tse_detail_url(
+            tse.public_ref,
+            include="entries,calculations,geometries,review,validation_evidence",
+        )
+    ).json()
+    record = body["record"]
+    assert record["available_sections"] == {
+        "has_entries": True,
+        "has_calculations": True,
+        "has_geometries": True,
+        "has_review": True,
+        "has_validation_evidence": True,
+    }
+    assert len(record["entries"]) == 2
+    assert len(record["calculations"]) == 1
+    assert len(record["geometries"]) == 1
+    assert len(record["review_history"]) == 1
+    assert len(record["validation_evidence"]) == 1
 
 
 def test_tse_detail_include_all_does_not_restore_internal_ids(
