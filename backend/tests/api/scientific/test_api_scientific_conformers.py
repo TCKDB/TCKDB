@@ -712,6 +712,34 @@ def test_cg_detail_available_sections_present(client, db_session):
     assert sections["has_calculations"] is False
 
 
+def test_cg_detail_available_sections_has_observations_false_on_empty_group(
+    client, db_session
+):
+    """The group-surface counterpart of ``test_cg_detail_available_sections_present``'s
+    ``has_observations is True`` — this fixture is the case that flag must be
+    able to say ``False`` about. Without a paired empty-group fixture, the
+    True case above proves nothing (it would read True whether the flag
+    were measured or hardcoded)."""
+    _, cg = _make_group(db_session)
+    body = client.get(_cg_url(cg.public_ref)).json()
+    assert body["record"]["available_sections"]["has_observations"] is False
+
+
+def test_cg_detail_available_sections_has_selections_true_when_present(
+    client, db_session
+):
+    """Pairs with the ``has_selections is False`` assertion above — same
+    request shape, a group that actually has a selection row."""
+    _, cg, _ = _make_group_with_obs(db_session)
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg,
+        selection_kind=ConformerSelectionKind.curator_pick,
+    )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    assert body["record"]["available_sections"]["has_selections"] is True
+
+
 def test_cg_detail_include_observations(client, db_session):
     _, cg, obs = _make_group_with_obs(db_session, n_observations=2)
     body = client.get(_cg_url(cg.public_ref, include="observations")).json()
@@ -1388,6 +1416,114 @@ def test_co_detail_evidence_summary_keeps_booleans(client, db_session):
 
     sibling = client.get(_co_url(obs[1].public_ref)).json()
     assert sibling["record"]["evidence_summary"]["has_freq"] is False
+
+
+# ---------------------------------------------------------------------------
+# available_sections (issue #268 — has_observations / has_selections were
+# constant rather than measured on this surface)
+# ---------------------------------------------------------------------------
+
+
+def test_co_detail_available_sections_has_observations_false_for_sole_observation(
+    client, db_session
+):
+    """A group with exactly one observation: ``include=observations`` would
+    return only this record's own observation, telling the client nothing
+    it does not already know from ``record.conformer_observation``. That is
+    the "genuinely absent" case for this flag — see
+    ``_exists_other_observations_in_group``'s docstring for why raw
+    non-emptiness (the record is always a member of its own group) cannot
+    be the measure."""
+    _, _, obs = _make_group_with_obs(db_session, n_observations=1)
+    body = client.get(_co_url(obs[0].public_ref)).json()
+    assert body["record"]["available_sections"]["has_observations"] is False
+
+
+def test_co_detail_available_sections_has_observations_true_with_siblings(
+    client, db_session
+):
+    """Same request shape as the sole-observation case above, but a second
+    observation in the basin — ``has_observations`` must flip to True for
+    both members, and ``include=observations`` genuinely returns more than
+    the requesting record."""
+    _, _, obs = _make_group_with_obs(db_session, n_observations=2)
+    for o in obs:
+        body = client.get(_co_url(o.public_ref)).json()
+        assert body["record"]["available_sections"]["has_observations"] is True
+
+
+def test_co_detail_available_sections_has_selections_false_when_group_has_none(
+    client, db_session
+):
+    _, _, obs = _make_group_with_obs(db_session, n_observations=1)
+    body = client.get(_co_url(obs[0].public_ref)).json()
+    assert body["record"]["available_sections"]["has_selections"] is False
+
+
+def test_co_detail_available_sections_has_selections_true_and_matches_body(
+    client, db_session
+):
+    """The bug this closes: ``has_selections`` was hardcoded False even
+    when ``include=selections`` returned the parent group's non-empty
+    list. Same request shape as the false case above, plus a selection row
+    on the parent group — the flag must agree with the body."""
+    _, cg, obs = _make_group_with_obs(db_session, n_observations=1)
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg,
+        selection_kind=ConformerSelectionKind.curator_pick,
+    )
+    body = client.get(_co_url(obs[0].public_ref, include="selections")).json()
+    assert body["record"]["selections"], (
+        "fixture must actually carry a selection — a flag assertion over "
+        "an empty body proves nothing"
+    )
+    assert body["record"]["available_sections"]["has_selections"] is True
+
+
+def test_co_detail_available_sections_all_five_flags_measured(client, db_session):
+    """One fixture where every one of the five flags is independently true,
+    cross-checked against the include block it corresponds to — the same
+    audit the group surface's own tests run, extended to the two flags
+    that used to be constant here."""
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    attach_conformer_selection(
+        db_session,
+        conformer_group=cg,
+        selection_kind=ConformerSelectionKind.curator_pick,
+    )
+    calc, geom = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        with_geom=True,
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_id=obs[0].id,
+        status=RecordReviewStatus.under_review,
+    )
+    body = client.get(
+        _co_url(
+            obs[0].public_ref,
+            include="observations,selections,calculations,geometries,review",
+        )
+    ).json()
+    record = body["record"]
+    sections = record["available_sections"]
+    assert sections == {
+        "has_observations": True,
+        "has_selections": True,
+        "has_calculations": True,
+        "has_geometries": True,
+        "has_review": True,
+    }
+    assert len(record["observations"]) == 2
+    assert len(record["selections"]) == 1
+    assert len(record["calculations"]) == 1
+    assert len(record["geometries"]) == 1
+    assert len(record["review_history"]) == 1
 
 
 # ===========================================================================

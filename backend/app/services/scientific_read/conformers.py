@@ -230,6 +230,7 @@ def build_group_record(
         obs_ids=obs_ids,
         group_ids_for_review=[cg.id],
         selection_count=len(selection_rows),
+        has_observations=len(obs_ids) > 0,
     )
 
     cg_core = _build_group_core_block(
@@ -405,11 +406,32 @@ def _build_observation_record(
     evidence = _build_observation_evidence_summary(
         session, observation.id, levels_index=levels_index
     )
+    # ``has_observations``: ``include=observations`` on this surface always
+    # returns a non-empty list -- this record's own observation is a member
+    # of its own group by construction (``conformer_group_id`` is NOT
+    # NULL), so "is the raw list non-empty" can never be false here and
+    # would be exactly as hardcoded as the bug this replaces. What the
+    # section can genuinely add over the record's own core block is
+    # *other* observations sharing the basin -- see this function's own
+    # docstring ("which other observations share the basin") -- so that is
+    # what this measures: is there at least one sibling besides this one.
+    has_sibling_observations = _exists_other_observations_in_group(
+        session,
+        conformer_group_id=observation.conformer_group_id,
+        exclude_observation_id=observation.id,
+    )
+    # ``has_selections``: selections live on the parent group (see
+    # ``selections_block`` below), so load the real rows once here -- the
+    # same query the group surface runs -- and reuse them for both the
+    # boolean and, if requested, the include block itself instead of
+    # re-querying.
+    selection_rows = _load_selection_rows(session, observation.conformer_group_id)
     available = _build_available_sections(
         session,
         obs_ids=obs_ids,
         group_ids_for_review=[],  # review history is per-observation here
-        selection_count=0,
+        selection_count=len(selection_rows),
+        has_observations=has_sibling_observations,
     )
     # ``has_review`` for the observation surface tracks the observation's
     # own review_record rows (not the parent group's), so recompute it.
@@ -439,10 +461,8 @@ def _build_observation_record(
 
     selections_block: list[ConformerSelectionSummary] | None = None
     if "selections" in includes:
-        # Selections live on the parent group, so expose those.
-        selection_rows = _load_selection_rows(
-            session, observation.conformer_group_id
-        )
+        # Selections live on the parent group, so expose the rows already
+        # loaded above for ``has_selections`` -- one query, not two.
         selections_block = _build_selection_summary_list(session, selection_rows)
 
     calculations_block: list[ConformerCalculationSummary] | None = None
@@ -1075,8 +1095,19 @@ def _build_available_sections(
     obs_ids: list[int],
     group_ids_for_review: list[int],
     selection_count: int,
+    has_observations: bool,
 ) -> AvailableConformerSections:
-    has_observations = len(obs_ids) > 0
+    """Assemble the boolean map. ``obs_ids`` scopes the calc/geometry
+    queries only -- it is *not* a source for ``has_observations`` (that
+    used to be ``len(obs_ids) > 0`` inline here, which was correct on the
+    group surface, where ``obs_ids`` is the group's real observation list,
+    and silently wrong on the observation surface, where the caller passed
+    ``[observation.id]`` for calc/geometry scoping and the same length-1
+    list produced an unconditional ``True`` regardless of any DB state).
+    Every caller now measures ``has_observations`` itself and hands in the
+    answer, so the two concerns can no longer be conflated by sharing one
+    list.
+    """
     has_calcs = False
     has_geoms = False
     if obs_ids:
@@ -1126,6 +1157,40 @@ def _build_available_sections(
         has_calculations=has_calcs,
         has_geometries=has_geoms,
         has_review=has_review,
+    )
+
+
+def _exists_other_observations_in_group(
+    session: Session,
+    *,
+    conformer_group_id: int,
+    exclude_observation_id: int,
+) -> bool:
+    """Whether *conformer_group_id* has an observation besides the excluded one.
+
+    Backs ``has_observations`` on the observation-grained detail surface.
+    ``ConformerObservation.conformer_group_id`` is NOT NULL, so any
+    observation is trivially a member of its own group -- a plain
+    "does this group have any observations" query would be an
+    unconditional ``True`` on this surface for exactly the same reason the
+    retired ``len([observation.id]) > 0`` was: it never touches anything
+    that could vary. Excluding *exclude_observation_id* is what makes the
+    result answer something the caller does not already know from the
+    record's own core block -- and what makes it capable of being
+    ``False`` (a group with exactly one observation).
+    """
+    return bool(
+        session.scalar(
+            select(
+                exists().where(
+                    and_(
+                        ConformerObservation.conformer_group_id
+                        == conformer_group_id,
+                        ConformerObservation.id != exclude_observation_id,
+                    )
+                )
+            )
+        )
     )
 
 
