@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "check:dist": "node scripts/check-dist-self-contained.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
