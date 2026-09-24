@@ -65,6 +65,20 @@ jobs:
     services:
       postgres:
         image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+        # Authenticated pull. On 2026-09-24 Docker Hub began refusing this
+        # public image to GitHub-hosted runners with "unauthorized: access to
+        # the requested resource is not authorized", mid-download, while it
+        # stayed pullable from anywhere else. That is Docker Hub throttling
+        # anonymous pulls from GitHub's shared address pool, and it failed
+        # "Initialize containers" on every backend gate before checkout, so
+        # every pull request went red at once with no test output -- the
+        # same failure class as the MinIO outage of 2026-09-12 below. The
+        # vendor publishes this image only on Docker Hub, so the fix is to
+        # authenticate rather than move registries. These are the same
+        # secrets build-api-image.yml already uses to push.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
@@ -86,7 +100,7 @@ jobs:
           --health-retries 10
 
       minio:
-        # quay.io, pinned by digest. `minio/minio:latest` on Docker Hub
+        # Was quay.io, pinned by digest. `minio/minio:latest` on Docker Hub
         # became unpullable on 2026-09-12 ("pull access denied ...
         # repository does not exist or may require 'docker login'"),
         # which failed "Initialize containers" on every backend gate
@@ -97,7 +111,16 @@ jobs:
         # Pinned by digest, not by `latest`: an unpinned upstream tag is
         # what turned someone else's publishing change into this repo's
         # outage. A digest cannot move under us.
-        image: quay.io/minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
+        # 2026-09-24: MinIO withdrew its images from BOTH registries --
+        # quay.io and Docker Hub refuse every tag and digest, anonymous or
+        # logged in. This is a private mirror of the exact release the
+        # storage tests were measured against (RELEASE.2025-09-07T16-13-09Z,
+        # amd64, pushed from a cached copy of upstream digest sha256:14cea493…),
+        # so it needs the same Docker Hub login as the postgres service.
+        image: laxzal/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         command: server /data --address ":9000"
         env:
           MINIO_ROOT_USER: tckdb
