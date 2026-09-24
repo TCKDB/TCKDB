@@ -58,6 +58,53 @@ def test_get_ignores_identifier_query_params_it_does_not_declare(client, db_sess
     assert "smiles" not in body["request"]["filter"]
 
 
+def test_species_ref_and_entry_ref_on_the_wire_are_bound_to_their_own_row(
+    client, db_session
+):
+    """Regression for #275: hard-coding every ``species_entry_ref`` (or
+    ``species_ref``) in the record builder to one constant used to pass
+    this endpoint's whole suite. Two distinguishable species on the wire,
+    each checked against its own public ref, is what catches that.
+
+    ``species_id`` / ``species_entry_id`` are stripped from this response
+    by default (see ``test_record_envelope_matches_search_shape``), so
+    records are matched by ``species_ref`` -- the only handle a browse
+    caller actually has.
+    """
+    species_a = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("APIBRBINDA")
+    )
+    entry_a = make_species_entry(db_session, species_a)
+    species_b = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("APIBRBINDB")
+    )
+    entry_b = make_species_entry(db_session, species_b)
+
+    resp = client.get("/api/v1/scientific/species/browse")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    record_a = next(
+        r for r in body["records"] if r["species_ref"] == species_a.public_ref
+    )
+    record_b = next(
+        r for r in body["records"] if r["species_ref"] == species_b.public_ref
+    )
+    assert record_a["species_ref"] != record_b["species_ref"]
+
+    # Each species has exactly one entry here, so the sole entry under
+    # each record is unambiguously that species' own entry.
+    assert len(record_a["entries"]) == 1
+    assert len(record_b["entries"]) == 1
+    entry_record_a = record_a["entries"][0]
+    entry_record_b = record_b["entries"][0]
+    assert entry_record_a["species_entry_ref"] == entry_a.public_ref
+    assert entry_record_b["species_entry_ref"] == entry_b.public_ref
+    assert (
+        entry_record_a["species_entry_ref"] != entry_record_b["species_entry_ref"]
+    )
+
+
 def test_get_parses_collapse_offset_limit(client, db_session):
     a = make_species(
         db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("APIBRCO1")

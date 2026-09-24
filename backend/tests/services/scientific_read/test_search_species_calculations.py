@@ -94,6 +94,80 @@ def test_search_by_species_entry_id_handle(db_session):
     assert response.records[0].species.species_entry_id == entry.id
 
 
+def test_species_entry_id_handle_binds_species_entry_ref_to_the_entry_looked_up(
+    db_session,
+):
+    """Regression for #275: ``species.species_entry_id`` was already
+    asserted here, but the public ``species_entry_ref`` sibling never
+    was. Two species entries, looked up one call at a time by internal
+    id, each must come back with its *own* public ref -- not the other
+    entry's and not a made-up-but-well-formed one.
+    """
+    species_x, entry_x = _entry(db_session, smiles="EHBINDX")
+    make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry_x.id
+    )
+    species_y, entry_y = _entry(db_session, smiles="EHBINDY")
+    make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry_y.id
+    )
+
+    response_x = search_species_calculations(
+        db_session,
+        SpeciesCalculationsSearchRequest(species_entry_id=entry_x.id),
+    )
+    response_y = search_species_calculations(
+        db_session,
+        SpeciesCalculationsSearchRequest(species_entry_id=entry_y.id),
+    )
+
+    assert len(response_x.records) == 1
+    assert len(response_y.records) == 1
+    assert response_x.records[0].species.species_ref == species_x.public_ref
+    assert response_x.records[0].species.species_entry_ref == entry_x.public_ref
+    assert response_y.records[0].species.species_ref == species_y.public_ref
+    assert response_y.records[0].species.species_entry_ref == entry_y.public_ref
+    assert (
+        response_x.records[0].species.species_entry_ref
+        != response_y.records[0].species.species_entry_ref
+    )
+
+
+def test_species_id_handle_binds_each_entrys_ref_to_itself_not_a_sibling(
+    db_session,
+):
+    """Same regression, for the ``species_id`` handle (Path 2): one
+    species, two distinguishable entries (differing ``stereo_label``),
+    resolved in a single call. Each returned record's
+    ``species_entry_ref`` must match the entry that produced it, so a
+    swap between the two sibling entries is not invisible to this suite.
+    """
+    species = make_species(
+        db_session, smiles="EHBINDZ", inchi_key=next_inchi_key("SCBINDZ")
+    )
+    entry_cis = make_species_entry(db_session, species, stereo_label="cis")
+    entry_trans = make_species_entry(db_session, species, stereo_label="trans")
+    make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry_cis.id
+    )
+    make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry_trans.id
+    )
+
+    response = search_species_calculations(
+        db_session,
+        SpeciesCalculationsSearchRequest(species_id=species.id),
+    )
+
+    by_entry_id = {
+        r.species.species_entry_id: r.species.species_entry_ref
+        for r in response.records
+    }
+    assert by_entry_id[entry_cis.id] == entry_cis.public_ref
+    assert by_entry_id[entry_trans.id] == entry_trans.public_ref
+    assert by_entry_id[entry_cis.id] != by_entry_id[entry_trans.id]
+
+
 def test_explicit_entry_ref_does_not_bypass_unsupported_inchi(db_session):
     _, entry = _entry(db_session, smiles="EH_INCHI")
 

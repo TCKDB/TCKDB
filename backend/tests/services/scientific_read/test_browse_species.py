@@ -69,6 +69,46 @@ def test_browse_does_not_raise_missing_identifier(db_session):
     assert response.pagination.total >= 0  # does not raise
 
 
+def test_species_ref_and_entry_ref_are_bound_to_their_own_record(db_session):
+    """Regression for #275: ``species_ref``/``species_entry_ref`` must name
+    the record that produced them, not a neighbour's and not a constant.
+
+    A single-species fixture cannot tell "the right ref" from "a made-up
+    but well-formed one" -- both look like a valid ``spe_...`` string. Two
+    distinguishable species, each checked against its *own* public ref
+    (and cross-checked to differ from the other's), is the cheapest
+    fixture that can fail on a hard-coded or swapped ref.
+    """
+    species_a = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRBINDA")
+    )
+    entry_a = make_species_entry(db_session, species_a)
+    species_b = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRBINDB")
+    )
+    entry_b = make_species_entry(db_session, species_b)
+
+    response = browse_species(db_session, SpeciesBrowseRequest())
+
+    record_a = next(r for r in response.records if r.species_id == species_a.id)
+    record_b = next(r for r in response.records if r.species_id == species_b.id)
+
+    assert record_a.species_ref == species_a.public_ref
+    assert record_b.species_ref == species_b.public_ref
+    assert record_a.species_ref != record_b.species_ref
+
+    entry_record_a = next(
+        e for e in record_a.entries if e.species_entry_id == entry_a.id
+    )
+    entry_record_b = next(
+        e for e in record_b.entries if e.species_entry_id == entry_b.id
+    )
+
+    assert entry_record_a.species_entry_ref == entry_a.public_ref
+    assert entry_record_b.species_entry_ref == entry_b.public_ref
+    assert entry_record_a.species_entry_ref != entry_record_b.species_entry_ref
+
+
 # ---------------------------------------------------------------------------
 # Secondary filters narrow the listing
 # ---------------------------------------------------------------------------
