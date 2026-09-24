@@ -171,7 +171,7 @@ For the longer-form treatment with examples and design rationale, see
 ## Architecture
 
 In normal use, clients do **not** connect directly to Postgres or
-MinIO. You talk to the TCKDB API, either with curl, the Python client,
+the object store. You talk to the TCKDB API, either with curl, the Python client,
 or a workflow tool. The API then reads/writes the database and artifact
 storage for you.
 
@@ -184,7 +184,7 @@ storage for you.
        ┌────────────────┼──────────────────┐
        ▼                ▼                  ▼
  ┌──────────┐    ┌────────────┐     ┌────────────────┐
- │ Postgres │    │ MinIO / S3 │     │ optional       │
+ │ Postgres │    │ S3 store   │     │ optional       │
  │ + RDKit  │    │ artifacts  │     │ frontend or    │
  │ (private)│    │ (private)  │     │ workflow tools │
  └──────────┘    └────────────┘     └────────────────┘
@@ -201,8 +201,10 @@ storage for you.
 Key invariants:
 
 - **PostgreSQL with the RDKit cartridge** is the chemistry-aware
-  storage layer; **MinIO** (or any S3-compatible store) holds
-  artifacts.
+  storage layer; an **S3-compatible object store** holds artifacts.
+  The shipped Compose file runs **SeaweedFS**; AWS S3, Google Cloud
+  Storage (S3 interoperability, HMAC keys), an existing MinIO or any
+  other S3-compatible service works instead via `S3_ENDPOINT_URL`.
 - **The API is the public surface.** All client traffic — read,
   upload, admin — goes through `/api/v1/*`.
 - **The database and object storage are private services.** Shipped
@@ -284,7 +286,7 @@ cd backend && pip install -e ".[dev]" && cd ..
 #    uv resolves tckdb-schemas from the path in [tool.uv.sources].
 # cd backend && uv sync --extra dev --extra rdkit && cd ..
 
-# 3. Start Postgres+RDKit + MinIO and run migrations
+# 3. Start Postgres+RDKit + SeaweedFS and run migrations
 make up
 
 # 4. Start the API on 127.0.0.1:8010 (foreground; Ctrl-C to stop)
@@ -303,7 +305,7 @@ scientific records yet. Query endpoints can legitimately return empty
 `records` arrays until you load data or upload records.
 
 `make help` lists every available target. The first-run diagnostic
-`make doctor` checks Docker, the env files, db/minio health, RDKit,
+`make doctor` checks Docker, the env files, db/seaweedfs health, RDKit,
 Alembic, and the API — with actionable hints on each failure.
 
 The two Python-env paths in step 2 are complementary:
@@ -366,8 +368,8 @@ cp .env.selfhosted.example .env.selfhosted
 cp .env.db-admin.example .env.db-admin
 $EDITOR .env.selfhosted .env.db-admin
 
-# 2. Bring up the core data plane (Postgres + MinIO)
-docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db minio
+# 2. Bring up the core data plane (Postgres + SeaweedFS)
+docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
 
 # 3. Provision DB roles, run migrations, and seed an admin (from backend/)
 set -a; source .env.selfhosted; source .env.db-admin; set +a
@@ -405,7 +407,7 @@ options" section in
 [docs/deployment/self_hosted_single_node.md](docs/deployment/self_hosted_single_node.md).
 
 Run `backend/scripts/check_selfhosted_deployment.sh` after standing
-the stack up to verify db/minio/API health, public read access, and
+the stack up to verify db/seaweedfs/API health, public read access, and
 the API-key path end-to-end.
 
 ---

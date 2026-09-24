@@ -20,6 +20,8 @@
 # Overridable inputs:
 #   COMPOSE_FILE      docker compose file (default: docker-compose.yml)
 #   COMPOSE_ENV_FILE  env file passed to docker compose (default: .env.selfhosted)
+#   STORAGE_SERVICE   compose service holding the S3 store (default:
+#                     seaweedfs; set to minio on a MinIO deployment)
 #   TCKDB_BASE_URL    API base URL to probe (default: http://127.0.0.1:8010/api/v1)
 #   DB_NAME           DB to inspect (default: tckdb)
 #   DB_USER           DB user (default: tckdb)
@@ -31,7 +33,7 @@
 
 case "${1:-}" in
     -h|--help|help)
-        sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'
         exit 0
         ;;
 esac
@@ -40,6 +42,7 @@ set -uo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.selfhosted}"
+STORAGE_SERVICE="${STORAGE_SERVICE:-seaweedfs}"
 TCKDB_BASE_URL="${TCKDB_BASE_URL:-http://127.0.0.1:8010/api/v1}"
 DB_NAME="${DB_NAME:-tckdb}"
 DB_USER="${DB_USER:-tckdb}"
@@ -89,7 +92,7 @@ else
     # Each running service is a JSON object on its own line (newer compose).
     # Fall back to a non-jq scan if jq is unavailable.
     if command -v jq >/dev/null 2>&1; then
-        for svc in db minio; do
+        for svc in db "$STORAGE_SERVICE"; do
             row="$(echo "$ps_output" | jq -c --arg s "$svc" 'select(.Service == $s)' 2>/dev/null || true)"
             if [[ -z "$row" ]]; then
                 bad "$svc service not listed in 'docker compose ps'"
@@ -104,7 +107,7 @@ else
             fi
         done
     else
-        for svc in db minio; do
+        for svc in db "$STORAGE_SERVICE"; do
             if echo "$ps_output" | grep -q "\"Service\":\"$svc\""; then
                 ok "$svc listed (install jq for health detail)"
             else

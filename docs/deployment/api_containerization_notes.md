@@ -7,7 +7,7 @@ self-hosted operator's top-level invocation becomes:
 ```bash
 docker compose --env-file .env.selfhosted \
     --env-file .env.db-admin \
-    up -d db minio api
+    up -d db seaweedfs api
 ```
 
 The container itself is not yet in the repo. What **is** in the repo

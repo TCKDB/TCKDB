@@ -26,7 +26,7 @@ for the wider taxonomy.
 > backend, schema, and auth model documented on this page.
 
 The page below uses the **Docker Compose quick-start** as its
-infrastructure strategy: containers for PostgreSQL+RDKit and MinIO,
+infrastructure strategy: containers for PostgreSQL+RDKit and SeaweedFS,
 plus the host-side conda env for the backend API and upload worker.
 This is a quick-start *recipe* for provisioning the application's
 dependencies — not the definition of a single-machine deployment.
@@ -74,7 +74,7 @@ This brings up:
 | Service | Image | Purpose |
 |---------|-------|---------|
 | `db`    | `informaticsmatters/rdkit-cartridge-debian` | PostgreSQL with the RDKit cartridge |
-| `minio` | `minio/minio` | S3-compatible artifact storage |
+| `seaweedfs` | `chrislusf/seaweedfs` | S3-compatible artifact storage |
 
 Both services run on `network_mode: host` so the host-side API reaches
 them at `127.0.0.1:5432` and `127.0.0.1:9000` without overrides.
@@ -336,10 +336,11 @@ You'll need to re-run the migration (step 2) and bootstrap admin (step
   user's role. Curators/admins are required for some endpoints — log in
   as a curator/admin before minting the key, or promote the user via
   the admin endpoints.
-- **MinIO bucket missing.** The first artifact upload fails until the
-  bucket exists. Either create it via the MinIO console at
-  `http://localhost:9001` (login with `S3_ACCESS_KEY` /
-  `S3_SECRET_KEY`) or use `mc mb`.
+- **Artifact bucket missing.** `/status` reports the bucket as missing
+  until it exists. Create it with any S3 client, e.g.
+  `aws --endpoint-url http://127.0.0.1:9000 s3 mb s3://tckdb-artifacts`
+  (keys `S3_ACCESS_KEY` / `S3_SECRET_KEY`); on a MinIO deployment the
+  MinIO console at `http://localhost:9001` or `mc mb` also work.
 
 ---
 

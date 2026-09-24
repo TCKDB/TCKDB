@@ -375,22 +375,41 @@ def test_a_missing_object_is_still_502_artifact_object_missing(
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("s3_code", "s3_status"),
+    [
+        ("AccessDenied", 403),
+        # Measured against SeaweedFS 4.47: this is its answer to a full
+        # store -- volume slots exhausted, the disk itself out of space
+        # (ENOSPC), and a bucket that ``s3.bucket.quota.enforce`` made
+        # read-only -- all three alike. It is also its answer to *any*
+        # internal failure, so it cannot mean "full". See the SeaweedFS
+        # note on ``_STORAGE_FULL_CODES``.
+        ("InternalError", 500),
+    ],
+)
 def test_a_refused_write_that_is_not_about_space_stays_unclassified(
-    capacity_db,
+    capacity_db, s3_code, s3_status
 ) -> None:
-    """``AccessDenied`` is a real outage-shaped failure, not a full store.
+    """A refusal that does not *say* it is about space is not a full store.
 
-    Without this, ``_STORAGE_FULL_CODES`` could be widened to "any
-    ``ClientError`` on a write" and every test above would still pass,
-    which would turn a credentials problem into "free some space".
+    ``AccessDenied`` is a real outage-shaped failure. Without this,
+    ``_STORAGE_FULL_CODES`` could be widened to "any ``ClientError`` on a
+    write" and every test above would still pass, which would turn a
+    credentials problem into "free some space".
+
+    ``InternalError`` is the tempting one: it is literally what SeaweedFS
+    returns when full. Admitting it would tell a depositor to wait for an
+    operator on every transient SeaweedFS fault, and record a durable
+    refusal that degrades ``/status`` until a large enough write succeeds.
     """
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
         artifact_storage.store_artifact(
-            _BYTES, _SHA256, client=_FullStore(code="AccessDenied", status=403),
+            _BYTES, _SHA256, client=_FullStore(code=s3_code, status=s3_status),
             bucket="b",
         )
     assert caught.value.full is False
-    assert caught.value.s3_code == "AccessDenied"
+    assert caught.value.s3_code == s3_code
     assert _outstanding(capacity_db) is None
 
 

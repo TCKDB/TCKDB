@@ -25,6 +25,11 @@ from app.services.artifact_storage import (
     validate_artifact,
     validate_total_upload_size,
 )
+from tests.services._live_object_store import (
+    store_description,
+    store_server_header,
+    unavailable,
+)
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 GAUSSIAN_OPT_LOG = FIXTURES / "gaussian" / "opt_g09.log"
@@ -35,8 +40,8 @@ ORCA_OPT_LOG = FIXTURES / "orca" / "opt_orca.out"
 # per xdist worker, because the ``s3_test_bucket`` fixture below is
 # function-scoped and *deletes the bucket* at teardown. Sharing one name across
 # workers means one worker's teardown drops the bucket, and its objects, out
-# from under another worker's test. Unlike the database, MinIO is a single
-# shared service, so the isolation has to be in the name.
+# from under another worker's test. Unlike the database, the object store is
+# a single shared service, so the isolation has to be in the name.
 #
 # S3 bucket names allow only lowercase alphanumerics, hyphens and dots, so the
 # worker id is normalised rather than interpolated raw.
@@ -234,18 +239,20 @@ class TestNonLogKinds:
 
 
 # ---------------------------------------------------------------------------
-# S3 content-addressed storage (requires MinIO running)
+# S3 content-addressed storage (requires a running S3-compatible store)
 # ---------------------------------------------------------------------------
 
 
-def _minio_available() -> bool:
-    """Check if MinIO is reachable."""
-    try:
-        client = _get_s3_client()
-        client.list_buckets()
-        return True
-    except Exception:
-        return False
+@pytest.fixture()
+def _requires_live_store():
+    """Skip without a store locally; fail without one on CI.
+
+    This was a ``skipif`` on "MinIO not running", evaluated on CI too, so
+    an object store the suite could not reach made this whole class skip
+    and the gate pass. See :mod:`tests.services._live_object_store`.
+    """
+    if store_server_header() is None:
+        unavailable(f"{store_description()} did not answer ListBuckets")
 
 
 @pytest.fixture()
@@ -271,7 +278,7 @@ def s3_test_bucket():
         pass
 
 
-@pytest.mark.skipif(not _minio_available(), reason="MinIO not running")
+@pytest.mark.usefixtures("_requires_live_store")
 class TestS3Storage:
     def test_key_layout(self):
         sha = "a577811dc7167bfc1234567890abcdef1234567890abcdef1234567890abcdef"

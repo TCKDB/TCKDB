@@ -32,8 +32,8 @@ A native install brings TCKDB up by:
 1. Installing **PostgreSQL with the RDKit cartridge** as a host service.
 2. Installing the **`tckdb_env` conda environment** for the Python
    backend.
-3. Providing **object/artifact storage** (MinIO, AWS S3, or another
-   S3-compatible service).
+3. Providing **object/artifact storage** (SeaweedFS, AWS S3, MinIO, or
+   another S3-compatible service).
 4. Running the standard Alembic migrations against the host DB.
 5. Bootstrapping the first admin via `backend/scripts/bootstrap_admin.py`.
 6. Starting the API (`uvicorn main:app`) and, optionally, the upload
@@ -70,7 +70,7 @@ If none of those apply, choose Docker.
 |-----------|-----|--------|
 | **PostgreSQL** (recent stable) with the **RDKit cartridge** loaded | Identity tables use RDKit `mol` columns and chemistry-aware indexes. | [Build PostgreSQL+RDKit yourself](#postgresql--rdkit-cartridge), or use the upstream Docker image (`informaticsmatters/rdkit-cartridge-debian`) if Docker is acceptable for this *one* component. |
 | **Conda / Miniforge** with the project's `tckdb_env` environment | The backend, worker, and Alembic CLI all run from this env. | Project repo (`environment.yml` / equivalent). |
-| **Object / artifact storage** (S3-compatible) | Artifact uploads (logs, geometries) write through the object store. | MinIO, AWS S3, lab-managed S3, or any S3 API-compatible service. |
+| **Object / artifact storage** (S3-compatible) | Artifact uploads (logs, geometries) write through the object store. | SeaweedFS, AWS S3, lab-managed S3, MinIO, or any S3 API-compatible service. |
 | **Service manager** (systemd, supervisord, runit, …) | To keep `uvicorn` and the upload worker running. | OS-native. |
 | **Reverse proxy** (only if exposing the API beyond `127.0.0.1`) | TLS termination, cookie + `X-API-Key` passthrough. | nginx / Caddy / Traefik, etc. See [shared-private-deployment.md §Reverse proxy basics](shared-private-deployment.md#reverse-proxy-basics). |
 
@@ -165,13 +165,23 @@ object store.
 
 Choose one of:
 
-- **MinIO** as a host-managed binary. Single Go binary, runs under
-  systemd, persists to a directory you back up. Configure
+- **SeaweedFS** as a host-managed binary. Single Go binary (`weed mini
+  -dir=<dir> -s3.port=9000`), runs under systemd, persists to a
+  directory you back up. Give it an admin identity by exporting
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (the same values as
+  `S3_ACCESS_KEY` / `S3_SECRET_KEY`) -- without them it accepts
+  unauthenticated requests. Configure
   `S3_ENDPOINT_URL=http://127.0.0.1:9000` and create a bucket named
-  `$S3_BUCKET`.
+  `$S3_BUCKET`. An existing host-managed MinIO works the same way.
 - **Lab-managed S3.** Point `S3_ENDPOINT_URL` at the institutional
   endpoint; provision a bucket and credentials.
-- **AWS S3.** Omit `S3_ENDPOINT_URL`; use real AWS credentials.
+- **AWS S3.** Set `S3_ENDPOINT_URL` to the regional endpoint
+  (`https://s3.<region>.amazonaws.com`) and `S3_REGION` to match; use
+  real AWS credentials. Do not leave `S3_ENDPOINT_URL` unset: its
+  default is `http://localhost:9000`.
+- **Google Cloud Storage.** Use its S3 interoperability endpoint,
+  `S3_ENDPOINT_URL=https://storage.googleapis.com`, with HMAC keys as
+  `S3_ACCESS_KEY` / `S3_SECRET_KEY`.
 
 Database backups alone are **not** sufficient if artifacts live
 outside the database. Plan artifact backups too — see

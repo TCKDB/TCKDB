@@ -7,10 +7,11 @@ The core services are:
 
 - FastAPI backend: public HTTP API.
 - Postgres with RDKit cartridge: chemistry-aware relational storage.
-- MinIO or another S3-compatible service: artifact storage.
+- SeaweedFS (the shipped default) or any other S3-compatible service,
+  such as AWS S3, Google Cloud Storage or MinIO: artifact storage.
 
-Clients should talk to the API. Postgres and MinIO should remain
-private services.
+Clients should talk to the API. Postgres and the object store should
+remain private services.
 
 ## Which Deployment Mode?
 

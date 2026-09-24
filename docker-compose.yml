@@ -1,19 +1,19 @@
 # ============================================================================
 # TCKDB - canonical Docker Compose stack
 #
-# One file, two deployment scenarios, four services. Picks between them via
+# One file, two deployment scenarios, five services. Picks between them via
 # `--env-file` and `--profile`:
 #
 #   Local developer machine
 #   -----------------------
 #       cp .env.example .env                  # one-time; edit DB_PASSWORD etc.
-#       docker compose up -d db minio         # core services
+#       docker compose up -d db seaweedfs     # core services
 #       docker compose --profile worker up -d # add the upload worker
 #
 #   Self-hosted single-node server
 #   ------------------------------
 #       cp .env.selfhosted.example .env.selfhosted   # one-time; fill secrets
-#       docker compose --env-file .env.selfhosted up -d db minio
+#       docker compose --env-file .env.selfhosted up -d db seaweedfs
 #       docker compose --env-file .env.selfhosted --profile cloudflare up -d
 #
 # Conventions baked in
@@ -25,17 +25,21 @@
 #     env file; the API receives only the restricted DB_* runtime account.
 #   * Secrets (DB_PASSWORD, S3_SECRET_KEY) are REQUIRED via `${VAR:?...}`.
 #     Compose fails fast if they are unset.
-#   * All published ports bind to 127.0.0.1 only. Postgres and MinIO are
-#     never reachable from the LAN or public internet. Loopback is enough
-#     because the API and Alembic run on the host (`tckdb_env` conda env).
+#   * All published ports bind to 127.0.0.1 only. Postgres and the object
+#     store are never reachable from the LAN or public internet. Loopback
+#     is enough because the API and Alembic run on the host (`tckdb_env`
+#     conda env).
 #   * Bridge networking for the data plane; `network_mode: host` only for
 #     `cloudflared`, which must dial the host-side API at 127.0.0.1:8010.
 #   * Optional services live behind profiles so `docker compose config`
-#     and `docker compose up -d db minio` ignore them by default.
+#     and `docker compose up -d db seaweedfs` ignore them by default.
+#     MinIO is one of them (`--profile minio`), for deployments that
+#     already run it.
 #
 # Image arch note: informaticsmatters/rdkit-cartridge-debian publishes
 # both linux/amd64 and linux/arm64, so the same file runs on x86_64
-# servers and on arm64 (Raspberry Pi) without changes.
+# servers and on arm64 (Raspberry Pi) without changes. So does
+# chrislusf/seaweedfs.
 # ============================================================================
 
 services:
@@ -106,7 +110,77 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # S3-compatible artifact store. SeaweedFS is the default TCKDB ships
+  # (#541); MinIO was, until MinIO withdrew its public images. TCKDB is a
+  # plain S3 client, so this service is optional: point S3_ENDPOINT_URL at
+  # AWS S3 or any other S3-compatible service and do not start it.
+  #
+  # `weed mini` runs master, volume, filer and S3 gateway in one process.
+  # The S3 gateway listens on 9000, the port MinIO used, so S3_ENDPOINT_URL
+  # values written for MinIO still point at the store. Telemetry, WebDAV,
+  # the admin UI and the Iceberg and Lance endpoints are off; nothing here
+  # uses them.
+  #
+  # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY become SeaweedFS's admin
+  # identity -- the same S3_ACCESS_KEY / S3_SECRET_KEY the API signs with,
+  # the way MINIO_ROOT_USER / MINIO_ROOT_PASSWORD were. They are not
+  # optional in effect: measured, SeaweedFS started without them accepts
+  # every request, signed or anonymous.
+  #
+  # Pinned by digest (release 4.47, multi-arch: linux/amd64 and
+  # linux/arm64): an unpinned upstream tag is how MinIO's publishing change
+  # became this repository's outage.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    command:
+      - mini
+      - -dir=/data
+      - -s3.port=9000
+      - -master.telemetry=false
+      - -webdav=false
+      - -admin.ui=false
+      - -s3.port.iceberg=0
+      - -s3.port.lance=0
+    environment:
+      AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-tckdb}
+      AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
+    # The S3 API is loopback-only, like every other published port here.
+    ports:
+      - "127.0.0.1:9000:9000"
+    volumes:
+      - tckdb_seaweedfs:/data
+    restart: unless-stopped
+    # A signed ListBuckets: healthy only once the S3 gateway answers an
+    # authenticated request with these credentials. `$$` defers expansion
+    # to the container's shell, so the secret is not baked into the
+    # healthcheck definition.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user \"$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY\" http://127.0.0.1:9000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # MinIO, for deployments that already run it. Behind the `minio` profile,
+  # so it starts only when asked for:
+  #     docker compose --profile minio up -d db minio
+  #
+  # Kept because TCKDB still supports MinIO and an existing deployment's
+  # artifacts live in the `tckdb_minio` volume. Moving them to SeaweedFS is
+  # a separate, verified copy (not yet written); until then keep using this
+  # service rather than starting `seaweedfs` on an empty volume. Both
+  # publish 127.0.0.1:9000, so starting both fails loudly on the port
+  # rather than silently switching the API to an empty store.
+  #
+  # MinIO no longer publishes images: `minio/minio` resolves only on a host
+  # that already has it pulled.
   minio:
+    profiles: ["minio"]
     image: minio/minio
     command: server /data --console-address ":9001"
     environment:
@@ -173,8 +247,8 @@ services:
   # The token is provisioned out-of-band via `cloudflared tunnel create`
   # + Cloudflare Zero Trust dashboard and injected as CLOUDFLARED_TUNNEL_TOKEN
   # in .env.selfhosted. The tunnel forwards only the public hostname ->
-  # 127.0.0.1:8010. Postgres, MinIO, and the MinIO console are not part of
-  # any ingress rule.
+  # 127.0.0.1:8010. Postgres and the object store (and the MinIO console,
+  # where MinIO runs) are not part of any ingress rule.
   #
   # `network_mode: host` so the tunnel can reach the API on 127.0.0.1:8010
   # without piercing a Docker bridge. Do NOT also run cloudflared as a
@@ -199,4 +273,5 @@ services:
 
 volumes:
   tckdb_pgdata:
+  tckdb_seaweedfs:
   tckdb_minio:

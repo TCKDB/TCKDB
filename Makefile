@@ -12,7 +12,7 @@
 #                      `alembic upgrade head`. Cheap and idempotent
 #                      when no new migrations are pending.
 #
-#   make reset       - destructive. Wipes the DB + MinIO volumes,
+#   make reset       - destructive. Wipes the DB + object-store volumes,
 #                      brings infra back up, re-applies migrations
 #                      from scratch. Use only when the mutable
 #                      initial migration (d861dfd60891) changed —
@@ -34,12 +34,12 @@
 # Print available targets.
 help:
 	@echo "TCKDB local-dev targets:"
-	@echo "  make up           Start db/minio + run migrations"
+	@echo "  make up           Start db/seaweedfs + run migrations"
 	@echo "  make api          Start the FastAPI backend on 127.0.0.1:8010 (foreground)"
 	@echo "  make admin        Bootstrap a dev admin user (idempotent)"
 	@echo "  make doctor       Run setup diagnostics (alias: make check)"
 	@echo "  make migrate      Re-apply migrations without restarting infra"
-	@echo "  make reset        Wipe DB + MinIO volumes, restart, re-migrate"
+	@echo "  make reset        Wipe DB + object-store volumes, restart, re-migrate"
 	@echo "  make reset-login  reset + dev admin + API key (uses dev_login.sh)"
 	@echo "  make down         Stop infra (volumes preserved)"
 	@echo "  make test         Run the backend test suite"
@@ -55,12 +55,12 @@ help:
 	@echo "Snapshots:"
 	@echo "  make update-openapi-golden  Regenerate backend/tests/api/golden/openapi.json"
 
-# Start local Postgres + MinIO and apply migrations to tckdb_dev.
+# Start local Postgres + SeaweedFS and apply migrations to tckdb_dev.
 # Uses the canonical docker-compose.yml at the repo root; Compose
 # auto-loads .env. If the latest initial migration was edited, this
 # will silently leave the DB stale — use `make reset` instead.
 up:
-	docker compose up -d db minio
+	docker compose up -d db seaweedfs
 	cd backend && DB_NAME=tckdb_dev conda run -n tckdb_env alembic upgrade head
 
 # Stop the infrastructure containers (data volumes preserved).
@@ -71,13 +71,13 @@ down:
 migrate:
 	cd backend && DB_NAME=tckdb_dev conda run -n tckdb_env alembic upgrade head
 
-# Destructive: wipe DB + MinIO volumes, restart infra, re-migrate.
+# Destructive: wipe DB + object-store volumes, restart infra, re-migrate.
 # See the workflow comment at the top of this file for when to use
 # this vs. `make up`. Does NOT reseed admin credentials or API keys —
 # run `make reset-login` for that.
 reset:
 	docker compose down -v
-	docker compose up -d db minio
+	docker compose up -d db seaweedfs
 	cd backend && DB_NAME=tckdb_dev conda run -n tckdb_env alembic upgrade head
 
 # `make reset`, then re-bootstrap the dev admin user, log in, and mint
@@ -152,7 +152,7 @@ admin:
 	    --email    "$${TCKDB_BOOTSTRAP_EMAIL:-admin@example.org}" \
 	    --role     admin
 
-# Run setup diagnostics (db/minio health, RDKit, alembic, API).
+# Run setup diagnostics (db/seaweedfs health, RDKit, alembic, API).
 # `check` is an alias.
 doctor check:
 	bash backend/scripts/tckdb_doctor.sh
