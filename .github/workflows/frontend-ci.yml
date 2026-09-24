@@ -48,3 +48,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Runs over dist/ from the step above: the page nginx serves must load
+      # nothing from another host (issue #531). Fails if dist/ is missing.
+      - name: Check built page is self-contained
+        run: npm run check:dist

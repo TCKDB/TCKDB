@@ -666,7 +666,9 @@ def test_frontend_gate_runs_the_locked_quality_contract() -> None:
 
     Registering a workflow with the aggregate only proves that GitHub waited
     for it. Pinning the steps here proves the awaited job actually installs
-    the lockfile, lints, runs the tests, and produces a release build.
+    the lockfile, lints, runs the tests, produces a release build, and then
+    checks that build loads nothing from another host (issue #531) -- the
+    check reads ``dist/``, so it must come after the build step.
     """
     workflow = _workflow(".github/workflows/frontend-ci.yml")
     jobs = list(workflow["jobs"].values())
@@ -678,7 +680,7 @@ def test_frontend_gate_runs_the_locked_quality_contract() -> None:
 
     command_steps = [step for step in job.get("steps", []) if step.get("run")]
     commands = [step["run"] for step in command_steps]
-    assert commands == ["npm ci", "npm run lint", "npm test", "npm run build"]
+    assert commands == ["npm ci", "npm run lint", "npm test", "npm run build", "npm run check:dist"]
     for step in command_steps:
         assert "if" not in step, f"{step['run']!r} must run unconditionally"
         assert not step.get("continue-on-error", False), f"{step['run']!r} must block on failure"
