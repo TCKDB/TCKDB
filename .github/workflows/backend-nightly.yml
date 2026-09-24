@@ -35,6 +35,20 @@ jobs:
     services:
       postgres:
         image: informaticsmatters/rdkit-cartridge-debian:Release_2025_03_3
+        # Authenticated pull. On 2026-09-24 Docker Hub began refusing this
+        # public image to GitHub-hosted runners with "unauthorized: access to
+        # the requested resource is not authorized", mid-download, while it
+        # stayed pullable from anywhere else. That is Docker Hub throttling
+        # anonymous pulls from GitHub's shared address pool, and it failed
+        # "Initialize containers" on every backend gate before checkout, so
+        # every pull request went red at once with no test output -- the
+        # same failure class as the MinIO outage of 2026-09-12 below. The
+        # vendor publishes this image only on Docker Hub, so the fix is to
+        # authenticate rather than move registries. These are the same
+        # secrets build-api-image.yml already uses to push.
+        credentials:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
         env:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
