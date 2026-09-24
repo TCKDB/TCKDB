@@ -30,7 +30,9 @@ def test_zero_kelvin_is_content(schema, value):
     record = schema(**extra, enthalpy_formation_0k_kj_mol=value)
     assert record.enthalpy_formation_0k_kj_mol == value
     assert record.phase == "gas"
-    assert record.reference_pressure_bar == 1
+    # reference_pressure_bar is never defaulted (issue #529): omitting it
+    # stays unrecorded even for a computed-origin record.
+    assert record.reference_pressure_bar is None
     with pytest.raises(ValidationError):
         schema(**extra, enthalpy_formation_0k_uncertainty_kj_mol=0)
 
@@ -51,7 +53,8 @@ def test_state_null_and_omission(schema, origin):
     extra = {"species_entry": IDENTITY} if schema is ThermoUploadRequest else {}
     record = schema(**extra, h298_kj_mol=0, scientific_origin=origin)
     assert record.phase == ("gas" if origin == "computed" else None)
-    assert record.reference_pressure_bar == (1 if origin == "computed" else None)
+    # reference_pressure_bar is never defaulted, for any origin (#529).
+    assert record.reference_pressure_bar is None
     record = schema(**extra, h298_kj_mol=0, scientific_origin=origin,
                     phase=None, reference_pressure_bar=None)
     replay = schema.model_validate(record.model_dump(exclude_unset=True))
