@@ -196,15 +196,40 @@ class ThermoUploadRequest(SchemaBase):
         default=None, ge=0
     )
 
-    # Standard-state reference pressure (bar) and physical phase. These are
-    # left unset (``None``) at the field level and are only *defaulted* for
-    # computed uploads (see ``apply_computed_origin_defaults`` below): a QC
-    # record is reasonably gas-phase @ 1 bar (IUPAC) unless stated
-    # otherwise. For experimental/literature/estimated origins the defaults
-    # are NOT applied — silently stamping a condensed-phase literature value
-    # as ``gas @ 1 bar`` would reintroduce the ambiguity this schema removes.
-    # Explicit values are always honored regardless of origin; for legacy
-    # 1 atm data set ``reference_pressure_bar=1.01325``.
+    # Standard-state reference pressure (bar) and physical phase.
+    #
+    # ``reference_pressure_bar`` is left unset (``None``) at the field level
+    # and is NEVER defaulted, for any origin (decided 2026-09-24, issue
+    # #529). It used to be stamped ``1.0`` for computed uploads on the
+    # reasoning that a QC record is "reasonably gas-phase @ 1 bar (IUPAC)
+    # unless stated otherwise" -- a read-only survey of ARC/RMG on
+    # 2026-09-24 established that reasoning is false for the dominant
+    # producer: ARC's entropy is computed with a translational partition
+    # function that hardcodes 1 atm (101325 Pa), and ARC records no
+    # pressure anywhere in its output. The default was therefore stamping
+    # every ARC-derived computed thermo record with a standard state
+    # (1 bar) its own numbers were never computed at -- an offset of
+    # R*ln(1.01325) on every gas-phase entropy, invisible and systematic.
+    # This mirrors the ``enthalpy_reference_kind`` decision on this same
+    # model (see ``Thermo``'s docstring): a wrong default is a
+    # plausible-looking error nothing detects, so omission stays omission.
+    # An explicit value (including an explicit ``None``) is always honored
+    # regardless of origin, via ``model_fields_set``; for legacy 1 atm data
+    # set ``reference_pressure_bar=1.01325`` explicitly.
+    #
+    # ``phase`` keeps its computed-origin default of ``gas`` (see
+    # ``apply_computed_origin_defaults`` below). Judgement call, not
+    # symmetry-by-default: unlike the pressure convention, gas is not an
+    # arbitrary unit choice a producer could plausibly have gotten wrong --
+    # it is a direct consequence of the ideal-gas rigid-rotor/harmonic-
+    # oscillator statistical mechanics every current computed-origin
+    # producer in this system uses (RMG's translational partition function,
+    # which ARC calls, has no non-gas mode). No computed thermo record has
+    # ever been deposited with a non-gas phase, and nothing in the current
+    # pipeline (including ``level_of_theory.solvent``/``solvent_model``,
+    # which characterize the electronic-energy calculation, not the
+    # thermo standard state) produces one. Revisit if/when a
+    # condensed-phase computed producer exists.
     enthalpy_reference_kind: EnthalpyReferenceKind | str | None = None
     reference_pressure_bar: float | None = Field(default=None, gt=0)
     phase: PhaseKind | None = None
@@ -251,21 +276,22 @@ class ThermoUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def apply_computed_origin_defaults(self) -> Self:
-        """Fill reference-state defaults only for computed uploads.
+        """Fill the ``phase`` default only for computed uploads.
 
-        A computed QC record is reasonably gas-phase @ 1 bar (IUPAC)
-        unless stated otherwise, so ``phase``/``reference_pressure_bar``
-        default to ``gas``/``1.0`` when the uploader omits them. For
-        experimental/literature/estimated origins the fields stay ``None``
-        unless explicitly provided — defaulting them would silently stamp
-        e.g. a condensed-phase literature value as ``gas @ 1 bar``.
+        A computed QC record's thermo values come from an ideal-gas
+        rigid-rotor/harmonic-oscillator treatment, so ``phase`` defaults to
+        ``gas`` when the uploader omits it. For experimental/literature/
+        estimated origins the field stays ``None`` unless explicitly
+        provided — defaulting it would silently stamp e.g. a
+        condensed-phase literature value as ``gas``.
+
+        ``reference_pressure_bar`` is NEVER defaulted, for any origin
+        (decided 2026-09-24, issue #529): see the field comment above.
 
         Explicit values (including an explicit ``None``) are honored:
         ``model_fields_set`` distinguishes "omitted" from "provided".
         """
         if self.scientific_origin == ScientificOriginKind.computed:
-            if "reference_pressure_bar" not in self.model_fields_set:
-                self.reference_pressure_bar = 1.0
             if "phase" not in self.model_fields_set:
                 self.phase = PhaseKind.gas
         return self

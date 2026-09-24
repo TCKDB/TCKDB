@@ -63,7 +63,8 @@ def test_deposit_enthalpy_contract(client, db_session, route, content, reference
         record = public.json()["records"][0]
         assert record["enthalpy_reference_kind"] == reference
         assert record["phase"] == "gas"
-        assert record["reference_pressure_bar"] == 1
+        # reference_pressure_bar is never defaulted (issue #529).
+        assert record["reference_pressure_bar"] is None
 
 
 # NASA-9 and Wilhoit are not representable in the computed-species /

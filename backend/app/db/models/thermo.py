@@ -83,7 +83,15 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     * ``reference_pressure_bar`` is the standard-state pressure the H/S
       and NASA/tabulated values are referenced to (IUPAC 1 bar; legacy
       data using the older 1 atm convention should record 1.01325).
-      ``NULL`` means the reference pressure was not specified.
+      ``NULL`` means the reference pressure was not specified. There is
+      no origin default (decided 2026-09-24, issue #529): a QC computed
+      upload that omits it stays ``NULL`` rather than being stamped
+      ``1.0``, because the dominant computed producer (ARC) computes
+      entropy at 1 atm and records no pressure anywhere in its output --
+      the same class of invisible, plausible-looking error the
+      enthalpy-reference decision above exists to prevent. Rows written
+      before this decision still carry the invented ``1.0``; correcting
+      them is a separate, undecided question.
     * ``phase`` records the physical phase (gas by default for computed
       species). ``NULL`` means unspecified.
     * ``statmech_id`` links a *computed* thermo row to the ``statmech``
