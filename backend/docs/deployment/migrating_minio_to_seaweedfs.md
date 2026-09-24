@@ -37,15 +37,44 @@ not application settings.
 | Mode | What it does | Exit 0 means |
 |---|---|---|
 | (no flag) dry run | Lists both buckets and reports what it would copy (count and bytes). Checks every database reference against the *source*. Writes nothing. | the plan was made |
-| `--commit` | Copies each object across in chunks, never whole in memory. Skips a key only when the destination already has the same size **and** SHA-256. Reads each copy back and checks it. Then verifies. | everything was copied and verified |
-| `--verify-only` | Reads every referenced object back from the **destination**, and checks its SHA-256 and byte count against the database row. Also checks that every source key is in the destination at the same size. | every reference was checked and matched |
+| `--commit` | Proves the two stores are different (below), then copies each object across in chunks, never whole in memory. Reads each copy back and checks it. Then verifies. | everything was copied and verified |
+| `--verify-only` | Proves the two stores are different, then reads every referenced object back from the **destination** and checks its SHA-256 and byte count against the database row. Also checks every source key: a key that names a digest is hashed in the destination and must match it; any other key must be there at the same size. | every reference and every key was checked and matched |
 
-Exit `1` means something is missing, mismatched or failed to copy. Exit `2`
+**Which side is right is decided by the digest, never by the direction.**
+Every key TCKDB writes names its own SHA-256 (`<aa>/<sha256>`,
+`reclaimed/<sha256>`), and each database row names the digest of its object.
+So the tool:
+
+- never overwrites a destination object whose bytes already match that
+  digest, whatever the source holds;
+- never writes source bytes that do not match it. The upload is abandoned
+  before the object exists, and the key is reported under
+  `copy.source_defect_keys`;
+- copies a key that names no digest and that no row references (such as an
+  operator's stray file) by the older rule: replace it when the size or the
+  SHA-256 differs. Each such key is listed under `copy.unverifiable_keys`.
+
+That is what makes the rollback, which runs the tool backwards, safe: a
+damaged SeaweedFS copy cannot overwrite MinIO's sound one.
+
+**The same-store proof.** One store can have several addresses
+(`127.0.0.1`, `localhost`, a service alias), and a store copied onto itself
+skips everything and verifies perfectly. So `--commit` and `--verify-only`
+first write a random probe key (`tckdb-migrate-probe/<uuid>`) to the
+destination, look for it in the source bucket, and delete it. If the source
+can see it, they refuse with exit 2. This probe is the only write the tool
+makes outside the copy, so `--verify-only` needs write access to the
+destination. A dry run writes nothing, so it cannot run the probe, and it
+says so in `warnings`.
+
+Exit `1` means something is missing, mismatched, failed to copy, or was
+not copied because the source's bytes contradict their digest. Exit `2`
 means nothing was verified: no database row references an object, a store
-did not answer, or the command was wrong. **A verify that compared nothing
-does not pass**: the report always states how many rows and objects it
-compared (`rows_compared`, `distinct_objects_read`). Pass `--allow-empty`
-only if the deployment really has no artifacts.
+did not answer, the destination bucket does not exist, the two stores are
+one, or the command was wrong. **A verify that compared nothing does not
+pass**: the report always states how many rows and objects it compared
+(`rows_compared`, `distinct_objects_read`). Pass `--allow-empty` only if the
+deployment really has no artifacts.
 
 The report is JSON on stdout. Progress lines and the one-line `RESULT` go
 to stderr. Endpoints are printed without credentials, and secrets are never
@@ -53,10 +82,26 @@ printed.
 
 ## Before you start
 
+- **Your MinIO volume's real name.** The compose file declares the volume
+  as `tckdb_minio` with no `name:`, so Docker prefixes the compose project
+  name: the volume is `<project>_tckdb_minio` (for example
+  `tckdb_tckdb_minio` for a checkout in a directory called `tckdb`).
+  Find yours with `docker volume ls | grep tckdb_minio`. It is written
+  `<minio-volume>` below.
+- **Database backups do not include the files.** `pg_dump` and
+  `tckdb_backup.sh` save the database only. The stored files live only in
+  the object store, so **until the soak in step 10 ends, `<minio-volume>` is
+  the only other copy of every file**. If you can spare the disk, take a
+  file-level copy of it before you start, while MinIO is stopped or idle:
+
+  ```bash
+  docker run --rm -v <minio-volume>:/data:ro -v "$PWD":/backup alpine \
+      tar czf /backup/minio-volume-pre-seaweedfs.tgz -C /data .
+  ```
 - **Disk.** SeaweedFS needs room for a full second copy of the bucket while
-  MinIO still holds the first. Check the MinIO volume's size
-  (`docker system df -v`, the `tckdb_minio` line) against the free space
-  where Docker keeps its volumes.
+  MinIO still holds the first. Check `<minio-volume>`'s size
+  (`docker system df -v`) against the free space where Docker keeps its
+  volumes.
 - **Compose version.** The port override below uses `!override`, which
   needs Docker Compose 2.24.4 or newer (`docker compose version`).
 - **Which layout you run.** The commands differ in one place:
@@ -75,8 +120,8 @@ container's name, and `<network>` is the compose network the API joins
 ## Running both stores at once
 
 The compose file keeps MinIO as the `minio` service under `--profile minio`,
-with its data in the `tckdb_minio` volume, and runs SeaweedFS as the
-`seaweedfs` service on the `tckdb_seaweedfs` volume. **Both publish
+with its data in `<minio-volume>` (declared as `tckdb_minio`), and runs
+SeaweedFS as the `seaweedfs` service on `<project>_tckdb_seaweedfs`. **Both publish
 `127.0.0.1:9000`**, so starting SeaweedFS next to a running MinIO fails on
 the port. The fix is not to rename anything. For the migration only,
 publish SeaweedFS on another host port. Create
@@ -148,7 +193,8 @@ migrate() {
 ### 1. Back up the database
 
 Nothing here writes to it, but a backup should come before any storage
-change. Use your usual backup (`backend/scripts/ops/tckdb_backup.sh`
+change. It does **not** cover the stored files (see
+[Before you start](#before-you-start)). Use your usual backup (`backend/scripts/ops/tckdb_backup.sh`
 restores its dump to check it), or:
 
 ```bash
@@ -197,8 +243,9 @@ stops it too.
 migrate --commit > copy-2.json
 ```
 
-Objects already copied are compared by size and SHA-256 and skipped. Only
-new or changed keys are transferred. Expect `copied` to be small.
+Objects already copied are hashed in the destination and skipped when they
+match their digest. Only new or changed keys are transferred. Expect
+`copied` to be small.
 
 ### 6. Verify, and require exit 0
 
@@ -266,31 +313,86 @@ need the host port; a host API does).
 
 ### 10. Keep MinIO for a soak period
 
-Leave the MinIO **container and the `tckdb_minio` volume untouched for at
-least two weeks, and through at least one successful backup cycle.** Stop
-MinIO if you like (a host API needs its port freed anyway), but do not
-remove the container, do not run `docker compose down -v`, and do not
-`docker volume rm tckdb_minio`. After the soak, remove them deliberately.
+Leave the MinIO **container and `<minio-volume>` untouched for at least two
+weeks, and through at least one successful backup cycle.** Database backups
+do not contain the files, so during the soak this volume is the only other
+copy of every file that existed at the cutover (plus your tarball, if you
+took one). Stop MinIO if you like (a host API needs its port freed anyway),
+but do not remove the container, do not run `docker compose down -v`, and
+do not `docker volume rm <minio-volume>`. After the soak, remove them
+deliberately.
 
 ## Rolling back
 
-Point the endpoint back at MinIO the same way you switched it:
-`S3_ENDPOINT_URL=http://minio:9000` for a containerised API, or stop
-SeaweedFS and start MinIO on 9000 for a host API. Then recreate or restart
-the API as in step 8.
+**Anything written after the cutover exists only in SeaweedFS.** So a
+rollback copies those files back *first*, and switches the API back only
+after that copy verifies. Doing it the other way round leaves every row
+created since the cutover pointing at a file MinIO has never seen.
 
-**Anything written after the cutover exists only in SeaweedFS.** Before
-rolling back, stop writes, then carry it back with the same tool in the
-reverse direction. The env file still names SeaweedFS as `S3_*`, so it is
-the source:
+The copy back is the same tool run in the other direction. It is safe even
+if SeaweedFS holds a damaged copy of something: it never overwrites a MinIO
+object that matches its digest, and never writes bytes that contradict
+theirs.
 
-```bash
-docker run --rm --network <network> --env-file <env-file> -e DB_HOST=db -e DB_PORT=5432 \
-    "$IMAGE" python scripts/ops/migrate_object_store.py --dest-endpoint http://minio:9000 --commit
-```
+1. **Stop writes**, as in step 4.
+2. **Start MinIO again** if you stopped it during the soak. SeaweedFS may
+   hold `127.0.0.1:9000` by now, so publish MinIO on another port for the
+   copy. Create `docker-compose.minio-rollback.yml`:
 
-Only switch back once that exits 0. Skipping it leaves every row created
-after the cutover pointing at a file MinIO has never seen.
+   ```yaml
+   # Temporary, for copying post-cutover files back to MinIO only.
+   services:
+     minio:
+       ports: !override
+         - "127.0.0.1:9100:9000"
+         - "127.0.0.1:9101:9001"
+   ```
+
+   ```bash
+   docker compose --env-file <env-file> --profile minio \
+       -f docker-compose.yml -f docker-compose.minio-rollback.yml up -d minio
+   ```
+
+   It comes back on `<minio-volume>` with everything it held at the cutover.
+3. **Copy back and verify.** The env file still names SeaweedFS as `S3_*`,
+   so SeaweedFS is the source.
+
+   API in a container (MinIO is `minio:9000` on the compose network):
+
+   ```bash
+   back() {
+       docker run --rm --network <network> --env-file <env-file> -e DB_HOST=db -e DB_PORT=5432 \
+           "$IMAGE" python scripts/ops/migrate_object_store.py --dest-endpoint http://minio:9000 "$@"
+   }
+   back --commit && back --verify-only; echo "exit=$?"
+   ```
+
+   API on the host (MinIO is `127.0.0.1:9100` while the rollback override is
+   in place), from `backend/`:
+
+   ```bash
+   back() {
+       DEST_S3_ENDPOINT_URL=http://127.0.0.1:9100 \
+           conda run -n tckdb_env python scripts/ops/migrate_object_store.py "$@"
+   }
+   back --commit && back --verify-only; echo "exit=$?"
+   ```
+
+   Continue only on `exit=0`.
+4. **Switch the API back.** API in a container: set
+   `S3_ENDPOINT_URL=http://minio:9000` and recreate the API as in step 8.
+   API on the host: stop SeaweedFS, then recreate MinIO *without* the
+   rollback override so it publishes `127.0.0.1:9000` again. The env file
+   keeps `http://127.0.0.1:9000`:
+
+   ```bash
+   docker compose --env-file <env-file> stop seaweedfs
+   docker compose --env-file <env-file> --profile minio up -d minio
+   sudo systemctl start tckdb-api
+   ```
+
+   Then check `/status` and one download, as in step 9, and delete
+   `docker-compose.minio-rollback.yml`.
 
 ## When verification fails
 
@@ -299,8 +401,8 @@ Each entry in `references.missing_objects` and
 whether the **source** copy is sound:
 
 - `"source_sound": true`: the copy lost or damaged it. Run `--commit`
-  again, which recopies any key whose destination copy differs, then
-  `--verify-only`.
+  again, which recopies any key whose destination copy does not match its
+  digest, then `--verify-only`.
 - `"source_sound": false`: MinIO already had it missing or wrong. That is
   an existing integrity break, not a copy fault. Investigate it on the
   source with `verify_artifact_integrity.py --sha256 <digest>`. If you
@@ -308,9 +410,16 @@ whether the **source** copy is sound:
   entries) from failing the run. They are still listed, and the `RESULT`
   line says how many were tolerated.
 
-`key_parity.missing_keys` lists source keys (referenced or not) that are
-absent from the destination. `copy.failures` lists keys that could not be
-copied, with the reason.
+`key_parity.failure_keys` lists source keys (referenced or not) that are
+missing or wrong in the destination. `key_parity.source_defect_keys` and
+`copy.source_defect_keys` list keys the tool refused to copy because the
+source's bytes contradict their digest. `copy.failures` lists keys that
+could not be copied, with the reason.
+
+`--tolerate-source-defects` forgives a break only when the source was
+already wrong **and** the destination is no different: byte-identical to
+the source's copy, or absent because the tool refused to copy it. A
+destination that differs from a defective source still fails.
 
 ## Things to know
 
@@ -327,6 +436,12 @@ copied, with the reason.
 - **ETags are not compared.** Multipart ETags depend on the part size, so
   the same bytes can carry different ETags on two servers. The tool
   compares SHA-256 instead.
-- **Verification re-reads every referenced file** from the destination,
-  and each copy is read back once as it is written. Expect a full pass to
-  take roughly as long as reading the bucket twice.
+- **Verification re-reads every file whose key names a digest** from the
+  destination (in practice, all of them), and each copy is read back once
+  as it is written. Expect a full pass to take roughly as long as reading
+  the bucket twice. A rerun hashes each destination object again to decide
+  whether it can be skipped.
+- **A killed run can leave a probe key.** If the tool is killed between
+  writing its same-store probe and deleting it, a
+  `tckdb-migrate-probe/<uuid>` object stays in the destination. It is
+  harmless and safe to delete.
