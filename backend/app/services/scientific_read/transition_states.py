@@ -317,7 +317,19 @@ def get_transition_state(
     evidence_summary = _build_concept_evidence_summary(
         session, entry_ids, levels_index=levels_index
     )
-    available = _build_available_sections(session, entries, entry_ids)
+    # ``has_review`` at concept grain must answer the same question this
+    # concept's own ``include=review`` body does (``_build_review_history``
+    # below, scoped to ``(transition_state, ts.id)``) — not "do any of
+    # this concept's entries have a review", a different record type that
+    # can disagree with that body in either direction (#534).
+    available = _build_available_sections(
+        session,
+        entry_ids,
+        has_entries=bool(entries),
+        has_review=_exists_review_for(
+            session, SubmissionRecordType.transition_state, ts.id
+        ),
+    )
     # Same bargain as ``levels_index`` above: one statement for the whole
     # TS concept's entries, shared across every embedded entry record,
     # rather than one per entry — see ``_build_saddle_point_index``'s own
@@ -565,7 +577,27 @@ def _build_entry_record(
     if saddle_point_index is None:
         saddle_point_index = _build_saddle_point_index(session, [entry.id])
     saddle_point = saddle_point_index.get(entry.id)
-    available = _build_available_sections(session, [entry], [entry.id])
+    # ``has_entries``: ``include=entries`` on this surface always returns a
+    # non-empty list — this record's own entry is a member of its own TS
+    # by construction (see ``ScientificTransitionStateEntryRecord.entries``'s
+    # own docstring, "this one included") — so "is the raw list
+    # non-empty" can never be false here and would be exactly as
+    # hardcoded as the tautology it replaces. What the section can
+    # genuinely add over the record's own core block is *other* entries
+    # under the same TS, so that is what this measures.
+    has_sibling_entries = _exists_other_entries_in_ts(
+        session,
+        transition_state_id=entry.transition_state_id,
+        exclude_entry_id=entry.id,
+    )
+    available = _build_available_sections(
+        session,
+        [entry.id],
+        has_entries=has_sibling_entries,
+        has_review=_exists_review_for(
+            session, SubmissionRecordType.transition_state_entry, entry.id
+        ),
+    )
 
     calcs_block: list[TransitionStateCalculationSummary] | None = None
     if "calculations" in includes:
@@ -1086,10 +1118,28 @@ def _build_entry_evidence_summary(
 
 def _build_available_sections(
     session: Session,
-    entries: list[TransitionStateEntry] | None,
     entry_ids: list[int],
+    *,
+    has_entries: bool,
+    has_review: bool,
 ) -> AvailableTransitionStateSections:
-    has_entries = bool(entries) if entries is not None else len(entry_ids) > 0
+    """Assemble the boolean map.
+
+    ``entry_ids`` scopes the calculation / geometry / validation-evidence
+    existence queries only — it is *not* a source for ``has_entries`` or
+    ``has_review``. Both used to be derived from a list this function
+    received for scoping (``bool(entries)`` on the concept surface, and
+    ``bool([entry])`` — unconditionally ``True`` — on the entry surface;
+    ``has_review`` computed over ``transition_state_entry`` rows
+    regardless of which surface's ``include=review`` body it was meant to
+    describe). Every caller now decides ``has_entries`` and ``has_review``
+    itself, in terms of what its own include body actually returns, and
+    hands the answer in — so the two concerns can no longer be conflated
+    by sharing one list or one query shape. See
+    :func:`_exists_other_entries_in_ts` and :func:`_exists_review_for` for
+    the two computations, and each call site for why it picked the one it
+    did.
+    """
     has_calcs = False
     has_geoms = False
     if entry_ids:
@@ -1118,7 +1168,6 @@ def _build_available_sections(
                     )
                 )
             )
-    has_review = False
     has_validation_evidence = bool(
         entry_ids
         and session.scalar(
@@ -1129,28 +1178,77 @@ def _build_available_sections(
             )
         )
     )
-    if entries is not None:
-        has_review = bool(
-            session.scalar(
-                select(
-                    exists().where(
-                        and_(
-                            RecordReview.record_id.in_(
-                                [e.id for e in entries] or [0]
-                            ),
-                            RecordReview.record_type
-                            == SubmissionRecordType.transition_state_entry,
-                        )
-                    )
-                )
-            )
-        )
     return AvailableTransitionStateSections(
         has_entries=has_entries,
         has_calculations=has_calcs,
         has_geometries=has_geoms,
         has_review=has_review,
         has_validation_evidence=has_validation_evidence,
+    )
+
+
+def _exists_other_entries_in_ts(
+    session: Session,
+    *,
+    transition_state_id: int,
+    exclude_entry_id: int,
+) -> bool:
+    """Whether *transition_state_id* has an entry besides the excluded one.
+
+    Backs ``has_entries`` on the entry-grained detail surface.
+    ``include=entries`` on that surface always returns a non-empty list —
+    the record's own entry is a member of its own TS by construction, and
+    ``ScientificTransitionStateEntryRecord.entries``'s own docstring says
+    as much ("this one included") — so a plain "does this TS have any
+    entries" query would be an unconditional ``True`` for exactly the
+    reason the retired ``bool([entry])`` was: it never touches anything
+    that could vary. Excluding *exclude_entry_id* is what makes the
+    result answer something the caller does not already know from the
+    record's own core block, and what makes it capable of being
+    ``False`` (a TS with exactly one entry).
+    """
+    return bool(
+        session.scalar(
+            select(
+                exists().where(
+                    and_(
+                        TransitionStateEntry.transition_state_id
+                        == transition_state_id,
+                        TransitionStateEntry.id != exclude_entry_id,
+                    )
+                )
+            )
+        )
+    )
+
+
+def _exists_review_for(
+    session: Session,
+    record_type: SubmissionRecordType,
+    record_id: int,
+) -> bool:
+    """Whether ``record_review`` carries a row for *record_type*/*record_id*.
+
+    Backs ``has_review`` on both TS surfaces. Each caller passes exactly
+    the ``(record_type, record_id)`` pair its own ``include=review`` body
+    queries (:func:`_build_review_history`) — never a stand-in scope such
+    as "any of this concept's child entries" — so the flag can never
+    promise a review the body does not return, or deny one it does
+    (#534: the concept-grain flag used to count
+    ``transition_state_entry`` reviews while the concept's own review body
+    is scoped to ``transition_state``).
+    """
+    return bool(
+        session.scalar(
+            select(
+                exists().where(
+                    and_(
+                        RecordReview.record_type == record_type,
+                        RecordReview.record_id == record_id,
+                    )
+                )
+            )
+        )
     )
 
 
