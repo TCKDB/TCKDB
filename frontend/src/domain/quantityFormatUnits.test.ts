@@ -22,8 +22,8 @@ import { QUANTITY_SPECS } from "./quantityFormat"
  */
 const ALLOWED_UNITS: ReadonlySet<string> = new Set([
     "kJ/mol",
-    "J/mol·K", // J/mol·K, U+00B7 MIDDLE DOT
-    "Å", // Å, U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE
+    "J/mol\u00B7K", // J/mol·K, U+00B7 MIDDLE DOT
+    "\u00C5", // Å, U+00C5 LATIN CAPITAL LETTER A WITH RING ABOVE
     "K",
     "D", // debye
     "hartree",
