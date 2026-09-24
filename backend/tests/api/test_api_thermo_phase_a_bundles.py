@@ -7,7 +7,7 @@ from tests.api.test_api_bundle_thermo_and_scf_provenance import _reaction_bundle
 
 @pytest.mark.parametrize("kind", ["computed-species", "computed-reaction"])
 @pytest.mark.parametrize("state,expected", [
-    ({}, {"phase": "gas", "reference_pressure_bar": 1}),
+    ({}, {"phase": "gas", "reference_pressure_bar": None}),
     ({"phase": None, "reference_pressure_bar": None}, {"phase": None, "reference_pressure_bar": None}),
     ({"phase": "liquid", "reference_pressure_bar": 1.01325},
      {"phase": "liquid", "reference_pressure_bar": 1.01325}),

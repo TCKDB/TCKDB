@@ -1532,20 +1532,26 @@ def test_thermo_upload_persists_reference_state_fields(db_conn) -> None:
         assert read.enthalpy_formation_0k_uncertainty_kj_mol == pytest.approx(0.4)
 
 
-def test_thermo_upload_defaults_reference_pressure_and_phase(db_conn) -> None:
-    """Omitting reference pressure / phase applies the IUPAC 1 bar, gas defaults."""
+def test_thermo_upload_defaults_phase_leaves_pressure_unset(db_conn) -> None:
+    """Omitting phase applies the gas default; omitting pressure stays unset.
+
+    reference_pressure_bar is never defaulted (decided 2026-09-24, issue
+    #529): ARC computes entropy at 1 atm and records no pressure anywhere
+    in its output, so stamping 1 bar on an omitted value would assert a
+    standard state the record's own numbers were not computed at.
+    """
     distinct = {"smiles": "CCCCCCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
         enthalpy_reference_kind="formation_298k", species_entry=dict(distinct),
         scientific_origin="computed",
         h298_kj_mol=-187.8,
     )
-    assert request.reference_pressure_bar == pytest.approx(1.0)
+    assert request.reference_pressure_bar is None
     assert request.phase == PhaseKind.gas
 
     with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
-        assert thermo.reference_pressure_bar == pytest.approx(1.0)
+        assert thermo.reference_pressure_bar is None
         assert thermo.phase == PhaseKind.gas
         # ΔfH°(0 K) is unspecified when not provided.
         assert thermo.enthalpy_formation_0k_kj_mol is None
@@ -1588,19 +1594,20 @@ def test_non_computed_origin_does_not_default_phase_or_pressure(
         assert thermo.phase is None
 
 
-def test_computed_origin_defaults_phase_and_pressure(db_conn) -> None:
-    """A computed upload without phase/pressure defaults to gas @ 1 bar."""
+def test_computed_origin_defaults_phase_not_pressure(db_conn) -> None:
+    """A computed upload without phase/pressure defaults phase to gas only;
+    reference_pressure_bar stays unrecorded (issue #529)."""
     request = ThermoUploadRequest(
         enthalpy_reference_kind="formation_298k", species_entry={"smiles": "CCCCCCCCCCC", "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
         h298_kj_mol=-270.8,
     )
-    assert request.reference_pressure_bar == pytest.approx(1.0)
+    assert request.reference_pressure_bar is None
     assert request.phase == PhaseKind.gas
 
     with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
-        assert thermo.reference_pressure_bar == pytest.approx(1.0)
+        assert thermo.reference_pressure_bar is None
         assert thermo.phase == PhaseKind.gas
 
 
