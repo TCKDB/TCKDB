@@ -12370,6 +12370,49 @@
         "title": "ConformerObservationRead",
         "type": "object"
       },
+      "ConformerObservationSiblingCore": {
+        "description": "Identity + review slice of a sibling observation, list-shaped.\n\nDeliberately thinner than :class:`ConformerObservationCoreBlock`: no\n``scientific_origin`` / ``note`` / ``created_at``, because nothing\nthat reads a sibling list reads those either — see\n:class:`ConformerObservationSiblingSummary`.",
+        "properties": {
+          "conformer_observation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Observation Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "conformer_observation_ref": {
+            "title": "Conformer Observation Ref",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/RecordReviewBadge"
+          }
+        },
+        "required": [
+          "conformer_observation_ref",
+          "review"
+        ],
+        "title": "ConformerObservationSiblingCore",
+        "type": "object"
+      },
+      "ConformerObservationSiblingSummary": {
+        "description": "One sibling in a conformer-observation's basin, list-shaped.\n\nPopulated under ``include=observations`` on the\n**conformer-observation** detail surface only — i.e. it is the type\nof ``ScientificConformerObservationRecord.observations``, which\nexists to answer the one question an observation-grained record\ncannot answer about itself: what else is in this basin. It is\n*not* the type embedded when a conformer-*group* record expands its\nown ``observations`` include (``ScientificConformerGroupRecord.\nobservations``, still ``ScientificConformerObservationRecord``\nthere) — that surface's consumer renders each observation's own\ncalculations and output geometries and genuinely needs the richer\nshape.\n\nBefore this type existed, a sibling was built as a full\n:class:`ScientificConformerObservationRecord` with every include\ntoken minus ``observations`` — its own calculations, geometries,\nselections, review history and evidence summary, and a *duplicate*\ncopy of the parent group's core block and species context. For a\nbasin the UI renders as three ``<li>`` elements (ref + review pill),\nthat scaled the response linearly with basin size: one measured\nrequest came back at 22.8 KB, 90%+ of it the sibling block (issue\n#269). A sibling in a list carries what the list needs; the full\nrecord for any one sibling is one hop away, at that sibling's own\n``GET /scientific/conformer-observations/{ref}``.",
+        "properties": {
+          "conformer_observation": {
+            "$ref": "#/components/schemas/ConformerObservationSiblingCore"
+          }
+        },
+        "required": [
+          "conformer_observation"
+        ],
+        "title": "ConformerObservationSiblingSummary",
+        "type": "object"
+      },
       "ConformerObservationsSummary": {
         "description": "Counts of observation rows under one conformer group, broken\ndown by scientific_origin (computed / experimental / estimated).",
         "properties": {
@@ -35703,7 +35746,7 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/ScientificConformerObservationRecord"
+                  "$ref": "#/components/schemas/ConformerObservationSiblingSummary"
                 },
                 "type": "array"
               },

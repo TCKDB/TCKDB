@@ -84,41 +84,22 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             has_geometries: true,
             has_review: true,
         },
+        // Lean sibling projection (`ConformerObservationSiblingSummary`,
+        // issue #269) -- a ref + review badge, nothing else. Siblings no
+        // longer carry their own evidence_summary/available_sections/
+        // calculations/geometries: that data is one hop away, at the
+        // sibling's own detail endpoint.
         observations: [
             {
                 conformer_observation: {
                     conformer_observation_ref: "co_one",
-                    scientific_origin: "computed",
-                    note: null,
-                    created_at: "2026-07-21T12:06:50.748258",
                     review: { status: "reviewed" },
-                },
-                conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-                species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-                evidence_summary: {
-                    calculation_count: 3, geometry_count: 2, has_opt: true, has_freq: true, has_sp: false,
-                    has_geometry_validation: true, has_scf_stability: false, levels_of_theory: {},
-                },
-                available_sections: {
-                    has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
                 },
             },
             {
                 conformer_observation: {
                     conformer_observation_ref: "co_two",
-                    scientific_origin: "computed",
-                    note: null,
-                    created_at: "2026-07-21T12:14:32.845900",
                     review: { status: "not_reviewed" },
-                },
-                conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-                species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-                evidence_summary: {
-                    calculation_count: 1, geometry_count: 1, has_opt: true, has_freq: false, has_sp: false,
-                    has_geometry_validation: false, has_scf_stability: false, levels_of_theory: {},
-                },
-                available_sections: {
-                    has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
                 },
             },
         ],
@@ -642,20 +623,7 @@ describe("ConformerObservationPage", () => {
                     observations: [{
                         conformer_observation: {
                             conformer_observation_ref: "co_one",
-                            scientific_origin: "computed",
-                            note: null,
-                            created_at: "2026-07-21T12:06:50.748258",
                             review: { status: "reviewed" },
-                        },
-                        conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-                        species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-                        evidence_summary: {
-                            calculation_count: 3, geometry_count: 2, has_opt: true, has_freq: true, has_sp: false,
-                            has_geometry_validation: true, has_scf_stability: false, levels_of_theory: {},
-                        },
-                        available_sections: {
-                            has_observations: true, has_selections: false, has_calculations: true,
-                            has_geometries: true, has_review: true,
                         },
                     }],
                 }),
@@ -678,22 +646,10 @@ describe("ConformerObservationPage", () => {
     // sibling only gets its own pill when its status genuinely differs from
     // this record's.
     it("shows review status once, in the hero, not per calculation row or per matching sibling", async () => {
-        const siblingObservation = (ref: string, createdAt: string) => ({
+        const siblingObservation = (ref: string) => ({
             conformer_observation: {
                 conformer_observation_ref: ref,
-                scientific_origin: "computed",
-                note: null,
-                created_at: createdAt,
                 review: { status: "not_reviewed" },
-            },
-            conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-            species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-            evidence_summary: {
-                calculation_count: 1, geometry_count: 1, has_opt: true, has_freq: false, has_sp: false,
-                has_geometry_validation: false, has_scf_stability: false, levels_of_theory: {},
-            },
-            available_sections: {
-                has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
             },
         })
 
@@ -706,10 +662,10 @@ describe("ConformerObservationPage", () => {
                 review: { status: "not_reviewed" },
             },
             observations: [
-                siblingObservation("co_one", "2026-07-21T12:06:50.748258"),
-                siblingObservation("co_two", "2026-07-21T12:14:32.845900"),
-                siblingObservation("co_three", "2026-07-21T12:15:00.000000"),
-                siblingObservation("co_four", "2026-07-21T12:16:00.000000"),
+                siblingObservation("co_one"),
+                siblingObservation("co_two"),
+                siblingObservation("co_three"),
+                siblingObservation("co_four"),
             ],
             calculations: [
                 { calculation_ref: "calc_opt", type: "opt", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: { method: "b3lyp", basis: "def2tzvp" }, software_release: { software: "Gaussian" } },
@@ -755,37 +711,13 @@ describe("ConformerObservationPage", () => {
                 {
                     conformer_observation: {
                         conformer_observation_ref: "co_one",
-                        scientific_origin: "computed",
-                        note: null,
-                        created_at: "2026-07-21T12:06:50.748258",
                         review: { status: "not_reviewed" },
-                    },
-                    conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-                    species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-                    evidence_summary: {
-                        calculation_count: 3, geometry_count: 2, has_opt: true, has_freq: true, has_sp: false,
-                        has_geometry_validation: true, has_scf_stability: false, levels_of_theory: {},
-                    },
-                    available_sections: {
-                        has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
                     },
                 },
                 {
                     conformer_observation: {
                         conformer_observation_ref: "co_two",
-                        scientific_origin: "computed",
-                        note: null,
-                        created_at: "2026-07-21T12:14:32.845900",
                         review: { status: "reviewed" },
-                    },
-                    conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
-                    species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
-                    evidence_summary: {
-                        calculation_count: 1, geometry_count: 1, has_opt: true, has_freq: false, has_sp: false,
-                        has_geometry_validation: false, has_scf_stability: false, levels_of_theory: {},
-                    },
-                    available_sections: {
-                        has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
                     },
                 },
             ],

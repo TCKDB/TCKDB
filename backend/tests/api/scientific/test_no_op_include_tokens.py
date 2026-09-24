@@ -330,8 +330,13 @@ def test_observations_on_an_observation_returns_the_basins_observations(
         o["conformer_observation"]["conformer_observation_ref"] for o in block
     )
     assert refs == expected_refs
-    # Same recursion guard as the TS entries block.
-    assert all(o["observations"] is None for o in block)
+    # Each sibling is a lean ref+review projection
+    # (``ConformerObservationSiblingSummary``, issue #269), not a nested
+    # copy of the full record -- so there is no ``observations`` key on a
+    # sibling to recurse into at all. That is what terminates the
+    # recursion here (the TS entries block's own guard, by contrast, is
+    # a nested-but-empty field on a same-shaped record).
+    assert all(sorted(o.keys()) == ["conformer_observation"] for o in block)
 
 
 def test_observations_is_absent_on_an_observation_when_not_requested(

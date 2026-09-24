@@ -1243,10 +1243,14 @@ def test_co_detail_include_observations_returns_the_basin(client, db_session):
     accepted, echoed, and produces nothing is indistinguishable to a client
     from one that failed silently.
 
-    The nested records carry no ``observations`` of their own. That is not
-    a size optimisation but the thing that terminates the recursion.
+    Each sibling is a lean ref+review projection
+    (``ConformerObservationSiblingSummary``), not a full nested record —
+    see issue #269. That is what terminates the recursion (there is no
+    ``observations`` key on a sibling to recurse into at all) *and* what
+    keeps this response from scaling with basin size the way the full
+    nested-record shape used to.
     """
-    _, _, obs = _make_group_with_obs(db_session)
+    _, _, obs = _make_group_with_obs(db_session, n_observations=3)
     expected = sorted(o.public_ref for o in obs)
 
     body = client.get(_co_url(obs[0].public_ref, include="observations")).json()
@@ -1257,10 +1261,37 @@ def test_co_detail_include_observations_returns_the_basin(client, db_session):
     assert sorted(
         o["conformer_observation"]["conformer_observation_ref"] for o in block
     ) == expected
-    assert all(o["observations"] is None for o in block)
+    for sibling in block:
+        assert sorted(sibling.keys()) == ["conformer_observation"]
+        assert sorted(sibling["conformer_observation"].keys()) == [
+            "conformer_observation_ref",
+            "review",
+        ]
 
     default = client.get(_co_url(obs[0].public_ref)).json()
     assert "observations" not in default["record"]
+
+
+def test_co_detail_include_observations_sibling_review_status(
+    client, db_session
+):
+    """A sibling's review badge reflects that sibling's own review row,
+    not the requesting observation's."""
+    _, _, obs = _make_group_with_obs(db_session, n_observations=2)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_observation,
+        record_id=obs[1].id,
+        status=RecordReviewStatus.approved,
+    )
+
+    body = client.get(_co_url(obs[0].public_ref, include="observations")).json()
+    block = {
+        o["conformer_observation"]["conformer_observation_ref"]: o["conformer_observation"]["review"]
+        for o in body["record"]["observations"]
+    }
+    assert block[obs[0].public_ref]["status"] == "not_reviewed"
+    assert block[obs[1].public_ref]["status"] == "approved"
 
 
 def test_co_detail_include_selections_surfaces_parent_group_selections(

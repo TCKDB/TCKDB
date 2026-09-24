@@ -317,8 +317,18 @@ TRANSITION_STATE_RECORD_SECTIONS = IncludeGatedSections(
 
 # ``/conformers/search``, ``/conformer-groups/{ref}``,
 # ``/conformer-observations/{ref}`` — one vocabulary, two record shapes
-# that carry the same five fields, and the same two-depth nesting as the
-# transition-state family (``observations[*].selections`` and friends).
+# that carry the same five fields. The two-depth nesting the
+# transition-state family has (``entries[*].calculations`` and friends)
+# applies here too, but *only* on the group surface:
+# ``ScientificConformerGroupRecord.observations[*]`` is a full nested
+# record and so still carries its own ``selections``/``calculations``/
+# ``geometries``/``review_history`` keys when requested. On the
+# observation surface, ``ScientificConformerObservationRecord.
+# observations[*]`` (the sibling list) is the lean
+# ``ConformerObservationSiblingSummary`` projection and never carries any
+# of those keys at all — trimmed for size, see issue #269. ``ANYWHERE_SCOPE``
+# still strips correctly either way: a key the sibling summary does not
+# have is simply not found and not touched.
 # ``assignment_scheme`` is *not* here: no token names it, and it is ``null``
 # because this observation has no scheme.
 CONFORMER_RECORD_SECTIONS = IncludeGatedSections(

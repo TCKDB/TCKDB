@@ -1,7 +1,7 @@
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../record-identity-header.css"
-import type { ConformerObservation } from "../api/conformerObservationApi"
+import type { ConformerObservation, ConformerObservationSibling } from "../api/conformerObservationApi"
 import { Disclosure } from "../components/Disclosure"
 import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { LevelOfTheoryLink } from "../components/LevelOfTheoryLink"
@@ -20,7 +20,7 @@ const originTitle = (origin?: string | null) => (
 )
 type CalculationEntry = NonNullable<ConformerObservation["calculations"]>[number]
 type GeometryLink = NonNullable<ConformerObservation["geometries"]>[number]
-type SiblingObservation = NonNullable<ConformerObservation["observations"]>[number]
+type SiblingObservation = ConformerObservationSibling
 
 // Three states an include-gated section can be in, kept distinct per the
 // house rule: absence describes the request, null describes the data.
