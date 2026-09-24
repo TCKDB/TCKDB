@@ -80,11 +80,25 @@ const observationCoreSchema = z.object({
     review: recordReviewSchema,
 }).passthrough()
 
-// The observation record embeds a list of sibling observations under
-// `observations` (the whole basin, this record included) using the same
-// shape recursively — see `ScientificConformerObservationRecord` in
-// backend/app/schemas/reads/scientific_conformer.py. Zod needs an
-// explicit type + z.lazy() to express that self-reference.
+// A sibling in the `observations` list is a lean ref+review projection
+// (`ConformerObservationSiblingSummary` in
+// backend/app/schemas/reads/scientific_conformer.py), not a nested copy
+// of this whole record. It used to be: every sibling carried its own
+// calculations/geometries/selections/review_history (and a duplicated
+// copy of `conformer_group`/`species`), which made an observation
+// detail response scale linearly with basin size for a sibling ledger
+// that renders only a ref and, sometimes, a review pill (issue #269).
+// The full record for any one sibling is one hop away, at that
+// sibling's own detail endpoint.
+const siblingObservationSchema = z.object({
+    conformer_observation: z.object({
+        conformer_observation_ref: z.string(),
+        review: recordReviewSchema,
+    }).passthrough(),
+}).passthrough()
+
+export type ConformerObservationSibling = z.infer<typeof siblingObservationSchema>
+
 export interface ConformerObservation {
     conformer_observation: z.infer<typeof observationCoreSchema>
     conformer_group: z.infer<typeof conformerGroupContextSchema>
@@ -92,26 +106,26 @@ export interface ConformerObservation {
     assignment_scheme?: z.infer<typeof assignmentSchemeSchema> | null
     evidence_summary: z.infer<typeof evidenceSummarySchema>
     available_sections: z.infer<typeof availableSectionsSchema>
-    observations?: ConformerObservation[] | null
+    observations?: ConformerObservationSibling[] | null
     selections?: z.infer<typeof selectionSchema>[] | null
     calculations?: z.infer<typeof calculationSummarySchema>[] | null
     geometries?: z.infer<typeof geometryLinkSchema>[] | null
     review_history?: z.infer<typeof reviewEntrySchema>[] | null
 }
 
-const observationRecordSchema: z.ZodType<ConformerObservation> = z.lazy(() => z.object({
+const observationRecordSchema: z.ZodType<ConformerObservation> = z.object({
     conformer_observation: observationCoreSchema,
     conformer_group: conformerGroupContextSchema,
     species: speciesContextSchema,
     assignment_scheme: assignmentSchemeSchema.nullable().optional(),
     evidence_summary: evidenceSummarySchema,
     available_sections: availableSectionsSchema,
-    observations: z.array(observationRecordSchema).nullable().optional(),
+    observations: z.array(siblingObservationSchema).nullable().optional(),
     selections: z.array(selectionSchema).nullable().optional(),
     calculations: z.array(calculationSummarySchema).nullable().optional(),
     geometries: z.array(geometryLinkSchema).nullable().optional(),
     review_history: z.array(reviewEntrySchema).nullable().optional(),
-}).passthrough())
+}).passthrough()
 
 const response = z.object({
     record: observationRecordSchema,

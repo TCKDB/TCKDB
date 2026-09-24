@@ -170,6 +170,51 @@ class ConformerObservationCoreBlock(BaseModel):
     review: RecordReviewBadge
 
 
+class ConformerObservationSiblingCore(BaseModel):
+    """Identity + review slice of a sibling observation, list-shaped.
+
+    Deliberately thinner than :class:`ConformerObservationCoreBlock`: no
+    ``scientific_origin`` / ``note`` / ``created_at``, because nothing
+    that reads a sibling list reads those either — see
+    :class:`ConformerObservationSiblingSummary`.
+    """
+
+    conformer_observation_id: int | None = None
+    conformer_observation_ref: str
+    review: RecordReviewBadge
+
+
+class ConformerObservationSiblingSummary(BaseModel):
+    """One sibling in a conformer-observation's basin, list-shaped.
+
+    Populated under ``include=observations`` on the
+    **conformer-observation** detail surface only — i.e. it is the type
+    of ``ScientificConformerObservationRecord.observations``, which
+    exists to answer the one question an observation-grained record
+    cannot answer about itself: what else is in this basin. It is
+    *not* the type embedded when a conformer-*group* record expands its
+    own ``observations`` include (``ScientificConformerGroupRecord.
+    observations``, still ``ScientificConformerObservationRecord``
+    there) — that surface's consumer renders each observation's own
+    calculations and output geometries and genuinely needs the richer
+    shape.
+
+    Before this type existed, a sibling was built as a full
+    :class:`ScientificConformerObservationRecord` with every include
+    token minus ``observations`` — its own calculations, geometries,
+    selections, review history and evidence summary, and a *duplicate*
+    copy of the parent group's core block and species context. For a
+    basin the UI renders as three ``<li>`` elements (ref + review pill),
+    that scaled the response linearly with basin size: one measured
+    request came back at 22.8 KB, 90%+ of it the sibling block (issue
+    #269). A sibling in a list carries what the list needs; the full
+    record for any one sibling is one hop away, at that sibling's own
+    ``GET /scientific/conformer-observations/{ref}``.
+    """
+
+    conformer_observation: ConformerObservationSiblingCore
+
+
 # ---------------------------------------------------------------------------
 # Species context
 # ---------------------------------------------------------------------------
@@ -511,12 +556,18 @@ class ScientificConformerObservationRecord(BaseModel):
 
     # Optional include blocks
     #: Every observation in this record's conformer group, this one
-    #: included — the same list the group surface returns under the same
-    #: token. Populated under ``include=observations``, which on an
-    #: observation-grained record is the one question the record cannot
-    #: answer from itself: *what else is in this basin*. Never populated on
-    #: a record nested inside another record's ``observations`` block.
-    observations: list[ScientificConformerObservationRecord] | None = None
+    #: included, projected as a lean ref+review summary rather than a
+    #: full nested record — see :class:`ConformerObservationSiblingSummary`
+    #: for why (issue #269). Populated under ``include=observations``,
+    #: which on an observation-grained record is the one question the
+    #: record cannot answer from itself: *what else is in this basin*.
+    #: This field only exists on the top-level record returned by the
+    #: observation detail endpoint; nothing ever nests a
+    #: ``ScientificConformerObservationRecord`` inside this list (unlike
+    #: ``ScientificConformerGroupRecord.observations``, which does, and
+    #: keeps the full shape because its consumer needs each observation's
+    #: own calculations/geometries).
+    observations: list[ConformerObservationSiblingSummary] | None = None
     selections: list[ConformerSelectionSummary] | None = None
     calculations: list[ConformerCalculationSummary] | None = None
     geometries: list[ConformerGeometryLink] | None = None

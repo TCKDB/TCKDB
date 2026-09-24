@@ -66,6 +66,8 @@ from app.schemas.reads.scientific_conformer import (
     ConformerGroupFingerprint,
     ConformerObservationCoreBlock,
     ConformerObservationEvidenceSummary,
+    ConformerObservationSiblingCore,
+    ConformerObservationSiblingSummary,
     ConformerObservationsSummary,
     ConformerReviewEntry,
     ConformerRotorTorsion,
@@ -449,14 +451,10 @@ def _build_observation_record(
         session, observation.assignment_scheme_id
     )
 
-    observations_block: list[ScientificConformerObservationRecord] | None = None
+    observations_block: list[ConformerObservationSiblingSummary] | None = None
     if "observations" in includes:
         observations_block = _build_sibling_observation_records(
-            session,
-            observation=observation,
-            cg_core=cg_core,
-            species_context=species_context,
-            includes=includes,
+            session, observation=observation
         )
 
     selections_block: list[ConformerSelectionSummary] | None = None
@@ -507,15 +505,20 @@ def _build_sibling_observation_records(
     session: Session,
     *,
     observation: ConformerObservation,
-    cg_core: ConformerGroupCoreBlock,
-    species_context: ConformerSpeciesContext,
-    includes: set[str],
-) -> list[ScientificConformerObservationRecord]:
+) -> list[ConformerObservationSiblingSummary]:
     """Every observation in *observation*'s group, this one included.
 
-    The nested records are built without ``observations`` in their include
-    set. That is not a size optimisation: a sibling that resolved its own
-    siblings would resolve this record again, without end.
+    Projected as :class:`ConformerObservationSiblingSummary` — ref +
+    review badge, nothing else. This used to build each sibling as a
+    full :func:`_build_observation_record` (every include token minus
+    ``observations``, plus a duplicated copy of the parent group's core
+    block and species context), which scaled an observation detail
+    response linearly with basin size for a UI slice that renders three
+    ``<li>`` elements. See :class:`ConformerObservationSiblingSummary`
+    for the measured numbers (issue #269). A sibling's full record —
+    calculations, geometries, selections, review history, its own
+    evidence summary — stays one hop away, at that sibling's own detail
+    endpoint.
     """
     siblings = session.scalars(
         select(ConformerObservation)
@@ -535,22 +538,16 @@ def _build_sibling_observation_records(
         if sibling_ids
         else {}
     )
-    nested_includes = includes - {"observations"}
-    sibling_levels = levels_of_theory.for_conformer_observations(
-        session, sibling_ids
-    )
     return [
-        _build_observation_record(
-            session,
-            observation=sibling,
-            cg_core=cg_core,
-            species_context=species_context,
-            observation_badge=badges.get(
-                sibling.id,
-                RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
-            ),
-            includes=nested_includes,
-            levels_index=sibling_levels,
+        ConformerObservationSiblingSummary(
+            conformer_observation=ConformerObservationSiblingCore(
+                conformer_observation_id=sibling.id,
+                conformer_observation_ref=sibling.public_ref,
+                review=badges.get(
+                    sibling.id,
+                    RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
+                ),
+            )
         )
         for sibling in siblings
     ]
