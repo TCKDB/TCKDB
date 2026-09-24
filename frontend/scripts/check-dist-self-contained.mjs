@@ -16,8 +16,10 @@
  *       `xlink:href` on anything but a link, `<meta http-equiv=refresh>`,
  *       `<?xml-stylesheet href>`, and `srcdoc` (checked recursively) -- must
  *       stay on this origin or be a `data:` URI. Tags are matched with quotes
- *       respected, and attribute values are entity-decoded first. A manifest
- *       or JSON file may name no absolute URL at all.
+ *       respected, comments end where the HTML tokenizer ends them (`<!-->`,
+ *       `<!--->`, `--!>` as well as `-->`), and attribute values are
+ *       entity-decoded first. A manifest or JSON file may name no absolute
+ *       URL at all.
  *   (b) Scripts load only from this origin. (a) covers `<script src>` and
  *       `modulepreload`. Emitted JS and inline `<script>` bodies are parsed
  *       with the TypeScript parser (already a devDependency), and every load
@@ -32,16 +34,23 @@
  *       HTML/SVG attribute value -- after decoding CSS escapes such as
  *       `\75rl(`, must stay on this origin, be a `data:` URI, or be a
  *       `#fragment`.
- *   (d) Every absolute URL in the output -- scheme in any case; in JS, every
- *       string and template value (regex literals and comments cannot load
- *       anything and are skipped); in CSS and markup, the text after
- *       decoding escapes -- is parsed with `new URL()` and must be on
- *       ALLOWED_URLS. Matching is by ORIGIN (scheme, host and port, so
- *       userinfo cannot disguise the host and `http://localhost:8000` is not
- *       `http://localhost`) and then by the exact normalised URL. A candidate
- *       that does not parse fails. A template literal that builds a host at
- *       run time (`https://${h}`) fails. An allow-list entry that no longer
- *       matches anything fails, so the list cannot rot wider.
+ *   (d) Every absolute URL in the output must be on ALLOWED_URLS. It reads
+ *       the RAW, unstripped text of every file -- comments included -- so no
+ *       stripping step can hide an address; in JS it also reads every parsed
+ *       string and template value (escapes decoded), and in CSS and markup
+ *       the text after decoding escapes. The scheme may be in any case; tab,
+ *       CR and LF inside a host are removed as a browser removes them. Each
+ *       candidate is parsed with `new URL()` and matched by ORIGIN (scheme,
+ *       host and port, so userinfo cannot disguise the host and
+ *       `http://localhost:8000` is not `http://localhost`) and then by the
+ *       exact normalised URL. A candidate that does not parse fails. A host
+ *       built at run time fails, whether by template (`https://${h}`) or by
+ *       concatenation (`"https://" + h`), unless it is one of the two places
+ *       below: ALLOWED_RUNTIME_HOSTS (one 3Dmol.js loader), or a bare
+ *       `new URL(template);` statement whose result is thrown away (zod's
+ *       IPv6 check) in a file where nothing rebinds or reassigns `URL`. An
+ *       allow-list entry that no longer matches anything fails, so the lists
+ *       cannot rot wider.
  *
  * "Stay on this origin" is decided by the WHATWG URL parser against two
  * sentinel page origins, one https and one http, so the forms a browser
@@ -59,12 +68,26 @@
  *   someone hiding a URL on purpose: a string assembled at run time
  *   (`"htt" + "ps://"`) is invisible to any static scan.
  * - (d) allows URLs by address, not by use. Every entry is one exact URL, so
- *   a new load from,
- *   say, github.com fails unless it is one of those exact URLs, and (b)
- *   fails any written-out load call whatever the allow list says. But a URL
- *   that IS on the list, stored in a variable and then fetched, passes.
- * - 3Dmol.js's remote structure loaders (RCSB, PubChem) are in the bundle as
- *   base URLs it appends an id to. That the app never calls them rests on
+ *   a new load from, say, github.com fails unless it is one of those exact
+ *   URLs, and (b) fails any written-out load call whatever the allow list
+ *   says. But a URL that IS on the list passes when it is loaded any way (b)
+ *   does not recognise: stored in a variable and then fetched, assigned to
+ *   `img.src`, passed to `xhr.open`, called as `(0, window.fetch)(...)`, or
+ *   used as a `<form action>`.
+ * - A scheme-relative string such as `"http:host"` has no `//`, so (d) does
+ *   not read it as a URL; stored in a variable and assigned to `.src` on an
+ *   https page, a browser resolves it to `http://host`. (Written directly
+ *   into an HTML attribute, (a) judges it correctly.)
+ * - The CSS scan strips `/* ... *\/` comments before looking for `url()`
+ *   without tracking strings, so a comment opener inside a CSS string can
+ *   hide a later `url()` from (c). (d) still reads the raw text.
+ * - A line break inside the PATH of an allow-listed URL ends it for (d), so
+ *   a different path on that same allowed origin could read as the listed
+ *   URL. The origin itself cannot be disguised this way: tab, CR and LF
+ *   inside a host are removed before parsing.
+ * - 3Dmol.js's remote loaders are in the bundle: base URLs it appends an id
+ *   to (RCSB, PubChem) and a trajectory loader that prefixes `http://` to a
+ *   caller's server. That the app never calls them rests on
  *   `GeometryViewer.tsx` only calling `addModel` with an in-memory XYZ
  *   string, which this script does not prove.
  *
@@ -109,6 +132,20 @@ const ALLOWED_URLS = [
     { url: "https://mmtf.rcsb.org/v1.0/", why: "3Dmol.js loader base (MMTF), written protocol-relative" },
     { url: "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/", why: "3Dmol.js loader base (fetch by PubChem CID)" },
 ]
+
+/**
+ * Places a library builds a host at run time, and why each is tolerated.
+ * Matched by the emitted chunk's name, the enclosing method's name (public
+ * API, so it survives minification) and the literal the host is glued to.
+ * An entry that no longer matches anything fails, like ALLOWED_URLS.
+ */
+const ALLOWED_RUNTIME_HOSTS = [
+    {
+        chunk: "3Dmol-", method: "setCoordinatesFromURL", literal: "http://",
+        why: "3Dmol.js trajectory loader: prefixes http:// to a caller-supplied server URL. The app does not call it (see header)",
+    },
+]
+const runtimeHostHits = new Set()
 
 /** `<a href>` / `<area href>` targets are links a reader follows, not loads. None today. */
 const ALLOWED_ANCHOR_URLS = []
@@ -199,8 +236,13 @@ function entityDecode(text, onUnknown) {
 
 // ---------------------------------------------------------------- absolute URL inventory (d)
 
-const HOST_CHARS = String.raw`[^\s"'\x60<>(){}\\/?#]`
-const REST_CHARS = String.raw`[^\s"'\x60<>(){}\\]`
+// Browsers delete tab, CR and LF anywhere in a URL before parsing it, so a
+// host written `localhost\t.evil.example` is `localhost.evil.example`. Inside
+// the authority those three are absorbed whenever more host follows; in the
+// path a tab is absorbed too, while a line break still ends the URL (text
+// wraps; and a path cannot change which origin a URL points at).
+const HOST_CHARS = String.raw`(?:[^\s"'\x60<>(){}\\/?#]|[\t\n\r]+(?=[^\s"'\x60<>(){}\\/?#]))`
+const REST_CHARS = String.raw`(?:[^\s"'\x60<>(){}\\]|\t+(?=[^\s"'\x60<>(){}\\]))`
 // scheme in any case, then one or more / or \, then authority and the rest.
 const SCHEMED = new RegExp(String.raw`(?<![A-Za-z0-9+.-])(https?|wss?|ftp):[\\/]+(${HOST_CHARS}+)(${REST_CHARS}*)`, "gi")
 // protocol-relative, where a URL value starts: after a quote, `=`, or at the start of a JS string.
@@ -218,7 +260,7 @@ const PLAUSIBLE_HOST = /^(?:\[[0-9a-f:.]+\]|[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?(?
 function record(file, candidate, shown, onFound, { protocolRelative = false } = {}) {
     let url
     try {
-        url = new URL(candidate)
+        url = new URL(candidate.replace(/[\t\n\r]/g, ""))
     } catch {
         if (!protocolRelative) fail(file, `(d) absolute address that does not parse: ${shown}`)
         return
@@ -245,6 +287,23 @@ function inventory(file, text, { atStart = false, onFound, openEnd = false } = {
     }
 }
 
+/**
+ * (d) over the raw text of a JS file, comments and all, so nothing the parser
+ * skips can hide an address. Schemed URLs only: a regex literal such as
+ * `/\/\/*$/` would otherwise read as a protocol-relative host. A URL cut off
+ * by a `${` is a template, judged on the parsed tree instead.
+ */
+function inventoryRawJs(file, text) {
+    for (const m of text.matchAll(SCHEMED)) {
+        let [whole, scheme, host, rest] = m
+        if (text[m.index + whole.length] === "{" && whole.endsWith("$")) {
+            if (rest === "") continue // `https://${h}`: a host built at run time, judged on the tree
+            rest = rest.slice(0, -1)
+        }
+        record(file, `${scheme}://${host}${rest}`, whole)
+    }
+}
+
 // ---------------------------------------------------------------- CSS (c)
 
 function balancedBody(text, openIndex) {
@@ -261,7 +320,7 @@ function cssTargets(rawCss) {
     const css = cssUnescape(rawCss.replace(/\/\*[\s\S]*?\*\//g, ""))
     const targets = []
     for (const m of css.matchAll(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)]*?))\s*\)/gi)) targets.push(m[1] ?? m[2] ?? m[3] ?? "")
-    for (const m of css.matchAll(/@import\s+(?:"([^"]*)"|'([^']*)')/gi)) targets.push(m[1] ?? m[2])
+    for (const m of css.matchAll(/@import\s*(?:"([^"]*)"|'([^']*)')/gi)) targets.push(m[1] ?? m[2])
     for (const m of css.matchAll(/(?:-webkit-)?image-set\s*\(/gi)) {
         const body = balancedBody(css, m.index + m[0].length - 1)
         for (const s of body.matchAll(/"([^"]*)"|'([^']*)'/g)) targets.push(s[1] ?? s[2])
@@ -305,16 +364,86 @@ function literalTarget(node) {
  * see whether it throws (zod's IPv6 check) and is then thrown away, so the
  * host it names is never fetched. Anything else that builds a host fails.
  */
-function isDiscardedUrlParse(templatePiece) {
+function isDiscardedUrlParse(templatePiece, urlIsShadowed) {
     const template = templatePiece.parent
     const construct = template?.parent
     return (
+        !urlIsShadowed &&
         ts.isTemplateExpression(template) &&
         ts.isNewExpression(construct) &&
-        calleeName(construct.expression) === "URL" &&
+        ts.isIdentifier(construct.expression) && // `new api.URL(...)` never qualifies
+        construct.expression.text === "URL" &&
         construct.arguments?.length === 1 &&
         ts.isExpressionStatement(construct.parent)
     )
+}
+
+const BINDING_PARENTS = [
+    ts.isVariableDeclaration, ts.isParameter, ts.isFunctionDeclaration, ts.isFunctionExpression,
+    ts.isClassDeclaration, ts.isClassExpression, ts.isBindingElement, ts.isImportSpecifier,
+    ts.isImportClause, ts.isNamespaceImport,
+]
+
+/**
+ * Whether anything in the file could make `URL` mean something other than
+ * the platform's: a declaration or binding named URL, an assignment to `URL`
+ * or to any `x.URL`, or a `{ URL }` shorthand (counted, to fail closed).
+ */
+function shadowsUrl(sf) {
+    let found = false
+    const visit = (node) => {
+        if (found) return
+        const parent = node.parent
+        if (ts.isIdentifier(node) && node.text === "URL" && parent) {
+            if (parent.name === node && BINDING_PARENTS.some((is) => is(parent))) found = true
+            if (ts.isShorthandPropertyAssignment(parent)) found = true
+        }
+        if (
+            ts.isBinaryExpression(node) &&
+            node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+            node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+        ) {
+            const left = node.left
+            if ((ts.isIdentifier(left) && left.text === "URL") || (ts.isPropertyAccessExpression(left) && left.name.text === "URL")) {
+                found = true
+            }
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(sf)
+    return found
+}
+
+/** The literal text a JS value is known to END with, or null when it ends computed. */
+function trailingText(node) {
+    if (ts.isParenthesizedExpression(node)) return trailingText(node.expression)
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text
+    if (ts.isTemplateExpression(node)) return node.templateSpans.at(-1).literal.text
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        const right = node.right
+        if (ts.isStringLiteral(right) || ts.isNoSubstitutionTemplateLiteral(right)) return (trailingText(node.left) ?? "") + right.text
+        return trailingText(right)
+    }
+    return null
+}
+
+/** Name of the nearest named function or method around a node. */
+function enclosingName(node) {
+    for (let n = node.parent; n; n = n.parent) {
+        if ((ts.isMethodDeclaration(n) || ts.isFunctionDeclaration(n) || ts.isFunctionExpression(n)) && n.name) {
+            return n.name.getText()
+        }
+    }
+    return null
+}
+
+/** Whether a JS value is known to START with literal text. */
+function startsLiteral(node) {
+    if (ts.isParenthesizedExpression(node)) return startsLiteral(node.expression)
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text !== ""
+    if (ts.isTemplateExpression(node)) return node.head.text !== ""
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) return startsLiteral(node.left)
+    return false
 }
 
 function checkScript(file, source, { inline }) {
@@ -325,6 +454,8 @@ function checkScript(file, source, { inline }) {
         return
     }
     const onFound = inline ? (url) => fail(file, `(b) inline script names an absolute URL: ${url.href}`) : undefined
+    const urlIsShadowed = shadowsUrl(sf)
+    inventoryRawJs(file, source)
 
     const sink = (label, target) => {
         counts.loadCalls += 1
@@ -340,11 +471,25 @@ function checkScript(file, source, { inline }) {
             const text = node.text ?? node.rawText ?? ""
             const openEnd = !ts.isTemplateTail(node) && OPEN_AUTHORITY.test(text)
             inventory(file, text, { atStart: ts.isTemplateHead(node), onFound, openEnd })
-            if (openEnd && !isDiscardedUrlParse(node)) {
+            if (openEnd && !isDiscardedUrlParse(node, urlIsShadowed)) {
                 fail(file, `(d) template builds a host at run time: ${JSON.stringify(`${text}\${...}`)}`)
             } else if (openEnd) {
                 counts.discardedUrlParses += 1
             }
+        } else if (
+            ts.isBinaryExpression(node) &&
+            node.operatorToken.kind === ts.SyntaxKind.PlusToken &&
+            !startsLiteral(node.right) &&
+            OPEN_AUTHORITY.test(trailingText(node.left) ?? "\u0000")
+        ) {
+            // `"https://" + host`: the same run-time host as `https://${host}`.
+            const literal = trailingText(node.left)
+            const method = enclosingName(node)
+            const allowed = ALLOWED_RUNTIME_HOSTS.find(
+                (e) => file.split("/").at(-1).startsWith(e.chunk) && e.method === method && e.literal === literal,
+            )
+            if (allowed) runtimeHostHits.add(allowed)
+            else fail(file, `(d) concatenation builds a host at run time: ${JSON.stringify(literal)} + ... in ${method ?? "(anonymous)"}`)
         } else if (ts.isCallExpression(node)) {
             const isImport = node.expression.kind === ts.SyntaxKind.ImportKeyword
             const name = isImport ? "import" : calleeName(node.expression)
@@ -385,6 +530,31 @@ function attributes(source, onUnknownEntity) {
     return attrs
 }
 
+/**
+ * Remove comments where the HTML tokenizer ends them: `<!-->` and `<!--->`
+ * close at once, otherwise the first `-->` or `--!>` closes, else end of file.
+ * A non-greedy `<!--[\s\S]*?-->` gets the first three wrong, and what it
+ * swallows after `<!-->` is a real element to the browser.
+ */
+function stripComments(html) {
+    let out = ""
+    let i = 0
+    for (;;) {
+        const start = html.indexOf("<!--", i)
+        if (start < 0) return out + html.slice(i)
+        out += html.slice(i, start)
+        const body = start + 4
+        if (html.startsWith(">", body)) i = body + 1
+        else if (html.startsWith("->", body)) i = body + 2
+        else {
+            const ends = [html.indexOf("-->", body), html.indexOf("--!>", body)]
+            const closes = ends.map((at, k) => (at < 0 ? Infinity : at + (k === 0 ? 3 : 4)))
+            i = Math.min(...closes)
+            if (i === Infinity) return out
+        }
+    }
+}
+
 function checkMarkup(file, html) {
     const onUnknownEntity = (entity) => fail(file, `(a) unrecognised character reference ${entity} in markup`)
 
@@ -405,9 +575,11 @@ function checkMarkup(file, html) {
         }
     }
 
-    const markup = html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`).replace(/<!--[\s\S]*?-->/g, "")
-    inventory(file, markup)
-    inventory(file, entityDecode(markup))
+    // (d) reads the raw, unstripped text: no stripping step can hide an address.
+    inventory(file, html)
+    inventory(file, entityDecode(html))
+
+    const markup = stripComments(html.replace(RAW_TEXT, (m, tag, attrs) => `<${tag}${attrs}></${tag}>`))
 
     for (const m of markup.matchAll(TAG)) {
         const tag = m[1].toLowerCase()
@@ -513,6 +685,12 @@ for (const [href, files] of seen) {
 for (const entry of ALLOWED_URLS) {
     if (![...seen.keys()].some((href) => allowedBy([entry], new URL(href)))) {
         failures.push(`allow list: ${entry.url} matches nothing in the build any more; remove it from ALLOWED_URLS`)
+    }
+}
+
+for (const entry of ALLOWED_RUNTIME_HOSTS) {
+    if (!runtimeHostHits.has(entry)) {
+        failures.push(`allow list: runtime host ${entry.chunk}* ${entry.method} "${entry.literal}" + ... matches nothing any more; remove it from ALLOWED_RUNTIME_HOSTS`)
     }
 }
 
