@@ -20,7 +20,7 @@ those records later through a stable HTTP API or Python client.
 
 ## What You Can Do
 
-- Run TCKDB locally with Postgres/RDKit, MinIO, and the FastAPI backend.
+- Run TCKDB locally with Postgres/RDKit, SeaweedFS, and the FastAPI backend.
 - Load a small demo dataset and query methane, ethane, radicals,
   thermo, calculations, geometries, reactions, and kinetics.
 - Query scientific records by chemistry-first handles such as SMILES,

@@ -109,7 +109,8 @@ containerised API still configured with the host's address:
 
 ```text
 S3_ENDPOINT_URL=http://127.0.0.1:9000     # correct on the host
-S3_ENDPOINT_URL=http://minio:9000         # correct inside the compose network
+S3_ENDPOINT_URL=http://seaweedfs:9000     # correct inside the compose network
+                                          # (http://minio:9000 on a MinIO deployment)
 ```
 
 Inside a container, `127.0.0.1` is the container's own loopback. The setting
@@ -143,6 +144,21 @@ Set `S3_ENDPOINT_URL` to the compose service name and restart the API. See
 An upload carrying an artifact returns `507` with
 `"code": "artifact_storage_full"`. Reads, queries, and file-less uploads all
 work normally. Downloads of existing artifacts also work normally.
+
+**Which stores produce this.** The 507 needs the store to *say* it is
+full. MinIO does (`XMinioStorageFull`, `XMinioAdminBucketQuotaExceeded`), and
+everything below about thresholds, quotas, `mc` and the admin API is about
+MinIO deployments. **SeaweedFS, the default store, does not**: measured on
+4.47, a full disk, exhausted volume slots and an enforced bucket quota all
+answer `InternalError` (HTTP 500), the same code as any internal fault. TCKDB
+cannot tell those apart, so on SeaweedFS a full store surfaces as `503
+artifact_storage_unavailable` and `/status` does not record it as full. If
+SeaweedFS uploads return 503 while `/status` shows the store reachable, check
+its disk (`df -h` on the volume) and its container log, which names the cause
+(`no space left on device`, `No writable volumes and no free volumes left`,
+or `read only ... (e.g. bucket over quota)`). SeaweedFS bucket quotas are not
+enforced on write: `s3.bucket.quota` alone refuses nothing until
+`s3.bucket.quota.enforce -apply` runs.
 
 **"Full" is not all-or-nothing, and this is the confusing part.** MinIO
 refuses a write that would breach its free-space threshold, sized against the

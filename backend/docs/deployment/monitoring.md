@@ -80,7 +80,7 @@ script never gets far enough to ping anything). Neither alone is enough.
       "queue_stalled": false, "healthy": true, "reason": null
     },
     "artifact_storage": {
-      "endpoint": "http://minio:9000", "bucket": "tckdb-artifacts",
+      "endpoint": "http://seaweedfs:9000", "bucket": "tckdb-artifacts",
       "healthy": true, "reachable": true, "reason": null,
       "storage_full": false, "storage_full_observed_at": null,
       "warnings": []
@@ -145,8 +145,11 @@ real write.
 
 `source` is either `bucket_quota` or `free_space`, and it matters because the
 remedies differ: "free disk" and "raise the quota" send you to different
-places. It is the tighter of the two, and either may be absent — against AWS S3
-or any non-MinIO store both are absent and no warning is ever raised.
+places. It is the tighter of the two, and either may be absent. Both arms come
+from MinIO's admin API, so they apply to MinIO deployments only: against
+SeaweedFS (the default store — measured, its answer to those paths is `404
+NoSuchBucket`), AWS S3 or any other non-MinIO store both are absent and no
+warning is ever raised.
 
 `quota_age_seconds` is the one stale number in the block. A bucket quota is
 cached for five minutes (`TCKDB_STORAGE_QUOTA_TTL_SECONDS`, default `300`)

@@ -7,7 +7,7 @@ shared lab server, or a public self-hosted deployment at e.g.
 `https://tckdb.example.org/api/v1`.
 
 For the full self-hosted single-node setup (compose layout,
-reverse-proxy/tunnel, Postgres/MinIO posture) see
+reverse-proxy/tunnel, Postgres/object-store posture) see
 [self_hosted_single_node.md](self_hosted_single_node.md). That guide
 was tested on a Raspberry Pi but the recipe transfers to any small
 Linux server.
@@ -172,7 +172,8 @@ TCKDB_BASE_URL=https://tckdb.example.org/api/v1 \
 
 What the script verifies:
 
-1. `docker compose ps` works and `db`, `minio` services are running/healthy
+1. `docker compose ps` works and `db`, `seaweedfs` services are running/healthy
+   (`STORAGE_SERVICE=minio` on a MinIO deployment)
 2. `psql` inside the `db` container responds
 3. The `rdkit` extension is installed in `$DB_NAME`
 4. `alembic current` reports a revision (best-effort — needs the

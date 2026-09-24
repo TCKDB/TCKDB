@@ -72,7 +72,7 @@ are valid; the deployment scenario does not change.
          │    │   TCKDB API (uvicorn, host conda env)      │
          │    │     │                                      │
   HTTP   │    │     ├─► PostgreSQL + RDKit (Docker)        │
-  client │    │     └─► MinIO / S3 (Docker or external)    │
+  client │    │     └─► S3 store (SeaweedFS or external)   │
   jobs   │    │                                            │
          └────┼─►  Upload worker (inline or separate proc) │
               └────────────────────────────────────────────┘
@@ -122,7 +122,7 @@ host:
 | Service       | Role                                                  | Where it runs                       |
 |---------------|-------------------------------------------------------|-------------------------------------|
 | PostgreSQL+RDKit | Identity, results, provenance, moderation          | Docker (`docker-compose.yml`) — or a managed PostgreSQL+RDKit service, or a [native install](native-advanced.md) |
-| MinIO / S3    | Artifact / object storage                              | Docker, or lab-managed S3           |
+| S3 store      | Artifact / object storage                              | SeaweedFS in Docker, or any S3-compatible service (lab-managed S3, AWS S3, GCS via HMAC keys) |
 | Backend API   | FastAPI, schema, auth, upload routes                   | Host conda env (`tckdb_env`)        |
 | Upload worker | Async ingestion (optional; can run inline in the API) | Host conda env, or separate proc    |
 | Reverse proxy | TLS, routing, header forwarding, access control       | Host or separate appliance          |
@@ -282,8 +282,8 @@ Things to avoid:
 - Stripping or rewriting `X-API-Key` in the proxy.
 - Buffering / rewriting `Set-Cookie` so session login appears to "work"
   but no cookie reaches the browser.
-- Exposing internal admin/debug surfaces (e.g. MinIO console, DB
-  admin tooling) on the public proxy.
+- Exposing internal admin/debug surfaces (e.g. the object store's
+  admin UI or MinIO console, DB admin tooling) on the public proxy.
 
 ---
 
@@ -296,7 +296,8 @@ A shared private deployment is private. Treat it like one:
   deployment is almost never necessary.
 - If the proxy must be public-facing, restrict source IPs to the
   ranges that actually need access (HPC login nodes, lab subnets).
-- Block direct access to PostgreSQL (5432) and MinIO (9000/9001) at
+- Block direct access to PostgreSQL (5432) and the object store (9000;
+  also 9001 on MinIO) at
   the host firewall — only the proxy needs to reach the API, and only
   the API needs to reach the DB and object store.
 - Do not put the bootstrap admin password in shared shell history;
@@ -392,8 +393,15 @@ mis-counting every non-ASCII character. See
 
 ### Artifacts / object store
 
-If you use the bundled MinIO container, mirror the `/data` volume to a
-backup target. With `mc` (MinIO client):
+Copy the bucket out through the S3 API, which works for the bundled
+SeaweedFS container and for any other S3-compatible store. With
+`rclone`, given remotes for the store and the backup target:
+
+```bash
+rclone sync tckdb:tckdb-artifacts s3-backup:tckdb-artifacts
+```
+
+On a MinIO deployment, `mc` (MinIO client) does the same:
 
 ```bash
 mc mirror --overwrite local/tckdb-artifacts s3-backup/tckdb-artifacts

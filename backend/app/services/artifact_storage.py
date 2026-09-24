@@ -1,8 +1,9 @@
 """Artifact validation and S3-compatible content-addressed storage.
 
 Validates uploaded calculation artifacts (ESS output logs, input files,
-checkpoints) and writes them to an S3-compatible object store (MinIO
-locally, AWS S3 in production).
+checkpoints) and writes them to an S3-compatible object store: SeaweedFS
+from ``docker-compose.yml`` by default, or any other S3-compatible
+service ``S3_ENDPOINT_URL`` points at (AWS S3, MinIO, ...).
 
 Security measures:
 - Content signature validation: output_log artifacts must match a known
@@ -14,7 +15,7 @@ Security measures:
 - Artifacts are stored as inert blobs, never executed.
 
 Configuration (environment variables):
-- ``S3_ENDPOINT_URL``: MinIO/S3 endpoint (default: ``http://localhost:9000``)
+- ``S3_ENDPOINT_URL``: S3 endpoint (default: ``http://localhost:9000``)
 - ``S3_ACCESS_KEY``: Access key (default: ``tckdb``)
 - ``S3_SECRET_KEY``: Secret key (default: ``tckdb_secret``)
 - ``S3_BUCKET``: Bucket name (default: ``tckdb-artifacts``)
@@ -140,6 +141,30 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #:   store is the defect being repaired and an unrecognised spelling
 #:   reproduces it exactly, while a false positive costs only a more
 #:   accurate-sounding message on a store that answered something else.
+#:
+#: **SeaweedFS contributes nothing here, deliberately.** Measured against
+#: SeaweedFS ``4.47`` (``weed mini``, the default store TCKDB ships since
+#: #541) on size-capped tmpfs volumes, every way of running out of room
+#: answers the same thing, ``InternalError`` at HTTP ``500`` with "We
+#: encountered an internal error, please try again.":
+#:
+#: * all volume slots used (256 MiB volume, auto-sized slots; refused at
+#:   192 MiB written, with 63 MiB of disk still free);
+#: * the disk itself full (128 MiB volume, slots raised above what the
+#:   disk holds; refused at 127 MiB, the server log reading "no space left
+#:   on device");
+#: * a bucket over quota. ``s3.bucket.quota -sizeMB=20`` alone refused
+#:   nothing: 60 × 1 MiB writes were all accepted. Only after
+#:   ``s3.bucket.quota.enforce -apply`` marked the bucket read-only were
+#:   writes refused, again as ``InternalError``/500.
+#:
+#: ``InternalError`` is also SeaweedFS's answer to any internal failure,
+#: so it does not mean "full", and admitting it would turn every transient
+#: fault into "an operator must free space" plus a durable refusal on
+#: ``/status``. A full SeaweedFS store is therefore reported as
+#: unavailable (503, retry later), not as full. That is the pre-#541
+#: behaviour this set was built to fix, and it stays that way on SeaweedFS
+#: until the store gives a code that says what happened.
 #:
 #: ``EntityTooLarge`` is deliberately **not** here, against the first
 #: reading of this problem. It means "this object exceeds the store's

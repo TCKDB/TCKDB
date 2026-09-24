@@ -43,7 +43,7 @@ runtime variables:
 docker compose \
   --env-file .env.selfhosted \
   --env-file .env.db-admin \
-  up -d db minio
+  up -d db seaweedfs
 ```
 
 For an existing database whose current `tckdb` login is the bootstrap

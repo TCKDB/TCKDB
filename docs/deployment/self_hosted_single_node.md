@@ -30,7 +30,7 @@ application, same schema, same auth model — what changes is the
 - The API is reachable from the public internet.
 - Anonymous scientific reads are allowed, but every hosted abuse-control
   knob is on.
-- Postgres and MinIO are not reachable from anything but the API
+- Postgres and the object store are not reachable from anything but the API
   process on the host.
 - TLS terminates at Cloudflare; the hop from `cloudflared` to the API
   is loopback only.
@@ -191,14 +191,14 @@ The default `docker-compose.yml` publishes
 must use that same value in any host-side `DB_PORT`. The container
 itself does not move.
 
-The same logic applies to MinIO: container ports `9000`/`9001`
-published to `127.0.0.1:9000`/`127.0.0.1:9001`. Never republish them
-on `0.0.0.0`.
+The same logic applies to the object store: SeaweedFS's S3 port `9000`
+is published to `127.0.0.1:9000` (and, on a MinIO deployment, its console
+`9001` to `127.0.0.1:9001`). Never republish them on `0.0.0.0`.
 
 ### If the API runs in a container, address siblings by service name
 
 **A containerised API must reach its sibling services by their compose
-service name — `db`, `minio` — never `localhost` or `127.0.0.1`.** Inside a
+service name — `db`, `seaweedfs` — never `localhost` or `127.0.0.1`.** Inside a
 container, loopback is *that container's own* loopback. Nothing else is
 listening on it, and the connection fails with no indication that the address
 was ever wrong.
@@ -208,7 +208,7 @@ This applies to every service coordinate, not just the database:
 | Setting | API on the host | API in the compose network |
 |---|---|---|
 | `DB_HOST` / `DB_PORT` | `127.0.0.1` / host-published port | `db` / `5432` |
-| `S3_ENDPOINT_URL` | `http://127.0.0.1:9000` | `http://minio:9000` |
+| `S3_ENDPOINT_URL` | `http://127.0.0.1:9000` | `http://seaweedfs:9000` (`http://minio:9000` on a MinIO deployment) |
 
 The reason this deserves its own heading: **migrating the API from the host to
 a container does not change the config file, so nothing looks wrong.** Every
@@ -230,19 +230,35 @@ endpoint it actually reached for (see
 ## Compose services
 
 [docker-compose.yml](../../docker-compose.yml)
-defines three services, split across **core** services that run by
-default and an **opt-in ingress** service behind a Compose profile:
+defines these services, split across **core** services that run by
+default and **opt-in** services behind Compose profiles:
 
 | Service | Image | Binding | Public? | Profile |
 |---|---|---|---|---|
 | `db` | `informaticsmatters/rdkit-cartridge-debian` | `127.0.0.1:5432` | **No** | (always) |
-| `minio` | `minio/minio` | `127.0.0.1:9000` + `127.0.0.1:9001` | **No** | (always) |
+| `seaweedfs` | `chrislusf/seaweedfs` (pinned by digest) | `127.0.0.1:9000` | **No** | (always) |
+| `minio` | `minio/minio` | `127.0.0.1:9000` + `127.0.0.1:9001` | **No** | `minio` (existing MinIO deployments only) |
 | `cloudflared` | `cloudflare/cloudflared` | host network (egress only) | tunnel only | `cloudflare` (opt-in) |
 
 The FastAPI backend and (inline) upload worker run **on the host** as
 a systemd unit, not in Docker, so the existing conda-based dev/test
 workflow is preserved. The host process talks to Docker services over
 loopback.
+
+**The object store is replaceable.** TCKDB is a plain S3 client, so
+`seaweedfs` is only the default. To use AWS S3, Google Cloud Storage
+(through its S3 interoperability endpoint with HMAC keys) or any other
+S3-compatible service, set `S3_ENDPOINT_URL`, `S3_ACCESS_KEY`,
+`S3_SECRET_KEY`, `S3_BUCKET` and `S3_REGION` to that service and do not
+start `seaweedfs`.
+
+**An existing MinIO deployment keeps running MinIO.** Its artifacts live
+in the `tckdb_minio` volume, and starting `seaweedfs` would give the API
+an empty store. Start MinIO with its profile instead
+(`docker compose --profile minio up -d db minio`); both services publish
+`127.0.0.1:9000`, so running both fails on the port rather than silently.
+A copy-and-verify migration from MinIO to SeaweedFS is planned as a
+separate change.
 
 > **Keep `--workers 1`.** The default rate limiter is in-process; each
 > extra Uvicorn worker multiplies the effective per-IP bucket budget.
@@ -258,7 +274,7 @@ including the LAN.
 
 ## Ingress options
 
-The core stack (`db`, `minio`, plus the host-side API) is independent
+The core stack (`db`, `seaweedfs`, plus the host-side API) is independent
 of how you publish the API. Ingress is a separate layer; pick **one**
 of these, do not stack them:
 
@@ -275,7 +291,7 @@ The Compose default brings up only the core services:
 ```bash
 docker compose --env-file .env.selfhosted \
     --env-file .env.db-admin \
-    up -d db minio
+    up -d db seaweedfs
 ```
 
 Cloudflare Tunnel ingress is opt-in via the `cloudflare` profile:
@@ -407,7 +423,8 @@ the Zero Trust dashboard enabled (the free tier is fine).
    - URL: `127.0.0.1:8010`
 
    That is the **only** ingress rule. Do not add rules for `9001`
-   (MinIO console), `5432` (Postgres), or any other internal port.
+   (MinIO console, where MinIO runs), `5432` (Postgres), or any other
+   internal port.
 
 4. **Launch.** Once the rest of the stack is up (next section), the
    `cloudflared` service authenticates with the token and the public
@@ -535,7 +552,7 @@ sudo -u tckdb chmod 600 .env.selfhosted .env.db-admin
 sudo -u tckdb $EDITOR .env.selfhosted .env.db-admin  # fill every placeholder
 
 # 1. Bring up the data plane
-docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db minio
+docker compose --env-file .env.selfhosted --env-file .env.db-admin up -d db seaweedfs
 
 # 2. Run migrations.
 #    For first bootstrap of an empty DB this is straightforward.
@@ -608,10 +625,19 @@ off-box target — examples:
 Schedule via a second timer or piggyback on the existing one. Encrypt
 at the storage layer (rclone crypt or B2 server-side encryption).
 
-### MinIO artifact backups
+### Artifact backups
 
 If `S3_BUCKET=tckdb-artifacts` accumulates real data (parsed-output
-attachments etc.), mirror it the same way:
+attachments etc.), mirror it the same way. Any S3 client can copy the bucket out through the S3 API, whatever store
+serves it (SeaweedFS, MinIO, AWS S3). With `rclone`, given a remote named
+`tckdb` configured for `S3_ENDPOINT_URL` and the S3 keys:
+
+```bash
+rclone sync tckdb:tckdb-artifacts /srv/backups/tckdb-artifacts/$(date +%F)
+```
+
+On a MinIO deployment, MinIO's own client inside the container does the
+same:
 
 ```bash
 docker compose exec -T minio \
@@ -662,7 +688,7 @@ Three log sources, three rotation strategies — all bounded:
 
    Apply with `sudo systemctl restart systemd-journald`.
 
-2. **Docker container logs (db, minio, cloudflared).** The compose
+2. **Docker container logs (db, seaweedfs, cloudflared).** The compose
    file pins `json-file` driver with `max-size: 10m`, `max-file: 5`
    per service.
 
@@ -970,7 +996,7 @@ cloudflared`. For nginx/Caddy/Traefik: stop or reload the proxy with a
 503-everything config.
 
 This drops the public surface — for Cloudflare Tunnel the URL returns
-the "tunnel offline" page. Everything else — Postgres, MinIO, the API
+the "tunnel offline" page. Everything else — Postgres, the object store, the API
 — stays up on loopback so you can debug at leisure.
 
 ---

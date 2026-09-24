@@ -868,7 +868,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Replay.may_succeed default: this is the half of the "
                 "original pair where the 503's retry advice was true all "
                 "along, and it is the entry that makes the new field's "
-                "guard non-vacuous."
+                "guard non-vacuous. One exception, measured in #541: "
+                "SeaweedFS, the default store, answers a full store (disk, "
+                "volume slots, or an enforced bucket quota) with a generic "
+                "InternalError 500 that cannot be told apart from a "
+                "transient fault, so a full SeaweedFS store lands here "
+                "rather than at artifact_storage_full, and retrying does not "
+                "help until an operator frees space. The detail says so: "
+                "'If this persists, the store may be full.'"
             )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
