@@ -354,12 +354,18 @@ def test_observations_is_absent_on_an_observation_when_not_requested(
 def test_the_group_surface_still_returns_its_observations_without_nesting(
     client, db_session
 ):
-    """The group's own ``include=observations`` is unchanged in shape.
+    """The group's own default ``include=observations`` shape (issue #537).
 
-    It is the surface the new block borrowed its shape from, so a regression
-    here would mean the two have quietly diverged — and the embedded records
-    must not have grown sibling lists of their own, which on a group of *n*
-    observations would be *n* copies of the same list.
+    As of issue #537, a bare ``include=observations`` on the group surface
+    no longer embeds a full ``ScientificConformerObservationRecord`` per
+    observation — that cascaded every other requested token onto every
+    embedded observation, multiplying with basin size (see
+    ``ConformerObservationGroupSummary``'s own docstring). The default is
+    now a lean ref+review+origin+note summary, the same terminating shape
+    ``ConformerObservationSiblingSummary`` established for the sibling
+    case (issue #269/PR #535) — so there is no ``observations`` key on an
+    embedded entry to recurse into at all, which is what stops the
+    recursion here.
     """
     group, observations = _make_group_with_observations(db_session, n=3)
 
@@ -370,4 +376,34 @@ def test_the_group_surface_still_returns_its_observations_without_nesting(
 
     block = body["record"]["observations"]
     assert len(block) == len(observations)
+    assert all(sorted(o.keys()) == ["conformer_observation"] for o in block)
+
+
+def test_the_group_surface_nests_full_records_only_with_observation_details(
+    client, db_session
+):
+    """``include=observations,observation_details`` restores the full,
+    pre-#537 embedded-record shape — deliberately, only when the caller
+    names ``observation_details`` explicitly — and that full shape still
+    does not grow its OWN sibling list: the nested set stripped before
+    building each embedded record removes ``observations`` (and
+    ``observation_details`` itself), so an embedded observation's own
+    ``observations`` field is always ``None`` even under this token,
+    which is what terminates recursion for the expanded shape the same
+    way the lean summary's structural absence terminates it for the
+    default one above.
+    """
+    group, observations = _make_group_with_observations(db_session, n=3)
+
+    body = client.get(
+        f"/api/v1/scientific/conformer-groups/{group.public_ref}"
+        "?include=observations,observation_details"
+    ).json()
+
+    block = body["record"]["observations"]
+    assert len(block) == len(observations)
     assert all(o["observations"] is None for o in block)
+    # The full shape carries its own evidence summary / available_sections
+    # / conformer_group / species -- keys the lean summary above never has.
+    assert all("evidence_summary" in o for o in block)
+    assert all("conformer_group" in o for o in block)

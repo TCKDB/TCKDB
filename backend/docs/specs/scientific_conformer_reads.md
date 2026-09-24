@@ -537,10 +537,11 @@ fragment rather than redefining it.
 
 ## 5. Include behavior
 
-Legal include tokens (six public + `internal_ids`):
+Legal include tokens (seven public + `internal_ids`):
 
 ```text
 observations
+observation_details
 selections
 calculations
 geometries
@@ -549,11 +550,31 @@ internal_ids
 all
 ```
 
+`observation_details` gates no field of its own — it only selects which
+shape the group surface's `observations[*]` entries take (see below) and
+is excluded from `include=all`, on purpose: it is the one token whose
+whole job is to opt into a response that multiplies with basin size, so
+a caller must name it explicitly (issue #537).
+
 Group detail (`/conformer-groups/{handle}`):
 
 ```text
-include=observations    — list of ScientificConformerObservationRecord
-                          per observation under the group
+include=observations    — list of embedded observations under the group.
+                          Default shape (observation_details absent):
+                          ConformerObservationGroupSummary per
+                          observation — ref, review, scientific_origin,
+                          note. calculations/geometries/selections/review
+                          requested alongside observations populate this
+                          record's OWN same-named fields, never the
+                          embedded observations'.
+include=observation_details
+                        — only meaningful together with `observations`.
+                          Switches every embedded entry to the full
+                          ScientificConformerObservationRecord shape
+                          (its own calculations/geometries/selections/
+                          review_history, still gated per-field by
+                          whichever of those tokens are also requested).
+                          This is the pre-#537 behavior, now opt-in.
 include=selections      — already on by default in the bounded
                           selection_summary; the include token surfaces
                           per-row note + created_at + scheme summary
@@ -568,7 +589,7 @@ include=fingerprints    — populates conformer_group.fingerprint (numeric
                           rotor)
 include=all             — observations + selections + calculations +
                           geometries + review + fingerprints (never
-                          internal_ids)
+                          internal_ids, never observation_details)
 include=internal_ids    — Phase D policy gate
 ```
 
@@ -580,29 +601,39 @@ include=geometries      — output-geometry links for this observation's
                           calcs
 include=review          — record_review row history for the observation
 include=observations    — the sibling observations in this record's
-                          conformer group, this one included; the same
-                          list the group surface returns under the same
-                          token. Was a documented no-op until PR 2.
+                          conformer group, this one included, always as
+                          the lean ConformerObservationSiblingSummary
+                          projection (ref + review; issue #269/PR #535).
+                          Was a documented no-op until PR 2.
+include=observation_details
+                        — legal here (shared vocabulary with the group
+                          surface) but a no-op: the sibling list has only
+                          the one shape.
 include=selections      — the parent group's selections
 include=fingerprints    — populates the embedded conformer_group's
                           fingerprint (same shape as group detail)
 include=all             — observations + selections + calculations +
                           geometries + review + fingerprints (never
-                          internal_ids)
+                          internal_ids, never observation_details)
 include=internal_ids    — Phase D policy gate
 ```
 
 Search (`/conformers/search`):
 
 ```text
-include=observations    — embed observation records under each group
+include=observations    — embed observations under each group record,
+                          same default-vs-observation_details shape
+                          choice as group detail above
+include=observation_details
+                        — same meaning as on group detail, per record
 include=selections      — extra per-row selection detail beyond the
                           bounded selection_summary
 include=calculations    — embed calc summaries on each record
 include=geometries      — embed geometry links on each record
 include=review          — embed review history on each record
 include=fingerprints    — populates each record's conformer_group.fingerprint
-include=all             — six public tokens above (never internal_ids)
+include=all             — six public tokens above (never internal_ids,
+                          never observation_details)
 include=internal_ids    — Phase D policy gate
 ```
 

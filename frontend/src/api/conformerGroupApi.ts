@@ -68,7 +68,18 @@ export async function loadConformerGroup(
     onRateLimited?: (retryAfterSeconds: number) => void,
 ): Promise<ConformerGroup> {
     const query = new URLSearchParams()
-    for (const include of ["observations", "calculations", "geometries"]) query.append("include", include)
+    // `observation_details` is required alongside `observations` to get
+    // each embedded observation's own `calculations`/`geometries` inline
+    // -- since issue #537, the default `observations` shape is a lean
+    // per-observation summary (ref/review/origin/note only) and does not
+    // carry either. Without this token this page's `ObservationCard`
+    // would render every observation with an empty calculation table and
+    // no geometry links, even though calculations/geometries WAS
+    // requested (that token now only populates this record's OWN
+    // `calculations`/`geometries` fields, not the embedded observations').
+    for (const include of ["observations", "observation_details", "calculations", "geometries"]) {
+        query.append("include", include)
+    }
     const endpoint = `/api/v1/scientific/conformer-groups/${encodeURIComponent(ref)}?${query}`
     const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(response, payload, "conformer group").record

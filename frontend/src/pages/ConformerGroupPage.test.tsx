@@ -119,8 +119,14 @@ const payload = {
 describe("ConformerGroupPage", () => {
     it("keeps observations, calculation stages, methods, and geometry inventory distinct", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", ({ request }) => {
+            // `observation_details` is required alongside `observations` to
+            // get each embedded observation's own calculations/geometries
+            // expanded inline (issue #537) -- without it the response would
+            // carry only a lean per-observation summary and this page's
+            // observation cards would render empty. Mutation check: drop
+            // the token from `loadConformerGroup` and this assertion fails.
             expect(new URL(request.url).searchParams.getAll("include"))
-                .toEqual(["observations", "calculations", "geometries"])
+                .toEqual(["observations", "observation_details", "calculations", "geometries"])
             return HttpResponse.json(payload)
         }))
 

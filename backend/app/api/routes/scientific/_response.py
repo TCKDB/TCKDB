@@ -319,16 +319,22 @@ TRANSITION_STATE_RECORD_SECTIONS = IncludeGatedSections(
 # ``/conformer-observations/{ref}`` — one vocabulary, two record shapes
 # that carry the same five fields. The two-depth nesting the
 # transition-state family has (``entries[*].calculations`` and friends)
-# applies here too, but *only* on the group surface:
-# ``ScientificConformerGroupRecord.observations[*]`` is a full nested
-# record and so still carries its own ``selections``/``calculations``/
-# ``geometries``/``review_history`` keys when requested. On the
-# observation surface, ``ScientificConformerObservationRecord.
-# observations[*]`` (the sibling list) is the lean
-# ``ConformerObservationSiblingSummary`` projection and never carries any
-# of those keys at all — trimmed for size, see issue #269. ``ANYWHERE_SCOPE``
-# still strips correctly either way: a key the sibling summary does not
-# have is simply not found and not touched.
+# can apply here too, but *only* on the group surface and *only* when the
+# caller also requests ``observation_details``:
+# ``ScientificConformerGroupRecord.observations[*]`` is then a full
+# nested record and carries its own ``selections``/``calculations``/
+# ``geometries``/``review_history`` keys when requested. Without
+# ``observation_details``, each entry is the lean
+# ``ConformerObservationGroupSummary`` projection (issue #537) and has
+# none of those keys to strip. On the observation surface,
+# ``ScientificConformerObservationRecord.observations[*]`` (the sibling
+# list) is, unconditionally, the lean ``ConformerObservationSiblingSummary``
+# projection and never carries any of those keys at all — trimmed for
+# size, see issue #269. ``ANYWHERE_SCOPE`` still strips correctly in
+# every case: a key a given shape does not have is simply not found and
+# not touched. ``observation_details`` itself is not a table entry —
+# it names no field of its own; it only selects which of the two shapes
+# above ``build_group_record`` builds, before the strip ever runs.
 # ``assignment_scheme`` is *not* here: no token names it, and it is ``null``
 # because this observation has no scheme.
 CONFORMER_RECORD_SECTIONS = IncludeGatedSections(

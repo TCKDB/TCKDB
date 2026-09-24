@@ -191,13 +191,10 @@ class ConformerObservationSiblingSummary(BaseModel):
     **conformer-observation** detail surface only — i.e. it is the type
     of ``ScientificConformerObservationRecord.observations``, which
     exists to answer the one question an observation-grained record
-    cannot answer about itself: what else is in this basin. It is
-    *not* the type embedded when a conformer-*group* record expands its
-    own ``observations`` include (``ScientificConformerGroupRecord.
-    observations``, still ``ScientificConformerObservationRecord``
-    there) — that surface's consumer renders each observation's own
-    calculations and output geometries and genuinely needs the richer
-    shape.
+    cannot answer about itself: what else is in this basin. See
+    :class:`ConformerObservationGroupSummary` for the analogous, but
+    slightly richer, projection the **conformer-group** surface embeds
+    under its own ``observations`` include by default.
 
     Before this type existed, a sibling was built as a full
     :class:`ScientificConformerObservationRecord` with every include
@@ -213,6 +210,45 @@ class ConformerObservationSiblingSummary(BaseModel):
     """
 
     conformer_observation: ConformerObservationSiblingCore
+
+
+class ConformerObservationGroupSummary(BaseModel):
+    """One embedded observation under a conformer **group**'s
+    ``observations`` block, by default.
+
+    Populated under ``include=observations`` on the
+    **conformer-group** detail (and search) surface whenever
+    ``observation_details`` is *not* also requested — see
+    :func:`app.services.scientific_read.conformers.build_group_record`.
+    Carries what a *list* of a basin's observations needs: identity
+    (``conformer_observation_ref``), review status, ``scientific_origin``
+    (computed / experimental / estimated) and ``note`` — the four facts
+    the group page's own observation cards render regardless of whether
+    an observation has any calculations at all. Deliberately richer than
+    :class:`ConformerObservationSiblingCore` (which drops
+    ``scientific_origin``/``note`` because nothing that reads a sibling
+    reads those either): this projection has a different reader with a
+    different need, not the same one duplicated.
+
+    What it does **not** carry is calculations, geometries, selections,
+    review history or its own evidence summary — before ``observation_
+    details`` existed as an explicit opt-in, every embedded observation
+    was a full :class:`ScientificConformerObservationRecord` (every
+    include token minus ``observations``), so a caller requesting
+    ``include=observations,selections,review`` on the group surface got
+    every one of those sections duplicated onto every observation, never
+    requested them there, and paid a cost that multiplied with basin
+    size without ever asking for it (issue #537, following the same
+    shape #269/PR #535 fixed on the observation-sibling case above). A
+    caller that genuinely needs an observation's own calculations and
+    geometries inline — the group page's own use — asks for both
+    explicitly: ``include=observations,observation_details,calculations,
+    geometries``, which builds :class:`ScientificConformerObservationRecord`
+    entries instead, still gated by whichever of ``calculations`` /
+    ``geometries`` / ``selections`` / ``review`` the caller also named.
+    """
+
+    conformer_observation: ConformerObservationCoreBlock
 
 
 # ---------------------------------------------------------------------------
@@ -583,6 +619,18 @@ class ScientificConformerGroupRecord(BaseModel):
     (``observations`` / ``selections`` / ``calculations`` /
     ``geometries`` / ``review_history``) are populated only when the
     caller opts in.
+
+    ``observations`` is one of two shapes depending on whether
+    ``observation_details`` is also requested alongside ``observations``
+    (see :func:`app.services.scientific_read.conformers.build_group_record`
+    and :class:`ConformerObservationGroupSummary`): a lean per-observation
+    summary by default, or the full :class:`ScientificConformerObservationRecord`
+    — with its own calculations/geometries/selections/review history — only
+    when a caller deliberately opts into the heavier shape. This is the
+    fix for issue #537: previously ``observations`` was unconditionally
+    the full shape, so every include token requested at the group level
+    cascaded onto every embedded observation as well, multiplying with
+    basin size.
     """
 
     conformer_group: ConformerGroupCoreBlock
@@ -593,7 +641,11 @@ class ScientificConformerGroupRecord(BaseModel):
     available_sections: AvailableConformerSections
 
     # Optional include blocks
-    observations: list[ScientificConformerObservationRecord] | None = None
+    observations: (
+        list[ConformerObservationGroupSummary]
+        | list[ScientificConformerObservationRecord]
+        | None
+    ) = None
     selections: list[ConformerSelectionSummary] | None = None
     calculations: list[ConformerCalculationSummary] | None = None
     geometries: list[ConformerGeometryLink] | None = None
@@ -636,6 +688,7 @@ __all__ = [
     "ConformerObservationCoreBlock",
     "ConformerObservationDetailRequest",
     "ConformerObservationEvidenceSummary",
+    "ConformerObservationGroupSummary",
     "ConformerObservationsSummary",
     "ConformerReviewEntry",
     "ConformerRotorTorsion",

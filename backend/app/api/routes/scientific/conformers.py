@@ -140,8 +140,11 @@ def scientific_conformers_search_get(
     )
     payload = search_conformers(session, request_obj)
     visibility = apply_internal_ids_visibility(payload)
-    # Every gated block is materialised again on each nested
-    # ``observations[*]`` record, so the strip has to reach both depths.
+    # A gated field is materialised again on each nested
+    # ``observations[*]`` record only when ``observation_details`` is
+    # also requested (issue #537) -- the default lean summary shape has
+    # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
+    # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
         visibility,
         payload,
@@ -175,8 +178,11 @@ def scientific_conformers_search_post(
         )
     payload = search_conformers(session, body)
     visibility = apply_internal_ids_visibility(payload)
-    # Every gated block is materialised again on each nested
-    # ``observations[*]`` record, so the strip has to reach both depths.
+    # A gated field is materialised again on each nested
+    # ``observations[*]`` record only when ``observation_details`` is
+    # also requested (issue #537) -- the default lean summary shape has
+    # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
+    # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
         visibility,
         payload,
@@ -206,8 +212,11 @@ def scientific_conformer_group_detail(
         include=parse_include(include),
     )
     visibility = apply_internal_ids_visibility(payload)
-    # Every gated block is materialised again on each nested
-    # ``observations[*]`` record, so the strip has to reach both depths.
+    # A gated field is materialised again on each nested
+    # ``observations[*]`` record only when ``observation_details`` is
+    # also requested (issue #537) -- the default lean summary shape has
+    # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
+    # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
         visibility,
         payload,
@@ -239,8 +248,11 @@ def scientific_conformer_observation_detail(
         include=parse_include(include),
     )
     visibility = apply_internal_ids_visibility(payload)
-    # Every gated block is materialised again on each nested
-    # ``observations[*]`` record, so the strip has to reach both depths.
+    # A gated field is materialised again on each nested
+    # ``observations[*]`` record only when ``observation_details`` is
+    # also requested (issue #537) -- the default lean summary shape has
+    # none of these keys to strip. ``ANYWHERE_SCOPE`` still has to reach
+    # both depths, since the full shape can appear at either one.
     return omit_unrequested_sections(
         visibility,
         payload,

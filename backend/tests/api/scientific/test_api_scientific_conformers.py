@@ -752,6 +752,176 @@ def test_cg_detail_include_observations(client, db_session):
     assert refs == {obs[0].public_ref, obs[1].public_ref}
 
 
+# ---------------------------------------------------------------------------
+# Issue #537: the group surface's ``observations`` no longer cascades every
+# other requested token onto every embedded observation. Default shape is a
+# lean summary; ``observation_details`` opts into the full, pre-#537 shape.
+# ---------------------------------------------------------------------------
+
+
+def _make_group_with_full_evidence(db_session, *, n_observations=2):
+    """A group whose observations each carry a calc + output geometry, plus
+    a group-level selection and group-level review -- everything the
+    ``observations,calculations,geometries,selections,review`` combination
+    can possibly cascade onto an embedded observation, so a test against it
+    catches every field the lean summary must NOT carry.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=n_observations)
+    calcs = {}
+    geoms = {}
+    for o in obs:
+        calc, geom = _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=o,
+            calc_type=CalculationType.opt,
+            with_geom=True,
+        )
+        calcs[o.id] = calc
+        geoms[o.id] = geom
+    attach_conformer_selection(
+        db_session, conformer_group=cg, selection_kind=ConformerSelectionKind.lowest_energy
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.conformer_group,
+        record_id=cg.id,
+        status=RecordReviewStatus.approved,
+    )
+    return entry, cg, obs, calcs, geoms
+
+
+def test_cg_detail_include_observations_default_is_a_lean_summary(client, db_session):
+    """Without ``observation_details``, every heavy token requested
+    alongside ``observations`` populates ONLY this record's own same-named
+    field -- never the embedded observations, regardless of how many other
+    tokens are requested at once.
+    """
+    _, cg, obs, _calcs, _geoms = _make_group_with_full_evidence(db_session)
+    body = client.get(
+        _cg_url(
+            cg.public_ref,
+            include="observations,calculations,geometries,selections,review",
+        )
+    ).json()
+    record = body["record"]
+
+    # The record's OWN blocks are populated as normal.
+    assert record["calculations"] is not None and len(record["calculations"]) == 2
+    assert record["geometries"] is not None and len(record["geometries"]) == 2
+    assert record["selections"] is not None and len(record["selections"]) == 1
+    assert record["review_history"] is not None and len(record["review_history"]) == 1
+
+    block = record["observations"]
+    assert block is not None
+    assert len(block) == 2
+    for entry in block:
+        # Lean summary: exactly one key, the same terminating shape the
+        # observation-surface sibling summary uses (issue #269/PR #535).
+        assert sorted(entry.keys()) == ["conformer_observation"]
+        core = entry["conformer_observation"]
+        assert set(core.keys()) >= {
+            "conformer_observation_ref", "scientific_origin", "note", "review",
+        }
+        assert core["conformer_observation_ref"] in {o.public_ref for o in obs}
+
+
+def test_cg_detail_include_observation_details_expands_each_observation(
+    client, db_session
+):
+    """``observation_details`` restores the full per-observation shape,
+    with each observation's own ``calculations``/``geometries`` -- not the
+    whole group's -- and still gated by the ``calculations``/``geometries``
+    tokens themselves.
+    """
+    _, cg, obs, calcs, geoms = _make_group_with_full_evidence(db_session)
+    body = client.get(
+        _cg_url(
+            cg.public_ref,
+            include="observations,observation_details,calculations,geometries",
+        )
+    ).json()
+    block = body["record"]["observations"]
+    assert len(block) == 2
+    by_ref = {
+        entry["conformer_observation"]["conformer_observation_ref"]: entry
+        for entry in block
+    }
+    for o in obs:
+        entry = by_ref[o.public_ref]
+        # Full shape: carries the parent core block + species + its own
+        # evidence summary, none of which the lean summary has.
+        assert "conformer_group" in entry
+        assert "species" in entry
+        assert "evidence_summary" in entry
+        assert entry["calculations"] is not None
+        assert [c["calculation_ref"] for c in entry["calculations"]] == [
+            calcs[o.id].public_ref
+        ]
+        assert entry["geometries"] is not None
+        assert [g["geometry"]["geometry_ref"] for g in entry["geometries"]] == [
+            geoms[o.id].public_ref
+        ]
+
+
+def test_cg_detail_observation_details_without_observations_is_a_noop(
+    client, db_session
+):
+    """``observation_details`` alone -- without ``observations`` -- names no
+    field of its own and gates nothing by itself."""
+    _, cg, _obs, _calcs, _geoms = _make_group_with_full_evidence(db_session)
+    body = client.get(_cg_url(cg.public_ref, include="observation_details")).json()
+    assert "observations" not in body["record"]
+
+
+def test_cg_detail_include_all_never_expands_observation_details(client, db_session):
+    """``include=all`` must never buy the expensive combination as a side
+    effect of asking for "everything" -- ``observation_details`` requires
+    explicit opt-in (issue #537), the same rule ``points`` follows on the
+    network-kinetics surface."""
+    _, cg, _obs, _calcs, _geoms = _make_group_with_full_evidence(db_session)
+    body = client.get(_cg_url(cg.public_ref, include="all")).json()
+    assert "observation_details" not in body["request"]["include"]
+    block = body["record"]["observations"]
+    assert block is not None
+    assert all(sorted(entry.keys()) == ["conformer_observation"] for entry in block)
+
+
+def test_cg_detail_include_observations_default_measured_response_size(
+    client, db_session
+):
+    """Regression pin for issue #537's measured claim: with several
+    observations each carrying their own evidence, requesting the full
+    combination WITHOUT ``observation_details`` must not scale with basin
+    size the way it did before this fix. Six observations, matching PR
+    #535's own fixture size for the sibling case this borrows its shape
+    from."""
+    _, cg, obs, _calcs, _geoms = _make_group_with_full_evidence(
+        db_session, n_observations=6
+    )
+    lean = client.get(
+        _cg_url(
+            cg.public_ref,
+            include="observations,calculations,geometries,selections,review",
+        )
+    )
+    expanded = client.get(
+        _cg_url(
+            cg.public_ref,
+            include="observations,observation_details,calculations,geometries,selections,review",
+        )
+    )
+    assert len(lean.content) < len(expanded.content)
+    lean_block = lean.json()["record"]["observations"]
+    expanded_block = expanded.json()["record"]["observations"]
+    assert len(lean_block) == len(expanded_block) == 6
+    # The lean block does not grow with what each observation carries;
+    # the expanded one does (each entry duplicates the parent core block,
+    # species context, and its own calculations/geometries).
+    assert all(sorted(e.keys()) == ["conformer_observation"] for e in lean_block)
+    assert all("calculations" in e for e in expanded_block)
+
+
 def test_cg_detail_include_selections(client, db_session):
     _, cg, _ = _make_group_with_obs(db_session)
     attach_conformer_selection(

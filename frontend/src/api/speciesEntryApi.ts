@@ -141,7 +141,18 @@ export async function loadEntryConformers(
     // load of this list -- rather than lazily, per card -- costs nothing
     // meaningful and lets `ConformerSelector` render it without a second
     // round trip per card.
-    for (const include of ["observations", "calculations", "geometries", "fingerprints"]) {
+    //
+    // `observation_details` is required alongside `observations` to get
+    // each embedded observation's own `calculations` -- since issue #537
+    // the default `observations` shape is a lean summary with no
+    // `calculations` field at all. `domain/conformerEvidence.ts`'s
+    // `optimizationStaging` reads `observation.calculations` per
+    // observation (its `everyObservationLoaded` check) to tell a
+    // per-observation staging verdict from a merely aggregate one; without
+    // this token every observation's `calculations` would be `undefined`,
+    // silently downgrading every conformer card on this page from a
+    // per-observation staging statement to the aggregate-only one.
+    for (const include of ["observations", "observation_details", "calculations", "geometries", "fingerprints"]) {
         query.append("include", include)
     }
     const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
