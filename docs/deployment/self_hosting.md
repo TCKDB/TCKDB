@@ -18,7 +18,7 @@ A TCKDB deployment has four moving parts:
 | Piece | What it is | How it's usually run |
 |---|---|---|
 | **PostgreSQL (RDKit)** | the database | a container (stateful, pinned image) |
-| **MinIO / S3** | artifact object store | a container |
+| **S3 object store** | artifact object store (SeaweedFS by default; any S3-compatible service) | a container, or a hosted service such as AWS S3 |
 | **API** | the FastAPI app (`uvicorn app.api.app:create_app --factory`) | container **or** native process |
 | **Ingress** | public TLS + hostname | a Cloudflare tunnel or reverse proxy |
 
@@ -31,7 +31,7 @@ uncontroversial part. The real choice is **how you run the API**.
 
 ### Pattern A — Fully containerized (recommended default)
 
-Everything (DB, MinIO, API, worker) is a container; `docker compose up` brings
+Everything (DB, object store, API, worker) is a container; `docker compose up` brings
 the whole stack up. The API runs from a published image
 (`docker.io/laxzal/tckdb-api`, built by
 [`.github/workflows/build-api-image.yml`](../../.github/workflows/build-api-image.yml)).
@@ -45,7 +45,7 @@ the whole stack up. The API runs from a published image
 
 ### Pattern B — Native API + containerized infra
 
-DB and MinIO are containers; the API runs as a **native process** under
+DB and object store are containers; the API runs as a **native process** under
 **systemd**, from a conda/micromamba environment. Ingress via a Cloudflare
 tunnel.
 
@@ -79,8 +79,13 @@ This is the reference setup for a Raspberry Pi.
 
 ```bash
 cd <repo>
-docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db minio
+docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db seaweedfs
 ```
+
+> **Already running MinIO?** Keep it: start `minio` instead of `seaweedfs`
+> (`... --profile minio up -d db minio`). Your artifacts are in the
+> `tckdb_minio` volume, and `seaweedfs` would start on an empty one. Moving
+> them across is a separate, verified copy that is not written yet.
 
 `.env.pi` holds only runtime DB credentials, S3 keys, rate-limit config,
 cookie/security settings, etc. `.env.pi.db-admin` holds the database
@@ -219,8 +224,8 @@ systemctl list-timers tckdb-backup.timer
 > with it. Add an `rsync`/`rclone` step to copy each dump to another
 > machine or a cloud bucket.
 
-Artifacts (MinIO) are a separate backup concern; mirror the object store too if
-you rely on it.
+Artifacts (the object store) are a separate backup concern; mirror the bucket
+too if you rely on it (any S3 client works, e.g. `rclone sync`).
 
 ### Migrations on a deployed DB
 
@@ -269,7 +274,7 @@ change rather than a moving `:latest`.
 
 | Task | Command |
 |---|---|
-| Bring up infra | `docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db minio` |
+| Bring up infra | `docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db seaweedfs` (`--profile minio ... db minio` on a MinIO deployment) |
 | API status / logs | `systemctl status tckdb-api` · `journalctl -u tckdb-api -f` |
 | Restart API | `sudo systemctl restart tckdb-api` |
 | Apply migrations | `alembic upgrade head` (env sourced; back up first) |

@@ -54,7 +54,7 @@ conda run -n tckdb_env python -m pip install -e "backend[dev]"
 ## 2. Start an empty database and object store, migrate to head
 
 ```bash
-docker compose up -d db minio
+docker compose up -d db seaweedfs
 ```
 
 The backend reads its database from these environment variables

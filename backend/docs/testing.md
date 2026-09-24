@@ -619,10 +619,16 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
 - The pytest fixture creates a fresh `tckdb_test` database via
   `alembic upgrade head` once per session (see
   [`tests/conftest.py`](../tests/conftest.py)) and rolls each test
-  back inside its own transaction. Tests that commit raw bytes to
-  external storage (MinIO) skip themselves when MinIO is not
-  reachable — that's expected on a workstation without the dev
-  container running.
+  back inside its own transaction. Tests that talk to the real object
+  store (`S3_ENDPOINT_URL`; SeaweedFS from `docker-compose.yml`) skip
+  themselves when it is not reachable — expected on a workstation
+  without the dev container running. **On CI they fail instead**
+  (`GITHUB_ACTIONS=true`): CI always starts a store, so not reaching
+  it is a broken setup, and a skip there would pass a gate that tested
+  nothing. See `tests/services/_live_object_store.py`. To run them
+  locally, start `seaweedfs` (or point the `S3_*` variables at any S3
+  store) and create `S3_BUCKET` first, as CI's "Initialize artifact
+  bucket" step does.
 
 ### The ambient session factory
 
@@ -860,7 +866,8 @@ nights, attached to no PR and explained by nothing in the file. Both workflows
 now present the same empty database, so that class of coupling fails the pull
 request that introduces it.
 
-Each CI job owns an isolated Postgres service and MinIO service. Its
+Each CI job owns an isolated Postgres service and SeaweedFS service (MinIO
+until #541). Its
 `DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
 job role, so concurrent jobs and workflow runs do not share test resources.
 The run token now makes the `DB_TEST_NAME` half of that redundant for
@@ -951,7 +958,7 @@ usefulness:
 
 ```
 slow          # exceeds a stated wall-time budget
-integration   # needs a running DB / MinIO / external service
+integration   # needs a running DB / object store / external service
 external      # hits a real third-party API (CCCBDB, DOI, ISBN)
 smoke         # opt-in liveness/sanity tests (already a directory)
 ```
@@ -993,7 +1000,7 @@ Things still worth knowing:
 - Worker count is a tuning knob, not a core count — the Postgres server is
   shared. 8 is the measured default; see the header of
   [`scripts/lib/pytest_run_args.sh`](../scripts/lib/pytest_run_args.sh).
-- The MinIO bucket is **not** per worker. Artifact tests key objects by content
+- The object-store bucket is **not** per worker. Artifact tests key objects by content
   hash or by row id from their own worker-local database, so they do not
   collide today, but a future test that writes a fixed object key would.
 - `--dist load` (the default) may split one file across workers. Nothing in the

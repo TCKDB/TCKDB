@@ -421,7 +421,8 @@ A few supporting structures complete the picture:
   timer, and a startup guard that refuses to boot a publicly-exposed
   instance with unsafe settings), or the hosted community database.
   Docker currently provides the data plane (PostgreSQL with the RDKit
-  cartridge, MinIO for artifacts); the API itself runs from a conda
+  cartridge, SeaweedFS or any S3-compatible store for artifacts); the
+  API itself runs from a conda
   environment — API containerization is the next packaging milestone.
 - **Migrations as history.** The schema itself follows the append-only
   philosophy: a baseline Alembic revision plus layered revisions, with

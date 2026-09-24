@@ -60,13 +60,13 @@ HPC compute node                       Reachable TCKDB API
 │   → parses results         │  HTTPS  │ single-machine private   │
 │   → POST /api/v1/uploads…  │ ──────► │ TCKDB deployment         │
 │      X-API-Key: tck_…      │         │   PostgreSQL+RDKit       │
-└────────────────────────────┘         │   MinIO / S3 artifacts   │
+└────────────────────────────┘         │   S3 store (artifacts)   │
                                        └──────────────────────────┘
 ```
 
 Properties of this pattern:
 
-- **No database, no backend, no MinIO** runs in the compute job. The
+- **No database, no backend, no object store** runs in the compute job. The
   job is *just* a TCKDB client.
 - The job needs only `TCKDB_BASE_URL` and `TCKDB_API_KEY`; everything
   else is the same as any other API client. See

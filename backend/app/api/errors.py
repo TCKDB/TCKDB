@@ -617,7 +617,14 @@ def _artifact_storage_unavailable_handler(
     return JSONResponse(
         status_code=503,
         content={
-            "detail": "Artifact storage is temporarily unavailable. Retry later.",
+            # The second sentence is for SeaweedFS, which answers a full
+            # store with a generic ``InternalError`` 500 that cannot be told
+            # apart from a transient fault, so it lands here rather than at
+            # 507 ``artifact_storage_full``. See ``_STORAGE_FULL_CODES``.
+            "detail": (
+                "Artifact storage is temporarily unavailable. Retry later. "
+                "If this persists, the store may be full."
+            ),
             "code": "artifact_storage_unavailable",
             "context": {},
         },

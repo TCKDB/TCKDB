@@ -64,7 +64,7 @@ their own users and downstream workflow tools.
 - Public reach is provided by a Cloudflare Tunnel or a reverse proxy
   (nginx/Caddy/Traefik) mapping a public hostname to the local API
   port. Router port-forwarding is discouraged.
-- Postgres and object storage (MinIO/S3) must never be exposed
+- Postgres and object storage (SeaweedFS or another S3 store) must never be exposed
   publicly. Only the API is reachable through the tunnel/proxy.
 - The canonical self-hosted single-node recipe belongs in this mode
   — see [self_hosted_single_node.md](self_hosted_single_node.md) for

@@ -42,7 +42,8 @@ jobs:
         # anonymous pulls from GitHub's shared address pool, and it failed
         # "Initialize containers" on every backend gate before checkout, so
         # every pull request went red at once with no test output -- the
-        # same failure class as the MinIO outage of 2026-09-12 below. The
+        # same failure class as the MinIO outage of 2026-09-12 (see the
+        # object store service below). The
         # vendor publishes this image only on Docker Hub, so the fix is to
         # authenticate rather than move registries. These are the same
         # secrets build-api-image.yml already uses to push.
@@ -75,36 +76,50 @@ jobs:
           --health-timeout 5s
           --health-retries 10
 
-      minio:
-        # Was quay.io, pinned by digest. `minio/minio:latest` on Docker Hub
-        # became unpullable on 2026-09-12 ("pull access denied ...
-        # repository does not exist or may require 'docker login'"),
-        # which failed "Initialize containers" on every backend gate
-        # before checkout, so every backend pull request went red at once
-        # with no test output. quay.io is MinIO's own registry and serves
-        # the identical image (same manifest digest).
+      seaweedfs:
+        # The S3 object store the artifact tests write to. It was MinIO until
+        # 2026-09-24, when MinIO withdrew its public images from every
+        # registry (after `minio/minio:latest` had already vanished from
+        # Docker Hub on 2026-09-12 and failed every backend gate before
+        # checkout). SeaweedFS replaces it as the default store TCKDB ships
+        # (#541): Apache-2.0, actively released, one binary serving S3, with
+        # linux/amd64 and linux/arm64 images published by the project.
         #
-        # Pinned by digest, not by `latest`: an unpinned upstream tag is
-        # what turned someone else's publishing change into this repo's
-        # outage. A digest cannot move under us.
-        # 2026-09-24: MinIO withdrew its images from BOTH registries --
-        # quay.io and Docker Hub refuse every tag and digest, anonymous or
-        # logged in. This is a private mirror of the exact release the
-        # storage tests were measured against (RELEASE.2025-09-07T16-13-09Z,
-        # amd64, pushed from a cached copy of upstream digest sha256:14cea493…),
-        # so it needs the same Docker Hub login as the postgres service.
-        image: laxzal/minio@sha256:a1a8bd4ac40ad7881a245bab97323e18f971e4d4cba2c2007ec1bedd21cbaba2
+        # Pinned by digest, not by tag: an unpinned upstream tag is what
+        # turned someone else's publishing change into this repo's outage on
+        # 2026-09-12. This is release 4.47 (the multi-arch index digest).
+        #
+        # The image is public and pulls anonymously, but the pull is still
+        # authenticated: anonymous Docker Hub pulls from GitHub's shared
+        # address pool are what the postgres service above was refused.
+        #
+        # `weed mini` runs master, volume, filer and S3 gateway in one
+        # process. The S3 gateway listens on 9000, where MinIO did, so
+        # S3_ENDPOINT_URL is unchanged. AWS_ACCESS_KEY_ID/SECRET become its
+        # admin identity; without them SeaweedFS accepts ANY request,
+        # signed or not. Telemetry, WebDAV, the admin UI and the Iceberg and
+        # Lance endpoints are off because nothing here uses them.
+        image: chrislusf/seaweedfs@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
         credentials:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-        command: server /data --address ":9000"
+        command: >-
+          mini -dir=/data -s3.port=9000 -master.telemetry=false -webdav=false
+          -admin.ui=false -s3.port.iceberg=0 -s3.port.lance=0
         env:
-          MINIO_ROOT_USER: tckdb
-          MINIO_ROOT_PASSWORD: tckdb_secret
+          AWS_ACCESS_KEY_ID: tckdb
+          AWS_SECRET_ACCESS_KEY: tckdb_secret
         ports:
           - 9000:9000
+        # Two requests, both required. A signed ListBuckets with the test
+        # credentials: the S3 gateway answers (measured to fail on a wrong
+        # port, curl exit 7, and on a wrong secret, exit 22/403). And an
+        # unsigned one that must be refused with 403: SeaweedFS started
+        # without keys accepts every request, so without this half an
+        # image that stopped reading the env credentials would be an open
+        # store reported healthy.
         options: >-
-          --health-cmd "mc ready local"
+          --health-cmd "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user tckdb:tckdb_secret http://127.0.0.1:9000/ && test $(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:9000/) = 403"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10

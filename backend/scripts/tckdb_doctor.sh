@@ -13,6 +13,8 @@
 # Overridable inputs (all optional):
 #   COMPOSE_FILE      docker compose file (default: docker-compose.yml)
 #   COMPOSE_ENV_FILE  env file for docker compose, if any (default: unset)
+#   STORAGE_SERVICE   compose service holding the S3 store (default:
+#                     seaweedfs; set to minio on a MinIO deployment)
 #   TCKDB_ENV_FILE    backend env file to validate (default: backend/.env)
 #   TCKDB_BASE_URL    API base URL to probe (default: http://127.0.0.1:8010/api/v1)
 #   DB_NAME           DB to inspect (default: tckdb_dev)
@@ -27,7 +29,7 @@
 
 case "${1:-}" in
     -h|--help|help)
-        sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
         exit 0
         ;;
 esac
@@ -36,6 +38,7 @@ set -uo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-}"
+STORAGE_SERVICE="${STORAGE_SERVICE:-seaweedfs}"
 TCKDB_ENV_FILE="${TCKDB_ENV_FILE:-backend/.env}"
 TCKDB_BASE_URL="${TCKDB_BASE_URL:-http://127.0.0.1:8010/api/v1}"
 DB_NAME="${DB_NAME:-tckdb_dev}"
@@ -199,7 +202,7 @@ if ! ps_output="$(compose ps --format json 2>&1)"; then
     hint "is Docker running? on Linux: sudo systemctl status docker"
 else
     if command -v jq >/dev/null 2>&1; then
-        for svc in db minio; do
+        for svc in db "$STORAGE_SERVICE"; do
             row="$(echo "$ps_output" | jq -c --arg s "$svc" 'select(.Service == $s)' 2>/dev/null || true)"
             if [[ -z "$row" ]]; then
                 bad "$svc service not listed in 'docker compose ps'"
@@ -216,7 +219,7 @@ else
             fi
         done
     else
-        for svc in db minio; do
+        for svc in db "$STORAGE_SERVICE"; do
             if echo "$ps_output" | grep -q "\"Service\":\"$svc\""; then
                 ok "$svc listed (install jq for health detail)"
             else
