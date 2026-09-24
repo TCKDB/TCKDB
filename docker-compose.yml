@@ -119,7 +119,15 @@ services:
   # The S3 gateway listens on 9000, the port MinIO used, so S3_ENDPOINT_URL
   # values written for MinIO still point at the store. Telemetry, WebDAV,
   # the admin UI and the Iceberg and Lance endpoints are off; nothing here
-  # uses them.
+  # uses them. `weed mini` also runs the filer (8888), master (9333) and
+  # volume server (9340) with NO authentication, reachable from anything
+  # on the compose network (objects can be read and written through
+  # seaweedfs:8888 without credentials), so those ports must never be
+  # published; locking them down (security.toml JWT or a whitelist) is a
+  # follow-up.
+  #
+  # S3_BUCKET is passed so `weed mini` creates the artifact bucket on
+  # start (it reads that variable; existing buckets are left alone).
   #
   # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY become SeaweedFS's admin
   # identity -- the same S3_ACCESS_KEY / S3_SECRET_KEY the API signs with,
@@ -144,18 +152,21 @@ services:
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-tckdb}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
+      S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
     # The S3 API is loopback-only, like every other published port here.
     ports:
       - "127.0.0.1:9000:9000"
     volumes:
       - tckdb_seaweedfs:/data
     restart: unless-stopped
-    # A signed ListBuckets: healthy only once the S3 gateway answers an
-    # authenticated request with these credentials. `$$` defers expansion
-    # to the container's shell, so the secret is not baked into the
+    # Healthy only when both hold: a signed ListBuckets with these
+    # credentials succeeds (the S3 gateway answers), and an unsigned
+    # request is refused with 403 (auth is actually on -- SeaweedFS
+    # started without keys accepts everything). `$$` defers expansion to
+    # the container's shell, so the secret is not baked into the
     # healthcheck definition.
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user \"$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY\" http://127.0.0.1:9000/"]
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user \"$$AWS_ACCESS_KEY_ID:$$AWS_SECRET_ACCESS_KEY\" http://127.0.0.1:9000/ && test $$(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:9000/) = 403"]
       interval: 30s
       timeout: 5s
       retries: 3

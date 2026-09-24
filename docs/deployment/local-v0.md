@@ -336,11 +336,13 @@ You'll need to re-run the migration (step 2) and bootstrap admin (step
   user's role. Curators/admins are required for some endpoints — log in
   as a curator/admin before minting the key, or promote the user via
   the admin endpoints.
-- **Artifact bucket missing.** `/status` reports the bucket as missing
+- **Artifact bucket missing.** The compose `seaweedfs` service creates
+  `S3_BUCKET` each time it starts, so with it this needs no action. On
+  MinIO or an external store, `/status` reports the bucket as missing
   until it exists. Create it with any S3 client, e.g.
   `aws --endpoint-url http://127.0.0.1:9000 s3 mb s3://tckdb-artifacts`
-  (keys `S3_ACCESS_KEY` / `S3_SECRET_KEY`); on a MinIO deployment the
-  MinIO console at `http://localhost:9001` or `mc mb` also work.
+  (keys `S3_ACCESS_KEY` / `S3_SECRET_KEY`); on MinIO the console at
+  `http://localhost:9001` or `mc mb` also work.
 
 ---
 

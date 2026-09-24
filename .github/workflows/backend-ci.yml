@@ -135,11 +135,15 @@ jobs:
           AWS_SECRET_ACCESS_KEY: tckdb_secret
         ports:
           - 9000:9000
-        # A signed ListBuckets with the test credentials: healthy only once
-        # the S3 gateway answers an authenticated request. Measured to fail
-        # on a wrong port (curl exit 7) and on a wrong secret (exit 22, 403).
+        # Two requests, both required. A signed ListBuckets with the test
+        # credentials: the S3 gateway answers (measured to fail on a wrong
+        # port, curl exit 7, and on a wrong secret, exit 22/403). And an
+        # unsigned one that must be refused with 403: SeaweedFS started
+        # without keys accepts every request, so without this half an
+        # image that stopped reading the env credentials would be an open
+        # store reported healthy.
         options: >-
-          --health-cmd "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user tckdb:tckdb_secret http://127.0.0.1:9000/"
+          --health-cmd "curl -fsS -o /dev/null --aws-sigv4 aws:amz:us-east-1:s3 --user tckdb:tckdb_secret http://127.0.0.1:9000/ && test $(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:9000/) = 403"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10

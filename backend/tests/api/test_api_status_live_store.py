@@ -18,6 +18,8 @@ What was measured against SeaweedFS 4.47 before these were written:
   capacity must read as silent, never as low and never as broken.
 * ``HeadBucket`` answers 200 on an existing bucket, so the storage
   component is healthy.
+* With keys configured an unsigned request is refused (``AccessDenied``,
+  403); started without keys, SeaweedFS accepts it.
 
 Off CI these skip when no store answers; on CI they fail, because CI
 always provides one (see :mod:`tests.services._live_object_store`).
@@ -25,7 +27,11 @@ always provides one (see :mod:`tests.services._live_object_store`).
 
 from __future__ import annotations
 
+import boto3
 import pytest
+from botocore import UNSIGNED
+from botocore.config import Config as BotoConfig
+from botocore.exceptions import ClientError
 from sqlalchemy.orm import sessionmaker
 
 from app.api.routes import health
@@ -74,6 +80,33 @@ def test_status_reports_the_configured_store_healthy(client, live_store) -> None
     # No capacity opinion must mean no warning, not a warning about zero.
     assert block["warnings"] == [], block
     assert "artifact_storage" not in body["degraded"], body
+
+
+def test_the_store_refuses_an_unsigned_request(live_store) -> None:
+    """Authentication is actually on, not merely configured.
+
+    Measured against SeaweedFS 4.47: started without
+    ``AWS_ACCESS_KEY_ID``/``AWS_SECRET_ACCESS_KEY`` it accepts every
+    request, signed with any key or not signed at all. Every other test
+    here signs its requests, so all of them pass against such an open
+    store; this one does not. It is what goes red if a future image stops
+    reading the credentials from its environment.
+    """
+    anonymous = boto3.client(
+        "s3",
+        endpoint_url=artifact_storage.S3_ENDPOINT_URL,
+        region_name=artifact_storage.S3_REGION,
+        config=BotoConfig(
+            signature_version=UNSIGNED,
+            connect_timeout=2,
+            read_timeout=2,
+            retries={"max_attempts": 0, "mode": "legacy"},
+        ),
+    )
+    with pytest.raises(ClientError) as refused:
+        anonymous.list_buckets()
+    status = refused.value.response["ResponseMetadata"]["HTTPStatusCode"]
+    assert status == 403, refused.value.response
 
 
 def test_seaweedfs_gives_the_headroom_probe_no_opinion(live_store) -> None:
