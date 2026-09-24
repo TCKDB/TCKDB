@@ -69,7 +69,7 @@ describe("species-entry API", () => {
             http.get("/api/v1/scientific/conformers/search", ({ request }) => {
                 const query = new URL(request.url).searchParams
                 expect(query.get("species_entry_ref")).toBe(entryRef); expect(query.get("limit")).toBe("50")
-                expect(query.getAll("include")).toEqual(["observations", "calculations", "geometries", "fingerprints"])
+                expect(query.getAll("include")).toEqual(["observations", "observation_details", "calculations", "geometries", "fingerprints"])
                 return HttpResponse.json(conformerPayload)
             }),
         )

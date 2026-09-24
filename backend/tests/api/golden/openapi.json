@@ -12295,6 +12295,19 @@
         "title": "ConformerObservationEvidenceSummary",
         "type": "object"
       },
+      "ConformerObservationGroupSummary": {
+        "description": "One embedded observation under a conformer **group**'s\n``observations`` block, by default.\n\nPopulated under ``include=observations`` on the\n**conformer-group** detail (and search) surface whenever\n``observation_details`` is *not* also requested — see\n:func:`app.services.scientific_read.conformers.build_group_record`.\nCarries what a *list* of a basin's observations needs: identity\n(``conformer_observation_ref``), review status, ``scientific_origin``\n(computed / experimental / estimated) and ``note`` — the four facts\nthe group page's own observation cards render regardless of whether\nan observation has any calculations at all. Deliberately richer than\n:class:`ConformerObservationSiblingCore` (which drops\n``scientific_origin``/``note`` because nothing that reads a sibling\nreads those either): this projection has a different reader with a\ndifferent need, not the same one duplicated.\n\nWhat it does **not** carry is calculations, geometries, selections,\nreview history or its own evidence summary — before ``observation_\ndetails`` existed as an explicit opt-in, every embedded observation\nwas a full :class:`ScientificConformerObservationRecord` (every\ninclude token minus ``observations``), so a caller requesting\n``include=observations,selections,review`` on the group surface got\nevery one of those sections duplicated onto every observation, never\nrequested them there, and paid a cost that multiplied with basin\nsize without ever asking for it (issue #537, following the same\nshape #269/PR #535 fixed on the observation-sibling case above). A\ncaller that genuinely needs an observation's own calculations and\ngeometries inline — the group page's own use — asks for both\nexplicitly: ``include=observations,observation_details,calculations,\ngeometries``, which builds :class:`ScientificConformerObservationRecord`\nentries instead, still gated by whichever of ``calculations`` /\n``geometries`` / ``selections`` / ``review`` the caller also named.",
+        "properties": {
+          "conformer_observation": {
+            "$ref": "#/components/schemas/ConformerObservationCoreBlock"
+          }
+        },
+        "required": [
+          "conformer_observation"
+        ],
+        "title": "ConformerObservationGroupSummary",
+        "type": "object"
+      },
       "ConformerObservationRead": {
         "description": "Read schema for one conformer observation within a basin.",
         "properties": {
@@ -12401,7 +12414,7 @@
         "type": "object"
       },
       "ConformerObservationSiblingSummary": {
-        "description": "One sibling in a conformer-observation's basin, list-shaped.\n\nPopulated under ``include=observations`` on the\n**conformer-observation** detail surface only — i.e. it is the type\nof ``ScientificConformerObservationRecord.observations``, which\nexists to answer the one question an observation-grained record\ncannot answer about itself: what else is in this basin. It is\n*not* the type embedded when a conformer-*group* record expands its\nown ``observations`` include (``ScientificConformerGroupRecord.\nobservations``, still ``ScientificConformerObservationRecord``\nthere) — that surface's consumer renders each observation's own\ncalculations and output geometries and genuinely needs the richer\nshape.\n\nBefore this type existed, a sibling was built as a full\n:class:`ScientificConformerObservationRecord` with every include\ntoken minus ``observations`` — its own calculations, geometries,\nselections, review history and evidence summary, and a *duplicate*\ncopy of the parent group's core block and species context. For a\nbasin the UI renders as three ``<li>`` elements (ref + review pill),\nthat scaled the response linearly with basin size: one measured\nrequest came back at 22.8 KB, 90%+ of it the sibling block (issue\n#269). A sibling in a list carries what the list needs; the full\nrecord for any one sibling is one hop away, at that sibling's own\n``GET /scientific/conformer-observations/{ref}``.",
+        "description": "One sibling in a conformer-observation's basin, list-shaped.\n\nPopulated under ``include=observations`` on the\n**conformer-observation** detail surface only — i.e. it is the type\nof ``ScientificConformerObservationRecord.observations``, which\nexists to answer the one question an observation-grained record\ncannot answer about itself: what else is in this basin. See\n:class:`ConformerObservationGroupSummary` for the analogous, but\nslightly richer, projection the **conformer-group** surface embeds\nunder its own ``observations`` include by default.\n\nBefore this type existed, a sibling was built as a full\n:class:`ScientificConformerObservationRecord` with every include\ntoken minus ``observations`` — its own calculations, geometries,\nselections, review history and evidence summary, and a *duplicate*\ncopy of the parent group's core block and species context. For a\nbasin the UI renders as three ``<li>`` elements (ref + review pill),\nthat scaled the response linearly with basin size: one measured\nrequest came back at 22.8 KB, 90%+ of it the sibling block (issue\n#269). A sibling in a list carries what the list needs; the full\nrecord for any one sibling is one hop away, at that sibling's own\n``GET /scientific/conformer-observations/{ref}``.",
         "properties": {
           "conformer_observation": {
             "$ref": "#/components/schemas/ConformerObservationSiblingCore"
@@ -35556,7 +35569,7 @@
         "type": "object"
       },
       "ScientificConformerGroupRecord": {
-        "description": "One conformer-group projected as a scientific record.\n\nCarries the group core block + parent species context + bounded\nsummaries (observations breakdown, evidence summary,\navailable_sections). Heavy include blocks\n(``observations`` / ``selections`` / ``calculations`` /\n``geometries`` / ``review_history``) are populated only when the\ncaller opts in.",
+        "description": "One conformer-group projected as a scientific record.\n\nCarries the group core block + parent species context + bounded\nsummaries (observations breakdown, evidence summary,\navailable_sections). Heavy include blocks\n(``observations`` / ``selections`` / ``calculations`` /\n``geometries`` / ``review_history``) are populated only when the\ncaller opts in.\n\n``observations`` is one of two shapes depending on whether\n``observation_details`` is also requested alongside ``observations``\n(see :func:`app.services.scientific_read.conformers.build_group_record`\nand :class:`ConformerObservationGroupSummary`): a lean per-observation\nsummary by default, or the full :class:`ScientificConformerObservationRecord`\n— with its own calculations/geometries/selections/review history — only\nwhen a caller deliberately opts into the heavier shape. This is the\nfix for issue #537: previously ``observations`` was unconditionally\nthe full shape, so every include token requested at the group level\ncascaded onto every embedded observation as well, multiplying with\nbasin size.",
         "properties": {
           "available_sections": {
             "$ref": "#/components/schemas/AvailableConformerSections"
@@ -35599,6 +35612,12 @@
           },
           "observations": {
             "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ConformerObservationGroupSummary"
+                },
+                "type": "array"
+              },
               {
                 "items": {
                   "$ref": "#/components/schemas/ScientificConformerObservationRecord"

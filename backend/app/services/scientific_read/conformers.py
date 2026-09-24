@@ -66,6 +66,7 @@ from app.schemas.reads.scientific_conformer import (
     ConformerGroupFingerprint,
     ConformerObservationCoreBlock,
     ConformerObservationEvidenceSummary,
+    ConformerObservationGroupSummary,
     ConformerObservationSiblingCore,
     ConformerObservationSiblingSummary,
     ConformerObservationsSummary,
@@ -117,8 +118,23 @@ from app.services.scientific_read.species_identity import (
 # projection (nothing here is default), not marked ``internal`` like
 # ``internal_ids`` (which is policy-gated ID visibility, a different
 # concern from "this blob is heavy, ask for it explicitly").
+#
+# ``observation_details`` gates the *shape* of ``observations``, not its
+# presence -- it is meaningless without ``observations`` alongside it and
+# names no field of its own. Legal on both surfaces for one shared
+# vocabulary, but only the **group** surface's ``observations`` block has
+# two shapes to choose between (see ``build_group_record``); on the
+# observation surface, ``observations`` is always the lean
+# ``ConformerObservationSiblingSummary`` list (issue #269/PR #535), so
+# ``observation_details`` there is legal, accepted, and a no-op -- it
+# gates nothing that surface has. Excluded from the ``all`` expansion for
+# the same reason ``points`` is excluded on the network-kinetics surface:
+# it is the one token whose whole job is to turn on an expensive,
+# multiplying combination, so a caller must name it, never receive it as
+# a side effect of asking for "everything" (issue #537).
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "observations",
+    "observation_details",
     "selections",
     "calculations",
     "geometries",
@@ -127,7 +143,7 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "observation_details"}
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +175,21 @@ def get_conformer_group(
     ``conformer_group.fingerprint`` with the group's numeric basin
     identity (quantized torsion bins + representative angles) instead of
     expanding the response with a new list.
+
+    ``include=observations`` alone embeds a lean
+    :class:`~app.schemas.reads.scientific_conformer.ConformerObservationGroupSummary`
+    per observation (ref, review, scientific_origin, note — what a list of
+    observations needs). ``calculations`` / ``geometries`` / ``selections``
+    / ``review`` requested *alongside* ``observations`` populate the
+    group's own same-named fields, never the embedded observations' —
+    a token applies to the record you asked for. A caller that wants each
+    embedded observation's own calculations and geometries expanded
+    inline must additionally request ``observation_details``, which
+    switches every embedded entry to the full
+    :class:`~app.schemas.reads.scientific_conformer.ScientificConformerObservationRecord`
+    shape (still gated per-field by whichever of ``calculations`` /
+    ``geometries`` / ``selections`` / ``review`` were also requested).
+    See :func:`build_group_record` for the mechanics; issue #537.
     """
     includes = validate_includes(
         include or [],
@@ -211,6 +242,18 @@ def build_group_record(
     `selection_summary` / `evidence_summary` / `available_sections`)
     is always populated; heavy include blocks are populated only when
     their tokens are present in *includes*.
+
+    ``observations`` is the one field with two possible shapes. Without
+    ``observation_details`` in *includes*, each entry is a lean
+    :class:`ConformerObservationGroupSummary` — nothing else in
+    *includes* leaks into it, so ``include=observations,selections,review``
+    populates this record's own ``selections``/``review_history`` and
+    leaves every embedded observation a plain summary. With
+    ``observation_details`` also present, each entry is instead the full
+    :class:`ScientificConformerObservationRecord`, built with
+    ``includes - {"observations", "observation_details"}`` — i.e. the
+    same cascade this surface used unconditionally before issue #537,
+    now opt-in.
     """
     species_context = _build_species_context(session, cg.species_entry_id)
 
@@ -239,7 +282,11 @@ def build_group_record(
         cg, cg_badge, include_fingerprint="fingerprints" in includes
     )
 
-    observations_block: list[ScientificConformerObservationRecord] | None = None
+    observations_block: (
+        list[ConformerObservationGroupSummary]
+        | list[ScientificConformerObservationRecord]
+        | None
+    ) = None
     if "observations" in includes:
         obs_badges = (
             fetch_review_badges(
@@ -250,28 +297,54 @@ def build_group_record(
             if obs_ids
             else {}
         )
-        # Without ``observations`` in the nested set, every embedded
-        # observation would resolve the same sibling list this block is.
-        nested_includes = includes - {"observations"}
-        # One statement for the block, not one per observation.
-        obs_levels = levels_of_theory.for_conformer_observations(
-            session, obs_ids
-        )
-        observations_block = [
-            _build_observation_record(
-                session,
-                observation=o,
-                cg_core=cg_core,
-                species_context=species_context,
-                observation_badge=obs_badges.get(
-                    o.id,
-                    RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
-                ),
-                includes=nested_includes,
-                levels_index=obs_levels,
+        if "observation_details" in includes:
+            # Deliberate, explicit opt-in into the expensive shape (issue
+            # #537). Without ``observations``/``observation_details`` both
+            # removed from the nested set, every embedded observation
+            # would resolve the same sibling list this block already is.
+            nested_includes = includes - {"observations", "observation_details"}
+            # One statement for the block, not one per observation.
+            obs_levels = levels_of_theory.for_conformer_observations(
+                session, obs_ids
             )
-            for o in obs_rows
-        ]
+            observations_block = [
+                _build_observation_record(
+                    session,
+                    observation=o,
+                    cg_core=cg_core,
+                    species_context=species_context,
+                    observation_badge=obs_badges.get(
+                        o.id,
+                        RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
+                    ),
+                    includes=nested_includes,
+                    levels_index=obs_levels,
+                )
+                for o in obs_rows
+            ]
+        else:
+            # Default shape: a lean summary per observation. Carries what
+            # a list of observations needs (ref, review, scientific_origin,
+            # note) and nothing that cascades from the group's own
+            # ``calculations``/``geometries``/``selections``/``review``
+            # tokens -- those govern the group's own same-named fields
+            # only, never the embedded observations (issue #537).
+            observations_block = [
+                ConformerObservationGroupSummary(
+                    conformer_observation=ConformerObservationCoreBlock(
+                        conformer_observation_id=o.id,
+                        conformer_observation_ref=o.public_ref,
+                        scientific_origin=o.scientific_origin,
+                        note=o.note,
+                        created_at=o.created_at,
+                        review=obs_badges.get(
+                            o.id,
+                            RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
+                        ),
+                    )
+                )
+                for o in obs_rows
+            ]
 
     selections_block: list[ConformerSelectionSummary] | None = None
     if "selections" in includes:
@@ -323,8 +396,12 @@ def get_conformer_observation(
     Returns the observation core block + parent group + species
     context + bounded evidence/available_sections summaries.
     ``include=observations`` returns the sibling observations in this
-    record's conformer group, in the shape the group surface returns;
-    ``include=selections`` returns the parent group's selections.
+    record's conformer group, always as the lean
+    ``ConformerObservationSiblingSummary`` projection (issue #269/PR
+    #535); ``include=selections`` returns the parent group's selections.
+    ``observation_details`` is legal here (one shared vocabulary with the
+    group surface) but gates nothing on this surface — the sibling list
+    has only the one shape.
     """
     includes = validate_includes(
         include or [],
@@ -398,11 +475,20 @@ def _build_observation_record(
     observation.id``).
 
     ``include=observations`` populates the sibling observations in the same
-    conformer group, in the shape the group surface returns under the same
-    token. It used to be documented as a no-op here on the reading that the
+    conformer group, as the lean ``ConformerObservationSiblingSummary``
+    projection (issue #269/PR #535) — never the richer group-surface shape,
+    regardless of who called this builder or what else is in *includes*.
+    It used to be documented as a no-op here on the reading that the
     record already *is* an observation; what it can say is which other
     observations share the basin, which an observation-grained record has
     no other way to report.
+
+    This same builder is also what ``build_group_record`` calls, per
+    observation, when the group surface's ``observation_details`` token is
+    present — there, *includes* never contains ``"observations"`` (the
+    caller strips it, alongside ``observation_details`` itself, before
+    calling in), so the branch above never fires from that caller; it only
+    ever fires for :func:`get_conformer_observation`'s own top-level call.
     """
     obs_ids = [observation.id]
     evidence = _build_observation_evidence_summary(

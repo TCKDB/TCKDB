@@ -321,3 +321,6 @@ data/external/cccbdb/
 # Ignore the entire vtrace cache dir (supersedes the specific entries above)
 .vtrace/
 docs/specs/read_api_mvp.md
+
+# Agent scratch (this task)
+.agent_scratch/
