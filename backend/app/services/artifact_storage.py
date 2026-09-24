@@ -509,12 +509,37 @@ def _get_s3_client(config=None):
         talking to. A health check that reaches a different endpoint than
         the uploads do is worse than no health check at all.
     """
+    return build_s3_client(
+        endpoint_url=S3_ENDPOINT_URL,
+        access_key=S3_ACCESS_KEY,
+        secret_key=S3_SECRET_KEY,
+        region=S3_REGION,
+        config=config,
+    )
+
+
+def build_s3_client(
+    *,
+    endpoint_url: str,
+    access_key: str,
+    secret_key: str,
+    region: str,
+    config=None,
+):
+    """A boto3 S3 client for an explicitly named store.
+
+    :func:`_get_s3_client` is this with the app's own ``S3_*`` settings.
+    The one caller that needs a *different* store is the MinIO-to-SeaweedFS
+    copy (``backend/scripts/ops/migrate_object_store.py``), which talks to
+    the configured store and a destination at once; it builds the second
+    client here so both are constructed the same way.
+    """
     return boto3.client(
         "s3",
-        endpoint_url=S3_ENDPOINT_URL,
-        aws_access_key_id=S3_ACCESS_KEY,
-        aws_secret_access_key=S3_SECRET_KEY,
-        region_name=S3_REGION,
+        endpoint_url=endpoint_url,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        region_name=region,
         config=config,
     )
 

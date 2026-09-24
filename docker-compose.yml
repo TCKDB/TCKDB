@@ -183,10 +183,11 @@ services:
   #
   # Kept because TCKDB still supports MinIO and an existing deployment's
   # artifacts live in the `tckdb_minio` volume. Moving them to SeaweedFS is
-  # a separate, verified copy (not yet written); until then keep using this
-  # service rather than starting `seaweedfs` on an empty volume. Both
-  # publish 127.0.0.1:9000, so starting both fails loudly on the port
-  # rather than silently switching the API to an empty store.
+  # a verified copy: backend/docs/deployment/migrating_minio_to_seaweedfs.md.
+  # Until you have done it, keep using this service rather than starting
+  # `seaweedfs` on an empty volume. Both publish 127.0.0.1:9000, so starting
+  # both fails loudly on the port rather than silently switching the API to
+  # an empty store; the runbook shows how to run both during the copy.
   #
   # MinIO no longer publishes images: `minio/minio` resolves only on a host
   # that already has it pulled.

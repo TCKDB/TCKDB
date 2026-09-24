@@ -84,8 +84,9 @@ docker compose --env-file .env.pi --env-file .env.pi.db-admin up -d db seaweedfs
 
 > **Already running MinIO?** Keep it: start `minio` instead of `seaweedfs`
 > (`... --profile minio up -d db minio`). Your artifacts are in the
-> `tckdb_minio` volume, and `seaweedfs` would start on an empty one. Moving
-> them across is a separate, verified copy that is not written yet.
+> `tckdb_minio` volume, and `seaweedfs` would start on an empty one. To move
+> them across, follow
+> [Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md).
 
 `.env.pi` holds only runtime DB credentials, S3 keys, rate-limit config,
 cookie/security settings, etc. `.env.pi.db-admin` holds the database
