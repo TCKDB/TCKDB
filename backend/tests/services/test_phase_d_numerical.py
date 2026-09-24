@@ -454,6 +454,23 @@ def test_thermo_kinetics_domain_and_reference_pressure_mismatch_are_visible():
     assert _details(incompatible, "rate_units")[0]["reason"] == "incompatible_reference_pressures"
 
 
+def test_thermo_kinetics_declines_on_unrecorded_reference_pressure():
+    """D3 (thermo-vs-kinetics equilibrium) consumes reference_pressure_bar
+    at ``pressure = thermo_items[0][1].reference_pressure_bar * 100000.0``
+    (engine.py); since issue #529 a computed thermo record can carry
+    ``reference_pressure_bar=None`` (no longer defaulted to 1 bar), so this
+    guards that the D3 comparison declines via
+    ``engine.gas_state_reason`` before ever reaching that multiplication,
+    rather than raising or silently treating the missing value as a number.
+    """
+    forward, reverse, mapping = _reaction()
+    mapping[1].reference_pressure_bar = None
+    result = compare_kinetics(forward, reverse, mapping, temperature_grid=[500])
+    rows = _details(result, "rate_units")
+    assert rows and all(r["reason"] == "missing_or_invalid_reference_pressure" for r in rows)
+    assert all("k_forward" not in r for r in rows)
+
+
 def test_kinetics_currency_inputs_change_and_reordered_sets_do_not():
     forward, reverse, mapping = _reaction()
     baseline = compare_kinetics(forward, reverse, mapping, temperature_grid=[500, 700])
