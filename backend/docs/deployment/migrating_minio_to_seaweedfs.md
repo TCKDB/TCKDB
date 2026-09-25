@@ -308,8 +308,11 @@ sha256sum artifact.bin; stat -c %s artifact.bin       # must equal the row
 ```
 
 Delete `docker-compose.seaweedfs-migration.yml` once MinIO no longer runs,
-so the next `up` publishes SeaweedFS on 9000 (a containerised API does not
-need the host port; a host API does).
+so the next `up` publishes SeaweedFS on 9000. Deleting the file does not
+move a running container. With an API in a container, SeaweedFS keeps
+`127.0.0.1:9100` until it is next recreated, which is harmless: that API
+reaches it as `seaweedfs:9000`. A host API needs 9000, which step 7 already
+gave it.
 
 ### 10. Keep MinIO for a soak period
 
@@ -320,7 +323,33 @@ copy of every file that existed at the cutover (plus your tarball, if you
 took one). Stop MinIO if you like (a host API needs its port freed anyway),
 but do not remove the container, do not run `docker compose down -v`, and
 do not `docker volume rm <minio-volume>`. After the soak, remove them
-deliberately.
+deliberately, but first:
+
+**Save the source defects.** Objects whose bytes contradicted their digest
+were deliberately *not* copied to SeaweedFS (they are listed in each
+`--commit` report under `copy.source_defect_keys`, and in the verify report
+under `references.key_parity.source_defect_keys`). Once `<minio-volume>` is
+gone, those corrupt bytes, which are evidence of what went wrong, are gone
+too. With MinIO running (as in [Rolling back](#rolling-back), step 2),
+collect the keys from the reports you saved in steps 3, 5 and 6 and copy
+each object out:
+
+```bash
+jq -r '.copy.source_defect_keys[]?.key, .references.key_parity.source_defect_keys[]?.key' \
+    copy-1.json copy-2.json verify.json | sort -u > source-defects.txt
+mkdir -p source-defects
+while read -r key; do
+    docker compose --env-file <env-file> --profile minio exec -T minio sh -c \
+        'mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null && mc cat "local/<bucket>/$1"' \
+        sh "$key" < /dev/null > "source-defects/${key//\//_}"
+done < source-defects.txt
+sha256sum source-defects/*      # each hashes to the source_sha256 the report printed
+```
+
+`<bucket>` is your `S3_BUCKET`. An empty `source-defects.txt` means there
+is nothing to save. Keep the tarball from
+[Before you start](#before-you-start), if you took one, for as long as you
+keep these.
 
 ## Rolling back
 
@@ -335,17 +364,21 @@ object that matches its digest, and never writes bytes that contradict
 theirs.
 
 1. **Stop writes**, as in step 4.
-2. **Start MinIO again** if you stopped it during the soak. SeaweedFS may
-   hold `127.0.0.1:9000` by now, so publish MinIO on another port for the
-   copy. Create `docker-compose.minio-rollback.yml`:
+2. **Start MinIO again** if you stopped it during the soak. It comes back
+   on `<minio-volume>` with everything it held at the cutover. How depends
+   on the layout, and the two must not be mixed: SeaweedFS may still hold
+   `127.0.0.1:9100` from the migration override (step 9 deletes the file
+   but does not move the running container), or `127.0.0.1:9000`.
+
+   **API in a container: publish no host port at all.** The tool reaches
+   MinIO as `minio:9000` on the compose network, so it needs none, and
+   nothing can collide. Create `docker-compose.minio-rollback.yml`:
 
    ```yaml
-   # Temporary, for copying post-cutover files back to MinIO only.
+   # Temporary, for copying post-cutover files back to MinIO (API in a container).
    services:
      minio:
-       ports: !override
-         - "127.0.0.1:9100:9000"
-         - "127.0.0.1:9101:9001"
+       ports: !reset []
    ```
 
    ```bash
@@ -353,7 +386,24 @@ theirs.
        -f docker-compose.yml -f docker-compose.minio-rollback.yml up -d minio
    ```
 
-   It comes back on `<minio-volume>` with everything it held at the cutover.
+   **API on the host: publish MinIO on 9200.** The tool runs on the host and
+   needs a host port. 9200/9201 are used by nothing else in this runbook.
+   Create `docker-compose.minio-rollback-host.yml`:
+
+   ```yaml
+   # Temporary, for copying post-cutover files back to MinIO (API on the host).
+   services:
+     minio:
+       ports: !override
+         - "127.0.0.1:9200:9000"
+         - "127.0.0.1:9201:9001"
+   ```
+
+   ```bash
+   docker compose --env-file <env-file> --profile minio \
+       -f docker-compose.yml -f docker-compose.minio-rollback-host.yml up -d minio
+   ```
+
 3. **Copy back and verify.** The env file still names SeaweedFS as `S3_*`,
    so SeaweedFS is the source.
 
@@ -367,12 +417,11 @@ theirs.
    back --commit && back --verify-only; echo "exit=$?"
    ```
 
-   API on the host (MinIO is `127.0.0.1:9100` while the rollback override is
-   in place), from `backend/`:
+   API on the host (MinIO is `127.0.0.1:9200`), from `backend/`:
 
    ```bash
    back() {
-       DEST_S3_ENDPOINT_URL=http://127.0.0.1:9100 \
+       DEST_S3_ENDPOINT_URL=http://127.0.0.1:9200 \
            conda run -n tckdb_env python scripts/ops/migrate_object_store.py "$@"
    }
    back --commit && back --verify-only; echo "exit=$?"
@@ -381,9 +430,10 @@ theirs.
    Continue only on `exit=0`.
 4. **Switch the API back.** API in a container: set
    `S3_ENDPOINT_URL=http://minio:9000` and recreate the API as in step 8.
-   API on the host: stop SeaweedFS, then recreate MinIO *without* the
-   rollback override so it publishes `127.0.0.1:9000` again. The env file
-   keeps `http://127.0.0.1:9000`:
+   MinIO can stay unpublished; it only needs a host port again if you want
+   `mc` or the console from the host. API on the host: stop SeaweedFS, then
+   recreate MinIO *without* the rollback override so it publishes
+   `127.0.0.1:9000` again. The env file keeps `http://127.0.0.1:9000`:
 
    ```bash
    docker compose --env-file <env-file> stop seaweedfs
@@ -391,8 +441,8 @@ theirs.
    sudo systemctl start tckdb-api
    ```
 
-   Then check `/status` and one download, as in step 9, and delete
-   `docker-compose.minio-rollback.yml`.
+   Then check `/status` and one download, as in step 9, and delete the
+   rollback override file you created.
 
 ## When verification fails
 

@@ -636,6 +636,10 @@ def run_copy(
         expected = digest_named_by_key(key) or row_digests.get(key)
         try:
             dest_present = key in dest_listing
+            # Why an existing destination object is being replaced, logged
+            # only once the write has actually happened: a refused copy
+            # (a source defect) must not read as a replacement.
+            replaces: str | None = None
             if expected is not None:
                 if dest_present:
                     held = observe(dst_client, dest.bucket, key)
@@ -646,7 +650,7 @@ def run_copy(
                         report.skipped_bytes += held[1]
                         continue
                     if held is not None:
-                        log(f"replacing {key}: the destination's bytes do not match its digest")
+                        replaces = "the destination's bytes did not match its digest"
                     dest_present = held is not None
             else:
                 report.unverifiable.append(key)
@@ -662,14 +666,15 @@ def run_copy(
                         report.skipped += 1
                         report.skipped_bytes += size
                         continue
-                    log(f"replacing {key} (names no digest): its bytes differ from the source's")
+                if dest_present:
+                    replaces = "names no digest; the destination's bytes differed from the source's"
             _, sent = copy_one(
                 src_client, source, dst_client, dest, key,
                 expected_sha256=expected, dest_present=dest_present,
             )
             report.copied += 1
             report.copied_bytes += sent
-            log(f"copied {key} ({sent} bytes)")
+            log(f"copied {key} ({sent} bytes)" + (f"; replaced: {replaces}" if replaces else ""))
         except SourceVanished:
             # Listed, then gone: the reclaim sweep can move an object while
             # the API is still serving. Not a copy failure; the final pass,

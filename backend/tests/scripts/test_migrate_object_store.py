@@ -222,11 +222,11 @@ def _configs(dest_bucket: str = BUCKET):
     return src, dst
 
 
-def _copy(source, dest, *, commit=True, row_digests=None):
+def _copy(source, dest, *, commit=True, row_digests=None, log=None):
     src_cfg, dst_cfg = _configs()
     return tool.run_copy(
         src_cfg, dst_cfg, commit=commit, row_digests=row_digests,
-        src_client=source, dst_client=dest, log=lambda _m: None,
+        src_client=source, dst_client=dest, log=log or (lambda _m: None),
     )
 
 
@@ -287,10 +287,15 @@ def test_a_same_size_destination_object_with_wrong_bytes_is_replaced() -> None:
     key = next(iter(_referenced(objects)))
     source, dest = _stores(dest_objects={**objects, key: _flip(objects[key])})
 
-    report, _ = _copy(source, dest)
+    logged: list[str] = []
+    report, _ = _copy(source, dest, log=logged.append)
     assert report.copied == 1 and report.skipped == 4
     assert dest.buckets[BUCKET][key] == objects[key]
     assert source.writes == []
+    assert [m for m in logged if "replaced" in m] == [
+        f"copied {key} ({len(objects[key])} bytes); replaced: "
+        "the destination's bytes did not match its digest"
+    ]
 
 
 def test_a_copy_that_does_not_read_back_is_a_failure() -> None:
@@ -389,9 +394,13 @@ def test_bad_source_bytes_do_not_replace_bad_destination_bytes_either() -> None:
     key = next(iter(_referenced(good)))
     src_bad, dst_bad = _flip(good[key], 0), _flip(good[key], 1)
     source, dest = _stores(source_objects={**good, key: src_bad}, dest_objects={**good, key: dst_bad})
-    report, _ = _copy(source, dest)
+    logged: list[str] = []
+    report, _ = _copy(source, dest, log=logged.append)
     assert dest.buckets[BUCKET][key] == dst_bad
     assert [d["key"] for d in report.source_defects] == [key]
+    # Nothing was replaced, so nothing may say it was.
+    assert not any("replac" in m for m in logged), logged
+    assert any(m.startswith(f"NOT COPIED {key}") for m in logged)
 
 
 def test_a_key_that_names_no_digest_is_checked_against_its_row() -> None:
