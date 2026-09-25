@@ -257,8 +257,9 @@ in the `tckdb_minio` volume, and starting `seaweedfs` would give the API
 an empty store. Start MinIO with its profile instead
 (`docker compose --profile minio up -d db minio`); both services publish
 `127.0.0.1:9000`, so running both fails on the port rather than silently.
-A copy-and-verify migration from MinIO to SeaweedFS is planned as a
-separate change.
+To move to SeaweedFS, follow
+[Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md):
+a verified copy that changes no database row, with MinIO kept for rollback.
 
 > **Keep `--workers 1`.** The default rate limiter is in-process; each
 > extra Uvicorn worker multiplies the effective per-IP bucket budget.

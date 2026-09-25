@@ -99,7 +99,7 @@ PGPASSWORD=$DB_PASSWORD pg_dump \
 
 For larger databases, use `pg_dump --format=custom --compress=9` and `pg_restore`. Verify the dump file is non-empty before proceeding.
 
-Artifact storage (SeaweedFS, MinIO or another S3 store) is a separate concern. If the migration touches artifact-referencing columns, mirror the object store too — see the backup section in [shared-private-deployment.md](../../../docs/deployment/shared-private-deployment.md#backup-and-restore-basics).
+Artifact storage (SeaweedFS, MinIO or another S3 store) is a separate concern. If the migration touches artifact-referencing columns, mirror the object store too — see the backup section in [shared-private-deployment.md](../../../docs/deployment/shared-private-deployment.md#backup-and-restore-basics). Moving the object store itself (MinIO to SeaweedFS) needs no Alembic revision and changes no row: see [migrating_minio_to_seaweedfs.md](migrating_minio_to_seaweedfs.md).
 
 ### 3. Read the revision docstrings
 

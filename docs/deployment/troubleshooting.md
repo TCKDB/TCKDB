@@ -282,6 +282,39 @@ succeed without clearing anything, by design:
   asynchronously from its data-usage scanner, so both the refusal and the
   recovery lag the change by a minute or two.
 
+### Moving an existing MinIO deployment to SeaweedFS
+
+**Symptoms**
+
+- `docker compose up -d seaweedfs` on a MinIO host fails with `port is
+  already allocated` on `127.0.0.1:9000`.
+- After switching `S3_ENDPOINT_URL` to SeaweedFS, some downloads return
+  `502` with `"code": "artifact_object_missing"`, and `/status` is healthy.
+
+**Cause**
+
+Both services publish `127.0.0.1:9000`, on purpose, so the API cannot be
+switched to an empty store by accident. The second symptom means the API
+was switched before the copy was complete. Every such download also
+records an `object_missing` integrity event against the calculation.
+
+**Fix**
+
+Follow
+[Moving from MinIO to SeaweedFS](../../backend/docs/deployment/migrating_minio_to_seaweedfs.md).
+It publishes SeaweedFS on another host port for the duration of the copy,
+and it switches the endpoint only after
+`backend/scripts/ops/migrate_object_store.py --verify-only` has read every
+referenced file back from SeaweedFS and exited 0. If you already switched
+early, do not switch back: uploads since the switch exist only in
+SeaweedFS. Stop the API. Then finish the copy with the source named
+explicitly, since the env file now names SeaweedFS:
+`migrate_object_store.py --source-endpoint http://minio:9000 --dest-endpoint http://seaweedfs:9000 --commit`
+(use the `127.0.0.1` ports on a host API). Start the API again once
+`--verify-only` with the same two flags exits 0. A clean re-read then
+clears the `object_missing` events that were recorded
+(`verify_artifact_integrity.py --sha256 <digest>`, or `--all`).
+
 ---
 
 ## Database
