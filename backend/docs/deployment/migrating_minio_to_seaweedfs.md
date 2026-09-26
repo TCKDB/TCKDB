@@ -140,7 +140,15 @@ services:
 
 Start it with the **same project and env file** as the running stack, so it
 joins the same network and takes the same `S3_ACCESS_KEY` / `S3_SECRET_KEY`
-and `S3_BUCKET` as MinIO:
+and `S3_BUCKET` as MinIO. The env file must also set `SEAWEEDFS_JWT_KEY`
+(`openssl rand -hex 32`): it signs the tokens that keep SeaweedFS's internal
+ports closed, and the container exits 78 without it (#545). Only SeaweedFS
+uses it; the copy tool talks to the S3 gateway and never needs it.
+
+SeaweedFS is on the `<project>_storage` network only, not on the default
+network the API and `db` share (#545). MinIO is on both. So anything that
+must reach SeaweedFS -- the copy tool below, and later the API -- joins
+`storage` as well.
 
 ```bash
 docker compose --env-file <env-file> \
@@ -168,14 +176,24 @@ the API container is up:
 ```bash
 IMAGE="$(docker inspect <api-container> --format '{{.Config.Image}}')"
 migrate() {
-    docker run --rm --network <network> --env-file <env-file> \
+    # Created on the default network (db, minio), connected to storage
+    # (seaweedfs), then run. `docker run` accepts a second --network only on
+    # recent Docker, so this works on any.
+    local c rc
+    c="$(docker create --network <network> --env-file <env-file> \
         -e DB_HOST=db -e DB_PORT=5432 \
         "$IMAGE" python scripts/ops/migrate_object_store.py \
-        --dest-endpoint http://seaweedfs:9000 "$@"
+        --dest-endpoint http://seaweedfs:9000 "$@")" || return 1
+    docker network connect <project>_storage "$c" || { docker rm "$c" >/dev/null; return 1; }
+    docker start -a "$c"; rc=$?
+    docker rm "$c" >/dev/null
+    return "$rc"
 }
 ```
 
-While the API is running you can instead run
+While the API is running and already on the storage network
+(`docker network connect <project>_storage <api-container>`) you can instead
+run
 `docker exec <api-container> /usr/local/bin/_entrypoint.sh python scripts/ops/migrate_object_store.py --dest-endpoint http://seaweedfs:9000 ...`.
 
 **API on the host.** From `backend/`, with the environment the API runs
@@ -270,7 +288,13 @@ S3_ENDPOINT_URL=http://seaweedfs:9000
 Change `S3_ACCESS_KEY` / `S3_SECRET_KEY` only if SeaweedFS was given
 different keys. The compose file gives it the same ones. Leave `S3_BUCKET`
 unchanged: rows record `s3://<bucket>/...`, and the tool warns if the
-destination bucket's name differs.
+destination bucket's name differs. Put the API on the storage network:
+set `TCKDB_EXTRA_NETWORKS=<project>_storage` for `tckdb_deploy.sh` (step 8
+recreates the container with it). Also set
+`S3_SEAWEEDFS_MASTER_URL=http://seaweedfs:9333`, so a full SeaweedFS is
+reported as full (507, and degraded on `/status`) rather than as a
+transient 503; see
+[troubleshooting](../../../docs/deployment/troubleshooting.md#uploads-with-files-return-507-artifact_storage_full).
 
 **API on the host.** Stop MinIO, and publish SeaweedFS on 9000 by
 recreating it *without* the migration override. `S3_ENDPOINT_URL` stays

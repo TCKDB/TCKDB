@@ -145,20 +145,57 @@ An upload carrying an artifact returns `507` with
 `"code": "artifact_storage_full"`. Reads, queries, and file-less uploads all
 work normally. Downloads of existing artifacts also work normally.
 
-**Which stores produce this.** The 507 needs the store to *say* it is
-full. MinIO does (`XMinioStorageFull`, `XMinioAdminBucketQuotaExceeded`), and
-everything below about thresholds, quotas, `mc` and the admin API is about
-MinIO deployments. **SeaweedFS, the default store, does not**: measured on
-4.47, a full disk, exhausted volume slots and an enforced bucket quota all
-answer `InternalError` (HTTP 500), the same code as any internal fault. TCKDB
-cannot tell those apart, so on SeaweedFS a full store surfaces as `503
-artifact_storage_unavailable` and `/status` does not record it as full. If
-SeaweedFS uploads return 503 while `/status` shows the store reachable, check
-its disk (`df -h` on the volume) and its container log, which names the cause
+**Which stores produce this.** MinIO says it is full in its own error code
+(`XMinioStorageFull`, `XMinioAdminBucketQuotaExceeded`), and everything below
+about thresholds, quotas, `mc` and the admin API is about MinIO deployments.
+
+**SeaweedFS, the default store, does not say so.** Measured on 4.47, a full
+disk, exhausted volume slots and an enforced bucket quota all answer
+`InternalError` (HTTP 500), the same code as any internal fault. So when
+`S3_SEAWEEDFS_MASTER_URL` is set (e.g. `http://seaweedfs:9333` for an API
+container on the compose network), TCKDB asks SeaweedFS for its room after an
+`InternalError` write refusal: free disk on the volume server, and free volume
+slots on the master. If the store reports less room than the refused write,
+the upload gets this 507, the refusal is recorded, and `/status` goes degraded,
+exactly as for MinIO. The API log line reads `artifact storage refused a
+<n>-byte write for want of room (S3 code InternalError) ... SeaweedFS reports
+<n> bytes of room (disk free <n>, volume slots <free>/<max> free ...)`, which
+tells you which of the two ran out:
+
+- **Disk** (`limited by free_space`). `weed mini` keeps 1 % of the disk
+  free and checks every 60 s; below that every volume turns read-only and
+  even a 1 KiB write is refused (measured on 4.47). So on a 500 GB disk
+  writes stop with about 5 GB still "free". The log line shows raw `disk
+  free` and the `usable` bytes above the 1 %, and says `BELOW the minimum`
+  in that state; `/status`'s headroom warning already subtracts the 1 %.
+  Free disk on the volume that holds the `tckdb_seaweedfs` data. Measured:
+  the volumes were writable again at the next check, within 75 s, with no
+  restart.
+- **Volume slots** (`limited by volume_slots`). `volume slots 0/<max> free`
+  with `0 bytes of room`, and disk still above the 1 % minimum (measured:
+  slots ran out at 192 MiB written with 63 MiB of disk left). Below the 1 %
+  minimum the slot count also collapses to 0 free, but that is the disk
+  case above and is reported as `free_space`; adding slots would not help.
+  SeaweedFS sizes its slot count from the disk when it starts; give it more
+  (`-volume.max=<n>` on the `seaweedfs` command) or more disk, then
+  recreate the container.
+
+Two cases still surface as `503 artifact_storage_unavailable` with `/status`
+healthy: `S3_SEAWEEDFS_MASTER_URL` is unset (the store is never asked), or the
+store reports room, which is how a real fault and an **enforced bucket quota**
+both look, since free disk and free slots cannot see a quota. If SeaweedFS
+uploads return 503 while `/status` shows the store reachable, check its disk
+(`df -h` on the volume) and its container log, which names the cause
 (`no space left on device`, `No writable volumes and no free volumes left`,
 or `read only ... (e.g. bucket over quota)`). SeaweedFS bucket quotas are not
 enforced on write: `s3.bucket.quota` alone refuses nothing until
 `s3.bucket.quota.enforce -apply` runs.
+
+**Recovery.** While a refusal is outstanding, each `/status` poll asks the
+store again, and clears the refusal once it reports at least the refused size
+free (on SeaweedFS: the smaller of free disk and free slot room). Deleting
+objects on SeaweedFS does not return disk until the volume is vacuumed, so
+freeing disk on the host, or adding slots, is the faster lever.
 
 **"Full" is not all-or-nothing, and this is the confusing part.** MinIO
 refuses a write that would breach its free-space threshold, sized against the
@@ -216,6 +253,7 @@ and clears only on evidence of at least that size:
 | a write **smaller** than the refused size succeeds | **no** — recorded, but the store is still refusing real artifacts |
 | deduplicating against an object already stored | no — that is a read |
 | MinIO reports **at least** the refused size free | yes, unless the refusal was a bucket quota |
+| SeaweedFS (with `S3_SEAWEEDFS_MASTER_URL` set) reports **at least** the refused size of room, disk and slots both | yes |
 | an operator clears it explicitly | yes, always |
 | time passing | **never** — there is deliberately no expiry |
 
@@ -226,8 +264,10 @@ that goes quiet while the disk is still full.
 While a refusal is outstanding, `/status` also asks MinIO's admin API how
 much room it has, so **recovery is noticed on the next poll rather than on
 the next large upload**. It uses the credentials the API already holds, writes
-nothing, and is skipped entirely on a healthy store. Against AWS S3 or any
-non-MinIO store it returns no opinion and changes nothing.
+nothing, and is skipped entirely on a healthy store. SeaweedFS is asked the
+same question through `S3_SEAWEEDFS_MASTER_URL` (its volume server's
+`/status` and its master's status page). Against AWS S3, or any store that is
+neither, it returns no opinion and changes nothing.
 
 It cannot see a bucket quota: measured, MinIO refused a 2 MiB write with
 `XMinioAdminBucketQuotaExceeded` while reporting **418 MiB free**. A quota

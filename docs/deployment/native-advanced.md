@@ -172,7 +172,19 @@ Choose one of:
   `S3_ACCESS_KEY` / `S3_SECRET_KEY`) -- without them it accepts
   unauthenticated requests. Configure
   `S3_ENDPOINT_URL=http://127.0.0.1:9000` and create a bucket named
-  `$S3_BUCKET`. An existing host-managed MinIO works the same way.
+  `$S3_BUCKET`. Its filer (8888), master (9333) and volume server (9340),
+  and their gRPC ports (18888, 19333, 19340, 19000), take no credentials,
+  and over gRPC anyone who can connect can delete objects and whole
+  collections (measured on 4.47). On a single host where the API is the
+  only client, bind everything to loopback: `-ip=127.0.0.1
+  -ip.bind=127.0.0.1`. Measured on 4.47, that closes every port but one:
+  the admin gRPC port 33646 still listens on all interfaces even with
+  `-admin.ui=false`, so block it in the host firewall. Add the `WEED_JWT_*`
+  keys and
+  `WEED_GUARD_WHITE_LIST=127.0.0.1,@` from the `seaweedfs` service in
+  `docker-compose.yml` for the HTTP ports as well. Set
+  `S3_SEAWEEDFS_MASTER_URL=http://127.0.0.1:9333` so the API can tell a full
+  store from a fault. An existing host-managed MinIO works the same way.
 - **Lab-managed S3.** Point `S3_ENDPOINT_URL` at the institutional
   endpoint; provision a bucket and credentials.
 - **AWS S3.** Set `S3_ENDPOINT_URL` to the regional endpoint

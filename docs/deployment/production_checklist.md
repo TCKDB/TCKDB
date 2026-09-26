@@ -58,12 +58,15 @@ Every row below must be set to the indicated value before the API is reachable f
 | `DB_PASSWORD` | strong random value | Never leave at `tckdb` outside local dev. The hosted compose file refuses to start without one. |
 | `DB_ADMIN_*` / `DB_OWNER_*` | strong, distinct operator-only credentials | Keep these in a separate mode-600 env file that the API and worker never load. Alembic uses the owner account. |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | strong random values | Same: never leave at the local-dev defaults in a hosted setup. |
+| `SEAWEEDFS_JWT_KEY` | `openssl rand -hex 32` | Read by the `seaweedfs` compose service only. It signs the tokens its filer and volume server require, which keeps other containers out of the store's internal HTTP ports. The seaweedfs container exits 78 without one (16+ characters). |
+| `TCKDB_EXTRA_NETWORKS` | `tckdbv2_storage` (your `<project>_storage`) when the API is a container using the bundled SeaweedFS | Read by `tckdb_deploy.sh`. The object store is on its own `storage` network, which only the API and worker join; anything on that network can reach SeaweedFS's unauthenticated gRPC ports, so never attach anything else. |
+| `S3_SEAWEEDFS_MASTER_URL` | `http://seaweedfs:9333` on the default store; unset otherwise | Optional. Lets the API tell a full SeaweedFS from a fault (507 and a degraded `/status` instead of a 503) and warn before it fills. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | production DB coordinates | Point at the production PostgreSQL+RDKit instance. Verify the DB exists and the user has appropriate privileges before starting the API. |
 | `TCKDB_API_HOST` | `127.0.0.1` | The API should listen on loopback only; the ingress (Cloudflare Tunnel, nginx, Caddy, Traefik, Tailscale, …) is the only thing that talks to it directly. |
 
 ### Note on signing secrets
 
-TCKDB does **not** use a signed-cookie or JWT model — sessions are server-side rows in `user_session` keyed by a SHA-256 hash of the cookie token. There is no `SECRET_KEY` / `SESSION_SECRET` to configure. The relevant secrets are the DB password and the S3 credentials above.
+TCKDB does **not** use a signed-cookie or JWT model — sessions are server-side rows in `user_session` keyed by a SHA-256 hash of the cookie token. There is no `SECRET_KEY` / `SESSION_SECRET` to configure. The relevant secrets are the DB password, the S3 credentials and SeaweedFS's JWT key above; the last signs tokens inside the object store only and never touches a user session.
 
 If a future change introduces signed cookies or JWTs, add the corresponding secret to this table at the same time as the code change.
 

@@ -143,13 +143,20 @@ predicate is `headroom < MAX_ARTIFACT_BYTES` — *the store no longer has room
 for the largest artifact TCKDB will accept*, which is a claim about the next
 real write.
 
-`source` is either `bucket_quota` or `free_space`, and it matters because the
-remedies differ: "free disk" and "raise the quota" send you to different
-places. It is the tighter of the two, and either may be absent. Both arms come
-from MinIO's admin API, so they apply to MinIO deployments only: against
-SeaweedFS (the default store — measured, its answer to those paths is `404
-NoSuchBucket`), AWS S3 or any other non-MinIO store both are absent and no
-warning is ever raised.
+`source` is `bucket_quota`, `free_space` or `volume_slots`, and it matters
+because the remedies differ: "free disk", "raise the quota" and "give
+SeaweedFS more volume slots" send you to different places. It is the tightest
+of the arms that answered, and any may be absent. `bucket_quota` and
+`free_space` come from MinIO's admin API on MinIO deployments (against
+SeaweedFS those paths answer `404 NoSuchBucket`, measured). On SeaweedFS,
+`free_space` and `volume_slots` come from the store itself when
+`S3_SEAWEEDFS_MASTER_URL` is set: free disk from the volume server's
+`/status`, and slot room (empty slots times the volume size limit, plus what
+the bucket's volumes can still take) from the master's status page. Measured
+on 4.47, a store ran out of slots with 63 MiB of disk still free, which is
+why slots are an arm of their own; `volume_slot_bytes` in the warning carries
+that number. Against AWS S3, or SeaweedFS with the variable unset, every arm
+is absent and no warning is ever raised.
 
 `quota_age_seconds` is the one stale number in the block. A bucket quota is
 cached for five minutes (`TCKDB_STORAGE_QUOTA_TTL_SECONDS`, default `300`)

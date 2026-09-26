@@ -22,8 +22,8 @@ accept*. That is a statement about the next real upload rather than about
 a ratio, and it is the same 50 MB ceiling the upload path enforces, so the
 warning and the refusal are talking about the same object.
 
-Two arms, either of which may have no opinion
----------------------------------------------
+Three arms, any of which may have no opinion
+--------------------------------------------
 ``headroom = min(arms)`` over whichever of these answered:
 
 ``bucket_quota``
@@ -35,11 +35,21 @@ Two arms, either of which may have no opinion
     drive free space MinIO reports. Blind to a bucket quota — measured,
     418 MiB free while a 2 MiB write was refused for quota — which is
     exactly why it is one arm of a ``min()`` and not the whole answer.
+``volume_slots`` (SeaweedFS)
+    Room left in the store's volume slots, and ``free_space`` then comes
+    from the SeaweedFS volume server's disk rather than from MinIO -- less
+    the 1 % that ``weed mini`` keeps free, since writes stop there. Both
+    from :func:`app.services.artifact_storage_seaweedfs.report_capacity`,
+    asked only when ``S3_SEAWEEDFS_MASTER_URL`` is set. Measured on 4.47,
+    a store ran out of slots with 63 MiB of disk still free, so the slot
+    arm is its own arm with its own remedy ("more volume slots", not "free
+    disk") rather than folded into free space.
 
-If neither arm has an opinion (AWS S3, a non-MinIO store, a credential
-without admin rights, a timeout) this returns ``None`` and ``/status``
-says nothing. Never raises: a probe that could turn a healthy deployment
-red would be a worse bug than the silence it was added to fix.
+If no arm has an opinion (AWS S3, a store that is neither MinIO nor a
+configured SeaweedFS, a credential without admin rights, a timeout) this
+returns ``None`` and ``/status`` says nothing. Never raises: a probe that
+could turn a healthy deployment red would be a worse bug than the silence
+it was added to fix.
 
 Why usage comes from the ledger and not from the store
 ------------------------------------------------------
@@ -119,7 +129,11 @@ from typing import Callable, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.services import artifact_storage, artifact_storage_admin
+from app.services import (
+    artifact_storage,
+    artifact_storage_admin,
+    artifact_storage_seaweedfs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +197,7 @@ class Headroom:
     #: than clamping to zero, which would read as "exactly no room" and
     #: hide how far past the line it is.
     bytes: int
-    #: ``"bucket_quota"`` or ``"free_space"``.
+    #: ``"bucket_quota"``, ``"free_space"`` or ``"volume_slots"``.
     source: str
     #: When the arms were combined, UTC.
     measured_at: datetime
@@ -191,6 +205,9 @@ class Headroom:
     quota_bytes: Optional[int]
     ledger_bytes: Optional[int]
     free_bytes: Optional[int]
+    #: SeaweedFS only: room left in volume slots for the bucket. ``None``
+    #: when the store is not a configured SeaweedFS or did not answer.
+    volume_slot_bytes: Optional[int]
     #: Age of the cached quota answer in seconds; ``0.0`` when it was
     #: fetched on this call, ``None`` when there is no quota arm. This is
     #: the only stale number in the report — the ledger and the free-space
@@ -278,6 +295,7 @@ def current_headroom(
     session_factory: Optional[Callable[[], Session]] = None,
     monotonic: Optional[Callable[[], float]] = None,
     now: Optional[Callable[[], datetime]] = None,
+    seaweedfs_master_url: str = "",
 ) -> Optional[Headroom]:
     """The smallest headroom any arm can vouch for, or ``None``.
 
@@ -294,6 +312,7 @@ def current_headroom(
     quota_age: Optional[float] = None
     ledger_bytes: Optional[int] = None
     free_bytes: Optional[int] = None
+    slot_bytes: Optional[int] = None
     try:
         quota_bytes, quota_age = _cached_quota(
             endpoint_url=endpoint_url,
@@ -309,6 +328,21 @@ def current_headroom(
             access_key=access_key,
             secret_key=secret_key,
         )
+        if free_bytes is None and seaweedfs_master_url:
+            # Only when MinIO had no opinion: a store is one or the other,
+            # and a MinIO answering its admin API is not a SeaweedFS.
+            seaweed = artifact_storage_seaweedfs.report_capacity(
+                master_url=seaweedfs_master_url, bucket=bucket
+            )
+            if seaweed is not None:
+                # Usable disk: free less weed mini's 1 % minimum, below which
+                # every write is refused. Measured on 4.47; see the module.
+                free_bytes = seaweed.disk_room_bytes
+                # Below that minimum the master's slot count collapses to the
+                # volumes in use, so the slot arm would read 0 and take the
+                # blame for a disk problem. Leave it out; disk answers alone.
+                if not seaweed.below_min_free:
+                    slot_bytes = seaweed.slot_room_bytes
     except Exception as exc:  # pragma: no cover - defensive
         # Both callees promise never to raise. If one ever breaks that
         # promise it must not take /status with it.
@@ -320,13 +354,16 @@ def current_headroom(
         arms.append(("bucket_quota", quota_bytes - ledger_bytes))
     if free_bytes is not None:
         arms.append(("free_space", free_bytes))
+    if slot_bytes is not None:
+        arms.append(("volume_slots", slot_bytes))
     if not arms:
         return None
 
     # ``min`` on the value, ties resolved by the order above, which puts the
     # quota first: on a quota-limited store the quota is the constraint an
     # operator has to act on, and naming free space there would send them to
-    # the wrong runbook page.
+    # the wrong runbook page. Free space precedes volume slots for the same
+    # reason: with no disk left, more slots would not help.
     source, value = min(arms, key=lambda arm: arm[1])
     if quota_bytes is None:
         quota_age = None
@@ -337,6 +374,7 @@ def current_headroom(
         quota_bytes=quota_bytes,
         ledger_bytes=ledger_bytes,
         free_bytes=free_bytes,
+        volume_slot_bytes=slot_bytes,
         quota_age_seconds=quota_age,
     )
 

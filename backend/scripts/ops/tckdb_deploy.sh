@@ -28,6 +28,15 @@
 #   tckdb_deploy.sh sha-<full-commit>       # deploy a pinned build
 #   tckdb_deploy.sh v1.2.3                  # deploy a release
 #   tckdb_deploy.sh --check                 # report what is running vs available
+#
+# EXTRA NETWORKS
+#   TCKDB_EXTRA_NETWORKS (optional, space- or comma-separated) names Docker
+#   networks the API container joins besides TCKDB_DB_NETWORK. The compose
+#   file keeps the object store on its own `storage` network (#545), so an
+#   API that uses the bundled SeaweedFS needs e.g.
+#       TCKDB_EXTRA_NETWORKS=tckdbv2_storage
+#   Unset (the default) changes nothing. Each network is checked to exist
+#   before the old container is touched, so a typo cannot cause an outage.
 set -uo pipefail
 
 IMAGE_REPO="${TCKDB_IMAGE_REPO:-laxzal/tckdb-api}"
@@ -41,6 +50,9 @@ DB_NETWORK="${TCKDB_DB_NETWORK:-tckdbv2_default}"
 ENV_FILE="${TCKDB_ENV_FILE:-}"
 BACKUP_DIR="${TCKDB_BACKUP_DIR:-}"
 STATUS_URL="${TCKDB_LOCAL_STATUS_URL:-http://127.0.0.1:${API_PORT}/api/v1/status}"
+# Word-split on spaces and commas; empty means none.
+EXTRA_NETWORKS_RAW="${TCKDB_EXTRA_NETWORKS:-}"
+read -r -a EXTRA_NETWORKS <<<"${EXTRA_NETWORKS_RAW//,/ }"
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -53,6 +65,7 @@ if [[ "${1:-}" == "--check" ]]; then
     # does not require either to be set.
     check_body="$(curl -s "$STATUS_URL" 2>/dev/null)"
     echo "container:      $(running_image)"
+    echo "networks:       $(docker inspect "$CONTAINER" --format '{{range $k, $_ := .NetworkSettings.Networks}}{{$k}} {{end}}' 2>/dev/null || echo n/a)"
     echo "systemd uvicorn: $(systemctl is-active tckdb-api.service 2>/dev/null || echo n/a)"
     echo "live revision:  $(grep -o '"alembic_revision":"[^"]*"' <<<"$check_body" || echo unknown)"
     if command -v jq >/dev/null 2>&1; then
@@ -78,6 +91,12 @@ fi
 
 IMAGE="${IMAGE_REPO}:${TAG}"
 echo "==> deploying ${IMAGE}"
+
+# Before anything changes: every network the new container must join exists.
+for net in "$DB_NETWORK" "${EXTRA_NETWORKS[@]}"; do
+    docker network inspect "$net" >/dev/null 2>&1 \
+        || die "Docker network '${net}' does not exist; nothing has been changed (check TCKDB_DB_NETWORK / TCKDB_EXTRA_NETWORKS)"
+done
 
 # 1. Back up first. Cheap, and the only step that makes the rest reversible.
 mkdir -p "$BACKUP_DIR"
@@ -116,6 +135,11 @@ docker run -d --name "$CONTAINER" \
     -p "127.0.0.1:${API_PORT}:8010" \
     --restart unless-stopped \
     "$IMAGE" >/dev/null || die "could not start the new container; roll back with: $0 <previous-tag>"
+for net in "${EXTRA_NETWORKS[@]}"; do
+    docker network connect "$net" "$CONTAINER" \
+        || die "could not connect ${CONTAINER} to network '${net}'; roll back with: $0 <previous-tag>"
+    echo "    joined network: ${net}"
+done
 
 # 5. Verify, and be specific about what to do if it is wrong.
 #

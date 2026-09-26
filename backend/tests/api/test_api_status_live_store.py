@@ -12,10 +12,12 @@ What was measured against SeaweedFS 4.47 before these were written:
 * The MinIO admin paths the headroom probe uses
   (``/minio/admin/v3/info``, ``/minio/admin/v3/get-bucket-quota``) answer
   **404 NoSuchBucket**: SeaweedFS reads ``minio`` as a bucket name. The
-  probe's contract turns every HTTP error into "no opinion", so headroom
-  is ``None`` and ``/status`` raises no warning. That is the correct
-  answer and the one asserted here: a store TCKDB cannot ask about
-  capacity must read as silent, never as low and never as broken.
+  probe's contract turns every HTTP error into "no opinion". That is the
+  correct answer and the one asserted here: a store TCKDB cannot ask about
+  capacity must read as silent, never as low and never as broken. Since
+  #545 SeaweedFS is asked in its own terms instead, through
+  ``S3_SEAWEEDFS_MASTER_URL``; the last tests here read that signal from
+  the real store and prove the store's internal ports are locked down.
 * ``HeadBucket`` answers 200 on an existing bucket, so the storage
   component is healthy.
 * With keys configured an unsigned request is refused (``AccessDenied``,
@@ -27,6 +29,12 @@ always provides one (see :mod:`tests.services._live_object_store`).
 
 from __future__ import annotations
 
+import os
+import urllib.error
+import urllib.request
+import uuid
+from urllib.parse import urlsplit
+
 import boto3
 import pytest
 from botocore import UNSIGNED
@@ -35,7 +43,12 @@ from botocore.exceptions import ClientError
 from sqlalchemy.orm import sessionmaker
 
 from app.api.routes import health
-from app.services import artifact_storage, artifact_storage_admin, artifact_storage_headroom
+from app.services import (
+    artifact_storage,
+    artifact_storage_admin,
+    artifact_storage_headroom,
+    artifact_storage_seaweedfs,
+)
 from tests.services._live_object_store import (
     on_ci,
     store_description,
@@ -109,7 +122,7 @@ def test_the_store_refuses_an_unsigned_request(live_store) -> None:
     assert status == 403, refused.value.response
 
 
-def test_seaweedfs_gives_the_headroom_probe_no_opinion(live_store) -> None:
+def test_seaweedfs_gives_the_minio_admin_probes_no_opinion(live_store) -> None:
     if not live_store.startswith("SeaweedFS"):
         message = (
             f"{store_description()} identifies as {live_store!r}, not SeaweedFS; "
@@ -133,9 +146,128 @@ def test_seaweedfs_gives_the_headroom_probe_no_opinion(live_store) -> None:
         )
         is None
     )
+    # Without ``seaweedfs_master_url`` only the MinIO arms are consulted,
+    # and against SeaweedFS both are silent.
     assert (
         artifact_storage_headroom.current_headroom(
             bucket=artifact_storage.S3_BUCKET, **credentials
         )
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# SeaweedFS: the capacity signal, and the side door that must stay shut (#545)
+# ---------------------------------------------------------------------------
+#
+# ``weed mini`` also runs a filer (8888), a master (9333) and a volume server
+# (9340). Measured on 4.47 with the pre-#545 configuration, all three
+# answered anyone on the network with no credentials: objects were read and
+# written through the filer, needles through the volume server, and the
+# master grew volumes and would delete collections on request. The fix is
+# configuration -- JWT signing on the filer and volume server, and a guard
+# whitelist on the master and volume server admin API (see the ``seaweedfs``
+# service in docker-compose.yml and the CI workflows) -- so these tests are
+# what goes red if that configuration is lost. They reach the ports the way
+# another container on the network would: without credentials, from an
+# address that is not the store's own loopback.
+
+
+@pytest.fixture
+def seaweedfs_master(live_store) -> str:
+    """``S3_SEAWEEDFS_MASTER_URL``, required on CI."""
+    if not live_store.startswith("SeaweedFS"):
+        message = f"{store_description()} is {live_store!r}, not SeaweedFS"
+        if on_ci():
+            pytest.fail(message)
+        pytest.skip(message)
+    master = os.environ.get("S3_SEAWEEDFS_MASTER_URL", "")
+    if not master:
+        unavailable("S3_SEAWEEDFS_MASTER_URL is not set")
+    return master.rstrip("/")
+
+
+def _sibling(master: str, port: int) -> str:
+    """Another ``weed mini`` port on the master's host."""
+    parts = urlsplit(master)
+    return f"{parts.scheme}://{parts.hostname}:{port}"
+
+
+def _status_of(method: str, url: str, body: bytes | None = None) -> int:
+    request = urllib.request.Request(url, data=body, method=method)
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def test_the_seaweedfs_capacity_signal_is_readable(seaweedfs_master) -> None:
+    """Requirement (c): the status pages still answer the API.
+
+    Also pins the master status page's shape against the image CI pins: a
+    digest bump that changes it turns this red instead of silencing the
+    full-store detection.
+    """
+    capacity = artifact_storage_seaweedfs.report_capacity(
+        master_url=seaweedfs_master, bucket=artifact_storage.S3_BUCKET
+    )
+    assert capacity is not None, "SeaweedFS gave no capacity opinion"
+    assert capacity.volume_size_limit_bytes >= 1024 * 1024, capacity
+    assert capacity.max_slots >= 1, capacity
+    assert capacity.disk_free_bytes > 0, capacity
+    assert capacity.room_bytes > 0, capacity
+
+    # And the headroom probe uses it.
+    report = artifact_storage_headroom.current_headroom(
+        endpoint_url=artifact_storage.S3_ENDPOINT_URL,
+        bucket=artifact_storage.S3_BUCKET,
+        access_key=artifact_storage.S3_ACCESS_KEY,
+        secret_key=artifact_storage.S3_SECRET_KEY,
+        seaweedfs_master_url=seaweedfs_master,
+    )
+    assert report is not None
+    assert report.volume_slot_bytes == capacity.slot_room_bytes
+
+
+def test_the_filer_refuses_unauthenticated_reads_and_writes(seaweedfs_master) -> None:
+    """Requirement (a), filer half. Before #545 these answered 201 and 200."""
+    filer = _sibling(seaweedfs_master, 8888)
+    bucket = artifact_storage.S3_BUCKET
+
+    # A real object, written the authenticated way, so the read below is
+    # refused for want of credentials and not because nothing is there.
+    key = f"sidedoor-probe/{uuid.uuid4().hex}"
+    signed = artifact_storage._get_s3_client()
+    signed.put_object(Bucket=bucket, Key=key, Body=b"written through S3")
+    try:
+        assert signed.get_object(Bucket=bucket, Key=key)["Body"].read() == b"written through S3"
+
+        assert _status_of("GET", f"{filer}/buckets/{bucket}/{key}") == 401
+        assert _status_of("GET", f"{filer}/buckets/{bucket}/") == 401
+        written = f"{filer}/buckets/{bucket}/sidedoor-probe/{uuid.uuid4().hex}"
+        assert _status_of("PUT", written, b"unauthenticated") == 401
+    finally:
+        signed.delete_object(Bucket=bucket, Key=key)
+
+
+def test_the_volume_server_refuses_unauthenticated_reads_and_writes(
+    seaweedfs_master,
+) -> None:
+    """Requirement (a), volume half: a needle can be neither read nor written."""
+    volume = _sibling(seaweedfs_master, artifact_storage_seaweedfs.VOLUME_SERVER_PORT)
+    needle = f"{volume}/1,01{uuid.uuid4().hex[:8]}"
+    assert _status_of("GET", needle) == 401
+    assert _status_of("POST", needle, b"unauthenticated") == 401
+
+
+def test_the_master_refuses_admin_requests_from_elsewhere(seaweedfs_master) -> None:
+    """Requirement (d). ``/dir/assign`` is here too: it hands out the JWT a
+    volume server write needs, so an open assign is an open volume server."""
+    for path in (
+        "/vol/grow?count=1",
+        "/col/delete?collection=sidedoor-probe",
+        "/dir/assign",
+        "/dir/lookup?volumeId=1",
+    ):
+        assert _status_of("GET", f"{seaweedfs_master}{path}") == 401, path

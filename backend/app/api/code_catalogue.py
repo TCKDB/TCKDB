@@ -830,7 +830,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "and the object is not there' (502): it answered, and it "
                 "has no room. Told apart by "
                 "ArtifactStorageUnavailable.full, set from the store's own "
-                "error code in artifact_storage._raise_write_refusal. "
+                "error code in artifact_storage._raise_write_refusal, or, "
+                "for SeaweedFS's generic InternalError, from the store's "
+                "own report of its free disk and volume slots when "
+                "S3_SEAWEEDFS_MASTER_URL is set (#545). "
                 "Measured, not inferred: MinIO answers XMinioStorageFull "
                 "at 507 when the drive free-space threshold is breached, "
                 "and XMinioAdminBucketQuotaExceeded at 400 when a hard "
@@ -875,7 +878,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "transient fault, so a full SeaweedFS store lands here "
                 "rather than at artifact_storage_full, and retrying does not "
                 "help until an operator frees space. The detail says so: "
-                "'If this persists, the store may be full.'"
+                "'If this persists, the store may be full.' Since #545 that "
+                "holds only where S3_SEAWEEDFS_MASTER_URL is unset or the "
+                "store does not answer; otherwise TCKDB asks the store for "
+                "its room and a full SeaweedFS reaches artifact_storage_full."
             )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
