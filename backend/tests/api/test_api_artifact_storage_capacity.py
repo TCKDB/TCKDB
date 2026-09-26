@@ -77,6 +77,7 @@ from app.api.routes import health
 from app.db.models.artifact_storage_capacity import ArtifactStorageCapacityEvent
 from app.services import artifact_storage
 from app.services import artifact_storage_capacity as capacity
+from app.services import artifact_storage_seaweedfs as seaweedfs
 
 CONFORMER_PAYLOAD: dict = {
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -211,6 +212,18 @@ def capacity_db(db_engine, monkeypatch):
     finally:
         transaction.rollback()
         connection.close()
+
+
+@pytest.fixture(autouse=True)
+def _no_seaweedfs_capacity_opinion_by_default(monkeypatch):
+    """No test here asks a real SeaweedFS unless it says so.
+
+    CI sets ``S3_SEAWEEDFS_MASTER_URL`` for the live tests, so without this
+    an ``InternalError`` scripted below would be classified by whatever the
+    CI store happens to say about its room. Unset is the pre-#545
+    behaviour, and the tests that exercise the SeaweedFS arm set it back.
+    """
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", "")
 
 
 def _outstanding(factory) -> capacity.StorageFullState | None:
@@ -555,9 +568,10 @@ def test_deduplicating_against_an_existing_object_does_not_clear_it(
 def test_a_refusal_of_unknown_size_is_not_cleared_by_any_write(
     capacity_db,
 ) -> None:
-    """The server-side-copy arm never knows the object's size.
+    """The server-side-copy arm may not know the object's size.
 
-    A refusal with no size cannot be answered by a size comparison, so no
+    It asks with a HEAD after the copy is refused (#545), and records no
+    size when that fails. A refusal with no size cannot be answered by a size comparison, so no
     write may clear it — the conservative direction, and the one an
     operator can undo. Clearing it on any write would be the naive rule
     reintroduced through the one path that has no size to check.
@@ -827,3 +841,281 @@ def test_a_capacity_report_may_not_clear_a_bucket_quota_refusal(
         accepted_bytes=2_097_152, session_factory=capacity_db
     )
     assert _outstanding(capacity_db) is None
+
+
+# ---------------------------------------------------------------------------
+# SeaweedFS: a refusal that does not say "full", and a store that does (#545)
+# ---------------------------------------------------------------------------
+#
+# SeaweedFS answers a full store with ``InternalError``/500, the same as any
+# fault, so the code never classifies it. With ``S3_SEAWEEDFS_MASTER_URL``
+# set, the write path asks the store for its room, and the answers below are
+# the ones measured against 4.47 at the instant of a real refusal (see
+# ``tests/services/test_artifact_storage_seaweedfs.py`` for the recordings).
+
+_MASTER = "http://seaweedfs.test:9333"
+
+#: Measured: 256 MiB store refused at 192 MiB written, slots exhausted, disk
+#: still free.
+_SLOTS_EXHAUSTED = seaweedfs.SeaweedCapacity(
+    disk_free_bytes=66_736_128,
+    disk_room_bytes=66_736_128,
+    below_min_free=False,
+    slot_room_bytes=0,
+    volume_size_limit_bytes=64 * 1024 * 1024,
+    free_slots=0,
+    max_slots=3,
+)
+#: Measured: an empty 256 MiB store.
+_ROOMY = seaweedfs.SeaweedCapacity(
+    disk_free_bytes=268_120_064,
+    disk_room_bytes=268_120_064,
+    below_min_free=False,
+    slot_room_bytes=3 * 64 * 1024 * 1024,
+    volume_size_limit_bytes=64 * 1024 * 1024,
+    free_slots=3,
+    max_slots=3,
+)
+
+
+@pytest.fixture
+def seaweed_answers(monkeypatch):
+    """Point the write path at a SeaweedFS and script what it reports."""
+    asked: list[dict] = []
+
+    def _install(answer):
+        monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _MASTER)
+
+        def _report(**kwargs):
+            asked.append(kwargs)
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+
+        monkeypatch.setattr(seaweedfs, "report_capacity", _report)
+        return asked
+
+    return _install
+
+
+def _refused_internal_error(capacity_db):
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        artifact_storage.store_artifact(
+            _BYTES,
+            _SHA256,
+            client=_FullStore(code="InternalError", status=500),
+            bucket="b",
+            session_factory=capacity_db,
+        )
+    return caught.value
+
+
+def test_an_internal_error_on_a_seaweedfs_with_no_room_is_full(
+    capacity_db, seaweed_answers
+) -> None:
+    asked = seaweed_answers(_SLOTS_EXHAUSTED)
+    refused = _refused_internal_error(capacity_db)
+
+    assert refused.full is True
+    assert refused.s3_code == "InternalError"
+    assert asked == [{"master_url": _MASTER, "bucket": artifact_storage.S3_BUCKET}]
+
+    observation = _outstanding(capacity_db)
+    assert observation is not None
+    assert observation.s3_code == "InternalError"
+    assert observation.attempted_bytes == len(_BYTES)
+    # A free-space report can answer it later: it is not a quota refusal.
+    assert observation.clearable_by_capacity_report is True
+
+    with capacity_db() as session:
+        detail = session.scalars(
+            select(ArtifactStorageCapacityEvent.detail).order_by(
+                ArtifactStorageCapacityEvent.id.desc()
+            )
+        ).first()
+    # The operator reading the row sees what the store said, including the
+    # slot count that disk free space alone would have hidden.
+    assert "0 bytes of room" in detail, detail
+    assert "disk free 66736128" in detail, detail
+    assert "0/3 free" in detail, detail
+
+
+def test_an_internal_error_on_a_seaweedfs_with_room_stays_unclassified(
+    capacity_db, seaweed_answers
+) -> None:
+    """A transient fault on a store with room is not a full store."""
+    asked = seaweed_answers(_ROOMY)
+    refused = _refused_internal_error(capacity_db)
+
+    assert len(asked) == 1, "the store was not asked"
+    assert refused.full is False
+    assert _outstanding(capacity_db) is None
+
+
+def test_no_opinion_from_seaweedfs_leaves_the_refusal_unclassified(
+    capacity_db, seaweed_answers
+) -> None:
+    seaweed_answers(None)
+    refused = _refused_internal_error(capacity_db)
+    assert refused.full is False
+    assert _outstanding(capacity_db) is None
+
+
+def test_a_capacity_check_that_raises_leaves_the_upload_failure_intact(
+    capacity_db, seaweed_answers
+) -> None:
+    """``report_capacity`` promises never to raise; if it ever does, the
+    depositor still gets the storage failure, not the probe's exception."""
+    asked = seaweed_answers(RuntimeError("probe blew up"))
+    refused = _refused_internal_error(capacity_db)
+
+    assert len(asked) == 1
+    assert isinstance(refused, artifact_storage.ArtifactStorageUnavailable)
+    assert refused.full is False
+    assert refused.s3_code == "InternalError"
+    assert _outstanding(capacity_db) is None
+
+
+def test_unset_asks_nothing(capacity_db, monkeypatch) -> None:
+    def _must_not_be_called(**_kwargs):
+        raise AssertionError("asked a SeaweedFS with S3_SEAWEEDFS_MASTER_URL unset")
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _must_not_be_called)
+    refused = _refused_internal_error(capacity_db)
+    assert refused.full is False
+
+
+def test_only_internal_error_earns_a_second_opinion(
+    capacity_db, seaweed_answers
+) -> None:
+    """``AccessDenied`` on a full store is still a credentials problem."""
+    asked = seaweed_answers(_SLOTS_EXHAUSTED)
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        artifact_storage.store_artifact(
+            _BYTES,
+            _SHA256,
+            client=_FullStore(code="AccessDenied", status=403),
+            bucket="b",
+            session_factory=capacity_db,
+        )
+    assert caught.value.full is False
+    assert asked == []
+
+
+@pytest.fixture
+def status_sees_only_seaweedfs(monkeypatch):
+    """``/status`` with a bucket that answers and no MinIO admin opinion.
+
+    A full SeaweedFS still answers ``HeadBucket`` (measured), and the MinIO
+    admin probes must not reach whatever store the machine running the test
+    happens to have on 9000.
+    """
+    monkeypatch.setattr(
+        health,
+        "_probe_bucket",
+        lambda: {"healthy": True, "reachable": True, "reason": None},
+    )
+    monkeypatch.setattr(
+        health.artifact_storage_admin, "report_free_bytes", lambda **_k: None
+    )
+    monkeypatch.setattr(
+        health.artifact_storage_admin, "report_bucket_quota_bytes", lambda **_k: None
+    )
+
+
+def test_a_full_seaweedfs_reaches_the_depositor_as_507_and_status_as_degraded(
+    client, use_store, capacity_db, seaweed_answers, status_sees_only_seaweedfs
+) -> None:
+    """The whole chain through the route, then ``/status``.
+
+    Before #545 this upload answered 503 "retry later" and ``/status``
+    stayed healthy.
+    """
+    seaweed_answers(_SLOTS_EXHAUSTED)
+    use_store(_FullStore(code="InternalError", status=500))
+    calc_id = _a_calculation(client)
+
+    response = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+    )
+    assert response.status_code == 507, response.text
+    assert response.json()["code"] == "artifact_storage_full"
+
+    body = client.get("/api/v1/status").json()
+    block = body["components"]["artifact_storage"]
+    assert block["storage_full"] is True, block
+    assert block["healthy"] is False, block
+    assert "artifact_storage" in body["degraded"], body
+
+
+def test_a_seaweedfs_report_of_room_clears_the_refusal_on_status(
+    client, capacity_db, seaweed_answers, status_sees_only_seaweedfs
+) -> None:
+    """Recovery without waiting for a depositor: the operator frees space
+    (here, the store now reports room) and the next poll goes green."""
+    seaweed_answers(_SLOTS_EXHAUSTED)
+    _refused_internal_error(capacity_db)
+
+    still_full = client.get("/api/v1/status").json()
+    assert still_full["components"]["artifact_storage"]["storage_full"] is True
+
+    seaweed_answers(_ROOMY)
+    recovered = client.get("/api/v1/status").json()
+    assert recovered["components"]["artifact_storage"]["storage_full"] is False
+    assert "artifact_storage" not in recovered["degraded"], recovered
+
+
+#: Measured (fixture ``disk_full``): 3,833,856 bytes free on 128 MiB, of which
+#: 2,491,678 are usable above weed mini's 1 % minimum; slots to spare.
+_DISK_FULL = seaweedfs.SeaweedCapacity(
+    disk_free_bytes=3_833_856,
+    disk_room_bytes=2_491_678,
+    below_min_free=False,
+    slot_room_bytes=7 * 64 * 1024 * 1024,
+    volume_size_limit_bytes=64 * 1024 * 1024,
+    free_slots=7,
+    max_slots=10,
+)
+_HELD_BYTES = 4 * 1024 * 1024
+
+
+class _InternalErrorOnCopy(_HealthyStore):
+    """Serves reads, including HEAD of the object being moved; refuses the copy."""
+
+    def copy_object(self, Bucket, Key, CopySource):
+        raise _client_error("InternalError", 500, "CopyObject")
+
+
+@pytest.mark.parametrize(
+    ("operation", "source_key"),
+    [
+        (artifact_storage.hold_artifact_object, _KEY),
+        (artifact_storage.restore_held_object, artifact_storage.reclaim_hold_key(_SHA256)),
+    ],
+    ids=["hold", "restore"],
+)
+def test_a_refused_copy_on_a_full_disk_is_sized_and_classified(
+    capacity_db, seaweed_answers, operation, source_key
+) -> None:
+    """The copy arm used to report no size, so on a full *disk* -- where the
+    store still has some bytes -- "room < size" could not be asked and a
+    full store read as a fault. The size is the object's, from a HEAD."""
+    seaweed_answers(_DISK_FULL)
+    store = _InternalErrorOnCopy({source_key: b"z" * _HELD_BYTES})
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        operation(_SHA256, client=store, bucket="b")
+    assert caught.value.full is True
+    observation = _outstanding(capacity_db)
+    assert observation is not None
+    assert observation.attempted_bytes == _HELD_BYTES
+
+
+def test_a_refused_copy_whose_size_cannot_be_read_stays_unclassified(
+    capacity_db, seaweed_answers
+) -> None:
+    """No HEAD answer, no size: only "no room at all" could explain it."""
+    seaweed_answers(_DISK_FULL)
+    store = _InternalErrorOnCopy({})  # HEAD of the source answers 404
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        artifact_storage.hold_artifact_object(_SHA256, client=store, bucket="b")
+    assert caught.value.full is False

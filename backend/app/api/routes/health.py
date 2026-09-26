@@ -44,6 +44,7 @@ from app.services import (
     artifact_storage_admin,
     artifact_storage_capacity,
     artifact_storage_headroom,
+    artifact_storage_seaweedfs,
 )
 
 router = APIRouter()
@@ -299,8 +300,18 @@ def _outstanding_storage_refusal():
         secret_key=artifact_storage.S3_SECRET_KEY,
     )
     if free_bytes is None:
-        # No opinion -- a non-MinIO store, or one that will not say. The
-        # recorded refusal stands untouched.
+        # Not a MinIO. A configured SeaweedFS reports its room instead: the
+        # smaller of disk free and volume-slot room, the same number that
+        # classified the refusal as full on the write path. Unconfigured, or
+        # not answering, it is ``None`` without a request being made.
+        seaweed = artifact_storage_seaweedfs.report_capacity(
+            master_url=artifact_storage.S3_SEAWEEDFS_MASTER_URL,
+            bucket=artifact_storage.S3_BUCKET,
+        )
+        free_bytes = None if seaweed is None else seaweed.room_bytes
+    if free_bytes is None:
+        # No opinion -- a store that will not say. The recorded refusal
+        # stands untouched.
         return state
 
     return _refusal_after_capacity_report(free_bytes=free_bytes, fallback=state)
@@ -385,6 +396,7 @@ def _headroom_warning() -> dict | None:
         access_key=artifact_storage.S3_ACCESS_KEY,
         secret_key=artifact_storage.S3_SECRET_KEY,
         session_factory=SessionLocal,
+        seaweedfs_master_url=artifact_storage.S3_SEAWEEDFS_MASTER_URL,
     )
     if headroom is None or not headroom.is_low:
         return None
@@ -396,10 +408,18 @@ def _headroom_warning() -> dict | None:
             f"TCKDB has deposited ({headroom.ledger_bytes:,} bytes); raise "
             f"the quota or reclaim orphaned objects"
         )
+    elif headroom.source == "volume_slots":
+        where = (
+            f"room left in the SeaweedFS volume slots "
+            f"({headroom.volume_slot_bytes:,} bytes) although the disk has "
+            f"{headroom.free_bytes:,} usable bytes; give the volume server "
+            f"more slots (-volume.max) or free disk"
+        )
     else:
         where = (
-            f"free space the object store reports ({headroom.free_bytes:,} "
-            f"bytes); free disk"
+            f"usable free space the object store reports "
+            f"({headroom.free_bytes:,} bytes, after any minimum the store "
+            f"keeps free); free disk"
         )
     summary = (
         f"artifact storage has {headroom.bytes:,} bytes of headroom, less "
@@ -417,6 +437,7 @@ def _headroom_warning() -> dict | None:
         "quota_bytes": headroom.quota_bytes,
         "ledger_bytes": headroom.ledger_bytes,
         "free_bytes": headroom.free_bytes,
+        "volume_slot_bytes": headroom.volume_slot_bytes,
         # The one stale number in the report, named as such. The ledger and
         # the free-space figure are read fresh on every poll; the quota is
         # cached because it changes about once a year.
@@ -468,7 +489,10 @@ def _artifact_storage_status() -> dict:
       poll instead of on the next lucky upload — and costs nothing on a
       healthy store. It can only ever *answer* a refusal, never raise one,
       because it is MinIO-specific and blind to bucket quotas; see
-      :mod:`app.services.artifact_storage_admin`.
+      :mod:`app.services.artifact_storage_admin`. A SeaweedFS store named
+      by ``S3_SEAWEEDFS_MASTER_URL`` answers the same question from its
+      volume server and master status pages
+      (:mod:`app.services.artifact_storage_seaweedfs`).
     * **``endpoint`` and ``bucket`` are reported.** They are what makes the
       failure legible in seconds rather than after reading source: the
       incident's whole content was that the endpoint was the wrong one,

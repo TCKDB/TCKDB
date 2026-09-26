@@ -35,6 +35,7 @@ from app.services import (
     artifact_storage,
     artifact_storage_admin,
     artifact_storage_headroom,
+    artifact_storage_seaweedfs,
 )
 from app.services import artifact_storage_capacity as capacity
 
@@ -493,6 +494,11 @@ def _no_capacity_probe_by_default(monkeypatch):
     monkeypatch.setattr(
         artifact_storage_admin, "report_bucket_quota_bytes", lambda **_kwargs: None
     )
+    # Nor a real SeaweedFS: CI sets S3_SEAWEEDFS_MASTER_URL for the live
+    # tests, and a real store's room would answer refusals recorded here.
+    monkeypatch.setattr(
+        artifact_storage_seaweedfs, "report_capacity", lambda **_kwargs: None
+    )
     yield
     artifact_storage_headroom.clear_quota_cache()
 
@@ -640,6 +646,8 @@ def test_the_probe_deadline_is_short_enough_to_poll(client) -> None:
     # budgets add. Asserted together because either one alone looks fine and
     # the sum is what an operator's poll actually waits for.
     assert artifact_storage_admin._TIMEOUT_SECONDS <= 2.0
+    # The SeaweedFS probe asks two servers, each on this budget.
+    assert artifact_storage_seaweedfs._TIMEOUT_SECONDS <= 2.0
     assert (
         health._STORAGE_PROBE_DEADLINE_SECONDS
         + artifact_storage_admin._TIMEOUT_SECONDS
@@ -1119,6 +1127,104 @@ def test_an_unreachable_store_is_not_also_told_it_is_getting_full(
     assert body["degraded"] == ["artifact_storage"]
     assert body["warnings"] == []
     assert asked == [], "the headroom probe ran against a store that is not there"
+
+
+# ---------------------------------------------------------------------------
+# SeaweedFS headroom (#545): the numbers measured on 4.47 while filling it
+# ---------------------------------------------------------------------------
+
+_SEAWEED_MASTER = "http://seaweedfs.test:9333"
+_MIB = 1024 * 1024
+
+
+def _seaweed_reports(monkeypatch, capacity_answer):
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _SEAWEED_MASTER)
+    asked: list[dict] = []
+
+    def _report(**kwargs):
+        asked.append(kwargs)
+        return capacity_answer
+
+    monkeypatch.setattr(artifact_storage_seaweedfs, "report_capacity", _report)
+    return asked
+
+
+def test_seaweedfs_out_of_slots_warns_before_it_fills(
+    client, storage_probe, monkeypatch
+) -> None:
+    """Measured at 160 MiB written into a 256 MiB store: every write still
+    succeeded, 100 MiB of disk was free, and 32 MiB of volume-slot room was
+    left. Disk free space alone would have raised nothing; the store refused
+    at 192 MiB. The warning has to come from the slot arm, and has to name
+    it, because the remedy is more slots, not more disk."""
+    storage_probe(None)
+    asked = _seaweed_reports(
+        monkeypatch,
+        artifact_storage_seaweedfs.SeaweedCapacity(
+            disk_free_bytes=100_294_656,
+            disk_room_bytes=100_294_656,
+            below_min_free=False,
+            slot_room_bytes=64 * _MIB - 33_554_528,
+            volume_size_limit_bytes=64 * _MIB,
+            free_slots=0,
+            max_slots=3,
+        ),
+    )
+
+    body = client.get("/api/v1/status").json()
+    assert asked == [{"master_url": _SEAWEED_MASTER, "bucket": PROBE_BUCKET}]
+    assert body["status"] == "ok"
+    assert body["degraded"] == []
+    warning = _artifact_warnings(body)[0]
+    assert warning["source"] == "volume_slots"
+    assert warning["headroom_bytes"] == 64 * _MIB - 33_554_528
+    assert warning["volume_slot_bytes"] == 64 * _MIB - 33_554_528
+    assert warning["free_bytes"] == 100_294_656
+    assert "-volume.max" in warning["summary"], warning["summary"]
+
+
+def test_seaweedfs_disk_low_warns_as_free_space(
+    client, storage_probe, monkeypatch
+) -> None:
+    storage_probe(None)
+    _seaweed_reports(
+        monkeypatch,
+        artifact_storage_seaweedfs.SeaweedCapacity(
+            disk_free_bytes=33_202_176,
+            disk_room_bytes=33_202_176,
+            below_min_free=False,
+            slot_room_bytes=8 * 64 * _MIB,
+            volume_size_limit_bytes=64 * _MIB,
+            free_slots=8,
+            max_slots=10,
+        ),
+    )
+    warning = _artifact_warnings(client.get("/api/v1/status").json())[0]
+    assert warning["source"] == "free_space"
+    assert warning["headroom_bytes"] == 33_202_176
+    assert "free disk" in warning["summary"]
+
+
+def test_seaweedfs_with_room_raises_no_warning(
+    client, storage_probe, monkeypatch
+) -> None:
+    storage_probe(None)
+    asked = _seaweed_reports(
+        monkeypatch,
+        artifact_storage_seaweedfs.SeaweedCapacity(
+            disk_free_bytes=20 * 1024 * _MIB,
+            disk_room_bytes=20 * 1024 * _MIB,
+            below_min_free=False,
+            slot_room_bytes=10 * 1024 * _MIB,
+            volume_size_limit_bytes=1024 * _MIB,
+            free_slots=10,
+            max_slots=20,
+        ),
+    )
+    body = client.get("/api/v1/status").json()
+    assert len(asked) == 1, "the store was not asked, so 'no warning' proves nothing"
+    assert body["warnings"] == []
+    assert body["status"] == "ok"
 
 
 @pytest.mark.parametrize(

@@ -619,8 +619,11 @@ def _artifact_storage_unavailable_handler(
         content={
             # The second sentence is for SeaweedFS, which answers a full
             # store with a generic ``InternalError`` 500 that cannot be told
-            # apart from a transient fault, so it lands here rather than at
-            # 507 ``artifact_storage_full``. See ``_STORAGE_FULL_CODES``.
+            # apart from a transient fault by its code. With
+            # ``S3_SEAWEEDFS_MASTER_URL`` set, the store is asked for its
+            # room and a full one reaches 507 ``artifact_storage_full``
+            # instead; unset, or with the store not answering, it lands
+            # here. See ``_SECOND_OPINION_CODES``.
             "detail": (
                 "Artifact storage is temporarily unavailable. Retry later. "
                 "If this persists, the store may be full."

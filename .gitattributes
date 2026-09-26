@@ -4,3 +4,7 @@
 *.yaml text eol=lf
 *.toml text eol=lf
 *.sh text eol=lf
+
+# Verbatim response bodies recorded from a real server (#545). Their
+# trailing whitespace is what the server sent; keep it, and do not flag it.
+backend/tests/fixtures/seaweedfs_4_47/* -whitespace

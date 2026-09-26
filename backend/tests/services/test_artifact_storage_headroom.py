@@ -47,6 +47,7 @@ from app.schemas.fragments.artifact import ArtifactIn
 from app.services import artifact_persistence, artifact_storage
 from app.services import artifact_storage_admin as admin
 from app.services import artifact_storage_headroom as headroom
+from app.services import artifact_storage_seaweedfs as seaweedfs
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_species,
@@ -466,3 +467,128 @@ def test_the_ttl_is_configurable_and_a_bad_value_is_ignored(monkeypatch) -> None
     for nonsense in ("soon", "-5", ""):
         monkeypatch.setenv("TCKDB_STORAGE_QUOTA_TTL_SECONDS", nonsense)
         assert headroom._ttl_seconds() == headroom._QUOTA_TTL_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# SeaweedFS (#545): its disk is the free-space arm, its slots a third arm
+# ---------------------------------------------------------------------------
+
+_MIB = 1024**2
+
+
+def _seaweed(disk: int, slots: int) -> seaweedfs.SeaweedCapacity:
+    return seaweedfs.SeaweedCapacity(
+        disk_free_bytes=disk,
+        disk_room_bytes=disk,
+        below_min_free=False,
+        slot_room_bytes=slots,
+        volume_size_limit_bytes=64 * _MIB,
+        free_slots=0,
+        max_slots=3,
+    )
+
+
+def test_seaweedfs_slots_are_an_arm_of_their_own(monkeypatch) -> None:
+    """Measured on 4.47: refused with 63.6 MiB of disk free and no slot room.
+    As one number, "free space" would have read 63.6 MiB and not warned."""
+    _arms(monkeypatch)
+    monkeypatch.setattr(
+        seaweedfs, "report_capacity", lambda **_kw: _seaweed(66_736_128, 0)
+    )
+    report = _headroom(seaweedfs_master_url="http://seaweedfs:9333")
+    assert report is not None
+    assert report.bytes == 0
+    assert report.source == "volume_slots"
+    assert report.free_bytes == 66_736_128
+    assert report.volume_slot_bytes == 0
+    assert report.is_low
+
+
+def test_seaweedfs_disk_is_the_free_space_arm(monkeypatch) -> None:
+    _arms(monkeypatch)
+    monkeypatch.setattr(
+        seaweedfs, "report_capacity", lambda **_kw: _seaweed(3_833_856, 7 * 64 * _MIB)
+    )
+    report = _headroom(seaweedfs_master_url="http://seaweedfs:9333")
+    assert report is not None
+    assert report.source == "free_space"
+    assert report.bytes == 3_833_856
+
+
+def test_seaweedfs_is_not_asked_unless_configured(monkeypatch) -> None:
+    _arms(monkeypatch)
+
+    def _must_not_be_called(**_kw):
+        raise AssertionError("asked a SeaweedFS nobody configured")
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _must_not_be_called)
+    assert _headroom() is None
+
+
+def test_seaweedfs_is_not_asked_when_minio_answered(monkeypatch) -> None:
+    """A store that answers MinIO's admin API is a MinIO."""
+    _arms(monkeypatch, free=7 * _MIB)
+
+    def _must_not_be_called(**_kw):
+        raise AssertionError("asked SeaweedFS about a MinIO")
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _must_not_be_called)
+    report = _headroom(seaweedfs_master_url="http://seaweedfs:9333")
+    assert report is not None and report.bytes == 7 * _MIB
+    assert report.volume_slot_bytes is None
+
+
+def test_seaweedfs_with_no_opinion_is_no_opinion(monkeypatch) -> None:
+    _arms(monkeypatch)
+    monkeypatch.setattr(seaweedfs, "report_capacity", lambda **_kw: None)
+    assert _headroom(seaweedfs_master_url="http://seaweedfs:9333") is None
+
+
+def test_below_seaweedfs_minimum_free_the_warning_names_disk_not_slots(monkeypatch) -> None:
+    """Measured on 4.47 (fixture ``below_min_free``): at 0.77 % free every
+    volume goes read-only and the master's slot count collapses to 0 free.
+    The slot arm must not take the blame; "add slots" would do nothing."""
+    _arms(monkeypatch)
+    monkeypatch.setattr(
+        seaweedfs,
+        "report_capacity",
+        lambda **_kw: seaweedfs.SeaweedCapacity(
+            disk_free_bytes=8_265_728,
+            disk_room_bytes=0,
+            below_min_free=True,
+            slot_room_bytes=0,
+            volume_size_limit_bytes=64 * _MIB,
+            free_slots=0,
+            max_slots=16,
+        ),
+    )
+    report = _headroom(seaweedfs_master_url="http://seaweedfs:9333")
+    assert report is not None
+    assert report.source == "free_space"
+    assert report.bytes == 0
+    assert report.volume_slot_bytes is None
+
+
+def test_seaweedfs_usable_disk_excludes_the_minimum_free(monkeypatch) -> None:
+    """On 500 GB writes stop at 5 GB free, so 5.04 GB "free" is 40 MB of
+    usable room: below the 50 MB artifact ceiling, so the warning fires.
+    Reading raw free space, it would not fire until writes had stopped."""
+    _arms(monkeypatch)
+    monkeypatch.setattr(
+        seaweedfs,
+        "report_capacity",
+        lambda **_kw: seaweedfs.SeaweedCapacity(
+            disk_free_bytes=5_040_000_000,
+            disk_room_bytes=40_000_000,
+            below_min_free=False,
+            slot_room_bytes=400 * 1024 * _MIB,
+            volume_size_limit_bytes=1024 * _MIB,
+            free_slots=400,
+            max_slots=466,
+        ),
+    )
+    report = _headroom(seaweedfs_master_url="http://seaweedfs:9333")
+    assert report is not None
+    assert report.source == "free_space"
+    assert report.bytes == 40_000_000
+    assert report.is_low

@@ -24,13 +24,17 @@
 #     Hosted deployments supply DB_ADMIN_* from a separate operator-only
 #     env file; the API receives only the restricted DB_* runtime account.
 #   * Secrets (DB_PASSWORD, S3_SECRET_KEY) are REQUIRED via `${VAR:?...}`.
-#     Compose fails fast if they are unset.
+#     Compose fails fast if they are unset. SEAWEEDFS_JWT_KEY is required
+#     too, but checked by the seaweedfs container when it starts (it exits
+#     78 without one), so a stack that runs only MinIO does not need it.
 #   * All published ports bind to 127.0.0.1 only. Postgres and the object
 #     store are never reachable from the LAN or public internet. Loopback
 #     is enough because the API and Alembic run on the host (`tckdb_env`
 #     conda env).
 #   * Bridge networking for the data plane; `network_mode: host` only for
 #     `cloudflared`, which must dial the host-side API at 127.0.0.1:8010.
+#     The object store is on a second network, `storage`, that only the
+#     services talking to it join (see the seaweedfs service, #545).
 #   * Optional services live behind profiles so `docker compose config`
 #     and `docker compose up -d db seaweedfs` ignore them by default.
 #     MinIO is one of them (`--profile minio`), for deployments that
@@ -119,12 +123,60 @@ services:
   # The S3 gateway listens on 9000, the port MinIO used, so S3_ENDPOINT_URL
   # values written for MinIO still point at the store. Telemetry, WebDAV,
   # the admin UI and the Iceberg and Lance endpoints are off; nothing here
-  # uses them. `weed mini` also runs the filer (8888), master (9333) and
-  # volume server (9340) with NO authentication, reachable from anything
-  # on the compose network (objects can be read and written through
-  # seaweedfs:8888 without credentials), so those ports must never be
-  # published; locking them down (security.toml JWT or a whitelist) is a
-  # follow-up.
+  # uses them.
+  #
+  # The side door, and how it is shut (#545). `weed mini` also runs a filer
+  # (8888), a master (9333) and a volume server (9340), each with a gRPC
+  # port beside it (18888, 19333, 19340; the S3 gateway has 19000), and
+  # out of the box none of them asks for credentials. Measured on 4.47,
+  # from another container with no credentials: objects read and written
+  # through seaweedfs:8888, raw data on :9340, the master growing volumes on
+  # request -- and, over gRPC with `weed shell`, an object deleted
+  # (`fs.rm`) and the bucket's whole collection deleted
+  # (`collection.delete -apply`). Two layers close it:
+  #
+  # 1. Network isolation, which is what closes gRPC. `seaweedfs` is on the
+  #    `storage` network ONLY. Nothing on `default` (db, anything else
+  #    started in this project) can reach any SeaweedFS port, gRPC included.
+  #    Only services that talk to the store join `storage`: the worker
+  #    here, and the API container, which tckdb_deploy.sh connects when
+  #    TCKDB_EXTRA_NETWORKS names this network. The API already holds S3
+  #    credentials that can delete every object, so reaching gRPC gives it
+  #    nothing it does not have; that is why isolation, rather than gRPC
+  #    mTLS (which needs certificate files), is the chosen fix.
+  # 2. HTTP lockdown, for whatever does share the network:
+  #    * JWT signing -- the filer and the volume server refuse to read or
+  #      write file content without a JWT (401 "wrong jwt"). The four
+  #      WEED_JWT_* keys are derived inside the container from one secret,
+  #      SEAWEEDFS_JWT_KEY, with a different suffix per role, by the
+  #      entrypoint wrapper below.
+  #    * WEED_GUARD_WHITE_LIST -- the master and volume server admin API
+  #      (/vol/grow, /col/delete, /dir/assign, which hands out write JWTs,
+  #      /dir/lookup, /dir/status) answers 401 to any address not listed.
+  #      `127.0.0.1` is this container's own loopback; `@` is the peer name
+  #      SeaweedFS gives its in-process gRPC over a unix socket, without
+  #      which the master cannot create volumes (measured).
+  #    * -ip=127.0.0.1 -- the components address one another on loopback,
+  #      so their own HTTP comes from a whitelisted address. -ip.bind=0.0.0.0
+  #      keeps every port listening where it was.
+  #
+  # What the HTTP layer does NOT cover: the gRPC ports, which a container on
+  # the `storage` network can still use destructively (SeaweedFS secures
+  # gRPC only with mTLS). Only join `storage` from something you would
+  # trust with the S3 secret key. Readable without credentials, on purpose:
+  # the volume server's /status and the master's status page (GET /), which
+  # the API reads for free space when S3_SEAWEEDFS_MASTER_URL is set. No
+  # SeaweedFS port other than 9000 on loopback is published, and none may be.
+  #
+  # None of this touches stored data: a volume written without these
+  # settings reads back unchanged with them, and after removing them again.
+  #
+  # SEAWEEDFS_JWT_KEY is checked when the container starts, not when Compose
+  # reads this file, so a MinIO-only stack (`--profile minio up db minio`)
+  # does not need it. Started without it (or with fewer than 16 characters)
+  # the container exits 78 and says why, rather than running an open store:
+  # a `${VAR:-}` default with the suffixes appended would have produced
+  # well-known keys such as ".volume-write".
   #
   # S3_BUCKET is passed so `weed mini` creates the artifact bucket on
   # start (it reads that variable; existing buckets are left alone).
@@ -140,6 +192,23 @@ services:
   # became this repository's outage.
   seaweedfs:
     image: chrislusf/seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882
+    # A wrapper around the image's own /entrypoint.sh, which still does the
+    # ownership fix and drops to the `seaweed` user. `$$` defers expansion to
+    # the container's shell; the key never appears in the compose model.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ "$${#SEAWEEDFS_JWT_KEY}" -lt 16 ]; then
+          echo "seaweedfs: SEAWEEDFS_JWT_KEY is unset or shorter than 16 characters; refusing to start an unauthenticated store (see docker-compose.yml, #545)" >&2
+          exit 78
+        fi
+        export WEED_JWT_SIGNING_KEY="$${SEAWEEDFS_JWT_KEY}.volume-write"
+        export WEED_JWT_SIGNING_READ_KEY="$${SEAWEEDFS_JWT_KEY}.volume-read"
+        export WEED_JWT_FILER_SIGNING_KEY="$${SEAWEEDFS_JWT_KEY}.filer-write"
+        export WEED_JWT_FILER_SIGNING_READ_KEY="$${SEAWEEDFS_JWT_KEY}.filer-read"
+        exec /entrypoint.sh "$$@"
+      - seaweedfs
     command:
       - mini
       - -dir=/data
@@ -149,10 +218,17 @@ services:
       - -admin.ui=false
       - -s3.port.iceberg=0
       - -s3.port.lance=0
+      - -ip=127.0.0.1
+      - -ip.bind=0.0.0.0
     environment:
       AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY:-tckdb}
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
       S3_BUCKET: ${S3_BUCKET:-tckdb-artifacts}
+      SEAWEEDFS_JWT_KEY: ${SEAWEEDFS_JWT_KEY:-}
+      WEED_GUARD_WHITE_LIST: "127.0.0.1,@"
+    # `storage` only; see "The side door" above. Do not add `default`.
+    networks:
+      - storage
     # The S3 API is loopback-only, like every other published port here.
     ports:
       - "127.0.0.1:9000:9000"
@@ -198,6 +274,12 @@ services:
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY:-tckdb}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?S3_SECRET_KEY must be set (copy .env.example to .env or pass --env-file)}
+    # `default` so an API still addressing minio:9000 there keeps working;
+    # `storage` so a container on the storage network (the API once
+    # connected, the MinIO-to-SeaweedFS copy tool) reaches both stores.
+    networks:
+      - default
+      - storage
     # Both the S3 API (9000) and the admin console (9001) are loopback-
     # only. The console is never exposed to the tunnel.
     ports:
@@ -240,6 +322,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       DB_NAME: ${DB_NAME:-tckdb_dev}
       TCKDB_INLINE_WORKER: "false"
+    # `storage` to reach the object store, which is on no other network.
+    networks:
+      - default
+      - storage
     depends_on:
       db:
         condition: service_healthy
@@ -282,6 +368,14 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+# `storage` holds the object store and the services that talk to it, and
+# nothing else (#545). Compose names it `<project>_storage`, e.g.
+# `tckdbv2_storage`; a containerised API joins it through
+# TCKDB_EXTRA_NETWORKS in backend/scripts/ops/tckdb_deploy.sh.
+networks:
+  default:
+  storage:
 
 volumes:
   tckdb_pgdata:
