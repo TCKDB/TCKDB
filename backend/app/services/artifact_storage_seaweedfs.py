@@ -261,6 +261,10 @@ def capacity_from_status(
         reserve = -(-total * _MIN_FREE_PERCENT // 100)  # ceil
         frees.append(free)
         rooms.append(max(0, free - reserve))
+        # "Any disk" is exact for ``weed mini``, which has one data dir. With
+        # several dirs, one full disk would label the whole store
+        # ``free_space`` while the others still took writes, and the label
+        # could then misname the limit. Not a case TCKDB ships.
         below_min_free = below_min_free or free < reserve
 
     volumes = volume_status.get("Volumes") or []

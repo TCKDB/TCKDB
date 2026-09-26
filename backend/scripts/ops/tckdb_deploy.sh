@@ -35,8 +35,11 @@
 #   file keeps the object store on its own `storage` network (#545), so an
 #   API that uses the bundled SeaweedFS needs e.g.
 #       TCKDB_EXTRA_NETWORKS=tckdbv2_storage
-#   Unset (the default) changes nothing. Each network is checked to exist
-#   before the old container is touched, so a typo cannot cause an outage.
+#   Unset (the default) changes nothing. Set, each value is checked before
+#   anything changes (it exists; it is not the DB network, `host`, `none`
+#   or a repeat), and the new container is created, connected and only then
+#   started, replacing the running one at the last moment. A connect that
+#   still fails leaves the running API as it was.
 set -uo pipefail
 
 IMAGE_REPO="${TCKDB_IMAGE_REPO:-laxzal/tckdb-api}"
@@ -92,10 +95,27 @@ fi
 IMAGE="${IMAGE_REPO}:${TAG}"
 echo "==> deploying ${IMAGE}"
 
-# Before anything changes: every network the new container must join exists.
+# Before anything changes: every network the new container must join is one
+# it can join. Each value refused here would otherwise fail `docker network
+# connect` after the backup and the migration (Docker 29, measured on a
+# running container: a network it is already on, and `host` / `none`).
+seen_networks=" $DB_NETWORK "
 for net in "$DB_NETWORK" "${EXTRA_NETWORKS[@]}"; do
     docker network inspect "$net" >/dev/null 2>&1 \
         || die "Docker network '${net}' does not exist; nothing has been changed (check TCKDB_DB_NETWORK / TCKDB_EXTRA_NETWORKS)"
+done
+for net in "${EXTRA_NETWORKS[@]}"; do
+    case "$net" in
+        host|none)
+            die "TCKDB_EXTRA_NETWORKS names '${net}', which cannot be joined as an extra network; nothing has been changed" ;;
+    esac
+    if [[ "$net" == "$DB_NETWORK" ]]; then
+        die "TCKDB_EXTRA_NETWORKS names '${net}', which is already the API's network (TCKDB_DB_NETWORK), so remove it; nothing has been changed"
+    fi
+    if [[ "$seen_networks" == *" $net "* ]]; then
+        die "TCKDB_EXTRA_NETWORKS names '${net}' more than once; nothing has been changed"
+    fi
+    seen_networks+="$net "
 done
 
 # 1. Back up first. Cheap, and the only step that makes the rest reversible.
@@ -126,20 +146,39 @@ if systemctl is-active --quiet tckdb-api.service 2>/dev/null; then
     echo "    stopping the systemd uvicorn unit (pre-container deployment)"
     sudo systemctl stop tckdb-api.service
 fi
-docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-docker run -d --name "$CONTAINER" \
-    --network "$DB_NETWORK" \
-    --env-file "$ENV_FILE" \
-    -e DB_HOST=db -e DB_PORT=5432 \
-    -e TCKDB_INLINE_WORKER=true \
-    -p "127.0.0.1:${API_PORT}:8010" \
-    --restart unless-stopped \
-    "$IMAGE" >/dev/null || die "could not start the new container; roll back with: $0 <previous-tag>"
-for net in "${EXTRA_NETWORKS[@]}"; do
-    docker network connect "$net" "$CONTAINER" \
-        || die "could not connect ${CONTAINER} to network '${net}'; roll back with: $0 <previous-tag>"
-    echo "    joined network: ${net}"
-done
+CONTAINER_ARGS=(
+    --network "$DB_NETWORK"
+    --env-file "$ENV_FILE"
+    -e DB_HOST=db -e DB_PORT=5432
+    -e TCKDB_INLINE_WORKER=true
+    -p "127.0.0.1:${API_PORT}:8010"
+    --restart unless-stopped
+)
+if [[ ${#EXTRA_NETWORKS[@]} -eq 0 ]]; then
+    # Unchanged from before TCKDB_EXTRA_NETWORKS existed.
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    docker run -d --name "$CONTAINER" "${CONTAINER_ARGS[@]}" \
+        "$IMAGE" >/dev/null || die "could not start the new container; roll back with: $0 <previous-tag>"
+else
+    # Created beside the running API, wired to every network, and only then
+    # swapped in and started: it never runs cut off from the object store,
+    # and a network that will not connect costs nothing but this container.
+    NEXT="${CONTAINER}-next"
+    docker rm -f "$NEXT" >/dev/null 2>&1 || true
+    docker create --name "$NEXT" "${CONTAINER_ARGS[@]}" "$IMAGE" >/dev/null \
+        || die "could not create the new container; the old API is still running"
+    for net in "${EXTRA_NETWORKS[@]}"; do
+        if ! docker network connect "$net" "$NEXT"; then
+            docker rm -f "$NEXT" >/dev/null 2>&1 || true
+            die "could not connect the new container to network '${net}'. The old API is still running and unchanged. Fix TCKDB_EXTRA_NETWORKS (or the network) and re-run; or deploy without it and join by hand: docker network connect ${net} ${CONTAINER}"
+        fi
+        echo "    joined network: ${net}"
+    done
+    docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+    docker rename "$NEXT" "$CONTAINER" \
+        || die "could not rename ${NEXT} to ${CONTAINER}; start it by hand: docker rename ${NEXT} ${CONTAINER} && docker start ${CONTAINER}"
+    docker start "$CONTAINER" >/dev/null || die "could not start the new container; roll back with: $0 <previous-tag>"
+fi
 
 # 5. Verify, and be specific about what to do if it is wrong.
 #
