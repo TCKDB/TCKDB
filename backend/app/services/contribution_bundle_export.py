@@ -93,7 +93,8 @@ class ContributionBundleExportError(ValueError):
 #
 # A thermo row deposited before the enthalpy-reference-declaration rule
 # existed can carry an enthalpy (a 298 K scalar, a NASA/NASA-9 fit, a
-# Wilhoit h0, or point enthalpies) with no ``enthalpy_reference_kind``
+# Wilhoit h0, point enthalpies, or point Gibbs energies, which sit on the
+# same zero) with no ``enthalpy_reference_kind``
 # declared. The DB never backfills a declaration onto such a row (see
 # ``e7b1c9d4a632``'s docstring), and the upload workflow's own rule
 # (``tckdb_schemas.enthalpy_reference.enthalpy_reference_error``, the same
@@ -121,9 +122,9 @@ class BundleExportOmission:
         fit *is* its entire scientific content.
         ``"enthalpy_pruned"`` -- the record was still exported, with its
         undeclared enthalpy value(s) dropped (298 K scalar, point
-        enthalpies, and/or a Wilhoit ``h0_kj_mol``, each independently
-        optional); entropy, heat capacity and every other field are
-        unaffected.
+        enthalpies, point Gibbs energies, and/or a Wilhoit ``h0_kj_mol``,
+        each independently optional); entropy, heat capacity and every
+        other field are unaffected.
     :param ref: The record's public ref (``thermo.public_ref``) -- never a
         row id, so the report stays meaningful outside this DB instance.
     :param detail: Human-readable reason.
@@ -189,11 +190,11 @@ def _thermo_export_disposition(
         )
     return (
         "enthalpy_pruned",
-        "carries a 298 K scalar, point, and/or Wilhoit enthalpy with no "
-        "enthalpy_reference_kind declared -- a legacy shape predating the "
-        "declaration rule that the import workflow refuses. The enthalpy "
-        "value(s) were dropped from this export; entropy, heat capacity "
-        "and other fields are unaffected.",
+        "carries a 298 K scalar, point, and/or Wilhoit enthalpy, or point "
+        "Gibbs energies, with no enthalpy_reference_kind declared -- a legacy "
+        "shape predating the declaration rule that the import workflow "
+        "refuses. The enthalpy and Gibbs value(s) were dropped from this "
+        "export; entropy, heat capacity and other fields are unaffected.",
     )
 
 
@@ -212,7 +213,12 @@ def _prune_undeclared_enthalpy(payload: dict[str, Any]) -> None:
         payload["wilhoit"] = {**wilhoit, "h0_kj_mol": None}
     points = payload.get("points")
     if points:
-        payload["points"] = [{**p, "h_kj_mol": None} for p in points]
+        # A point G is H(T) - T*S(T) on the same undeclared zero, and the
+        # shared rule counts it as enthalpy content: keep it and the
+        # importer refuses the bundle. A point left with no value at all
+        # fails the point schema, which ``_thermo_to_upload`` turns into a
+        # reported ``record_omitted``, never a broken bundle.
+        payload["points"] = [{**p, "h_kj_mol": None, "g_kj_mol": None} for p in points]
 
 
 # ---------------------------------------------------------------------------

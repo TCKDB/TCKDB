@@ -42,8 +42,9 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     standard formation enthalpy at 298.15 K plus the species' own enthalpy
     increment from 298.15 K. Elements in their reference forms have zero
     formation enthalpy; their term stays pinned at 298.15 K, not at T.
-    The parent declaration covers h298, point h, Wilhoit h0 and NASA-7/9
-    enthalpy constants. The separately named 0 K formation value is unchanged.
+    The parent declaration covers h298, point h, point g (which sits on the
+    same zero), Wilhoit h0 and NASA-7/9 enthalpy constants. The separately
+    named 0 K formation value is unchanged.
     Sensible increments and absolute quantum enthalpies belong in
     molecular_property_observation, not here.
 

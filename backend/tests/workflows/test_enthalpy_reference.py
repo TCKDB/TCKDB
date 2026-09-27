@@ -18,7 +18,8 @@ REFERENCE = "formation_298k"
     {"nasa9_intervals": [{}]},
     {"wilhoit": {"h0_kj_mol": 0.0}},
     {"points": [{"temperature_k": 400, "h_kj_mol": 0.0}]},
-], ids=["scalar", "nasa7", "nasa9", "wilhoit_h0", "point_h"])
+    {"points": [{"temperature_k": 400, "g_kj_mol": -10.0}]},
+], ids=["scalar", "nasa7", "nasa9", "wilhoit_h0", "point_h", "point_g"])
 def test_each_enthalpy_representation_requires_declaration(content):
     with pytest.raises(CodedValueError) as caught:
         assert_enthalpy_reference(content)
@@ -101,3 +102,74 @@ def test_computed_origin_does_not_default_reference():
     with pytest.raises(CodedValueError) as caught:
         persist_thermo_upload(None, request)
     assert caught.value.code == "enthalpy_declaration_absent"
+
+
+# ---------------------------------------------------------------------------
+# A stored Gibbs energy is enthalpy content (Phase D plan, decision 3).
+#
+# ``ThermoPoint.g_kj_mol`` is H(T) - T*S(T) on the parent record's enthalpy
+# zero, so a point G carries H's reference exactly as a point H does. Before
+# the shared rule counted it, an undeclared G+S-only deposit was ACCEPTED
+# (a G on an unestablished zero) and the same deposit declaring
+# formation_298k was REFUSED as a declaration without content. These run the
+# real ``persist_thermo_upload`` against a database rather than
+# ``assert_enthalpy_reference`` alone, so an accepted deposit is shown to
+# actually persist.
+# ---------------------------------------------------------------------------
+
+_G_AND_S_POINTS = [
+    {"temperature_k": 300.0, "s_j_mol_k": 188.9, "g_kj_mol": -298.5},
+    {"temperature_k": 500.0, "s_j_mol_k": 206.5, "g_kj_mol": -338.0},
+]
+
+
+def _points_request(points, **overrides) -> ThermoUploadRequest:
+    return ThermoUploadRequest(
+        species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+        scientific_origin="computed",
+        points=points,
+        **overrides,
+    )
+
+
+def test_undeclared_gibbs_points_are_refused_as_declaration_absent(db_session):
+    request = _points_request(_G_AND_S_POINTS)
+    # G is the record's only enthalpy-zero content: no h298, no fit, no point H.
+    assert request.h298_kj_mol is None and request.nasa is None
+    assert all(p.h_kj_mol is None and p.g_kj_mol is not None for p in request.points)
+    with pytest.raises(CodedValueError) as caught:
+        persist_thermo_upload(db_session, request)
+    assert caught.value.code == "enthalpy_declaration_absent"
+
+
+def test_declared_gibbs_only_points_are_accepted(db_session):
+    request = _points_request(
+        [{"temperature_k": 300.0, "g_kj_mol": -298.5}, {"temperature_k": 500.0, "g_kj_mol": -338.0}],
+        enthalpy_reference_kind=REFERENCE,
+    )
+    thermo = persist_thermo_upload(db_session, request)
+    db_session.flush()
+    assert thermo.id is not None
+    assert thermo.enthalpy_reference_kind.value == REFERENCE
+    stored = sorted((p.temperature_k, p.g_kj_mol, p.h_kj_mol) for p in thermo.points)
+    assert stored == [(300.0, -298.5, None), (500.0, -338.0, None)]
+
+
+def test_declared_gibbs_and_entropy_points_are_accepted(db_session):
+    thermo = persist_thermo_upload(
+        db_session, _points_request(_G_AND_S_POINTS, enthalpy_reference_kind=REFERENCE)
+    )
+    db_session.flush()
+    assert thermo.enthalpy_reference_kind.value == REFERENCE
+    stored = sorted((p.temperature_k, p.s_j_mol_k, p.g_kj_mol) for p in thermo.points)
+    assert stored == [(300.0, 188.9, -298.5), (500.0, 206.5, -338.0)]
+
+
+def test_declared_record_without_h_or_g_is_still_refused(db_session):
+    request = _points_request(
+        [{"temperature_k": 300.0, "cp_j_mol_k": 33.6, "s_j_mol_k": 188.9}],
+        enthalpy_reference_kind=REFERENCE,
+    )
+    with pytest.raises(CodedValueError) as caught:
+        persist_thermo_upload(db_session, request)
+    assert caught.value.code == "enthalpy_declaration_without_content"

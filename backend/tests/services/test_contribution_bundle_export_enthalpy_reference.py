@@ -33,7 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.models.common import ScientificOriginKind
-from app.db.models.thermo import Thermo
+from app.db.models.thermo import Thermo, ThermoPoint
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.contribution_bundle_export import export_thermo_bundle
 from app.workflows.thermo import persist_thermo_upload
@@ -211,6 +211,107 @@ def test_mixed_selection_keeps_declared_and_reports_legacy_fit(db_session) -> No
 
     # The declared record's export re-imports as-is.
     persist_thermo_upload(db_session, upload)
+
+
+# ---------------------------------------------------------------------------
+# Legacy point Gibbs energies: pruned exactly like point enthalpies
+#
+# A tabulated G is H(T) - T*S(T) on the record's enthalpy zero, so the import
+# rule counts it as enthalpy content. A legacy row carrying G with no
+# declaration was a shape the importer accepted when it was deposited and
+# refuses now; exporting it verbatim would hand back a bundle this server
+# will not re-import. G is independently optional on a point, so it is
+# dropped the way a point H is, and the rest of each point survives.
+# ---------------------------------------------------------------------------
+
+
+def _legacy_gibbs_thermo(session: Session, *, prefix: str, points: list[dict]) -> Thermo:
+    """Points with G, no declaration, no h298.
+
+    A plain insert: the DB guard fires only on ``thermo.h298_kj_mol`` /
+    ``thermo.enthalpy_reference_kind``, and point G lives in the child
+    ``thermo_point`` table -- no trigger governs it.
+    """
+    species = make_species(session, inchi_key=next_inchi_key(prefix))
+    entry = make_species_entry(session, species)
+    thermo = Thermo(
+        species_entry_id=entry.id,
+        scientific_origin=ScientificOriginKind.computed,
+        s298_j_mol_k=188.8,
+    )
+    session.add(thermo)
+    session.flush()
+    for point in points:
+        session.add(ThermoPoint(thermo_id=thermo.id, **point))
+    session.flush()
+    session.refresh(thermo)
+    assert thermo.enthalpy_reference_kind is None
+    assert any(p.g_kj_mol is not None for p in thermo.points)
+    return thermo
+
+
+def test_legacy_point_gibbs_is_pruned_and_reimports(db_session) -> None:
+    thermo = _legacy_gibbs_thermo(
+        db_session,
+        prefix="ENTHEXPGIBBS",
+        points=[
+            {"temperature_k": 300.0, "s_j_mol_k": 188.9, "g_kj_mol": -298.5},
+            {"temperature_k": 500.0, "cp_j_mol_k": 35.2, "s_j_mol_k": 206.5, "g_kj_mol": -338.0},
+        ],
+    )
+
+    result = export_thermo_bundle(
+        db_session,
+        thermo_ids=[thermo.id],
+        title="legacy gibbs export",
+        summary="A legacy thermo with point Gibbs energies and no declaration.",
+        exporter_label="tester",
+    )
+
+    assert [(o.action, o.ref) for o in result.omissions] == [("enthalpy_pruned", thermo.public_ref)]
+    assert "Gibbs" in result.omissions[0].detail
+    assert result.bundle is not None
+    [upload] = result.bundle.records.thermo_uploads
+    assert upload.enthalpy_reference_kind is None
+    exported = sorted(
+        (p.temperature_k, p.cp_j_mol_k, p.s_j_mol_k, p.h_kj_mol, p.g_kj_mol) for p in upload.points
+    )
+    assert exported == [
+        (300.0, None, 188.9, None, None),
+        (500.0, 35.2, 206.5, None, None),
+    ]
+    assert upload.s298_j_mol_k == pytest.approx(188.8)
+
+    # The importer accepts exactly what was exported.
+    reimported = persist_thermo_upload(db_session, upload)
+    db_session.flush()
+    assert reimported.enthalpy_reference_kind is None
+    assert sorted((p.temperature_k, p.g_kj_mol) for p in reimported.points) == [
+        (300.0, None),
+        (500.0, None),
+    ]
+
+
+def test_legacy_gibbs_only_points_leave_nothing_and_are_omitted(db_session) -> None:
+    """Points whose ONLY value is G are empty once G is pruned, and the
+    point schema refuses an empty point -- so the record is omitted and
+    reported by the existing post-prune fallback, never exported broken."""
+    thermo = _legacy_gibbs_thermo(
+        db_session,
+        prefix="ENTHEXPGONLY",
+        points=[{"temperature_k": 300.0, "g_kj_mol": -298.5}],
+    )
+
+    result = export_thermo_bundle(
+        db_session,
+        thermo_ids=[thermo.id],
+        title="legacy gibbs-only export",
+        summary="A legacy thermo whose points carry only G.",
+        exporter_label="tester",
+    )
+
+    assert result.bundle is None
+    assert [(o.action, o.ref) for o in result.omissions] == [("record_omitted", thermo.public_ref)]
 
 
 # ---------------------------------------------------------------------------

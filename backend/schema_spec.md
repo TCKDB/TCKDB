@@ -1750,8 +1750,9 @@ At another temperature, H(T) is that formation energy plus the species' own
 enthalpy increment from 298.15 K. The elemental term remains pinned at
 298.15 K; it is not recomputed against the elements at T.
 
-The declaration covers `h298_kj_mol`, `thermo_point.h_kj_mol`, Wilhoit
-`h0_kj_mol`, and the NASA-7/NASA-9 enthalpy integration constants. A point's
+The declaration covers `h298_kj_mol`, `thermo_point.h_kj_mol`,
+`thermo_point.g_kj_mol`, Wilhoit `h0_kj_mol`, and the NASA-7/NASA-9 enthalpy
+integration constants. A point's
 `g_kj_mol` means H(T) - T*S(T), on the same reference zero, with entropy
 converted to kJ/(mol*K). It is not a formation Gibbs energy recomputed
 against elemental entropies. `enthalpy_formation_0k_kj_mol` retains its
@@ -1770,8 +1771,12 @@ The two-layer rule deliberately is not a scalar iff constraint:
   would have frozen every legacy undeclared row against unrelated writes
   such as the public-ref backfill.
 - Every deposit workflow requires the declaration for any h298 scalar, point
-  enthalpy, Wilhoit h0, or NASA-7/NASA-9 block, and refuses a declaration when
-  none of that content exists. Cp/entropy-only deposits leave it null.
+  enthalpy, point Gibbs energy, Wilhoit h0, or NASA-7/NASA-9 block, and
+  refuses a declaration when none of that content exists. A point G counts
+  because it sits on the same reference zero as H, even on a point with no
+  H. Cp/entropy-only deposits leave it null. Point H and G live in the child
+  `thermo_point` table, so this part is workflow-only: no database trigger
+  or constraint inspects them.
 - Declared fit-only and point-only records are valid without h298. No scalar
   is evaluated from a fit and stored as though the depositor supplied it.
 
