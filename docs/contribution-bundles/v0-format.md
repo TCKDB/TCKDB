@@ -204,15 +204,22 @@ one of two dispositions per legacy row, chosen by where the enthalpy lives:
   the importer counts it as enthalpy content. Entropy, heat capacity,
   temperature range, and every other field on the record are carried over
   unchanged, and the record re-imports normally (now with no enthalpy
-  content and no declaration, which is a self-consistent shape). If
-  dropping them leaves a tabulated point with no value at all, the point
-  schema refuses it, and the whole record is omitted and reported instead.
+  content and no declaration, which is a self-consistent shape). A
+  tabulated point left with no value at all (one that held only H and/or
+  G) is dropped on its own; the other points are exported, and the dropped
+  temperatures are reported in the omission's `points_dropped_at_k`. If no
+  point survives, a stored `model_kind` of `tabulated` is left out so the
+  importer infers the kind from what remains. The record is omitted only
+  when no point, fit or scalar value survives at all, and the omission
+  says so and names the enthalpy values that were the record's only
+  content.
 - **A NASA-7 or NASA-9 fit** — `ThermoNASACreate` /
   `ThermoNASA9IntervalCreate` require every coefficient, the enthalpy term
   included, so there is no way to drop only the enthalpy without destroying
   the whole fit. Since the fit is the record's entire scientific content,
   the record is left out of the bundle entirely rather than exported
-  mutilated.
+  mutilated. This holds even when the record also carries tabulated
+  points: the fit decides, and no point is pruned or reported.
 
 Either way the change is **reported, never silent**: `export_thermo_bundle`
 returns a `ThermoBundleExport(bundle, omissions)` instead of a bare bundle.
