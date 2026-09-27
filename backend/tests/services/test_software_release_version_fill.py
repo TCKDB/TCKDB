@@ -29,11 +29,17 @@ from app.db.models.common import (
     ArtifactKind,
     RecordReviewStatus,
     SoftwareReconciliationStatus,
+    StatmechCalculationRole,
     SubmissionRecordType,
+    ThermoCalculationRole,
 )
+from app.db.models.execution_environment import ExecutionEnvironmentManifest
 from app.db.models.record_review import RecordReview
 from app.db.models.software import SoftwareRelease
+from app.db.models.statmech import StatmechSourceCalculation
+from app.db.models.thermo import ThermoSourceCalculation
 from app.services import software_release_version_fill as fill
+from app.services.reproducibility_rubric import evaluate_and_append_reproducibility
 from app.services.software_resolution import resolve_software_release
 from tests.services.scientific_read._factories import (
     attach_artifact,
@@ -41,6 +47,8 @@ from tests.services.scientific_read._factories import (
     make_software_release,
     make_species,
     make_species_entry,
+    make_statmech,
+    make_thermo_scalar,
     next_inchi_key,
     unique_smiles,
 )
@@ -88,7 +96,7 @@ class _Store:
         self.objects[sha] = content
         return sha
 
-    def __call__(self, sha256: str) -> bytes:
+    def __call__(self, sha256: str, **_kwargs) -> bytes:
         if sha256 not in self.objects:
             raise FileNotFoundError(sha256)
         return self.objects[sha256]
@@ -205,6 +213,137 @@ def test_apply_repoints_only_the_fillable_calculation(db_session, seeded):
         calc = db_session.get(Calculation, calcs[key].id)
         assert calc.software_release_id == orca_null.id, key
         assert calc.observed_software_banner is None, key
+
+
+def _bind_to_manifest(db_session, calc, release) -> None:
+    manifest = ExecutionEnvironmentManifest(
+        schema_version="1",
+        content_digest="sha256:" + hashlib.sha256(calc.public_ref.encode()).hexdigest(),
+        runtime_kind="container",
+        runtime_locator="docker://example/orca@sha256:" + "0" * 64,
+        executable_locator="/opt/orca/orca",
+        software_release_id=release.id,
+        workflow_tool_release_id=None,
+        closure_json=[],
+        canonical_json={},
+    )
+    db_session.add(manifest)
+    db_session.flush()
+    calc.execution_environment_manifest_id = manifest.id
+    db_session.flush()
+
+
+def test_environment_bound_calculation_is_reported_and_skipped(db_session):
+    """Review finding F1. ``trg_calculation_execution_environment_binding``
+    requires a calculation's release to equal its execution-environment
+    manifest's, and the manifest is immutable. Re-pointing such a
+    calculation raised P0001 and aborted the whole ``--commit``; it must be
+    reported as ``environment_bound`` and left alone instead."""
+    store = _Store()
+    orca_null = make_software_release(db_session, name="ORCA", version=None)
+    orca_log = (FIXTURES / "orca/opt_orca.out").read_bytes()
+    bound = _calc_with(db_session, store, orca_null, artifacts=[(ArtifactKind.output_log, orca_log)])
+    _bind_to_manifest(db_session, bound, orca_null)
+    free = _calc_with(db_session, store, orca_null, artifacts=[(ArtifactKind.output_log, orca_log)])
+
+    plan = fill.plan_release_fill(db_session, orca_null, load_bytes=store)
+    assert {(o.calculation_ref, o.status) for o in plan.outcomes} == {
+        (bound.public_ref, "environment_bound"),
+        (free.public_ref, "fillable"),
+    }
+
+    _plan, moved = fill.apply_release_fill(db_session, orca_null, load_bytes=store)
+
+    assert list(moved) == [free.public_ref]
+    assert db_session.get(Calculation, bound.id).software_release_id == orca_null.id
+
+
+def _approve(db_session, record_type, record_id) -> None:
+    when = datetime(2026, 9, 1)
+    curator = AppUser(username=f"vfill-approver-{record_type.value}-{record_id}", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    db_session.add(
+        RecordReview(
+            record_type=record_type,
+            record_id=record_id,
+            status=RecordReviewStatus.approved,
+            reviewed_by=curator.id,
+            reviewed_at=when,
+            first_approved_at=when,
+        )
+    )
+    db_session.flush()
+
+
+def test_plan_reports_stale_assessments_and_approved_products(db_session, script, monkeypatch, capsys):
+    """Review finding F4, reporting only. Re-pointing a calculation changes
+    the release columns every stored reproducibility assessment covering it
+    hashed, and an approved thermo/statmech citing it as a source is not
+    guarded by the accepted-science trigger. The dry run must say both."""
+    store = _Store()
+    orca_null = make_software_release(db_session, name="ORCA", version=None)
+    log = (FIXTURES / "orca/opt_orca.out").read_bytes()
+    calc = _calc_with(db_session, store, orca_null, artifacts=[(ArtifactKind.output_log, log)])
+    entry = db_session.get(Calculation, calc.id).species_entry
+
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    db_session.add(ThermoSourceCalculation(thermo_id=thermo.id, calculation_id=calc.id, role=ThermoCalculationRole.sp))
+    _approve(db_session, SubmissionRecordType.thermo, thermo.id)
+    statmech = make_statmech(db_session, species_entry=entry)  # cites it, not approved
+    db_session.add(
+        StatmechSourceCalculation(statmech_id=statmech.id, calculation_id=calc.id, role=StatmechCalculationRole.opt)
+    )
+    db_session.flush()
+    own = evaluate_and_append_reproducibility(
+        db_session, record_type=SubmissionRecordType.calculation, record_id=calc.id, artifact_loader=store
+    )
+    via_statmech = evaluate_and_append_reproducibility(
+        db_session, record_type=SubmissionRecordType.statmech, record_id=statmech.id, artifact_loader=store
+    )
+
+    plan = fill.plan_release_fill(db_session, orca_null, load_bytes=store)
+
+    [outcome] = plan.outcomes
+    assert outcome.status == "fillable"
+    assert outcome.stale_assessment_refs == tuple(sorted([own.public_ref, via_statmech.public_ref]))
+    assert outcome.approved_product_refs == (thermo.public_ref,)
+    assert outcome.fills_build is False
+
+    assert _run(script, monkeypatch, db_session, store, ["--software", "ORCA"]) == 0
+    out = capsys.readouterr().out
+    assert "2 reproducibility assessment(s) go stale" in out
+    assert f"source for 1 APPROVED thermo/statmech record(s): {thermo.public_ref}" in out
+    assert (
+        "--commit would re-point 1 calculation(s); 2 reproducibility assessment(s) "
+        "go stale; 1 approved thermo/statmech record(s) cite them."
+    ) in out
+
+
+def test_gaussian_banner_fills_build_and_says_so(db_session, script, monkeypatch, capsys):
+    """Review finding F3, behaviour unchanged (DR-0008 ``enriched``): a
+    Gaussian banner also fills ``build``, so the target is a sibling of an
+    existing build-less ``16``/``C.02`` release. The dry run says so."""
+    store = _Store()
+    g_null = make_software_release(db_session, name="Gaussian", version=None)
+    clean = make_software_release(db_session, name="Gaussian", version="16", revision="C.02")
+    calc = _calc_with(
+        db_session,
+        store,
+        g_null,
+        artifacts=[(ArtifactKind.output_log, (FIXTURES / "gaussian/sp_ub3lyp_g16.log").read_bytes())],
+    )
+
+    [outcome] = fill.plan_release_fill(db_session, g_null, load_bytes=store).outcomes
+    assert (outcome.calculation_ref, outcome.status, outcome.target, outcome.fills_build) == (
+        calc.public_ref,
+        "fillable",
+        ("16", "C.02", "ES64L-G16RevC.02"),
+        True,
+    )
+    assert _run(script, monkeypatch, db_session, store, ["--software", "Gaussian"]) == 0
+    assert "also fills build from the banner (DR-0008 enriched)" in capsys.readouterr().out
+    assert clean.build is None
 
 
 def test_accepted_is_the_database_s_answer_not_a_courtesy(db_session, seeded):

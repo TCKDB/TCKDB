@@ -257,6 +257,15 @@ def test_a_row_cited_after_planning_is_kept(prune, db_session, seeded):
     assert db_session.get(SoftwareRelease, late.id) is not None
 
 
+def test_help_tells_the_operator_to_run_commit_with_no_deposits_in_flight(prune, capsys):
+    """Review finding F5: ``--commit`` holds its row locks to the end."""
+    with pytest.raises(SystemExit):
+        prune.main(["--help"])
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert "Run it when no deposits are in flight" in help_text
+    assert "when no deposits are in flight" in " ".join(prune.__doc__.split())
+
+
 def test_commit_on_a_non_test_database_needs_the_explicit_flag(
     prune, monkeypatch, db_session, seeded, capsys
 ):

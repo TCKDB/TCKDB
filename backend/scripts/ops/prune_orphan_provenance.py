@@ -32,6 +32,11 @@ references are releases this run removes is listed too (marked
 ``after releases``), and at commit time it is deleted only after those
 releases are gone.
 
+Run ``--commit`` when no deposits are in flight: its single transaction
+holds the row locks it takes until it ends, so an upload citing a planned
+row waits for it (and then either the row is kept, or the upload's own
+foreign-key check fails).
+
 Usage::
 
     # Plan only -- the default. Lists what would be removed; writes nothing.
@@ -341,7 +346,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--commit",
         action="store_true",
-        help="delete the rows listed. Without this, the default is a dry run.",
+        help=(
+            "delete the rows listed. Without this, the default is a dry run. "
+            "Run it when no deposits are in flight: the transaction holds its "
+            "row locks until it ends, so a concurrent upload citing a planned "
+            "row waits on it."
+        ),
     )
     parser.add_argument(
         "--i-know-this-is-deployed",

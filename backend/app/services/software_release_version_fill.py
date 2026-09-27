@@ -51,6 +51,23 @@ was ever approved is refused by ``trg_as_root_calculation`` unless an
 made from an Alembic revision. Those calculations are reported as
 ``accepted`` and skipped; re-pointing them is a migration, not this.
 
+Environment-bound calculations
+------------------------------
+A calculation pinned to an execution-environment manifest must cite the
+manifest's release (``trg_calculation_execution_environment_binding``), and
+manifests are immutable. Re-pointing one raises, so they are reported as
+``environment_bound`` and skipped.
+
+What a re-point touches (reported, not prevented)
+-------------------------------------------------
+For each fillable calculation the plan lists the stored reproducibility
+assessments whose context hash covers its release columns (they go stale),
+and any *approved* thermo/statmech record citing it as a source -- the
+accepted-science trigger guards only the calculation's own approval. For a
+Gaussian banner the build string is filled as well (DR-0008 ``enriched``),
+so the target can be a near-duplicate of an existing build-less release;
+the plan says so.
+
 Owner attestation is deliberately not an evidence source here: recording
 who attested what, when, needs somewhere structured to put it, and there is
 no such column today (see the #305 PR for the proposed design).
@@ -69,7 +86,10 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import Calculation, CalculationArtifact
 from app.db.models.common import ArtifactKind, SubmissionRecordType
 from app.db.models.record_review import RecordReview
+from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.statmech import Statmech, StatmechSourceCalculation
+from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.services import (
     gaussian_parameter_parser,
     molpro_parameter_parser,
@@ -103,8 +123,13 @@ class CalculationOutcome:
     """What the evidence said for one calculation.
 
     ``status`` is one of: ``fillable``, ``accepted`` (fillable, but the
-    calculation is accepted science), ``no_artifact``, ``no_banner``,
+    calculation is accepted science), ``environment_bound`` (fillable, but
+    pinned to an immutable execution-environment manifest naming the
+    version-less release), ``no_artifact``, ``no_banner``,
     ``other_program``, ``disagrees``, ``unreadable``.
+
+    The ``consequences`` fields are reporting only, for a fillable
+    calculation: what re-pointing it would touch beyond the calculation.
     """
 
     calculation_ref: str
@@ -113,6 +138,19 @@ class CalculationOutcome:
     observed_banner: str | None = None
     target: tuple[str | None, str | None, str | None] | None = None
     detail: str | None = None
+    #: Stored reproducibility assessments that snapshot this calculation's
+    #: release columns (``reproducibility_rubric._calculation_snapshot``):
+    #: the calculation's own, and those of thermo/statmech records citing
+    #: it as a source. Re-pointing makes their context hash stale.
+    stale_assessment_refs: tuple[str, ...] = ()
+    #: Approved thermo/statmech records that cite this calculation as a
+    #: source. Only the calculation's own approval is guarded by the
+    #: accepted-science trigger; these would see their source re-pointed.
+    approved_product_refs: tuple[str, ...] = ()
+    #: The banner also fills ``build`` (Gaussian), so the target is a
+    #: sibling of any existing build-less release with the same version and
+    #: revision -- DR-0008's ``enriched`` rule, kept as is.
+    fills_build: bool = False
 
 
 @dataclass
@@ -265,16 +303,95 @@ def plan_release_fill(
             result.resolved_ref.revision,
             result.resolved_ref.build,
         )
+        if _is_accepted(session, calc):
+            status = "accepted"
+        elif calc.execution_environment_manifest_id is not None:
+            # trg_calculation_execution_environment_binding requires the
+            # calculation's release to equal its manifest's, and manifests
+            # are immutable: re-pointing raises P0001 and aborts the run.
+            status = "environment_bound"
+        else:
+            status = "fillable"
+        stale, approved = (
+            _consequences(session, calc) if status == "fillable" else ((), ())
+        )
         plan.outcomes.append(
             CalculationOutcome(
                 calc.public_ref,
-                "accepted" if _is_accepted(session, calc) else "fillable",
+                status,
                 observed_version=parsed["version"],
                 observed_banner=banner,
                 target=target,
+                stale_assessment_refs=stale,
+                approved_product_refs=approved,
+                fills_build=declared is not None
+                and declared.build is None
+                and result.resolved_ref.build is not None,
             )
         )
     return plan
+
+
+def _consequences(
+    session: Session, calculation: Calculation
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Reporting only: what re-pointing *calculation* touches beyond itself.
+
+    :returns: ``(stale assessment refs, approved thermo/statmech refs)``.
+        Assessments counted are the calculation's own and those of the
+        thermo/statmech records that cite it directly as a source; a
+        record reaching it only through a calculation-dependency chain is
+        not traced here.
+    """
+
+    products: list[tuple[SubmissionRecordType, int, str]] = []
+    for model, link, fk, record_type in (
+        (Thermo, ThermoSourceCalculation, ThermoSourceCalculation.thermo_id, SubmissionRecordType.thermo),
+        (
+            Statmech,
+            StatmechSourceCalculation,
+            StatmechSourceCalculation.statmech_id,
+            SubmissionRecordType.statmech,
+        ),
+    ):
+        for row_id, ref in session.execute(
+            select(model.id, model.public_ref)
+            .join(link, fk == model.id)
+            .where(link.calculation_id == calculation.id)
+            .distinct()
+        ):
+            products.append((record_type, row_id, ref))
+
+    subjects = [(SubmissionRecordType.calculation, calculation.id)] + [
+        (record_type, row_id) for record_type, row_id, _ref in products
+    ]
+    stale = tuple(
+        sorted(
+            ref
+            for record_type, record_id in subjects
+            for ref in session.scalars(
+                select(RecordReproducibilityAssessment.public_ref).where(
+                    RecordReproducibilityAssessment.record_type == record_type,
+                    RecordReproducibilityAssessment.record_id == record_id,
+                )
+            )
+        )
+    )
+    approved = tuple(
+        sorted(
+            ref
+            for record_type, row_id, ref in products
+            if session.scalar(
+                select(RecordReview.id).where(
+                    RecordReview.record_type == record_type,
+                    RecordReview.record_id == row_id,
+                    RecordReview.first_approved_at.is_not(None),
+                )
+            )
+            is not None
+        )
+    )
+    return stale, approved
 
 
 def apply_release_fill(

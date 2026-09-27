@@ -19,6 +19,12 @@ Calculations that were ever approved are reported as ``accepted`` and left
 alone -- ``trg_as_root_calculation`` refuses the UPDATE without an
 ``accepted_science_repair`` declaration, which only a migration makes.
 
+Calculations pinned to an execution-environment manifest are reported as
+``environment_bound`` and left alone (the manifest fixes their release).
+For each fillable calculation the dry run also lists the reproducibility
+assessments that would go stale and any approved thermo/statmech record
+citing it, and says when a Gaussian banner fills ``build`` too.
+
 Needs the artifact store configured (``S3_*``), exactly as the API does.
 
 Usage::
@@ -65,6 +71,35 @@ def _print_plan(plan) -> None:
         if o.detail:
             line += f"  ({o.detail})"
         print(line)
+        if o.status == "environment_bound":
+            print(
+                "      pinned to an execution-environment manifest naming this "
+                "release; skipped (the manifest is immutable)"
+            )
+        if o.fills_build:
+            print(
+                "      also fills build from the banner (DR-0008 enriched): the "
+                "target may sit beside a build-less release of the same version"
+            )
+        if o.stale_assessment_refs:
+            print(
+                f"      {len(o.stale_assessment_refs)} reproducibility assessment(s) "
+                "go stale: " + ", ".join(o.stale_assessment_refs)
+            )
+        if o.approved_product_refs:
+            print(
+                f"      source for {len(o.approved_product_refs)} APPROVED "
+                "thermo/statmech record(s): " + ", ".join(o.approved_product_refs)
+            )
+    fillable = plan.by_status("fillable")
+    if fillable:
+        stale = sum(len(o.stale_assessment_refs) for o in fillable)
+        approved = sorted({r for o in fillable for r in o.approved_product_refs})
+        print(
+            f"  --commit would re-point {len(fillable)} calculation(s); "
+            f"{stale} reproducibility assessment(s) go stale; "
+            f"{len(approved)} approved thermo/statmech record(s) cite them."
+        )
 
 
 def main(argv: list[str] | None = None) -> int:
