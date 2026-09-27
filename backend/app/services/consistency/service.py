@@ -8,6 +8,7 @@ from app.services.consistency.core import AdvisoryResult, currency, record_resul
 from app.services.consistency.gibbs import compare_gibbs
 from app.services.consistency.hess import compare_hess
 from app.services.consistency.kinetics import compare_kinetics
+from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
 
 
@@ -57,6 +58,10 @@ def compare(session, *, check, target_ref, comparison_thermo_ref=None, reverse_k
             if comparison_thermo_ref is not None or temperature_grid:
                 raise ValueError("gibbs-self uses the target thermo's own stored Gibbs point temperatures")
             return compare_gibbs(thermo)
+        if check == "kirchhoff":
+            neighbour = (_resolve(session, Thermo, comparison_thermo_ref, "thm_")
+                         if comparison_thermo_ref is not None else None)
+            return compare_kirchhoff(thermo, comparison=neighbour, temperature_grid=temperature_grid)
         if check == "external-cp":
             if comparison_thermo_ref is not None or temperature_grid:
                 raise ValueError("external-cp uses observation temperatures and the target thermo")

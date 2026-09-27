@@ -87,9 +87,9 @@ disagree, this one is right by construction.
 | `block` | 20 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 10 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
-| `review` | 5 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
+| `review` | 6 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **41** | |
+| **total** | **42** | |
 
 ## Where a check's code reaches a client
 
@@ -99,8 +99,8 @@ disagree, this one is right by construction.
 | `upload_warning` | 10 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
-| `none` | 8 | *nothing carries a code* |
-| **total** | **41** | |
+| `none` | 9 | *nothing carries a code* |
+| **total** | **42** | |
 
 ## Recorded divergences
 
@@ -913,7 +913,27 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
-### 39. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
+### 39. Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, and report each fit's own boundary jumps -- residuals only.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `review` |
+| **Code** | *(none — prose only)* |
+| **Code reaches a client via** | *nothing carries a code* |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.
+
+**Enforced at.**
+
+- `compare_kirchhoff` — `backend/app/services/consistency/kirchhoff.py::compare_kirchhoff`
+  *Explicit Phase D CLI/service invocation only (check 'kirchhoff'). Only records that declare enthalpy_reference_kind take part; an undeclared record is reported enthalpy_reference_unrecorded, never given an inferred basis. Reference pressure never gates enthalpy. Cross-record anchors state that the element-reference compilation is not recorded and that its cancellation is assumed. Gas phase only, as for D1. Explicit temperatures (--temperature) are ADDED to the default grid {298.15} + temperatures of points carrying h -- unlike D1's thermo check, where they replace it. A record is never its own neighbour.*
+
+**Escape hatch.** None.
+
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+
+### 40. Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature.
 
 | Field | Value |
 | --- | --- |
@@ -935,7 +955,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## External reference comparison
 
-### 40. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
+### 41. A computed thermo record's heat capacity, evaluated at each temperature an independent external observation reports, is compared against that observation and the residual is recorded -- never judged against a threshold and never fed back into the record's trust or review state.
 
 | Field | Value |
 | --- | --- |
@@ -957,7 +977,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Scan coordinates
 
-### 41. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+### 42. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
 
 | Field | Value |
 | --- | --- |

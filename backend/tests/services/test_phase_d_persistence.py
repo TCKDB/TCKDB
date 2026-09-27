@@ -585,3 +585,120 @@ def test_gibbs_service_refuses_neighbours_and_grids_and_the_cli_dry_runs(db_sess
     assert output["committed"] is False and output["check"] == "gibbs-self"
     assert len(output["findings"]) == 4
     assert count_reviews(db_session) == before and not commits
+
+
+# --------------------------------------------------------------------------- #
+# D5 Kirchhoff: dry run, one append, no restale, material-input currency.
+# Rows come from the thermo upload workflow (tests/services/test_phase_d_kirchhoff.py).
+# --------------------------------------------------------------------------- #
+
+KIRCHHOFF_KEY = "kirchhoff_consistency_v1"
+
+
+def _kirchhoff_record(session):
+    from tests.services.test_phase_d_foundation import LOW, _h_nasa7_kj
+    from tests.services.test_phase_d_kirchhoff import nasa7_block, upload
+    return upload(session, nasa=nasa7_block(), h298_kj_mol=_h_nasa7_kj(LOW, 298.15) - 1.5,
+                  points=[{"temperature_k": 600.0, "h_kj_mol": _h_nasa7_kj(LOW, 600.0) + 5.0}])
+
+
+def test_kirchhoff_dry_run_stages_nothing_and_commit_appends_one_row(db_session):
+    thermo = _kirchhoff_record(db_session)
+    before, inputs = count_reviews(db_session), thermo_inputs(thermo)
+    result, row = invoke(db_session, **request(thermo, "kirchhoff"))
+    assert row is None and not db_session.new and not db_session.dirty
+    assert count_reviews(db_session) == before
+    measured = [p for p in (json.loads(f.message) for f in result.findings) if "residual" in p]
+    # 3 anchor pairs x {298.15, 600} + 1 increment (from 600; no point at 298.15) + 1 jump.
+    assert len(measured) == 8
+    # h298-nasa7 at 298.15, point-nasa7 at 600, and the NASA-7 jump.
+    assert len([p for p in measured if p["reason"] is None]) == 3
+    flushed = []
+
+    def audit(session, *_):
+        flushed.extend(type(r).__name__ for r in session.new)
+        assert not session.dirty and not session.deleted
+
+    event.listen(db_session, "before_flush", audit)
+    try:
+        committed, row = invoke(db_session, commit=True, **request(thermo, "kirchhoff"))
+        db_session.flush()
+    finally:
+        event.remove(db_session, "before_flush", audit)
+    assert flushed == ["RecordMachineReviewRow"]
+    assert count_reviews(db_session) == before + 1
+    assert (row.record_id, row.model, row.provider) == (thermo.id, "kirchhoff_consistency", "tckdb.scientific_checks")
+    assert row.rubric_versions_json == {KIRCHHOFF_KEY: "1"}
+    assert all(f.severity.value == "info" for f in committed.findings)
+    assert thermo_inputs(thermo) == inputs
+
+
+def test_adding_the_kirchhoff_rubric_restales_no_stored_review(db_session, monkeypatch):
+    """The plan's claim, measured: rows recorded under the pre-D5 recipe stay current.
+
+    Every reviewer-family recipe is filtered to its own record type, and every
+    scientific-check row is keyed by its own rubric, so the new key reaches
+    no stored row's currency. Rows are recorded with the key absent (the
+    recipe as it was before D5), then classified with it present.
+    """
+    from app.services.machine_review.admin_trigger import (
+        SUPPORTED_RECORD_TYPES,
+        active_rubric_versions_for_record_type,
+    )
+    assert KIRCHHOFF_KEY in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+    with_key = {rt: active_rubric_versions_for_record_type(rt) for rt in SUPPORTED_RECORD_TYPES}
+    assert len(with_key) == 6
+    assert all(KIRCHHOFF_KEY not in recipe for recipe in with_key.values())
+
+    thermo, _, _ = setup_records(db_session)
+    monkeypatch.delitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, KIRCHHOFF_KEY)
+    assert {rt: active_rubric_versions_for_record_type(rt) for rt in SUPPORTED_RECORD_TYPES} == with_key
+    digest = MachineReviewContextDigest(context_hash="e" * 64, context_schema_version="v1")
+    reviewer_recipe = active_rubric_versions_for_record_type("thermo")
+    create_record_machine_review_row(
+        db_session, record_type="thermo", record_id=thermo.id, context_digest=digest,
+        prompt_version="reviewer_prompt_v9", rubric_versions=reviewer_recipe,
+        review=RecordMachineReview(record_type="thermo", record_ref=thermo.public_ref, record_id=thermo.id,
+                                   status=ServiceMachineReviewStatus.machine_screened_pass,
+                                   reviewed_at=datetime(2026, 9, 1)),
+    )
+    d1, _ = invoke(db_session, commit=True, **request(thermo, "thermo"))
+    cp.run_and_record(db_session, thermo.id)
+    db_session.flush()
+    monkeypatch.undo()
+    assert KIRCHHOFF_KEY in ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
+
+    def states():
+        plan = plan_record_machine_rereview(
+            db_session, record_type="thermo", record_id=thermo.id, current_context=digest,
+            active_prompt_version="reviewer_prompt_v9",
+            active_rubric_versions=active_rubric_versions_for_record_type("thermo"))
+        return (plan.decision, currency(db_session, d1).state.value,
+                cp.cp_comparison_currency(db_session, thermo.id).state.value)
+
+    expected = (MachineReviewReReviewDecision.skip_current, "current", "current")
+    assert states() == expected
+    k, _ = invoke(db_session, commit=True, **request(thermo, "kirchhoff"))
+    db_session.flush()
+    assert states() == expected
+    assert currency(db_session, k).state.value == "current"
+
+
+@pytest.mark.parametrize("location,field,value", [
+    ("nasa", "a6", 25.0), ("nasa", "b6", 125.0), ("nasa", "t_mid", 900.0),
+    ("point", "h_kj_mol", 1.0), ("thermo", "h298_kj_mol", 1.0), ("thermo", "enthalpy_reference_kind", None),
+    ("thermo", "reference_pressure_bar", 2.0), ("thermo", "phase", None), ("thermo", "tmax_k", 2500.0),
+    ("thermo", "h298_uncertainty_kj_mol", 0.5), ("entry", "isotope_key", "[2H]C"),
+])
+def test_every_material_kirchhoff_input_changes_live_currency(db_session, location, field, value):
+    thermo = _kirchhoff_record(db_session)
+    args = request(thermo, "kirchhoff")
+    _, row = invoke(db_session, commit=True, **args)
+    db_session.flush()
+    assert current(db_session, **args).state.value == "current"
+    targets = {"thermo": thermo, "nasa": thermo.nasa, "point": thermo.points[0], "entry": thermo.species_entry}
+    with db_session.no_autoflush:
+        setattr(targets[location], field, value)
+        live = compare(db_session, **args)
+        assert live.digest.context_hash != row.context_hash
+        assert current(db_session, **args).state.value == "stale"

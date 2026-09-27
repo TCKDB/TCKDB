@@ -20,6 +20,7 @@ from app.scientific_checks import (
 from app.services.consistency.gibbs import compare_gibbs
 from app.services.consistency.hess import compare_hess
 from app.services.consistency.kinetics import compare_kinetics
+from app.services.consistency.kirchhoff import compare_kirchhoff
 from app.services.consistency.thermo import compare_thermo
 from app.services.external_comparison.cp import compare_thermo_with_cp_observations
 
@@ -131,6 +132,33 @@ CHECK_GIBBS_SELF_CONSISTENCY = ScientificCheck(
             "a G on a declared record that follows another convention is reported as its raw "
             "residual, never relabelled. Reference pressure does not gate this check (g, h and s "
             "of one record share one state); gas phase only, as the other Phase D checks."
+        ),
+    ),),
+    escape_hatch=None,
+)
+
+__all__ += ["CHECK_KIRCHHOFF_CONSISTENCY"]
+
+CHECK_KIRCHHOFF_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=4, code=None,
+    asserts=(
+        "Compare a thermo record's supplied enthalpies (h298, exact points, NASA-7, NASA-9) at shared "
+        "temperatures, compare each enthalpy change with the exact interval-local Cp integral of a fit, "
+        "and report each fit's own boundary jumps -- residuals only."
+    ),
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
+    adr="0008", enforced_by=(PythonCheck(
+        compare_kirchhoff,
+        note=(
+            "Explicit Phase D CLI/service invocation only (check 'kirchhoff'). Only records that declare "
+            "enthalpy_reference_kind take part; an undeclared record is reported "
+            "enthalpy_reference_unrecorded, never given an inferred basis. Reference pressure never "
+            "gates enthalpy. Cross-record anchors state that the element-reference compilation is not "
+            "recorded and that its cancellation is assumed. Gas phase only, as for D1. Explicit "
+            "temperatures (--temperature) are ADDED to the default grid {298.15} + temperatures of points "
+            "carrying h -- unlike D1's thermo check, where they replace it. A record is never its own "
+            "neighbour."
         ),
     ),),
     escape_hatch=None,
