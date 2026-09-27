@@ -10,10 +10,12 @@ D0–D3: baseline `5988fbb890674eddb1819a164079612b0e79aff1`; migration head
 PR #518 and, after review round 2, is merged to `main`.
 
 D4–D6: the shared foundation (#549), D4 Gibbs self-consistency (#551), D6
-Hess (#550) and D5 Kirchhoff (#552) are merged to `main`; the record below
-was verified at `15079bbc`, migration head `e7b1c9d4a632`, Cantera 3.2.0.
-They compare only records that declare `enthalpy_reference_kind`, which
-the thermo upload has required of every enthalpy since 2026-09.
+Hess (#550) and D5 Kirchhoff (#552) are merged to `main` at `15079bbc`. The
+record below was verified against `main` at `2a32f694`, which adds #555
+and leaves the consistency code unchanged. Migration head is `e7b1c9d4a632`
+and Cantera is 3.2.0. The checks compare only records that declare
+`enthalpy_reference_kind`. Since #555 the thermo upload requires that
+declaration for every enthalpy, a stored Gibbs energy included.
 
 D0–D6 are implemented. The true Gibbs energy of formation (ΔfG) check,
 formation-increment Kirchhoff and normalized experimental H/G comparisons
@@ -136,9 +138,11 @@ ones the pull requests did not list, and ran each one.
 Each mutation is one textual change to production code. The change was
 applied alone, the nine Phase D modules (`backend/tests/services/test_phase_d_*.py`)
 were run, and the file was restored and its SHA-256 compared with the
-original. A mutation is killed when at least one test fails. The suite had
-333 tests before the additions below and 343 after. Line numbers refer to
-`15079bbc`, except the #554 guard, which is new.
+original. A mutation is killed when at least one test fails. At `15079bbc`
+the suite had 333 tests before the additions below and 343 after. After
+rebasing onto `2a32f694` it has 344, and every mutation that first
+survived, plus V1.1, was run again there and failed the same tests. Line
+numbers refer to `15079bbc`, except the #554 guard, which is new.
 
 | ID | Change (file:line) | Failing tests | Result |
 | --- | --- | --- | --- |
@@ -204,7 +208,10 @@ routes: `persist_thermo_upload`, `persist_transition_state_upload` and
   with ΔfH re-anchored to −74.6 kJ/mol) and points at 298.15 K and 1000 K;
   the 1000 K point's h is 0.5 kJ/mol above the fit and its G 0.2 kJ/mol
   above its own H − TS;
-- an undeclared C2H6 record whose only point carries S and G;
+- a C2H6 record whose only point carries S and G, deposited declared and
+  then cleared of its declaration in the database, because the upload now
+  refuses an undeclared G (#555); this is how a row from before the rule
+  reads;
 - a declared OH⁻ record;
 - CH4 + OH → CH3 + H2O, forward, with a tunneling row (ΔE = −54.6 kJ/mol,
   `thermal_enthalpy_298k`, separated reactants) and four declared thermo
@@ -270,7 +277,19 @@ NASA-7/NASA-9/Wilhoit, same-entry neighbour, differing and NaN pressures,
 a different entry, and unrecorded phase. The self-neighbour case was
 accepted before the fix (10 findings) and is refused after it.
 
-GATE_RESULTS_PLACEHOLDER
+The gates ran one at a time on the branch after rebasing onto `2a32f694`.
+The object store was a throwaway SeaweedFS started with CI's image, flags
+and environment, so the live-store tests ran rather than skipped:
+
+| Check | Result |
+| --- | --- |
+| `conda run -n tckdb_env bash backend/scripts/test-rest.sh` | 6652 passed, 31 skipped |
+| `conda run -n tckdb_env bash backend/scripts/test-api.sh` | 4021 passed |
+| `conda run -n tckdb_env bash backend/scripts/test-scientific.sh` | 2936 passed |
+| Phase D modules (`tests/services/test_phase_d_*.py`) | 344 passed |
+| `ruff check app tests scripts`, `check_runtime_ascii.py`, scoped `mypy` (196 files) | clean |
+| `generate_scientific_check_register.py --check`, `test_gate_coverage.py` (31) | up to date, passed |
+| `mkdocs build --strict` | built without warnings |
 
 ## Limits and remaining holds
 
@@ -296,7 +315,8 @@ GATE_RESULTS_PLACEHOLDER
   not an accuracy or approval claim.
 - D4–D6 compare only records that declare `enthalpy_reference_kind`. An
   undeclared record is `enthalpy_reference_unrecorded` and no basis is
-  inferred. On the playground instance, measured read-only on 2026-09-27,
+  inferred. Since #555 such a record cannot be newly deposited, so only
+  rows from before the rule are excluded this way. On the playground instance, measured read-only on 2026-09-27,
   no record is eligible yet: none of its 65 thermo rows declares its
   enthalpy reference, and none of its 17 kinetics records carries a
   tunneling row with reaction energies. The checks apply to new declared

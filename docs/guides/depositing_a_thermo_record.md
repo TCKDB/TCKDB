@@ -221,9 +221,10 @@ compare enthalpies and an enthalpy means nothing without its reference:
 
 A record without a declaration is excluded from all three and reported as
 `enthalpy_reference_unrecorded`. It is not assumed to be a formation
-enthalpy and it is not checked under a guessed convention. Declaring the
-reference on a new deposit is what makes a record eligible. The records that
-predate the rule stay excluded. The heat-capacity and entropy checks do not
+enthalpy and it is not checked under a guessed convention. Such a record
+can no longer be deposited: any enthalpy, Gibbs energy included, now has to
+come with the declaration. So the excluded records are the ones that
+predate the rule, and they stay excluded. The heat-capacity and entropy checks do not
 read the declaration, because neither quantity depends on it. The check of
 rates against thermo does not read it either; it uses the stored NASA
 coefficients as they are.
