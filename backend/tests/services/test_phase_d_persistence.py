@@ -380,3 +380,208 @@ def test_no_observations_is_visible_and_large_engine_values_are_unavailable(db_s
     result = compare(db_session, **request(thermo))
     assert json.loads(result.findings[0].message)["comparability_reason"] == "nonfinite_engine_result"
     assert result.digest.context_hash
+
+
+# --------------------------------------------------------------------------- #
+# D4 Gibbs self-consistency (``--check gibbs-self``). The record is persisted
+# through the real thermo upload workflow (``upload_thermo``), with a stored
+# G on every point so the check has something to evaluate.
+# --------------------------------------------------------------------------- #
+
+_GIBBS_LOW = (3.0, 2e-3, -4e-7, 3e-11, -1e-15, -9000.0, 7.0)
+_GIBBS_HIGH = (3.4, 1.1e-3, -2e-7, 1e-11, -3e-16, -8800.0, 5.0)
+
+
+def gibbs_records(session):
+    from tests.services.test_phase_d_gibbs import nasa7_payload, upload_thermo
+    return upload_thermo(
+        session, smiles="CCO", enthalpy_reference_kind="formation_298k", reference_pressure_bar=1.0,
+        nasa=nasa7_payload(_GIBBS_LOW, _GIBBS_HIGH),
+        points=[{"temperature_k": 500.0, "h_kj_mol": -50.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0},
+                {"temperature_k": 1500.0, "h_kj_mol": 10.0, "s_j_mol_k": 300.0, "g_kj_mol": -440.0}],
+    )
+
+
+def gibbs_request(thermo):
+    return {"check": "gibbs-self", "target_ref": thermo.public_ref}
+
+
+def _evaluated(result):
+    rows = [json.loads(f.message) for f in result.findings]
+    evaluated = [r for r in rows if r["reason"] is None]
+    return rows, evaluated
+
+
+def test_gibbs_dry_run_stages_nothing(db_session):
+    thermo = gibbs_records(db_session)
+    before = count_reviews(db_session)
+    result, row = invoke(db_session, **gibbs_request(thermo))
+    rows, evaluated = _evaluated(result)
+    assert row is None
+    assert len(rows) == 4 and len(evaluated) == 4  # two stored G x (point, nasa7)
+    assert not db_session.new and not db_session.dirty and not db_session.deleted
+    assert count_reviews(db_session) == before
+
+
+def test_gibbs_commit_appends_one_review_and_changes_no_scientific_state(db_session):
+    thermo = gibbs_records(db_session)
+    before = thermo_inputs(thermo)
+    count_before = count_reviews(db_session)
+    flushed = []
+
+    def audit(session, *_):
+        flushed.extend(type(row).__name__ for row in session.new)
+        assert not session.dirty and not session.deleted
+
+    event.listen(db_session, "before_flush", audit)
+    try:
+        result, row = invoke(db_session, commit=True, **gibbs_request(thermo))
+        db_session.flush()
+    finally:
+        event.remove(db_session, "before_flush", audit)
+    rows, evaluated = _evaluated(result)
+    assert len(rows) == 4 and len(evaluated) == 4
+    assert flushed == ["RecordMachineReviewRow"]
+    assert count_reviews(db_session) == count_before + 1
+    assert (row.record_type.value, row.record_id, row.model, row.prompt_version) == (
+        "thermo", thermo.id, "gibbs_self_consistency", "gibbs_self_consistency")
+    assert row.rubric_versions_json == {"gibbs_self_consistency_v1": "1"}
+    assert thermo_inputs(thermo) == before
+    assert current(db_session, **gibbs_request(thermo)).state.value == "current"
+
+
+def test_gibbs_check_does_not_restale_the_reviewer_review_or_d1_rows(db_session, monkeypatch):
+    thermo = gibbs_records(db_session)
+    digest, prompt_version, rubric_versions = _seed_reviewer_review(
+        db_session, record_type="thermo", record_id=thermo.id, record_ref=thermo.public_ref,
+    )
+    d1, _ = invoke(db_session, commit=True, **request(thermo, "thermo"))
+    db_session.flush()
+
+    def _plan():
+        return plan_record_machine_rereview(
+            db_session, record_type="thermo", record_id=thermo.id,
+            current_context=digest, active_prompt_version=prompt_version,
+            active_rubric_versions=rubric_versions,
+        )
+
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+    assert currency(db_session, d1).state.value == "current"
+    d4, first = invoke(db_session, commit=True, **gibbs_request(thermo))
+    _, second = invoke(db_session, commit=True, **gibbs_request(thermo))
+    db_session.flush()
+    assert first.id != second.id and latest_recorded(db_session, d4).id == second.id
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+    assert currency(db_session, d1).state.value == "current"
+    assert latest_recorded(db_session, d1).id != second.id
+    # Bumping D4's own rubric stales D4 and nothing else.
+    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name(d4.rubric), "999")
+    assert currency(db_session, d4).state.value == "stale"
+    assert currency(db_session, d1).state.value == "current"
+    assert _plan().decision is MachineReviewReReviewDecision.skip_current
+
+
+def test_adding_the_gibbs_rubric_restales_no_stored_review(db_session, monkeypatch):
+    """Record every existing kind of thermo review in a world WITHOUT the D4 key,
+    then add the key back: nothing recorded before it existed may go stale.
+    """
+    from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
+    from app.services.trust.rubrics import GIBBS_SELF_CONSISTENCY_V1
+
+    key = public_rubric_name(GIBBS_SELF_CONSISTENCY_V1)
+    thermo, _, _ = setup_records(db_session)
+    with_key = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
+    monkeypatch.delitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, key)
+    without_key = dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS)
+    assert set(with_key) - set(without_key) == {key}  # premise: the full recipe really changes
+
+    reviewer_recipe_before = active_rubric_versions_for_record_type("thermo")
+    digest = MachineReviewContextDigest(context_hash="f" * 64, context_schema_version="v1")
+    create_record_machine_review_row(
+        db_session, record_type="thermo", record_id=thermo.id,
+        review=RecordMachineReview(record_type="thermo", record_ref=thermo.public_ref,
+                                   status=ServiceMachineReviewStatus.machine_screened_pass,
+                                   reviewed_at=datetime(2026, 9, 1), record_id=thermo.id),
+        context_digest=digest, prompt_version="machine_review_v1", rubric_versions=reviewer_recipe_before,
+    )
+    recorded = {check: invoke(db_session, commit=True, **request(thermo, check))[0]
+                for check in ("thermo", "external-cp")}
+    db_session.flush()
+    assert len(recorded) == 2
+    assert all(currency(db_session, r).state.value == "current" for r in recorded.values())
+
+    monkeypatch.setitem(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, key, with_key[key])
+    assert dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS) == with_key
+    reviewer_recipe_after = active_rubric_versions_for_record_type("thermo")
+    assert reviewer_recipe_after == reviewer_recipe_before
+    plan = plan_record_machine_rereview(
+        db_session, record_type="thermo", record_id=thermo.id, current_context=digest,
+        active_prompt_version="machine_review_v1", active_rubric_versions=reviewer_recipe_after,
+    )
+    assert plan.decision is MachineReviewReReviewDecision.skip_current
+    states = {check: currency(db_session, r).state.value for check, r in recorded.items()}
+    assert states == {"thermo": "current", "external-cp": "current"}
+
+
+@pytest.mark.parametrize("location,field,value", [
+    ("thermo", "enthalpy_reference_kind", None),
+    ("point", "h_kj_mol", -51.0), ("point", "s_j_mol_k", 201.0), ("point", "g_kj_mol", -149.0),
+    ("nasa", "a6", -9001.0), ("nasa", "b6", -8801.0),
+])
+def test_every_material_gibbs_input_changes_live_currency(db_session, location, field, value):
+    thermo = gibbs_records(db_session)
+    _, row = invoke(db_session, commit=True, **gibbs_request(thermo))
+    db_session.flush()
+    assert current(db_session, **gibbs_request(thermo)).state.value == "current"
+    targets = {"thermo": thermo, "nasa": thermo.nasa, "point": thermo.points[0]}
+    assert getattr(targets[location], field) != value
+    setattr(targets[location], field, value)
+    with db_session.no_autoflush:
+        live = compare(db_session, **gibbs_request(thermo))
+        assert live.digest.context_hash != row.context_hash
+        assert current(db_session, **gibbs_request(thermo)).state.value == "stale"
+        assert latest_recorded(db_session, live).id == row.id
+
+
+def test_gibbs_hash_ignores_clocks_and_point_order(db_session):
+    thermo = gibbs_records(db_session)
+    baseline = compare(db_session, **gibbs_request(thermo))
+    thermo.points.reverse()
+    thermo.updated_at = datetime(2020, 1, 1)
+    with db_session.no_autoflush:
+        assert compare(db_session, **gibbs_request(thermo)).digest == baseline.digest
+
+
+def test_gibbs_service_refuses_neighbours_and_grids_and_the_cli_dry_runs(db_session, monkeypatch, capsys):
+    from app.api import deps
+    from scripts import run_consistency_check as cli
+    thermo = gibbs_records(db_session)
+    with pytest.raises(ValueError, match="gibbs-self"):
+        compare(db_session, **gibbs_request(thermo), temperature_grid=[500.0])
+    with pytest.raises(ValueError, match="gibbs-self"):
+        compare(db_session, **gibbs_request(thermo), comparison_thermo_ref=thermo.public_ref)
+    commits = []
+
+    class SessionProxy:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            pass
+
+        def __getattr__(self, name):
+            return getattr(db_session, name)
+
+        def commit(self):
+            commits.append(True)
+
+        def rollback(self):
+            pass
+
+    monkeypatch.setattr(deps, "SessionLocal", SessionProxy)
+    before = count_reviews(db_session)
+    assert cli.main(["--check", "gibbs-self", "--target-ref", thermo.public_ref]) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["committed"] is False and output["check"] == "gibbs-self"
+    assert len(output["findings"]) == 4
+    assert count_reviews(db_session) == before and not commits

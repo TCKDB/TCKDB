@@ -17,6 +17,7 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
+from app.services.consistency.gibbs import compare_gibbs
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.thermo import compare_thermo
 from app.services.external_comparison.cp import compare_thermo_with_cp_observations
@@ -103,6 +104,32 @@ CHECK_THERMO_KINETICS_CONSISTENCY = ScientificCheck(
             "decided 2026-09-23): a thermo record whose phase is recorded as "
             "something else, or was never recorded at all, is reported "
             "unavailable, not refused and not assumed gas."
+        ),
+    ),),
+    escape_hatch=None,
+)
+
+__all__ += ["CHECK_GIBBS_SELF_CONSISTENCY"]
+
+CHECK_GIBBS_SELF_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=3, code=None,
+    asserts=(
+        "Compare every stored Gibbs value of one thermo record with H(T) - T*S(T) taken from each of "
+        "that record's own representations, H and S always from the same one."
+    ),
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale=(
+        "Explicit advisory comparison records residuals or unavailable reasons; the only flag is "
+        "float precision on the same row's own identity, and there is no threshold or approval effect."
+    ),
+    adr="0008", enforced_by=(PythonCheck(
+        compare_gibbs,
+        note=(
+            "Explicit Phase D CLI/service invocation only (--check gibbs-self). A record whose "
+            "enthalpy_reference_kind was never recorded is excluded, never assumed formation_298k; "
+            "a G on a declared record that follows another convention is reported as its raw "
+            "residual, never relabelled. Reference pressure does not gate this check (g, h and s "
+            "of one record share one state); gas phase only, as the other Phase D checks."
         ),
     ),),
     escape_hatch=None,
