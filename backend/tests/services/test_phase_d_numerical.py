@@ -511,3 +511,18 @@ def test_engine_load_failures_are_configuration_errors(monkeypatch, exception):
     thermo.points = [ThermoPoint(temperature_k=500, cp_j_mol_k=30)]
     with pytest.raises(engine.ConfigurationError):
         compare_thermo(thermo)
+
+
+def test_a_record_is_never_its_own_neighbour():
+    """#554: self-comparison gave residuals of exactly 0 and every representation pair twice."""
+    thermo = _thermo(1)
+    thermo.points = [ThermoPoint(temperature_k=500.0, cp_j_mol_k=3.5 * R, s_j_mol_k=R * (3.5 * log(500.0) + 2.0))]
+    with pytest.raises(ValueError, match="cannot be its own neighbour"):
+        compare_thermo(thermo, comparison=thermo, temperature_grid=[500.0])
+    twin = _thermo(1)  # another object loaded for the same record
+    with pytest.raises(ValueError, match="cannot be its own neighbour"):
+        compare_thermo(thermo, comparison=twin, temperature_grid=[500.0])
+    # The temperature requirement is still checked first, as before.
+    with pytest.raises(ValueError, match="explicit temperatures"):
+        compare_thermo(thermo, comparison=thermo)
+    assert _details(compare_thermo(thermo, temperature_grid=[500.0]), "residual")
