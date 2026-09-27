@@ -21,6 +21,19 @@ def test_builder_refuses_missing_reference(kwargs):
     assert builder.enthalpy_reference_kind == REFERENCE
 
 
+def test_builder_treats_point_gibbs_as_enthalpy_content():
+    """A tabulated G is H - T*S on the record's enthalpy zero, so it needs
+    the declaration a point H needs -- and satisfies it."""
+    points = [{"temperature_k": 300.0, "s_j_mol_k": 188.9, "g_kj_mol": -298.5}]
+    with pytest.raises(TCKDBBuilderValidationError, match="^enthalpy_declaration_absent: "):
+        Thermo.points(points)
+    builder = Thermo.points(points, enthalpy_reference_kind=REFERENCE)
+    assert builder.enthalpy_reference_kind == REFERENCE
+    assert builder.to_payload()["points"] == [
+        {"temperature_k": 300.0, "s_j_mol_k": 188.9, "g_kj_mol": -298.5}
+    ]
+
+
 def test_builder_refuses_unused_reference():
     with pytest.raises(TCKDBBuilderValidationError, match="enthalpy_declaration_without_content"):
         Thermo.scalar(s298_j_mol_k=20, enthalpy_reference_kind=REFERENCE)

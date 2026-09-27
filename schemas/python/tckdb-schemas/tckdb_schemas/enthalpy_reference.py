@@ -50,6 +50,17 @@ def shared_enthalpy_reference(kinds: Iterable[Any]) -> tuple[str | None, str | N
 def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
     """Return a refusal code/message, or None for a coherent declaration.
 
+    Enthalpy content, any of which requires ``enthalpy_reference_kind`` and
+    without all of which a declaration is refused:
+
+    * ``h298_kj_mol``;
+    * a ``nasa`` block or ``nasa9_intervals`` (their enthalpy constants);
+    * ``wilhoit.h0_kj_mol``;
+    * a point ``h_kj_mol``;
+    * a point ``g_kj_mol``. A tabulated Gibbs energy is H(T) - T*S(T) on the
+      record's enthalpy zero, so it carries H's reference exactly as a point
+      H does, even on a point with no H of its own.
+
     A 0 K formation scalar has its own reference and is outside this rule.
     Never derive a missing scalar from a fit or infer a declaration.
     """
@@ -81,7 +92,10 @@ def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
         or get(payload, "nasa") is not None
         or bool(get(payload, "nasa9_intervals"))
         or get(get(payload, "wilhoit"), "h0_kj_mol") is not None
-        or any(get(point, "h_kj_mol") is not None for point in (get(payload, "points") or []))
+        or any(
+            get(point, "h_kj_mol") is not None or get(point, "g_kj_mol") is not None
+            for point in (get(payload, "points") or [])
+        )
     )
     if content and reference is None:
         return (

@@ -197,12 +197,16 @@ accept that exact shape on the way back in
 `enthalpy_reference_kind: null` next to a real enthalpy. Instead it applies
 one of two dispositions per legacy row, chosen by where the enthalpy lives:
 
-- **298 K scalar, tabulated point enthalpies, or a Wilhoit `h0_kj_mol`** —
-  each is an independently optional field, so only the enthalpy value(s)
-  are dropped from the export. Entropy, heat capacity, temperature range,
-  and every other field on the record are carried over unchanged, and the
-  record re-imports normally (now with no enthalpy content and no
-  declaration, which is a self-consistent shape).
+- **298 K scalar, tabulated point enthalpies or Gibbs energies, or a
+  Wilhoit `h0_kj_mol`** — each is an independently optional field, so only
+  the enthalpy value(s) are dropped from the export. A point `g_kj_mol` is
+  dropped with them: it is H(T) − T·S(T) on the same undeclared zero, and
+  the importer counts it as enthalpy content. Entropy, heat capacity,
+  temperature range, and every other field on the record are carried over
+  unchanged, and the record re-imports normally (now with no enthalpy
+  content and no declaration, which is a self-consistent shape). If
+  dropping them leaves a tabulated point with no value at all, the point
+  schema refuses it, and the whole record is omitted and reported instead.
 - **A NASA-7 or NASA-9 fit** — `ThermoNASACreate` /
   `ThermoNASA9IntervalCreate` require every coefficient, the enthalpy term
   included, so there is no way to drop only the enthalpy without destroying

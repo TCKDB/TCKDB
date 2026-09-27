@@ -14,7 +14,11 @@ from decimal import Decimal
 from math import inf, isfinite, log, nan
 
 import pytest
+from sqlalchemy import update
+from sqlalchemy.orm import object_session
 
+from app.api.error_contract import CodedValueError
+from app.db.models.thermo import Thermo
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.consistency import engine
 from app.services.consistency.gibbs import G_DEFINITION, RUNNER, STANDARD_STATE_NOTE, compare_gibbs
@@ -367,11 +371,28 @@ def _set_nasa(column, value):
     return mutate
 
 
+def _stored_legacy_undeclared(thermo):
+    """Clear the stored declaration in the database, not just in memory.
+
+    A point G is enthalpy content, so the upload path now refuses an
+    undeclared G deposit (``enthalpy_declaration_absent``). Undeclared rows
+    carrying G exist only as legacy data from before that rule; this writes
+    one. The DB guard permits it: it only requires a declaration when
+    ``h298_kj_mol`` is set, and this row has none.
+    """
+    session = object_session(thermo)
+    assert thermo.h298_kj_mol is None
+    session.execute(update(Thermo).where(Thermo.id == thermo.id).values(enthalpy_reference_kind=None))
+    session.expire(thermo)
+    assert thermo.enthalpy_reference_kind is None
+
+
 REASON_CASES = [
     # (id, upload fields, species (smiles, charge, multiplicity), in-memory mutation, expected {source: reason})
     ("enthalpy_reference_unrecorded",
-     {"points": [{"temperature_k": 500.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0}]},
-     ("C", 0, 1), None, {"point": "enthalpy_reference_unrecorded"}),
+     {"enthalpy_reference_kind": DECLARED,
+      "points": [{"temperature_k": 500.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0}]},
+     ("C", 0, 1), _stored_legacy_undeclared, {"point": "enthalpy_reference_unrecorded"}),
     ("charged_species_out_of_scope", {"enthalpy_reference_kind": DECLARED, "points": [_POINT]},
      ("[NH4+]", 1, 1), None, {"point": "charged_species_out_of_scope"}),
     ("isotope_labelled_species_out_of_scope", {"enthalpy_reference_kind": DECLARED, "points": [_POINT]},
@@ -445,6 +466,13 @@ def test_d4_5_one_case_per_reason(db_session, case_id, fields, species, mutate, 
     for source, row in by_source.items():
         assert set(row) == PAYLOAD_KEYS | ({"standard_state_note"} if source in NOTED else set()), source
         assert (row["residual_kj_mol"] is None) is (row["reason"] is not None), source
+
+
+def test_undeclared_gibbs_can_no_longer_be_deposited(db_session):
+    """Why the unrecorded case above is a stored legacy row, not an upload."""
+    with pytest.raises(CodedValueError) as caught:
+        upload_thermo(db_session, points=[{"temperature_k": 500.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0}])
+    assert caught.value.code == "enthalpy_declaration_absent"
 
 
 def test_every_reason_d4_emits_has_a_case():

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.51.0 - 2026-09-27
+
+`enthalpy_reference.enthalpy_reference_error` now counts a tabulated Gibbs
+energy (`points[*].g_kj_mol`) as enthalpy content. A stored G is
+H(T) - T*S(T) on the record's enthalpy zero, so it carries H's reference.
+**Behaviour change for depositors:** a thermo deposit whose points carry `g`
+must now declare `enthalpy_reference_kind`, like one that carries an
+enthalpy; before, an undeclared G-only (or G-and-S) deposit was accepted,
+and declaring `formation_298k` on it was refused as
+`enthalpy_declaration_without_content`. Now the undeclared one is refused
+with `enthalpy_declaration_absent` and the declared one is accepted. Codes
+and messages are unchanged. Existing stored records are not revisited.
+
 ## 0.50.0 - 2026-09-27
 
 Add `enthalpy_reference.shared_enthalpy_reference(kinds)`, the rule for
