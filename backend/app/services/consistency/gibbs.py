@@ -63,10 +63,29 @@ _PRESSURE_FREE_GATE = "h"
 
 _SCALAR_SOURCE = "scalar298"
 
+#: Existing engine token, reused: the record carries 298.15 K scalars but no
+#: stored G at exactly 298.15 K, the only temperature they are values at.
+#: Reported once per record, never once per point.
+NO_EXACT_MATCHING_POINT = "no_exact_matching_point"
 
-def _sources(thermo):
+#: On every finding whose H and S come from a representation other than the
+#: G's own row. A 1 bar vs 1 atm difference between that representation and
+#: the row would shift the residual by T*R*ln(1.01325)/1000 (0.033 kJ/mol at
+#: 298 K, 0.109 at 1000 K) -- the size of rounding residuals -- and nothing
+#: records which pressure each representation used. The point source needs
+#: no note: it is the same row.
+STANDARD_STATE_NOTE = "all representations assumed to share one standard pressure; not verified"
+_NOTED_SOURCES = frozenset({"nasa7", "nasa9", _SCALAR_SOURCE})
+
+
+def _has_scalars(thermo):
+    return thermo.h298_kj_mol is not None or thermo.s298_j_mol_k is not None
+
+
+def _sources(thermo, point):
+    """Point, every fit, and the scalars only at exactly 298.15 K."""
     names = ["point", *engine.fit_names(thermo)]
-    if thermo.h298_kj_mol is not None or thermo.s298_j_mol_k is not None:
+    if _has_scalars(thermo) and point.temperature_k == engine.T298_K:
         names.append(_SCALAR_SOURCE)
     return names
 
@@ -95,8 +114,7 @@ def _read_source(thermo, point, source):
         return None, None, reason
     # One Cantera object supplies both, so H and S cannot come from different
     # representations or different NASA7 branches / NASA9 intervals.
-    h = poly.h(temperature) / engine._ENGINE_DIVISOR["h"]
-    s = poly.s(temperature) / engine._ENGINE_DIVISOR["s"]
+    h, s = engine.enthalpy_and_entropy(poly, temperature)
     return (h, s, None) if _finite(h, s) else (None, None, "nonfinite_engine_result")
 
 
@@ -115,6 +133,19 @@ def _record_reason(thermo):
     return engine.gas_state_reason(thermo, quantity=_PRESSURE_FREE_GATE)
 
 
+def _payload(context, source, temperature, g, h, s, residual, within, bound, reason):
+    payload = {
+        **context, "source": source, "temperature_k": temperature, "unit": "kJ/mol",
+        "g_kj_mol": g, "h_kj_mol": h, "s_j_mol_k": s,
+        "residual_definition": RESIDUAL_DEFINITION, "residual_kj_mol": residual,
+        "within_float_precision": within, "float_precision_bound_kj_mol": bound,
+        "reason": reason,
+    }
+    if source in _NOTED_SOURCES:
+        payload["standard_state_note"] = STANDARD_STATE_NOTE
+    return payload
+
+
 def compare_gibbs(thermo):
     """Pure comparison of one resolved thermo record's stored G values."""
     refs = [thermo.public_ref, thermo.species_entry.public_ref]
@@ -130,13 +161,12 @@ def compare_gibbs(thermo):
         findings.append(finding(thermo, {**context, "reason": NO_STORED_GIBBS_VALUES,
                                          "points_examined": len(thermo.points)}, refs))
     else:
-        sources = _sources(thermo)
         if engine.fit_names(thermo):
             engine.cantera()  # Configuration failure precedes any finding.
         record_reason = _record_reason(thermo)
         for point in eligible:
             temperature, g = point.temperature_k, point.g_kj_mol
-            for source in sources:
+            for source in _sources(thermo, point):
                 h = s = residual = within = bound = None
                 reason = record_reason or (None if isfinite(g) else NONFINITE_STORED_VALUE)
                 if reason is None:
@@ -147,13 +177,14 @@ def compare_gibbs(thermo):
                         bound = _FLOAT_PRECISION_ULPS * _EPSILON * (
                             abs(g) + abs(h) + temperature * abs(s) / 1000.0)
                         within = abs(residual) <= bound
-                findings.append(finding(thermo, {
-                    **context, "source": source, "temperature_k": temperature, "unit": "kJ/mol",
-                    "g_kj_mol": g, "h_kj_mol": h, "s_j_mol_k": s,
-                    "residual_definition": RESIDUAL_DEFINITION, "residual_kj_mol": residual,
-                    "within_float_precision": within, "float_precision_bound_kj_mol": bound,
-                    "reason": reason,
-                }, refs))
+                findings.append(finding(thermo, _payload(
+                    context, source, temperature, g, h, s, residual, within, bound, reason), refs))
+        if _has_scalars(thermo) and not any(p.temperature_k == engine.T298_K for p in eligible):
+            # One row per record, not one per point: the scalars exist but no
+            # stored G sits at the only temperature they are values at.
+            findings.append(finding(thermo, _payload(
+                context, _SCALAR_SOURCE, engine.T298_K, None, None, None, None, None, None,
+                record_reason or NO_EXACT_MATCHING_POINT), refs))
     return AdvisoryResult(thermo, RUNNER, GIBBS_SELF_CONSISTENCY_V1, tuple(findings), encoded({
         "engine": f"cantera/{engine.ENGINE_VERSION}", "target": thermo_inputs(thermo),
         "species_entry": snapshot(thermo.species_entry, ("species",)),

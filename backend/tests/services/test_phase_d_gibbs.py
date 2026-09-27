@@ -17,7 +17,7 @@ import pytest
 
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.consistency import engine
-from app.services.consistency.gibbs import G_DEFINITION, RUNNER, compare_gibbs
+from app.services.consistency.gibbs import G_DEFINITION, RUNNER, STANDARD_STATE_NOTE, compare_gibbs
 from app.workflows.thermo import persist_thermo_upload
 
 R = 8.31446261815324
@@ -34,6 +34,8 @@ PAYLOAD_KEYS = {
     "temperature_k", "unit", "g_kj_mol", "h_kj_mol", "s_j_mol_k", "residual_definition",
     "residual_kj_mol", "within_float_precision", "float_precision_bound_kj_mol", "reason",
 }
+#: Sources whose H and S come from a representation other than G's own row.
+NOTED = {"nasa7", "nasa9", "scalar298"}
 
 
 # -- hand formulas --------------------------------------------------------------
@@ -218,20 +220,26 @@ def test_d4_4_each_source_supplies_its_own_h_and_s_at_the_points_temperature(db_
         {"temperature_k": t1, "h_kj_mol": h1 + 1.0, "s_j_mol_k": s1 + 2.0, "g_kj_mol": gibbs(h1, s1, t1) + 0.5},
         # High branch; the point has no entropy of its own.
         {"temperature_k": t2, "h_kj_mol": h2, "g_kj_mol": gibbs(h2, s2, t2) + 0.5},
-        # At 298.15 the scalars are a source: residual +0.25 against them.
-        {"temperature_k": T298, "h_kj_mol": h298, "s_j_mol_k": s298, "g_kj_mol": gibbs(h298, s298, T298) + 0.25},
+        # At 298.15 the scalars are a source: residual +0.25 against them. The
+        # row's own s differs from s298 by 2 J/mol/K, so the point residual is
+        # 0.25 + 298.15*2/1000 = +0.8463 and a scalar source that read S from
+        # the row instead of s298 would show here.
+        {"temperature_k": T298, "h_kj_mol": h298, "s_j_mol_k": s298 + 2.0,
+         "g_kj_mol": gibbs(h298, s298, T298) + 0.25},
     ]
     thermo = upload_thermo(db_session, enthalpy_reference_kind=DECLARED, h298_kj_mol=h298, s298_j_mol_k=s298,
                            nasa=nasa7_payload(), points=points)
     rows = by_key(rows_of(run(db_session, thermo)))
-    assert len(rows) == 9  # three stored G x (point, nasa7, scalar298)
+    assert len(rows) == 7  # three stored G x (point, nasa7), plus scalar298 at 298.15 only
     expected = {
-        ("point", t1): (0.7, None), ("nasa7", t1): (0.5, None), ("scalar298", t1): (None, "no_exact_h298_value"),
+        ("point", t1): (0.7, None), ("nasa7", t1): (0.5, None),
         ("point", t2): (None, "gibbs_point_missing_enthalpy_or_entropy"), ("nasa7", t2): (0.5, None),
-        ("scalar298", t2): (None, "no_exact_h298_value"),
-        ("point", T298): (0.25, None), ("scalar298", T298): (0.25, None),
+        ("point", T298): (0.25 + T298 * 2.0 / 1000.0, None), ("scalar298", T298): (0.25, None),
         ("nasa7", T298): (gibbs(h298, s298, T298) + 0.25 - gibbs(nasa7_h(LOW, T298), nasa7_s(LOW, T298), T298), None),
     }
+    assert (rows["scalar298", T298]["h_kj_mol"], rows["scalar298", T298]["s_j_mol_k"]) == (h298, s298)
+    for (source, _), row in rows.items():
+        assert row.get("standard_state_note") == (STANDARD_STATE_NOTE if source in NOTED else None), source
     assert set(rows) == set(expected)
     for key, (residual, reason) in expected.items():
         row = rows[key]
@@ -264,6 +272,33 @@ def test_d4_4b_nasa9_residual_from_the_interval_that_owns_the_temperature(db_ses
     assert rows["nasa9", t]["reason"] is None
     assert rows["nasa9", t]["residual_kj_mol"] == pytest.approx(0.5, abs=1e-9)
     assert rows["nasa9", t]["within_float_precision"] is None
+    assert rows["nasa9", t]["standard_state_note"] == STANDARD_STATE_NOTE
+    assert "standard_state_note" not in rows["point", t]
+
+
+# -- the scalar source adds at most one row per record -----------------------------------------
+
+_TABLE = [300.0 + 20.0 * i for i in range(50)]
+
+
+@pytest.mark.parametrize("with_298", [False, True])
+def test_scalar_source_adds_one_row_per_record_not_one_per_point(db_session, with_298):
+    temperatures = ([T298] if with_298 else []) + _TABLE
+    points = [{"temperature_k": t, "h_kj_mol": -74.6, "s_j_mol_k": 186.3, "g_kj_mol": gibbs(-74.6, 186.3, t)}
+              for t in temperatures]
+    thermo = upload_thermo(db_session, enthalpy_reference_kind=DECLARED, h298_kj_mol=-74.6, s298_j_mol_k=186.3,
+                           points=points)
+    rows = by_key(rows_of(run(db_session, thermo)))
+    assert len(points) == 50 + with_298
+    assert len(rows) == len(points) + 1
+    assert sum(r["source"] == "point" for r in rows.values()) == len(points)
+    scalar = [r for r in rows.values() if r["source"] == "scalar298"]
+    assert len(scalar) == 1 and scalar[0]["temperature_k"] == T298
+    if with_298:
+        assert scalar[0]["reason"] is None and scalar[0]["residual_kj_mol"] == pytest.approx(0.0, abs=1e-12)
+    else:
+        assert scalar[0]["reason"] == "no_exact_matching_point"
+        assert scalar[0]["g_kj_mol"] is None and scalar[0]["residual_kj_mol"] is None
 
 
 # -- pressure never gates D4 ------------------------------------------------------------
@@ -311,6 +346,13 @@ def test_no_stored_gibbs_values_is_exactly_one_finding(db_session, points):
 # -- D4-5: one case per reason ---------------------------------------------------------------
 
 _POINT = {"temperature_k": 500.0, "h_kj_mol": -50.0, "s_j_mol_k": 200.0, "g_kj_mol": -150.0}
+_POINT_298 = {"temperature_k": T298, "h_kj_mol": -74.6, "s_j_mol_k": 186.25, "g_kj_mol": -130.1}
+
+
+def _set_thermo(column, value):
+    def mutate(thermo):
+        setattr(thermo, column, value)
+    return mutate
 
 
 def _set_point(column, value):
@@ -352,13 +394,21 @@ REASON_CASES = [
     ("nonfinite_stored_value:g-precedes-sources",
      {"enthalpy_reference_kind": DECLARED, "nasa": nasa7_payload(), "points": [_POINT]},
      ("C", 0, 1), _set_point("g_kj_mol", -inf), {"point": "nonfinite_stored_value", "nasa7": "nonfinite_stored_value"}),
+    ("nonfinite_stored_value:s", {"enthalpy_reference_kind": DECLARED, "points": [_POINT]},
+     ("C", 0, 1), _set_point("s_j_mol_k", inf), {"point": "nonfinite_stored_value"}),
+    ("nonfinite_stored_value:h298",
+     {"enthalpy_reference_kind": DECLARED, "h298_kj_mol": -74.6, "s298_j_mol_k": 186.25, "points": [_POINT_298]},
+     ("C", 0, 1), _set_thermo("h298_kj_mol", nan), {"point": None, "scalar298": "nonfinite_stored_value"}),
     ("no_exact_s298_value",
-     {"enthalpy_reference_kind": DECLARED, "h298_kj_mol": -74.6,
-      "points": [{"temperature_k": T298, "h_kj_mol": -74.6, "s_j_mol_k": 186.25, "g_kj_mol": -130.1}]},
+     {"enthalpy_reference_kind": DECLARED, "h298_kj_mol": -74.6, "points": [_POINT_298]},
      ("C", 0, 1), None, {"point": None, "scalar298": "no_exact_s298_value"}),
     ("no_exact_h298_value",
-     {"enthalpy_reference_kind": DECLARED, "h298_kj_mol": -74.6, "s298_j_mol_k": 186.3, "points": [_POINT]},
+     {"enthalpy_reference_kind": DECLARED, "s298_j_mol_k": 186.25, "points": [_POINT_298]},
      ("C", 0, 1), None, {"point": None, "scalar298": "no_exact_h298_value"}),
+    # Scalars present, no stored G at 298.15: one row for the record, at 298.15.
+    ("no_exact_matching_point",
+     {"enthalpy_reference_kind": DECLARED, "h298_kj_mol": -74.6, "s298_j_mol_k": 186.3, "points": [_POINT]},
+     ("C", 0, 1), None, {"point": None, "scalar298": "no_exact_matching_point"}),
     ("unsupported_representation",
      {"enthalpy_reference_kind": DECLARED, "points": [_POINT],
       "wilhoit": {"cp0_j_mol_k": 33.0, "cp_inf_j_mol_k": 80.0, "b_k": 500.0, "a0": 0.0, "a1": 0.0, "a2": 0.0,
@@ -387,19 +437,21 @@ def test_d4_5_one_case_per_reason(db_session, case_id, fields, species, mutate, 
     thermo = upload_thermo(db_session, smiles=smiles, charge=charge, multiplicity=multiplicity, **fields)
     if mutate is not None:
         mutate(thermo)
-    temperature = fields["points"][0]["temperature_k"]
-    rows = by_key(rows_of(run(db_session, thermo)))
+    rows = rows_of(run(db_session, thermo))
     assert len(rows) == len(expected)
-    assert {source: rows[source, temperature]["reason"] for source in expected} == expected
-    for (source, _), row in rows.items():
-        assert set(row) == PAYLOAD_KEYS
+    by_source = {row["source"]: row for row in rows}
+    assert len(by_source) == len(rows)
+    assert {source: row["reason"] for source, row in by_source.items()} == expected
+    for source, row in by_source.items():
+        assert set(row) == PAYLOAD_KEYS | ({"standard_state_note"} if source in NOTED else set()), source
         assert (row["residual_kj_mol"] is None) is (row["reason"] is not None), source
 
 
 def test_every_reason_d4_emits_has_a_case():
     tokens = {reason for *_, expected in REASON_CASES for reason in expected.values() if reason}
-    assert len(REASON_CASES) == 17
+    assert len(REASON_CASES) == 20
     assert tokens | {"no_stored_gibbs_values"} == {
+        "no_exact_matching_point",
         "enthalpy_reference_unrecorded", "charged_species_out_of_scope", "isotope_labelled_species_out_of_scope",
         "unusable_species_composition", "phase_not_recorded", "non_gas_phase_unsupported",
         "gibbs_point_missing_enthalpy_or_entropy", "nonfinite_stored_value", "no_exact_s298_value",

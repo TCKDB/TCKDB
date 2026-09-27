@@ -296,3 +296,18 @@ def evaluate(thermo, representation, temperature, quantity):
         return None, reason
     value = getattr(poly, quantity)(temperature) / _ENGINE_DIVISOR[quantity]
     return (value, None) if isfinite(value) else (None, "nonfinite_engine_result")
+
+
+#: The one temperature at which a stored 298.15 K scalar is a value (public
+#: name for callers that must know it without evaluating anything).
+T298_K = _T298_K
+
+
+def enthalpy_and_entropy(poly, temperature):
+    """Return (H in kJ/mol, S in J/mol/K) from ONE Cantera thermo object.
+
+    For a check that needs both quantities from the same representation
+    (D4): reading them from one object means they can never come from
+    different NASA7 branches or NASA9 intervals. Units as :func:`evaluate`.
+    """
+    return poly.h(temperature) / _ENGINE_DIVISOR["h"], poly.s(temperature) / _ENGINE_DIVISOR["s"]
