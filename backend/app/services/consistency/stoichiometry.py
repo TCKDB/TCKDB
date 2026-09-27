@@ -15,7 +15,7 @@ Stoichiometry counts ``reaction_entry_structure_participant`` *slots*:
 species instead would make that reaction look unbalanced.
 """
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from rdkit import Chem
 
@@ -62,6 +62,22 @@ def species_facts(species):
         composition=composition,
         charge=species.charge,
     )
+
+
+def entry_facts(species_entry):
+    """:func:`species_facts` for an entry's species, with the entry's isotope content.
+
+    The upload path strips isotope labels before storing ``species.smiles``
+    (``app.chemistry.species.canonical_species_identity``): isotopologues
+    share one species row, and the labelling lives only on
+    ``species_entry.isotope_key`` (``None`` = every atom at its most
+    abundant isotope). So on persisted data the species SMILES never shows
+    an isotope, and ``has_isotopes`` must come from the entry. A label on
+    the species SMILES itself -- a row stored before labels were stripped
+    (#66) -- still counts, so neither source can hide the other.
+    """
+    facts = species_facts(species_entry.species)
+    return replace(facts, has_isotopes=facts.has_isotopes or species_entry.isotope_key is not None)
 
 
 @dataclass(frozen=True)
@@ -121,8 +137,13 @@ def is_balanced(balance, charge):
     return not any(balance.values()) and not charge
 
 
-def species_scope_reason(species):
+def species_scope_reason(species_entry):
     """The one per-species scope rule for the thermochemical checks, or None.
+
+    Takes the species ENTRY, not the species: isotope content exists only
+    on ``species_entry.isotope_key`` for persisted data (see
+    :func:`entry_facts`), so a rule reading the species alone could never
+    see a deuterated or 13C-labelled entry.
 
     Order, first match wins:
 
@@ -130,21 +151,22 @@ def species_scope_reason(species):
        from the column, so it is known even when the SMILES is unusable.
     2. ``unusable_species_composition`` -- the charge was never recorded,
        the SMILES does not parse, its elements cannot be counted, it counts
-       no atoms at all, or it contains a dummy/wildcard atom. Isotope
-       labels cannot be judged on a structure that cannot be read, so this
-       precedes them.
-    3. ``isotope_labelled_species_out_of_scope`` -- any atom carries an
-       explicit isotope label.
+       no atoms at all, or it contains a dummy/wildcard atom. A structure
+       that cannot be read is reported as such before anything else about it.
+    3. ``isotope_labelled_species_out_of_scope`` -- the entry carries an
+       ``isotope_key`` (or, for a legacy row, its species SMILES carries a
+       label).
 
     Ions and isotopologues are out of scope pending the decisions the
     Phase D plan names (electron and nuclide reference conventions); they
     are reported, never silently treated as the neutral or natural species.
     """
+    species = species_entry.species
     if species.charge is None:
         return UNUSABLE_SPECIES_COMPOSITION
     if species.charge != 0:
         return CHARGED_SPECIES_OUT_OF_SCOPE
-    facts = species_facts(species)
+    facts = entry_facts(species_entry)
     if not facts.parsed or not facts.composition or facts.has_dummy_atoms:
         return UNUSABLE_SPECIES_COMPOSITION
     if facts.has_isotopes:

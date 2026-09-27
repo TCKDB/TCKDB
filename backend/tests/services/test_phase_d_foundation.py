@@ -8,11 +8,12 @@ from math import log
 
 import pytest
 
-from app.db.models.species import Species
+from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import ThermoPoint
 from app.services.consistency import engine
 from app.services.consistency.stoichiometry import (
     element_balance,
+    entry_facts,
     is_balanced,
     participant_slots,
     species_facts,
@@ -255,27 +256,48 @@ def test_a_role_that_is_neither_side_leaves_slots_unaccounted():
 
 
 def test_species_facts_report_without_judging():
-    facts = species_facts(_species("[2H]C([2H])([2H])[2H]"))
-    assert (facts.parsed, facts.has_isotopes, facts.has_dummy_atoms) == (True, True, False)
-    assert facts.composition == {"C": 1, "H": 4}
+    facts = species_facts(_species("CC=O"))
+    assert (facts.parsed, facts.has_isotopes, facts.has_dummy_atoms) == (True, False, False)
+    assert facts.composition == {"C": 2, "H": 4, "O": 1}
     assert species_facts(_species("C((")).parsed is False
 
 
+def _entry(smiles, charge=0, isotope_key=None):
+    return SpeciesEntry(species=_species(smiles, charge), isotope_key=isotope_key)
+
+
+def test_entry_facts_take_isotopes_from_the_entry_key():
+    """Stored exactly as ``resolve_species_entry`` stores CD4: bare species SMILES, labelled key.
+
+    The real upload path is exercised in ``test_phase_d_isotope_scope.py``.
+    """
+    stored = _entry("C", isotope_key="[2H]C([2H])([2H])[2H]")
+    assert species_facts(stored.species).has_isotopes is False
+    assert entry_facts(stored).has_isotopes is True
+    assert entry_facts(stored).composition == {"C": 1, "H": 4}
+    assert entry_facts(_entry("C")).has_isotopes is False
+
+
 # -- species scope: one case per reason, plus in scope --
+# Isotope cases on real persisted entries live in test_phase_d_isotope_scope.py;
+# the rows here cover branches the upload path refuses to create (unreadable
+# SMILES, dummy atoms, unrecorded charge) but a row could still carry.
 
 
-@pytest.mark.parametrize("smiles,charge,expected", [
-    ("C", 0, None),
-    ("[OH-]", -1, "charged_species_out_of_scope"),
-    ("[NH4+]", 1, "charged_species_out_of_scope"),
-    ("[2H]C([2H])([2H])[2H]", 0, "isotope_labelled_species_out_of_scope"),
-    ("[13CH4]", 0, "isotope_labelled_species_out_of_scope"),
-    ("C((", 0, "unusable_species_composition"),
-    ("", 0, "unusable_species_composition"),
-    ("*C", 0, "unusable_species_composition"),
-    ("C", None, "unusable_species_composition"),
+@pytest.mark.parametrize("smiles,charge,isotope_key,expected", [
+    ("C", 0, None, None),
+    ("[OH-]", -1, None, "charged_species_out_of_scope"),
+    ("[NH4+]", 1, None, "charged_species_out_of_scope"),
+    ("C", 0, "[13CH4]", "isotope_labelled_species_out_of_scope"),
+    # A row stored before #66 stripped labels from species.smiles: the label
+    # on the SMILES still counts even though the entry has no key.
+    ("[2H]C([2H])([2H])[2H]", 0, None, "isotope_labelled_species_out_of_scope"),
+    ("C((", 0, None, "unusable_species_composition"),
+    ("", 0, None, "unusable_species_composition"),
+    ("*C", 0, None, "unusable_species_composition"),
+    ("C", None, None, "unusable_species_composition"),
     # Charge is read from the column, so it is reported even on an unreadable SMILES.
-    ("C((", 1, "charged_species_out_of_scope"),
+    ("C((", 1, None, "charged_species_out_of_scope"),
 ])
-def test_species_scope_reason(smiles, charge, expected):
-    assert species_scope_reason(_species(smiles, charge)) == expected
+def test_species_scope_reason(smiles, charge, isotope_key, expected):
+    assert species_scope_reason(_entry(smiles, charge, isotope_key)) == expected
