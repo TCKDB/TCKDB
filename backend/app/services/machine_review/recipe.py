@@ -50,6 +50,24 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # rubric recipe. Each is the single source of its own version — listed here only
 # to bind it into the recipe, never to restate a version number by hand.
 #
+# THE CURRENCY RULE: a stored recipe must be the filtered view. Every consumer
+# that stamps a review with ``rubric_versions`` (and every currency check that
+# compares against it) takes only the one key for its own rubric out of
+# ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS`` -- never the whole dict. The
+# filtering sites are ``active_rubric_versions_for_record_type`` in
+# ``admin_trigger.py`` (reviewer family, per record type),
+# ``AdvisoryResult.recipe`` in ``app.services.consistency.core`` (scientific-check
+# family, per advisory check and runner) and the two call sites in
+# ``app.services.external_comparison.cp`` (external-Cp runner). Currency compares
+# the stored dict for equality with the active one, so a consumer that stored
+# the unfiltered dict would see every stored review go stale whenever *any*
+# rubric is added to or bumped in the tuple below. That is why this module
+# offers no "whole recipe" accessor: ``get_active_machine_review_recipe()``,
+# which returned exactly that dict, was removed (issue #553) before anything
+# could persist its result. The rule is pinned by
+# ``tests/services/test_machine_review_recipe_filtering.py``, which stores each
+# filtered recipe, adds an unrelated key, and asserts nothing restales.
+#
 # EXTERNAL_CP_COMPARISON_V2 (Phase C-E4, bumped to v2 in Phase D's review
 # round 2 -- see docs/research/tckdb-phase-d-verification.md) is not a
 # computed-trust rubric -- it carries no checks and is never run by the trust
@@ -130,10 +148,12 @@ def public_rubric_name(rubric: EvidenceRubric) -> str:
     return f"{rubric.name}_v{rubric.version}"
 
 
-#: The full active rubric-version recipe, derived from the trust rubric
+#: The full active rubric-version table, derived from the trust rubric
 #: constants so it cannot drift from the deployed rubrics. Keyed by the public
 #: rubric name (``computed_*_v1``), valued by the integer rubric version as a
-#: string. A rubric bump changes both the key and the value, restaling reviews.
+#: string. A rubric bump changes both the key and the value, restaling reviews
+#: of that rubric. This is a lookup table, not a recipe: never store or compare
+#: against it whole -- take the one key for your own rubric (currency rule above).
 ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS: dict[str, str] = {
     public_rubric_name(rubric): str(rubric.version) for rubric in _ACTIVE_RUBRICS
 }
@@ -141,6 +161,10 @@ ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS: dict[str, str] = {
 
 class MachineReviewActiveRecipe(BaseModel):
     """Active machine-review recipe used for context currency checks.
+
+    ``rubric_versions`` must be a *filtered* view -- the one key for the
+    consumer's own rubric (see the currency rule above ``_ACTIVE_RUBRICS``),
+    never the whole of ``ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS``.
 
     ``extra="forbid"`` / ``frozen=True`` so it can carry no mutation instruction
     and cannot be edited after construction — it *describes* the active recipe,
@@ -152,15 +176,3 @@ class MachineReviewActiveRecipe(BaseModel):
     prompt_version: str
     rubric_versions: dict[str, str]
 
-
-def get_active_machine_review_recipe() -> MachineReviewActiveRecipe:
-    """Return the active machine-review prompt and rubric-version recipe.
-
-    A single, shared snapshot for every consumer (admin trigger today, future
-    provider orchestration). The rubric versions are derived from the deployed
-    trust rubric constants, so the recipe stays in lockstep with the evaluator.
-    """
-    return MachineReviewActiveRecipe(
-        prompt_version=ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
-        rubric_versions=dict(ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS),
-    )

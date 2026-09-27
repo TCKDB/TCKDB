@@ -228,7 +228,9 @@ POST /api/v1/admin/machine-review/records/{record_type}/{record_id}/run-fake
   `prompt_version = "machine_review_v1"`; `rubric_versions` is derived from the
   trust rubric constants (e.g. `{"computed_calculation_v1": "1"}`), so a rubric
   bump restales reviews without a second source of truth. `recipe.py` also
-  exposes `MachineReviewActiveRecipe` / `get_active_machine_review_recipe()`.
+  exposes `MachineReviewActiveRecipe`. A stored recipe is always the filtered
+  view (the one rubric for the record's type, via
+  `active_rubric_versions_for_record_type`), never the whole table (#553).
 - **Producer:** `FakeMachineReviewProducer` only — the appended row carries
   `provider="fake"`, `model="fake-test"`.
 
