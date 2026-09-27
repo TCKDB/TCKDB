@@ -38,6 +38,7 @@ from app.db.models.common import (
     ActivationEnergyUnits,
     ReactionRole,
     SubmissionRecordType,
+    ThermoModelKind,
 )
 from app.db.models.kinetics import Kinetics
 from app.db.models.reaction import (
@@ -114,28 +115,38 @@ class BundleExportOmission:
     """A thermo record (or one of its enthalpy values) left out of a bundle.
 
     :param action: ``"record_omitted"`` -- the whole record was left out of
-        the bundle, because its enthalpy lives inside a NASA-7/NASA-9 fit.
-        Those coefficients are mandatory together (``ThermoNASACreate`` /
-        ``ThermoNASA9IntervalCreate`` require every ``a``/``b`` coefficient,
-        the enthalpy term included), so there is no way to drop only the
-        enthalpy without destroying the whole fit -- and a fit-only record's
-        fit *is* its entire scientific content.
+        the bundle, for one of two reasons. Either its enthalpy lives inside
+        a NASA-7/NASA-9 fit: those coefficients are mandatory together
+        (``ThermoNASACreate`` / ``ThermoNASA9IntervalCreate`` require every
+        ``a``/``b`` coefficient, the enthalpy term included), so there is no
+        way to drop only the enthalpy without destroying the whole fit.
+        Or every value the record held was undeclared enthalpy content, so
+        once that is dropped no point, fit or scalar value remains.
         ``"enthalpy_pruned"`` -- the record was still exported, with its
         undeclared enthalpy value(s) dropped (298 K scalar, point
         enthalpies, point Gibbs energies, and/or a Wilhoit ``h0_kj_mol``,
         each independently optional); entropy, heat capacity and every
-        other field are unaffected.
+        other field are unaffected. A tabulated point left with no value
+        at all is dropped, and its temperature listed in
+        ``points_dropped_at_k``.
     :param ref: The record's public ref (``thermo.public_ref``) -- never a
         row id, so the report stays meaningful outside this DB instance.
     :param detail: Human-readable reason.
+    :param points_dropped_at_k: Temperatures (K, ascending) of the tabulated
+        points whose only values were undeclared enthalpy content, and which
+        were therefore dropped. Empty when no point was dropped.
     """
 
     action: str
     ref: str
     detail: str
+    points_dropped_at_k: tuple[float, ...] = ()
 
-    def to_dict(self) -> dict[str, str]:
-        return {"action": self.action, "ref": self.ref, "detail": self.detail}
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"action": self.action, "ref": self.ref, "detail": self.detail}
+        if self.points_dropped_at_k:
+            out["points_dropped_at_k"] = list(self.points_dropped_at_k)
+        return out
 
 
 @dataclass
@@ -198,9 +209,68 @@ def _thermo_export_disposition(
     )
 
 
-def _prune_undeclared_enthalpy(payload: dict[str, Any]) -> None:
+#: The point columns ``ThermoPointCreate`` requires at least one of.
+_THERMO_POINT_VALUE_FIELDS = ("cp_j_mol_k", "h_kj_mol", "s_j_mol_k", "g_kj_mol")
+
+
+@dataclass(frozen=True)
+class _EnthalpyPrune:
+    """What :func:`_prune_undeclared_enthalpy` removed beyond the values."""
+
+    points_dropped_at_k: tuple[float, ...] = ()
+    model_kind_cleared: bool = False
+
+
+def _format_temperatures(temperatures: Iterable[float]) -> str:
+    return ", ".join(str(t) for t in temperatures)
+
+
+def _undeclared_enthalpy_values(payload: dict[str, Any]) -> list[str]:
+    """Name each undeclared enthalpy value :func:`_prune_undeclared_enthalpy`
+    is about to drop, for a truthful omission message."""
+    names: list[str] = []
+    if payload.get("h298_kj_mol") is not None:
+        names.append("h298_kj_mol")
+    wilhoit = payload.get("wilhoit")
+    if wilhoit is not None and wilhoit.get("h0_kj_mol") is not None:
+        names.append("wilhoit h0_kj_mol")
+    points = payload.get("points") or []
+    for column in ("h_kj_mol", "g_kj_mol"):
+        temperatures = sorted(p["temperature_k"] for p in points if p.get(column) is not None)
+        if temperatures:
+            names.append(f"point {column} at {_format_temperatures(temperatures)} K")
+    return names
+
+
+def _has_scientific_content(payload: dict[str, Any]) -> bool:
+    """Whether any point, fit or scalar value survives in ``payload``.
+
+    Mirrors ``ThermoUploadRequest.validate_has_scientific_content``. Only
+    used to word the omission truthfully: the payload is still validated
+    against the real schema afterwards.
+    """
+    return bool(
+        payload.get("h298_kj_mol") is not None
+        or payload.get("s298_j_mol_k") is not None
+        or payload.get("enthalpy_formation_0k_kj_mol") is not None
+        or payload.get("nasa") is not None
+        or payload.get("nasa9_intervals")
+        or payload.get("wilhoit") is not None
+        or payload.get("points")
+    )
+
+
+def _prune_undeclared_enthalpy(payload: dict[str, Any]) -> _EnthalpyPrune:
     """Drop the optional enthalpy sub-values ``_thermo_export_disposition``
     identified as this record's ONLY enthalpy content, in place.
+
+    A tabulated point left with no value at all is dropped from
+    ``payload["points"]``: the point schema refuses an empty point, and it
+    holds nothing the record still needs. If that removes every point, the
+    ``points`` key goes too, and a stored ``model_kind`` of ``tabulated``
+    (which the upload schema refuses without points) is removed so the
+    importer infers the kind from what remains. Both are reported in the
+    returned :class:`_EnthalpyPrune`.
 
     Never touches ``nasa`` / ``nasa9_intervals`` -- callers only reach this
     for the ``"enthalpy_pruned"`` disposition, which never fires when either
@@ -212,13 +282,32 @@ def _prune_undeclared_enthalpy(payload: dict[str, Any]) -> None:
     if wilhoit is not None:
         payload["wilhoit"] = {**wilhoit, "h0_kj_mol": None}
     points = payload.get("points")
-    if points:
-        # A point G is H(T) - T*S(T) on the same undeclared zero, and the
-        # shared rule counts it as enthalpy content: keep it and the
-        # importer refuses the bundle. A point left with no value at all
-        # fails the point schema, which ``_thermo_to_upload`` turns into a
-        # reported ``record_omitted``, never a broken bundle.
-        payload["points"] = [{**p, "h_kj_mol": None, "g_kj_mol": None} for p in points]
+    if not points:
+        return _EnthalpyPrune()
+    # A point G is H(T) - T*S(T) on the same undeclared zero, and the shared
+    # rule counts it as enthalpy content: keep it and the importer refuses
+    # the bundle.
+    kept: list[dict[str, Any]] = []
+    emptied: list[float] = []
+    for point in points:
+        pruned = {**point, "h_kj_mol": None, "g_kj_mol": None}
+        if any(pruned.get(name) is not None for name in _THERMO_POINT_VALUE_FIELDS):
+            kept.append(pruned)
+        else:
+            emptied.append(pruned["temperature_k"])
+    if not emptied:
+        payload["points"] = kept
+        return _EnthalpyPrune()
+    dropped = tuple(sorted(emptied))
+    model_kind_cleared = False
+    if kept:
+        payload["points"] = kept
+    else:
+        del payload["points"]
+        if payload.get("model_kind") == ThermoModelKind.tabulated.value:
+            del payload["model_kind"]
+            model_kind_cleared = True
+    return _EnthalpyPrune(points_dropped_at_k=dropped, model_kind_cleared=model_kind_cleared)
 
 
 # ---------------------------------------------------------------------------
@@ -478,9 +567,10 @@ def _thermo_to_upload(
     """Reconstruct an upload-equivalent thermo dict from a ``Thermo`` row.
 
     Returns ``(payload, omission)``. ``payload`` is ``None`` only when the
-    row's enthalpy could not be represented at all (see
-    ``_thermo_export_disposition``); the caller must not add it to the
-    bundle. ``omission`` is set whenever the row's legacy undeclared
+    row's undeclared enthalpy could not be dropped without losing the whole
+    record: it lives in a NASA fit (see ``_thermo_export_disposition``), or
+    it was the record's only content, so no point, fit or scalar survives
+    the prune. The caller must not add it to the bundle. ``omission`` is set whenever the row's legacy undeclared
     enthalpy changed what was exported, whether or not ``payload`` is
     ``None``.
 
@@ -541,25 +631,67 @@ def _thermo_to_upload(
             return None, BundleExportOmission(
                 action=action, ref=thermo.public_ref, detail=detail
             )
-        _prune_undeclared_enthalpy(payload)
-        omission = BundleExportOmission(action=action, ref=thermo.public_ref, detail=detail)
+        pruned_values = _undeclared_enthalpy_values(payload)
+        prune = _prune_undeclared_enthalpy(payload)
+        if prune.points_dropped_at_k and not _has_scientific_content(payload):
+            # Every value the record held was undeclared enthalpy content:
+            # with it dropped, and its emptied points with it, nothing is
+            # left to export.
+            return None, BundleExportOmission(
+                action="record_omitted",
+                ref=thermo.public_ref,
+                detail=(
+                    f"carries only undeclared enthalpy content ("
+                    f"{'; '.join(pruned_values)}), with no "
+                    "enthalpy_reference_kind declared -- a legacy shape "
+                    "predating the declaration rule that the import workflow "
+                    "refuses. Once those values are dropped, no point, fit or "
+                    "scalar value remains, so the record is omitted from this "
+                    "bundle."
+                ),
+                points_dropped_at_k=prune.points_dropped_at_k,
+            )
+        if prune.points_dropped_at_k:
+            detail += (
+                " Tabulated points left with no value were dropped, at "
+                f"{_format_temperatures(prune.points_dropped_at_k)} K; the "
+                "other points are exported."
+            )
+        if prune.model_kind_cleared:
+            detail += (
+                " No tabulated point remained, so the stored model_kind "
+                "'tabulated' no longer describes the record; it was left out "
+                "for the importer to infer from what remains."
+            )
+        omission = BundleExportOmission(
+            action=action,
+            ref=thermo.public_ref,
+            detail=detail,
+            points_dropped_at_k=prune.points_dropped_at_k,
+        )
 
     try:
         ThermoUploadRequest.model_validate(payload)
     except ValidationError as exc:
         if omission is not None:
-            # Pruning the undeclared enthalpy left nothing scientifically
-            # meaningful behind (e.g. h298 was this record's only content)
-            # -- omit the whole record rather than export an empty shell
-            # the schema itself refuses.
+            # Omit the whole record rather than export something the schema
+            # itself refuses -- and say which of the two reasons applies.
+            if _has_scientific_content(payload):
+                reason = (
+                    "the remaining content failed the upload schema, so the "
+                    "record is omitted"
+                )
+            else:
+                # e.g. h298 was this record's only content.
+                reason = "nothing scientifically meaningful remained to export"
             return None, BundleExportOmission(
                 action="record_omitted",
                 ref=thermo.public_ref,
                 detail=(
                     f"{omission.detail} After dropping the undeclared "
-                    f"enthalpy, nothing scientifically meaningful remained "
-                    f"to export: {exc}"
+                    f"enthalpy, {reason}: {exc}"
                 ),
+                points_dropped_at_k=omission.points_dropped_at_k,
             )
         raise ContributionBundleExportError(
             f"thermo_upload_incompatible: {thermo.public_ref}: {exc}"
