@@ -63,6 +63,21 @@ _T298_K = 298.15
 _NASA7_BRANCHES = ("low", "high")
 
 
+def _check_quantity(quantity, *, allow_none):
+    """Refuse a quantity these evaluators do not define -- never fall back silently.
+
+    Supported: ``"cp"``, ``"s"``, ``"h"``; the applicability gate also takes
+    ``None`` (the full record, as D3 uses it). A misspelt or not-yet-supported
+    quantity such as ``"g"`` would otherwise read the wrong column or apply
+    the wrong unit divisor and report an innocent-looking unavailable reason.
+    """
+    if quantity is None and allow_none:
+        return
+    if quantity not in _ENGINE_DIVISOR:
+        allowed = "'cp', 's', 'h'" + (" or None" if allow_none else "")
+        raise ValueError(f"unsupported quantity {quantity!r}; expected {allowed}")
+
+
 def gas_state_reason(thermo, *, quantity=None):
     """Applicability gate, split per quantity (decided 2026-09-23).
 
@@ -84,7 +99,15 @@ def gas_state_reason(thermo, *, quantity=None):
     like a positive claim of an incompatible phase, and would make a
     genuinely incompatible record look like it was merely never recorded.
     Neither is compared under a gas assumption.
+
+    For a pressure-independent quantity the stored pressure is not inspected
+    at all, so a NaN, zero, negative or infinite value passes the gate and
+    reaches the Cantera constructor. That is deliberate and harmless:
+    measured 2026-09-27 on Cantera 3.2.0, NASA7 and NASA9 construct without
+    error at each of those pressures and return Cp and H identical to the
+    1 bar values. (Cp behaves the same way on main since 2026-09-23.)
     """
+    _check_quantity(quantity, allow_none=True)
     if thermo.phase is None:
         return "phase_not_recorded"
     if thermo.phase not in SUPPORTED_PHASES:
@@ -254,11 +277,13 @@ def evaluate(thermo, representation, temperature, quantity):
     Units: Cp and S in J/mol/K; H in kJ/mol. ``"point"`` needs a stored
     point at exactly ``temperature``; ``"s298"`` and ``"h298"`` are values
     only at exactly 298.15 K and only for their own quantity -- never
-    interpolated, never shifted by a fit.
+    interpolated, never shifted by a fit. Any other quantity raises
+    ``ValueError`` (see :func:`_check_quantity`).
     """
+    _check_quantity(quantity, allow_none=False)
     if representation == "point":
         point = next((p for p in thermo.points if p.temperature_k == temperature), None)
-        value = getattr(point, _POINT_COLUMN.get(quantity, f"{quantity}_j_mol_k"), None)
+        value = getattr(point, _POINT_COLUMN[quantity], None)
         return value, None if value is not None else "no_exact_matching_point"
     if representation == "s298":
         value = thermo.s298_j_mol_k if temperature == _T298_K and quantity == "s" else None
@@ -269,5 +294,5 @@ def evaluate(thermo, representation, temperature, quantity):
     poly, reason = polynomial(thermo, representation, temperature, quantity=quantity)
     if reason:
         return None, reason
-    value = getattr(poly, quantity)(temperature) / _ENGINE_DIVISOR.get(quantity, 1000.0)
+    value = getattr(poly, quantity)(temperature) / _ENGINE_DIVISOR[quantity]
     return (value, None) if isfinite(value) else (None, "nonfinite_engine_result")

@@ -4,6 +4,7 @@ Expectations come from hand formulas and SI constants, never from the
 production evaluator. Every test that iterates asserts the exact number of
 evaluated cases first, so an empty set cannot pass.
 """
+import json
 from math import log
 
 import pytest
@@ -301,3 +302,108 @@ def test_entry_facts_take_isotopes_from_the_entry_key():
 ])
 def test_species_scope_reason(smiles, charge, isotope_key, expected):
     assert species_scope_reason(_entry(smiles, charge, isotope_key)) == expected
+
+
+# -- review round 1: gates on the single-branch helpers --
+
+
+def _gated_cases():
+    """(mutator, quantity, temperature, expected reason) for both helpers."""
+    def phase(value):
+        return lambda t: setattr(t, "phase", value)
+
+    def tmin(t):
+        t.tmin_k = 500.0
+
+    def no_pressure(t):
+        t.reference_pressure_bar = None
+
+    return [
+        (phase(None), "h", 800.0, "phase_not_recorded"),
+        (phase("liquid"), "h", 800.0, "non_gas_phase_unsupported"),
+        (tmin, "h", 400.0, "temperature_outside_record_range"),
+        (no_pressure, "s", 800.0, "missing_or_invalid_reference_pressure"),
+    ]
+
+
+def _nasa9_pair():
+    thermo = _thermo()
+    thermo.nasa = None
+    thermo.nasa9_intervals = [_nasa9(1, 200.0, 1000.0, 3.0), _nasa9(2, 1000.0, 3000.0, 5.0)]
+    return thermo
+
+
+def test_single_branch_helpers_apply_the_record_gate():
+    cases = _gated_cases()
+    assert len(cases) == 4
+    evaluated = 0
+    for mutate, quantity, temperature, expected in cases:
+        seven = _nasa7_thermo()
+        mutate(seven)
+        assert engine.nasa7_branch(seven, "low", temperature, quantity=quantity) == (None, expected)
+        nine = _nasa9_pair()
+        mutate(nine)
+        assert engine.nasa9_interval(nine, 1, temperature, quantity=quantity) == (None, expected)
+        evaluated += 2
+    assert evaluated == 8
+
+
+def test_single_branch_helpers_pass_the_gate_for_h_without_a_pressure():
+    """Control for the gate cases: the same records, gate satisfied, evaluate."""
+    seven = _nasa7_thermo(pressure=None)
+    nine = _nasa9_pair()
+    nine.reference_pressure_bar = None
+    poly7, reason7 = engine.nasa7_branch(seven, "low", 800.0, quantity="h")
+    poly9, reason9 = engine.nasa9_interval(nine, 1, 800.0, quantity="h")
+    assert reason7 is None and reason9 is None
+    assert poly7.h(800.0) / 1e6 == pytest.approx(_h_nasa7_kj(LOW, 800.0), rel=1e-12)
+    assert poly9.h(800.0) / 1e6 == pytest.approx(R * 3.0 * 800.0 / 1000.0, rel=1e-12)
+
+
+# -- review round 1: no silent fallback for an unsupported quantity --
+
+
+@pytest.mark.parametrize("representation", ["point", "s298", "h298", "nasa7"])
+def test_evaluate_refuses_an_unsupported_quantity(representation):
+    thermo = _nasa7_thermo()
+    thermo.points = [ThermoPoint(temperature_k=500.0, g_kj_mol=-10.0)]
+    with pytest.raises(ValueError, match="unsupported quantity 'g'"):
+        engine.evaluate(thermo, representation, 500.0, "g")
+
+
+@pytest.mark.parametrize("call", [
+    lambda t: engine.gas_state_reason(t, quantity="g"),
+    lambda t: engine.polynomial(t, "nasa7", 500.0, quantity="g"),
+    lambda t: engine.nasa7_branch(t, "low", 500.0, quantity="g"),
+    lambda t: engine.evaluate(t, "nasa7", 500.0, None),
+])
+def test_every_entry_point_refuses_an_unsupported_quantity(call):
+    with pytest.raises(ValueError, match="unsupported quantity"):
+        call(_nasa7_thermo())
+
+
+# -- review round 1: D1 reads the same constant --
+
+
+def test_d1_pressure_matching_reads_the_pressure_independent_constant(monkeypatch):
+    """D1 must not hardcode ``cp``: widening the constant changes D1's pressure matching too.
+
+    Two neighbours at different, valid reference pressures. Entropy pairs are
+    refused as ``incompatible_reference_pressures``; once ``s`` is (wrongly,
+    for this test only) declared pressure-independent, they are compared.
+    """
+    from app.services.consistency.thermo import compare_thermo
+
+    left, right = _thermo(pressure=1.0), _thermo(pressure=2.5)
+    right.public_ref = "th_neighbour"
+
+    def s_rows():
+        result = compare_thermo(left, comparison=right, temperature_grid=[500])
+        rows = [json.loads(f.message) for f in result.findings]
+        rows = [r for r in rows if r.get("quantity") == "s" and "residual" in r]
+        assert len(rows) == 1
+        return rows
+
+    assert s_rows()[0]["reason"] == "incompatible_reference_pressures"
+    monkeypatch.setattr(engine, "PRESSURE_INDEPENDENT_QUANTITIES", frozenset({"cp", "h", "s"}))
+    assert s_rows()[0]["reason"] is None

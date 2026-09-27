@@ -52,8 +52,10 @@ def compare_thermo(thermo, *, comparison=None, temperature_grid=()):
                     reason = reason or engine.gas_state_reason(t, quantity=quantity)
                 # Reference pressure cannot change a heat capacity (decided
                 # 2026-09-23): only entropy needs matching reference
-                # pressures to be comparable.
-                if quantity != "cp" and left.reference_pressure_bar != right.reference_pressure_bar:
+                # pressures to be comparable. Same constant as the gate, so
+                # a pressure-free quantity is never refused here either.
+                pressures_differ = left.reference_pressure_bar != right.reference_pressure_bar
+                if quantity not in engine.PRESSURE_INDEPENDENT_QUANTITIES and pressures_differ:
                     reason = reason or "incompatible_reference_pressures"
                 x = y = None
                 if reason is None:
