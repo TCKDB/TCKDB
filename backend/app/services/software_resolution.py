@@ -9,6 +9,37 @@ from tckdb_schemas.software import normalize_software_name
 from app.db.models.software import Software, SoftwareRelease
 from app.schemas.fragments.refs import SoftwareReleaseRef
 
+#: Programs that are workflow tools and can never be the electronic-structure
+#: package that ran a calculation (issue #305). Keyed by the lowercased,
+#: whitespace-collapsed name; the value is the canonical workflow-tool name.
+#:
+#: Arkane computes thermochemistry and rate coefficients *from* the output of
+#: an electronic-structure package. Declaring it as a calculation's software
+#: says a calculation was run by a program that runs none; the pressure-
+#: dependent ingester (``scripts/pdep_ingestion/builder.py``) already records
+#: it as a ``workflow_tool_release``.
+#:
+#: Deliberately scoped to the *calculation* seam. A product row's
+#: ``software_release`` (thermo/statmech/kinetics, fed by the bundle-level
+#: ``analysis_software_release``) is documented as the analysis code --
+#: "e.g. Arkane, MESS" -- and the ARC adapter fills it with Arkane on every
+#: reaction deposit. Moving that slot is an owner decision with a schema
+#: dimension (the product's one ``workflow_tool_release`` slot already holds
+#: ARC), so it is not made here.
+WORKFLOW_TOOLS_NOT_ESS: dict[str, str] = {"arkane": "Arkane"}
+
+
+def workflow_tool_named_as_ess(name: str | None) -> str | None:
+    """Return the canonical workflow-tool name if *name* is one, else ``None``.
+
+    :param name: A declared software name, in any case or spacing.
+    :returns: e.g. ``"Arkane"`` for ``" arkane "``; ``None`` for ``"ORCA"``.
+    """
+
+    if not name:
+        return None
+    return WORKFLOW_TOOLS_NOT_ESS.get(" ".join(name.split()).lower())
+
 
 def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:
     """Build a nullable equality predicate for dedupe lookups.

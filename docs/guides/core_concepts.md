@@ -170,11 +170,24 @@ and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visib
 
 - **`level_of_theory`** captures method + basis + dispersion + solvent
   + auxiliary settings under one stable ref (`lot_…`).
-- **`software` / `software_release`** identifies the ESS code and
-  version (Gaussian 16.A.03, Orca 5.0.4, …).
+- **`software` / `software_release`** identifies a program and its
+  exact release. On a **calculation** it is always the electronic
+  structure program that ran the job (Gaussian 16 C.02, ORCA 6.1.0, …);
+  naming a workflow tool there (Arkane) is refused with
+  `calculation_software_is_workflow_tool`. On a thermo, statmech or
+  kinetics record it is the *analysis* code that produced the numbers
+  (the bundle's `analysis_software_release` — Arkane, MESS, MultiWell),
+  which is why Arkane can appear in the `software` table without any
+  calculation citing it. A NULL `version` means "the program was
+  recorded, its version was not"; it is never filled in place (see
+  `backend/app/services/software_release_version_fill.py`).
 - **`workflow_tool` / `workflow_tool_release`** identifies the
   high-level pipeline that produced the records (ARC, a custom RMG
   pipeline, …). TCKDB itself is workflow-tool agnostic.
+- The `/meta/software*` and `/meta/workflow-tool*` vocabularies list only
+  programs and versions some **calculation** cites — observations, not
+  the registry. Registry rows nothing cites at all can be listed and
+  removed with `backend/scripts/ops/prune_orphan_provenance.py`.
 
 ### Literature
 

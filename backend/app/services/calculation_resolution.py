@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -75,7 +76,10 @@ from app.services.software_reconciliation import (
     parsed_dict_to_ref,
     reconcile_software_provenance,
 )
-from app.services.software_resolution import resolve_software_release_ref
+from app.services.software_resolution import (
+    resolve_software_release_ref,
+    workflow_tool_named_as_ess,
+)
 
 
 class ExecutionEnvironmentManifestIntegrityError(ValueError):
@@ -310,6 +314,54 @@ def resolve_execution_environment_manifest(
     )
 
 
+#: A calculation's ``software_release`` named a workflow tool (issue #305).
+E_CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
+
+
+def refuse_workflow_tool_as_calculation_software(
+    software_release: SoftwareReleaseRef | None,
+) -> None:
+    """Refuse a calculation whose declared software is a workflow tool.
+
+    A calculation is one electronic-structure job, and its
+    ``software_release`` names the program that ran it. Arkane runs no such
+    job -- it reads the output of one -- so ``software_release.name=
+    "Arkane"`` on a calculation is a category error this database cannot
+    repair: the program that actually ran is simply absent. Accepting it is
+    what lets ``Arkane`` sit in the ``software`` registry beside Gaussian,
+    Molpro and ORCA and surface in the software vocabulary (issue #305,
+    item 1).
+
+    Refused rather than routed. Moving it to the calculation's
+    ``workflow_tool_release`` would still leave the calculation naming no
+    electronic-structure program, and silently rewriting a declared value is
+    what DR-0008 exists to prevent. The refusal names both fixes so the
+    depositor can make the one that is true.
+
+    :param software_release: The declared software ref, or ``None``.
+    :raises CodedValueError: when the name is a known workflow tool.
+    """
+
+    if software_release is None:
+        return
+    tool = workflow_tool_named_as_ess(software_release.name)
+    if tool is None:
+        return
+    raise CodedValueError(
+        E_CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL,
+        f"software_release.name={software_release.name!r} names {tool}, a "
+        "workflow tool, not the electronic-structure program that ran this "
+        "calculation. Declare the program that produced the output (e.g. "
+        f"Gaussian, ORCA, Molpro) as software_release, and put {tool} in "
+        "workflow_tool_release if it orchestrated the job.",
+        context={
+            "field": "software_release.name",
+            "declared_name": software_release.name,
+            "workflow_tool": tool,
+        },
+    )
+
+
 def resolve_calculation_create_request(
     session: Session,
     request: CalculationCreateRequest,
@@ -319,8 +371,12 @@ def resolve_calculation_create_request(
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing calculation create request.
     :returns: Internal resolved calculation payload with database ids.
+    :raises CodedValueError: ``calculation_software_is_workflow_tool`` when
+        ``software_release`` names a workflow tool (see
+        :func:`refuse_workflow_tool_as_calculation_software`).
     """
 
+    refuse_workflow_tool_as_calculation_software(request.software_release)
     software_release = resolve_software_release_ref(session, request.software_release)
     workflow_tool_release = resolve_workflow_tool_release_ref(
         session, request.workflow_tool_release
