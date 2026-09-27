@@ -12,7 +12,9 @@ def compare_thermo(thermo, *, comparison=None, temperature_grid=()):
     """Pure comparison over resolved records, with exact tabulated temperatures."""
     if comparison is not None and not temperature_grid:
         raise ValueError("neighbour comparisons require explicit temperatures")
-    grid = temperatures(temperature_grid or (
+    if comparison is not None and (comparison is thermo or comparison.public_ref == thermo.public_ref):
+        raise ValueError("a thermo record cannot be its own neighbour; omit the comparison for a single-record check")
+    grid =temperatures(temperature_grid or (
         [p.temperature_k for p in thermo.points] + ([298.15] if thermo.s298_j_mol_k is not None else [])
     ))
     records = [thermo] if comparison is None else [thermo, comparison]

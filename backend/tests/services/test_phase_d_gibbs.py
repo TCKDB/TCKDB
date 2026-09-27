@@ -130,7 +130,9 @@ def test_d4_1_point_identity_is_exact_and_flagged_within_float_precision(db_sess
     assert (row["source"], row["temperature_k"], row["reason"]) == ("point", 500.0, None)
     assert row["residual_kj_mol"] == 0.0
     assert row["within_float_precision"] is True
-    assert row["float_precision_bound_kj_mol"] == pytest.approx(16 * EPS * (150.0 + 50.0 + 100.0), rel=1e-12)
+    # abs=0: pytest.approx keeps a 1e-12 absolute floor unless told otherwise,
+    # and the bound itself is ~1e-12, so without it this line could not fail.
+    assert row["float_precision_bound_kj_mol"] == pytest.approx(16 * EPS * (150.0 + 50.0 + 100.0), rel=1e-12, abs=0)
     assert row["g_definition"] == G_DEFINITION == "formation_298k H(T) - T*S(T)"
     assert row["enthalpy_reference_kind"] == DECLARED
     # The recorded pressure is null (no default since #529); it is shown and does not gate.
@@ -494,3 +496,33 @@ def test_a_declared_kind_other_than_formation_298k_is_refused_not_relabelled(db_
     thermo.enthalpy_reference_kind = "some_future_basis"  # in memory only; the enum has one member today
     with pytest.raises(ValueError, match="formation_298k"):
         run(db_session, thermo)
+
+
+# -- scalar temperature and record-reason order ----------------------------------------------
+
+
+def test_scalars_are_read_only_for_a_g_at_exactly_298_15(db_session):
+    # A stored G at 298.0 K is not at the scalars' temperature: it gets its point
+    # row only, and the record gets its one scalar row at 298.15 K.
+    near = {"temperature_k": 298.0, "h_kj_mol": -74.6, "s_j_mol_k": 186.3, "g_kj_mol": gibbs(-74.6, 186.3, 298.0)}
+    thermo = upload_thermo(db_session, enthalpy_reference_kind=DECLARED, h298_kj_mol=-74.6, s298_j_mol_k=186.3,
+                           points=[near])
+    rows = by_key(rows_of(run(db_session, thermo)))
+    assert set(rows) == {("point", 298.0), ("scalar298", T298)}
+    assert rows["point", 298.0]["reason"] is None
+    assert rows["point", 298.0]["residual_kj_mol"] == pytest.approx(0.0, abs=1e-12)
+    assert rows["scalar298", T298]["reason"] == "no_exact_matching_point"
+
+
+def test_record_reasons_follow_scope_then_basis_then_phase(db_session):
+    # A row written before the declaration rule carries no declaration and may
+    # carry no phase; both are set in memory only, the way such a row reads.
+    ion = upload_thermo(db_session, smiles="[NH4+]", charge=1, enthalpy_reference_kind=DECLARED, points=[_POINT])
+    neutral = upload_thermo(db_session, enthalpy_reference_kind=DECLARED, points=[_POINT])
+    for thermo in (ion, neutral):
+        thermo.enthalpy_reference_kind = None
+        thermo.phase = None
+    assert [r["reason"] for r in rows_of(run(db_session, ion))] == ["charged_species_out_of_scope"]
+    assert [r["reason"] for r in rows_of(run(db_session, neutral))] == ["enthalpy_reference_unrecorded"]
+    neutral.enthalpy_reference_kind = DECLARED
+    assert [r["reason"] for r in rows_of(run(db_session, neutral))] == ["phase_not_recorded"]

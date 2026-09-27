@@ -205,12 +205,32 @@ different quantity.
 Records deposited before the declaration existed carry no reference, and they
 are not being rewritten. A read reports the reference as not recorded.
 
-The consistency checks (D0–D3, `backend/app/services/consistency/`) do not
-examine `enthalpy_reference_kind` or any enthalpy field at all — they check
-Cp and entropy representations, not enthalpy. So this rule currently has no
-automated consistency check of its own: a record's declared (or undeclared)
-reference is not something D0–D3 look at, whether the record predates this
-rule or not.
+Three of the advisory consistency checks read the declaration, because they
+compare enthalpies and an enthalpy means nothing without its reference:
+
+- **Gibbs self-consistency** checks each stored Gibbs value against the same
+  record's H − T·S. The declaration covers `points[*].g_kj_mol` too, so a
+  Gibbs value on a record that declares nothing is not checked.
+- **Kirchhoff** checks that a record's enthalpies at different temperatures
+  agree with its own heat capacity, and that its enthalpy forms agree with
+  each other. Comparing two records needs both to declare the same reference.
+- **Hess** checks a rate record's stated reaction energy against the formation
+  enthalpies of the thermo records named for its participants. Every one of
+  those thermo records must declare the same reference. (At 0 K it reads
+  `enthalpy_formation_0k_kj_mol`, whose name already fixes its meaning.)
+
+A record without a declaration is excluded from all three and reported as
+`enthalpy_reference_unrecorded`. It is not assumed to be a formation
+enthalpy and it is not checked under a guessed convention. Such a record
+can no longer be deposited: any enthalpy, Gibbs energy included, now has to
+come with the declaration. So the excluded records are the ones that
+predate the rule, and they stay excluded. The heat-capacity and entropy checks do not
+read the declaration, because neither quantity depends on it. The check of
+rates against thermo does not read it either; it uses the stored NASA
+coefficients as they are.
+
+These checks are advisory. They record the differences they find and never
+change a record, its status, or whether it is selected.
 
 If one of these records is later exported as a contribution bundle
 (`scripts/export_contribution_bundle.py`, see

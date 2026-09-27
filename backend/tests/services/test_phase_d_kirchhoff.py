@@ -498,6 +498,18 @@ def test_a_record_is_never_its_own_neighbour(db_session):
                 comparison_thermo_ref=thermo.public_ref, temperature_grid=[600.0])
 
 
+def test_the_neighbours_own_record_gates_apply_to_every_pair(db_session):
+    # Tabulated points pass through no engine gate, so only the pair gate can
+    # keep a neighbour whose phase was never recorded out of the comparison.
+    target = upload(db_session, points=[{"temperature_k": 500.0, "h_kj_mol": 1.0}])
+    neighbour = upload(db_session, phase=None, points=[{"temperature_k": 500.0, "h_kj_mol": 1.5}])
+    assert target.species_entry_id == neighbour.species_entry_id and neighbour.phase is None
+    for left, right in ((target, neighbour), (neighbour, target)):
+        anchors = rows(compare_kirchhoff(left, comparison=right, temperature_grid=[500.0]), "anchor")
+        assert len(anchors) == 2  # point against point at 298.15 and 500
+        assert all((a["reason"], a["residual"]) == ("phase_not_recorded", None) for a in anchors)
+
+
 def test_a_stored_non_finite_enthalpy_is_a_reason_not_a_residual(db_session):
     """Finding 6: a stored NaN point h and an infinite h298 (PostgreSQL stores both)."""
     thermo = upload(db_session, nasa=nasa7_block(), h298_kj_mol=_h_nasa7_kj(LOW, T298),

@@ -345,6 +345,40 @@ def test_exact_point_representation_and_the_combination_cap(db_conn):
             compare(session, **request(kinetics, mapping_for(kinetics, thermo, {"CH4": "wilhoit"})))
 
 
+def test_a_combination_count_exactly_at_the_cap_is_evaluated(db_conn, monkeypatch):
+    # At most one fit per record, so four participants reach 16 or 81 but never
+    # 64 itself; the cap is lowered to 16 to test its boundary.
+    from app.services.consistency import hess
+    monkeypatch.setattr(hess, "MAX_COMBINATIONS", 16)
+    with uploads(db_conn) as session:
+        kinetics, thermo = _nasa_abstraction(session)
+        found = evaluated(compare(session, **request(kinetics, mapping_for(kinetics, thermo))))
+        assert len(found) == 16
+        assert all(p["residual_kj_mol"] == pytest.approx(2.8, abs=1e-9) for p in found)
+        monkeypatch.setattr(hess, "MAX_COMBINATIONS", 15)
+        with pytest.raises(ValueError, match="15 explicit representation combinations"):
+            compare(session, **request(kinetics, mapping_for(kinetics, thermo)))
+
+
+def test_the_shared_basis_is_required_of_fitted_participants_too(db_conn):
+    # A NASA fit encodes an enthalpy, so an undeclared fitted participant is
+    # refused exactly as an undeclared h298 one is. The upload refuses such a
+    # row today; it is set in memory only and rolled back.
+    with Session(db_conn) as session:
+        transaction = session.begin()
+        try:
+            kinetics, thermo = _nasa_abstraction(session)
+            for name in ("CH4", "OH"):
+                thermo[name].h298_kj_mol = None
+            thermo["OH"].enthalpy_reference_kind = None
+            with session.no_autoflush:
+                result = compare(session, **request(kinetics, mapping_for(kinetics, thermo, {"CH4": "nasa7"})))
+            assert reasons(result) == ["enthalpy_reference_unrecorded"]
+            assert evaluated(result) == []
+        finally:
+            transaction.rollback()
+
+
 def test_pressure_never_gates_enthalpy(db_conn):
     with uploads(db_conn) as session:
         kinetics, thermo = abstraction(session)
