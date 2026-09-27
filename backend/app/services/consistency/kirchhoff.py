@@ -22,9 +22,24 @@ dH/dT = Cp holds by construction, so a fit is never compared with itself
     shared interval boundary.
 
 T0 is 298.15 K when both r and q evaluate there, else the lowest grid
-temperature at which both do (recorded as ``increment_from_k``). Nothing is
+temperature at which both do (recorded as ``increment_from_k``). A pair whose
+only grid temperature is T0 has nothing to integrate over and says so
+(``no_comparison_pairs_or_temperatures``) rather than vanishing. Nothing is
 judged against a threshold and nothing changes status, selection, trust or
 approval.
+
+Boundary ownership is the engine's, unchanged: at NASA-7 ``t_mid`` the
+combined fit answers with the LOW branch, at a NASA-9 shared boundary with
+the UPPER interval. So when r is a fit evaluated exactly at a boundary, its
+stated change H_r(T) - H_r(T0) includes that boundary's jump for NASA-9 and
+excludes it for NASA-7. Every finding therefore names the branch/interval
+each fit value came from (``segment`` on anchor sides; ``r_segment_at_T0``,
+``r_segment_at_T``, ``q_segment_at_T0``, ``q_segment_at_T`` on increments),
+so a jump's contribution is visible rather than silent.
+
+A record is never its own neighbour (that would compare it with itself and
+report every jump twice); passing one raises ``ValueError``. A stored point
+or h298 that is not finite is ``nonfinite_stored_value``, never a residual.
 
 Decisions (2026-09-27): a record that does not declare its enthalpy
 reference is excluded (``enthalpy_reference_unrecorded``) and two declared
@@ -62,6 +77,7 @@ NASA9_GAP_NO_SHARED_BOUNDARY = "nasa9_gap_no_shared_boundary"
 INTEGRATION_PATH_CROSSES_NASA9_GAP = "integration_path_crosses_nasa9_gap"
 INCREMENT_REFERENCE_TEMPERATURE_UNAVAILABLE = "increment_reference_temperature_unavailable"
 NO_COMPARISON_PAIRS = "no_comparison_pairs_or_temperatures"
+NONFINITE_STORED_VALUE = "nonfinite_stored_value"
 
 
 def representations(thermo):
@@ -101,7 +117,27 @@ def _difference(x, y, reason):
 
 
 def _h(thermo, representation, temperature):
-    return engine.evaluate(thermo, representation, temperature, "h")
+    value, reason = engine.evaluate(thermo, representation, temperature, "h")
+    if reason is None and not isfinite(value):
+        return None, NONFINITE_STORED_VALUE
+    return value, reason
+
+
+def _owning_segment(thermo, representation, temperature):
+    """The branch/interval the combined fit answers from at ``temperature``; None for non-fits.
+
+    Mirrors the engine's ownership (``engine.polynomial``): NASA-7 ``t_mid``
+    belongs to the low branch, a NASA-9 shared boundary to the upper interval.
+    """
+    if representation == "nasa7":
+        return "low" if temperature <= thermo.nasa.t_mid else "high"
+    if representation == "nasa9":
+        owner = None
+        for interval in sorted(thermo.nasa9_intervals, key=lambda iv: iv.interval_index):
+            if interval.t_min_k <= temperature <= interval.t_max_k:
+                owner = interval.interval_index
+        return owner
+    return None
 
 
 def _segment_h(thermo, representation, segment, temperature):
@@ -228,6 +264,8 @@ def compare_kirchhoff(thermo, *, comparison=None, temperature_grid=()):
     """
     if comparison is not None and not temperature_grid:
         raise ValueError("neighbour comparisons require explicit temperatures")
+    if comparison is not None and (comparison is thermo or comparison.public_ref == thermo.public_ref):
+        raise ValueError("a thermo record cannot be its own neighbour; omit the comparison for a single-record check")
     records = [thermo] if comparison is None else [thermo, comparison]
     grid = temperatures([T298_K, *temperature_grid,
                          *(p.temperature_k for t in records for p in t.points if p.h_kj_mol is not None)])
@@ -269,8 +307,10 @@ def compare_kirchhoff(thermo, *, comparison=None, temperature_grid=()):
                 reason = error_x or error_y
             findings.append(finding(thermo, {
                 "kind": "anchor", "quantity": "h", "unit": UNIT, "temperature_k": temperature,
-                "left": {"ref": left.public_ref, "representation": a, "value": x},
-                "right": {"ref": right.public_ref, "representation": b, "value": y},
+                "left": {"ref": left.public_ref, "representation": a, "value": x,
+                         "segment": _owning_segment(left, a, temperature) if x is not None else None},
+                "right": {"ref": right.public_ref, "representation": b, "value": y,
+                          "segment": _owning_segment(right, b, temperature) if y is not None else None},
                 "residual": _difference(x, y, reason), "reason": reason,
                 "reference_pressure_bar": _pressures(left, right),
                 "element_reference_compilation": "not_recorded",
@@ -294,19 +334,29 @@ def compare_kirchhoff(thermo, *, comparison=None, temperature_grid=()):
             }, refs))
             continue
         h_start, _ = _h(r_thermo, r, start)
-        for temperature in grid:
-            if temperature == start:
-                continue
+        others = [temperature for temperature in grid if temperature != start]
+        if not others:
+            # A real pair with nothing to integrate over is stated, never silently dropped.
+            findings.append(finding(thermo, {
+                **pair, "temperature_k": None, "increment_from_k": start, "residual": None,
+                "reason": NO_COMPARISON_PAIRS,
+            }, refs))
+        for temperature in others:
             h_end, reason = _h(r_thermo, r, temperature)
             integral = segments = None
             if reason is None:
                 integral, segments, reason = _integral(q_thermo, q, start, temperature)
             increment = h_end - h_start if h_end is not None else None
+            upward = temperature > start
             findings.append(finding(thermo, {
                 **pair, "temperature_k": temperature, "increment_from_k": start,
                 "enthalpy": {**pair["enthalpy"], "value_at_from": h_start, "value_at_temperature": h_end,
                              "increment": increment},
                 "integral": {**pair["integral"], "value": integral, "segments": segments},
+                "r_segment_at_T0": _owning_segment(r_thermo, r, start),
+                "r_segment_at_T": _owning_segment(r_thermo, r, temperature) if h_end is not None else None,
+                "q_segment_at_T0": segments[0 if upward else -1]["segment"] if segments else None,
+                "q_segment_at_T": segments[-1 if upward else 0]["segment"] if segments else None,
                 "residual": _difference(increment, integral, reason), "reason": reason,
             }, refs))
 

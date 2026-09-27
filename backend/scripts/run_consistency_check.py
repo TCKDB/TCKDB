@@ -22,7 +22,15 @@ def main(argv=None):
     parser.add_argument("--reverse-kinetics-ref")
     parser.add_argument("--thermo", action="append", default=[], metavar="SPECIES_ENTRY_REF=THERMO_REF[:REP]",
                         help="hess only: optional :REP pins h298, nasa7, nasa9 or point")
-    parser.add_argument("--temperature", action="append", type=float, default=[])
+    parser.add_argument(
+        "--temperature", action="append", type=float, default=[], metavar="K",
+        help=("Exact temperature in K; repeatable. Its meaning depends on --check: "
+              "thermo -- REPLACES the default grid (point temperatures, plus 298.15 when s298 is stored); "
+              "thermo-kinetics -- the grid, required; "
+              "kirchhoff -- ADDED to the default grid {298.15} + temperatures of points carrying h; "
+              "external-cp, gibbs-self, hess -- not accepted. "
+              "A neighbour comparison (--comparison-thermo-ref) requires it."),
+    )
     parser.add_argument("--commit", action="store_true")
     args = parser.parse_args(argv)
     mapping = {}

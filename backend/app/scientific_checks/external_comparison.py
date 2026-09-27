@@ -155,7 +155,10 @@ CHECK_KIRCHHOFF_CONSISTENCY = ScientificCheck(
             "enthalpy_reference_kind take part; an undeclared record is reported "
             "enthalpy_reference_unrecorded, never given an inferred basis. Reference pressure never "
             "gates enthalpy. Cross-record anchors state that the element-reference compilation is not "
-            "recorded and that its cancellation is assumed. Gas phase only, as for D1."
+            "recorded and that its cancellation is assumed. Gas phase only, as for D1. Explicit "
+            "temperatures (--temperature) are ADDED to the default grid {298.15} + temperatures of points "
+            "carrying h -- unlike D1's thermo check, where they replace it. A record is never its own "
+            "neighbour."
         ),
     ),),
     escape_hatch=None,

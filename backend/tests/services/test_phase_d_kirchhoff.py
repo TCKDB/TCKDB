@@ -385,3 +385,137 @@ def test_cli_offers_kirchhoff_and_dry_runs_by_default(db_session, monkeypatch, c
     output = json.loads(capsys.readouterr().out)
     assert (output["check"], output["committed"]) == ("kirchhoff", False)
     assert len(output["findings"]) == 5
+
+
+def test_cli_help_states_what_temperature_means_per_check(capsys):
+    from scripts import run_consistency_check as cli
+    with pytest.raises(SystemExit):
+        cli.main(["--help"])
+    text = " ".join(capsys.readouterr().out.split())
+    assert "thermo -- REPLACES the default grid" in text
+    assert "kirchhoff -- ADDED to the default grid" in text
+
+
+# --------------------------------------------------------------------------- review round 1 (#552)
+
+
+def test_a_pair_with_only_its_start_temperature_is_stated_not_dropped(db_session):
+    """Finding 1: a real pair whose grid holds nothing but T0 used to emit nothing."""
+    single = upload(db_session, nasa=nasa7_block(), points=[{"temperature_k": T298, "h_kj_mol": 1.0}])
+    increments = rows(compare_kirchhoff(single), "increment")
+    assert len(increments) == 1
+    assert (increments[0]["reason"], increments[0]["increment_from_k"], increments[0]["temperature_k"]) == (
+        "no_comparison_pairs_or_temperatures", T298, None)
+    assert (increments[0]["enthalpy"]["representation"], increments[0]["integral"]["representation"]) == (
+        "point", "nasa7")
+    target, neighbour = upload(db_session, nasa=nasa7_block()), upload(db_session, nasa=nasa7_block())
+    increments = rows(compare_kirchhoff(target, comparison=neighbour, temperature_grid=[T298]), "increment")
+    assert len(increments) == 2
+    assert {(k["enthalpy"]["ref"], k["integral"]["ref"]) for k in increments} == {
+        (target.public_ref, neighbour.public_ref), (neighbour.public_ref, target.public_ref)}
+    assert all((k["reason"], k["increment_from_k"]) == ("no_comparison_pairs_or_temperatures", T298)
+               for k in increments)
+
+
+def test_integration_below_the_start_temperature_carries_its_sign(db_session):
+    """X1: T < T0. Hand: K = +R*48.15/1000 (NASA-9 r) and -R*48.15/1000 (NASA-7 r)."""
+    target = upload(db_session, nasa9_intervals=[nasa9_interval(1, 200.0, 3000.0, 2.5, 50.0)])
+    neighbour = upload(db_session, nasa=constant_cp_nasa7(3.5, a6=10.0, b6=10.0))
+    increments = [k for k in rows(compare_kirchhoff(target, comparison=neighbour, temperature_grid=[250.0, 1000.0]),
+                                  "increment") if k["temperature_k"] == 250.0]
+    assert len(increments) == 2
+    by_r = {k["enthalpy"]["representation"]: k for k in increments}
+    assert all(k["reason"] is None and k["increment_from_k"] == T298 for k in increments)
+    assert by_r["nasa9"]["integral"]["value"] == pytest.approx(-R * 3.5 * 48.15 / 1000, rel=1e-9)
+    assert by_r["nasa9"]["residual"] == pytest.approx(R * 48.15 / 1000, rel=1e-9)
+    assert by_r["nasa7"]["residual"] == pytest.approx(-R * 48.15 / 1000, rel=1e-9)
+
+
+def _three_interval_nasa9(session):
+    return upload(session, nasa9_intervals=[nasa9_interval(1, 200.0, 1000.0, 3.0, 0.0),
+                                            nasa9_interval(2, 1000.0, 2000.0, 4.0, 10.0),
+                                            nasa9_interval(3, 2000.0, 2500.0, 5.0, 30.0)])
+
+
+def test_three_nasa9_intervals_every_boundary_and_the_interval_local_integral(db_session):
+    """X2/X3. Hand: jumps R*1010/1000, R*2020/1000; K = +R*3929.075/1000 and -R*899.075/1000."""
+    target = _three_interval_nasa9(db_session)
+    neighbour = upload(db_session, nasa=constant_cp_nasa7(3.5, a6=10.0, b6=10.0))
+    result = compare_kirchhoff(target, comparison=neighbour, temperature_grid=[2500.0])
+    jumps = [j for j in rows(result, "boundary_jump") if j["input"] == target.public_ref]
+    assert len(jumps) == 2
+    by_boundary = {j["boundary_k"]: j for j in jumps}
+    assert {k: (j["lower"]["segment"], j["upper"]["segment"], j["reason"]) for k, j in by_boundary.items()} == {
+        1000.0: (1, 2, None), 2000.0: (2, 3, None)}
+    assert by_boundary[1000.0]["residual"] == pytest.approx(R * 1010 / 1000, rel=1e-9)
+    assert by_boundary[2000.0]["residual"] == pytest.approx(R * 2020 / 1000, rel=1e-9)
+    increments = rows(result, "increment")
+    assert len(increments) == 2
+    by_r = {k["enthalpy"]["representation"]: k for k in increments}
+    forward, reverse = by_r["nasa9"], by_r["nasa7"]
+    assert forward["reason"] is None and reverse["reason"] is None
+    assert forward["residual"] == pytest.approx(R * 3929.075 / 1000, rel=1e-9)
+    assert (forward["r_segment_at_T0"], forward["r_segment_at_T"]) == (1, 3)
+    assert reverse["integral"]["segments"] == [{"segment": 1, "from_k": T298, "to_k": 1000.0},
+                                               {"segment": 2, "from_k": 1000.0, "to_k": 2000.0},
+                                               {"segment": 3, "from_k": 2000.0, "to_k": 2500.0}]
+    assert reverse["integral"]["value"] == pytest.approx(R * 8605.55 / 1000, rel=1e-9)
+    assert reverse["residual"] == pytest.approx(-R * 899.075 / 1000, rel=1e-9)
+    assert (reverse["q_segment_at_T0"], reverse["q_segment_at_T"]) == (1, 3)
+
+
+def test_each_finding_names_the_branch_a_boundary_value_came_from(db_session):
+    """Finding 3. At 1000 K the NASA-9 value is interval 2's (its jump is in K), NASA-7's is the low branch.
+
+    Hand: r = NASA-9 gives K = R*659.075/1000; r = NASA-7 gives K = R*350.925/1000.
+    """
+    target = _three_interval_nasa9(db_session)
+    neighbour = upload(db_session, nasa=constant_cp_nasa7(3.5, a6=20.0, b6=120.0))
+    result = compare_kirchhoff(target, comparison=neighbour, temperature_grid=[1000.0])
+    increments = rows(result, "increment")
+    assert len(increments) == 2
+    by_r = {k["enthalpy"]["representation"]: k for k in increments}
+    nine, seven = by_r["nasa9"], by_r["nasa7"]
+    assert (nine["r_segment_at_T0"], nine["r_segment_at_T"], nine["q_segment_at_T0"], nine["q_segment_at_T"]) == (
+        1, 2, "low", "low")
+    assert nine["residual"] == pytest.approx(R * 659.075 / 1000, rel=1e-9)
+    assert (seven["r_segment_at_T0"], seven["r_segment_at_T"], seven["q_segment_at_T0"], seven["q_segment_at_T"]) == (
+        "low", "low", 1, 1)
+    assert seven["residual"] == pytest.approx(R * 350.925 / 1000, rel=1e-9)
+    anchors = rows(result, "anchor")
+    assert len(anchors) == 2
+    assert {a["temperature_k"]: (a["left"]["segment"], a["right"]["segment"]) for a in anchors} == {
+        T298: (1, "low"), 1000.0: (2, "low")}
+
+
+def test_a_record_is_never_its_own_neighbour(db_session):
+    """Finding 4: self-comparison gave anchors of exactly 0 and every jump twice."""
+    thermo = upload(db_session, nasa=nasa7_block())
+    with pytest.raises(ValueError, match="own neighbour"):
+        compare_kirchhoff(thermo, comparison=thermo, temperature_grid=[600.0])
+    with pytest.raises(ValueError, match="own neighbour"):
+        compare(db_session, check="kirchhoff", target_ref=thermo.public_ref,
+                comparison_thermo_ref=thermo.public_ref, temperature_grid=[600.0])
+
+
+def test_a_stored_non_finite_enthalpy_is_a_reason_not_a_residual(db_session):
+    """Finding 6: a stored NaN point h and an infinite h298 (PostgreSQL stores both)."""
+    thermo = upload(db_session, nasa=nasa7_block(), h298_kj_mol=_h_nasa7_kj(LOW, T298),
+                    points=[{"temperature_k": T298, "h_kj_mol": _h_nasa7_kj(LOW, T298)},
+                            {"temperature_k": 600.0, "h_kj_mol": _h_nasa7_kj(LOW, 600.0)}])
+    next(p for p in thermo.points if p.temperature_k == 600.0).h_kj_mol = float("nan")
+    thermo.h298_kj_mol = float("inf")
+    db_session.flush()
+    db_session.expire(thermo)
+    result = compare_kirchhoff(thermo)
+    anchors = rows(result, "anchor")
+    assert len(anchors) == 6
+    by_key = {(a["left"]["representation"], a["right"]["representation"], a["temperature_k"]): a for a in anchors}
+    assert {k: a["reason"] for k, a in by_key.items()} == {
+        ("h298", "point", T298): "nonfinite_stored_value", ("h298", "point", 600.0): "no_exact_h298_value",
+        ("h298", "nasa7", T298): "nonfinite_stored_value", ("h298", "nasa7", 600.0): "no_exact_h298_value",
+        ("point", "nasa7", T298): None, ("point", "nasa7", 600.0): "nonfinite_stored_value"}
+    assert all(a["residual"] is None for k, a in by_key.items() if a["reason"])
+    increments = rows(result, "increment")
+    assert len(increments) == 1
+    assert (increments[0]["reason"], increments[0]["residual"]) == ("nonfinite_stored_value", None)
