@@ -15,7 +15,7 @@ from app.services.consistency.service import invoke
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", required=True, choices=("thermo", "external-cp", "thermo-kinetics"))
+    parser.add_argument("--check", required=True, choices=("thermo", "external-cp", "thermo-kinetics", "gibbs-self"))
     parser.add_argument("--target-ref", required=True)
     parser.add_argument("--comparison-thermo-ref")
     parser.add_argument("--reverse-kinetics-ref")

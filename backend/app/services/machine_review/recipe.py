@@ -36,6 +36,7 @@ from app.services.trust.rubrics import (
     COMPUTED_TRANSITION_STATE_V2,
     COMPUTED_TRANSPORT_V1,
     EXTERNAL_CP_COMPARISON_V2,
+    GIBBS_SELF_CONSISTENCY_V1,
     THERMO_CONSISTENCY_V1,
     THERMO_KINETICS_CONSISTENCY_V1,
 )
@@ -96,6 +97,14 @@ ACTIVE_MACHINE_REVIEW_PROMPT_VERSION = "machine_review_v1"
 # currency check, so bumping it needs no matching bump to the runner
 # identity, and NOT bumping it keeps every already-recorded v1-era row
 # discoverable under the same ``model`` as the runner's newest rows.
+#
+# GIBBS_SELF_CONSISTENCY_V1 (Phase D4, ``app.services.consistency.gibbs``) is
+# one more entry of the D1/D3 kind, added for the same reason and safe by the
+# same argument: one new key, read only by the D4 runner's own
+# ``AdvisoryResult.recipe`` under its own scientific-check family and model.
+# That no existing review is restaled by adding it is pinned by
+# ``test_adding_the_gibbs_rubric_restales_no_stored_review`` in
+# ``tests/services/test_phase_d_persistence.py``.
 _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
@@ -106,6 +115,7 @@ _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     EXTERNAL_CP_COMPARISON_V2,
     THERMO_CONSISTENCY_V1,
     THERMO_KINETICS_CONSISTENCY_V1,
+    GIBBS_SELF_CONSISTENCY_V1,
 )
 
 
