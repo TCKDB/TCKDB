@@ -4,7 +4,7 @@ from math import isfinite, log
 
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, temperatures, thermo_inputs
-from app.services.consistency.stoichiometry import element_balance, is_balanced, participant_slots, species_facts
+from app.services.consistency.stoichiometry import element_balance, entry_facts, is_balanced, participant_slots
 from app.services.trust.rubrics import THERMO_KINETICS_CONSISTENCY_V1
 
 RUNNER = "thermo_kinetics_consistency"
@@ -82,9 +82,11 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
     compositions = {}
     if reason is None:
         # Neutral facts from the shared helper; D3's own tokens are mapped
-        # here, first failing species in participant order.
+        # here, first failing species in participant order. Isotope content is
+        # read from the ENTRY (isotope_key): the stored species SMILES is
+        # stripped of labels, so reading it alone never saw an isotopologue.
         for key, species_entry in entries.items():
-            facts = species_facts(species_entry.species)
+            facts = entry_facts(species_entry)
             if not facts.parsed:
                 reason = "unusable_species_composition"
                 break

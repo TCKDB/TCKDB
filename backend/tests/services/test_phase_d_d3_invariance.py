@@ -107,6 +107,17 @@ def _smiles(**by_key):
     return forward, reverse, mapping, [500]
 
 
+def _isotope_key(**by_key):
+    """Entries stored the way ``resolve_species_entry`` stores an isotopologue.
+
+    Bare species SMILES (labels stripped on upload), labelled ``isotope_key``.
+    """
+    forward, reverse, mapping = _reaction()
+    for key, isotope_key in by_key.items():
+        mapping[int(key[1:])].species_entry.isotope_key = isotope_key
+    return forward, reverse, mapping, [500]
+
+
 def _third_order(units, a):
     thermos = [_thermo(1, cp_r=1, entropy_constant=0, smiles="[H]"),
                _thermo(2, cp_r=1, entropy_constant=0, smiles="[O]"),
@@ -191,6 +202,10 @@ SCENARIOS = {
     "inferred_collider": _collider,
     "no_products": _no_products,
     "unknown_role": _unknown_role,
+    # Added with the D3 isotope fix (after the extraction): the two scenarios
+    # whose reasons deliberately changed. See ISOTOPE_KEY_BEFORE_FIX below.
+    "isotope_key_product": lambda: _isotope_key(k2="[2H]"),
+    "isotope_key_reactant": lambda: _isotope_key(k1="[2H][2H]"),
 }
 
 
@@ -207,7 +222,8 @@ def _run(name):
     return fingerprint(compare_kinetics(forward, reverse, mapping, temperature_grid=grid))
 
 
-# Captured at main 0bc86f03, before the stoichiometry extraction.
+# Captured at main 0bc86f03, before the stoichiometry extraction; the two
+# isotope_key_* entries were added with the D3 isotope fix and pin its result.
 EXPECTED = {
     "baseline_p1.01325_cm3_mol_s": (
         "4d63c87175bded4e45570d8c95b42debb087d78bab410c4f4a1569d54cfde5cf",
@@ -369,11 +385,35 @@ EXPECTED = {
         "347c8efb57522c3c0dfff262a5ae9300115eb0855a5d3a3fc40c64dbfe784ebc",
         ["-", "-", "-", "-", "missing_or_invalid_reference_pressure"],
     ),
+    "isotope_key_product": (
+        "5f183b0b41967144f927abd1bd3e0edb43bd02a4f7569b74557a8002fce0a244",
+        ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
+    ),
+    "isotope_key_reactant": (
+        "ded30e63c81d85009ede5a52371820d84b4c32ed9e1d6db67b47958ebf07dd6f",
+        ["-", "-", "-", "-", "isotope_specific_equilibrium_unsupported"],
+    ),
+}
+
+#: The deliberate D3 behaviour change (isotope content read from the
+#: species entry). Before it, these two scenarios were evaluated as if the
+#: participants were the natural-abundance species. The context hash is the
+#: same before and after (``isotope_key`` was already a hashed input); only
+#: the reasons changed. The other 40 pins are unchanged by the fix.
+ISOTOPE_KEY_BEFORE_FIX = {
+    "isotope_key_product": (
+        "5f183b0b41967144f927abd1bd3e0edb43bd02a4f7569b74557a8002fce0a244",
+        ["-", "-", "-", "-", None],
+    ),
+    "isotope_key_reactant": (
+        "ded30e63c81d85009ede5a52371820d84b4c32ed9e1d6db67b47958ebf07dd6f",
+        ["-", "-", "-", "-", None],
+    ),
 }
 
 
 def test_every_scenario_is_pinned():
-    assert len(SCENARIOS) == 40
+    assert len(SCENARIOS) == 42
     assert set(EXPECTED) == set(SCENARIOS)
 
 
@@ -383,3 +423,12 @@ def test_d3_hash_and_reasons_are_byte_identical_to_pre_extraction(name):
     expected_hash, expected_reasons = EXPECTED[name]
     assert context_hash == expected_hash
     assert reasons == expected_reasons
+
+
+def test_the_isotope_fix_changed_only_the_reasons_of_its_two_scenarios():
+    assert len(ISOTOPE_KEY_BEFORE_FIX) == 2
+    for name, (before_hash, before_reasons) in ISOTOPE_KEY_BEFORE_FIX.items():
+        after_hash, after_reasons = EXPECTED[name]
+        assert before_hash == after_hash
+        assert [r for r in before_reasons if r != "-"] == [None]
+        assert [r for r in after_reasons if r != "-"] == ["isotope_specific_equilibrium_unsupported"]
