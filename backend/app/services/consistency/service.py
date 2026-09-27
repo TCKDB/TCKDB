@@ -6,6 +6,7 @@ from app.db.models.species import SpeciesEntry
 from app.db.models.thermo import Thermo
 from app.services.consistency.core import AdvisoryResult, currency, record_result
 from app.services.consistency.gibbs import compare_gibbs
+from app.services.consistency.hess import compare_hess
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.thermo import compare_thermo
 
@@ -33,6 +34,18 @@ def compare(session, *, check, target_ref, comparison_thermo_ref=None, reverse_k
                 entry = _resolve(session, SpeciesEntry, entry_ref, "spe_")
                 mapping[entry.id] = _resolve(session, Thermo, thermo_ref, "thm_")
             return compare_kinetics(forward, reverse, mapping, temperature_grid=temperature_grid)
+        if check == "hess":
+            if comparison_thermo_ref is not None or reverse_kinetics_ref is not None or temperature_grid:
+                raise ValueError("hess uses the kinetics record's own reaction energy and a spe=thm[:rep] mapping")
+            kinetics = _resolve(session, Kinetics, target_ref, "kin_")
+            mapping, selection = {}, {}
+            for entry_ref, value in (thermo_mapping or {}).items():
+                thermo_ref, _, representation = value.partition(":")
+                entry = _resolve(session, SpeciesEntry, entry_ref, "spe_")
+                mapping[entry.id] = _resolve(session, Thermo, thermo_ref, "thm_")
+                if representation:
+                    selection[entry.id] = representation
+            return compare_hess(kinetics, mapping, representations=selection)
         if reverse_kinetics_ref is not None or thermo_mapping:
             raise ValueError("reverse kinetics and thermo mapping apply only to thermo-kinetics")
         thermo = _resolve(session, Thermo, target_ref, "thm_")

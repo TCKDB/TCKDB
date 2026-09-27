@@ -3285,3 +3285,4 @@ THERMO_KINETICS_CONSISTENCY_V1 = EvidenceRubric(
     name="thermo_kinetics_consistency", version=1, record_type="kinetics", checks=(),
 )
 GIBBS_SELF_CONSISTENCY_V1 = EvidenceRubric(name="gibbs_self_consistency", version=1, record_type="thermo", checks=())
+HESS_CONSISTENCY_V1 = EvidenceRubric(name="hess_consistency", version=1, record_type="kinetics", checks=())

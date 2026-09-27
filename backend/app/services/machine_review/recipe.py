@@ -37,6 +37,7 @@ from app.services.trust.rubrics import (
     COMPUTED_TRANSPORT_V1,
     EXTERNAL_CP_COMPARISON_V2,
     GIBBS_SELF_CONSISTENCY_V1,
+    HESS_CONSISTENCY_V1,
     THERMO_CONSISTENCY_V1,
     THERMO_KINETICS_CONSISTENCY_V1,
 )
@@ -116,6 +117,9 @@ _ACTIVE_RUBRICS: tuple[EvidenceRubric, ...] = (
     THERMO_CONSISTENCY_V1,
     THERMO_KINETICS_CONSISTENCY_V1,
     GIBBS_SELF_CONSISTENCY_V1,
+    # D6 (Hess): same kind of entry as D1/D3 above -- one more key, read
+    # only by its own runner's currency, so no stored review is restaled.
+    HESS_CONSISTENCY_V1,
 )
 
 
