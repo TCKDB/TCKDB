@@ -375,6 +375,13 @@ def _no_source(session):
     return kinetics, {name: declared_thermo(session, name) for name in ("CH4", "OH", "CH3", "H2O")}
 
 
+def _in_memory_no_level_of_theory(session):
+    """Unreachable by upload (a calculation payload requires a level of theory); edited in memory."""
+    kinetics, thermo = abstraction(session)
+    kinetics.tunneling_applications[0].source_calculation.lot = None
+    return kinetics, thermo
+
+
 def _solvated(session):
     kinetics = deposit_rate(session, lot={**_LOT, "solvent": "water", "solvent_model": "SMD"})
     return kinetics, {name: declared_thermo(session, name) for name in ("CH4", "OH", "CH3", "H2O")}
@@ -498,6 +505,7 @@ REASON_CASES = [
     ("energy_correction_convention_without_thermo_counterpart", _rate_case(energy_correction_convention="electronic_only")),
     ("energy_convention_other", _rate_case(energy_correction_convention="other", convention_note="G4 enthalpy at 0 K")),
     ("reaction_energy_source_untraceable", _no_source),
+    ("reaction_energy_source_untraceable", _in_memory_no_level_of_theory),
     ("reaction_energy_solvated_out_of_scope", _solvated),
     ("nonfinite_stored_value", _rate_case(product_energy_kj_mol=float("nan"))),
     ("missing_or_unsupported_participants", _in_memory_unsupported_role),
@@ -537,7 +545,7 @@ def _run_case(session, build):
 
 def test_reason_cases_cover_every_token():
     tokens = {token for token, _ in REASON_CASES}
-    assert len(REASON_CASES) == 27
+    assert len(REASON_CASES) == 28
     assert tokens == {
         "no_reaction_level_energy", "tunneling_orientation_not_declared",
         "tunneling_transition_state_on_other_reaction_entry", "energy_zero_convention_not_separated_species",
