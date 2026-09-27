@@ -45,7 +45,12 @@ from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.schemas.workflows.transition_state_upload import TransitionStateUploadRequest
 from app.services.consistency import engine
 from app.services.consistency.core import currency, latest_recorded, thermo_inputs
-from app.services.consistency.hess import ELEMENT_REFERENCE_COMPILATION, RUNNER, compare_hess
+from app.services.consistency.hess import (
+    ELEMENT_REFERENCE_COMPILATION,
+    ENDPOINT_IDENTITY,
+    RUNNER,
+    compare_hess,
+)
 from app.services.consistency.service import compare, current, invoke
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
@@ -61,6 +66,7 @@ SPECIES = {
     "CH4": ("C", 0, 1), "OH": ("[OH]", 0, 2), "CH3": ("[CH3]", 0, 2), "H2O": ("O", 0, 1),
     "C2H6": ("CC", 0, 1), "OH-": ("[OH-]", -1, 1), "CH3-": ("[CH3-]", -1, 1),
     "CD4": ("[2H]C([2H])([2H])[2H]", 0, 1), "CD3": ("[2H][C]([2H])[2H]", 0, 2), "HDO": ("[2H]O", 0, 1),
+    "C2H5": ("C[CH2]", 0, 2), "H": ("[H]", 0, 2), "H2": ("[H][H]", 0, 1),
 }
 DFH298 = {"CH4": -74.6, "OH": 37.4, "CH3": 147.2, "H2O": -241.8, "C2H6": -84.0}
 DFH0 = {"CH4": -66.6, "OH": 37.1, "CH3": 150.0, "H2O": -238.9}
@@ -151,7 +157,7 @@ def deposit_rate(session, reactants=("CH4", "OH"), products=("CH3", "H2O"), *, d
         "energy_zero_convention": "separated_reactants", "energy_correction_convention": "thermal_enthalpy_298k",
     }
     block.update(tunneling_fields)
-    units = "cm3_mol_s" if len(reactants) == 2 else "per_s"
+    units = {1: "per_s", 2: "cm3_mol_s"}.get(len(reactants))
     kinetics = persist_kinetics_upload(session, KineticsUploadRequest(
         reaction=reaction, scientific_origin="computed", direction=direction, a=1.0e12, a_units=units, n=0.0,
         reported_ea=30.0, reported_ea_units="kj_mol", tmin_k=300.0, tmax_k=2000.0,
@@ -242,6 +248,7 @@ def test_d6_1_abstraction_at_298_residual(db_conn):
             "CH3": [1, "h298", 147.2, 0.3], "H2O": [1, "h298", -241.8, 0.04]}
         assert payload["uncertainty_propagation"] is None
         assert all(p["element_reference_compilation"] == ELEMENT_REFERENCE_COMPILATION for p in payloads(result))
+        assert all(p["endpoint_identity"] == ENDPOINT_IDENTITY for p in payloads(result))
         assert len(result.findings) == 6  # one reaction-energy input, four thermo inputs, one evaluation
         assert result.runner == RUNNER and result.target is kinetics
 
@@ -493,6 +500,15 @@ def _exact_point_missing(session):
     return kinetics, thermo, {"select": {"H2O": "point"}}
 
 
+def _isotopologue_entry_mapped_onto_participant(session):
+    """Thermo for the CD3 entry (same species row as CH3, different entry) offered for CH3."""
+    kinetics, thermo = abstraction(session)
+    cd3 = declared_thermo(session, "CH3", species_entry=_participant("CD3")["species_entry"])
+    assert cd3.species_entry.species_id == thermo["CH3"].species_entry.species_id
+    assert cd3.species_entry_id != thermo["CH3"].species_entry_id
+    return kinetics, thermo, {"replace": {"CH3": cd3}}
+
+
 REASON_CASES = [
     ("no_reaction_level_energy", _no_tunneling),
     ("no_reaction_level_energy", _rate_case(model="wigner", reactant_energy_kj_mol=None, product_energy_kj_mol=None,
@@ -501,6 +517,8 @@ REASON_CASES = [
     ("tunneling_orientation_not_declared", _direction(None)),
     ("tunneling_transition_state_on_other_reaction_entry", _in_memory_ts_on_other_entry),
     ("energy_zero_convention_not_separated_species", _rate_case(energy_zero_convention="lowest_state")),
+    # A pre-reactive complex well stated on the separated-reactants scale: R is not 0.
+    ("reaction_energy_not_separated_species", _rate_case(reactant_energy_kj_mol=-8.0, product_energy_kj_mol=-62.6)),
     ("energy_correction_convention_not_declared", _rate_case(model="wigner", energy_correction_convention=None)),
     ("energy_correction_convention_without_thermo_counterpart", _rate_case(energy_correction_convention="electronic_only")),
     ("energy_convention_other", _rate_case(energy_correction_convention="other", convention_note="G4 enthalpy at 0 K")),
@@ -511,6 +529,7 @@ REASON_CASES = [
     ("missing_or_unsupported_participants", _in_memory_unsupported_role),
     ("incomplete_or_incompatible_thermo_mapping", _missing_mapping),
     ("incomplete_or_incompatible_thermo_mapping", _wrong_species_mapping),
+    ("incomplete_or_incompatible_thermo_mapping", _isotopologue_entry_mapped_onto_participant),
     ("charged_species_out_of_scope", _charged),
     ("isotope_labelled_species_out_of_scope", _isotope),
     ("unusable_species_composition", _in_memory_unusable),
@@ -539,16 +558,19 @@ def _run_case(session, build):
         if "swap" in options:
             a, b = options["swap"]
             by_entry[thermo[a].species_entry_id] = thermo[b]
+        for name, replacement in options.get("replace", {}).items():
+            by_entry[thermo[name].species_entry_id] = replacement
         assert participants and by_entry
         return compare_hess(kinetics, by_entry, representations=selection)
 
 
 def test_reason_cases_cover_every_token():
     tokens = {token for token, _ in REASON_CASES}
-    assert len(REASON_CASES) == 28
+    assert len(REASON_CASES) == 30
     assert tokens == {
         "no_reaction_level_energy", "tunneling_orientation_not_declared",
         "tunneling_transition_state_on_other_reaction_entry", "energy_zero_convention_not_separated_species",
+        "reaction_energy_not_separated_species",
         "energy_correction_convention_not_declared", "energy_correction_convention_without_thermo_counterpart",
         "energy_convention_other", "reaction_energy_source_untraceable", "reaction_energy_solvated_out_of_scope",
         "nonfinite_stored_value", "missing_or_unsupported_participants", "incomplete_or_incompatible_thermo_mapping",
@@ -570,6 +592,7 @@ def test_each_unavailable_reason(db_conn, expected, build):
             assert found == [expected]
             assert evaluated(result) == []
             assert all(p["element_reference_compilation"] == ELEMENT_REFERENCE_COMPILATION for p in payloads(result))
+            assert all(p["endpoint_identity"] == ENDPOINT_IDENTITY for p in payloads(result))
         finally:
             transaction.rollback()
 
@@ -664,6 +687,7 @@ def _material_targets(kinetics, thermo):
     return {
         "tunneling": tunneling, "kinetics": kinetics, "thermo": thermo["OH"], "lot": tunneling.source_calculation.lot,
         "species": thermo["CH3"].species_entry.species, "entry": thermo["CH3"].species_entry,
+        "ts_entry": tunneling.transition_state_entry, "transition_state": tunneling.transition_state_entry.transition_state,
     }
 
 
@@ -675,6 +699,8 @@ MATERIAL_INPUTS = [
     ("thermo", "h298_uncertainty_kj_mol", 1.0), ("thermo", "enthalpy_formation_0k_kj_mol", 37.0),
     ("thermo", "enthalpy_reference_kind", None), ("thermo", "phase", None), ("lot", "solvent", "water"),
     ("species", "charge", 1), ("entry", "isotope_key", "fake"),
+    # In-memory only (no upload re-homes a TS); never flushed.
+    ("transition_state", "reaction_entry_id", "another_reaction_entry"), ("ts_entry", "multiplicity", 4),
 ]
 
 
@@ -688,6 +714,8 @@ def test_every_material_input_changes_live_currency(db_conn, location, field, va
             _, row = invoke(session, commit=True, **args)
             session.flush()
             assert current(session, **args).state.value == "current"
+            if value == "another_reaction_entry":
+                value = kinetics.reaction_entry_id + 10**9
             setattr(_material_targets(kinetics, thermo)[location], field, value)
             with session.no_autoflush:
                 live = compare(session, **args)
@@ -757,3 +785,116 @@ def test_cli_dry_runs_and_commits_once(db_conn, monkeypatch, capsys):
         capsys.readouterr()
         assert count_reviews(session) == before + 1 and commits == [True]
         assert cli.main([*args, "--temperature", "300"]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Review round 1 (#550): endpoints, headroom, Cp-only points
+# --------------------------------------------------------------------------- #
+
+
+def test_separated_reactants_scale_requires_the_reactant_energy_at_zero(db_conn):
+    with uploads(db_conn) as session:
+        well, thermo = abstraction(session, reactant_energy_kj_mol=-8.0, product_energy_kj_mol=-62.6)
+        result = compare(session, **request(well, mapping_for(well, thermo)))
+        assert evaluated(result) == [] and reasons(result) == ["reaction_energy_not_separated_species"]
+        exact, thermo = abstraction(session, reactant_energy_kj_mol=-0.0, product_energy_kj_mol=-54.6)
+        found = evaluated(compare(session, **request(exact, mapping_for(exact, thermo))))
+        assert len(found) == 1 and found[0]["residual_kj_mol"] == pytest.approx(2.8, abs=1e-9)
+
+
+def test_absolute_scale_states_the_unverifiable_endpoint_assumption(db_conn):
+    with uploads(db_conn) as session:
+        kinetics, thermo = abstraction(session, energy_zero_convention="absolute",
+                                       reactant_energy_kj_mol=12337.0, product_energy_kj_mol=12282.4)
+        result = compare(session, **request(kinetics, mapping_for(kinetics, thermo)))
+        found = evaluated(result)
+        assert len(found) == 1 and found[0]["residual_kj_mol"] == pytest.approx(2.8, abs=1e-9)
+        assert len(result.findings) == 6
+        assert all(p["endpoint_identity"] == ENDPOINT_IDENTITY for p in payloads(result))
+
+
+_XYZ_DOUBLE_ABSTRACTION = """16
+two abstractions, one saddle-shaped fixture
+C  0.000  0.000  0.000
+H  0.000  1.027 -0.363
+H  0.889 -0.513 -0.363
+H -0.889 -0.513 -0.363
+H  0.000  0.000  1.300
+O  0.000  0.000  2.500
+H  0.940  0.000  2.750
+C  6.000  0.000  0.000
+C  7.530  0.000  0.000
+H  5.630  1.027  0.000
+H  5.630 -0.513  0.889
+H  5.630 -0.513 -0.889
+H  7.900  1.027  0.000
+H  7.900 -0.513  0.889
+H  7.900 -0.513 -2.200
+H  7.900 -0.513 -3.100
+"""
+
+#: Deliberately long floats, so the eight-term row set overflows one finding.
+_LONG_DFH298 = {"CH4": -74.60000000000001, "OH": 37.40000000000001, "C2H6": -84.00000000000001,
+                "H": 217.99800000000002, "CH3": 147.20000000000002, "H2O": -241.80000000000001,
+                "C2H5": 119.86000000000001, "H2": 0.0000000000000001}
+
+
+def test_a_large_reaction_splits_its_terms_instead_of_overflowing(db_conn):
+    from app.services.machine_review.schemas import MachineReviewFinding
+
+    limit = next(m.max_length for m in MachineReviewFinding.model_fields["message"].metadata if hasattr(m, "max_length"))
+    assert limit == 1000
+    reactants, products = ("CH4", "OH", "C2H6", "H"), ("CH3", "H2O", "C2H5", "H2")
+    dh = sum(_LONG_DFH298[n] for n in products) - sum(_LONG_DFH298[n] for n in reactants)
+    with uploads(db_conn) as session:
+        kinetics = deposit_rate(session, reactants, products, xyz=_XYZ_DOUBLE_ABSTRACTION, ts_multiplicity=1,
+                                product_energy_kj_mol=dh + 1.25, reverse_barrier_kj_mol=40.0)
+        thermo = {name: deposit_thermo(session, name, enthalpy_reference_kind="formation_298k",
+                                       h298_kj_mol=value, h298_uncertainty_kj_mol=0.123456789012345)
+                  for name, value in _LONG_DFH298.items()}
+        result = compare(session, **request(kinetics, mapping_for(kinetics, thermo)))
+        assert all(len(f.message) <= limit for f in result.findings)
+        found = evaluated(result)
+        assert len(found) == 1
+        (payload,) = found
+        assert payload["residual_kj_mol"] == pytest.approx(1.25, abs=1e-9)
+        # The terms moved to continuation findings, deterministically, and all of them arrived.
+        assert "terms" not in payload and payload["term_findings"] >= 1 and payload["combination"] == 0
+        parts = [p for p in payloads(result) if "terms_part" in p]
+        assert len(parts) == payload["term_findings"]
+        assert [p["terms_part"] for p in parts] == list(range(len(parts)))
+        terms = {ref: row for p in parts for ref, row in p["terms"].items()}
+        assert len(terms) == 8
+        assert sum(row[0] * row[2] for row in terms.values()) == pytest.approx(payload["delta_h_formation_kj_mol"])
+        assert all(p["endpoint_identity"] == ENDPOINT_IDENTITY for p in payloads(result))
+        assert compare(session, **request(kinetics, mapping_for(kinetics, thermo))).findings == result.findings
+
+
+def test_an_oversized_reason_detail_is_dropped_and_said_so():
+    """The detail-list path of the size bound, on the pure helper (no upload makes a list this long)."""
+    from app.db.models.kinetics import Kinetics
+    from app.services.consistency.hess import _bounded_findings
+
+    target = Kinetics(public_ref="kin_oversized")
+    base = {"element_reference_compilation": ELEMENT_REFERENCE_COMPILATION, "endpoint_identity": ENDPOINT_IDENTITY}
+    missing = [f"spe_{i:026d}" for i in range(40)]
+    payload = {**base, "reason": "incomplete_or_incompatible_thermo_mapping", "missing_participants": missing}
+    findings = _bounded_findings(target, payload, ["kin_oversized"], combination=None, base=base,
+                                 droppable=("missing_participants",))
+    assert len(findings) == 1 and len(findings[0].message) <= 1000
+    head = json.loads(findings[0].message)
+    assert head["reason"] == "incomplete_or_incompatible_thermo_mapping"
+    assert head["detail_omitted"] == "finding_too_large" and "missing_participants" not in head
+
+
+def test_cp_only_points_are_not_an_enthalpy_representation(db_conn):
+    with uploads(db_conn) as session:
+        kinetics = deposit_rate(session)
+        thermo = {name: declared_thermo(session, name, points=[{"temperature_k": T298, "cp_j_mol_k": 35.0}])
+                  for name in ("CH4", "OH", "CH3", "H2O")}
+        found = evaluated(compare(session, **request(kinetics, mapping_for(kinetics, thermo))))
+        assert len(found) == 1
+        assert {row[1] for row in found[0]["terms"].values()} == {"h298"}
+        # Pinning the Cp-only points is a visible unavailability, not a silent pass.
+        pinned = compare(session, **request(kinetics, mapping_for(kinetics, thermo, {"H2O": "point"})))
+        assert evaluated(pinned) == [] and reasons(pinned) == ["participant_enthalpy_unavailable"]

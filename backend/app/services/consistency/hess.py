@@ -43,7 +43,10 @@ Gates, first failing reason wins, in this order:
    ``energy_convention_other``, ``reaction_energy_source_untraceable`` (no
    source calculation, or one with no recorded level of theory -- the
    level the energies stand at is part of tracing them),
-   ``reaction_energy_solvated_out_of_scope``, ``nonfinite_stored_value``;
+   ``reaction_energy_solvated_out_of_scope``, ``nonfinite_stored_value``,
+   ``reaction_energy_not_separated_species`` (``separated_reactants`` with a
+   reactant energy that is not exactly zero -- a pre-reactive complex well,
+   say, which the upload allows since barriers may be submerged);
 2. participants -- ``missing_or_unsupported_participants``,
    ``incomplete_or_incompatible_thermo_mapping``, the per-species scope
    reasons of :func:`species_scope_reason`, ``unbalanced_stoichiometry``;
@@ -68,6 +71,7 @@ from app.services.consistency.stoichiometry import (
     participant_slots,
     species_scope_reason,
 )
+from app.services.machine_review.schemas import MachineReviewFinding
 from app.services.trust.rubrics import HESS_CONSISTENCY_V1
 
 RUNNER = "hess_consistency"
@@ -75,6 +79,12 @@ RUNNER = "hess_consistency"
 #: Stated on every finding (decided 2026-09-27): the check runs although no
 #: thermo record says which element-reference compilation it used.
 ELEMENT_REFERENCE_COMPILATION = "not_recorded; cancellation across terms assumed, unverifiable"
+
+#: Stated on every finding (review of #550): the tunneling row names no
+#: endpoint structures. Under ``separated_reactants`` a zero reactant energy
+#: is checked, but the product end (a post-reaction complex?) never can be,
+#: and under ``absolute`` neither end can. Separated species are assumed.
+ENDPOINT_IDENTITY = "not_recorded; separated species assumed"
 
 #: Representations that give an enthalpy at exactly 298.15 K, in the order
 #: they are enumerated. Wilhoit is not evaluated by the engine.
@@ -85,6 +95,13 @@ MAX_COMBINATIONS = 64
 #: Meaning of each evaluated term row, ``terms[thermo_ref]``; the
 #: uncertainty is the one supplied for that value, listed, never combined.
 TERM_COLUMNS = ("coefficient", "representation", "h_kj_mol", "uncertainty_kj_mol")
+
+#: The size bound on one finding's message, read from the model that
+#: enforces it. A payload over it is split (terms) or trimmed (detail lists),
+#: never left to fail validation.
+_MESSAGE_LIMIT = next(m.max_length for m in MachineReviewFinding.model_fields["message"].metadata
+                      if getattr(m, "max_length", None) is not None)
+FINDING_TOO_LARGE = "finding_too_large"
 
 _T298_K = 298.15
 _SEPARATED_SPECIES_ZEROS = frozenset({"separated_reactants", "absolute"})
@@ -123,6 +140,12 @@ def _reaction_side_reason(kinetics, tunneling):
         return "reaction_energy_solvated_out_of_scope"
     if not _finite(tunneling.reactant_energy_kj_mol, tunneling.product_energy_kj_mol):
         return "nonfinite_stored_value"
+    # On the separated-reactants scale the reactant end IS the zero. Exact
+    # comparison, no tolerance: the upload stores the depositor's number as
+    # given, and a stated zero is 0.0. Anything else is some other endpoint
+    # (a pre-reactive complex well, for instance) reported on that scale.
+    if _token(tunneling.energy_zero_convention) == "separated_reactants" and tunneling.reactant_energy_kj_mol != 0:
+        return "reaction_energy_not_separated_species"
     return None
 
 
@@ -131,9 +154,48 @@ def _available_298(thermo):
     if thermo.h298_kj_mol is not None:
         names.append("h298")
     names.extend(name for name in engine.fit_names(thermo) if name in ENTHALPY_298_REPRESENTATIONS)
-    if thermo.points:
+    # A point is an enthalpy option only if it carries an enthalpy; Cp/S-only
+    # points would add a combination that can only ever be unavailable.
+    if any(point.h_kj_mol is not None for point in thermo.points):
         names.append("point")
     return names
+
+
+def _fits(payload):
+    return len(encoded(payload)) <= _MESSAGE_LIMIT
+
+
+def _bounded_findings(kinetics, payload, refs, *, combination, base, droppable=()):
+    """Findings for one payload, each inside the message bound.
+
+    Evaluated terms that do not fit move, in thermo-ref order, to numbered
+    continuation findings (``terms_part`` 0..n-1, ``term_findings`` = n on
+    the head). Detail lists on a reason finding are dropped, and the drop
+    stated, before anything is allowed to fail validation.
+    """
+    if _fits(payload):
+        return [finding(kinetics, payload, refs)]
+    head = {k: v for k, v in payload.items() if k not in ("terms", *droppable)}
+    head["combination"] = combination
+    if any(k in payload for k in droppable):
+        head["detail_omitted"] = FINDING_TOO_LARGE
+    if "terms" not in payload:
+        return [finding(kinetics, head, refs)]
+    parts, part = [], {}
+
+    def part_payload(index, terms):
+        return {**base, "combination": combination, "terms_part": index, "term_columns": TERM_COLUMNS,
+                "terms": terms}
+
+    for ref, row in payload["terms"].items():
+        if part and not _fits(part_payload(len(parts), {**part, ref: row})):
+            parts.append(part)
+            part = {}
+        part[ref] = row
+    parts.append(part)
+    head["term_findings"] = len(parts)
+    return [finding(kinetics, head, refs)] + [
+        finding(kinetics, part_payload(index, terms), refs) for index, terms in enumerate(parts)]
 
 
 #: The stored uncertainty that belongs to a term's value. Fits and points
@@ -168,7 +230,7 @@ def compare_hess(kinetics, thermo_by_entry, *, representations=None):
     refs = [kinetics.public_ref, entry.public_ref]
     if tunneling is not None:
         refs.append(tunneling.transition_state_entry.public_ref)
-    base = {"element_reference_compilation": ELEMENT_REFERENCE_COMPILATION}
+    base = {"element_reference_compilation": ELEMENT_REFERENCE_COMPILATION, "endpoint_identity": ENDPOINT_IDENTITY}
 
     calculation = tunneling.source_calculation if tunneling is not None else None
     reason = _reaction_side_reason(kinetics, tunneling)
@@ -241,9 +303,10 @@ def compare_hess(kinetics, thermo_by_entry, *, representations=None):
     if len(combinations) > MAX_COMBINATIONS:
         raise ValueError(f"comparison exceeds {MAX_COMBINATIONS} explicit representation combinations")
     if reason is not None:
-        findings.append(finding(kinetics, {**evaluation, **extra, "temperature_k": None, "reason": reason},
-                                refs + [t.public_ref for _, t in thermo_items]))
-    for combination in combinations:
+        findings.extend(_bounded_findings(
+            kinetics, {**evaluation, **extra, "temperature_k": None, "reason": reason},
+            refs + [t.public_ref for _, t in thermo_items], combination=None, base=base, droppable=tuple(extra)))
+    for index, combination in enumerate(combinations):
         error, terms = None, []
         for (key, thermo), representation in zip(thermo_items, combination, strict=True):
             if representation == "formation_0k":
@@ -265,7 +328,7 @@ def compare_hess(kinetics, thermo_by_entry, *, representations=None):
                            delta_e_claim_kj_mol=delta_e, delta_h_formation_kj_mol=delta_h,
                            residual_kj_mol=delta_e - delta_h)
         fit_refs = [f"{t.public_ref}:{r}" for (_, t), r in zip(thermo_items, combination, strict=True)]
-        findings.append(finding(kinetics, payload, refs + fit_refs))
+        findings.extend(_bounded_findings(kinetics, payload, refs + fit_refs, combination=index, base=base))
 
     inputs = {
         "kinetics": snapshot(kinetics),

@@ -927,7 +927,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `compare_hess` — `backend/app/services/consistency/hess.py::compare_hess`
-  *Explicit Phase D CLI/service invocation only (--check hess). thermal_enthalpy_298k pairs with formation enthalpies at 298.15 K under one declared enthalpy_reference_kind; electronic_plus_zpe and atom_and_bond_corrected pair with enthalpy_formation_0k_kj_mol. The element-reference compilation is not recorded, so cancellation across terms is assumed and every finding says so. Gas phase only; ions and isotopologues out of scope; pressure never gates enthalpy.*
+  *Explicit Phase D CLI/service invocation only (--check hess). thermal_enthalpy_298k pairs with formation enthalpies at 298.15 K under one declared enthalpy_reference_kind; electronic_plus_zpe and atom_and_bond_corrected pair with enthalpy_formation_0k_kj_mol. The element-reference compilation is not recorded, so cancellation across terms is assumed and every finding says so; so is the endpoint identity (separated species), which only a separated_reactants row's exactly-zero reactant energy partly checks. Gas phase only; ions and isotopologues out of scope; pressure never gates enthalpy.*
 
 **Escape hatch.** None.
 

@@ -155,7 +155,9 @@ CHECK_HESS_CONSISTENCY = ScientificCheck(
             "electronic_plus_zpe and atom_and_bond_corrected pair with "
             "enthalpy_formation_0k_kj_mol. The element-reference "
             "compilation is not recorded, so cancellation across terms is "
-            "assumed and every finding says so. Gas phase only; ions and "
+            "assumed and every finding says so; so is the endpoint "
+            "identity (separated species), which only a separated_reactants "
+            "row's exactly-zero reactant energy partly checks. Gas phase only; ions and "
             "isotopologues out of scope; pressure never gates enthalpy."
         ),
     ),),
