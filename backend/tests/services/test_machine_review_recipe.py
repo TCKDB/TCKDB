@@ -3,8 +3,11 @@
 The *recipe* (active prompt version + active rubric versions) is the single
 source of truth every machine-review consumer reads (readiness-audit risk R1).
 These tests pin that it preserves the prompt version, derives rubric versions
-from the deployed trust rubric constants (never hand-maintained), and that the
-typed recipe model carries no mutation payload.
+from the deployed trust rubric constants (never hand-maintained), that the
+filtered views consumers store are independent copies, and that the typed
+recipe model carries no mutation payload. That a stored recipe is the filtered
+view -- and so survives an unrelated rubric being added -- is pinned in
+``test_machine_review_recipe_filtering.py``.
 """
 
 from __future__ import annotations
@@ -12,11 +15,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
+from app.services.consistency.core import AdvisoryResult
+from app.services.machine_review.admin_trigger import active_rubric_versions_for_record_type
 from app.services.machine_review.recipe import (
     ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
     ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
     MachineReviewActiveRecipe,
-    get_active_machine_review_recipe,
     public_rubric_name,
 )
 from app.services.trust.rubrics import (
@@ -56,7 +60,6 @@ _ACTIVE_RUBRICS = (
 def test_active_machine_review_recipe_preserves_prompt_version():
     """The prompt version is the documented private constant."""
     assert ACTIVE_MACHINE_REVIEW_PROMPT_VERSION == "machine_review_v1"
-    assert get_active_machine_review_recipe().prompt_version == "machine_review_v1"
 
 
 def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constants():
@@ -71,7 +74,6 @@ def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constan
         public_rubric_name(rubric): str(rubric.version) for rubric in _ACTIVE_RUBRICS
     }
     assert expected == ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS
-    assert get_active_machine_review_recipe().rubric_versions == expected
 
     # Each key carries the version it maps to (key/value can't silently diverge).
     for rubric in _ACTIVE_RUBRICS:
@@ -80,11 +82,21 @@ def test_active_machine_review_recipe_derives_rubric_versions_from_trust_constan
         assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS[name] == str(rubric.version)
 
 
-def test_active_recipe_snapshot_is_an_independent_copy():
-    """Mutating a returned recipe's dict never mutates the module constant."""
-    recipe = get_active_machine_review_recipe()
-    recipe.rubric_versions["computed_calculation_v1"] = "999"
+def test_filtered_recipes_are_independent_copies():
+    """Mutating a returned filtered recipe never mutates the module constant."""
+    reviewer = active_rubric_versions_for_record_type("calculation")
+    assert reviewer == {"computed_calculation_v1": "1"}
+    reviewer["computed_calculation_v1"] = "999"
     assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["computed_calculation_v1"] == "1"
+    assert active_rubric_versions_for_record_type("calculation") == {"computed_calculation_v1": "1"}
+
+    advisory = AdvisoryResult(target=None, runner="thermo_consistency", rubric=THERMO_CONSISTENCY_V1,
+                              findings=(), inputs_json="{}")
+    stamped = advisory.recipe
+    assert stamped == {"thermo_consistency_v1": "1"}
+    stamped["thermo_consistency_v1"] = "999"
+    assert ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS["thermo_consistency_v1"] == "1"
+    assert advisory.recipe == {"thermo_consistency_v1": "1"}
 
 
 def test_recipe_model_forbids_mutation_payload_fields():

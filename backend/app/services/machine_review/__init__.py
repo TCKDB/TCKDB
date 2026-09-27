@@ -111,7 +111,6 @@ from app.services.machine_review.recipe import (
     ACTIVE_MACHINE_REVIEW_PROMPT_VERSION,
     ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS,
     MachineReviewActiveRecipe,
-    get_active_machine_review_recipe,
     public_rubric_name,
 )
 from app.services.machine_review.rereview import (
@@ -212,7 +211,6 @@ __all__ = [
     "derive_machine_review_status",
     "event_is_machine_review",
     "execute_record_machine_rereview_plan",
-    "get_active_machine_review_recipe",
     "get_curator_task_or_404",
     "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
