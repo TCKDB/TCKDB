@@ -18,6 +18,7 @@ from app.scientific_checks import (
     ScientificCheck,
 )
 from app.services.consistency.gibbs import compare_gibbs
+from app.services.consistency.hess import compare_hess
 from app.services.consistency.kinetics import compare_kinetics
 from app.services.consistency.thermo import compare_thermo
 from app.services.external_comparison.cp import compare_thermo_with_cp_observations
@@ -130,6 +131,34 @@ CHECK_GIBBS_SELF_CONSISTENCY = ScientificCheck(
             "a G on a declared record that follows another convention is reported as its raw "
             "residual, never relabelled. Reference pressure does not gate this check (g, h and s "
             "of one record share one state); gas phase only, as the other Phase D checks."
+        ),
+    ),),
+    escape_hatch=None,
+)
+
+__all__ += ["CHECK_HESS_CONSISTENCY"]
+
+CHECK_HESS_CONSISTENCY = ScientificCheck(
+    group="Advisory consistency", sort_key=5, code=None,
+    asserts=(
+        "Compare a kinetics record's stated reaction energy (its tunneling row, forward, separated-species "
+        "zero) with the Hess sum of explicitly mapped formation enthalpies at the matching temperature."
+    ),
+    tier=CheckTier.review, channel=CodeChannel.none,
+    tier_rationale="Explicit advisory comparison records residuals or unavailable reasons; no threshold or approval effect.",
+    adr="0008", enforced_by=(PythonCheck(
+        compare_hess,
+        note=(
+            "Explicit Phase D CLI/service invocation only (--check hess). "
+            "thermal_enthalpy_298k pairs with formation enthalpies at "
+            "298.15 K under one declared enthalpy_reference_kind; "
+            "electronic_plus_zpe and atom_and_bond_corrected pair with "
+            "enthalpy_formation_0k_kj_mol. The element-reference "
+            "compilation is not recorded, so cancellation across terms is "
+            "assumed and every finding says so; so is the endpoint "
+            "identity (separated species), which only a separated_reactants "
+            "row's exactly-zero reactant energy partly checks. Gas phase only; ions and "
+            "isotopologues out of scope; pressure never gates enthalpy."
         ),
     ),),
     escape_hatch=None,

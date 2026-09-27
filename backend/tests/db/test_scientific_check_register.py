@@ -77,9 +77,13 @@ def test_register_is_non_empty_and_proportionate() -> None:
     constraints. If this count approaches that order the inclusion test
     has stopped being applied and every entry's claim is diluted.
     """
-    assert 10 <= len(REGISTER) <= 40, (
+    # Ceiling raised 40 -> 45 (2026-09-27) for the Phase D advisory checks
+    # D4-D6, each a separate review-tier claim the Phase D plan requires to be
+    # declared; D4 filled slot 40, D6 is 41, D5 will be 42. The ceiling is
+    # still a filter: anything past 45 needs the same explicit argument.
+    assert 10 <= len(REGISTER) <= 45, (
         f"{len(REGISTER)} entries. Below ~10 the register is not describing "
-        "the system; above ~40 the inclusion test ('could this check be wrong "
+        "the system; above ~45 the inclusion test ('could this check be wrong "
         "in an interesting way?') has stopped being applied."
     )
 
