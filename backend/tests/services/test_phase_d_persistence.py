@@ -527,13 +527,16 @@ def test_adding_the_gibbs_rubric_restales_no_stored_review(db_session, monkeypat
     ("thermo", "enthalpy_reference_kind", None),
     ("point", "h_kj_mol", -51.0), ("point", "s_j_mol_k", 201.0), ("point", "g_kj_mol", -149.0),
     ("nasa", "a6", -9001.0), ("nasa", "b6", -8801.0),
+    # Species scope decides the findings, so it is a material input too.
+    ("entry", "isotope_key", "[2H]OCC"), ("species", "charge", 1),
 ])
 def test_every_material_gibbs_input_changes_live_currency(db_session, location, field, value):
     thermo = gibbs_records(db_session)
     _, row = invoke(db_session, commit=True, **gibbs_request(thermo))
     db_session.flush()
     assert current(db_session, **gibbs_request(thermo)).state.value == "current"
-    targets = {"thermo": thermo, "nasa": thermo.nasa, "point": thermo.points[0]}
+    targets = {"thermo": thermo, "nasa": thermo.nasa, "point": thermo.points[0], "entry": thermo.species_entry,
+               "species": thermo.species_entry.species}
     assert getattr(targets[location], field) != value
     setattr(targets[location], field, value)
     with db_session.no_autoflush:
@@ -702,3 +705,29 @@ def test_every_material_kirchhoff_input_changes_live_currency(db_session, locati
         live = compare(db_session, **args)
         assert live.digest.context_hash != row.context_hash
         assert current(db_session, **args).state.value == "stale"
+
+
+def test_the_requested_kirchhoff_grid_is_a_hashed_input(db_session):
+    # Explicit temperatures change which findings exist, so a review recorded on
+    # one grid is not current for a request on another.
+    thermo = _kirchhoff_record(db_session)
+    args = {**request(thermo, "kirchhoff"), "temperature_grid": [500.0]}
+    _, row = invoke(db_session, commit=True, **args)
+    db_session.flush()
+    assert current(db_session, **args).state.value == "current"
+    other = {**args, "temperature_grid": [700.0]}
+    assert compare(db_session, **other).digest.context_hash != row.context_hash
+    assert current(db_session, **other).state.value == "stale"
+
+
+def test_d1_refuses_a_record_as_its_own_neighbour_through_the_service(db_session):
+    """#554, service path: refused before anything is staged."""
+    thermo, _, _ = setup_records(db_session)
+    before = count_reviews(db_session)
+    with pytest.raises(ValueError, match="cannot be its own neighbour"):
+        invoke(db_session, commit=True, check="thermo", target_ref=thermo.public_ref,
+               comparison_thermo_ref=thermo.public_ref, temperature_grid=[300.0])
+    assert count_reviews(db_session) == before and not db_session.new
+    # The same record without a neighbour still runs.
+    result, _ = invoke(db_session, check="thermo", target_ref=thermo.public_ref, temperature_grid=[300.0])
+    assert result.findings
