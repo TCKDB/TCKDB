@@ -1,13 +1,10 @@
 """D3: supplied elementary forward/reverse rates against supplied NASA thermo."""
-from collections import Counter
 from itertools import product
 from math import isfinite, log
 
-from rdkit import Chem
-
-from app.chemistry.species import element_counts_from_smiles
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, temperatures, thermo_inputs
+from app.services.consistency.stoichiometry import element_balance, is_balanced, participant_slots, species_facts
 from app.services.trust.rubrics import THERMO_KINETICS_CONSISTENCY_V1
 
 RUNNER = "thermo_kinetics_consistency"
@@ -50,7 +47,8 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
     ct = engine.cantera()
     entry = forward.reaction_entry
     participants = list(entry.structure_participants)
-    entries = {p.species_entry_id: p.species_entry for p in participants}
+    slots = participant_slots(participants)
+    entries = slots.entries
     thermo_items = sorted(thermo_by_entry.items())
     refs = [forward.public_ref, reverse.public_ref, entry.public_ref]
     # Per-input findings keep citation cardinality and JSON message sizes bounded.
@@ -78,34 +76,29 @@ def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):
         reason = "explicit_opposite_directions_required"
     elif set(entries) != set(thermo_by_entry) or any(t.species_entry_id != key for key, t in thermo_items):
         reason = "incomplete_or_incompatible_thermo_mapping"
-    reactants = Counter(p.species_entry_id for p in participants if p.role == "reactant")
-    products = Counter(p.species_entry_id for p in participants if p.role == "product")
-    if not reactants or not products or len(participants) != sum(reactants.values()) + sum(products.values()):
+    reactants, products = slots.reactants, slots.products
+    if not slots.accounted:
         reason = reason or "missing_or_unsupported_participants"
     compositions = {}
     if reason is None:
-        balance = Counter()
-        charge = 0
+        # Neutral facts from the shared helper; D3's own tokens are mapped
+        # here, first failing species in participant order.
         for key, species_entry in entries.items():
-            species = species_entry.species
-            molecule = Chem.MolFromSmiles(species.smiles)
-            if molecule is None:
+            facts = species_facts(species_entry.species)
+            if not facts.parsed:
                 reason = "unusable_species_composition"
                 break
-            if any(atom.GetIsotope() for atom in molecule.GetAtoms()):
+            if facts.has_isotopes:
                 reason = "isotope_specific_equilibrium_unsupported"
                 break
-            try:
-                compositions[key] = dict(element_counts_from_smiles(species.smiles))
-            except ValueError:
+            if facts.composition is None:
                 reason = "unusable_species_composition"
                 break
-            coefficient = products[key] - reactants[key]
-            for element, count in compositions[key].items():
-                balance[element] += coefficient * count
-            charge += coefficient * species.charge
-        if any(balance.values()) or charge:
-            reason = reason or "unbalanced_stoichiometry"
+            compositions[key] = facts.composition
+        if reason is None:
+            charges = {key: species_entry.species.charge for key, species_entry in entries.items()}
+            if not is_balanced(*element_balance(slots, compositions, charges)):
+                reason = "unbalanced_stoichiometry"
     if reason is None:
         for _, thermo in thermo_items:
             reason = reason or engine.gas_state_reason(thermo)

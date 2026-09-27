@@ -1,15 +1,51 @@
 """Shared enthalpy declaration rules, independent of persistence and transport."""
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from enum import Enum
 from typing import Any
 
 from tckdb_schemas.enums import EnthalpyReferenceKind
-
 
 W_ENTHALPY_DECLARATION_ABSENT = "enthalpy_declaration_absent"
 W_ENTHALPY_DECLARATION_WITHOUT_CONTENT = "enthalpy_declaration_without_content"
 W_ENTHALPY_QUANTITY_NOT_STORABLE_HERE = "enthalpy_quantity_not_storable_here"
 W_ENTHALPY_REFERENCE_KIND_UNRECOGNIZED = "enthalpy_reference_kind_unrecognized"
+
+#: Reasons :func:`shared_enthalpy_reference` declines to name a shared basis.
+ENTHALPY_REFERENCE_UNRECORDED = "enthalpy_reference_unrecorded"
+ENTHALPY_REFERENCE_MIXED = "enthalpy_reference_mixed"
+
+
+def shared_enthalpy_reference(kinds: Iterable[Any]) -> tuple[str | None, str | None]:
+    """Return ``(kind, None)`` when every term declares one shared enthalpy basis.
+
+    This is the rule for combining enthalpies from several thermo records
+    (a reaction enthalpy, a Hess cycle): every term must *declare* its
+    ``enthalpy_reference_kind``, and all must declare the *same* one.
+
+    * Any term ``None`` -> ``(None, "enthalpy_reference_unrecorded")``. An
+      undeclared enthalpy means its reference was never recorded, not that
+      it defaults to a formation quantity; this wins over "mixed".
+    * Two or more distinct declared kinds -> ``(None, "enthalpy_reference_mixed")``.
+      Only one kind exists today, so this cannot fire yet; it is the check
+      that stays correct if a second kind is ever added.
+    * Otherwise ``(token, None)``, where ``token`` is the declared kind's
+      string value (enum members of the backend's and this package's
+      ``EnthalpyReferenceKind`` and plain strings all compare by value).
+
+    An empty collection raises ``ValueError``: zero terms share nothing, and
+    answering "shared" for them would be a vacuous pass. Callers decide what
+    having no terms means before asking.
+    """
+    tokens = [kind.value if isinstance(kind, Enum) else kind for kind in kinds]
+    if not tokens:
+        raise ValueError("shared_enthalpy_reference needs at least one term")
+    distinct = set(tokens)
+    if None in distinct:
+        return None, ENTHALPY_REFERENCE_UNRECORDED
+    if len(distinct) > 1:
+        return None, ENTHALPY_REFERENCE_MIXED
+    return tokens[0], None
 
 def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
     """Return a refusal code/message, or None for a coherent declaration.

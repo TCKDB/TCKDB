@@ -59,6 +59,11 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.enthalpy_reference import (
+    ENTHALPY_REFERENCE_MIXED,
+    ENTHALPY_REFERENCE_UNRECORDED,
+    shared_enthalpy_reference,
+)
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
@@ -1193,8 +1198,11 @@ def _ts_and_barrier(
 #: count (see ``_stream_reactions``) -- never invented as a new per-record
 #: JSON field, matching how every other missing term in this module (the
 #: barrier, the TS block) is represented: the value is simply ``null``.
-DELTA_H298_UNRECORDED_REFERENCE = "enthalpy_reference_unrecorded"
-DELTA_H298_MIXED_REFERENCE = "enthalpy_reference_mixed"
+#: The values are the wire package's shared-basis reasons
+#: (``tckdb_schemas.enthalpy_reference.shared_enthalpy_reference``), which
+#: ``_delta_h298`` returns verbatim.
+DELTA_H298_UNRECORDED_REFERENCE = ENTHALPY_REFERENCE_UNRECORDED
+DELTA_H298_MIXED_REFERENCE = ENTHALPY_REFERENCE_MIXED
 
 
 def _delta_h298(
@@ -1249,14 +1257,14 @@ def _delta_h298(
     if reactant_blocks is None or product_blocks is None:
         return None, None
 
-    reference_kinds = {
+    # The shared-basis rule lives in the wire package so the Phase D Hess
+    # check applies the identical rule; both terms lists are non-empty here.
+    _, reference_reason = shared_enthalpy_reference(
         block.get("enthalpy_reference_kind")
         for block in reactant_blocks + product_blocks
-    }
-    if None in reference_kinds:
-        return None, DELTA_H298_UNRECORDED_REFERENCE
-    if len(reference_kinds) > 1:
-        return None, DELTA_H298_MIXED_REFERENCE
+    )
+    if reference_reason is not None:
+        return None, reference_reason
 
     reactant_sum = sum(block["h298_kj_mol"] for block in reactant_blocks)
     product_sum = sum(block["h298_kj_mol"] for block in product_blocks)

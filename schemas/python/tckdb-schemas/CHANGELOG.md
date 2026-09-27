@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.50.0 - 2026-09-27
+
+Add `enthalpy_reference.shared_enthalpy_reference(kinds)`, the rule for
+combining enthalpies from several thermo records: every term must declare
+its `enthalpy_reference_kind`, and all must declare the same one. It returns
+the shared kind, or declines with `enthalpy_reference_unrecorded` (any term
+undeclared) or `enthalpy_reference_mixed` (terms disagree), exported as
+`ENTHALPY_REFERENCE_UNRECORDED` / `ENTHALPY_REFERENCE_MIXED`. An empty
+collection raises `ValueError` rather than reporting a vacuous shared basis.
+The ML reaction export's `delta_h298` already applied this rule privately
+and now calls it; its reason values are unchanged. Additive: no existing
+name, value or behaviour changes.
+
 ## 0.49.0 - 2026-09-24
 
 Stop defaulting `reference_pressure_bar` to 1 bar on computed thermo uploads
