@@ -198,3 +198,50 @@ def test_a_legitimate_version_uploads_cleanly_through_the_same_route(client):
     resp = client.post("/api/v1/uploads/conformers", json=payload)
 
     assert resp.status_code == 201, resp.text
+
+
+def test_the_live_gaussian_16_c02_banner_lands_on_the_clean_16_c02_release(
+    client, db_session
+):
+    """Issue #305 item 2, the exact string that reached the deployed archive.
+
+    ARC declared ``version="Gaussian 16, Revision C.02"`` -- a *producer*
+    banner, not anything TCKDB's own parser wrote (the Gaussian parser only
+    ever emits the digit group, ``"16"``; see
+    ``tests/parsers/test_software_version_banners.py``). Before #315 it was
+    persisted verbatim as a second release beside the clean ``16``/``C.02``
+    one; migration ``6141f2d98e78`` merged the two. This pins that the same
+    string deposited today resolves to the *same* release row as a clean
+    ``16``/``C.02`` deposit, so the split cannot reopen.
+    """
+    clean = client.post(
+        "/api/v1/uploads/conformers",
+        json=_hydrogen_conformer_payload(
+            software_release={"name": "Gaussian", "version": "16", "revision": "C.02"}
+        ),
+    )
+    assert clean.status_code == 201, clean.text
+    banner = client.post(
+        "/api/v1/uploads/conformers",
+        json=_hydrogen_conformer_payload(
+            software_release={
+                "name": "Gaussian",
+                "version": "Gaussian 16, Revision C.02",
+            }
+        ),
+    )
+    assert banner.status_code == 201, banner.text
+
+    clean_release = _released_software(
+        db_session, clean.json()["primary_calculation"]["calculation_id"]
+    )
+    banner_release = _released_software(
+        db_session, banner.json()["primary_calculation"]["calculation_id"]
+    )
+    assert (banner_release.version, banner_release.revision) == ("16", "C.02")
+    assert banner_release.id == clean_release.id
+    assert [
+        w["code"]
+        for w in banner.json()["warnings"]
+        if w["field"] == "calculation.software_release.version"
+    ] == ["software_release_version_is_composite"]

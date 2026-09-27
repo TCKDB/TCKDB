@@ -978,6 +978,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "older code for the same reason in reverse: there, a "
                 "conformer name and a calculation name are one repair."
             )),
+    ApiCode("calculation_software_is_workflow_tool", 422, Surface.coded_exception,
+            "backend/app/services/calculation_resolution.py",
+            note=(
+                "A calculation declared a workflow tool (Arkane) as the "
+                "program that ran it (issue #305). Refused, not routed: the "
+                "electronic-structure program that produced the output is "
+                "absent, and moving the declared value into "
+                "workflow_tool_release would leave the calculation claiming "
+                "none. context names the declared_name and the workflow_tool "
+                "it matched. Scoped to calculations only -- a thermo, "
+                "statmech or kinetics record's analysis software_release "
+                "(fed by analysis_software_release) is not checked."
+            )),
     ApiCode("candidate_rights_basis_incompatible", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,

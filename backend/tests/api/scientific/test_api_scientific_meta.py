@@ -168,6 +168,57 @@ def test_software_record_kind_scopes_species_and_transition_state(client, db_ses
     assert "SpeciesOnlyXYZ" not in ts_values
 
 
+def test_software_vocabulary_is_exactly_the_observed_releases(client, db_session):
+    """Issue #305, the playground's own shape, asserted as whole lists.
+
+    Seeded to mirror what the deployed instance held on 2026-09-27: a
+    Gaussian ``16``/``C.02`` release cited by a calculation, an orphan
+    Gaussian release with a NULL version, an orphan ``09``, an ORCA
+    release cited by a calculation but with a NULL version, and an
+    ``Arkane`` software/release no calculation cites. The vocabulary is
+    the observed subset and nothing else -- orphans absent at both levels,
+    no value merged or rewritten, and ORCA's NULL version reported as an
+    empty version list rather than hidden or invented.
+
+    Whole-list equality, not ``in`` checks: a registry dump, a hard-coded
+    list, or an endpoint that silently dropped a used release would each
+    pass a membership assertion.
+    """
+    g16 = make_software_release(db_session, name="Gaussian", version="16", revision="C.02")
+    make_software_release(db_session, name="Gaussian", version=None)  # orphan
+    make_software_release(db_session, name="Gaussian", version="09")  # orphan
+    orca_null = make_software_release(db_session, name="ORCA", version=None)
+    make_software_release(
+        db_session, name="Arkane", version=None, revision="b8586246" + "0" * 32
+    )  # orphan w.r.t. calculations
+    make_software(db_session, name="NeverReleasedXYZ")  # orphan, no release at all
+
+    for release in (g16, g16, orca_null):
+        se = _species_entry(db_session, prefix="SWEX")
+        make_calculation(
+            db_session, species_entry_id=se.id, software_release_id=release.id
+        )
+
+    software = client.get("/api/v1/scientific/meta/software").json()["results"]
+    gaussian_versions = client.get(
+        "/api/v1/scientific/meta/software-versions", params={"software": "Gaussian"}
+    ).json()["results"]
+    orca_versions = client.get(
+        "/api/v1/scientific/meta/software-versions", params={"software": "ORCA"}
+    ).json()["results"]
+    arkane_versions = client.get(
+        "/api/v1/scientific/meta/software-versions", params={"software": "Arkane"}
+    ).json()["results"]
+
+    assert software == [
+        {"value": "Gaussian", "count": 2},
+        {"value": "ORCA", "count": 1},
+    ]
+    assert gaussian_versions == [{"value": "16", "count": 1}]
+    assert orca_versions == []
+    assert arkane_versions == []
+
+
 def test_workflow_tools_absent_when_no_calculation_uses_it(client, db_session):
     make_workflow_tool_release(db_session, name="unused-tool-xyz", version="1.0.0")
 

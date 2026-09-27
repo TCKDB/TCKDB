@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.93.0 - 2026-09-28
+
+Adds `RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL` (HTTP 422). The
+server now refuses a calculation whose `software_release.name` is a workflow
+tool (Arkane): a calculation's software is the electronic-structure program
+that ran it. Declare that program instead, and put Arkane in
+`workflow_tool_release` if it orchestrated the job. A thermo, statmech or
+kinetics record's `analysis_software_release` is unaffected (issue #305).
+
 ## 0.92.0 - 2026-09-27
 
 Requires `tckdb-schemas>=0.51.0`. The thermo builder (`Thermo`,
