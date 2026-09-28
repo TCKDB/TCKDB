@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 204 | `backend/app/api/code_catalogue.py` |
-| **total** | **493** | |
+| Refusal codes a caller can receive | 205 | `backend/app/api/code_catalogue.py` |
+| **total** | **494** | |
 
 ## How a record is named
 
@@ -701,7 +701,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (153 codes)
+### HTTP 422 (154 codes)
 
 | Code | Names |
 | --- | --- |
@@ -722,6 +722,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
+| `calculation_software_is_workflow_tool` | a thing |
 | `candidate_rights_basis_incompatible` | a relationship — read `context` |
 | `candidate_rights_basis_missing` | a relationship — read `context` |
 | `canonical_parameter_value_requires_key` | a thing |

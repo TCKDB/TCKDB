@@ -100,6 +100,7 @@ class RejectionCode(str, Enum):
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
+    CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
     CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE = "candidate_rights_basis_incompatible"
     CANDIDATE_RIGHTS_BASIS_MISSING = "candidate_rights_basis_missing"
     CANONICAL_PARAMETER_VALUE_REQUIRES_KEY = "canonical_parameter_value_requires_key"
@@ -309,6 +310,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
+        RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL,
         RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE,
         RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING,
         RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY,
@@ -513,6 +515,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
+    RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL: frozenset({422}),
     RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
     RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING: frozenset({422}),
     RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
