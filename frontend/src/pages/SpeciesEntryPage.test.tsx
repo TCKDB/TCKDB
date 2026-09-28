@@ -488,9 +488,17 @@ describe("species-entry page: identity and errors", () => {
         // cached (successful, empty) result and never reach its own
         // handler.
         server.use(...handlers({ empty: true }))
+        // Hold the entry lookup so the loading state is still on screen when
+        // asserted; a resolver that returns nothing falls through to the
+        // `empty` handler once released. `findBy`, not `getBy`: the page is
+        // lazy-loaded, so the Suspense fallback can render first.
+        let releaseLookup: () => void = () => {}
+        const lookupHeld = new Promise<void>((resolve) => { releaseLookup = resolve })
+        server.use(http.get("/api/v1/scientific/species/search", async () => { await lookupHeld }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
-        expect(screen.getByRole("heading", { name: "Loading species entry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "Loading species entry" })).toBeVisible()
+        releaseLookup()
         expect(await screen.findByRole("heading", { name: "Entry not found" })).toBeVisible()
         cleanup()
         resetAllRequestCaches()
