@@ -193,6 +193,10 @@ describe("species overview", () => {
     // state, plain-language wording -- same as every other rate-limited
     // surface (`RecordStatus`, `SpeciesEntryPage`).
     it("gives a double 429 its own rate-limited state, in plain language, distinct from 'unavailable'", async () => {
+        // Load the lazy page module before faking timers: fake timers cannot
+        // advance a module load, so otherwise the page can still be behind
+        // the Suspense fallback when the timers below run.
+        await import("./SpeciesOverviewPage")
         vi.useFakeTimers()
         server.use(http.get("/api/v1/scientific/species/search", () => (
             HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "45" } })

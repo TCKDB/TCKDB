@@ -689,13 +689,25 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
     // rate-limited surface.
     it("reads a distinct, plain-language message for a double 429, not the generic 5xx wording", async () => {
         vi.useFakeTimers()
-        server.use(http.get("/api/v1/scientific/species/browse", () => (
-            HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "15" } })
-        )))
+        let attempts = 0
+        server.use(http.get("/api/v1/scientific/species/browse", () => {
+            attempts += 1
+            return HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "15" } })
+        }))
         renderAt("/species")
-        await act(async () => { await vi.advanceTimersByTimeAsync(200) }) // useBrowse's own request debounce
-        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first (429) attempt lands
-        await act(async () => { await vi.advanceTimersByTimeAsync(15_000) }) // the retry, also 429
+
+        // Step the fake clock until the retry has gone out, not by fixed
+        // amounts: loading the lazy page and reading the first 429 take real
+        // event-loop turns, so a fixed advance can pass the retry's sleep
+        // before it is scheduled. `vi.waitFor` polls on real time.
+        await vi.waitFor(async () => {
+            await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+            expect(attempts).toBe(2)
+        }, { timeout: 5_000, interval: 10 })
+        await vi.waitFor(async () => {
+            await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+            expect(screen.getByRole("alert")).toBeInTheDocument()
+        }, { timeout: 5_000, interval: 10 })
 
         const message = screen.getByRole("alert")
         expect(message).toHaveTextContent(

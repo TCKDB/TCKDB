@@ -1121,9 +1121,10 @@ describe("the buttons say what is actually happening", () => {
     it("disables Reopen while its own write is out", async () => {
         meIs(admin)
         queueIs([task({ workflow_state: "resolved_no_action" })])
+        const write = gate()
         server.use(
             http.post(`${QUEUE}/41/reopen`, async () => {
-                await new Promise((r) => setTimeout(r, 120))
+                await write.held
                 return HttpResponse.json(task())
             }),
         )
@@ -1134,14 +1135,20 @@ describe("the buttons say what is actually happening", () => {
         const ref = "spc_vu7cuk4s37szxaudjpf355tqda"
         await user.click(rowButton(ref, "Reopen"))
         expect(rowButton(ref, "Reopen")).toBeDisabled()
+
+        // Release and wait out the re-read, so no request from this test
+        // lands in the next one's handlers.
+        write.release()
+        await waitFor(() => expect(rowButton(ref, "Reopen")).toBeEnabled())
     })
 
     it("disables Close task while its own write is out", async () => {
         meIs(admin)
-        queueIs([task()])
+        const reads = queueIs([task()])
+        const write = gate()
         server.use(
             http.post(`${QUEUE}/41/resolve`, async () => {
-                await new Promise((r) => setTimeout(r, 120))
+                await write.held
                 return HttpResponse.json(task({ workflow_state: "resolved_no_action" }))
             }),
         )
@@ -1154,6 +1161,13 @@ describe("the buttons say what is actually happening", () => {
 
         // Without this a second click files the same reason twice.
         expect(screen.getByRole("button", { name: "Close task" })).toBeDisabled()
+
+        // Release and wait out the re-read, as above. A saved resolve closes
+        // the form; the row is re-enabled only once the re-read has landed.
+        write.release()
+        await waitFor(() => expect(screen.queryByRole("button", { name: "Close task" })).not.toBeInTheDocument())
+        await waitFor(() => expect(rowButton("spc_vu7cuk4s37szxaudjpf355tqda", "Close…")).toBeEnabled())
+        expect(reads.reads).toBe(2)
     })
 
     it("Close… is a disclosure, and says so to a screen reader", async () => {
