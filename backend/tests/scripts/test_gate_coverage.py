@@ -553,6 +553,94 @@ def test_workflow_invokes_every_gate_script(script_rel: str) -> None:
     )
 
 
+def _required_modules() -> set[tuple[str, str]]:
+    """``require_module(name, install=...)`` calls under backend/tests/.
+
+    ``(test file, install command)`` pairs. Read with ``ast``
+    rather than imported, since this file runs with ``--noconftest`` and
+    without the backend on the path.
+    """
+    import ast
+
+    found: set[tuple[str, str]] = set()
+    for path in sorted((BACKEND_ROOT / "tests").rglob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "require_module(" not in source:
+            continue
+        tree = ast.parse(source)
+        # ``install=`` may name a module-level string constant.
+        constants = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and getattr(node.func, "id", None) == "require_module"):
+                continue
+            install = next((kw.value for kw in node.keywords if kw.arg == "install"), None)
+            if isinstance(install, ast.Name):
+                value = constants.get(install.id)
+            elif isinstance(install, ast.Constant) and isinstance(install.value, str):
+                value = install.value
+            else:
+                value = None
+            assert value is not None, (
+                f"{path.relative_to(REPO_ROOT)}:{node.lineno}: require_module needs install= as a "
+                "string literal or a module-level string constant, so this check can read it"
+            )
+            found.add((path.relative_to(REPO_ROOT).as_posix(), value))
+    return found
+
+
+def _editable_installs(workflow_rel: str) -> set[str]:
+    """Every ``pip install -e <path>`` target in a workflow's run steps."""
+    targets: set[str] = set()
+    for job in _workflow(workflow_rel)["jobs"].values():
+        for step in job.get("steps", []):
+            for line in _join_continuations(step.get("run") or ""):
+                if line.startswith("#"):
+                    continue
+                tokens = shlex.split(line)
+                for index, token in enumerate(tokens[:-1]):
+                    if token == "-e" and "install" in tokens[:index]:
+                        targets.add(tokens[index + 1].split("[", 1)[0])
+    return targets
+
+
+@pytest.mark.parametrize(
+    "workflow_rel",
+    [".github/workflows/backend-ci.yml", ".github/workflows/backend-nightly.yml"],
+)
+def test_backend_workflows_install_what_require_module_needs(workflow_rel: str) -> None:
+    """A dependency a test fails-not-skips on CI must be installed by CI (#575).
+
+    ``tests/_ci_dependency.require_module`` turns a missing package into a
+    collection error on CI, so a missing install line is caught when the
+    suite runs. This catches it earlier and names the step: every install
+    command a backend test cites must appear in each workflow that runs
+    the backend suite.
+    """
+    required = _required_modules()
+    # Guard the guard: an empty scan would pass whatever the workflow says.
+    assert any(rel.startswith("backend/tests/client_builder_contract/") for rel, _ in required), (
+        "found no require_module call in tests/client_builder_contract/; the scan is not seeing them"
+    )
+    installed = _editable_installs(workflow_rel)
+    missing = sorted(
+        (rel, install)
+        for rel, install in required
+        if install.startswith("pip install -e ") and install.removeprefix("pip install -e ").strip() not in installed
+    )
+    assert not missing, (
+        f"{workflow_rel} does not install what these tests require (installs: {sorted(installed)}):\n  "
+        + "\n  ".join(f"{rel}: {install}" for rel, install in missing)
+    )
+
+
 @pytest.mark.parametrize("workflow_rel", REQUIRED_WORKFLOWS)
 def test_required_workflows_run_on_pull_requests(workflow_rel: str) -> None:
     assert "pull_request" in _triggers(_workflow(workflow_rel)), (

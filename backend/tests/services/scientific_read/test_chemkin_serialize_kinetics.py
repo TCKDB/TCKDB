@@ -50,6 +50,11 @@ from app.services.scientific_read.export import (
     SelectionPolicy,
     SpeciesExportRecord,
 )
+from tests._ci_dependency import require_module
+
+#: Cantera comes from backend/environment.yml, which CI builds from, so these
+#: tests fail rather than skip on CI without it (tests/_ci_dependency.py).
+_CANTERA_INSTALL = "conda install -c conda-forge cantera=3.2.0 (backend/environment.yml)"
 
 # ---------------------------------------------------------------------------
 # Lightweight ORM stand-ins (attribute-compatible with what the serializer
@@ -171,7 +176,7 @@ def _reaction_lines(chem_inp: str) -> list[str]:
 def _forward_rate_sum(export_files, equation_species, *, temperature=1000.0):
     """Load the mechanism in Cantera and sum forward rate constants over the
     reactions whose reactants match ``equation_species`` (a set of names)."""
-    ct = pytest.importorskip("cantera")
+    ct = require_module("cantera", install=_CANTERA_INSTALL)
     from cantera import ck2yaml
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -235,7 +240,7 @@ def test_multi_arrhenius_emits_one_duplicate_arrhenius_line_per_term():
 def test_multi_arrhenius_cantera_summed_rate_is_sum_of_terms():
     """Cantera loads the expanded mechanism and its net forward rate equals the
     (non-zero) sum of the two Arrhenius terms."""
-    pytest.importorskip("cantera")
+    require_module("cantera", install=_CANTERA_INSTALL)
     H = _species(1, "[H]", "H")
     O2 = _species(2, "[O][O]", "O2")
     HO2 = _species(3, "[O]O", "HO2")
@@ -333,7 +338,7 @@ def test_simple_third_body_uses_bare_plus_M_with_efficiencies():
     assert any("H2O1/6/" in ln and "Ar1/0.7/" in ln for ln in body)
 
     validate_chemkin_mechanism(export.files)
-    ct = pytest.importorskip("cantera")
+    ct = require_module("cantera", install=_CANTERA_INSTALL)
 
     with tempfile.TemporaryDirectory() as tmp:
         for name, content in export.files.items():
@@ -379,7 +384,7 @@ def test_simple_third_body_without_efficiencies_still_bare_M_and_loads():
     assert not any("/" in ln and "<=>" not in ln for ln in body)
 
     validate_chemkin_mechanism(export.files)
-    ct = pytest.importorskip("cantera")
+    ct = require_module("cantera", install=_CANTERA_INSTALL)
     with tempfile.TemporaryDirectory() as tmp:
         for name, content in export.files.items():
             with open(os.path.join(tmp, name), "w") as fh:
@@ -434,7 +439,7 @@ def test_multi_arrhenius_third_body_efficiencies_on_every_term():
     assert len(dup_lines) == 2
 
     validate_chemkin_mechanism(export.files)
-    ct = pytest.importorskip("cantera")
+    ct = require_module("cantera", install=_CANTERA_INSTALL)
     with tempfile.TemporaryDirectory() as tmp:
         for name, content in export.files.items():
             with open(os.path.join(tmp, name), "w") as fh:

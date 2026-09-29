@@ -228,6 +228,9 @@ jobs:
           conda run -n tckdb_env python -m pip install --upgrade pip
           conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
           conda run -n tckdb_env python -m pip install -e "backend[dev]"
+          # Same as backend-ci.yml: tests/client_builder_contract/ needs the
+          # client, and fails rather than skips on CI without it (#575).
+          conda run -n tckdb_env python -m pip install -e clients/python
 
       - name: Initialize artifact bucket
         # See the twin step in backend-ci.yml: as `conda run python - <<'PY'`
