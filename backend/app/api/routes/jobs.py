@@ -77,6 +77,7 @@ def _enqueue(session: Session, kind: UploadJobKind, request, user_id: int) -> Jo
         status=job.status,
         kind=job.kind,
         submission_id=submission.id,
+        submission_ref=submission.public_ref,
     )
 
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.57.0 - 2026-09-30
+
+Every upload, job and bundle response now names its submission by public ref
+as well as row id: `submission_ref` (`sub_...`) beside `submission_id`. In this
+package that is `ComputedSpeciesUploadResult.submission_ref`, and
+`CalculationUploadRefInBundle.calculation_ref` (`calc_...`) beside
+`calculation_id`. Both are optional and additive. The two routes that took a
+row id in the path, `POST /api/v1/submissions/{submission_id}/rights-attestations`
+and `POST /api/v1/calculations/{calculation_id}/artifacts`, now accept either
+the integer or the ref there (a `handle_type_mismatch` 422 for a ref of the
+wrong kind, 404 `handle_not_found` for an unknown one, in either form); the integer is deprecated, not removed.
+
 ## 0.56.0 - 2026-09-29
 
 `reversible` on the reaction of `POST /api/v1/uploads/transition-states`

@@ -202,6 +202,9 @@ class ArtifactUploadBatchResult:
     calculation_keys: tuple[str, ...]
     artifact_count: int
     response: Any
+    #: The ``calc_`` ref the batch was addressed by, or ``None`` when the plan
+    #: carried none and the integer id was used.
+    calculation_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -880,7 +883,7 @@ class TCKDBClient:
 
     def upload_artifact(
         self,
-        calculation_id: int,
+        calculation_id: "int | str",
         path: "str | Path",
         kind: str,
         *,
@@ -896,6 +899,10 @@ class TCKDBClient:
         ``/api/v1/calculations/{calculation_id}/artifacts``. The
         endpoint accepts an inline batch wrapper — this helper sends a
         single-item batch.
+
+        ``calculation_id`` is the calculation's ``calc_`` ref (what upload
+        responses return as ``calculation_ref``) or, during the server's
+        deprecation window, its integer id. Prefer the ref.
 
         ``filename`` defaults to the path's basename; supply an
         explicit value when uploading from a temp file with a synthetic
@@ -1101,6 +1108,16 @@ class TCKDBClient:
         groups: dict[int, list[Any]] = {}
         for item in items:
             groups.setdefault(item.calculation_id, []).append(item)
+        # Address each calculation by its ``calc_`` ref when the plan has one
+        # (every item in a group names the same calculation, so the first
+        # ref found stands for the group); fall back to the integer.
+        group_ref: dict[int, str | None] = {
+            cid: next(
+                (r for r in (getattr(i, "calculation_ref", None) for i in grp) if r),
+                None,
+            )
+            for cid, grp in groups.items()
+        }
 
         results: list[ArtifactUploadBatchResult] = []
         for calc_id, group_items in groups.items():
@@ -1135,7 +1152,7 @@ class TCKDBClient:
                 )
 
             response = self.post_json(
-                f"/calculations/{calc_id}/artifacts",
+                f"/calculations/{group_ref[calc_id] or calc_id}/artifacts",
                 {"artifacts": artifact_payloads},
                 idempotency_key=idem,
             )
@@ -1145,6 +1162,7 @@ class TCKDBClient:
                     calculation_keys=tuple(calc_keys),
                     artifact_count=len(artifact_payloads),
                     response=response,
+                    calculation_ref=group_ref[calc_id],
                 )
             )
         return results
@@ -1175,7 +1193,7 @@ class TCKDBClient:
                 )
             results.append(
                 self.upload_artifact(
-                    calc_id,
+                    getattr(item, "calculation_ref", None) or calc_id,
                     item.path,
                     item.kind,
                     sha256=getattr(item, "sha256", None),

@@ -169,6 +169,11 @@ class UploadSubmissionContext:
     def submission_id(self) -> int:
         return self.submission.id
 
+    @property
+    def submission_ref(self) -> str:
+        """The ``sub_`` ref, minted when the row was flushed."""
+        return self.submission.public_ref
+
 
 def open_upload_submission(
     session: Session,

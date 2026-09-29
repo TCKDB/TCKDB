@@ -2089,6 +2089,17 @@
             "title": "Calculation Id",
             "type": "integer"
           },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          },
           "warnings": {
             "default": [],
             "items": {
@@ -9119,6 +9130,17 @@
             "title": "Calculation Id",
             "type": "integer"
           },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
+          },
           "request_index": {
             "anyOf": [
               {
@@ -9157,6 +9179,17 @@
           "calculation_id": {
             "title": "Calculation Id",
             "type": "integer"
+          },
+          "calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Ref"
           },
           "key": {
             "title": "Key",
@@ -10929,6 +10962,13 @@
             ],
             "title": "Atom Map Id"
           },
+          "calculation_key_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Calculation Key Refs",
+            "type": "object"
+          },
           "calculation_keys": {
             "additionalProperties": {
               "type": "integer"
@@ -10979,6 +11019,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "thermo_ids": {
             "items": {
@@ -11169,6 +11220,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "thermo": {
             "anyOf": [
@@ -13122,6 +13184,17 @@
             ],
             "title": "Submission Id"
           },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          },
           "type": {
             "default": "conformer_observation",
             "title": "Type",
@@ -13998,7 +14071,7 @@
       },
       "ContributionBundleSubmitResult": {
         "additionalProperties": false,
-        "description": "Top-level submit response.\n\nA successful HTTP 201 response carries this shape; dry-run blocking\nerrors surface as 422 with a structured detail payload, and unsupported\nbundle kinds surface as 422 from the bundle schema itself.\n\n:param submission_id: Hosted ``submission`` row id.\n:param status: Raw moderation-lifecycle status on the submission row\n    (``pending`` in v0; reserved so future statuses surface here without\n    a schema change).\n:param review_status: Human-readable trust state — always\n    ``unreviewed`` in v0.\n:param bundle_kind: Bundle family that was imported.\n:param summary: Counts derived from ``records``.\n:param records: Per-row report covering every imported and linked row.\n:param messages: Bundle-wide notes (dry-run warnings carried forward,\n    plus an ``ingestion_succeeded`` info entry).",
+        "description": "Top-level submit response.\n\nA successful HTTP 201 response carries this shape; dry-run blocking\nerrors surface as 422 with a structured detail payload, and unsupported\nbundle kinds surface as 422 from the bundle schema itself.\n\n:param submission_id: Hosted ``submission`` row id.\n:param submission_ref: The ``sub_`` ref of the same submission; name it\n    in later requests.\n:param status: Raw moderation-lifecycle status on the submission row\n    (``pending`` in v0; reserved so future statuses surface here without\n    a schema change).\n:param review_status: Human-readable trust state — always\n    ``unreviewed`` in v0.\n:param bundle_kind: Bundle family that was imported.\n:param summary: Counts derived from ``records``.\n:param records: Per-row report covering every imported and linked row.\n:param messages: Bundle-wide notes (dry-run warnings carried forward,\n    plus an ``ingestion_succeeded`` info entry).",
         "properties": {
           "bundle_kind": {
             "$ref": "#/components/schemas/BundleKind"
@@ -14027,6 +14100,17 @@
           "submission_id": {
             "title": "Submission Id",
             "type": "integer"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "summary": {
             "$ref": "#/components/schemas/ContributionBundleSubmitSummary"
@@ -18671,6 +18755,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           }
         },
         "required": [
@@ -21281,6 +21376,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "type": {
             "default": "kinetics",
@@ -26481,6 +26587,17 @@
             ],
             "title": "Submission Id"
           },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          },
           "type": {
             "default": "network_pdep",
             "title": "Type",
@@ -29421,6 +29538,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "type": {
             "default": "network",
@@ -32740,6 +32868,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "type": {
             "default": "reaction_entry",
@@ -43334,6 +43473,17 @@
             ],
             "title": "Submission Id"
           },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          },
           "type": {
             "default": "statmech",
             "title": "Type",
@@ -47411,6 +47561,17 @@
             ],
             "title": "Submission Id"
           },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
+          },
           "type": {
             "default": "thermo",
             "title": "Type",
@@ -48897,6 +49058,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "transition_state_id": {
             "title": "Transition State Id",
@@ -50526,6 +50698,17 @@
               }
             ],
             "title": "Submission Id"
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "type": {
             "default": "transport",
@@ -56537,12 +56720,14 @@
         "operationId": "upload_calculation_artifacts_api_v1_calculations__calculation_id__artifacts_post",
         "parameters": [
           {
+            "description": "The calculation, by its ``calc_`` ref (preferred; upload responses return it as ``calculation_ref``) or, for a deprecation window, by its integer id.",
             "in": "path",
             "name": "calculation_id",
             "required": true,
             "schema": {
+              "description": "The calculation, by its ``calc_`` ref (preferred; upload responses return it as ``calculation_ref``) or, for a deprecation window, by its integer id.",
               "title": "Calculation Id",
-              "type": "integer"
+              "type": "string"
             }
           },
           {
@@ -86110,12 +86295,14 @@
         "operationId": "create_rights_attestation_api_v1_submissions__submission_id__rights_attestations_post",
         "parameters": [
           {
+            "description": "The submission, by its ``sub_`` ref (preferred; every upload, job and bundle response returns it as ``submission_ref``) or, for a deprecation window, by its integer id.",
             "in": "path",
             "name": "submission_id",
             "required": true,
             "schema": {
+              "description": "The submission, by its ``sub_`` ref (preferred; every upload, job and bundle response returns it as ``submission_ref``) or, for a deprecation window, by its integer id.",
               "title": "Submission Id",
-              "type": "integer"
+              "type": "string"
             }
           },
           {
