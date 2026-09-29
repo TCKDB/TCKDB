@@ -1561,6 +1561,30 @@ _OPTIMIZED_FROM_PARENT_TYPES: frozenset[CalculationType] = frozenset(
 )
 
 
+def dependency_role_type_compatible(
+    parent_calc: Calculation,
+    role: CalculationDependencyRole,
+) -> bool:
+    """Say whether ``parent_calc``'s type is allowed as the parent of ``role``.
+
+    The predicate behind :func:`assert_dependency_role_type_compatible`, for
+    writers whose edge is inferred by the server rather than declared by the
+    depositor. Those skip a forbidden edge instead of refusing the upload.
+    """
+    # Use ``==`` rather than ``is`` so wire-enum role values from
+    # ``tckdb_schemas.enums`` (passed in via bundle workflows) compare
+    # equal to the backend DB enum member. Two mirrored enum classes
+    # share ``.value`` and ``__hash__`` but are distinct Python objects,
+    # so ``is`` silently returned False here and skipped the
+    # opt/path_search parent-type check for ``optimized_from`` edges.
+    if role == CalculationDependencyRole.optimized_from:
+        return parent_calc.type in _OPTIMIZED_FROM_PARENT_TYPES
+    expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
+    if expected is None:
+        return True
+    return parent_calc.type == expected
+
+
 def assert_dependency_role_type_compatible(
     parent_calc: Calculation,
     role: CalculationDependencyRole,
@@ -1576,28 +1600,18 @@ def assert_dependency_role_type_compatible(
     or ``path_search`` (TS-guess generator). Bundle workflows surface
     incompatibilities as 422 to mirror DR-0028 error semantics.
     """
-    # Use ``==`` rather than ``is`` so wire-enum role values from
-    # ``tckdb_schemas.enums`` (passed in via bundle workflows) compare
-    # equal to the backend DB enum member. Two mirrored enum classes
-    # share ``.value`` and ``__hash__`` but are distinct Python objects,
-    # so ``is`` silently returned False here and skipped the
-    # opt/path_search parent-type check for ``optimized_from`` edges.
+    if dependency_role_type_compatible(parent_calc, role):
+        return
     if role == CalculationDependencyRole.optimized_from:
-        if parent_calc.type not in _OPTIMIZED_FROM_PARENT_TYPES:
-            raise ValueError(
-                f"{context}: role='optimized_from' requires a parent of "
-                f"type 'opt' or 'path_search', got "
-                f"'{parent_calc.type.value}'."
-            )
-        return
-    expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
-    if expected is None:
-        return
-    if parent_calc.type != expected:
         raise ValueError(
-            f"{context}: role='{role.value}' is incompatible with the "
-            f"resolved parent calculation type."
+            f"{context}: role='optimized_from' requires a parent of "
+            f"type 'opt' or 'path_search', got "
+            f"'{parent_calc.type.value}'."
         )
+    raise ValueError(
+        f"{context}: role='{role.value}' is incompatible with the "
+        f"resolved parent calculation type."
+    )
 
 
 def add_dependency_edge_idempotent(
@@ -2017,8 +2031,14 @@ def persist_additional_calculations(
             context=upload_label,
         )
 
+        # These edges are inferred by the server, not declared by the
+        # depositor, so one DR-0028 forbids (e.g. ``single_point_on`` under
+        # a primary that is not an ``opt``) is skipped, not refused: the
+        # calculation is still stored and anchored to the observation.
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
-        if dep_role is not None:
+        if dep_role is not None and dependency_role_type_compatible(
+            primary_calc, dep_role
+        ):
             session.add(
                 CalculationDependency(
                     parent_calculation_id=primary_calc.id,
@@ -2031,7 +2051,9 @@ def persist_additional_calculations(
         # primary opt is ``optimized_from`` the path search rather than the
         # other way around.
         inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
-        if inverted_role is not None:
+        if inverted_role is not None and dependency_role_type_compatible(
+            child_calc, inverted_role
+        ):
             session.add(
                 CalculationDependency(
                     parent_calculation_id=child_calc.id,

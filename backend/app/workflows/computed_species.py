@@ -77,6 +77,7 @@ from app.services.calculation_resolution import (
     _INVERTED_DEPENDENCY_ROLE_FOR_TYPE,
     add_dependency_edge_idempotent,
     assert_dependency_role_type_compatible,
+    dependency_role_type_compatible,
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
     collect_converged_opt_energy_warnings,
@@ -457,7 +458,9 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
-            if dep_role is not None:
+            if dep_role is not None and dependency_role_type_compatible(
+                primary_calc, dep_role
+            ):
                 add_dependency_edge_idempotent(
                     session,
                     parent_calculation_id=primary_calc.id,
@@ -474,7 +477,9 @@ def persist_computed_species_upload(
             inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(
                 additional_in.type
             )
-            if inverted_role is not None:
+            if inverted_role is not None and dependency_role_type_compatible(
+                child_calc, inverted_role
+            ):
                 add_dependency_edge_idempotent(
                     session,
                     parent_calculation_id=child_calc.id,
