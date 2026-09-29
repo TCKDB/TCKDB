@@ -976,3 +976,36 @@ class TestTransitionStateReversibleDefault:
         assert resp.status_code == 201, resp.text
         entry = db_session.get(ReactionEntry, resp.json()["reaction_entry_id"])
         assert db_session.get(ChemReaction, entry.reaction_id).reversible is False
+
+    def test_omitted_does_not_join_a_stored_irreversible_twin(
+        self, client, db_session
+    ):
+        """Pins existing identity behaviour; it is not a fix.
+
+        ``reversible`` is part of the reaction identity hash, so a stored
+        ``reversible=false`` reaction and a TS upload that omits the field
+        (meaning ``true``) are different ``chem_reaction`` rows over the
+        same participants, and nothing warns about the twin. An explicit
+        ``true`` behaved the same before the default existed.
+        """
+        from app.db.models.reaction import ChemReaction, ReactionEntry
+
+        payload = _transition_state_payload(label="ts-twin")
+        irreversible = {
+            "reversible": False,
+            "reactants": payload["reaction"]["reactants"],
+            "products": payload["reaction"]["products"],
+        }
+        stored = client.post("/api/v1/uploads/reactions", json=irreversible)
+        assert stored.status_code == 201, stored.text
+        del payload["reaction"]["reversible"]
+        ts = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert ts.status_code == 201, ts.text
+        # /uploads/reactions names the reaction_entry ``id``; the TS route
+        # names it ``reaction_entry_id``.
+        stored_entry = db_session.get(ReactionEntry, stored.json()["id"])
+        stored_rxn = stored_entry.reaction_id
+        ts_rxn = _chem_reaction_id(db_session, ts)
+        assert stored_rxn != ts_rxn
+        assert db_session.get(ChemReaction, stored_rxn).reversible is False
+        assert db_session.get(ChemReaction, ts_rxn).reversible is True
