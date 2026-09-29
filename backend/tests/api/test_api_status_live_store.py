@@ -39,7 +39,10 @@ from urllib.parse import urlsplit
 import boto3
 import pytest
 from botocore import UNSIGNED
+from botocore.auth import S3SigV4Auth
+from botocore.awsrequest import AWSRequest
 from botocore.config import Config as BotoConfig
+from botocore.credentials import Credentials
 from botocore.exceptions import ClientError
 from sqlalchemy.orm import sessionmaker
 
@@ -284,13 +287,11 @@ def test_the_seaweedfs_quota_endpoints_answer_signed_reads_in_the_measured_shape
     """Pins both quota reads against the image CI pins (#545).
 
     ``report_quota`` classifies an enforced quota from two signed S3 reads.
-    The bucket here has no quota (an enforced one needs the admin shell, which
-    a test cannot reach), so this pins the parts an image bump could change:
-    both endpoints answer a signed request in exactly the shape the parser
-    accepts, both refuse an unsigned one, and the parser reads "no quota" as
-    no opinion rather than as room. The enforced-quota bodies are pinned by the
-    recordings in ``tests/fixtures/seaweedfs_4_47/``, captured from the same
-    digest.
+    This one reads the configured (shared) bucket, which has no quota unless
+    someone set one: both endpoints answer a signed request in exactly the
+    shape the parser accepts, both refuse an unsigned one, and the parser reads
+    "no quota" as no opinion rather than as room. The enabled shapes are pinned
+    live by the next test, on a bucket of its own.
     """
     bucket = artifact_storage.S3_BUCKET
     credentials = {
@@ -320,3 +321,78 @@ def test_the_seaweedfs_quota_endpoints_answer_signed_reads_in_the_measured_shape
 
     for url in (quota_url, capacity_url):
         assert _status_of("GET", url) == 403, url
+
+
+def _signed_put(url: str, body: bytes) -> int:
+    """A body-carrying signed request (``S3SigV4Auth`` adds the payload hash
+    header SeaweedFS insists on; the plain ``SigV4Auth`` answers
+    ``SignatureDoesNotMatch``)."""
+    request = AWSRequest(method="PUT", url=url, data=body)
+    S3SigV4Auth(
+        Credentials(artifact_storage.S3_ACCESS_KEY, artifact_storage.S3_SECRET_KEY),
+        "s3",
+        artifact_storage.S3_REGION,
+    ).add_auth(request)
+    prepared = urllib.request.Request(
+        url, data=body, headers=dict(request.headers.items()), method="PUT"
+    )
+    try:
+        with urllib.request.urlopen(prepared, timeout=5) as response:
+            return response.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def test_an_enabled_seaweedfs_quota_reads_in_the_measured_shape(seaweedfs_master) -> None:
+    """The enabled shapes, live, on a bucket of this test's own (#545).
+
+    A signed ``PUT /{bucket}?seaweedfs-quota`` sets a quota with the same
+    credentials (204, measured on 4.47), so the enabled answers can be pinned
+    against the image CI pins. It is a bucket of its own because 4.47 enforces
+    quotas on a 60 s sweep, and a quota on the shared bucket could turn it
+    read-only under the other tests. The quota is removed and the bucket
+    deleted afterwards.
+    """
+    client = artifact_storage._get_s3_client()
+    bucket = f"tckdb-quota-probe-{uuid.uuid4().hex[:12]}"
+    quota_bytes = 8 * 1024 * 1024
+    credentials = {
+        "access_key": artifact_storage.S3_ACCESS_KEY,
+        "secret_key": artifact_storage.S3_SECRET_KEY,
+        "region": artifact_storage.S3_REGION,
+    }
+    url = _s3_url(f"/{bucket}?seaweedfs-quota")
+    client.create_bucket(Bucket=bucket)
+    try:
+        enabled = json.dumps(
+            {"quota_size": quota_bytes, "quota_unit": "B", "quota_enabled": True}
+        ).encode()
+        assert _signed_put(url, enabled) == 204
+
+        quota_body = artifact_storage_seaweedfs._get_signed(url, 5, **credentials)
+        capacity_body = artifact_storage_seaweedfs._get_signed(
+            _s3_url(f"/{bucket}/{artifact_storage_seaweedfs._CAPACITY_KEY}"), 5, **credentials
+        )
+        assert json.loads(quota_body) == {
+            "quota_size": quota_bytes,
+            "quota_unit": "B",
+            "quota_enabled": True,
+        }
+        assert artifact_storage_seaweedfs._CAPACITY_XML.match(capacity_body.decode()), capacity_body
+        parsed = artifact_storage_seaweedfs.parse_quota_answers(quota_body, capacity_body)
+        assert parsed is not None
+        assert parsed.quota_bytes == quota_bytes
+        assert parsed.available_bytes == quota_bytes and parsed.used_bytes == 0
+
+        reported = artifact_storage_seaweedfs.report_quota(
+            endpoint_url=artifact_storage.S3_ENDPOINT_URL, bucket=bucket, **credentials
+        )
+        assert reported == parsed
+        # Room under the quota explains no refusal.
+        assert not artifact_storage_seaweedfs.refusal_is_over_quota(reported, 1024)
+    finally:
+        _signed_put(
+            url,
+            json.dumps({"quota_size": 0, "quota_unit": "B", "quota_enabled": False}).encode(),
+        )
+        client.delete_bucket(Bucket=bucket)

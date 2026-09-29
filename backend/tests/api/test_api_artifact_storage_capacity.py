@@ -921,7 +921,10 @@ def test_an_internal_error_on_a_seaweedfs_with_no_room_is_full(
 
     assert refused.full is True
     assert refused.s3_code == "InternalError"
-    assert asked == [{"master_url": _MASTER, "bucket": artifact_storage.S3_BUCKET}]
+    assert [{k: v for k, v in call.items() if k != "deadline"} for call in asked] == [
+        {"master_url": _MASTER, "bucket": "b"}
+    ]
+    assert 0 < asked[0]["deadline"] <= artifact_storage._PROBE_BUDGET_SECONDS
 
     observation = _outstanding(capacity_db)
     assert observation is not None
@@ -992,8 +995,7 @@ def test_access_denied_earns_no_capacity_opinion(
     capacity_db, seaweed_answers
 ) -> None:
     """``AccessDenied`` is not what a full disk or exhausted slots answer, so
-    the master is not asked about room; only the quota read (below) applies,
-    and with no opinion from it the refusal stays a credentials problem."""
+    the master is not asked about room."""
     asked = seaweed_answers(_SLOTS_EXHAUSTED)
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
         artifact_storage.store_artifact(
@@ -1058,22 +1060,23 @@ def _refused(capacity_db, *, code="InternalError", status=500):
     return caught.value
 
 
-@pytest.mark.parametrize("code, status", [("InternalError", 500), ("AccessDenied", 403)])
 def test_a_refusal_on_an_exhausted_seaweedfs_quota_is_full_and_a_quota(
-    capacity_db, quota_answers, code, status
+    capacity_db, quota_answers
 ) -> None:
+    code = "InternalError"
     asked = quota_answers(_QUOTA_EXHAUSTED)
-    refused = _refused(capacity_db, code=code, status=status)
+    refused = _refused(capacity_db, code=code, status=500)
 
     assert refused.full is True
     assert refused.s3_code == seaweedfs.QUOTA_EXCEEDED_CODE
-    assert asked == [
+    assert [{k: v for k, v in call.items() if k != "deadline"} for call in asked] == [
         {
             "endpoint_url": artifact_storage.S3_ENDPOINT_URL,
             "access_key": artifact_storage.S3_ACCESS_KEY,
             "secret_key": artifact_storage.S3_SECRET_KEY,
             "region": artifact_storage.S3_REGION,
-            "bucket": artifact_storage.S3_BUCKET,
+            # The bucket that refused (_refused writes to "b"), not S3_BUCKET.
+            "bucket": "b",
         }
     ]
 
@@ -1093,6 +1096,10 @@ def test_a_refusal_on_an_exhausted_seaweedfs_quota_is_full_and_a_quota(
     # What the store actually said stays on the row.
     assert code in detail, detail
     assert "20971520-byte bucket quota with 0 bytes available" in detail, detail
+    # The row says what the rule is: gross numbers, and that un-vacuumed
+    # deletions can make a bucket near its quota read as full.
+    assert "31457840 used, by gross volume size" in detail, detail
+    assert "Approximation" in detail and "vacuum" in detail, detail
 
 
 def test_a_quota_refusal_is_not_cleared_by_free_space_on_status(
@@ -1152,16 +1159,58 @@ def test_a_full_disk_is_named_before_a_quota_is_asked(capacity_db, quota_answers
     assert asked == []
 
 
-def test_access_denied_with_no_quota_opinion_stays_a_credentials_problem(
-    capacity_db, quota_answers
-) -> None:
-    """The signed quota read fails with the same bad credentials, so a 403 is
-    never called a quota on its own."""
-    asked = quota_answers(None)
+def test_access_denied_is_never_a_quota(capacity_db, quota_answers) -> None:
+    """On SeaweedFS a write ``AccessDenied`` is a bucket policy, with valid
+    credentials that read the quota fine. Measured: a ``Deny s3:PutObject``
+    policy on a bucket with room under its quota was recorded as a quota,
+    a refusal free space never clears. The quota is not even read."""
+    asked = quota_answers(_QUOTA_EXHAUSTED)
     refused = _refused(capacity_db, code="AccessDenied", status=403)
-    assert len(asked) == 1
+    assert asked == []
     assert refused.full is False
     assert refused.s3_code == "AccessDenied"
+    assert _outstanding(capacity_db) is None
+
+
+def test_the_room_and_quota_probes_share_one_budget(
+    capacity_db, monkeypatch, seaweed_answers
+) -> None:
+    """They run one after the other, so each is handed what is left of one
+    budget: the worst case is the budget, not two of them."""
+    import time
+
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _MASTER)
+    deadlines: dict[str, float] = {}
+
+    def _slow_room(**kwargs):
+        deadlines["room"] = kwargs["deadline"]
+        time.sleep(1.0)
+        return _ROOMY
+
+    def _quota(**kwargs):
+        deadlines["quota"] = kwargs["deadline"]
+        return None
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _slow_room)
+    monkeypatch.setattr(seaweedfs, "report_quota", _quota)
+    _refused(capacity_db)
+
+    budget = artifact_storage._PROBE_BUDGET_SECONDS
+    assert budget <= 4.0
+    assert deadlines["room"] <= budget
+    assert deadlines["quota"] <= budget - 1.0 + 0.05, deadlines
+
+
+def test_a_spent_budget_asks_the_quota_nothing(capacity_db, monkeypatch) -> None:
+    monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", _MASTER)
+    monkeypatch.setattr(artifact_storage, "_PROBE_BUDGET_SECONDS", 0.0)
+
+    def _must_not_be_called(**_kwargs):
+        raise AssertionError("probed with no budget left")
+
+    monkeypatch.setattr(seaweedfs, "report_capacity", _must_not_be_called)
+    monkeypatch.setattr(seaweedfs, "report_quota", _must_not_be_called)
+    assert _refused(capacity_db).full is False
 
 
 def test_other_codes_are_not_asked_about_a_quota(capacity_db, quota_answers) -> None:
@@ -1177,7 +1226,6 @@ def test_the_quota_is_not_read_without_the_seaweedfs_setting(capacity_db, monkey
 
     monkeypatch.setattr(seaweedfs, "report_quota", _must_not_be_called)
     assert _refused(capacity_db).full is False
-    assert _refused(capacity_db, code="AccessDenied", status=403).full is False
 
 
 def test_a_seaweedfs_quota_reaches_the_depositor_as_507(

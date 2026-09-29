@@ -595,3 +595,85 @@ def test_a_dripping_server_cannot_hold_the_quota_probe_past_its_deadline() -> No
         server.server_close()
     assert answer is None
     assert elapsed < 2.5, elapsed
+
+
+# ---------------------------------------------------------------------------
+# Bounded bodies, bounded threads (re-review of #594)
+# ---------------------------------------------------------------------------
+
+
+class _Big(BaseHTTPRequestHandler):
+    """A 100 KiB body, more than any quota answer, sent promptly."""
+
+    def do_GET(self):
+        body = b"x" * (100 * 1024)
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):
+        pass
+
+
+def _serve_forever(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def test_an_answer_over_64_kib_is_refused_not_read() -> None:
+    """Without the cap a store could make TCKDB buffer whatever it likes."""
+    server, base = _serve_forever(_Big)
+    try:
+        with pytest.raises(ValueError, match="larger"):
+            seaweedfs._get_signed(f"{base}/{BUCKET}?seaweedfs-quota", 2.0, **CREDENTIALS)
+        assert seaweedfs.report_quota(endpoint_url=base, bucket=BUCKET, **CREDENTIALS) is None
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_body_that_drips_ends_its_probe_thread_at_the_read_budget(monkeypatch) -> None:
+    """The caller stops waiting at the deadline, but an abandoned thread used
+    to live as long as the body did (64 KiB at a byte per 1.9 s is ~34 h)."""
+    monkeypatch.setattr(seaweedfs, "_READ_BUDGET_SECONDS", 1.0)
+    server, base = _serve_forever(_Drip)
+    try:
+        assert (
+            seaweedfs.report_quota(
+                endpoint_url=base, bucket=BUCKET, timeout=1.0, deadline=1.5, **CREDENTIALS
+            )
+            is None
+        )
+        gone_by = time.monotonic() + 6.0
+        while time.monotonic() < gone_by and any(
+            t.name == "seaweedfs-quota-probe" for t in threading.enumerate()
+        ):
+            time.sleep(0.1)
+        assert not any(t.name == "seaweedfs-quota-probe" for t in threading.enumerate())
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_probe_threads_are_capped_and_a_full_cap_is_no_opinion(monkeypatch) -> None:
+    calls = _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(0))
+    assert _report() is None
+    assert seaweedfs.report_capacity(master_url="http://seaweedfs:9333", bucket=BUCKET) is None
+    assert calls == [], "a request was made with no probe slot free"
+
+
+def test_every_probe_gives_its_slot_back(monkeypatch) -> None:
+    """More probes than slots, each finishing: none may leak a slot."""
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    for _ in range(3 * seaweedfs._MAX_PROBE_THREADS):
+        assert _report() is not None
+    failing = _quota_answers("quota_enforced")
+    failing[f"{ENDPOINT}/{BUCKET}?seaweedfs-quota"] = RuntimeError("boom")
+    _serve_quota(monkeypatch, failing)
+    for _ in range(3 * seaweedfs._MAX_PROBE_THREADS):
+        assert _report() is None
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    assert _report() is not None

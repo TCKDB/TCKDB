@@ -237,9 +237,10 @@ Measured on 4.47 (the pinned image, `weed mini`, the compose lockdown), with a
   a 0-byte `PutObject` and `CreateMultipartUpload`, with HTTP 500, `Code:
   InternalError`, `Message: We encountered an internal error, please try
   again.` and no quota-specific header. Reads and deletes still work. That is
-  4.47's wire behaviour; upstream maps a read-only bucket to `AccessDenied`
-  (403), so a later image may answer that instead, and TCKDB asks the same
-  question for either code.
+  4.47's wire behaviour; it never answers a quota with 403. Upstream maps a
+  read-only bucket to `AccessDenied`, so a later image might, and the quota
+  probe should then be revisited (see below for why `AccessDenied` is not a
+  trigger today).
 - 4.47 enforces quotas on a 60 s sweep of its own. Nobody has to run
   `s3.bucket.quota.enforce`: write past a quota and the writes start failing
   about a minute later, and raising the quota clears it within about a minute.
@@ -252,21 +253,48 @@ Measured on 4.47 (the pinned image, `weed mini`, the compose lockdown), with a
   `GET /<bucket>/.system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml`
   returns `<Capacity>20971520</Capacity><Available>0</Available><Used>31457840</Used>`.
 
-So when `S3_SEAWEEDFS_MASTER_URL` is set, an `InternalError` or `AccessDenied`
-write refusal that the room check did not explain is followed by those two
-signed reads (same 2 s per request, 4 s overall bound, no opinion on any
-failure, nothing written). If the quota is enabled and `Available` is below the
-refused size, the refusal is classified full exactly as a MinIO quota is: the
-upload gets 507, `/status` goes degraded with S3 code
-`SeaweedFSBucketQuotaExceeded`, and **free space cannot clear it** (only a
-successful write of at least the refused size, or an operator clear, can). The
-row's detail keeps the store's own code. Two caveats: `Used` is the gross
-volume size while the enforcer compares logical size, so `Available` can read 0
-for up to about 60 s after a deletion or a raised quota while the bucket is
-already writable (this can only mislabel a refusal that has another cause in
-that window); and a `403` on the signed read itself means bad credentials, which
-is never called a quota. To check on the host: `weed shell`, `s3.bucket.list`
-(each bucket line shows `quota:` and `usage:`). To lift it: raise it with
+So when `S3_SEAWEEDFS_MASTER_URL` is set, an `InternalError` write refusal that
+the room check did not explain is followed by those two signed reads (2 s per
+request, nothing written, no opinion on any failure). The room check and the
+quota reads share one 4 s budget, so a refusal waits at most 4 s in total. If
+the quota is enabled and `Available` is below the refused size, the refusal is
+classified full exactly as a MinIO quota is: the upload gets 507, `/status`
+goes degraded with S3 code `SeaweedFSBucketQuotaExceeded`, and **free space
+cannot clear it** (only a successful write of at least the refused size, or an
+operator clear, can; a copy refusal whose size could not be measured can only
+be cleared by an operator). The row's detail keeps the store's own code.
+
+Three limits, all deliberate:
+
+- **This is an approximation.** `Available` is the quota less the *gross*
+  volume size, while the enforcer compares the *logical* size. Deleted objects
+  keep their bytes until the volume is vacuumed, and `weed mini` never vacuums
+  a volume under 30 % garbage, so a bucket near its quota after deletions can
+  read `Available 0` for as long as that lasts, not for a minute: measured over
+  five minutes with 1 MiB writes succeeding throughout (logical 38.3 MB,
+  gross 46.2 MB, quota 41.9 MB). Any real `InternalError` in that band is
+  recorded as a quota. It never *misses* a real quota refusal, because gross is
+  never smaller than logical. Nothing cheap over S3 separates the two (the
+  logical size is a sum over a listing of every object), so the recorded detail
+  states the gross numbers and this caveat instead. If it names a quota while
+  uploads of that size work, compare `s3.bucket.list` (logical size) with the
+  quota and vacuum before raising it.
+- **`AccessDenied` is not a trigger.** On SeaweedFS it is never a
+  bad-credentials answer (a wrong secret is `SignatureDoesNotMatch`, an unknown
+  key `InvalidAccessKeyId`); a write `AccessDenied` is a bucket policy, and the
+  same credentials read the quota fine, so it would record a policy denial as a
+  quota. Measured: a `Deny s3:PutObject` policy on a bucket with room under its
+  quota was recorded full. Revisit if a pinned image starts answering 403 for a
+  quota.
+- **Abandoned probes are bounded.** A probe that runs past its budget is
+  abandoned, not killed. Each response body is read against a time budget, so
+  its thread ends within about 12 s (two reads, each bounded), and at most 4 probe threads exist at once
+  in a process: with none free a probe is no opinion without a request. What
+  the cap bounds is a server that withholds even the response headers a byte at
+  a time.
+
+To check on the host: `weed shell`, `s3.bucket.list` (each bucket line shows
+`quota:` and `usage:`). To lift it: raise it with
 `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` (or `-op=remove`);
 no `lock` or `enforce` is needed.
 

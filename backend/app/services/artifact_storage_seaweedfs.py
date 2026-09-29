@@ -107,20 +107,42 @@ quota, 30 MiB used and writes refused:
   cluster's capacity instead, which is why the two answers are cross-checked
   (``Capacity`` must equal the quota) and anything else is no opinion.
 
-Two facts about the numbers. ``Used`` is the gross volume size, while the
-enforcer compares the *logical* size, so ``Available`` can read 0 for up to
-about 60 s after a deletion or a raised quota while the bucket is already
-writable again. That can only mislabel a refusal that has some other cause in
-that window, and never misses a real quota refusal, because gross is never
-smaller than logical. And 4.47 enforces on a 60 s sweep of its own, with
-nobody running ``s3.bucket.quota.enforce``: a quota set and written past
-starts refusing about a minute later, and raising it clears within about a
-minute.
+Two facts about the numbers, and the second is a chosen approximation.
 
-The wire code is a 4.47 fact. Upstream maps a read-only bucket to
-``AccessDenied``/403 and the ``InternalError``/500 is the error arriving
-flattened from the volume assign; the write path therefore asks this question
-for either code (see :func:`report_quota`).
+``Used`` is the gross volume size, while the enforcer compares the *logical*
+size, so ``Available`` can read 0 while the bucket is still writable. The
+window is **not** about 60 s: deleted objects keep their bytes in the volume
+until it is vacuumed, and ``weed mini`` does not vacuum a volume under 30 %
+garbage. Measured by the reviewer of #594: over five minutes of
+``Available 0`` while 1 MiB writes succeeded (logical 38.3 MB, gross 46.2 MB,
+quota 41.9 MB). So a bucket that is near its quota by gross size after
+deletions can read as full for as long as that lasts, and any real
+``InternalError`` in that band is recorded as a quota refusal. The other
+half is exact: gross is never smaller than logical, so a real quota refusal
+is never missed.
+
+**The rule is kept as an explicit approximation, not tightened.** Nothing
+available over S3 with TCKDB's credentials separates the two numbers cheaply:
+the logical size is only the sum over a listing of every object, which is
+unbounded on a bucket that can hold millions of artifacts and would run inside
+a failing upload. The recorded ``detail`` therefore states the gross numbers
+and this caveat (see ``artifact_storage._store_reports_quota_exceeded``), so an
+operator reading the row is told what it is and what to check: vacuum, or
+``s3.bucket.list`` for the logical size. A refusal whose size is unknown (a
+copy whose source could not be measured) is cleared only by an operator.
+
+4.47 also enforces on a 60 s sweep of its own, with nobody running
+``s3.bucket.quota.enforce``: a quota set and written past starts refusing about
+a minute later, and raising it clears within about a minute.
+
+``AccessDenied`` is deliberately **not** a trigger. On SeaweedFS it is never a
+bad-credentials answer (a wrong secret is ``SignatureDoesNotMatch``, an unknown
+key ``InvalidAccessKeyId``); a write ``AccessDenied`` comes from a bucket
+policy, with credentials that read the quota perfectly well, so asking would
+record a policy denial as a quota (measured: a ``Deny s3:PutObject`` policy on
+a bucket with room was recorded full). 4.47 answers an enforced quota with
+``InternalError``/500, never 403. Upstream maps a read-only bucket to 403, so
+revisit this if a pinned image starts answering 403 for a quota.
 
 Addresses
 ---------
@@ -140,6 +162,7 @@ import json
 import logging
 import re
 import threading
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -331,32 +354,92 @@ def capacity_from_status(
     )
 
 
+#: Most a status page or quota answer may weigh; a store answering with more
+#: is not the one measured.
+_MAX_PAGE_BYTES = 1024 * 1024
+
+#: The most time one GET may spend receiving its body. A socket timeout bounds
+#: each *read*, so a server dripping a byte inside it could keep a probe
+#: thread alive for as long as the body is long (a 64 KiB body at one byte per
+#: 1.9 s is about 34 hours). The body is therefore read in chunks against this
+#: budget, and a probe thread ends within it (plus one socket timeout).
+_READ_BUDGET_SECONDS = _DEADLINE_SECONDS
+
+#: Probe threads that may be alive at once, in the whole process. A probe the
+#: caller has stopped waiting for is abandoned, not killed, so the count of
+#: abandoned ones is capped: at the limit a new probe is *no opinion* without
+#: a request. Each refusal starts at most two, and they end within
+#: :data:`_READ_BUDGET_SECONDS` unless the server withholds even the response
+#: headers a byte at a time, which is what this cap bounds.
+_MAX_PROBE_THREADS = 4
+_PROBE_SLOTS = threading.BoundedSemaphore(_MAX_PROBE_THREADS)
+
+
+def _read_bounded(response, limit_bytes: int) -> bytes:
+    """The whole body, or ``ValueError``: too large, or too slow to arrive."""
+    ends = time.monotonic() + _READ_BUDGET_SECONDS
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = response.read1(8192)
+        if not chunk:
+            return b"".join(chunks)
+        total += len(chunk)
+        if total > limit_bytes:
+            raise ValueError("answer larger than any SeaweedFS status answer")
+        chunks.append(chunk)
+        if time.monotonic() > ends:
+            raise ValueError("answer arrived too slowly")
+
+
 def _get(url: str, timeout: float) -> bytes:
     with urllib.request.urlopen(urllib.request.Request(url, method="GET"), timeout=timeout) as response:
-        return response.read()
+        return _read_bounded(response, _MAX_PAGE_BYTES)
+
+
+def _run_within_deadline(work, name: str, deadline: float):
+    """``work()`` on a daemon thread; ``TimeoutError`` if not done by ``deadline``.
+
+    The thread holds one of :data:`_MAX_PROBE_THREADS` slots until it ends.
+    No slot free means too many abandoned probes: ``RuntimeError``, which the
+    callers turn into no opinion.
+    """
+    if not _PROBE_SLOTS.acquire(blocking=False):
+        raise RuntimeError("too many SeaweedFS probes still in flight")
+    outcome: dict[str, object] = {}
+
+    def _fetch() -> None:
+        try:
+            outcome["value"] = work()
+        except Exception as exc:  # handed to the caller, which absorbs it
+            outcome["error"] = exc
+        finally:
+            _PROBE_SLOTS.release()
+
+    try:
+        worker = threading.Thread(target=_fetch, name=name, daemon=True)
+        worker.start()
+    except BaseException:
+        _PROBE_SLOTS.release()
+        raise
+    worker.join(deadline)
+    if worker.is_alive():
+        raise TimeoutError(f"no complete answer within {deadline}s")
+    if "error" in outcome:
+        raise outcome["error"]  # type: ignore[misc]
+    return outcome["value"]
 
 
 def _fetch_within_deadline(
     master_url: str, volume_url: str, timeout: float, deadline: float
 ) -> tuple[str, object]:
     """Both answers, or an exception; the caller stops waiting at ``deadline``."""
-    outcome: dict[str, object] = {}
 
-    def _fetch() -> None:
-        try:
-            page = _get(master_url.rstrip("/") + "/", timeout).decode("utf-8", "replace")
-            outcome["value"] = (page, json.loads(_get(volume_url, timeout)))
-        except Exception as exc:  # handed to the caller, which absorbs it
-            outcome["error"] = exc
+    def _work() -> tuple[str, object]:
+        page = _get(master_url.rstrip("/") + "/", timeout).decode("utf-8", "replace")
+        return page, json.loads(_get(volume_url, timeout))
 
-    worker = threading.Thread(target=_fetch, name="seaweedfs-capacity-probe", daemon=True)
-    worker.start()
-    worker.join(deadline)
-    if worker.is_alive():
-        raise TimeoutError(f"no complete answer within {deadline}s")
-    if "error" in outcome:
-        raise outcome["error"]  # type: ignore[misc]
-    return outcome["value"]  # type: ignore[return-value]
+    return _run_within_deadline(_work, "seaweedfs-capacity-probe", deadline)  # type: ignore[return-value]
 
 
 def report_capacity(
@@ -473,10 +556,7 @@ def _get_signed(url: str, timeout: float, *, access_key: str, secret_key: str, r
     SigV4Auth(Credentials(access_key, secret_key), "s3", region).add_auth(request)
     prepared = urllib.request.Request(url, headers=dict(request.headers.items()), method="GET")
     with urllib.request.urlopen(prepared, timeout=timeout) as response:
-        body = response.read(_MAX_BODY_BYTES + 1)
-    if len(body) > _MAX_BODY_BYTES:
-        raise ValueError("answer larger than any SeaweedFS quota answer")
-    return body
+        return _read_bounded(response, _MAX_BODY_BYTES)
 
 
 def _quota_fetch_within_deadline(
@@ -486,25 +566,14 @@ def _quota_fetch_within_deadline(
     deadline: float,
     credentials: dict[str, str],
 ) -> tuple[bytes, bytes]:
-    outcome: dict[str, object] = {}
     base = endpoint_url.rstrip("/") + "/" + quote(bucket, safe="")
 
-    def _fetch() -> None:
-        try:
-            quota = _get_signed(base + "?seaweedfs-quota", timeout, **credentials)
-            capacity = _get_signed(base + "/" + _CAPACITY_KEY, timeout, **credentials)
-            outcome["value"] = (quota, capacity)
-        except Exception as exc:  # handed to the caller, which absorbs it
-            outcome["error"] = exc
+    def _work() -> tuple[bytes, bytes]:
+        quota = _get_signed(base + "?seaweedfs-quota", timeout, **credentials)
+        capacity = _get_signed(base + "/" + _CAPACITY_KEY, timeout, **credentials)
+        return quota, capacity
 
-    worker = threading.Thread(target=_fetch, name="seaweedfs-quota-probe", daemon=True)
-    worker.start()
-    worker.join(deadline)
-    if worker.is_alive():
-        raise TimeoutError(f"no complete answer within {deadline}s")
-    if "error" in outcome:
-        raise outcome["error"]  # type: ignore[misc]
-    return outcome["value"]  # type: ignore[return-value]
+    return _run_within_deadline(_work, "seaweedfs-quota-probe", deadline)  # type: ignore[return-value]
 
 
 def report_quota(
@@ -521,11 +590,11 @@ def report_quota(
 
     Reads only (two ``GET``s), with the credentials TCKDB already writes
     with, so it opens no new access and mutates nothing. ``None`` means *no
-    opinion*: an unset endpoint or credential, any failure (a 403 included:
-    if the credentials are bad, the refusal that prompted this is theirs and
-    not a quota), a quota that is not enabled, or an answer that is not the
-    shape measured against 4.47. The same 2 s per socket operation and 4 s
-    overall deadline as :func:`report_capacity`.
+    opinion*: an unset endpoint or credential, any failure (including a 403),
+    a quota that is not enabled, or an answer that is not the shape measured
+    against 4.47. The same 2 s per socket operation and overall ``deadline``
+    as :func:`report_capacity`; a caller running both shares one budget by
+    passing each what is left of it.
     """
     try:
         if not (endpoint_url and access_key and secret_key and region and bucket):
