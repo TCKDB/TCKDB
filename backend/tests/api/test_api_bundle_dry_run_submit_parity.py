@@ -237,6 +237,25 @@ REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
         422,
         "validation_error",
     ),
+    # app/services/reaction_resolution.py validate_reaction_elemental_balance,
+    # reached through persist_reaction_upload: H + H -> H2O. The preview
+    # resolves each species on its own and never compares the two sides.
+    "kinetics_reaction_mass_imbalance": (
+        lambda _s: _kinetics(
+            reaction={
+                "reversible": False,
+                "reactants": [
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+                    {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+                ],
+                "products": [
+                    {"species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1}}
+                ],
+            }
+        ),
+        422,
+        "reaction_mass_balance_failed",
+    ),
     # app/workflows/kinetics.py _find_sp_for_species: an energy level
     # whose single points were never deposited. A bare ValueError, so
     # submit answers with the generic code -- and the dry run must too.
