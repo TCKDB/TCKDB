@@ -145,6 +145,7 @@ def persist_conformer_upload(
     )
 
     additional_calcs = []
+    edge_warnings: list[UploadWarning] = []
     if request.additional_calculations:
         additional_calcs = persist_additional_calculations(
             session,
@@ -153,6 +154,7 @@ def persist_conformer_upload(
             geometry_id=geometry.id,
             species_entry_id=species_entry.id,
             created_by=created_by,
+            warnings=edge_warnings,
         )
 
     # Parse XYZ for torsion fingerprinting
@@ -333,6 +335,7 @@ def persist_conformer_upload(
             )
         )
     energy_warnings.extend(provenance_warnings)
+    energy_warnings.extend(edge_warnings)
 
     return ConformerUploadOutcome(
         observation=observation,

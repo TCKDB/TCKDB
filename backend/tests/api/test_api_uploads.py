@@ -221,7 +221,10 @@ class TestMinimumImaginaryModeBlocks:
         payload["additional_calculations"] = [_freq_calc(n_imag=0)]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 201, resp.text
-        assert resp.json()["warnings"] == []
+        # The base payload's primary is an ``sp``, so the freq's automatic
+        # link is skipped and disclosed; that is the only warning expected.
+        codes = [w["code"] for w in resp.json()["warnings"]]
+        assert codes == ["dependency_edge_not_inferred"]
 
     def test_no_frequency_evidence_is_unaffected(self, client):
         """Absence is not contradiction — the base payload has no freq data."""
