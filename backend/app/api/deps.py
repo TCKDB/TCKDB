@@ -61,7 +61,7 @@ def authenticate_api_key(session: Session, raw_key: str) -> AppUser | None:
     )
 
 
-def _install_statement_timeout_listener(target_engine) -> None:
+def _install_statement_timeout_listener(target_engine, *, persist: bool = False) -> None:
     """Apply ``settings.db_statement_timeout_ms`` on every new DBAPI connection.
 
     Registered as a ``connect`` event so the timeout follows pooled
@@ -75,6 +75,14 @@ def _install_statement_timeout_listener(target_engine) -> None:
     level listener is a belt-and-braces safety net, not the
     authoritative configuration. See F13 in
     ``docs/specs/public_read_abuse_controls.md``.
+
+    ``persist=True`` commits the ``SET`` so it survives the pool's
+    rollback-on-return. Without it the ``SET`` sits in the implicit
+    transaction psycopg opens, and the first rollback undoes it: measured,
+    only a connection's first checkout carries the timeout, later ones report
+    ``0``. That is the long-standing behaviour of the main engine and is left
+    as it is here (enforcing 30 s on it would change what deployed uploads
+    can do); the stamp engine is new and opts in.
     """
     timeout_ms = settings.db_statement_timeout_ms
     if not timeout_ms or timeout_ms <= 0:
@@ -90,6 +98,8 @@ def _install_statement_timeout_listener(target_engine) -> None:
             cursor.execute(f"SET statement_timeout = {int(timeout_ms)}")
         finally:
             cursor.close()
+        if persist:
+            dbapi_connection.commit()
 
 
 _install_statement_timeout_listener(engine)
@@ -122,7 +132,7 @@ def _derive_stamp_engine(source: Engine) -> Engine:
         pool_timeout=STAMP_POOL_TIMEOUT_S,
         pool_pre_ping=True,
     )
-    _install_statement_timeout_listener(derived)
+    _install_statement_timeout_listener(derived, persist=True)
     return derived
 
 
@@ -160,11 +170,19 @@ def bind_ambient_session_factory(new_engine) -> Engine:
     ``from app.api.deps import SessionLocal`` at import time follow the
     rebind — rebinding only the module attribute would not reach them.
 
+    The dedicated stamp engine (:data:`stamp_engine`, behind
+    :data:`StampSessionLocal`) is rebound with it: a fresh small engine is
+    derived from *new_engine* (:func:`_derive_stamp_engine`, which reuses its
+    connection factory, so it reaches the same database, or refuses in the
+    same way), :data:`StampSessionLocal` is pointed at it, and the previous
+    stamp engine is disposed.
+
     Returns the previous engine so a caller can restore it. The caller
     owns *new_engine* entirely, including its pooling and any statement
-    timeout: no listener is installed here, because a rebinder that
+    timeout: no listener is installed on it here, because a rebinder that
     silently imposed ``settings.db_statement_timeout_ms`` on someone
-    else's engine would be changing behaviour behind their back.
+    else's engine would be changing behaviour behind their back. The
+    derived stamp engine is this module's own, so it does get the listener.
 
     Called by ``backend/tests/conftest.py``; not used in deployment.
     """

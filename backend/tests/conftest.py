@@ -616,10 +616,11 @@ def _refuse_foreign_test_database(connection, db_name: str) -> None:
 # ---------------------------------------------------------------------------
 
 #: Client backends one xdist worker is worth, measured rather than assumed:
-#: an 8-worker ``test-rest.sh`` run peaks at ~31 backends across its 8 test
-#: databases.  Rounded up, with the admin/alembic connections counted
-#: separately below.
-_BACKENDS_PER_WORKER = 5
+#: an 8-worker ``test-rest.sh`` run peaked at ~31 backends across its 8 test
+#: databases, and at 41 (one database at 15) once the API-key stamp engine
+#: (up to two more connections per process, #587) existed.  41 / 8 is 5.1, so
+#: 6.  The admin/alembic connections are counted separately below.
+_BACKENDS_PER_WORKER = 6
 
 #: Connections a run needs beyond its workers: the session-start admin engine,
 #: the ``alembic upgrade head`` subprocess, and the sweep.

@@ -57,7 +57,6 @@ def factory(db_engine, _api_test_user, monkeypatch) -> Iterator[sessionmaker]:
     """Real connections; the ambient factory (the stamp's) is bound to them."""
     real = sessionmaker(bind=db_engine, expire_on_commit=False)
     monkeypatch.setattr(api_deps, "SessionLocal", real)
-    monkeypatch.setattr(api_deps, "StampSessionLocal", real)
 
     def _reset(value: datetime | None = None) -> None:
         with real() as session:
@@ -327,11 +326,12 @@ def test_a_saturated_request_pool_does_not_stall_or_lose_the_stamp(
 
 
 def test_a_full_stamp_pool_skips_the_stamp_without_waiting(
-    db_engine, factory, monkeypatch, caplog
+    factory, caplog
 ) -> None:
-    stamp, stamp_engine = _small_factory(db_engine, size=1, timeout=0.25)
-    monkeypatch.setattr(api_deps, "StampSessionLocal", stamp)
-    held = stamp_engine.connect()  # the stamp pool's only connection
+    """Hold every connection the production stamp engine is allowed. A
+    third would need a longer wait (``STAMP_POOL_TIMEOUT_S``) or overflow;
+    the request must do neither."""
+    held = [api_deps.stamp_engine.connect() for _ in range(api_deps.STAMP_POOL_SIZE)]
     try:
         app = _app_over(factory)
         with TestClient(app) as client, caplog.at_level(
@@ -341,12 +341,41 @@ def test_a_full_stamp_pool_skips_the_stamp_without_waiting(
             resp = client.get("/probe", headers=API_KEY)
             elapsed = time.monotonic() - start
     finally:
-        held.close()
-        stamp_engine.dispose()
+        for connection in held:
+            connection.close()
     assert resp.status_code == 200
     assert elapsed < 3, f"the request waited {elapsed:.1f}s on the stamp"
     assert "could not record api_key.last_used_at" in caplog.text
     assert _last_used(factory) is None
+
+
+def test_the_stamp_engine_is_the_derived_one_with_the_named_shape(db_engine) -> None:
+    stamp = api_deps.stamp_engine
+    assert stamp is not api_deps.engine
+    # Connects exactly as the ambient engine does (this is what keeps the
+    # harness's refusing engine refusing, and what points the stamp at the
+    # test database here).
+    assert stamp.pool._creator is db_engine.pool._creator  # type: ignore[attr-defined]
+    assert stamp.pool.size() == api_deps.STAMP_POOL_SIZE  # type: ignore[attr-defined]
+    assert stamp.pool._max_overflow == 0  # type: ignore[attr-defined]
+    assert stamp.pool._timeout == api_deps.STAMP_POOL_TIMEOUT_S  # type: ignore[attr-defined]
+    assert api_deps.StampSessionLocal.kw["bind"] is stamp
+
+
+def test_the_stamp_connection_carries_the_statement_timeout(db_engine) -> None:
+    expected = str(settings.db_statement_timeout_ms or 0)
+    assert expected != "0", "no statement timeout configured; this test would prove nothing"
+    # Several checkouts of the same pooled connection: each ends in the
+    # pool's rollback-on-return, which undoes a SET that was never committed.
+    seen = []
+    for _ in range(3):
+        with api_deps.stamp_engine.connect() as connection:
+            seen.append(
+                connection.execute(
+                    text("SELECT setting FROM pg_settings WHERE name = 'statement_timeout'")
+                ).scalar_one()
+            )
+    assert seen == [expected] * 3
 
 
 def test_a_route_restamps_a_key_last_used_long_ago(prod_client, factory) -> None:
@@ -357,13 +386,13 @@ def test_a_route_restamps_a_key_last_used_long_ago(prod_client, factory) -> None
     assert _last_used(factory) > old + timedelta(hours=1)
 
 
-def test_a_request_inside_the_window_opens_no_stamp_connection(
-    db_engine, factory, monkeypatch
-) -> None:
-    stamp, stamp_engine = _small_factory(db_engine, size=2, timeout=0.25)
-    monkeypatch.setattr(api_deps, "StampSessionLocal", stamp)
+def test_a_request_inside_the_window_opens_no_stamp_connection(factory) -> None:
     checkouts: list[int] = []
-    event.listen(stamp_engine, "checkout", lambda *_a: checkouts.append(1))
+
+    def _count(*_args) -> None:
+        checkouts.append(1)
+
+    event.listen(api_deps.stamp_engine, "checkout", _count)
     try:
         app = _app_over(factory)
         with TestClient(app) as client:
@@ -374,7 +403,7 @@ def test_a_request_inside_the_window_opens_no_stamp_connection(
             assert client.get("/probe", headers=API_KEY).status_code == 200
             assert checkouts == [1], "the counter cannot see a stamp that is due"
     finally:
-        stamp_engine.dispose()
+        event.remove(api_deps.stamp_engine, "checkout", _count)
 
 
 @pytest.fixture
