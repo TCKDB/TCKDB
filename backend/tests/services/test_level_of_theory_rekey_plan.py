@@ -83,7 +83,7 @@ def _parent_state(mig, rng, holder_probability):
         [(m, b) for m in _METHODS for b in _BASES], k=rng.randint(2, 9)
     )
     ids = rng.sample(range(1, 40), k=len(pairs))
-    rows = [_row(i, m, b, None) for i, (m, b) in zip(ids, pairs)]
+    rows = [_row(i, m, b, None) for i, (m, b) in zip(ids, pairs, strict=True)]
     by_prior = defaultdict(list)
     for row in rows:
         by_prior[mig._lot_hash(row, keyed_method=False)].append(row)
@@ -133,7 +133,7 @@ def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probab
         # other members into the holder.
         merged_now = set(merged)
         by_ref = {r._mapping["public_ref"]: r._mapping["id"] for r in rows}
-        for holder_ref, others in groups:
+        for _holder_ref, others in groups:
             for ref in others:
                 if rng.random() < 0.5:
                     merged_now.add(by_ref[ref])
