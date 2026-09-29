@@ -22,6 +22,19 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Supersede names submissions by public ref (2026-09-29)
+
+- Backend: `POST /api/v1/submissions/{submission_ref}/supersede` takes the
+  old submission's `sub_...` ref in the path and `{"new_submission_ref":
+  "sub_..."}` in the body; a row id is refused with 422 in either place
+  (issue #571). Submission reads now carry `public_ref`, so the ref is
+  obtainable. No caller sent the integer, so there is no deprecation window.
+- The no-database-id guard walks every producer-facing write route, chosen
+  by the producer contract's classification rather than a path-prefix list,
+  and now checks path and query parameters as well as request bodies.
+- tckdb-schemas 0.53.0: the producer contract describes the new shape.
+- tckdb-client 0.95.1: parity table follows the renamed route.
+
 ## A QCSchema import names every field it does not store (2026-09-29)
 
 - tckdb-qcschema 0.5.0: every field of an imported document is now in exactly

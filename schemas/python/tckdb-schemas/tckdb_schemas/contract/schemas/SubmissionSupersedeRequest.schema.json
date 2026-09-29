@@ -1,22 +1,24 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Payload for marking a submission as superseded by a newer one.\n\nThe replacing submission must have been created with\n``supersedes_submission_id`` pointing back at the old id; the service\nenforces that link rather than mutating it here.",
+  "description": "Payload for marking a submission as superseded by a newer one.\n\nNames the replacing submission by its public ref (``public_ref`` on\n:class:`SubmissionRead`), never by row id; the server resolves it. The\nreplacing submission must have been created declaring the old one as\nthe submission it supersedes; the service enforces that link rather\nthan creating it here.",
   "examples": [
     {
-      "new_submission_id": 42
+      "new_submission_ref": "sub_01j9x8k3y2rm4f0x8k3y2rm4f0"
     }
   ],
   "properties": {
-    "new_submission_id": {
-      "title": "New Submission Id",
-      "type": "integer"
+    "new_submission_ref": {
+      "maxLength": 40,
+      "pattern": "^sub_[A-Za-z0-9]+$",
+      "title": "New Submission Ref",
+      "type": "string"
     }
   },
   "required": [
-    "new_submission_id"
+    "new_submission_ref"
   ],
   "title": "SubmissionSupersedeRequest",
   "type": "object",
-  "x-tckdb-example-requires": "two submissions of the caller's own: the one in the path, and a newer one created with supersedes_submission_id pointing back at it, whose id replaces 42"
+  "x-tckdb-example-requires": "two submissions of the caller's own: the one whose public ref is in the path, and a newer one created declaring that it supersedes it, whose public ref (public_ref on a submission read) replaces this one"
 }

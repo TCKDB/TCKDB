@@ -357,7 +357,7 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 | `POST /api/v1/submissions/{submission_id}/approve` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/reject` | yes | — | — | — | — |
 | `POST /api/v1/submissions/{submission_id}/rights-attestations` | yes | — | — | — | — |
-| `POST /api/v1/submissions/{submission_id}/supersede` | yes | — | — | — | — |
+| `POST /api/v1/submissions/{submission_ref}/supersede` | yes | — | — | — | — |
 
 > Interactive credential and session management. The client only ever carries a pre-minted API key; issuing or revoking one is an out-of-band operator action.
 
