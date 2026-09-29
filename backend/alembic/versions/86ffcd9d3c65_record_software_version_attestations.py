@@ -2,10 +2,10 @@
 
 Two new, append-only tables:
 
-* ``software_version_attestation`` -- who attested (``app_user``), when, which
-  version-less ``software_release`` the statement concerns, the attested
-  version, the statement verbatim and the evidence kind
-  (``owner_attestation``).
+* ``software_version_attestation`` -- who attested (``attested_by``), whose
+  deposits the statement covers (``covers_depositor``), when, which
+  version-less ``software_release`` it concerns, the attested version, the
+  statement verbatim and the evidence kind (``owner_attestation``).
 * ``software_version_attestation_calculation`` -- one row per calculation
   re-pointed under an attestation, with its release before and after.
 
@@ -18,10 +18,25 @@ tables are provenance, not accepted science, and the ``trg_append_only_`` /
 ``tests/db/test_accepted_science_trigger_registry.py`` asserts set equality
 over.
 
-A link row is also validated on insert, so the table cannot say something
-that did not happen: its ``before`` release is the attestation's, its
-``after`` release is the same program carrying the attested version, and the
-calculation already cites ``after``.
+Rows are validated on insert, and **only against facts that never change
+afterwards**, because an archive restore replays these INSERTs against the
+calculations' *final* state (a calculation can be re-pointed again later,
+e.g. by DR-0008's name correction):
+
+* an attestation concerns a release whose ``version`` is NULL -- identity
+  rows are never filled in place (the fill tools re-point instead), so this
+  holds at restore as it did at write;
+* a link row's ``before`` is the attestation's release; ``after`` is the same
+  program, with ``revision`` and ``build`` exactly ``before``'s and
+  ``version`` exactly the attested string; the calculation was deposited by
+  the attestation's ``covers_depositor``; and the calculation no longer cites
+  ``before`` (nothing re-points a calculation *back* to a version-less row).
+
+"The calculation cites ``after`` now" is deliberately not checked here: it is
+true only at write time, and the tool checks it there.
+
+Edited in place while unmerged and undeployed (the brand-new-table rule), to
+add ``covers_depositor`` and restore-stable validation after review.
 
 No data is written. The playground's attestations are recorded afterwards by
 ``scripts/ops/fill_software_release_version.py --attest-version``.
@@ -66,6 +81,7 @@ def upgrade() -> None:
         sa.Column("statement", sa.Text(), nullable=False),
         sa.Column("evidence_kind", _EVIDENCE_KIND, nullable=False),
         sa.Column("attested_by", sa.BigInteger(), nullable=False),
+        sa.Column("covers_depositor", sa.BigInteger(), nullable=False),
         sa.Column("attested_at", sa.DateTime(timezone=False), nullable=False),
         sa.Column(
             "created_at",
@@ -78,6 +94,9 @@ def upgrade() -> None:
             ["software_release_id"], ["software_release.id"], name="fk_sva_software_release"
         ),
         sa.ForeignKeyConstraint(["attested_by"], ["app_user.id"], name="fk_sva_attested_by"),
+        sa.ForeignKeyConstraint(
+            ["covers_depositor"], ["app_user.id"], name="fk_sva_covers_depositor"
+        ),
         sa.CheckConstraint(
             "length(btrim(attested_version)) > 0",
             name=op.f("ck_software_version_attestation_version_nonblank"),
@@ -135,6 +154,23 @@ def upgrade() -> None:
 
     op.execute(
         """
+        CREATE FUNCTION public.tckdb_validate_sva()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        SET search_path = pg_catalog, public
+        AS $$
+        BEGIN
+            IF (SELECT version FROM public.software_release WHERE id = NEW.software_release_id) IS NOT NULL THEN
+                RAISE EXCEPTION USING ERRCODE = '23514',
+                    MESSAGE = 'software_version_attestation must concern a release whose version is NULL';
+            END IF;
+            RETURN NEW;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
         CREATE FUNCTION public.tckdb_validate_sva_calculation()
         RETURNS trigger
         LANGUAGE plpgsql
@@ -143,36 +179,48 @@ def upgrade() -> None:
         DECLARE
             v_attested_release bigint;
             v_attested_version text;
-            v_before_software bigint;
-            v_after_software bigint;
-            v_after_version text;
-            v_current_release bigint;
+            v_depositor bigint;
+            v_before public.software_release%ROWTYPE;
+            v_after public.software_release%ROWTYPE;
+            v_calc_depositor bigint;
+            v_calc_release bigint;
         BEGIN
-            SELECT software_release_id, attested_version
-              INTO v_attested_release, v_attested_version
+            SELECT software_release_id, attested_version, covers_depositor
+              INTO v_attested_release, v_attested_version, v_depositor
               FROM public.software_version_attestation WHERE id = NEW.attestation_id;
             IF NEW.before_software_release_id IS DISTINCT FROM v_attested_release THEN
                 RAISE EXCEPTION USING ERRCODE = '23514',
-                    MESSAGE = 'software_version_attestation_calculation.before must be the attested release';
+                    MESSAGE = 'software_version_attestation_calculation: before must be the attested release';
             END IF;
-            SELECT software_id INTO v_before_software
-              FROM public.software_release WHERE id = NEW.before_software_release_id;
-            SELECT software_id, version INTO v_after_software, v_after_version
-              FROM public.software_release WHERE id = NEW.after_software_release_id;
-            IF v_after_software IS DISTINCT FROM v_before_software
-               OR v_after_version IS DISTINCT FROM v_attested_version THEN
+            SELECT * INTO v_before FROM public.software_release WHERE id = NEW.before_software_release_id;
+            SELECT * INTO v_after FROM public.software_release WHERE id = NEW.after_software_release_id;
+            IF v_after.software_id IS DISTINCT FROM v_before.software_id
+               OR v_after.revision IS DISTINCT FROM v_before.revision
+               OR v_after.build IS DISTINCT FROM v_before.build
+               OR v_after.version IS DISTINCT FROM v_attested_version THEN
                 RAISE EXCEPTION USING ERRCODE = '23514',
-                    MESSAGE = 'software_version_attestation_calculation.after must be the same program at the attested version';
+                    MESSAGE = 'software_version_attestation_calculation: after must be before with only the attested version added';
             END IF;
-            SELECT software_release_id INTO v_current_release
+            SELECT created_by, software_release_id INTO v_calc_depositor, v_calc_release
               FROM public.calculation WHERE id = NEW.calculation_id;
-            IF v_current_release IS DISTINCT FROM NEW.after_software_release_id THEN
+            IF v_calc_depositor IS DISTINCT FROM v_depositor THEN
                 RAISE EXCEPTION USING ERRCODE = '23514',
-                    MESSAGE = 'software_version_attestation_calculation: the calculation does not cite the after release';
+                    MESSAGE = 'software_version_attestation_calculation: the calculation is not the covered depositor''s';
+            END IF;
+            IF v_calc_release IS NOT DISTINCT FROM NEW.before_software_release_id THEN
+                RAISE EXCEPTION USING ERRCODE = '23514',
+                    MESSAGE = 'software_version_attestation_calculation: the calculation was never re-pointed';
             END IF;
             RETURN NEW;
         END;
         $$
+        """
+    )
+    op.execute(
+        """
+        CREATE TRIGGER trg_sva_validate
+        BEFORE INSERT ON public.software_version_attestation
+        FOR EACH ROW EXECUTE FUNCTION public.tckdb_validate_sva()
         """
     )
     op.execute(
@@ -214,4 +262,5 @@ def downgrade() -> None:
         table_name="software_version_attestation",
     )
     op.drop_table("software_version_attestation")
+    op.execute("DROP FUNCTION IF EXISTS public.tckdb_validate_sva()")
     _EVIDENCE_KIND.drop(op.get_bind(), checkfirst=True)

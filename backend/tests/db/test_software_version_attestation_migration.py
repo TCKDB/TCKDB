@@ -20,6 +20,7 @@ _MIGRATION = revision_under_test("86ffcd9d3c65")
 
 _TABLES = ("software_version_attestation", "software_version_attestation_calculation")
 _TRIGGERS = {
+    ("software_version_attestation", "trg_sva_validate"),
     ("software_version_attestation", "trg_sva_append_only"),
     ("software_version_attestation", "trg_sva_no_truncate"),
     ("software_version_attestation_calculation", "trg_sva_calculation_append_only"),
@@ -60,13 +61,16 @@ def _state(harness) -> dict:
             text("SELECT count(*) FROM pg_type WHERE typname = 'software_version_evidence_kind'")
         )
         function = conn.scalar(
-            text("SELECT count(*) FROM pg_proc WHERE proname = 'tckdb_validate_sva_calculation'")
+            text(
+                "SELECT count(*) FROM pg_proc "
+                "WHERE proname IN ('tckdb_validate_sva', 'tckdb_validate_sva_calculation')"
+            )
         )
     return {"tables": tables, "triggers": triggers, "enum": enum, "function": function}
 
 
 _ABSENT = {"tables": set(), "triggers": set(), "enum": 0, "function": 0}
-_PRESENT = {"tables": set(_TABLES), "triggers": _TRIGGERS, "enum": 1, "function": 1}
+_PRESENT = {"tables": set(_TABLES), "triggers": _TRIGGERS, "enum": 1, "function": 2}
 
 
 def _seed_and_attest(harness) -> None:
@@ -100,8 +104,10 @@ def _seed_and_attest(harness) -> None:
         attestation = conn.scalar(
             text(
                 "INSERT INTO software_version_attestation "
-                "(software_release_id, attested_version, statement, evidence_kind, attested_by, attested_at) "
-                "VALUES (:r, '6', 'ORCA 6 for my runs', 'owner_attestation', :u, '2026-09-12') RETURNING id"
+                "(software_release_id, attested_version, statement, evidence_kind, attested_by, "
+                "covers_depositor, attested_at) "
+                "VALUES (:r, '6', 'ORCA 6 for my runs', 'owner_attestation', :u, :u, '2026-09-12') "
+                "RETURNING id"
             ),
             {"r": null_release, "u": user},
         )

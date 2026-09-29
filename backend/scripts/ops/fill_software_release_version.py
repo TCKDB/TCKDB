@@ -17,8 +17,9 @@ state the version. The statement is recorded verbatim in
 ``software_version_attestation`` (who, when, which release, which version),
 and each calculation it re-points gets a
 ``software_version_attestation_calculation`` row with its release before and
-after, all in one transaction. Only calculations the attester deposited
-(``created_by``) are eligible; one whose stored artifact names a version is
+after, all in one transaction. Only calculations deposited (``created_by``)
+by the covered depositor are eligible -- the attester by default, or
+``--for-depositor`` when the attester is an admin; one whose stored artifact names a version is
 reported ``banner_available`` and left to the banner mode. The target is the
 version-less release's own fields with ``version`` set exactly as attested
 -- ``("6", NULL, NULL)`` for a bare ORCA row; nothing else is inferred. A
@@ -50,6 +51,7 @@ Usage::
     # Attestation mode -- dry run first, then the same with --commit.
     python backend/scripts/ops/fill_software_release_version.py --software ORCA \
         --attest-version 6 --attested-by <username> --attested-on 2026-09-12 \
+        [--for-depositor <username>] [--release srel_...] \
         --statement "ORCA 6 was used for all ORCA runs deposited by <owner>"
 
 Prints public refs only, never primary keys.
@@ -154,6 +156,11 @@ def _attest(args, settings, SessionLocal) -> int:
         if attester is None:
             print(f"No app_user named {args.attested_by!r}.", file=sys.stderr)
             return 2
+        depositor_name = args.for_depositor or args.attested_by
+        depositor = session.scalar(select(AppUser).where(AppUser.username == depositor_name))
+        if depositor is None:
+            print(f"No app_user named {depositor_name!r}.", file=sys.stderr)
+            return 2
         attested_at = (
             datetime.combine(args.attested_on, time())
             if args.attested_on is not None
@@ -164,13 +171,32 @@ def _attest(args, settings, SessionLocal) -> int:
             statement=args.statement,
             attested_by=attester,
             attested_at=attested_at,
+            covers_depositor=depositor,
         )
         releases = version_less_releases(session, args.software)
         if not releases:
             print(f"No version-less software_release for {args.software!r}. Nothing to do.")
             return 0
+        # One statement is never applied to several version-less releases of
+        # a program silently: with more than one, the operator names it.
+        if args.release is not None:
+            releases = [r for r in releases if r.public_ref == args.release]
+            if not releases:
+                print(
+                    f"{args.release!r} is not a version-less {args.software} release.",
+                    file=sys.stderr,
+                )
+                return 2
+        elif len(releases) > 1:
+            print(
+                f"{args.software} has {len(releases)} version-less releases; name one "
+                "with --release: " + ", ".join(r.public_ref for r in releases),
+                file=sys.stderr,
+            )
+            return 2
         print(
-            f"Attestation by {attester.username!r} on {attested_at.date().isoformat()}: "
+            f"Attestation by {attester.username!r} on {attested_at.date().isoformat()}, "
+            f"covering deposits by {depositor.username!r}: "
             f"{args.software} version {args.attest_version!r}\n"
             f"  statement (verbatim): {args.statement!r}"
         )
@@ -217,6 +243,17 @@ def main(argv: list[str] | None = None) -> int:
     attest.add_argument("--statement", help="the attesting person's statement, recorded verbatim")
     attest.add_argument("--attested-by", help="username of the attesting app_user")
     attest.add_argument(
+        "--for-depositor",
+        help=(
+            "username whose deposits the statement covers (default: the attester); "
+            "another account is allowed only when the attester is an admin"
+        ),
+    )
+    attest.add_argument(
+        "--release",
+        help="public ref of the version-less release; required when the program has several",
+    )
+    attest.add_argument(
         "--attested-on",
         type=date.fromisoformat,
         help="date the statement was made (YYYY-MM-DD); default: now",
@@ -224,7 +261,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     attest_args = (args.attest_version, args.statement, args.attested_by)
-    if any(a is not None for a in (*attest_args, args.attested_on)) and not all(
+    optional = (args.attested_on, args.for_depositor, args.release)
+    if any(a is not None for a in (*attest_args, *optional)) and not all(
         a is not None for a in attest_args
     ):
         parser.error("--attest-version, --statement and --attested-by go together")

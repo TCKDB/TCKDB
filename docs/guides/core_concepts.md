@@ -190,7 +190,9 @@ and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visib
   `software_version_attestation` table, with one
   `software_version_attestation_calculation` row per calculation it
   re-pointed (before and after release), by the same tool's
-  `--attest-version` mode.
+  `--attest-version` mode. The statement names whose deposits it covers
+  (`covers_depositor`: the attester, or another account when an admin
+  attests), and only that account's calculations are moved.
 - **`workflow_tool` / `workflow_tool_release`** identifies the
   high-level pipeline that produced the records (ARC, a custom RMG
   pipeline, …). TCKDB itself is workflow-tool agnostic.

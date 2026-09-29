@@ -3072,6 +3072,7 @@ Table software_version_attestation {
   statement text [not null]
   evidence_kind SoftwareVersionEvidenceKind [not null]
   attested_by bigint [not null, ref: > app_user.id]
+  covers_depositor bigint [not null, ref: > app_user.id]
   attested_at timestamp [not null]
   created_at timestamp [not null, default: 'now']
 

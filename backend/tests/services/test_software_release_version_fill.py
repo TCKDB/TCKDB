@@ -147,7 +147,7 @@ def seeded(db_session):
             db_session, store, orca_null, artifacts=[(ArtifactKind.input, orca_input)]
         ),
         "no_artifact": _calc_with(db_session, store, orca_null),
-        "other_program": _calc_with(
+        "banner_names_other_program": _calc_with(
             db_session, store, orca_null, artifacts=[(ArtifactKind.output_log, gaussian_log)]
         ),
         "accepted": _calc_with(
@@ -176,7 +176,7 @@ def test_plan_reports_every_calculation_exactly(db_session, seeded):
         (calcs["accepted"].public_ref, "accepted", orca_610),
         (calcs["no_banner"].public_ref, "no_banner", None),
         (calcs["no_artifact"].public_ref, "no_artifact", None),
-        (calcs["other_program"].public_ref, "other_program", None),
+        (calcs["banner_names_other_program"].public_ref, "banner_names_other_program", None),
         (calcs["unreadable"].public_ref, "unreadable", None),
     }
     assert plan.release_ref == orca_null.public_ref
@@ -209,7 +209,7 @@ def test_apply_repoints_only_the_fillable_calculation(db_session, seeded):
     # The version-less release is untouched: same ref, still NULL.
     db_session.refresh(orca_null)
     assert (orca_null.public_ref, orca_null.version) == (null_ref, None)
-    for key in ("accepted", "no_banner", "no_artifact", "other_program", "unreadable"):
+    for key in ("accepted", "no_banner", "no_artifact", "banner_names_other_program", "unreadable"):
         calc = db_session.get(Calculation, calcs[key].id)
         assert calc.software_release_id == orca_null.id, key
         assert calc.observed_software_banner is None, key
@@ -433,8 +433,8 @@ def test_script_dry_run_writes_nothing(script, monkeypatch, db_session, seeded, 
 
     out = capsys.readouterr().out
     assert (
-        "6 calculation(s) -- accepted=1, fillable=1, no_artifact=1, no_banner=1, "
-        "other_program=1, unreadable=1"
+        "6 calculation(s) -- accepted=1, banner_names_other_program=1, fillable=1, "
+        "no_artifact=1, no_banner=1, unreadable=1"
     ) in out
     assert "Dry run -- nothing was written." in out
     assert db_session.get(Calculation, calcs["fillable"].id).software_release_id == orca_null.id

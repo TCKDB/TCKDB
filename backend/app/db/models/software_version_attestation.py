@@ -6,9 +6,10 @@ its version was not -- and have no stored artifact whose banner could say
 which version ran. The only evidence left is the person who ran it saying
 so. These two tables record that statement and exactly what it was used for.
 
-* ``software_version_attestation`` -- one statement: who attested, when,
-  which (version-less) ``software_release`` it concerns, the version they
-  attested, their words verbatim, and the evidence kind.
+* ``software_version_attestation`` -- one statement: who attested, whose
+  deposits it covers, when, which (version-less) ``software_release`` it
+  concerns, the version they attested, their words verbatim, and the
+  evidence kind.
 * ``software_version_attestation_calculation`` -- one row per calculation
   re-pointed under that statement, with its ``software_release`` before and
   after.
@@ -16,7 +17,10 @@ so. These two tables record that statement and exactly what it was used for.
 Both are **append-only** (``tckdb_reject_mutation`` / ``tckdb_reject_truncate``
 triggers, the same functions guarding ``record_review_event``). An
 attestation is a historical fact; a wrong one is answered by a new
-attestation and a new re-point, never by editing the old row.
+attestation and a new re-point, never by editing the old row. Inserts are
+validated by ``trg_sva_validate`` / ``trg_sva_calculation_validate`` against
+facts that never change afterwards, so an archive restore replays them
+cleanly (see revision ``86ffcd9d3c65``).
 
 Written only by ``scripts/ops/fill_software_release_version.py``
 ``--attest-version`` (``app/services/software_release_version_fill.py``).
@@ -60,6 +64,14 @@ class SoftwareVersionAttestation(Base):
     attested_by: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("app_user.id", name="fk_sva_attested_by"),
+        nullable=False,
+    )
+    #: Whose deposits the statement covers. Usually the attester; an admin
+    #: may attest for another account (e.g. deposits made under a shared
+    #: service account). Only calculations ``created_by`` this user are moved.
+    covers_depositor: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("app_user.id", name="fk_sva_covers_depositor"),
         nullable=False,
     )
     #: When the person made the statement (may precede ``created_at``).

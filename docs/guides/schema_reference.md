@@ -2483,6 +2483,7 @@ the gap.
 | `statement` | TEXT | no | — | — | — | not documented |
 | `evidence_kind` | SoftwareVersionEvidenceKind (enum) | no | — | — | `owner_attestation` | not documented |
 | `attested_by` | BIGINT | no | — | app_user.id | — | not documented |
+| `covers_depositor` | BIGINT | no | — | app_user.id | — | not documented |
 | `attested_at` | TIMESTAMP WITHOUT TIME ZONE | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 

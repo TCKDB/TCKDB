@@ -98,12 +98,13 @@ def playground(db_session):
     return owner, other, orca_null, molpro_null, calcs
 
 
-def _attestation(owner, version="6", statement=ORCA_STATEMENT) -> fill.Attestation:
+def _attestation(owner, version="6", statement=ORCA_STATEMENT, *, depositor=None) -> fill.Attestation:
     return fill.Attestation(
         attested_version=version,
         statement=statement,
         attested_by=owner,
         attested_at=ATTESTED_ON,
+        covers_depositor=depositor or owner,
     )
 
 
@@ -287,35 +288,102 @@ class TestAppendOnly:
                 db_session.execute(text(statement))
         assert excinfo.value.orig.sqlstate == "55000"
 
-    def test_a_link_must_describe_a_real_repoint(self, db_session, playground):
-        owner, _other, orca_null, molpro_null, calcs = playground
+    def _link(self, db_session, record, calculation_id, before, after):
+        with pytest.raises(DBAPIError) as excinfo:
+            with db_session.begin_nested():
+                db_session.add(
+                    SoftwareVersionAttestationCalculation(
+                        attestation_id=record.id,
+                        calculation_id=calculation_id,
+                        before_software_release_id=before,
+                        after_software_release_id=after,
+                    )
+                )
+                db_session.flush()
+        return excinfo.value.orig
+
+    @pytest.mark.parametrize(
+        "case",
+        [
+            "before_is_not_the_attested_release",
+            "after_is_another_program",
+            "after_is_not_the_attested_version",
+            "after_invents_a_revision",
+            "after_invents_a_build",
+            "never_re_pointed",
+            "not_the_covered_depositors_calculation",
+        ],
+    )
+    def test_a_forged_link_row_is_refused(self, db_session, playground, case):
+        """Finding 7. Each forged row breaks exactly one invariant, and every
+        invariant is a fact that never changes afterwards (finding 5)."""
+        owner, other, orca_null, molpro_null, calcs = playground
         record = self._record(db_session, playground)
         orca_6 = db_session.get(Calculation, calcs["orca_1"].id).software_release_id
-        molpro_26 = make_software_release(db_session, name="Molpro", version="26")
-        orca_7 = make_software_release(db_session, name="ORCA", version="7")
-        bad = [
-            # ``before`` is not the attested release
-            (calcs["orca_1"].id, molpro_null.id, orca_6),
-            # ``after`` is another program
-            (calcs["orca_1"].id, orca_null.id, molpro_26.id),
-            # ``after`` is not the attested version
-            (calcs["orca_1"].id, orca_null.id, orca_7.id),
-            # the calculation does not cite ``after``
-            (calcs["orca_other"].id, orca_null.id, orca_6),
-        ]
-        for calculation_id, before, after in bad:
-            with pytest.raises(DBAPIError) as excinfo:
-                with db_session.begin_nested():
-                    db_session.add(
-                        SoftwareVersionAttestationCalculation(
-                            attestation_id=record.id,
-                            calculation_id=calculation_id,
-                            before_software_release_id=before,
-                            after_software_release_id=after,
-                        )
+        # A fresh owner calculation already on ORCA 6, so only the named
+        # invariant can be what refuses it.
+        moved = _calc(db_session, orca_null, created_by=owner)
+        moved.software_release_id = orca_6
+        db_session.flush()
+        before, after, calculation_id = orca_null.id, orca_6, moved.id
+        if case == "before_is_not_the_attested_release":
+            before = molpro_null.id
+        elif case == "after_is_another_program":
+            after = make_software_release(db_session, name="Molpro", version="6").id
+        elif case == "after_is_not_the_attested_version":
+            after = make_software_release(db_session, name="ORCA", version="7").id
+        elif case == "after_invents_a_revision":
+            after = make_software_release(db_session, name="ORCA", version="6", revision="r9").id
+        elif case == "after_invents_a_build":
+            after = make_software_release(db_session, name="ORCA", version="6", build="b1").id
+        elif case == "never_re_pointed":
+            calculation_id = _calc(db_session, orca_null, created_by=owner).id
+        elif case == "not_the_covered_depositors_calculation":
+            foreign = _calc(db_session, orca_null, created_by=other)
+            foreign.software_release_id = orca_6
+            db_session.flush()
+            calculation_id = foreign.id
+
+        error = self._link(db_session, record, calculation_id, before, after)
+
+        assert error.sqlstate == "23514", case
+
+    def test_the_valid_control_row_is_accepted(self, db_session, playground):
+        """The control for the forged cases: the same setup, unforged, inserts."""
+        owner, _other, orca_null, _molpro_null, calcs = playground
+        record = self._record(db_session, playground)
+        orca_6 = db_session.get(Calculation, calcs["orca_1"].id).software_release_id
+        moved = _calc(db_session, orca_null, created_by=owner)
+        moved.software_release_id = orca_6
+        db_session.flush()
+        db_session.add(
+            SoftwareVersionAttestationCalculation(
+                attestation_id=record.id,
+                calculation_id=moved.id,
+                before_software_release_id=orca_null.id,
+                after_software_release_id=orca_6,
+            )
+        )
+        db_session.flush()
+
+    def test_an_attestation_about_a_versioned_release_is_refused(self, db_session, playground):
+        owner, *_ = playground
+        versioned = make_software_release(db_session, name="ORCA", version="5.0.4")
+        with pytest.raises(DBAPIError) as excinfo:
+            with db_session.begin_nested():
+                db_session.add(
+                    SoftwareVersionAttestation(
+                        software_release_id=versioned.id,
+                        attested_version="6",
+                        statement="forged",
+                        evidence_kind=SoftwareVersionEvidenceKind.owner_attestation,
+                        attested_by=owner.id,
+                        covers_depositor=owner.id,
+                        attested_at=ATTESTED_ON,
                     )
-                    db_session.flush()
-            assert excinfo.value.orig.sqlstate == "23514", (calculation_id, before, after)
+                )
+                db_session.flush()
+        assert excinfo.value.orig.sqlstate == "23514"
 
 
 def _attest_argv(software, version, statement, *extra):
@@ -374,3 +442,180 @@ def test_script_attestation_flags_go_together(script, monkeypatch, db_session, p
     with pytest.raises(SystemExit):
         _run(script, monkeypatch, db_session, _Store(), ["--software", "ORCA", "--attest-version", "6"])
 
+
+# Review findings on #566 ----------------------------------------------------
+
+
+def test_archive_round_trip_survives_a_later_re_point(db_session, playground):
+    """Finding 5. Restore replays the link rows' INSERTs after the
+    calculations are back at their *final* release. A calculation re-pointed
+    again after the attestation (here by DR-0008's name correction, the
+    Gaussian log proving ORCA never ran it) must still restore."""
+    import io
+
+    from app.services.archive import restore_archive, write_archive
+    from app.services.calculation_resolution import record_software_reconciliation
+    from app.services.gaussian_parameter_parser import parse_software_version
+    from tests.services.archive.test_archive import _empty_archive_tables
+
+    owner, _other, orca_null, _molpro_null, calcs = playground
+    fill.apply_attestation(db_session, orca_null, _attestation(owner), load_bytes=_Store())
+    calc = db_session.get(Calculation, calcs["orca_1"].id)
+    record_software_reconciliation(
+        db_session,
+        calc,
+        parsed_software=parse_software_version((FIXTURES / "gaussian/sp_ub3lyp_g16.log").read_text()),
+    )
+    db_session.flush()
+    assert calc.software_release.software.name == "Gaussian"
+    before = sorted(
+        (link.calculation_id, link.before_software_release_id, link.after_software_release_id)
+        for link in db_session.scalars(select(SoftwareVersionAttestationCalculation))
+    )
+
+    archive = io.BytesIO()
+    write_archive(db_session, archive)
+    _empty_archive_tables(db_session)
+    restore_archive(db_session, io.BytesIO(archive.getvalue()))
+
+    after = sorted(
+        (link.calculation_id, link.before_software_release_id, link.after_software_release_id)
+        for link in db_session.scalars(select(SoftwareVersionAttestationCalculation))
+    )
+    assert after == before and len(after) == 2
+    assert db_session.scalar(select(func.count(SoftwareVersionAttestation.id))) == 1
+
+
+def test_one_unreadable_artifact_makes_the_calculation_unreadable(db_session, playground):
+    """Finding 6. One readable artifact without a banner plus one unreadable
+    artifact is not evidence of absence: the unreadable one may hold the
+    banner. An owner statement must not override it."""
+    owner, _other, orca_null, *_ = playground
+    store = _Store()
+    calc = _calc(
+        db_session, orca_null, created_by=owner, store=store,
+        log=b"! B3LYP def2-SVP\n* xyz 0 2\nH 0 0 0\n*\n",
+    )
+    attach_artifact(
+        db_session, calculation=calc, kind=ArtifactKind.output_log, sha256="e" * 64, filename="lost.out"
+    )
+
+    plan = fill.plan_attestation(db_session, orca_null, _attestation(owner), load_bytes=store)
+
+    assert {o.status for o in plan.outcomes if o.calculation_ref == calc.public_ref} == {"unreadable"}
+
+
+def test_a_release_carrying_a_revision_or_build_is_refused(db_session, playground):
+    """Finding 8. Attesting "09" on a version-less row whose build says
+    ``ES64L-G16RevC.02`` would mint ``("09", NULL, "ES64L-G16RevC.02")``."""
+    owner, *_ = playground
+    g_null_build = make_software_release(db_session, name="Gaussian", version=None, build="ES64L-G16RevC.02")
+    _calc(db_session, g_null_build, created_by=owner)
+
+    with pytest.raises(fill.VersionFillRefused, match="release_has_revision_or_build"):
+        fill.plan_attestation(db_session, g_null_build, _attestation(owner, version="09"))
+
+
+def test_script_requires_release_when_a_program_has_several_version_less_releases(
+    script, monkeypatch, db_session, playground, capsys  # noqa: F811
+):
+    """Finding 8. One statement is never applied to every version-less
+    release of a program silently."""
+    owner, *_ = playground
+    second = make_software_release(db_session, name="ORCA", version=None, revision="r1")
+    _calc(db_session, second, created_by=owner)
+
+    rc = _run(script, monkeypatch, db_session, _Store(), _attest_argv("ORCA", "6", ORCA_STATEMENT))
+
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "--release" in err and second.public_ref in err
+    assert _counts(db_session) == (0, 0)
+
+
+def test_two_stored_logs_naming_different_releases_are_banners_disagree(db_session, playground):
+    """The ingest hook's batch rule, applied to stored artifacts too: two
+    logs naming ORCA 5.0.4 and ORCA 6.1.0 fill nothing in the banner mode."""
+    owner, _other, orca_null, *_ = playground
+    store = _Store()
+    calc = _calc(
+        db_session, orca_null, created_by=owner, store=store,
+        log=(FIXTURES / "orca/sp_dlpno_ccsdt_orca.out").read_bytes(),
+    )
+    attach_artifact(
+        db_session, calculation=calc, kind=ArtifactKind.output_log,
+        sha256=store.put((FIXTURES / "orca/opt_orca.out").read_bytes()), filename="second.out",
+    )
+
+    banner = fill.plan_release_fill(db_session, orca_null, load_bytes=store)
+
+    assert {o.status for o in banner.outcomes if o.calculation_ref == calc.public_ref} == {"banners_disagree"}
+
+
+def test_a_banner_naming_another_program_has_one_status_in_both_modes(db_session, playground):
+    """Finding 10. ``banner_available`` in one mode and ``other_program`` in
+    the other left the operator with no route; both now say why."""
+    owner, _other, orca_null, *_ = playground
+    store = _Store()
+    calc = _calc(
+        db_session, orca_null, created_by=owner, store=store,
+        log=(FIXTURES / "gaussian/sp_ub3lyp_g16.log").read_bytes(),
+    )
+
+    attest = fill.plan_attestation(db_session, orca_null, _attestation(owner), load_bytes=store)
+    banner = fill.plan_release_fill(db_session, orca_null, load_bytes=store)
+
+    for plan in (attest, banner):
+        [status] = {o.status for o in plan.outcomes if o.calculation_ref == calc.public_ref}
+        assert status == "banner_names_other_program"
+
+
+
+class TestCoveredDepositor:
+    """Design item 9: the depositor a statement covers is named explicitly."""
+
+    def test_an_admin_attests_for_another_account(self, db_session, playground):
+        _owner, other, orca_null, _molpro_null, calcs = playground
+        admin = AppUser(username="attest-admin", role=AppUserRole.admin)
+        db_session.add(admin)
+        db_session.flush()
+
+        _plan, moved = fill.apply_attestation(
+            db_session, orca_null, _attestation(admin, depositor=other), load_bytes=_Store()
+        )
+
+        assert list(moved) == [calcs["orca_other"].public_ref]
+        record = db_session.scalars(select(SoftwareVersionAttestation)).one()
+        assert (record.attested_by, record.covers_depositor) == (admin.id, other.id)
+
+    def test_a_non_admin_cannot_attest_for_another_account(self, db_session, playground):
+        owner, other, orca_null, *_ = playground
+        with pytest.raises(fill.VersionFillRefused, match="only for their own"):
+            fill.plan_attestation(db_session, orca_null, _attestation(owner, depositor=other))
+        assert _counts(db_session) == (0, 0)
+
+    def test_script_for_depositor_flag(self, script, monkeypatch, db_session, playground, capsys):  # noqa: F811
+        _owner, _other, _orca_null, _molpro_null, calcs = playground
+        admin = AppUser(username="attest-admin", role=AppUserRole.admin)
+        db_session.add(admin)
+        db_session.flush()
+        argv = [
+            "--software", "ORCA", "--attest-version", "6", "--statement", ORCA_STATEMENT,
+            "--attested-by", "attest-admin", "--for-depositor", "attest-someone-else",
+            "--attested-on", "2026-09-12", "--commit",
+        ]
+
+        assert _run(script, monkeypatch, db_session, _Store(), argv) == 0
+
+        assert "covering deposits by 'attest-someone-else'" in capsys.readouterr().out
+        assert _release_tuple(db_session, calcs["orca_other"]) == ("ORCA", "6", None, None)
+        assert _release_tuple(db_session, calcs["orca_1"]) == ("ORCA", None, None, None)
+
+    def test_script_refuses_a_non_admin_for_another_account(self, script, monkeypatch, db_session, playground, capsys):  # noqa: F811
+        argv = [
+            "--software", "ORCA", "--attest-version", "6", "--statement", ORCA_STATEMENT,
+            "--attested-by", "attest-owner", "--for-depositor", "attest-someone-else",
+        ]
+
+        assert _run(script, monkeypatch, db_session, _Store(), argv) == 2
+        assert "only for their own" in capsys.readouterr().err
