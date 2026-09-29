@@ -183,7 +183,29 @@ class ThermoUploadRequest(SchemaBase):
     # statmech_link`` below). Never persisted.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
-    model_config = ConfigDict(allow_inf_nan=False)
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        allow_inf_nan=False,
+        json_schema_extra={
+            "examples": [
+                {
+                    "species_entry": {
+                        "smiles": "C",
+                        "charge": 0,
+                        "multiplicity": 1
+                    },
+                    "scientific_origin": "computed",
+                    "h298_kj_mol": -74.6,
+                    "s298_j_mol_k": 186.25,
+                    "enthalpy_reference_kind": "formation_298k",
+                    "reference_pressure_bar": 1.01325,
+                    "phase": "gas"
+                }
+            ]
+        },
+    )
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
@@ -230,9 +252,33 @@ class ThermoUploadRequest(SchemaBase):
     # which characterize the electronic-energy calculation, not the
     # thermo standard state) produces one. Revisit if/when a
     # condensed-phase computed producer exists.
-    enthalpy_reference_kind: EnthalpyReferenceKind | str | None = None
-    reference_pressure_bar: float | None = Field(default=None, gt=0)
-    phase: PhaseKind | None = None
+    enthalpy_reference_kind: EnthalpyReferenceKind | str | None = Field(
+        default=None,
+        description=(
+            "What every enthalpy on this record means. The only accepted value is "
+            "formation_298k. Required when the record carries any enthalpy or "
+            "Gibbs-energy content and refused when it carries none; never "
+            "defaulted or inferred."
+        ),
+    )
+    reference_pressure_bar: float | None = Field(
+        default=None,
+        gt=0,
+        description=(
+            "Standard-state reference pressure, in bar, that the entropy (and any "
+            "Gibbs energy) was computed or reported at. Never defaulted, for any "
+            "scientific_origin: an omitted value is stored as not stated. 1 atm "
+            "is 1.01325 bar, not 1.0."
+        ),
+    )
+    phase: PhaseKind | None = Field(
+        default=None,
+        description=(
+            "Physical phase the record describes. Defaults to gas only when "
+            "scientific_origin is computed and the field is omitted; an explicit "
+            "null is kept as unknown."
+        ),
+    )
 
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
@@ -286,7 +332,8 @@ class ThermoUploadRequest(SchemaBase):
         condensed-phase literature value as ``gas``.
 
         ``reference_pressure_bar`` is NEVER defaulted, for any origin
-        (decided 2026-09-24, issue #529): see the field comment above.
+        (decided 2026-09-24, issue #529): an omitted pressure is stored as not
+        stated, never assumed to be 1 bar or 1 atm.
 
         Explicit values (including an explicit ``None``) are honored:
         ``model_fields_set`` distinguishes "omitted" from "provided".

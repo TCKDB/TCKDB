@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from tckdb_schemas.local_key_codes import (
     W_STATMECH_CALCULATION_KEY_UNDECLARED,
     undeclared_key_error,
@@ -229,6 +229,26 @@ class StatmechUploadRequest(SchemaBase):
         source calculations this same request links; the read-time
         ``levels`` block is always re-derived from those links directly.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species_entry": {
+                        "smiles": "O",
+                        "charge": 0,
+                        "multiplicity": 1
+                    },
+                    "scientific_origin": "computed",
+                    "external_symmetry": 2,
+                    "is_linear": False
+                }
+            ]
+        },
+    )
 
     species_entry: SpeciesEntryIdentityPayload
 

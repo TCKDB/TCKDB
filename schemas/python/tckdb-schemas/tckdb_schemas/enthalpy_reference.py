@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any
 
 from tckdb_schemas.enums import EnthalpyReferenceKind
+from tckdb_schemas.producer_rule import producer_rule
 
 W_ENTHALPY_DECLARATION_ABSENT = "enthalpy_declaration_absent"
 W_ENTHALPY_DECLARATION_WITHOUT_CONTENT = "enthalpy_declaration_without_content"
@@ -47,8 +48,16 @@ def shared_enthalpy_reference(kinds: Iterable[Any]) -> tuple[str | None, str | N
         return None, ENTHALPY_REFERENCE_MIXED
     return tokens[0], None
 
+
+@producer_rule
 def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
-    """Return a refusal code/message, or None for a coherent declaration.
+    """A thermo record with enthalpy content must declare what its enthalpies mean.
+
+    ``enthalpy_reference_kind`` accepts one value, ``formation_298k``: every
+    enthalpy on the record is a standard enthalpy of formation, pinned at
+    298.15 K, with the species' own increment above 298.15 K added at other
+    temperatures. It is never defaulted or inferred. Any other value is
+    refused; a near-miss spelling of ``formation_298k`` gets its own refusal.
 
     Enthalpy content, any of which requires ``enthalpy_reference_kind`` and
     without all of which a declaration is refused:
@@ -63,6 +72,9 @@ def enthalpy_reference_error(payload: Any) -> tuple[str, str] | None:
 
     A 0 K formation scalar has its own reference and is outside this rule.
     Never derive a missing scalar from a fit or infer a declaration.
+
+    Returns a refusal ``(code, message)``, or ``None`` for a coherent
+    declaration.
     """
     def get(obj: Any, key: str) -> Any:
         return obj.get(key) if isinstance(obj, Mapping) else getattr(obj, key, None)

@@ -1,0 +1,66 @@
+{
+  "$defs": {
+    "RightsBasisKind": {
+      "description": "On what footing a submission's records may be licensed for release.\n\nRecorded on ``submission_rights_attestation`` — curation *of a deposit*,\nkeyed to the submission and never to a scientific row. The kind says who\nis standing behind the license, which is the question a reader of a\nreleased dataset is entitled to ask.\n\n``depositor_agreement``  the depositor said so at deposit time (the\n                         ``rights`` fragment of the upload). Always\n                         attested by the submission's creator.\n``operator_own_data``    the deploying operator owns the deposit outright\n                         and licenses it as their own work.\n``historical_review``    a curator reviewed a deposit that predates\n                         rights capture and records the basis after the\n                         fact, with an actor, rather than by a default.\n``source_terms``         the records were taken from a source whose own\n                         terms permit the release; ``source_terms`` on\n                         the row must then quote or cite those terms.",
+      "enum": [
+        "depositor_agreement",
+        "operator_own_data",
+        "historical_review",
+        "source_terms"
+      ],
+      "title": "RightsBasisKind",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Payload for recording who agreed to license a submission, and how.\n\n``depositor_agreement`` may only be recorded by the submission's creator;\nevery other basis needs the curator or admin role. ``source_terms`` is\nrequired exactly when ``basis`` is ``source_terms``.",
+  "examples": [
+    {
+      "basis": "depositor_agreement",
+      "license": "CC-BY-4.0"
+    }
+  ],
+  "properties": {
+    "basis": {
+      "$ref": "#/$defs/RightsBasisKind"
+    },
+    "license": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "License",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
+    "source_terms": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Terms"
+    }
+  },
+  "required": [
+    "license",
+    "basis"
+  ],
+  "title": "RightsAttestationCreate",
+  "type": "object",
+  "x-tckdb-example-requires": "a submission the caller created, named by the submission_id in the path; every upload response returns one"
+}

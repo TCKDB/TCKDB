@@ -48,6 +48,18 @@ class ForeignSchemasPackageError(pytest.UsageError):
     """
 
 
+def _schemas_checkout():
+    """``backend/scripts/lib/schemas_checkout.py``, loaded by path."""
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "lib" / "schemas_checkout.py"
+    spec = importlib.util.spec_from_file_location("tckdb_schemas_checkout", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _assert_schemas_package_is_this_checkout() -> None:
     """Refuse a run that is silently testing a *different* checkout's copy of
     the ``tckdb_schemas`` wire package.
@@ -82,34 +94,12 @@ def _assert_schemas_package_is_this_checkout() -> None:
     install necessarily resolves inside it -- which is precisely why the
     check belongs here rather than in a workflow.
     """
-    try:
-        import tckdb_schemas
-    except ImportError:  # pragma: no cover - environment without the package
-        return
-
-    repo_root = Path(__file__).resolve().parents[2]
-    resolved = Path(tckdb_schemas.__file__).resolve()
-    if repo_root in resolved.parents:
-        return
-
-    expected = repo_root / "schemas" / "python" / "tckdb-schemas"
-    raise ForeignSchemasPackageError(
-        "tckdb_schemas resolves outside this checkout, so these tests would "
-        "exercise another checkout's wire schemas and any change made here "
-        "would be invisible.\n"
-        f"  this checkout: {repo_root}\n"
-        f"  resolved to:   {resolved}\n"
-        "This is what an editable install does inside a git worktree: it "
-        "points at the checkout it was installed from.\n"
-        "Fix it for this run by putting the package's parent directory "
-        "first on PYTHONPATH:\n"
-        f'  export PYTHONPATH="{expected}:$PYTHONPATH"\n'
-        "Note the path ends at 'tckdb-schemas' (the directory *containing* "
-        "the tckdb_schemas package). A path that does not exist is skipped "
-        "silently and leaves you exactly here.\n"
-        "The test-*.sh gate scripts do this for you; a bare pytest "
-        "invocation does not."
-    )
+    # The comparison and its message live in scripts/lib/schemas_checkout.py,
+    # shared with the producer-contract generator, which reads the same
+    # package and is wrong in the same way when it resolves elsewhere.
+    message = _schemas_checkout().foreign_schemas_message(Path(__file__).resolve().parents[2])
+    if message is not None:
+        raise ForeignSchemasPackageError(message)
 
 
 def _check_error_bodies(item) -> None:
