@@ -17,7 +17,7 @@ into the database configured by `app.api.config.settings.database_url`:
 | `level_of_theory` | 1 | `wb97xd/def2tzvp`, shared by all computed records |
 | `species` | 6 | `[H]`, `[H][H]`, `C` (CH₄), `[CH3]`, `CC` (C₂H₆), `[CH2]C` (C₂H₅) |
 | `species_entry` | 6 | one ground-state minimum entry per species |
-| `thermo` | 2 | scalar h298/s298 for CH₄; scalar+NASA for C₂H₆ |
+| `thermo` | 2 | scalar h298/s298 for CH₄; scalar+NASA for C₂H₆; both declare `enthalpy_reference_kind = formation_298k` and a 1 bar reference pressure |
 | `thermo_nasa` | 1 | attached to the C₂H₆ thermo record |
 | `geometry` | 2 | one per opt calculation that has output geometry |
 | `calculation` | 4 | CH₄ opt, CH₄ sp, C₂H₆ opt (with conformer), CH₃ opt |

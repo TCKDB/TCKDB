@@ -39,6 +39,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from tckdb_schemas.thermo import ThermoNASACreate
 
 from app.api.config import settings
 from app.db.models.calculation import (
@@ -52,6 +53,7 @@ from app.db.models.common import (
     ArrheniusAUnits,
     CalculationGeometryRole,
     CalculationType,
+    EnthalpyReferenceKind,
     KineticsModelKind,
     MoleculeKind,
     ReactionRole,
@@ -76,7 +78,10 @@ from app.db.models.species import (
     Species,
     SpeciesEntry,
 )
-from app.db.models.thermo import Thermo, ThermoNASA
+from app.db.models.thermo import Thermo
+from app.schemas.entities.thermo import ThermoCreate
+from app.services.thermo_resolution import persist_thermo
+from app.workflows.thermo import assert_enthalpy_reference
 
 DEMO_NOTE = "TCKDB demo data"
 
@@ -230,38 +235,52 @@ def _attach_geom_validation(
     session.flush()
 
 
-def _make_thermo_scalar(
+#: Illustrative NASA-7 fit attached to one demo thermo row.
+_DEMO_NASA = ThermoNASACreate(
+    t_low=200.0,
+    t_mid=1000.0,
+    t_high=6000.0,
+    a1=3.5, a2=1e-4, a3=0.0, a4=0.0, a5=0.0, a6=-1000.0, a7=4.0,
+    b1=3.2, b2=2e-4, b3=0.0, b4=0.0, b5=0.0, b6=-950.0, b7=5.0,
+)
+
+
+def _make_thermo(
     session: Session,
     *,
     entry: SpeciesEntry,
     h298: float,
     s298: float,
+    nasa: ThermoNASACreate | None = None,
     origin: ScientificOriginKind = ScientificOriginKind.computed,
 ) -> Thermo:
-    t = Thermo(
+    """Build one demo thermo row through the same schema and rule an upload uses.
+
+    Every demo row carries an h298, so each declares ``formation_298k``: the
+    values are standard formation enthalpies at 298.15 K, which is the one
+    reference thermo stores. ``assert_enthalpy_reference`` is the thermo
+    upload's own check (``tckdb_schemas.enthalpy_reference``), so a demo row
+    that drops the declaration, or declares one without enthalpy content, is
+    refused here with the upload's code rather than by the database trigger.
+
+    ``reference_pressure_bar`` is set to 1 bar (the IUPAC standard state)
+    because the rows carry an entropy and a NASA fit, both of which depend
+    on the reference pressure. Nothing defaults it any more (#536), and the
+    values are illustrative, so the choice is stated here rather than left
+    unrecorded.
+    """
+    payload = ThermoCreate(
         species_entry_id=entry.id,
         scientific_origin=origin,
+        enthalpy_reference_kind=EnthalpyReferenceKind.formation_298k,
         h298_kj_mol=h298,
         s298_j_mol_k=s298,
+        reference_pressure_bar=1.0,
+        nasa=nasa,
         note=DEMO_NOTE,
     )
-    session.add(t)
-    session.flush()
-    return t
-
-
-def _attach_nasa(session: Session, thermo: Thermo) -> None:
-    session.add(
-        ThermoNASA(
-            thermo_id=thermo.id,
-            t_low=200.0,
-            t_mid=1000.0,
-            t_high=6000.0,
-            a1=3.5, a2=1e-4, a3=0.0, a4=0.0, a5=0.0, a6=-1000.0, a7=4.0,
-            b1=3.2, b2=2e-4, b3=0.0, b4=0.0, b5=0.0, b6=-950.0, b7=5.0,
-        )
-    )
-    session.flush()
+    assert_enthalpy_reference(payload)
+    return persist_thermo(session, payload)
 
 
 def _make_chem_reaction(
@@ -423,14 +442,15 @@ def seed(session: Session) -> dict[str, int]:
     # ---- Thermo records (2–3) ----
     # Scalar-only for CH4 + scalar+NASA for C2H6 + a points-shaped one is
     # skipped to keep the script short; the goal is variety, not coverage.
-    # Created for its persistence side effect only; nothing references it.
-    _make_thermo_scalar(
-        session, entry=entry_by_smiles["C"], h298=-74.6, s298=186.3
+    # Created for their persistence side effect only; nothing references them.
+    _make_thermo(session, entry=entry_by_smiles["C"], h298=-74.6, s298=186.3)
+    _make_thermo(
+        session,
+        entry=entry_by_smiles["CC"],
+        h298=-83.8,
+        s298=229.6,
+        nasa=_DEMO_NASA,
     )
-    thermo_c2h6 = _make_thermo_scalar(
-        session, entry=entry_by_smiles["CC"], h298=-83.8, s298=229.6
-    )
-    _attach_nasa(session, thermo_c2h6)
     counts["thermo"] = 2
     counts["thermo_nasa"] = 1
 
