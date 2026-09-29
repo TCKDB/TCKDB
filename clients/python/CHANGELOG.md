@@ -4,7 +4,9 @@
 
 `RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL` now also covers ARC
 and RMG (`RMG-Py`), not only Arkane: the server refuses a calculation whose
-`software_release.name` is any of them (issue #305, owner decision). A
+`software_release.name` is any of them (issue #305, owner decision), in any
+case or spelling, with or without a trailing version (`ARC 1.1.0`,
+`ARC-1.1.0`, `rmgpy`, `rmg_py`, `RMG Py`, `RMG-Py 3.2.0`). A
 calculation's software is the electronic-structure program that ran the job;
 put ARC in `workflow_tool_release`. No enum member changed. A product's
 `analysis_software_release` is still unaffected, so RMG remains valid there.
