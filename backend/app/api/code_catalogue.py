@@ -1961,6 +1961,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("subject_type_mismatch", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship),
+    ApiCode("submission_supersede_not_owner", 403, Surface.message_prefix,
+            "backend/app/services/submission.py",
+            note=(
+                "The caller must have created both submissions, or hold the "
+                "curator or admin role: the rule every submission read "
+                "applies, applied to each of the two. One code for either "
+                "submission, deliberately: the caller named both refs and "
+                "already knows which one they did not create."
+            )),
     ApiCode("supersedes_same_record", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship),

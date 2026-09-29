@@ -22,6 +22,7 @@ from app.db.models.common import (
 from app.db.models.record_review import RecordReview
 from app.db.models.submission import Submission
 from app.services.submission import (
+    SubmissionSupersedeForbidden,
     append_audit_event,
     approve_submission,
     create_submission,
@@ -413,10 +414,16 @@ class TestSupersede:
             supersedes_submission_id=old.id,
         )
         supersede_submission(
-            db_session, old_submission_id=old.id, new_submission_id=new.id
+            db_session,
+            old_submission_id=old.id,
+            new_submission_id=new.id,
+            actor=alice,
         )
         supersede_submission(
-            db_session, old_submission_id=old.id, new_submission_id=new.id
+            db_session,
+            old_submission_id=old.id,
+            new_submission_id=new.id,
+            actor=alice,
         )
         # Only one superseded event on the old side
         events = list_audit_events(db_session, submission_id=old.id)
@@ -431,21 +438,121 @@ class TestSupersede:
         old = _open_pending(db_session, alice.id)
         unlinked_new = _open_pending(db_session, alice.id)
 
-        with pytest.raises(DomainError):
+        # ``match`` because the ownership refusal is a DomainError too: a
+        # bare ``raises(DomainError)`` would pass on the wrong refusal.
+        with pytest.raises(DomainError, match="link back"):
             supersede_submission(
                 db_session,
                 old_submission_id=old.id,
                 new_submission_id=unlinked_new.id,
+                actor=alice,
             )
 
     def test_self_supersede_rejected(self, db_session):
         alice = _uploader(db_session)
         sub = _open_pending(db_session, alice.id)
-        with pytest.raises(DomainError):
+        with pytest.raises(DomainError, match="cannot supersede itself"):
             supersede_submission(
                 db_session,
                 old_submission_id=sub.id,
                 new_submission_id=sub.id,
+                actor=alice,
+            )
+
+    # -- who may supersede ------------------------------------------------
+
+    @staticmethod
+    def _linked_pair(session, *, old_owner: AppUser, new_owner: AppUser):
+        old = _open_pending(session, old_owner.id)
+        new = create_submission(
+            session,
+            created_by=new_owner.id,
+            submission_kind=SubmissionKind.thermo,
+            supersedes_submission_id=old.id,
+        )
+        return old, new
+
+    @staticmethod
+    def _assert_untouched(session, old, new) -> None:
+        session.refresh(old)
+        assert old.status is SubmissionStatus.pending
+        for sub in (old, new):
+            kinds = {e.event_kind for e in list_audit_events(session, submission_id=sub.id)}
+            assert SubmissionAuditEventKind.submission_superseded not in kinds
+            assert SubmissionAuditEventKind.correction_uploaded not in kinds
+
+    def test_non_owner_is_refused(self, db_session):
+        alice = _uploader(db_session)
+        bob = _uploader(db_session, "bob")
+        old, new = self._linked_pair(db_session, old_owner=alice, new_owner=alice)
+
+        with pytest.raises(SubmissionSupersedeForbidden) as refused:
+            supersede_submission(
+                db_session,
+                old_submission_id=old.id,
+                new_submission_id=new.id,
+                actor=bob,
+            )
+        message = str(refused.value)
+        assert message.startswith("submission_supersede_not_owner: ")
+        assert str(old.id) not in message and str(new.id) not in message
+        self._assert_untouched(db_session, old, new)
+
+    @pytest.mark.parametrize(
+        ("old_owner_name", "new_owner_name"),
+        [("bob", "alice"), ("alice", "bob")],
+        ids=["owns-only-new", "owns-only-old"],
+    )
+    def test_owning_one_of_the_two_is_refused(
+        self, db_session, old_owner_name, new_owner_name
+    ):
+        users = {"alice": _uploader(db_session), "bob": _uploader(db_session, "bob")}
+        old, new = self._linked_pair(
+            db_session,
+            old_owner=users[old_owner_name],
+            new_owner=users[new_owner_name],
+        )
+        with pytest.raises(SubmissionSupersedeForbidden):
+            supersede_submission(
+                db_session,
+                old_submission_id=old.id,
+                new_submission_id=new.id,
+                actor=users["bob"],
+            )
+        self._assert_untouched(db_session, old, new)
+
+    @pytest.mark.parametrize("role", [AppUserRole.curator, AppUserRole.admin])
+    def test_curator_or_admin_may_supersede_anothers_pair(self, db_session, role):
+        alice = _uploader(db_session)
+        curating = _make_user(db_session, f"curating-{role.value}", role)
+        old, new = self._linked_pair(db_session, old_owner=alice, new_owner=alice)
+
+        superseded = supersede_submission(
+            db_session,
+            old_submission_id=old.id,
+            new_submission_id=new.id,
+            actor=curating,
+        )
+        assert superseded.status is SubmissionStatus.superseded
+        events = list_audit_events(db_session, submission_id=old.id)
+        assert any(
+            e.event_kind is SubmissionAuditEventKind.submission_superseded
+            and e.actor_user_id == curating.id
+            for e in events
+        )
+
+    def test_refusal_precedes_the_link_check(self, db_session):
+        """A refused caller cannot probe whether two submissions are linked."""
+        alice = _uploader(db_session)
+        bob = _uploader(db_session, "bob")
+        old = _open_pending(db_session, alice.id)
+        unlinked = _open_pending(db_session, alice.id)
+        with pytest.raises(SubmissionSupersedeForbidden):
+            supersede_submission(
+                db_session,
+                old_submission_id=old.id,
+                new_submission_id=unlinked.id,
+                actor=bob,
             )
 
 

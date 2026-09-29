@@ -13,7 +13,8 @@ module only exposes:
 
 The supersede action is the one producer-facing write here (any
 authenticated caller, not only a curator), so it names both submissions
-by public ref and never by row id (#571).
+by public ref and never by row id (#571). The caller must own both
+submissions or be a curator/admin; the service enforces that.
 
 Direct ``/uploads/*`` ingestion is intentionally NOT routed through this
 module — trusted ingest stays free of moderation overhead.
@@ -56,6 +57,7 @@ from app.services.rights import (
     record_attestation,
 )
 from app.services.submission import (
+    SubmissionSupersedeForbidden,
     approve_submission,
     get_latest_llm_precheck_audit_event,
     get_submission,
@@ -294,15 +296,26 @@ def supersede(
     in either place. The replacing submission must already declare the old
     one as the submission it supersedes -- supersession asserts the link, it
     does not create it. Returns the newly-superseded *old* submission.
+
+    The caller must have created both submissions, or hold the curator or
+    admin role -- the rule every read on this router applies, here applied
+    to each of the two. Otherwise 403 ``submission_supersede_not_owner``.
+    An unknown ref is 404 whoever asks.
     """
     old = get_submission_by_ref(session, submission_ref)
     new = get_submission_by_ref(session, body.new_submission_ref)
-    old = supersede_submission(
-        session,
-        old_submission_id=old.id,
-        new_submission_id=new.id,
-        actor=actor,
-    )
+    try:
+        old = supersede_submission(
+            session,
+            old_submission_id=old.id,
+            new_submission_id=new.id,
+            actor=actor,
+        )
+    except SubmissionSupersedeForbidden as exc:
+        # The service decides who may supersede; the route only translates.
+        # 403, as for every other submission on this router the caller has
+        # no business with (``_require_view_permission``).
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return SubmissionRead.model_validate(old)
 
 

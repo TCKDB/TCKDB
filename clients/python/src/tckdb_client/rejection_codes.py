@@ -237,6 +237,7 @@ class RejectionCode(str, Enum):
     STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = "statmech_torsion_scan_calculation_owner_mismatch"
     STORED_SPECIES_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
     SUBJECT_TYPE_MISMATCH = "subject_type_mismatch"
+    SUBMISSION_SUPERSEDE_NOT_OWNER = "submission_supersede_not_owner"
     SUPERSEDES_SAME_RECORD = "supersedes_same_record"
     TCKDB_CLIENT_VERSION_INVALID = "tckdb_client_version_invalid"
     TCKDB_CLIENT_VERSION_MISSING = "tckdb_client_version_missing"
@@ -652,6 +653,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.STORED_SPECIES_SMILES_UNPARSEABLE: frozenset({422}),
     RejectionCode.SUBJECT_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER: frozenset({403}),
     RejectionCode.SUPERSEDES_SAME_RECORD: frozenset({422}),
     RejectionCode.TCKDB_CLIENT_VERSION_INVALID: frozenset({426}),
     RejectionCode.TCKDB_CLIENT_VERSION_MISSING: frozenset({426}),

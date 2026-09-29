@@ -494,6 +494,159 @@ class TestSupersede:
         assert resp.status_code == 400
 
 
+class TestSupersedeOwnership:
+    """Superseding needs the caller to own both submissions, or to curate.
+
+    The same rule as every read on this router (``_can_view``): the
+    submission's creator, or a curator/admin. Supersede touches two
+    submissions, so it is applied to each of them. The back-link from the
+    newer submission to the older one is set directly here, as no HTTP
+    route sets it today.
+    """
+
+    _NOT_OWNER = "submission_supersede_not_owner"
+
+    @staticmethod
+    def _pair(db_session, *, old_owner: int, new_owner: int):
+        old = _seed_submission(db_session, created_by=old_owner, title="old")
+        new = _seed_submission(
+            db_session,
+            created_by=new_owner,
+            title="new",
+            supersedes_submission_id=old.id,
+        )
+        return old, new
+
+    @staticmethod
+    def _post(client, old, new):
+        return client.post(
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_ref": new.public_ref},
+        )
+
+    def _assert_refused_and_untouched(self, db_session, resp, old, new) -> None:
+        assert resp.status_code == 403, resp.text
+        body = resp.json()
+        assert body["code"] == self._NOT_OWNER
+        # No database ids in the refusal: neither row id appears anywhere.
+        rendered = json.dumps(body)
+        for row_id in (old.id, new.id):
+            assert f"_id={row_id}" not in rendered
+            assert f'"id": {row_id}' not in rendered
+        leaked = [
+            key for key in (body.get("context") or {})
+            if key == "id" or key.endswith("_id")
+        ]
+        assert leaked == []
+        db_session.refresh(old)
+        assert old.status is not SubmissionStatus.superseded
+        events = db_session.scalars(
+            select(SubmissionAuditEvent).where(
+                SubmissionAuditEvent.event_kind.in_(
+                    [
+                        SubmissionAuditEventKind.submission_superseded,
+                        SubmissionAuditEventKind.correction_uploaded,
+                    ]
+                ),
+                SubmissionAuditEvent.submission_id.in_([old.id, new.id]),
+            )
+        ).all()
+        assert events == []
+
+    def test_non_owner_is_refused(
+        self, client, db_session, _api_test_user, _api_other_user, login_as
+    ):
+        old, new = self._pair(
+            db_session, old_owner=_api_test_user, new_owner=_api_test_user
+        )
+        login_as(_api_other_user)
+
+        resp = self._post(client, old, new)
+        self._assert_refused_and_untouched(db_session, resp, old, new)
+
+        # Control: the same pair, by its owner, supersedes -- so the 403
+        # above is about who asked, not about the pair.
+        login_as(_api_test_user)
+        assert self._post(client, old, new).status_code == 200
+
+    def test_owner_succeeds(self, client, db_session, _api_test_user):
+        old, new = self._pair(
+            db_session, old_owner=_api_test_user, new_owner=_api_test_user
+        )
+        resp = self._post(client, old, new)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["status"] == SubmissionStatus.superseded.value
+
+    def test_curator_and_admin_may_supersede_anothers_pair(
+        self,
+        client,
+        db_session,
+        _api_test_user,
+        _api_curator_user,
+        _api_admin_user,
+        login_as,
+    ):
+        for curating_user in (_api_curator_user, _api_admin_user):
+            old, new = self._pair(
+                db_session, old_owner=_api_test_user, new_owner=_api_test_user
+            )
+            login_as(curating_user)
+            resp = self._post(client, old, new)
+            assert resp.status_code == 200, resp.text
+            assert resp.json()["status"] == SubmissionStatus.superseded.value
+
+    def test_owning_only_the_old_submission_is_refused(
+        self, client, db_session, _api_test_user, _api_other_user, login_as
+    ):
+        old, new = self._pair(
+            db_session, old_owner=_api_other_user, new_owner=_api_test_user
+        )
+        login_as(_api_other_user)
+        resp = self._post(client, old, new)
+        self._assert_refused_and_untouched(db_session, resp, old, new)
+
+    def test_owning_only_the_new_submission_is_refused(
+        self, client, db_session, _api_test_user, _api_other_user, login_as
+    ):
+        old, new = self._pair(
+            db_session, old_owner=_api_test_user, new_owner=_api_other_user
+        )
+        login_as(_api_other_user)
+        resp = self._post(client, old, new)
+        self._assert_refused_and_untouched(db_session, resp, old, new)
+
+    def test_already_superseded_pair_is_still_refused_to_a_non_owner(
+        self, client, db_session, _api_test_user, _api_other_user, login_as
+    ):
+        """The idempotent return is not a way round the check."""
+        old, new = self._pair(
+            db_session, old_owner=_api_test_user, new_owner=_api_test_user
+        )
+        assert self._post(client, old, new).status_code == 200
+        login_as(_api_other_user)
+        resp = self._post(client, old, new)
+        assert resp.status_code == 403, resp.text
+        assert resp.json()["code"] == self._NOT_OWNER
+
+    def test_unknown_ref_is_still_404_for_a_non_owner(
+        self, client, db_session, _api_test_user, _api_other_user, login_as
+    ):
+        old = _seed_submission(db_session, created_by=_api_test_user, title="old")
+        missing = "sub_" + "0" * 26
+        login_as(_api_other_user)
+
+        for path_ref, body_ref in (
+            (old.public_ref, missing),
+            (missing, old.public_ref),
+        ):
+            resp = client.post(
+                f"/api/v1/submissions/{path_ref}/supersede",
+                json={"new_submission_ref": body_ref},
+            )
+            assert resp.status_code == 404, resp.text
+            assert missing in json.dumps(resp.json())
+
+
 # ---------------------------------------------------------------------------
 # Audit events / record links visibility
 # ---------------------------------------------------------------------------

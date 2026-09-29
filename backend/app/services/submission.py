@@ -12,8 +12,8 @@ module so that:
 
 The module deliberately does not handle authentication or authorisation
 itself; the caller (API route or workflow) must pass the acting user and
-this layer validates their :class:`AppUserRole` against the requested
-action.
+this layer validates their :class:`AppUserRole` (and, for supersession,
+their ownership of both submissions) against the requested action.
 
 Current moderation is entirely curator-driven. The ``mark_precheck_result``
 helper and the ``SubmissionActorKind.llm`` actor kind are reserved for a
@@ -26,6 +26,7 @@ approver.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Iterable, Optional
 
@@ -58,6 +59,8 @@ from app.services.record_review import (
 if TYPE_CHECKING:
     from app.services.llm_precheck.schemas import LLMPrecheckResult
     from app.services.machine_review.schemas import MachineReviewProviderResultV2
+
+logger = logging.getLogger(__name__)
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
@@ -122,6 +125,27 @@ def get_submission(session: Session, submission_id: int) -> Submission:
 def _require_curator(user: AppUser) -> None:
     if user.role not in _CURATION_ROLES:
         raise DomainError("Curator or admin role required for this action")
+
+
+class SubmissionSupersedeForbidden(DomainError):
+    """The actor may not supersede this pair -- 403 on the wire.
+
+    A class rather than a status literal so the raise site says who may do
+    what and the route only translates, as
+    :class:`app.services.rights.RightsAttestationForbidden` does. A
+    :class:`DomainError` subclass so that a caller which forgets to
+    translate it still refuses (400) rather than proceeding.
+    """
+
+
+def can_act_on_submission(submission: Submission, user: AppUser) -> bool:
+    """The submission's creator, or a curator/admin.
+
+    The rule every submission read on ``/api/v1/submissions`` applies
+    (``_can_view`` in ``app.api.routes.submissions``), stated here so a
+    service-level write can apply the same one.
+    """
+    return user.role in _CURATION_ROLES or submission.created_by == user.id
 
 
 # ---------------------------------------------------------------------------
@@ -651,9 +675,16 @@ def supersede_submission(
     *,
     old_submission_id: int,
     new_submission_id: int,
-    actor: AppUser | None = None,
+    actor: AppUser,
 ) -> Submission:
     """Mark ``old`` as superseded by ``new`` and log the link.
+
+    ``actor`` must be allowed to act on *both* submissions: the creator of
+    each, or a curator/admin (:func:`can_act_on_submission`). The check runs
+    before any other state is read, so a refused caller learns nothing about
+    the pair -- not whether it is linked, and not whether it is already
+    superseded. ``actor`` is required: there is no system path that skips
+    the check.
 
     Superseding preserves the prior submission intact (no hard-delete) and
     records a ``submission_superseded`` event on both the old submission
@@ -671,12 +702,31 @@ def supersede_submission(
     ``old.supersedes_submission_id`` is not touched; the replacing
     submission's ``supersedes_submission_id`` is (and should already be) set
     to ``old_submission_id`` — we verify that here rather than mutate it.
-    """
-    if old_submission_id == new_submission_id:
-        raise DomainError("A submission cannot supersede itself")
 
+    :raises SubmissionSupersedeForbidden: ``actor`` is neither curator/admin
+        nor the creator of both submissions.
+    """
     old = _require_submission(session, old_submission_id)
     new = _require_submission(session, new_submission_id)
+
+    if not (
+        can_act_on_submission(old, actor) and can_act_on_submission(new, actor)
+    ):
+        # Row ids go to the log, never to the caller (DR-0028 Requirement 2).
+        logger.info(
+            "supersede refused: actor=%s old=%s new=%s",
+            actor.id,
+            old.id,
+            new.id,
+        )
+        raise SubmissionSupersedeForbidden(
+            "submission_supersede_not_owner: only the account that created "
+            "both submissions, or a curator or admin, may supersede one with "
+            "the other."
+        )
+
+    if old_submission_id == new_submission_id:
+        raise DomainError("A submission cannot supersede itself")
 
     if new.supersedes_submission_id != old_submission_id:
         raise DomainError(
@@ -690,10 +740,8 @@ def supersede_submission(
     old.status = SubmissionStatus.superseded
     session.flush()
 
-    actor_user_id = actor.id if actor is not None else None
-    actor_kind = (
-        resolve_actor_kind(actor) if actor is not None else SubmissionActorKind.system
-    )
+    actor_user_id = actor.id
+    actor_kind = resolve_actor_kind(actor)
 
     append_audit_event(
         session,
