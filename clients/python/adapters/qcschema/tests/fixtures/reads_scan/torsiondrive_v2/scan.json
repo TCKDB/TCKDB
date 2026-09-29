@@ -1,0 +1,183 @@
+{
+  "calculation": {
+    "calculation_ref": "calc_dgdlvnaqpauezetin647npzd54",
+    "created_at": "2026-09-29T15:11:08.878214",
+    "quality": "raw",
+    "review": {
+      "note": null,
+      "reviewed_at": null,
+      "reviewer_kind": null,
+      "status": "not_reviewed"
+    },
+    "type": "scan"
+  },
+  "coordinates": [
+    {
+      "atom1_index": 3,
+      "atom2_index": 1,
+      "atom3_index": 2,
+      "atom4_index": 4,
+      "atom_indices": [
+        3,
+        1,
+        2,
+        4
+      ],
+      "coordinate_index": 1,
+      "coordinate_kind": "dihedral",
+      "end_value": null,
+      "resolution_degrees": 90,
+      "start_value": null,
+      "step_count": null,
+      "step_size": 90.0,
+      "symmetry_number": null,
+      "value_unit": "degree"
+    }
+  ],
+  "owner": {
+    "kind": "species_entry",
+    "species_entry": {
+      "canonical_smiles": "OO",
+      "charge": 0,
+      "electronic_state_kind": "ground",
+      "formula": "H2O2",
+      "inchi_key": "MHAJPDPJQMAIIY-UHFFFAOYSA-N",
+      "multiplicity": 1,
+      "species_entry_kind": "minimum",
+      "species_entry_label": null,
+      "species_entry_ref": "spe_yundfz63if4d4sc4t2pafbbwei",
+      "species_ref": "spc_cxvr2gvnalyko24zgwkod5ph44"
+    },
+    "transition_state_entry": null
+  },
+  "pagination": {
+    "limit": 200,
+    "offset": 0,
+    "post_collapse_total": 4,
+    "returned": 4,
+    "total": 4
+  },
+  "points": [
+    {
+      "coordinate_values": [
+        {
+          "coordinate_index": 1,
+          "coordinate_value": -90.0,
+          "value_unit": "degree"
+        }
+      ],
+      "electronic_energy_hartree": -148.76416544459573,
+      "geometry_link": {
+        "geom_hash": "c6ba8f4dd73cb81eeb0ee4b034f81815897bea3db19097f83e60033239539ddd",
+        "geometry_ref": "geom_vpiwjwagn5w3plmdq2xq4dbbnu",
+        "natoms": 4
+      },
+      "geometry_ref": "geom_vpiwjwagn5w3plmdq2xq4dbbnu",
+      "note": null,
+      "point_index": 1,
+      "relative_energy_kj_mol": null
+    },
+    {
+      "coordinate_values": [
+        {
+          "coordinate_index": 1,
+          "coordinate_value": 0.0,
+          "value_unit": "degree"
+        }
+      ],
+      "electronic_energy_hartree": -148.75056290180424,
+      "geometry_link": {
+        "geom_hash": "12f054334d64e5a9057a4736533e5966e9da94e9eff44c325e64f71564ff163c",
+        "geometry_ref": "geom_2zmku2ff7msbdrlbkoq7vzoytm",
+        "natoms": 4
+      },
+      "geometry_ref": "geom_2zmku2ff7msbdrlbkoq7vzoytm",
+      "note": null,
+      "point_index": 2,
+      "relative_energy_kj_mol": null
+    },
+    {
+      "coordinate_values": [
+        {
+          "coordinate_index": 1,
+          "coordinate_value": 90.0,
+          "value_unit": "degree"
+        }
+      ],
+      "electronic_energy_hartree": -148.76416544456302,
+      "geometry_link": {
+        "geom_hash": "27bcb5e142666acd3c178ec42d47c77b475d79d2396e83bc41f366699f995194",
+        "geometry_ref": "geom_y2mtjg24egr6p2does7npl4p7a",
+        "natoms": 4
+      },
+      "geometry_ref": "geom_y2mtjg24egr6p2does7npl4p7a",
+      "note": null,
+      "point_index": 3,
+      "relative_energy_kj_mol": null
+    },
+    {
+      "coordinate_values": [
+        {
+          "coordinate_index": 1,
+          "coordinate_value": 180.0,
+          "value_unit": "degree"
+        }
+      ],
+      "electronic_energy_hartree": -148.7650133699291,
+      "geometry_link": {
+        "geom_hash": "da0cd30261385393194c66651ad1df9f510b501a6ce95025ac801d71c81606e2",
+        "geometry_ref": "geom_o5uj32hmz3ktczmbmopy4gxzui",
+        "natoms": 4
+      },
+      "geometry_ref": "geom_o5uj32hmz3ktczmbmopy4gxzui",
+      "note": null,
+      "point_index": 4,
+      "relative_energy_kj_mol": null
+    }
+  ],
+  "request": {
+    "include": [],
+    "include_geometries": true,
+    "limit": 200,
+    "offset": 0,
+    "profile": "exploratory",
+    "profile_recommendation": "none",
+    "profile_release_ref": null,
+    "sort": "point_index"
+  },
+  "scan": {
+    "coordinate_count": 1,
+    "coordinates": [
+      {
+        "atom1_index": 3,
+        "atom2_index": 1,
+        "atom3_index": 2,
+        "atom4_index": 4,
+        "atom_indices": [
+          3,
+          1,
+          2,
+          4
+        ],
+        "coordinate_index": 1,
+        "coordinate_kind": "dihedral",
+        "end_value": null,
+        "resolution_degrees": 90,
+        "start_value": null,
+        "step_count": null,
+        "step_size": 90.0,
+        "symmetry_number": null,
+        "value_unit": "degree"
+      }
+    ],
+    "dimension": 1,
+    "is_relaxed": true,
+    "max_electronic_energy_hartree": -148.75056290180424,
+    "max_relative_energy_kj_mol": null,
+    "min_electronic_energy_hartree": -148.7650133699291,
+    "min_relative_energy_kj_mol": null,
+    "note": null,
+    "point_count": 4,
+    "zero_energy_reference_hartree": null
+  }
+}

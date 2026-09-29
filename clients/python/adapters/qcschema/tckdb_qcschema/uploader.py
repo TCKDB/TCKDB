@@ -59,9 +59,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
-from .errors import E_ALREADY_IMPORTED, E_ARTIFACT_TOO_LARGE, QCSchemaAdapterError
+from .errors import (
+    E_ALREADY_IMPORTED,
+    E_ARTIFACT_TOO_LARGE,
+    E_SCAN_PARENT_ALREADY_IMPORTED,
+    QCSchemaAdapterError,
+)
 from .reader import QCRecord
 
 #: Refused above this size, per the plan's stated artifact cap.
@@ -220,12 +226,163 @@ def upload_record(
     )
 
 
+# ---------------------------------------------------------------------------
+# Scans: one computed-species bundle per torsion drive
+# ---------------------------------------------------------------------------
+
+#: A torsion drive and its parent optimization go up together, as one
+#: bundle with both raw documents inline -- one request, so there is no
+#: partial run to recover from.
+_COMPUTED_SPECIES_PATH = "/uploads/computed-species"
+
+
+def scan_bundle_idempotency_key(
+    canonical_sha256: str,
+    parent_canonical_sha256: str,
+    *,
+    nonce: str | None = None,
+    additional_canonical_sha256s: Sequence[str] = (),
+) -> str:
+    """``qcschema:<sha[:32]>:computed-species``, over *every* document.
+
+    The hash is ``sha256("<drive sha>[:<drive sha>...]:<parent sha>")`` over
+    the canonical-document hashes, drives in the order given: the same drive
+    with a different parent, or the same parent with another set of drives,
+    is a different bundle and must not replay the first one. For a single
+    drive this is ``sha256("<drive sha>:<parent sha>")``.
+    """
+    parts = [canonical_sha256, *additional_canonical_sha256s, parent_canonical_sha256]
+    combined = hashlib.sha256(":".join(parts).encode()).hexdigest()
+    suffix = f":dup-{nonce}" if nonce else ""
+    return f"qcschema:{combined[:32]}:computed-species{suffix}"
+
+
+def precheck_parent(client, raw_sha256: str, *, allow_duplicate: bool) -> None:
+    """Refuse ``scan_parent_already_imported`` if the parent is already deposited.
+
+    A drive's parent optimization is posted inside the bundle as the
+    conformer's ``opt``. If an earlier import already deposited it (the
+    usual case: a first rotor was imported alone), posting it again would
+    store the optimization twice, and the computed-species bundle has no way
+    to point at the conformer an earlier upload created. So the refusal
+    names the way that works -- every drive from this optimization in one
+    import -- rather than ``--allow-duplicate``, which would store the second
+    copy.
+    """
+    response = client.request_json(
+        "GET", _ARTIFACT_SEARCH_PATH, params={"sha256": raw_sha256, "limit": 1}
+    )
+    data = response.data if hasattr(response, "data") else response
+    records = (data or {}).get("records", []) if isinstance(data, dict) else []
+    if records and not allow_duplicate:
+        existing = records[0]
+        existing_calc_id = (existing.get("calculation") or {}).get("calculation_id")
+        raise QCSchemaAdapterError(
+            E_SCAN_PARENT_ALREADY_IMPORTED,
+            f"the parent optimization (sha256={raw_sha256}) is already "
+            f"deposited (calculation_id={existing_calc_id!r}). A torsion-drive "
+            f"import posts its parent again as the conformer's opt, and cannot "
+            f"attach a scan to a conformer an earlier upload created, so this "
+            f"import would store that optimization a second time. Import every "
+            f"drive that started from it together, in one bundle: "
+            f"tckdb-qcschema import DRIVE1.json DRIVE2.json ... --parent-opt "
+            f"OPT.json. Nothing was posted.",
+            existing=existing,
+        )
+
+
+@dataclass
+class ScanUploadOutcome:
+    """What happened for one imported bundle (one parent, one or more drives)."""
+
+    scan_calculation_ids: list[int]
+    opt_calculation_id: int
+    replayed: bool
+    response: dict
+
+    @property
+    def scan_calculation_id(self) -> int:
+        """The first drive's calculation id."""
+        return self.scan_calculation_ids[0]
+
+
+def upload_scan_bundle(
+    client,
+    record: QCRecord,
+    parent_record: QCRecord,
+    payload: dict,
+    *,
+    raw_bytes: bytes,
+    raw_sha256: str,
+    parent_raw_bytes: bytes,
+    parent_raw_sha256: str,
+    allow_duplicate: bool = False,
+    dry_run: bool = False,
+    duplicate_nonce: str | None = None,
+    additional_drives: Sequence[tuple[QCRecord, bytes, str]] = (),
+) -> ScanUploadOutcome | dict:
+    """Precheck every raw document, then POST the bundle once.
+
+    :param additional_drives: ``(record, raw_bytes, raw_sha256)`` for every
+        drive after the first, in the bundle's order.
+
+    Each drive already deposited refuses ``already_imported`` (the
+    :func:`upload_record` contract, ``--allow-duplicate`` included). The
+    parent already deposited refuses ``scan_parent_already_imported``
+    (:func:`precheck_parent`).
+    """
+    drives = [(record, raw_bytes, raw_sha256), *additional_drives]
+    for label, data in [
+        *((f"torsion drive {i + 1}", d[1]) for i, d in enumerate(drives)),
+        ("parent optimization", parent_raw_bytes),
+    ]:
+        if len(data) > MAX_ARTIFACT_BYTES:
+            raise QCSchemaAdapterError(
+                E_ARTIFACT_TOO_LARGE,
+                f"the {label} document is {len(data)} bytes, exceeding the "
+                f"{MAX_ARTIFACT_BYTES}-byte cap.",
+                bytes=len(data),
+            )
+
+    nonce = (duplicate_nonce or uuid.uuid4().hex[:12]) if allow_duplicate else None
+    key = scan_bundle_idempotency_key(
+        record.canonical_sha256,
+        parent_record.canonical_sha256,
+        nonce=nonce,
+        additional_canonical_sha256s=[d[0].canonical_sha256 for d in additional_drives],
+    )
+    if dry_run:
+        return {
+            "computed_species_idempotency_key": key,
+            "calculation_type": "scan",
+            "drive_count": len(drives),
+        }
+
+    for _record, _raw, sha in drives:
+        precheck_duplicate(client, sha, allow_duplicate=allow_duplicate)
+    precheck_parent(client, parent_raw_sha256, allow_duplicate=allow_duplicate)
+
+    response = client.request_json("POST", _COMPUTED_SPECIES_PATH, json=payload, idempotency_key=key)
+    data = response.data
+    conformer = data["conformers"][0]
+    return ScanUploadOutcome(
+        scan_calculation_ids=[c["calculation_id"] for c in conformer["additional_calculations"]],
+        opt_calculation_id=conformer["primary_calculation"]["calculation_id"],
+        replayed=bool(response.idempotency_replayed),
+        response=data,
+    )
+
+
 __all__ = [
     "MAX_ARTIFACT_BYTES",
+    "ScanUploadOutcome",
     "UploadOutcome",
     "sha256_bytes",
     "conformers_idempotency_key",
     "artifact_idempotency_key",
     "precheck_duplicate",
+    "precheck_parent",
+    "scan_bundle_idempotency_key",
     "upload_record",
+    "upload_scan_bundle",
 ]

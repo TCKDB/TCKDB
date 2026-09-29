@@ -1,0 +1,61 @@
+{
+  "drives": [
+    {
+      "pins": {
+        "coordinate_atoms": [
+          [
+            3,
+            1,
+            2,
+            4
+          ]
+        ],
+        "dimension": 1,
+        "point_count": 4,
+        "points": [
+          {
+            "coordinate_values": [
+              -90.0
+            ],
+            "electronic_energy_hartree": -148.76416544459573,
+            "grid_key": "-90"
+          },
+          {
+            "coordinate_values": [
+              0.0
+            ],
+            "electronic_energy_hartree": -148.75056290180424,
+            "grid_key": "0"
+          },
+          {
+            "coordinate_values": [
+              90.0
+            ],
+            "electronic_energy_hartree": -148.76416544456302,
+            "grid_key": "90"
+          },
+          {
+            "coordinate_values": [
+              180.0
+            ],
+            "electronic_energy_hartree": -148.7650133699291,
+            "grid_key": "180"
+          }
+        ]
+      },
+      "raw_sha256": "a3ba011ae78cadfddeaf50ec1f5bd8d985e644bef72104c690fb39c60dbd038f",
+      "source_case": "torsiondrive_v1"
+    }
+  ],
+  "expected_calculation_type": "scan",
+  "family": "v1",
+  "generator": {
+    "adapter_version": "0.6.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixtures": [
+      "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_v1"
+    ]
+  },
+  "parent_opt_case": "torsiondrive_parent_opt_v1",
+  "parent_raw_sha256": "3e6475db6d5ff02b2b600795eec96f6f0501fec0e12c094bbf545a135e4f10d8"
+}

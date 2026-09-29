@@ -101,6 +101,18 @@ _V2_SPELLING: dict[str, tuple[tuple[str, str], ...]] = {
         ("energies", "trajectory_properties"),
         ("trajectory", "trajectory_results"),
     ),
+    # :mod:`tckdb_qcschema.scan` writes its entries in the document's own
+    # spelling already; this table respells the branch-owned paths below.
+    "torsion_drive": (
+        ("input_specification.model", "input_data.specification.specification.specification.model"),
+        ("input_specification.keywords", "input_data.specification.specification.specification.keywords"),
+        ("optimization_spec.keywords", "input_data.specification.specification.keywords"),
+        ("optimization_spec.procedure", "input_data.specification.specification.program"),
+        ("keywords", "input_data.specification.keywords"),
+        ("initial_molecule", "input_data.initial_molecule"),
+        ("optimization_history", "scan_results"),
+        ("final_energies", "scan_properties"),
+    ),
 }
 
 #: Fields the mapping branch itself must classify, in v1 spelling. Never
@@ -129,6 +141,23 @@ _BRANCH_OWNED: dict[str, tuple[str, ...]] = {
         "input_specification.keywords",
         "trajectory",
         "energies",
+        "provenance.creator",
+        "provenance.version",
+    ),
+    # Every grid point's energy and final molecule, the drive's starting
+    # molecule(s) and the per-point optimizations are the branch's own:
+    # their keys are the document's grid points, so no static rule can
+    # name them.
+    "torsion_drive": (
+        "success",
+        "keywords.dihedrals",
+        "keywords.grid_spacing",
+        "initial_molecule",
+        "final_molecules",
+        "final_energies",
+        "optimization_history",
+        "input_specification.model.method",
+        "input_specification.model.basis",
         "provenance.creator",
         "provenance.version",
     ),
@@ -190,6 +219,77 @@ def _properties(model_cls: Any) -> dict[str, str]:
     }
 
 
+def _torsion_drive_rules(family: str) -> dict[str, str]:
+    """A ``TorsionDriveResult``'s fixed structure (see :mod:`tckdb_qcschema.scan`).
+
+    The grid-keyed parts (``final_molecules``, ``final_energies`` /
+    ``scan_properties``, ``optimization_history`` / ``scan_results``) and the
+    starting molecules are branch-owned. The rules marked ``T`` here are
+    fields the branch reads whenever they are present (grid ranges and
+    thresholds, keywords, program names); they are named so the pinned
+    models are covered, and never fill in for the branch.
+    """
+    rules: dict[str, str] = {
+        "schema_name": R,
+        "schema_version": R,
+        "id": R,
+        "error": U,
+        "stdout": U,
+        "stderr": U,
+    }
+    if family == "v1":
+        rules.update(
+            {
+                "keywords.dihedral_ranges": T,
+                "keywords.energy_decrease_thresh": T,
+                "keywords.energy_upper_limit": T,
+                "input_specification.schema_name": R,
+                "input_specification.schema_version": R,
+                # qcelemental requires ``gradient`` for a torsion drive.
+                "input_specification.driver": R,
+                "input_specification.keywords": T,
+                "optimization_spec.schema_name": R,
+                "optimization_spec.schema_version": R,
+                "optimization_spec.procedure": T,
+                "optimization_spec.keywords": T,
+                "optimization_spec.protocols": R,
+            }
+        )
+        return rules
+    spec = "input_data.specification"
+    rules.update(
+        {
+            "native_files": U,
+            "input_data.id": R,
+            "input_data.schema_name": R,
+            "input_data.schema_version": R,
+            "input_data.provenance": R,
+            f"{spec}.schema_name": R,
+            f"{spec}.program": T,
+            f"{spec}.protocols": R,
+            f"{spec}.keywords.schema_name": R,
+            f"{spec}.keywords.dihedral_ranges": T,
+            f"{spec}.keywords.energy_decrease_thresh": T,
+            f"{spec}.keywords.energy_upper_limit": T,
+            f"{spec}.specification.schema_name": R,
+            f"{spec}.specification.program": T,
+            f"{spec}.specification.keywords": T,
+            f"{spec}.specification.protocols": R,
+            f"{spec}.specification.specification.schema_name": R,
+            # The ESS program: read only when no per-point trajectory
+            # survives to name the release (the branch then marks it).
+            f"{spec}.specification.specification.program": R,
+            f"{spec}.specification.specification.driver": R,
+            f"{spec}.specification.specification.protocols": R,
+            f"{spec}.specification.specification.keywords": T,
+        }
+    )
+    rules.update(
+        {f"properties.{name}": R for name in _declared(qcel_v2.TorsionDriveProperties)}
+    )
+    return rules
+
+
 def _static_rules(family: str, record_kind: str) -> dict[str, str]:
     """Fields this profile knows and never maps, in the document's spelling."""
     if record_kind == "atomic":
@@ -225,6 +325,9 @@ def _static_rules(family: str, record_kind: str) -> dict[str, str]:
             )
             rules.update(_properties(qcel_v2.AtomicProperties))
         return rules
+
+    if record_kind == "torsion_drive":
+        return _torsion_drive_rules(family)
 
     rules = {"schema_name": R, "schema_version": R, "id": R, "error": U}
     if family == "v1":
@@ -344,6 +447,7 @@ def _extras_containers(rules: dict[str, str]) -> list[str]:
         "input_data.specification.extras",
         "input_specification.extras",
         "input_data.specification.specification.extras",
+        "input_data.specification.specification.specification.extras",
     ]
 
 

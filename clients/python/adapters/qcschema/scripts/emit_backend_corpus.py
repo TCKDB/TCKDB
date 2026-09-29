@@ -127,12 +127,97 @@ def _emit_case(case: str) -> None:
     print(f"emitted {case} -> {out_dir}")
 
 
-def main() -> int:
+#: The TorsionDrive route cases: backend case -> the adapter drive
+#: fixture(s) it bundles. Every drive in one case shares one
+#: ``meta.json["parent_opt_case"]`` and maps into one
+#: ``ComputedSpeciesUploadRequest`` -- see :mod:`tckdb_qcschema.scan` --
+#: written to its own corpus directory, ``qcschema_scan/``, as
+#: ``payload.json`` (every raw document is already inline in it as an
+#: artifact, so there is no separate ``artifact.json`` or ``document.json``)
+#: plus ``meta.json``, whose ``drives`` list pins each scan calculation in
+#: bundle order. ``torsiondrive_two_rotors_v2`` is two 1-D drives from one
+#: optimization in one bundle: one ``opt``, two ``scan`` calculations.
+SCAN_ROUTE_CASES: dict[str, tuple[str, ...]] = {
+    "torsiondrive_v1": ("torsiondrive_v1",),
+    "torsiondrive_v2": ("torsiondrive_v2",),
+    "torsiondrive_2d_v2": ("torsiondrive_2d_v2",),
+    "torsiondrive_two_rotors_v2": ("torsiondrive_rotor1_v2", "torsiondrive_rotor2_v2"),
+}
+BACKEND_SCAN_CORPUS = REPO_ROOT / "backend" / "tests" / "fixtures" / "qcschema_scan"
+
+
+def _emit_scan_case(case: str, drive_cases: tuple[str, ...]) -> None:
+    from tckdb_qcschema.scan import DriveDocument, build_scan_bundle_payload
+
+    drives = []
+    for drive_case in drive_cases:
+        src_dir = ADAPTER_FIXTURES / drive_case
+        raw = (src_dir / "document.json").read_bytes()
+        meta = json.loads((src_dir / "meta.json").read_text())
+        if sha256_bytes(raw) != meta["raw_sha256"]:
+            raise ValueError(f"{drive_case}: document.json drifted from its meta.json sha256.")
+        drives.append((drive_case, raw, meta))
+    parent_cases = {meta["parent_opt_case"] for _c, _r, meta in drives}
+    if len(parent_cases) != 1:
+        raise ValueError(f"{case}: drives name different parents {sorted(parent_cases)}.")
+    (parent_case,) = parent_cases
+    parent_raw = (ADAPTER_FIXTURES / parent_case / "document.json").read_bytes()
+    parent_meta = json.loads((ADAPTER_FIXTURES / parent_case / "meta.json").read_text())
+    if sha256_bytes(parent_raw) != parent_meta["raw_sha256"]:
+        raise ValueError(f"{parent_case}: document.json drifted from its meta.json sha256.")
+
+    documents = [
+        DriveDocument(read_document(raw), raw, f"{name}.qcschema.json", meta["raw_sha256"])
+        for name, raw, meta in drives
+    ]
+    first, *additional = documents
+    bundle = build_scan_bundle_payload(
+        first.record,
+        raw_bytes=first.raw_bytes,
+        raw_artifact_filename=first.filename,
+        raw_artifact_sha256=first.sha256,
+        parent_record=read_document(parent_raw),
+        parent_raw_bytes=parent_raw,
+        parent_artifact_filename=f"{parent_case}.qcschema.json",
+        parent_artifact_sha256=parent_meta["raw_sha256"],
+        declared_smiles=drives[0][2]["smiles_arg"],
+        additional_drives=additional,
+    )
+    out_dir = BACKEND_SCAN_CORPUS / case
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "payload.json").write_text(json.dumps(bundle.payload, indent=2, sort_keys=True) + "\n")
+    meta = {
+        "expected_calculation_type": "scan",
+        "family": drives[0][2]["family"],
+        "parent_opt_case": parent_case,
+        "parent_raw_sha256": parent_meta["raw_sha256"],
+        "drives": [
+            {"source_case": name, "raw_sha256": meta["raw_sha256"], "pins": meta["pins"]}
+            for name, _raw, meta in drives
+        ],
+        "generator": {
+            "adapter_version": ADAPTER_VERSION,
+            "qcelemental_version": qcelemental.__version__,
+            "source_fixtures": [f"clients/python/adapters/qcschema/tests/fixtures/{name}" for name in drive_cases],
+        },
+    }
+    (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n")
+    print(f"emitted {case} -> {out_dir}")
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``--scans-only`` re-emits the scan corpus and leaves the conformer
+    corpus's files untouched (they would otherwise change only in the
+    adapter version they record)."""
+    argv = sys.argv[1:] if argv is None else argv
     if not ADAPTER_FIXTURES.exists():
         print(f"adapter fixtures directory not found: {ADAPTER_FIXTURES}", file=sys.stderr)
         return 1
-    for case in ROUTE_CASES:
-        _emit_case(case)
+    if "--scans-only" not in argv:
+        for case in ROUTE_CASES:
+            _emit_case(case)
+    for case, drive_cases in SCAN_ROUTE_CASES.items():
+        _emit_scan_case(case, drive_cases)
     return 0
 
 

@@ -1,0 +1,108 @@
+{
+  "drives": [
+    {
+      "pins": {
+        "coordinate_atoms": [
+          [
+            1,
+            2,
+            3,
+            4
+          ]
+        ],
+        "dimension": 1,
+        "point_count": 4,
+        "points": [
+          {
+            "coordinate_values": [
+              -90.0
+            ],
+            "electronic_energy_hartree": -222.57703498068383,
+            "grid_key": "-90"
+          },
+          {
+            "coordinate_values": [
+              0.0
+            ],
+            "electronic_energy_hartree": -222.57183658124703,
+            "grid_key": "0"
+          },
+          {
+            "coordinate_values": [
+              90.0
+            ],
+            "electronic_energy_hartree": -222.5806096707767,
+            "grid_key": "90"
+          },
+          {
+            "coordinate_values": [
+              180.0
+            ],
+            "electronic_energy_hartree": -222.5758030632713,
+            "grid_key": "180"
+          }
+        ]
+      },
+      "raw_sha256": "791b7fcfb4e6f019ab835b1e72e36df56597931b2b5bd70fa9af3951bc3dba9e",
+      "source_case": "torsiondrive_rotor1_v2"
+    },
+    {
+      "pins": {
+        "coordinate_atoms": [
+          [
+            2,
+            3,
+            4,
+            5
+          ]
+        ],
+        "dimension": 1,
+        "point_count": 4,
+        "points": [
+          {
+            "coordinate_values": [
+              -90.0
+            ],
+            "electronic_energy_hartree": -222.5770349806749,
+            "grid_key": "-90"
+          },
+          {
+            "coordinate_values": [
+              0.0
+            ],
+            "electronic_energy_hartree": -222.5718365814159,
+            "grid_key": "0"
+          },
+          {
+            "coordinate_values": [
+              90.0
+            ],
+            "electronic_energy_hartree": -222.5806096708923,
+            "grid_key": "90"
+          },
+          {
+            "coordinate_values": [
+              180.0
+            ],
+            "electronic_energy_hartree": -222.57580306326122,
+            "grid_key": "180"
+          }
+        ]
+      },
+      "raw_sha256": "568cc62bce195d1876a42d185e09b94380d65e4b78f2dec142d4b6902db78b81",
+      "source_case": "torsiondrive_rotor2_v2"
+    }
+  ],
+  "expected_calculation_type": "scan",
+  "family": "v2",
+  "generator": {
+    "adapter_version": "0.6.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixtures": [
+      "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_rotor1_v2",
+      "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_rotor2_v2"
+    ]
+  },
+  "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
+  "parent_raw_sha256": "caa3ea7400b720794bf5aa5b3628d375b2286311c8b45aad79fe95c3cf7fb3d1"
+}

@@ -20,6 +20,13 @@ Six independently-testable stages, mirroring ``tckdb_chemkin``'s layout:
    calculation, read back through ``tckdb-client``, as a QCSchema v2
    ``AtomicResult`` document.
 
+Scans: :mod:`tckdb_qcschema.scan` maps a ``TorsionDriveResult`` (QCSchema's
+only scan model) plus the optimization it started from to a
+computed-species bundle whose conformer carries the scan, and
+:mod:`tckdb_qcschema.scan_export` exports a stored relaxed dihedral scan
+back out as a v2 ``TorsionDriveResult``. QCSchema has no IRC model, so an
+IRC is neither imported nor exported.
+
 Stages 1-4 are pure (no network, no DB). ``uploader`` and ``exporter`` are
 the two stages that touch the network, and only through a caller-supplied
 ``tckdb-client``.
@@ -27,6 +34,6 @@ the two stages that touch the network, and only through a caller-supplied
 
 from __future__ import annotations
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = ["__version__"]
