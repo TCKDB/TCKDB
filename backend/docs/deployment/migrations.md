@@ -574,6 +574,15 @@ change of the level of theory it rests on.
 - `trg_calculation_lot_not_merged` on `calculation` refuses a `lot_id` that
   names a merged row (on insert, or when `lot_id` changes).
 
+**Do not downgrade below `e88231299733` after a merge `--commit` unless the
+`c8424fe82997` holder-choice fix is in your tree** (the version of that revision
+that prints "Who holds a key" in its docstring). Older text of that revision
+could crash on such a downgrade.
+
+**Isolation level.** The triggers' race safety assumes READ COMMITTED (the
+default and the only level the application uses); see the `e88231299733`
+docstring.
+
 The upgrade prints how many chain links and stranded calculations already
 exist. Both should be 0; existing rows are reported, not rejected. The
 downgrade prints how many merges the table holds: downgrading further, past

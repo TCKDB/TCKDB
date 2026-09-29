@@ -275,7 +275,9 @@ def _lot_match(
             lot_status = "partial"
 
     if basis is not None:
-        if basis_identity_key(lot.basis) == basis_identity_key(basis):
+        wanted = basis_identity_key(basis)
+        # A blank request has no key; it must not "match" a row with no basis.
+        if wanted is not None and basis_identity_key(lot.basis) == wanted:
             mb.add(LOT_BASIS_EXACT, "basis matched exactly")
         else:
             mb.add(LOT_BASIS_MISMATCH, f"basis mismatch: have {lot.basis}, want {basis}")

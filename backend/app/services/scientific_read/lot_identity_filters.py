@@ -27,8 +27,19 @@ from app.chemistry.basis_set_names import HYPHEN_RULES, basis_identity_key
 from app.chemistry.method_names import method_identity_key
 from app.db.models.level_of_theory import LevelOfTheory
 
-#: Postgres ``\s`` is the regex space class; Python's ``str.strip`` strips
-#: the same characters for every name a wire schema lets through.
+#: Edge whitespace, stripped in SQL to mirror ``str.strip`` in Python.
+#:
+#: Known divergences between the SQL key and the Python key (no real method or
+#: basis name is affected, and each errs toward "no match", never a false one):
+#:
+#: * Whitespace. ``LevelOfTheoryRef`` strips values on the wire, so every row
+#:   written through the API has none at its edges and the two agree. Rows that
+#:   bypass it (archive restore, ``seed_scientific_demo_data.py``) may not, and
+#:   Python's ``strip`` removes some characters (NBSP, U+2003, U+3000, U+0085,
+#:   U+001C..U+001F) that Postgres ``\s`` may not.
+#: * Case. ``lower`` in Postgres follows the database's ctype (the Pi reports
+#:   ``server_encoding`` UTF8); Python's follows Unicode. They differ on a few
+#:   characters, such as ``I`` with a dot above and Greek final sigma.
 _EDGE_WHITESPACE = r"^\s+|\s+$"
 
 

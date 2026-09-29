@@ -272,3 +272,106 @@ def test_an_alias_beside_its_holder_needs_no_update(harness):
     completed = harness.run("upgrade", _MIGRATION.revision)
     assert _snapshot(harness.engine) == before
     assert "0 row(s) re-hashed, 0 duplicate group(s)" in completed.stdout
+
+
+def _insert(conn, key, method, basis, lot_hash) -> int:
+    return conn.scalar(
+        text(
+            "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "
+            "VALUES (:m, :b, :h, :r) RETURNING id"
+        ),
+        {"m": method, "b": basis, "h": lot_hash, "r": make_content_ref("lot", f"{key}:{lot_hash}")},
+    )
+
+
+def _stale(n: int) -> str:
+    return hashlib.sha256(f"stale:{n}".encode()).hexdigest()
+
+
+def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
+    """The review's lifecycle: a blocked #582 group, upgrade, ``--commit``, downgrade.
+
+    ``L15`` (``MP2/cc-pVDZ``) is older and carries an approved calculation, so
+    the #582 script could not merge it into ``L16`` (``MP2/cc-pvdz``), which
+    holds the pre-#585 key. The re-key must give the new key to ``L16`` (the
+    previous holder), not to the older row: otherwise the script merges the
+    holder into ``L15`` and the downgrade needs the hash the merged row kept.
+    A second, unblocked group gives the script something to merge.
+    """
+    import subprocess
+    from datetime import datetime
+
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
+    from app.db.models.record_review import RecordReview
+
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        species_id = conn.scalar(
+            text(
+                "INSERT INTO species (kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
+                "VALUES (CAST('molecule' AS molecule_kind), 'O', "
+                "'XLYOFNOQVPJJNP-UHFFFAOYSA-N', 0, 1, CAST('unspecified' AS stereo_kind)) "
+                "RETURNING id"
+            )
+        )
+        entry_id = conn.scalar(
+            text("INSERT INTO species_entry (species_id) VALUES (:s) RETURNING id"),
+            {"s": species_id},
+        )
+        older = _insert(conn, "l15", "MP2", "cc-pVDZ", _stale(15))
+        holder = _insert(conn, "l16", "MP2", "cc-pvdz", _prior_hash("MP2", "cc-pvdz"))
+        dup = _insert(conn, "x1", "CCSD", "cc-pVDZ", _stale(1))
+        keeper = _insert(conn, "x2", "CCSD", "cc-pvdz", _prior_hash("CCSD", "cc-pvdz"))
+        calcs = {}
+        for name, lot in (("older", older), ("holder", holder), ("dup", dup), ("keeper", keeper)):
+            calcs[name] = conn.scalar(
+                text(
+                    "INSERT INTO calculation (type, species_entry_id, lot_id) "
+                    "VALUES (CAST('sp' AS calc_type), :e, :l) RETURNING id"
+                ),
+                {"e": entry_id, "l": lot},
+            )
+    with Session(harness.engine) as session:
+        curator = AppUser(username="rekey-curator", role=AppUserRole.curator)
+        session.add(curator)
+        session.flush()
+        when = datetime(2026, 9, 1)
+        session.add(
+            RecordReview(
+                record_type=SubmissionRecordType.calculation,
+                record_id=calcs["older"],
+                status=RecordReviewStatus.approved,
+                reviewed_by=curator.id,
+                reviewed_at=when,
+                first_approved_at=when,
+            )
+        )
+        session.commit()
+    original = _snapshot(harness.engine)
+
+    harness.run("upgrade", _MIGRATION.revision)
+    after_upgrade = _snapshot(harness.engine)
+    # The previous holder takes the key, not the older row.
+    assert after_upgrade[holder][1] == _keyed_hash("MP2", "cc-pvdz")
+    assert after_upgrade[older][1] == original[older][1]
+
+    merged = subprocess.run(
+        [
+            "conda", "run", "-n", "tckdb_env", "python",
+            "scripts/ops/merge_duplicate_levels_of_theory.py", "--commit",
+        ],
+        cwd=harness.root, env=harness.env, capture_output=True, text=True, check=False,
+    )
+    assert merged.returncode == 0, merged.stderr[-3000:]
+    with harness.engine.connect() as conn:
+        pairs = set(
+            conn.execute(
+                text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")
+            ).all()
+        )
+    # The unblocked group merged; the approved calculation blocked the other.
+    assert pairs == {(dup, keeper)}, merged.stdout[-3000:]
+
+    harness.run("downgrade", _MIGRATION.parent)
+    assert _snapshot(harness.engine) == original

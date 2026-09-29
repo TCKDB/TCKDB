@@ -175,17 +175,46 @@ def test_the_seeded_fixture_is_not_empty(db_session):
 # ---------------------------------------------------------------------------
 
 _APP = pathlib.Path(__file__).resolve().parents[3] / "app"
-_RAW_COMPARISON = re.compile(r"LevelOfTheory\.(method|basis)\s*==")
+_COLUMN = r"\b(?:LevelOfTheory|lot)\.(?:method|basis)\b"
+#: A raw comparison of a stored method/basis spelling, in any of the forms a
+#: filter takes: ``==`` / ``!=`` either way round (the operator may follow a
+#: line break), ``.in_``, ``.ilike``, ``.like`` and ``.startswith``, and a
+#: hand-rolled ``func.lower(...)``.
+_RAW_COMPARISON = re.compile(
+    rf"{_COLUMN}\s*[=!]="
+    rf"|[=!]=\s*{_COLUMN}"
+    rf"|{_COLUMN}\s*\.\s*(?:in_|not_in|ilike|like|startswith|contains)\b"
+    rf"|lower\(\s*{_COLUMN}",
+    re.S,
+)
 
 
 def test_no_read_path_compares_a_raw_method_or_basis_spelling():
     """Every ``method=`` / ``basis=`` filter goes through ``lot_identity_filters``."""
     offenders = []
     for path in sorted(_APP.rglob("*.py")):
-        for number, line in enumerate(path.read_text().splitlines(), 1):
-            if _RAW_COMPARISON.search(line):
-                offenders.append(f"{path.relative_to(_APP)}:{number}: {line.strip()}")
+        text = path.read_text()
+        for match in _RAW_COMPARISON.finditer(text):
+            number = text.count("\n", 0, match.start()) + 1
+            offenders.append(f"{path.relative_to(_APP)}:{number}: {match.group(0)!r}")
     assert not offenders, "\n".join(offenders)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "stmt.where(LevelOfTheory.method == request.method)",
+        "stmt.where(request.method == LevelOfTheory.method)",
+        "stmt.where(LevelOfTheory.basis\n    == request.basis)",
+        "stmt.where(LevelOfTheory.basis != x)",
+        "stmt.where(LevelOfTheory.method.in_(names))",
+        "stmt.where(LevelOfTheory.basis.ilike('def2%'))",
+        "stmt.where(func.lower(LevelOfTheory.method) == 'b3lyp')",
+        "stmt.where(lot.basis == basis)",
+    ],
+)
+def test_the_scan_pattern_catches_each_form(line):
+    assert _RAW_COMPARISON.search(line), line
 
 
 def test_the_scan_sees_the_files_it_is_meant_to_scan():

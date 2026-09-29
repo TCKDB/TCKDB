@@ -36,8 +36,17 @@ Concurrency
 -----------
 Both triggers lock the level-of-theory rows they reason about (the merge guard
 ``FOR UPDATE``, lowest id first; the calculation guard ``FOR KEY SHARE``, the
-lock the foreign key takes anyway) before they read, so a merge and an upload
-racing on one row serialise, and whichever commits second sees the first.
+lock the foreign key takes anyway) before they read. Under READ COMMITTED
+(the PostgreSQL default, and the only isolation level this application uses)
+each statement after the lock takes a fresh snapshot, so a merge and an
+upload racing on one row serialise: the second to take the lock waits, then
+sees what the first committed.
+
+**This is not safe under REPEATABLE READ or SERIALIZABLE.** There the
+transaction's snapshot predates the lock wait, so the second trigger does not
+see the first's commit, and a calculation can be stranded on a merged row (or
+the reverse). Nothing in this codebase writes at those levels; a future writer
+that does must not rely on these triggers for that race.
 
 Why triggers, not application code
 ----------------------------------

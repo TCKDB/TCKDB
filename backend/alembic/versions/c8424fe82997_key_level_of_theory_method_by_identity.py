@@ -23,8 +23,8 @@ What this revision writes
     combined with two spellings of one basis) share a new hash, and
     ``lot_hash`` is unique, so only one of them can hold it. It goes to the
     row that already holds it, if any, and otherwise to the row with the
-    smallest id. The others keep their old hash. New uploads resolve to the
-    holder, so no new calculation joins the others, but their existing
+    smallest id (see "Who holds a key" below). The others keep their old hash.
+    New uploads resolve to the holder, so no new calculation joins the others, but their existing
     calculations still point at them. This revision does not merge them:
     ``scripts/ops/merge_duplicate_levels_of_theory.py`` does, as a
     dry-run-first operator step, using the same ``level_of_theory_merge``
@@ -36,6 +36,28 @@ What this revision writes
     hash it kept resolves nothing. A group always has an unmerged member,
     because a merge only joins rows the key already equates and this key only
     equates more.
+
+Who holds a key
+---------------
+In each group of rows that now share one hash, exactly one row can hold it.
+The holder is, in order:
+
+1. the unmerged row that already holds the target hash;
+2. the unmerged row whose current hash equals the hash its own *previous*
+   formula gives (the row that held the key of the formula this revision
+   replaces; on downgrade, the row that holds this revision's key). Choosing
+   it makes upgrade-then-downgrade exact, and keeps the row the #582 merge
+   script chose as its holder as the holder here. Without this rule, an older
+   row that only ever carried a stale hash could take the key, the script
+   would then merge the true holder into it, and the downgrade would need the
+   hash the merged row kept: a unique violation;
+3. the unmerged row with the smallest id.
+
+A hash **held by a merged row** is occupied: a merged row keeps its hash, and
+it is not touched here. If a target is occupied that way, that group's update
+is skipped and reported (both directions), rather than violating
+``uq_level_of_theory_lot_hash``. Rule 2 makes this unreachable for data the
+merge script produced; the check is the backstop.
 
 Why the merge is not in this revision
 -------------------------------------
@@ -78,8 +100,11 @@ Every row whose stored hash came from the post-revision formula gets the
 pre-revision one back exactly: the formula reads only columns this revision
 never writes. Rows whose pre-revision hash is shared (the two cases of one
 method that were merged, or that this revision left as duplicates) cannot all
-hold it: the row already holding it keeps it, otherwise the smallest unmerged
-id takes it, and the others keep their current, unique hash.
+hold it: the holder is chosen by the rules above (so a row that upgrade
+re-hashed gets its previous hash back), and the others keep their current,
+unique hash. Upgrade then downgrade restores every hash exactly, with or
+without merges in between (``tests/services/test_level_of_theory_rekey_plan.py``
+checks this over randomised lifecycles).
 
 Revision ID: c8424fe82997
 Revises: 38b06819f099
@@ -159,49 +184,76 @@ def _lot_hash(row, *, keyed_method: bool) -> str:
 
 
 def assign_hashes(
-    rows, target_of, merged_ids: set[int]
-) -> tuple[dict[int, str], list[tuple[object, list]]]:
+    rows, target_of, prior_target_of, merged_ids: set[int]
+) -> tuple[dict[int, str], list[tuple[object, list]], list[object]]:
     """Give each distinct target hash to exactly one unmerged row.
 
-    Rows are grouped by ``target_of(row)``. In each group the target goes to
-    the unmerged row that already holds it, otherwise to the unmerged row
-    with the smallest id; every other member keeps its current hash. A merged
-    row is an alias: it is never the holder and never re-hashed.
+    Rows are grouped by ``target_of(row)``. The holder is chosen as described
+    in the module docstring: the row already holding the target, else the row
+    whose hash is the one ``prior_target_of(row)`` gives, else the smallest
+    id. A merged row is an alias: never the holder, never re-hashed, and its
+    hash counts as occupied.
 
-    :returns: ``(updates, groups)``: row id -> new hash for rows whose hash
-        changes, and ``(holder, others)`` for every group with two or more
-        unmerged members.
+    :returns: ``(updates, groups, blocked)``: row id -> new hash for rows
+        whose hash changes; ``(holder, others)`` for every group with two or
+        more unmerged members; and the holders whose update was skipped
+        because a merged row holds their target.
     """
     by_target: dict[str, list] = defaultdict(list)
+    merged_hashes: set[str] = set()
     for row in rows:
-        if row._mapping["id"] not in merged_ids:
+        if row._mapping["id"] in merged_ids:
+            merged_hashes.add(row._mapping["lot_hash"])
+        else:
             by_target[target_of(row)].append(row)
 
     updates: dict[int, str] = {}
     groups: list[tuple[object, list]] = []
+    blocked: list[object] = []
     for target, members in by_target.items():
+        by_id = sorted(members, key=lambda m: m._mapping["id"])
         holder = next(
-            (m for m in members if m._mapping["lot_hash"] == target),
-            min(members, key=lambda m: m._mapping["id"]),
+            (m for m in by_id if m._mapping["lot_hash"] == target),
+            next(
+                (m for m in by_id if m._mapping["lot_hash"] == prior_target_of(m)),
+                by_id[0],
+            ),
         )
         if holder._mapping["lot_hash"] != target:
-            updates[holder._mapping["id"]] = target
+            if target in merged_hashes:
+                blocked.append(holder)
+            else:
+                updates[holder._mapping["id"]] = target
         others = [m for m in members if m is not holder]
         if others:
             groups.append((holder, others))
-    return updates, groups
+    return updates, groups, blocked
 
 
-def plan_rekey(rows, merged_ids: set[int]) -> tuple[dict[int, str], list[tuple[str, list[str]]]]:
+def plan_rekey(rows, merged_ids: set[int]):
     """Upgrade plan, with duplicate groups named by ``public_ref``."""
-    updates, groups = assign_hashes(
-        rows, lambda row: _lot_hash(row, keyed_method=True), merged_ids
+    updates, groups, blocked = assign_hashes(
+        rows,
+        lambda row: _lot_hash(row, keyed_method=True),
+        lambda row: _lot_hash(row, keyed_method=False),
+        merged_ids,
     )
     named = [
         (holder._mapping["public_ref"], [m._mapping["public_ref"] for m in others])
         for holder, others in groups
     ]
-    return updates, named
+    return updates, named, [h._mapping["public_ref"] for h in blocked]
+
+
+def plan_unkey(rows, merged_ids: set[int]):
+    """Downgrade plan: the pre-revision formula, mirror of :func:`plan_rekey`."""
+    updates, groups, blocked = assign_hashes(
+        rows,
+        lambda row: _lot_hash(row, keyed_method=False),
+        lambda row: _lot_hash(row, keyed_method=True),
+        merged_ids,
+    )
+    return updates, groups, [h._mapping["public_ref"] for h in blocked]
 
 
 def _apply(bind, updates: dict[int, str]) -> None:
@@ -220,7 +272,7 @@ def _merged_ids(bind) -> set[int]:
 def upgrade() -> None:
     bind = op.get_bind()
     rows = bind.execute(_SELECT_ROWS).all()
-    updates, groups = plan_rekey(rows, _merged_ids(bind))
+    updates, groups, blocked = plan_rekey(rows, _merged_ids(bind))
     _apply(bind, updates)
     print(
         f"level_of_theory method identity re-key: {len(updates)} row(s) re-hashed, "
@@ -229,14 +281,14 @@ def upgrade() -> None:
     )
     for holder, others in groups:
         print(f"  {holder} holds the key; also spelled as {', '.join(others)}")
+    for ref in blocked:
+        print(f"  {ref} NOT re-hashed: a merged row already holds its new hash.")
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     rows = bind.execute(_SELECT_ROWS).all()
-    updates, groups = assign_hashes(
-        rows, lambda row: _lot_hash(row, keyed_method=False), _merged_ids(bind)
-    )
+    updates, groups, blocked = plan_unkey(rows, _merged_ids(bind))
     _apply(bind, updates)
     if groups:
         print(
@@ -244,3 +296,5 @@ def downgrade() -> None:
             "pre-#585 hash (the same method in two cases); one row per group took "
             "it and the others kept their current hash."
         )
+    for ref in blocked:
+        print(f"  {ref} NOT re-hashed: a merged row already holds its pre-#585 hash.")

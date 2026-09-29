@@ -36,6 +36,11 @@ rule. The same goes for ``HF`` / ``RHF``, and ``UB3LYP`` / ``B3LYP`` (the
 spin treatment lives in its own column). Each pair keeps two keys: a split is
 recoverable, because the merge script joins it later; a false merge is not.
 
+The SQL twin used by the search filters
+(``scientific_read/lot_identity_filters.py``) agrees with this key on every
+real method name; its documented divergences are exotic Unicode and edge
+whitespace that the wire schema already removes.
+
 This module is pure. The Alembic revision that re-keys existing rows
 (``c8424fe82997``) carries a frozen copy of this rule, and a test holds the
 two in agreement.

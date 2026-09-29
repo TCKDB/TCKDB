@@ -84,3 +84,21 @@ def test_a_different_method_still_misses(client):
     codes = resp.json()["match"]["detail_codes"]
     assert "lot_method_exact" not in codes
     assert "lot_method_mismatch" in codes or "calculation_none" in codes, codes
+
+
+def test_a_blank_basis_request_does_not_claim_a_match_with_a_row_that_has_none():
+    from types import SimpleNamespace
+
+    from app.api.routes.lookup import _lot_match, _MatchBuilder
+
+    lot = SimpleNamespace(method="hf", basis=None, dispersion=None, solvent=None)
+    mb = _MatchBuilder()
+    _lot_match(lot, None, "", mb)
+    assert "lot_basis_exact" not in mb.codes
+    assert "lot_basis_mismatch" in mb.codes
+
+    # And a real match still reports as one.
+    mb = _MatchBuilder()
+    lot.basis = "Def2TZVP"
+    _lot_match(lot, None, "def2-tzvp", mb)
+    assert "lot_basis_exact" in mb.codes
