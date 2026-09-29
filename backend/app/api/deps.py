@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
@@ -16,8 +18,11 @@ from app.db.models.common import AppUserRole
 from app.services.auth import (
     API_KEY_HEADER,
     SESSION_COOKIE_NAME,
-    authenticate_api_key,
+    record_api_key_use,
     resolve_session,
+)
+from app.services.auth import (
+    authenticate_api_key as _authenticate_api_key,
 )
 from app.services.deposit_ownership import (
     ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES,
@@ -28,7 +33,35 @@ engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
-def _install_statement_timeout_listener(target_engine) -> None:
+logger = logging.getLogger(__name__)
+
+
+def _stamp_api_key_use(key_id: int) -> None:
+    """Record that an API key was just used, without ever failing the request.
+
+    Every route that authenticates by API key goes through
+    :func:`authenticate_api_key` below, so read, write, legacy-read and
+    optional-auth routes all stamp ``last_used_at`` the same way: in a
+    transaction of their own, on a dedicated pool (``StampSessionLocal``), not
+    the request's session and never waiting on the request's pool.
+    Session-cookie auth has no ``last_used_at`` column and is unaffected.
+    """
+    try:
+        record_api_key_use(StampSessionLocal, key_id)
+    except (SQLAlchemyError, OSError):
+        # Database and connection failures only: a bug elsewhere (and any
+        # coded refusal) must stay loud rather than be logged and forgotten.
+        logger.warning("could not record api_key.last_used_at", exc_info=True)
+
+
+def authenticate_api_key(session: Session, raw_key: str) -> AppUser | None:
+    """Authenticate *raw_key* and stamp its ``last_used_at`` out of band."""
+    return _authenticate_api_key(
+        session, raw_key, on_authenticated=_stamp_api_key_use
+    )
+
+
+def _install_statement_timeout_listener(target_engine, *, persist: bool = False) -> None:
     """Apply ``settings.db_statement_timeout_ms`` on every new DBAPI connection.
 
     Registered as a ``connect`` event so the timeout follows pooled
@@ -42,6 +75,14 @@ def _install_statement_timeout_listener(target_engine) -> None:
     level listener is a belt-and-braces safety net, not the
     authoritative configuration. See F13 in
     ``docs/specs/public_read_abuse_controls.md``.
+
+    ``persist=True`` commits the ``SET`` so it survives the pool's
+    rollback-on-return. Without it the ``SET`` sits in the implicit
+    transaction psycopg opens, and the first rollback undoes it: measured,
+    only a connection's first checkout carries the timeout, later ones report
+    ``0``. That is the long-standing behaviour of the main engine and is left
+    as it is here (enforcing 30 s on it would change what deployed uploads
+    can do); the stamp engine is new and opts in.
     """
     timeout_ms = settings.db_statement_timeout_ms
     if not timeout_ms or timeout_ms <= 0:
@@ -57,9 +98,46 @@ def _install_statement_timeout_listener(target_engine) -> None:
             cursor.execute(f"SET statement_timeout = {int(timeout_ms)}")
         finally:
             cursor.close()
+        if persist:
+            dbapi_connection.commit()
 
 
 _install_statement_timeout_listener(engine)
+
+#: Pool shape of the engine that records ``api_key.last_used_at``. Two
+#: connections, no overflow, and a quarter-second wait: the stamp is a
+#: best-effort audit write made while the request still holds its own
+#: connection from ``SessionLocal``'s pool, so it must never queue for one.
+#: Drawing on that shared pool stalled every stamping request for the full
+#: ``pool_timeout`` once it was saturated, lost the stamp, and left the key
+#: due again on the next request (#597 review). A separate small pool cannot
+#: be starved by requests and adds at most two connections per process --
+#: unlike ``NullPool``, which would open one per stamp and let a burst of
+#: distinct keys exceed Postgres ``max_connections``.
+STAMP_POOL_SIZE = 2
+STAMP_POOL_TIMEOUT_S = 0.25
+
+
+def _derive_stamp_engine(source: Engine) -> Engine:
+    """A small dedicated engine that connects exactly as *source* does.
+
+    Reuses the source pool's connection factory rather than the URL, so an
+    engine that refuses to connect (see ``tests/conftest.py``) still refuses.
+    """
+    derived = create_engine(
+        source.url,
+        creator=source.pool._creator,  # type: ignore[attr-defined]
+        pool_size=STAMP_POOL_SIZE,
+        max_overflow=0,
+        pool_timeout=STAMP_POOL_TIMEOUT_S,
+        pool_pre_ping=True,
+    )
+    _install_statement_timeout_listener(derived, persist=True)
+    return derived
+
+
+stamp_engine = _derive_stamp_engine(engine)
+StampSessionLocal = sessionmaker(bind=stamp_engine, expire_on_commit=False)
 
 
 def bind_ambient_session_factory(new_engine) -> Engine:
@@ -92,18 +170,30 @@ def bind_ambient_session_factory(new_engine) -> Engine:
     ``from app.api.deps import SessionLocal`` at import time follow the
     rebind — rebinding only the module attribute would not reach them.
 
+    The dedicated stamp engine (:data:`stamp_engine`, behind
+    :data:`StampSessionLocal`) is rebound with it: a fresh small engine is
+    derived from *new_engine* (:func:`_derive_stamp_engine`, which reuses its
+    connection factory, so it reaches the same database, or refuses in the
+    same way), :data:`StampSessionLocal` is pointed at it, and the previous
+    stamp engine is disposed.
+
     Returns the previous engine so a caller can restore it. The caller
     owns *new_engine* entirely, including its pooling and any statement
-    timeout: no listener is installed here, because a rebinder that
+    timeout: no listener is installed on it here, because a rebinder that
     silently imposed ``settings.db_statement_timeout_ms`` on someone
-    else's engine would be changing behaviour behind their back.
+    else's engine would be changing behaviour behind their back. The
+    derived stamp engine is this module's own, so it does get the listener.
 
     Called by ``backend/tests/conftest.py``; not used in deployment.
     """
-    global engine
+    global engine, stamp_engine
     previous = engine
     engine = new_engine
     SessionLocal.configure(bind=new_engine)
+    old_stamp_engine = stamp_engine
+    stamp_engine = _derive_stamp_engine(new_engine)
+    StampSessionLocal.configure(bind=stamp_engine)
+    old_stamp_engine.dispose()
     return previous
 
 
