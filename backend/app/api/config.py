@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     rate_limit_anon_read_per_minute: int = 60
     rate_limit_auth_read_per_minute: int = 300
     rate_limit_auth_write_per_minute: int = 30
+    # ``bundle_dry_run`` -- ``POST /bundles/dry-run``, which rehearses a
+    # full submit (#584) and so costs the server as much as one. Its own
+    # bucket, tighter than ``auth_write``, so test runs neither spend the
+    # allowance real uploads need nor let one credential run a full
+    # import's worth of work 30 times a minute (#586).
+    rate_limit_bundle_dry_run_per_minute: int = 10
     rate_limit_anon_other_per_minute: int = 20
 
     # Auth-surface throttles. These are deliberately tight: login is
@@ -92,6 +98,20 @@ class Settings(BaseSettings):
     # target. Both are keyed by client IP.
     rate_limit_auth_login_per_minute: int = 10
     rate_limit_register_per_hour: int = 10
+
+    # Caps on one contribution bundle, shared by ``/bundles/dry-run`` and
+    # ``/bundles/submit`` (#586). Measured on what the repo holds: the
+    # example bundles are 1.4 and 1.9 KB with one record each, and the
+    # largest ARC run fixture (513 KB of output.yml, whole-run data most of
+    # which a bundle never carries) has four species and one reaction. The
+    # defaults sit about ten times above the biggest whole ARC run file, and
+    # a hundred times above the record count of any run measured.
+    #
+    # ``bundle_max_body_bytes`` is enforced before the body is parsed
+    # (``app.api.bundle_limits``); ``bundle_max_records`` (thermo plus
+    # kinetics uploads) once it has been. ``0`` disables a cap.
+    bundle_max_body_bytes: int = 5 * 1024 * 1024
+    bundle_max_records: int = 500
 
     # When set, the middleware reads the client IP from this header.
     # Only enable when the deployment terminates TLS behind a trusted

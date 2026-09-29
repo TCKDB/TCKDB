@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 206 | `backend/app/api/code_catalogue.py` |
-| **total** | **495** | |
+| Refusal codes a caller can receive | 208 | `backend/app/api/code_catalogue.py` |
+| **total** | **497** | |
 
 ## How a record is named
 
@@ -702,7 +702,13 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (154 codes)
+### HTTP 413 (1 code)
+
+| Code | Names |
+| --- | --- |
+| `bundle_too_large` | a relationship — read `context` |
+
+### HTTP 422 (155 codes)
 
 | Code | Names |
 | --- | --- |
@@ -720,6 +726,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `atom_map_participant_not_declared` | a thing |
 | `atom_map_without_transition_state` | a thing |
 | `bac_total_requires_components` | a relationship — read `context` |
+| `bundle_too_many_records` | a relationship — read `context` |
 | `calculation_geometry_composition_mismatch` | a relationship — read `context` |
 | `calculation_handle_conflict` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |

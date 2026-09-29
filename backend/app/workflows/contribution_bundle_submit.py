@@ -482,9 +482,11 @@ def rehearse_contribution_bundle_submit(
     Crossref/ISBN lookup a new reference needs is not made while the
     rehearsal holds row locks: the fetch is cached in-process
     (``app.services.literature_metadata``), and the rehearsal's own lookup
-    then answers from the cache. A fetch that failed is not cached, so for
-    that reference the rehearsal tries again -- and holds its locks across
-    that attempt, as submit does.
+    then answers from the cache. A fetch that failed is not cached for
+    other callers; it is remembered for the rehearsal's one lookup only (a
+    few seconds, then forgotten), so the rehearsal does not repeat the failed
+    request while holding its locks, and a real submit sent afterwards still
+    retries it.
 
     :returns: ``None`` when submit would succeed, otherwise the exception it
         raised -- rendered by the caller through the app's own handlers --

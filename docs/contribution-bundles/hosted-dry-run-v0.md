@@ -101,10 +101,15 @@ Nothing a dry run does is kept:
   A refusal below the ORM also discards the physical connection, so the
   server aborts the transaction and no pooled connection can carry the
   writes to the next request.
-- **Not guarded:** a raw DBAPI connection or cursor taken from under
-  SQLAlchemy, and any other connection, engine or session the rehearsed
-  code opens for itself. Nothing in the submit path does either; code that
-  starts to would be outside this guarantee.
+- `commit()` on the raw DBAPI connection under SQLAlchemy's connection is
+  refused too: while the rehearsal runs, that one connection object's
+  `commit` is replaced by a refusal, and restored afterwards (#592).
+- **Not guarded:** SQL sent through a raw DBAPI *cursor*, and any other
+  connection, engine or session the rehearsed code opens for itself.
+  Nothing in the submit path does either, and a repo test forbids reaching
+  for `dbapi_connection` / `driver_connection` anywhere else under `app/`
+  (which is how a raw cursor would be obtained); code that starts to would
+  be outside this guarantee.
 - Code being rehearsed cannot tell it is: no module under `app/workflows`,
   `app/services` or `app/chemistry` other than the rehearsal itself may
   ask whether it is inside a savepoint (a repo test enforces it), so the
@@ -116,9 +121,38 @@ metadata lookup made for a literature reference not already on the
 instance -- the same lookup submit makes. That lookup is made *before* the
 rehearsal opens, and cached in-process (by DOI/ISBN, no database ids, 24 h
 TTL, 1024 entries), so a repeated dry run -- or the submit that follows it
--- does not fetch again. A lookup that failed is not cached; for that
-reference the rehearsal tries again and holds its locks across the
-attempt, as submit does.
+-- does not fetch again. A lookup that failed is not cached for
+anyone else -- a Crossref timeout is not "this DOI has no metadata", and a
+submit sent just after must still retry it -- but the prefetch leaves a
+one-use note of the failure, good for a few seconds, that the rehearsal's own
+lookup consumes, so the failed request is not repeated while the rehearsal
+holds its locks.
+
+## Limits on one bundle and on dry runs
+
+A dry run does a full submit's work, so it is bounded (#586):
+
+- **Body size**: a request body over `BUNDLE_MAX_BODY_BYTES` (default 5 MiB)
+  is refused `413 bundle_too_large` before it is parsed, on both
+  `/bundles/dry-run` and `/bundles/submit`. A declared `Content-Length` is
+  refused without reading the body; a chunked body is refused as soon as it
+  passes the cap.
+- **Record count**: more than `BUNDLE_MAX_RECORDS` (default 500) thermo plus
+  kinetics records is refused `422 bundle_too_many_records`, on both routes.
+  The count is known only once the bundle is parsed, so this is checked after
+  the body cap.
+- **Rate**: `/bundles/dry-run` has its own bucket,
+  `RATE_LIMIT_BUNDLE_DRY_RUN_PER_MINUTE` (default 10 per credential), separate
+  from `auth_write` in both directions; over it, `429 rate_limit_exceeded`
+  with `bucket: bundle_dry_run`.
+
+The defaults sit far above what was measured: the example bundles are 1.4 and
+1.9 KB with one record each, and the largest ARC run fixture in the repo (513
+KB of `output.yml`, most of which a bundle does not carry) holds four species
+and one reaction.
+
+Every dry run writes one INFO log line: the user id, the record count, the
+duration and the outcome, never the payload.
 
 ## Sharing the database with real deposits
 
@@ -129,11 +163,15 @@ dry run from being the reason a real deposit fails:
   and never more than half the server's `deadlock_timeout` (default 1 s),
   so it gives up before a real submit waiting on it would run its own
   deadlock check.
-- Where the database role may (a superuser, as in the default
-  deployment), it runs with `deadlock_timeout` of 10 ms, so when it closes
-  a deadlock it finds the cycle, and is aborted, long before the submit
-  would. Without that privilege the submit can still lose a deadlock that
-  forms within the `lock_timeout` window.
+- Where the database role may (only a superuser can), it runs with
+  `deadlock_timeout` of 10 ms, so when it closes a deadlock it finds the
+  cycle, and is aborted, long before the submit would. The shipped
+  deployment does not run as a superuser (`DB_USER=tckdb_app`, a
+  non-superuser role that `production_checklist.md` and `database_roles.md`
+  require), so that is the path in use: the rehearsal keeps the server's
+  `deadlock_timeout`, and the submit could lose only a deadlock that forms
+  within the `lock_timeout` window. Measured over 108 forced collisions on
+  that role, the real submit won every one.
 
 A dry run that gives way answers **`503 dry_run_contended`**, with
 `context.reason` `lock_timeout` or `deadlock` and `Retry-After: 1`. It

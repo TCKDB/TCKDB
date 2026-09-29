@@ -24,9 +24,16 @@ attempts to publish its writes are refused with
   of any savepoint not opened inside the rehearsal
   (``before_cursor_execute``).
 
-Not guarded: a raw DBAPI connection or cursor obtained from under
-SQLAlchemy, and any other connection, engine or session the rehearsed code
-opens for itself. Nothing in the submit path does either.
+* ``commit()`` on the raw DBAPI connection under that ``Connection``
+  (#592): while the rehearsal runs, that one instance's ``commit`` is
+  replaced by a refusal, and restored afterwards.
+
+Not guarded: SQL text sent through a raw DBAPI *cursor*, and any other
+connection, engine or session the rehearsed code opens for itself. Nothing
+in the submit path does either, and
+``tests/api/test_api_bundle_dry_run_submit_parity.py`` forbids reaching for
+``dbapi_connection`` or ``driver_connection`` anywhere else under ``app/``,
+which is how a raw cursor would be obtained.
 
 It also keeps a rehearsal from hurting real writers. Its inserts take the
 same locks a submit's do, so it waits at most ``lock_timeout`` for another
@@ -62,6 +69,9 @@ _CONTENDED_SQLSTATES = {"55P03": "lock_timeout", "40P01": "deadlock"}
 _COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
 _SAVEPOINT = re.compile(r"^\s*SAVEPOINT\s+(\S+)", re.I)
 _RELEASE = re.compile(r"^\s*RELEASE\s+(?:SAVEPOINT\s+)?(\S+)", re.I)
+_ROLLBACK_TO = re.compile(
+    r"^\s*ROLLBACK\s+(?:WORK\s+|TRANSACTION\s+)?TO\s+(?:SAVEPOINT\s+)?(\S+)", re.I
+)
 _PUBLISHING = re.compile(r"^\s*(COMMIT|END|PREPARE\s+TRANSACTION)\b", re.I)
 
 
@@ -105,7 +115,19 @@ def _statements(sql: str) -> Iterator[str]:
 
 
 def _savepoint_name(raw: str) -> str:
-    return raw.strip().strip('"')
+    """The name PostgreSQL would resolve: quoted as written, else folded to lower case."""
+    raw = raw.strip()
+    if len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"':
+        return raw[1:-1].replace('""', '"')
+    return raw.lower()
+
+
+def _most_recent(stack: list[str], name: str) -> int | None:
+    """Index of the newest savepoint called ``name``, as PostgreSQL picks it."""
+    for index in range(len(stack) - 1, -1, -1):
+        if stack[index] == name:
+            return index
+    return None
 
 
 @contextmanager
@@ -126,9 +148,16 @@ def rehearsal(session: Session) -> Iterator[None]:
     * The submit waits first, the rehearsal second. The rehearsal's own
       check finds the cycle ``REHEARSAL_DEADLOCK_TIMEOUT_MS`` after it began
       waiting, long before the submit's does -- where the role may set
-      ``deadlock_timeout`` (a superuser; the default deployment). Otherwise
-      the window in which the submit can still lose is ``lock_timeout``
-      wide.
+      ``deadlock_timeout``, which needs a superuser. The role that ships
+      does not have that: ``.env.selfhosted.example`` sets
+      ``DB_USER=tckdb_app``, and ``docs/deployment/production_checklist.md``
+      and ``docs/deployment/database_roles.md`` require a non-superuser API
+      role. So the path that runs in deployment is the second one: the
+      rehearsal keeps the server's ``deadlock_timeout``, and the window in
+      which the submit can still lose is ``lock_timeout`` wide. That path
+      was measured over 108 forced collisions (#592) and the real submit won
+      every one. The superuser branch is kept for a deployment that runs the
+      API as one; it is not what is tested against the shipped role.
 
     What this cannot fix is plain blocking in the other direction: a submit
     that needs a row the rehearsal has just inserted waits until the
@@ -139,8 +168,12 @@ def rehearsal(session: Session) -> Iterator[None]:
     """
     discard_unflushed_writes(session)
     connection = session.connection()
-    ours: list[str] = []
-    inner: set[str] = set()
+    # The savepoints open on the connection, oldest first, mirroring
+    # PostgreSQL's own stack. ``stack[0]`` is the rehearsal's; a name can
+    # appear more than once (PostgreSQL allows it, and a RELEASE or
+    # ROLLBACK TO addresses the *newest* one), so identity is the position,
+    # never the name (#592).
+    stack: list[str] = []
     # Set when a refusal fired below the ORM. SQLAlchemy may by then believe
     # the transaction is over, and return the connection to the pool without
     # rolling it back -- still holding the rehearsal's writes, for the next
@@ -155,15 +188,17 @@ def rehearsal(session: Session) -> Iterator[None]:
     def _guard_sql(_conn, _cursor, statement, _params, _context, _many):
         for stmt in _statements(statement):
             if match := _SAVEPOINT.match(stmt):
-                name = _savepoint_name(match.group(1))
-                if ours:
-                    inner.add(name)
-                else:
-                    ours.append(name)
+                stack.append(_savepoint_name(match.group(1)))
             elif match := _RELEASE.match(stmt):
-                if _savepoint_name(match.group(1)) not in inner:
+                index = _most_recent(stack, _savepoint_name(match.group(1)))
+                if not index:  # unknown, or the rehearsal's own at position 0
                     below_orm.append(True)
                     raise _refuse(f"release a savepoint it did not open ({stmt.strip()!r})")
+                del stack[index:]  # releases it and everything opened after it
+            elif match := _ROLLBACK_TO.match(stmt):
+                index = _most_recent(stack, _savepoint_name(match.group(1)))
+                if index is not None:
+                    del stack[index + 1 :]  # the target stays; later ones are gone
             elif _PUBLISHING.match(stmt):
                 below_orm.append(True)
                 raise _refuse(f"send {stmt.strip()!r}")
@@ -172,8 +207,21 @@ def rehearsal(session: Session) -> Iterator[None]:
         below_orm.append(True)
         raise _refuse("commit its connection")
 
+    # The driver's own connection object. Its ``commit`` is shadowed on this
+    # one instance -- the class is untouched, so no other connection is
+    # affected -- and the shadow is removed in ``finally``. SQLAlchemy's own
+    # commit reaches this method only after the ``commit`` event above has
+    # already refused, so the two never disagree about what is refused.
+    raw_connection = connection.connection.dbapi_connection
+
+    def _guard_raw_commit(*_args, **_kwargs) -> None:
+        below_orm.append(True)
+        raise _refuse("commit the raw DBAPI connection")
+
     event.listen(connection, "before_cursor_execute", _guard_sql)
     event.listen(connection, "commit", _guard_connection_commit)
+    if raw_connection is not None:
+        raw_connection.commit = _guard_raw_commit
     savepoint = session.begin_nested()
 
     def _guard_session_commit(target: Session) -> None:
@@ -211,22 +259,29 @@ def rehearsal(session: Session) -> Iterator[None]:
             raise
         raise RehearsalContended(reason) from exc
     finally:
-        if below_orm:
-            # Discard the physical connection: the server aborts its open
-            # transaction when it goes, whatever SQLAlchemy believes about
-            # it, so no pooled connection can carry these writes onward.
-            connection.invalidate()
-        else:
-            try:
-                savepoint.rollback()
-            except ResourceClosedError:
-                # Already rolled back: SQLAlchemy does that itself when the
-                # ORM-level release of it is refused above. It cannot have
-                # been released instead -- that is what the guards refuse.
-                pass
-        event.remove(session, "before_commit", _guard_session_commit)
-        event.remove(connection, "commit", _guard_connection_commit)
-        event.remove(connection, "before_cursor_execute", _guard_sql)
+        # The listeners and the raw-commit shadow live on per-request
+        # objects, but a raise from the rollback below must not leave them
+        # attached: they are removed in an inner ``finally`` (#592).
+        try:
+            if below_orm:
+                # Discard the physical connection: the server aborts its open
+                # transaction when it goes, whatever SQLAlchemy believes about
+                # it, so no pooled connection can carry these writes onward.
+                connection.invalidate()
+            else:
+                try:
+                    savepoint.rollback()
+                except ResourceClosedError:
+                    # Already rolled back: SQLAlchemy does that itself when the
+                    # ORM-level release of it is refused above. It cannot have
+                    # been released instead -- that is what the guards refuse.
+                    pass
+        finally:
+            if raw_connection is not None:
+                raw_connection.__dict__.pop("commit", None)
+            event.remove(session, "before_commit", _guard_session_commit)
+            event.remove(connection, "commit", _guard_connection_commit)
+            event.remove(connection, "before_cursor_execute", _guard_sql)
 
 
 __all__ = [

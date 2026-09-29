@@ -80,11 +80,27 @@ def normalize_isbn(isbn: str | None) -> str | None:
 # it while holding the rehearsal's row locks. The cache holds only what the
 # provider returned (no database ids, nothing instance-specific), keyed on
 # the normalized identifier, bounded in size and aged out, so a correction
-# upstream is seen within the TTL. A failed or empty lookup is *not* cached:
-# the next caller retries it, exactly as before.
+# upstream is seen within the TTL. A failed or empty lookup is *not* cached
+# for other callers: the next one retries it, exactly as before.
+#
+# One narrow exception (#592 item 4). A lookup that failed while the caller
+# was *warming* the cache (``remember_failure=True``, the dry run's prefetch)
+# leaves a note that the very next lookup of that identifier -- the
+# rehearsal's own, made while it holds row locks -- may reuse the failure
+# instead of repeating a request that can take ``_REQUEST_TIMEOUT_S`` under
+# those locks. The note is consumed by that one lookup and expires after
+# ``FAILURE_NOTE_TTL_S`` either way. A general 60 s negative cache was not
+# adopted: Crossref timeouts and 5xx answers are not "this DOI has no
+# metadata", and remembering one for a minute would make a real submit sent
+# right after a dry run store a literature row without the metadata it
+# would otherwise have fetched, permanently.
 
 METADATA_CACHE_TTL_S = 24 * 60 * 60
 METADATA_CACHE_MAX_ENTRIES = 1024
+FAILURE_NOTE_TTL_S = 5.0
+_REQUEST_TIMEOUT_S = 10
+
+_failure_notes: dict[tuple[str, str], float] = {}
 
 _cache: OrderedDict[tuple[str, str], tuple[float, dict[str, Any]]] = OrderedDict()
 _cache_lock = threading.Lock()
@@ -94,10 +110,15 @@ def clear_metadata_cache() -> None:
     """Forget every cached lookup."""
     with _cache_lock:
         _cache.clear()
+        _failure_notes.clear()
 
 
 def _cached(
-    kind: str, key: str, fetch: Callable[[str], dict[str, Any] | None]
+    kind: str,
+    key: str,
+    fetch: Callable[[str], dict[str, Any] | None],
+    *,
+    remember_failure: bool = False,
 ) -> dict[str, Any] | None:
     now = time.monotonic()
     with _cache_lock:
@@ -105,8 +126,17 @@ def _cached(
         if hit is not None and now - hit[0] < METADATA_CACHE_TTL_S:
             _cache.move_to_end((kind, key))
             return copy.deepcopy(hit[1])
+        if not remember_failure:
+            noted_at = _failure_notes.pop((kind, key), None)
+            if noted_at is not None and now - noted_at < FAILURE_NOTE_TTL_S:
+                return None
     value = fetch(key)
     if value is None:
+        if remember_failure:
+            with _cache_lock:
+                _failure_notes[(kind, key)] = now
+                while len(_failure_notes) > METADATA_CACHE_MAX_ENTRIES:
+                    _failure_notes.pop(next(iter(_failure_notes)))
         return None
     with _cache_lock:
         _cache[(kind, key)] = (now, copy.deepcopy(value))
@@ -116,17 +146,21 @@ def _cached(
     return value
 
 
-def fetch_doi_metadata(doi: str) -> dict[str, Any] | None:
+def fetch_doi_metadata(doi: str, *, remember_failure: bool = False) -> dict[str, Any] | None:
     """Fetch literature metadata from Crossref for a DOI, through the cache.
 
     :param doi: DOI in canonical or raw form.
+    :param remember_failure: for a caller warming the cache ahead of a
+        second lookup; see the module's note on failure handoff.
     :returns: Normalized metadata dictionary, or ``None`` when unavailable.
     """
 
     normalized_doi = normalize_doi(doi)
     if normalized_doi is None:
         return None
-    return _cached("doi", normalized_doi, _fetch_doi_metadata_uncached)
+    return _cached(
+        "doi", normalized_doi, _fetch_doi_metadata_uncached, remember_failure=remember_failure
+    )
 
 
 def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
@@ -140,7 +174,7 @@ def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
         response = requests.get(
             f"{_CROSSREF_BASE_URL}{normalized_doi}",
             headers=headers,
-            timeout=10,
+            timeout=_REQUEST_TIMEOUT_S,
         )
         response.raise_for_status()
     except requests.RequestException:
@@ -168,17 +202,20 @@ def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
     }
 
 
-def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
+def fetch_isbn_metadata(isbn: str, *, remember_failure: bool = False) -> dict[str, Any] | None:
     """Fetch literature metadata from an ``isbnlib``-compatible provider, cached.
 
     :param isbn: ISBN in canonical or raw form.
+    :param remember_failure: as for :func:`fetch_doi_metadata`.
     :returns: Normalized metadata dictionary, or ``None`` when unavailable.
     """
 
     normalized_isbn = normalize_isbn(isbn)
     if normalized_isbn is None:
         return None
-    return _cached("isbn", normalized_isbn, _fetch_isbn_metadata_uncached)
+    return _cached(
+        "isbn", normalized_isbn, _fetch_isbn_metadata_uncached, remember_failure=remember_failure
+    )
 
 
 def _fetch_isbn_metadata_uncached(normalized_isbn: str) -> dict[str, Any] | None:

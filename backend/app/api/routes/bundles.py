@@ -10,10 +10,14 @@ review — see ``docs/contribution-bundles/hosted-submit-v0.md``.
 from __future__ import annotations
 
 import json
+import logging
+import time
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
 
+from app.api.bundle_limits import bundle_record_count, enforce_bundle_record_cap
 from app.api.deps import get_current_user, get_db, get_write_db
 from app.api.errors import render_handled_exception
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
@@ -29,9 +33,10 @@ from app.workflows.contribution_bundle_submit import (
     rehearse_contribution_bundle_submit,
     submit_contribution_bundle,
 )
-from app.workflows.rehearsal import discard_unflushed_writes
+from app.workflows.rehearsal import RehearsalContended, discard_unflushed_writes
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post(
@@ -64,32 +69,59 @@ def dry_run_bundle(
     way rather than delay or deadlock that deposit, and this route answers
     ``503 dry_run_contended`` with a ``Retry-After`` header: nothing was
     decided about the bundle, and retrying is the right response.
+
+    A bundle over the size caps -- ``413 bundle_too_large`` for the request
+    body, ``422 bundle_too_many_records`` for the record count -- is refused
+    before any rehearsal, exactly as ``/bundles/submit`` refuses it. This
+    route has its own, tighter rate bucket.
     """
-    # A leftover safeguard: ``authenticate_api_key`` no longer leaves
-    # ``api_key.last_used_at`` unflushed in this session (the stamp is written
-    # on its own connection), but a dry run never commits, so anything pending
-    # would only be held locks for the whole rehearsal. See
-    # ``discard_unflushed_writes``.
-    discard_unflushed_writes(session)
-    result = dry_run_contribution_bundle(session, bundle)
-    refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)
-    if refusal is None:
-        return result
-    rendered = render_handled_exception(request, refusal)
-    if rendered is None or rendered[0] >= 500:
-        # Not a refusal of the bundle but a failure of the server: submit
-        # would answer with this status, so the dry run does too.
-        raise refusal
-    _status, body = rendered
-    detail = body.get("detail")
-    context = body.get("context")
-    field = context.get("field") if isinstance(context, dict) else None
-    return with_submit_refusal(
-        result,
-        code=body["code"],
-        message=detail if isinstance(detail, str) else json.dumps(detail),
-        field=field if isinstance(field, str) else None,
-    )
+    started = time.monotonic()
+    records = bundle_record_count(bundle)
+    outcome = "error"  # replaced below unless an exception is what leaves
+    try:
+        try:
+            enforce_bundle_record_cap(bundle)
+        except CodedValidationError:
+            outcome = "over_cap"
+            raise
+        # A leftover safeguard: ``authenticate_api_key`` no longer leaves
+        # ``api_key.last_used_at`` unflushed in this session (the stamp is
+        # written on its own connection), but a dry run never commits, so
+        # anything pending would only be held locks for the whole rehearsal.
+        # See ``discard_unflushed_writes``.
+        discard_unflushed_writes(session)
+        result = dry_run_contribution_bundle(session, bundle)
+        refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)
+        if refusal is None:
+            outcome = "accepted"
+            return result
+        rendered = render_handled_exception(request, refusal)
+        if rendered is None or rendered[0] >= 500:
+            # Not a refusal of the bundle but a failure of the server: submit
+            # would answer with this status, so the dry run does too.
+            if isinstance(refusal, RehearsalContended):
+                outcome = "contended"
+            raise refusal
+        outcome = "refused"
+        _status, body = rendered
+        detail = body.get("detail")
+        context = body.get("context")
+        field = context.get("field") if isinstance(context, dict) else None
+        return with_submit_refusal(
+            result,
+            code=body["code"],
+            message=detail if isinstance(detail, str) else json.dumps(detail),
+            field=field if isinstance(field, str) else None,
+        )
+    finally:
+        # One line per dry run; ids and counts only, never the payload.
+        logger.info(
+            "bundle dry run: user=%s records=%d duration_ms=%d outcome=%s",
+            current_user.id,
+            records,
+            round((time.monotonic() - started) * 1000),
+            outcome,
+        )
 
 
 @router.post(
@@ -117,7 +149,12 @@ def submit_bundle(
     back the whole bundle (no partial imports). Sending an
     ``Idempotency-Key`` header makes the submit retry-safe; an exact retry
     replays the stored response without re-importing the bundle.
+
+    A bundle over the size caps is refused as ``/bundles/dry-run`` refuses
+    it: ``413 bundle_too_large`` (request body) or
+    ``422 bundle_too_many_records``.
     """
+    enforce_bundle_record_cap(bundle)
     if (replay := idem.maybe_replay()) is not None:
         return replay
     result = submit_contribution_bundle(session, bundle, actor=current_user)

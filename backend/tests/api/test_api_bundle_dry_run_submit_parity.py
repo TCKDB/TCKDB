@@ -36,6 +36,7 @@ Assertions are on exact codes, never on substrings of the message.
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import re
@@ -742,3 +743,41 @@ def test_no_code_under_rehearsal_can_tell_it_is_rehearsed() -> None:
         "rehearsed code must not be able to tell it is inside a dry run:\n"
         + "\n".join(offenders)
     )
+
+
+#: The way to reach a raw DBAPI connection -- and from it a raw cursor, the
+#: one route to ``COMMIT`` the rehearsal's guards cannot see (#592).
+_RAW_DRIVER_ATTRIBUTES = {"dbapi_connection", "driver_connection", "raw_connection"}
+
+
+def _raw_driver_uses(source: str) -> list[int]:
+    return [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Attribute) and node.attr in _RAW_DRIVER_ATTRIBUTES
+    ]
+
+
+def test_nothing_under_app_reaches_the_raw_driver_connection() -> None:
+    backend = Path(__file__).resolve().parents[2]
+    scanned = 0
+    offenders: list[str] = []
+    for path in sorted((backend / "app").rglob("*.py")):
+        rel = path.relative_to(backend).as_posix()
+        lines = _raw_driver_uses(path.read_text())
+        if rel in _MAY_KNOW:
+            # Live: the rehearsal guards the raw commit, so it must use it.
+            assert lines, f"{rel} no longer reaches the raw connection; update this test"
+            continue
+        scanned += 1
+        offenders += [f"{rel}:{n}" for n in lines]
+    assert scanned > 200, f"only {scanned} files scanned; the scan is not looking"
+    assert offenders == [], (
+        "a raw DBAPI connection is outside the rehearsal's guards (a raw cursor "
+        "can COMMIT); use the SQLAlchemy Connection:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_raw_driver_scan_sees_a_use() -> None:
+    assert _raw_driver_uses("x = conn.connection.dbapi_connection\n") == [1]
+    assert _raw_driver_uses("x = 1  # dbapi_connection\n") == []
