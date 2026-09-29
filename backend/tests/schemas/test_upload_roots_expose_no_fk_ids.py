@@ -221,16 +221,16 @@ DEFERRED_PARAM_LEAKS: dict[str, str] = {
         "returns submission_ref, and this path takes either the integer or "
         "the sub_ ref (a handle, per the public identifier policy). The "
         "integer is still accepted for a deprecation window that ends when "
-        "no client of a supported version still sends it; step 3 of #578 "
-        "drops it and deletes this entry."
+        "no supported tckdb-client, in-repo tckdb-qcschema adapter or ARC adapter "
+        "release still sends it; step 3 of #578 drops it and deletes this entry."
     ),
     "POST /api/v1/calculations/{calculation_id}/artifacts:calculation_id": (
         "Step 2 of #578 is done: upload responses return calculation_ref "
         "beside calculation_id, tckdb-client sends the calc_ ref when it has "
         "one, and this path takes either form. The integer is still accepted "
-        "for a deprecation window that ends when no supported tckdb-client "
-        "or ARC adapter release still sends it; step 3 of #578 drops it and "
-        "deletes this entry."
+        "for a deprecation window that ends when no supported tckdb-client, "
+        "in-repo tckdb-qcschema adapter (uploader.py) or ARC adapter release "
+        "still sends it; step 3 of #578 drops it and deletes this entry."
     ),
 }
 

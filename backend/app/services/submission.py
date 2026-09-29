@@ -51,9 +51,14 @@ from app.db.models.submission import (
     SubmissionAuditEvent,
     SubmissionRecordLink,
 )
+from app.services.public_refs import PREFIXES
 from app.services.record_review import (
     RecordRef,
     bulk_set_record_review_status,
+)
+from app.services.scientific_read.handles import (
+    handle_type_mismatch_error,
+    parse_handle,
 )
 
 if TYPE_CHECKING:
@@ -132,28 +137,31 @@ def resolve_submission_handle(session: Session, handle: str) -> Submission:
     to that row whichever way it was named, so a ref is neither a way around a
     check the integer path makes nor the reverse.
 
-    An integer that matches no row and a ref that matches none are the same
-    404, as ``get_submission`` and ``get_submission_by_ref`` already give.
+    An unknown integer and an unknown ref are the same 404, code
+    ``handle_not_found``.
 
     :raises ValueError: 422 ``invalid_handle`` for a string that is neither
         shape; :class:`~app.api.error_contract.CodedValueError`
         ``handle_type_mismatch`` for a ref carrying another resource's prefix.
     :raises NotFoundError: 404 when no such submission exists.
     """
-    from app.services.public_refs import PREFIXES
-    from app.services.scientific_read.handles import (
-        _handle_type_mismatch,
-        parse_handle,
-    )
-
     kind, parsed = parse_handle(handle)
     if kind == "id":
-        return get_submission(session, parsed)
+        submission = session.get(Submission, parsed)
+        if submission is None:
+            logger.info("path_handle_not_found kind=submission lookup=id row_id=%d", parsed)
+            raise not_found("submission", code="handle_not_found")
+        return submission
     expected = PREFIXES["Submission"]
     prefix = parsed.split("_", 1)[0]
     if prefix != expected:
-        raise _handle_type_mismatch("submission", expected, prefix, noun="handle")
-    return get_submission_by_ref(session, parsed)
+        raise handle_type_mismatch_error("submission", expected, prefix, noun="handle")
+    submission = session.scalars(
+        select(Submission).where(Submission.public_ref == parsed)
+    ).first()
+    if submission is None:
+        raise not_found("submission", ref=parsed, code="handle_not_found")
+    return submission
 
 
 def _require_curator(user: AppUser) -> None:

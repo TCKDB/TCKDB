@@ -324,7 +324,16 @@ bundle response, and the polled job result, returns `submission_ref` beside
 `submission_id`, and `calculation_ref` (or `calculation_key_refs` on a
 computed reaction) beside each calculation id. The integer form is deprecated;
 it is removed, and the guard's `DEFERRED_PARAM_LEAKS` entries with it, once no
-supported `tckdb-client` or ARC adapter release still sends it.
+supported `tckdb-client`, in-repo `tckdb-qcschema` adapter, or out-of-repo ARC
+adapter release still sends it. An unknown handle of either form, on either
+route, is a 404 with code `handle_not_found`.
+
+Retry caveat: idempotency keys are scoped by the concrete URL path. A request
+committed by an older client through the integer path whose response was lost,
+then retried by a newer client with the same key through the `calc_` path, is
+not recognised as a replay, so the route runs again and attaches duplicate
+artifacts. Finish or abandon in-flight artifact uploads before upgrading a
+client, or keep sending the form you started with.
 
 ### Query-param refs
 

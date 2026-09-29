@@ -180,6 +180,13 @@ def _run_computed_reaction(session: Session, job: UploadJob, review_policy: Revi
     refs = public_refs_by_id(session, Calculation, key_to_id.values())
     return {
         **result,
+        # ``warnings`` arrives as ``UploadWarning`` objects, which the JSONB
+        # result column cannot store: a computed-reaction job that raised any
+        # warning used to finish with a "result_unavailable" placeholder.
+        "warnings": [
+            w.model_dump(mode="json") if hasattr(w, "model_dump") else w
+            for w in result.get("warnings", [])
+        ],
         "calculation_key_refs": {
             key: refs[cid] for key, cid in key_to_id.items() if cid in refs
         },

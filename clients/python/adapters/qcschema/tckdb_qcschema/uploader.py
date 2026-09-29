@@ -85,8 +85,9 @@ _ARTIFACT_SEARCH_PATH = "/scientific/artifacts/search"
 _CONFORMERS_PATH = "/uploads/conformers"
 
 
-def _artifact_path(calculation_id: int) -> str:
-    return f"/calculations/{calculation_id}/artifacts"
+def _artifact_path(calculation: "int | str") -> str:
+    """The artifact route for a calculation, named by ``calc_`` ref or integer id."""
+    return f"/calculations/{calculation}/artifacts"
 
 
 def sha256_bytes(data: bytes) -> str:
@@ -195,7 +196,11 @@ def upload_record(
     conformer_data = conformer_response.data
     conformer_replayed = bool(conformer_response.idempotency_replayed)
 
-    calculation_id = conformer_data["primary_calculation"]["calculation_id"]
+    primary = conformer_data["primary_calculation"]
+    calculation_id = primary["calculation_id"]
+    # Address the calculation by its public ref when the server returned one
+    # (#578); the integer is the fallback against an older server.
+    calculation_handle = primary.get("calculation_ref") or calculation_id
 
     artifact_payload = {
         "artifacts": [
@@ -210,7 +215,7 @@ def upload_record(
     }
     artifact_response = client.request_json(
         "POST",
-        _artifact_path(calculation_id),
+        _artifact_path(calculation_handle),
         json=artifact_payload,
         idempotency_key=artifact_key,
     )

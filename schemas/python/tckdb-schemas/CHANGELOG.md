@@ -10,7 +10,7 @@ package that is `ComputedSpeciesUploadResult.submission_ref`, and
 row id in the path, `POST /api/v1/submissions/{submission_id}/rights-attestations`
 and `POST /api/v1/calculations/{calculation_id}/artifacts`, now accept either
 the integer or the ref there (a `handle_type_mismatch` 422 for a ref of the
-wrong kind, 404 for an unknown one); the integer is deprecated, not removed.
+wrong kind, 404 `handle_not_found` for an unknown one, in either form); the integer is deprecated, not removed.
 
 ## 0.56.0 - 2026-09-29
 

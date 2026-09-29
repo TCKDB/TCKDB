@@ -35,9 +35,12 @@ from app.db.models.submission import Submission
 from tests.api.test_api_bundle_submit import ENDPOINT as BUNDLE_ENDPOINT
 from tests.api.test_api_bundle_submit import _load_bundle
 from tests.api.test_api_kfir_rxn import _BUNDLE as COMPUTED_REACTION_BUNDLE
+from tests.api.test_api_network_reads import _pdep_payload
+from tests.api.test_api_provenance_warnings import _kinetics_payload
 from tests.api.test_api_statmech_upload import _statmech_payload
 from tests.api.test_api_transport_upload import _transport_payload
 from tests.api.test_api_upload_computed_species import _hydrogen_bundle_payload
+from tests.api.test_api_uploads import _reaction_payload, _transition_state_payload
 
 CONFORMER = {
     "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
@@ -83,32 +86,31 @@ def _sub_ref_of(db_session, submission_id: int) -> str:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("route", "payload"),
-    [
-        ("/api/v1/uploads/conformers", CONFORMER),
-        ("/api/v1/uploads/thermo", THERMO),
-        ("/api/v1/uploads/statmech", None),
-        ("/api/v1/uploads/transport", None),
-        ("/api/v1/uploads/computed-species", None),
-        ("/api/v1/uploads/computed-reaction", COMPUTED_REACTION_BUNDLE),
-        ("/api/v1/jobs/transport", None),
-    ],
-)
+_UPLOAD_PAYLOADS = {
+    "/api/v1/uploads/conformers": lambda: CONFORMER,
+    "/api/v1/uploads/thermo": lambda: THERMO,
+    "/api/v1/uploads/statmech": _statmech_payload,
+    "/api/v1/uploads/transport": _transport_payload,
+    "/api/v1/uploads/reactions": _reaction_payload,
+    "/api/v1/uploads/kinetics": _kinetics_payload,
+    "/api/v1/uploads/networks": lambda: {"name": "example network"},
+    "/api/v1/uploads/networks/pdep": _pdep_payload,
+    "/api/v1/uploads/transition-states": _transition_state_payload,
+    "/api/v1/uploads/computed-species": _hydrogen_bundle_payload,
+    "/api/v1/uploads/computed-reaction": lambda: COMPUTED_REACTION_BUNDLE,
+    "/api/v1/jobs/transport": _transport_payload,
+}
+
+
+@pytest.mark.parametrize("route", list(_UPLOAD_PAYLOADS))
 def test_upload_and_job_responses_carry_the_submission_ref(
-    client, db_session, route, payload
+    client, db_session, route
 ) -> None:
-    payload = payload or {
-        "/api/v1/uploads/statmech": _statmech_payload,
-        "/api/v1/uploads/transport": _transport_payload,
-        "/api/v1/uploads/computed-species": _hydrogen_bundle_payload,
-        "/api/v1/jobs/transport": _transport_payload,
-    }[route]()
-    resp = client.post(route, json=payload)
+    resp = client.post(route, json=_UPLOAD_PAYLOADS[route]())
     assert resp.status_code in (201, 202), resp.text
     body = resp.json()
     assert body["submission_id"] is not None
-    assert body["submission_ref"].startswith("sub_")
+    assert body["submission_ref"] is not None and body["submission_ref"].startswith("sub_")
     assert body["submission_ref"] == _sub_ref_of(db_session, body["submission_id"])
 
 
@@ -173,6 +175,26 @@ def test_worker_job_result_carries_the_refs(client, db_session) -> None:
     assert calc["calculation_ref"] == db_session.get(
         Calculation, calc["calculation_id"]
     ).public_ref
+
+
+def test_worker_computed_reaction_job_result_carries_the_refs(client, db_session) -> None:
+    """The computed-reaction job's polled result names each calc key by ref."""
+    from app.db.models.upload_job import UploadJob
+    from app.workers.upload_worker import run_one_job
+
+    enq = client.post("/api/v1/jobs/computed-reaction", json=COMPUTED_REACTION_BUNDLE)
+    assert enq.status_code == 202, enq.text
+    job = db_session.get(UploadJob, enq.json()["job_id"])
+    run_one_job(db_session, job)
+    result = job.result
+    assert result["submission_ref"] == enq.json()["submission_ref"]
+    assert "result_unavailable" not in result, result
+    assert result["calculation_keys"], "the fixture must persist calculations"
+    assert result["calculation_key_refs"].keys() == result["calculation_keys"].keys()
+    for key, calc_id in result["calculation_keys"].items():
+        assert result["calculation_key_refs"][key] == db_session.get(
+            Calculation, calc_id
+        ).public_ref
 
 
 def test_every_producer_response_model_pairs_its_ids_with_refs() -> None:
@@ -354,3 +376,25 @@ def test_artifact_upload_rejects_unknown_and_mistyped_handles(client) -> None:
     assert wrong.json()["code"] == "handle_type_mismatch"
     missing_int = client.post("/api/v1/calculations/999999999/artifacts", json=ARTIFACT)
     assert missing_int.status_code == 404
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "/api/v1/submissions/sub_" + "a" * 26 + "/rights-attestations",
+        "/api/v1/submissions/999999999/rights-attestations",
+        "/api/v1/calculations/calc_" + "a" * 26 + "/artifacts",
+        "/api/v1/calculations/999999999/artifacts",
+    ],
+)
+def test_an_unknown_handle_is_the_same_404_code_on_both_routes_and_forms(
+    client, url
+) -> None:
+    body = (
+        {"license": "CC-BY-4.0", "basis": "depositor_agreement"}
+        if "rights" in url
+        else ARTIFACT
+    )
+    resp = client.post(url, json=body)
+    assert resp.status_code == 404, resp.text
+    assert resp.json()["code"] == "handle_not_found"

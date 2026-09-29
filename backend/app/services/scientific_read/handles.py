@@ -101,7 +101,7 @@ def parse_handle(value: str) -> tuple[str, Any]:
     )
 
 
-def _handle_type_mismatch(
+def handle_type_mismatch_error(
     kind_label: str,
     expected_prefix: str,
     prefix: str,
@@ -347,7 +347,7 @@ def resolve_path_handle(
     ref = parsed
     prefix = ref.split("_", 1)[0]
     if prefix != expected_prefix:
-        raise _handle_type_mismatch(
+        raise handle_type_mismatch_error(
             kind_label, expected_prefix, prefix, noun="handle"
         )
     row_id = session.scalar(
@@ -401,7 +401,7 @@ def resolve_filter_ref(
     expected_prefix = prefix_for(model_cls)
     prefix = ref.split("_", 1)[0]
     if prefix != expected_prefix:
-        raise _handle_type_mismatch(
+        raise handle_type_mismatch_error(
             kind_label, expected_prefix, prefix, noun="ref"
         )
     return session.scalar(
