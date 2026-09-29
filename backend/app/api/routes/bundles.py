@@ -154,9 +154,13 @@ def submit_bundle(
     it: ``413 bundle_too_large`` (request body) or
     ``422 bundle_too_many_records``.
     """
-    enforce_bundle_record_cap(bundle)
     if (replay := idem.maybe_replay()) is not None:
+        # Before the record cap: a replay does no work, and a cap lowered
+        # since the original request must not turn a legitimate replay of an
+        # accepted deposit into a 422. (The body cap still applies to a replay:
+        # it is enforced before any of this runs.)
         return replay
+    enforce_bundle_record_cap(bundle)
     result = submit_contribution_bundle(session, bundle, actor=current_user)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
     return result

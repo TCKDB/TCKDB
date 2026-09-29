@@ -101,15 +101,23 @@ Nothing a dry run does is kept:
   A refusal below the ORM also discards the physical connection, so the
   server aborts the transaction and no pooled connection can carry the
   writes to the next request.
-- `commit()` on the raw DBAPI connection under SQLAlchemy's connection is
-  refused too: while the rehearsal runs, that one connection object's
-  `commit` is replaced by a refusal, and restored afterwards (#592).
-- **Not guarded:** SQL sent through a raw DBAPI *cursor*, and any other
-  connection, engine or session the rehearsed code opens for itself.
-  Nothing in the submit path does either, and a repo test forbids reaching
-  for `dbapi_connection` / `driver_connection` anywhere else under `app/`
-  (which is how a raw cursor would be obtained); code that starts to would
-  be outside this guarantee.
+- `commit()` on the driver connection object under SQLAlchemy's connection
+  is refused too: while the rehearsal runs, that one object's `commit` is
+  replaced by a refusal, and restored afterwards (#592).
+- SQL that would publish the rehearsal (`COMMIT`, `END`, `PREPARE
+  TRANSACTION`, or releasing its own savepoint) is refused when sent through
+  the session's connection. It is read as code: comments and the contents of
+  string literals and dollar-quoted bodies are ignored, so `SELECT '--';
+  COMMIT` is refused, and savepoints are tracked by position rather than name.
+- **Out of scope:** a raw driver cursor or connection method sending `COMMIT`
+  directly (`.connection.cursor()`, `.connection.execute()`, `.pgconn`,
+  `dbapi_connection`, `driver_connection`, or `getattr` with a computed name
+  on something connection-like), and any other connection, engine or session
+  the rehearsed code opens for itself. These are not stopped at run time; a
+  repo test fails if any module under `app/` other than the rehearsal
+  reaches for them. The rehearsal runs TCKDB's own code, and the goal is to
+  make an accidental commit there impossible to miss, not to contain code
+  written to evade it.
 - Code being rehearsed cannot tell it is: no module under `app/workflows`,
   `app/services` or `app/chemistry` other than the rehearsal itself may
   ask whether it is inside a savepoint (a repo test enforces it), so the
@@ -121,12 +129,12 @@ metadata lookup made for a literature reference not already on the
 instance -- the same lookup submit makes. That lookup is made *before* the
 rehearsal opens, and cached in-process (by DOI/ISBN, no database ids, 24 h
 TTL, 1024 entries), so a repeated dry run -- or the submit that follows it
--- does not fetch again. A lookup that failed is not cached for
-anyone else -- a Crossref timeout is not "this DOI has no metadata", and a
-submit sent just after must still retry it -- but the prefetch leaves a
-one-use note of the failure, good for a few seconds, that the rehearsal's own
-lookup consumes, so the failed request is not repeated while the rehearsal
-holds its locks.
+-- does not fetch again. A lookup that failed is not cached: any other caller, or a later request,
+retries it (a Crossref timeout is not "this DOI has no metadata", and a
+submit must still fetch what a dry run could not). The dry run remembers the
+failure only inside its own request, so its rehearsal does not repeat the
+failed request while holding its locks; the memory is scoped to that request,
+is not timed, and no other request or user can see it.
 
 ## Limits on one bundle and on dry runs
 

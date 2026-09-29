@@ -10,30 +10,36 @@ predicts. ``tests/api/test_api_bundle_dry_run_submit_parity.py`` forbids the
 
 What the context manager guarantees, and what it does not
 ---------------------------------------------------------
-Nothing written inside it survives: it opens a ``SAVEPOINT`` and rolls it
-back whether the body succeeds or fails. While the body runs, these
-attempts to publish its writes are refused with
-:class:`RehearsalCommitRefused`:
+The rehearsal runs TCKDB's own code. Its job is to make an *accidental*
+commit in that code impossible to miss, not to contain code written to get
+round it. Nothing written inside it survives: it opens a ``SAVEPOINT`` and
+rolls it back whether the body succeeds or fails. While the body runs, these
+are refused with :class:`RehearsalCommitRefused`:
 
 * ``Session.commit()``, and releasing the rehearsal's own savepoint through
   the ORM (``before_commit``);
 * ``Connection.commit()`` -- any DBAPI commit issued through the
   SQLAlchemy ``Connection`` the session is using (``commit`` event);
-* SQL text sent through that connection that would end or publish the
-  transaction: ``COMMIT``, ``END``, ``PREPARE TRANSACTION``, or ``RELEASE``
-  of any savepoint not opened inside the rehearsal
-  (``before_cursor_execute``).
+* SQL text sent through that ``Connection`` (``before_cursor_execute``) that
+  would end or publish the transaction -- ``COMMIT``, ``END``,
+  ``PREPARE TRANSACTION`` -- or release the rehearsal's own savepoint.
+  Statements are read as code: comments are ignored, and the contents of
+  string literals (``'...'``, ``E'...'``, ``$$...$$``, ``$tag$...$tag$``) are
+  ignored too, so ``SELECT '--'; COMMIT`` is two statements and the second is
+  refused. Savepoints are tracked by position on PostgreSQL's own stack, so
+  reusing a name cannot release the rehearsal's;
+* ``commit()`` on the driver connection object under that ``Connection``
+  (#592): that one instance's ``commit`` is replaced by a refusal while the
+  rehearsal runs, and restored afterwards.
 
-* ``commit()`` on the raw DBAPI connection under that ``Connection``
-  (#592): while the rehearsal runs, that one instance's ``commit`` is
-  replaced by a refusal, and restored afterwards.
-
-Not guarded: SQL text sent through a raw DBAPI *cursor*, and any other
-connection, engine or session the rehearsed code opens for itself. Nothing
-in the submit path does either, and
-``tests/api/test_api_bundle_dry_run_submit_parity.py`` forbids reaching for
-``dbapi_connection`` or ``driver_connection`` anywhere else under ``app/``,
-which is how a raw cursor would be obtained.
+Out of scope, and only detected, not stopped, by
+``tests/api/test_api_bundle_dry_run_submit_parity.py``: a raw driver cursor
+or connection method (``.connection.cursor()``, ``.connection.execute()``,
+``.pgconn``, ``dbapi_connection``, ``driver_connection``, or a ``getattr``
+with a computed name on something connection-like) sending ``COMMIT``
+directly, and any other connection, engine or session the rehearsed code
+opens for itself. That test fails if any module under ``app/`` other than
+this one reaches for them, which is how such a path would be written.
 
 It also keeps a rehearsal from hurting real writers. Its inserts take the
 same locks a submit's do, so it waits at most ``lock_timeout`` for another
@@ -66,13 +72,19 @@ REHEARSAL_DEADLOCK_TIMEOUT_MS = 10
 #: refusal publishes for each.
 _CONTENDED_SQLSTATES = {"55P03": "lock_timeout", "40P01": "deadlock"}
 
-_COMMENTS = re.compile(r"--[^\n]*|/\*.*?\*/", re.S)
-_SAVEPOINT = re.compile(r"^\s*SAVEPOINT\s+(\S+)", re.I)
-_RELEASE = re.compile(r"^\s*RELEASE\s+(?:SAVEPOINT\s+)?(\S+)", re.I)
+# A savepoint name: a quoted identifier, or a run of anything that cannot end
+# one. PostgreSQL accepts a quote straight after the keyword
+# (``RELEASE"x"``), so whitespace is required only before an unquoted name.
+_IDENT = r'(?:"(?:[^"]|"")+"|[^\s";()]+)'
+_NAME_GAP = r'(?:\s+|(?="))'
+_SAVEPOINT = re.compile(rf"^\s*SAVEPOINT{_NAME_GAP}({_IDENT})", re.I)
+_RELEASE = re.compile(rf"^\s*RELEASE(?:\s+SAVEPOINT)?{_NAME_GAP}({_IDENT})", re.I)
 _ROLLBACK_TO = re.compile(
-    r"^\s*ROLLBACK\s+(?:WORK\s+|TRANSACTION\s+)?TO\s+(?:SAVEPOINT\s+)?(\S+)", re.I
+    rf"^\s*ROLLBACK(?:\s+(?:WORK|TRANSACTION))?\s+TO(?:\s+SAVEPOINT)?{_NAME_GAP}({_IDENT})",
+    re.I,
 )
 _PUBLISHING = re.compile(r"^\s*(COMMIT|END|PREPARE\s+TRANSACTION)\b", re.I)
+_DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_\x80-\U0010ffff][\w\x80-\U0010ffff]*)?\$")
 
 
 class RehearsalCommitRefused(RuntimeError):
@@ -108,8 +120,77 @@ def discard_unflushed_writes(session: Session) -> None:
         session.expire(obj)
 
 
+def _skip_quoted(sql: str, start: int, quote: str, backslash: bool) -> int:
+    """Index just past the quoted run opening at ``start`` (doubled quotes escape)."""
+    i, n = start + 1, len(sql)
+    while i < n:
+        if backslash and sql[i] == "\\":
+            i += 2
+        elif sql[i] == quote:
+            if sql[i + 1 : i + 2] == quote:
+                i += 2
+            else:
+                return i + 1
+        else:
+            i += 1
+    return n
+
+
 def _statements(sql: str) -> Iterator[str]:
-    for part in _COMMENTS.sub(" ", sql).split(";"):
+    """Split ``sql`` into statements, looking only at what is code.
+
+    Comments become a space, and the *contents* of string literals
+    (``'...'``, ``E'...'``, ``$$...$$``, ``$tag$...$tag$``) are dropped, so a
+    ``--``, ``/*`` or ``;`` inside a literal neither hides a statement nor
+    splits one (``SELECT '--'; COMMIT`` is two statements, the second
+    refused). Quoted identifiers are kept whole: a savepoint may be named
+    ``"Any Name"``.
+    """
+    n = len(sql)
+    current: list[str] = []
+    statements: list[str] = []
+    i = 0
+    while i < n:
+        c = sql[i]
+        if sql.startswith("--", i):
+            end = sql.find("\n", i)
+            i = n if end < 0 else end
+            current.append(" ")
+        elif sql.startswith("/*", i):
+            depth, i = 1, i + 2
+            while i < n and depth:
+                if sql.startswith("/*", i):
+                    depth, i = depth + 1, i + 2
+                elif sql.startswith("*/", i):
+                    depth, i = depth - 1, i + 2
+                else:
+                    i += 1
+            current.append(" ")
+        elif c == "'":
+            escaped = i > 0 and sql[i - 1] in "eE" and (
+                i < 2 or not (sql[i - 2].isalnum() or sql[i - 2] in "_$")
+            )
+            i = _skip_quoted(sql, i, "'", escaped)
+            current.append("''")
+        elif c == '"':
+            end = _skip_quoted(sql, i, '"', False)
+            current.append(sql[i:end])
+            i = end
+        elif c == "$" and not (i > 0 and (sql[i - 1].isalnum() or sql[i - 1] in "_$")) and (
+            tag := _DOLLAR_TAG.match(sql, i)
+        ):
+            end = sql.find(tag.group(0), tag.end())
+            i = n if end < 0 else end + len(tag.group(0))
+            current.append("''")
+        elif c == ";":
+            statements.append("".join(current))
+            current = []
+            i += 1
+        else:
+            current.append(c)
+            i += 1
+    statements.append("".join(current))
+    for part in statements:
         if part.strip():
             yield part
 

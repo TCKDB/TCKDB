@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 DeploymentMode = Literal["local", "shared_private", "hosted_public"]
@@ -109,9 +110,12 @@ class Settings(BaseSettings):
     #
     # ``bundle_max_body_bytes`` is enforced before the body is parsed
     # (``app.api.bundle_limits``); ``bundle_max_records`` (thermo plus
-    # kinetics uploads) once it has been. ``0`` disables a cap.
-    bundle_max_body_bytes: int = 5 * 1024 * 1024
-    bundle_max_records: int = 500
+    # kinetics uploads) once it has been. A negative value is refused at
+    # startup. ``0`` DISABLES a cap -- unlike the rate-limit budgets, where
+    # ``0`` refuses every request (``rate_limit_bundle_dry_run_per_minute=0``
+    # turns the dry run off entirely, which is a legitimate way to do it).
+    bundle_max_body_bytes: int = Field(5 * 1024 * 1024, ge=0)
+    bundle_max_records: int = Field(500, ge=0)
 
     # When set, the middleware reads the client IP from this header.
     # Only enable when the deployment terminates TLS behind a trusted

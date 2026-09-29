@@ -69,6 +69,38 @@ def test_a_bundle_at_the_record_cap_is_accepted(client, monkeypatch, route, stat
     assert resp.status_code == status, resp.text
 
 
+def test_a_replay_of_an_accepted_submit_survives_a_lowered_cap(client, monkeypatch) -> None:
+    """A replay does no work, so a cap lowered since the original request must
+    not turn it into a 422; a fresh key with the same bundle still is one."""
+    bundle = _thermo_bundle(2)
+    headers = {"Idempotency-Key": "cap-replay-test-key-0001"}
+    first = client.post(SUBMIT, json=bundle, headers=headers)
+    assert first.status_code == 201, first.text
+
+    monkeypatch.setattr(settings, "bundle_max_records", 1)
+    replay = client.post(SUBMIT, json=bundle, headers=headers)
+    assert replay.status_code == 201, replay.text
+    assert replay.headers.get("Idempotency-Replayed") == "true"
+    assert replay.json() == first.json()
+
+    fresh = client.post(
+        SUBMIT, json=bundle, headers={"Idempotency-Key": "cap-replay-test-key-0002"}
+    )
+    assert fresh.status_code == 422, fresh.text
+    assert fresh.json()["code"] == "bundle_too_many_records"
+
+
+def test_a_negative_cap_is_refused_at_startup() -> None:
+    from pydantic import ValidationError
+
+    from app.api.config import Settings
+
+    for name in ("bundle_max_body_bytes", "bundle_max_records"):
+        with pytest.raises(ValidationError):
+            Settings(**{name: -1})
+    assert Settings(bundle_max_body_bytes=0, bundle_max_records=0).bundle_max_records == 0  # 0: off
+
+
 def test_the_record_cap_counts_kinetics_records_too(client, monkeypatch) -> None:
     monkeypatch.setattr(settings, "bundle_max_records", 0)  # disabled: control
     bundle = _example("kinetics-bundle-v0.json")
@@ -241,3 +273,67 @@ def test_a_refused_dry_run_is_logged_once_too(client, monkeypatch, caplog) -> No
     assert len(lines) == 1
     assert "records=2 " in lines[0].getMessage()
     assert "outcome=over_cap" in lines[0].getMessage()
+
+
+# ---------------------------------------------------------------------------
+# The middleware itself, below the framework
+# ---------------------------------------------------------------------------
+
+
+def _run_middleware(chunks: list[bytes], *, headers: list | None = None, limit: int = 10):
+    """Drive ``BundleBodyLimitMiddleware`` with a fake app that reads its whole
+    body (or until the client is gone) and then answers ``200`` itself."""
+    import asyncio
+
+    from app.api.bundle_limits import BundleBodyLimitMiddleware
+
+    sent: list[dict] = []
+    app_saw: list[str] = []
+
+    async def app(scope, receive, send):
+        while True:
+            message = await receive()
+            app_saw.append(message["type"])
+            if message["type"] == "http.disconnect" or not message.get("more_body"):
+                break
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"the app's own reply"})
+
+    queue = [
+        {"type": "http.request", "body": chunk, "more_body": i < len(chunks) - 1}
+        for i, chunk in enumerate(chunks)
+    ]
+
+    async def receive():
+        return queue.pop(0) if queue else {"type": "http.disconnect"}
+
+    async def send(message):
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/api/v1/bundles/submit",
+        "headers": headers or [],
+    }
+    original = settings.bundle_max_body_bytes
+    settings.bundle_max_body_bytes = limit
+    try:
+        asyncio.run(BundleBodyLimitMiddleware(app)(scope, receive, send))
+    finally:
+        settings.bundle_max_body_bytes = original
+    return sent, app_saw
+
+
+def test_after_a_413_the_apps_own_reply_is_suppressed_and_it_is_told_the_client_left() -> None:
+    sent, app_saw = _run_middleware([b"x" * 6, b"x" * 6, b"x" * 6])
+    starts = [m for m in sent if m["type"] == "http.response.start"]
+    assert [m["status"] for m in starts] == [413], sent
+    assert not any(m.get("body") == b"the app's own reply" for m in sent)
+    assert app_saw[-1] == "http.disconnect"  # it stopped reading, not parsed the rest
+
+
+def test_a_body_at_the_cap_reaches_the_app_untouched() -> None:
+    sent, app_saw = _run_middleware([b"x" * 5, b"x" * 5])
+    assert [m["status"] for m in sent if m["type"] == "http.response.start"] == [200]
+    assert app_saw == ["http.request", "http.request"]
