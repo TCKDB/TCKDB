@@ -1,0 +1,51 @@
+{
+  "outcome": "route",
+  "expected": "scan",
+  "family": "v2",
+  "driver": null,
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "torsiondrive": "1.2.0",
+  "level": "hf/sto-3g",
+  "molecule": "hydrogen peroxide",
+  "smiles_arg": "OO",
+  "parent_opt_case": "torsiondrive_parent_opt_v2",
+  "pins": {
+    "dimension": 1,
+    "point_count": 4,
+    "points": [
+      {
+        "grid_key": "-90",
+        "coordinate_values": [
+          -90.0
+        ],
+        "electronic_energy_hartree": -148.76416544459573
+      },
+      {
+        "grid_key": "0",
+        "coordinate_values": [
+          0.0
+        ],
+        "electronic_energy_hartree": -148.75056290180424
+      },
+      {
+        "grid_key": "90",
+        "coordinate_values": [
+          90.0
+        ],
+        "electronic_energy_hartree": -148.76416544456302
+      },
+      {
+        "grid_key": "180",
+        "coordinate_values": [
+          180.0
+        ],
+        "electronic_energy_hartree": -148.7650133699291
+      }
+    ]
+  },
+  "raw_sha256": "e0d5754f87e2ba1ec9d6c40fb9823ac5a45faf9d6a5587a786105754fc59c4b6"
+}

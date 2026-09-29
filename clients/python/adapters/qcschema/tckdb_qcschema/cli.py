@@ -6,6 +6,11 @@
 
     tckdb-qcschema report result.json [--smiles O] [--json]
 
+    tckdb-qcschema import torsiondrive.json --parent-opt opt.json [--smiles OO] \
+        [--upload | --dry-run] [--allow-duplicate] [--json]
+
+    tckdb-qcschema report result.json [--smiles O] [--json]
+
     tckdb-qcschema export <calculation_ref_or_id> [--out FILE] [--json]
 
 ``report`` runs the read + map stages only (no network, ever) and prints
@@ -13,6 +18,15 @@ the mapping report; it is what ``--dry-run`` also uses internally. ``import
 --upload`` and ``export`` are the only commands that contact a live TCKDB
 instance -- see :mod:`tckdb_qcschema.exporter` for what ``export`` supports
 and refuses.
+
+A ``TorsionDriveResult`` (QCSchema's scan) is imported together with the
+``OptimizationResult`` it started from (``--parent-opt``): TCKDB attaches a
+scan to a conformer, and the conformer is anchored by that optimization.
+Both go up as one ``POST /uploads/computed-species`` bundle -- see
+:mod:`tckdb_qcschema.scan`. ``export`` of a stored ``scan`` produces a v2
+``TorsionDriveResult`` when the scan is one, with what was not carried
+listed in ``extras.tckdb.export_report`` -- see
+:mod:`tckdb_qcschema.scan_export`.
 
 Exit codes: 0 success, 2 an adapter refusal (``REFUSED [code]: ...``), 1 the
 TCKDB API could not be used -- a transport failure, an HTTP error, or a
@@ -36,13 +50,25 @@ from .reader import read_document
 from .uploader import sha256_bytes
 
 
+_PARENT_OPT_HELP = (
+    "TorsionDriveResult only: the OptimizationResult the drive started "
+    "from. It becomes the conformer's opt and the scan is attached to it; "
+    "it must share the drive's atoms, charge and multiplicity, and its "
+    "final geometry must be one of the drive's initial molecules."
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="tckdb-qcschema")
     sub = p.add_subparsers(dest="command", required=True)
 
     imp = sub.add_parser("import", help="Map a QCSchema document and (optionally) upload it.")
-    imp.add_argument("file", help="Path to a QCSchema AtomicResult/OptimizationResult JSON file.")
+    imp.add_argument(
+        "file",
+        help="Path to a QCSchema AtomicResult/OptimizationResult/TorsionDriveResult JSON file.",
+    )
     imp.add_argument("--smiles", help="Depositor-declared identity SMILES (source=depositor_declared).")
+    imp.add_argument("--parent-opt", help=_PARENT_OPT_HELP)
     imp.add_argument(
         "--species-entry-kind",
         default="minimum",
@@ -63,8 +89,12 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--json", action="store_true", help="Emit machine-readable JSON to stdout.")
 
     rep = sub.add_parser("report", help="Read + map only; print the mapping report. Never touches the network.")
-    rep.add_argument("file", help="Path to a QCSchema AtomicResult/OptimizationResult JSON file.")
+    rep.add_argument(
+        "file",
+        help="Path to a QCSchema AtomicResult/OptimizationResult/TorsionDriveResult JSON file.",
+    )
     rep.add_argument("--smiles", help="Depositor-declared identity SMILES (source=depositor_declared).")
+    rep.add_argument("--parent-opt", help=_PARENT_OPT_HELP)
     rep.add_argument(
         "--species-entry-kind",
         default="minimum",
@@ -76,7 +106,9 @@ def build_parser() -> argparse.ArgumentParser:
         "export",
         help=(
             "Read a stored sp or freq calculation back out as a QCSchema "
-            "v2 AtomicResult document."
+            "v2 AtomicResult document, or a stored relaxed dihedral scan "
+            "as a v2 TorsionDriveResult (bond/angle/rigid scans and IRCs "
+            "are refused: QCSchema has no model for them)."
         ),
     )
     exp.add_argument(
@@ -117,6 +149,10 @@ def _map_file(path: Path, *, smiles: str | None, species_entry_kind: str):
 
 def _cmd_report(args: argparse.Namespace) -> int:
     path = Path(args.file)
+    if _is_torsion_drive(path):
+        return _cmd_report_scan(args)
+    if args.parent_opt:
+        return _emit_error(_parent_opt_misused(), as_json=args.json)
     try:
         _raw_bytes, raw_sha256, record, payload, report = _map_file(
             path, smiles=args.smiles, species_entry_kind=args.species_entry_kind
@@ -169,6 +205,10 @@ def _emit_client_error(exc: Exception, *, as_json: bool) -> int:
 
 def _cmd_import(args: argparse.Namespace) -> int:
     path = Path(args.file)
+    if _is_torsion_drive(path):
+        return _cmd_import_scan(args)
+    if args.parent_opt:
+        return _emit_error(_parent_opt_misused(), as_json=args.json)
     try:
         raw_bytes, raw_sha256, record, payload, report = _map_file(
             path, smiles=args.smiles, species_entry_kind=args.species_entry_kind
@@ -206,6 +246,8 @@ def _cmd_import(args: argparse.Namespace) -> int:
     from tckdb_client import TCKDBClient, TCKDBError  # lazy
 
     base_url = args.base_url or os.environ.get("TCKDB_BASE_URL")
+    if not base_url:
+        return _emit_missing_base_url(as_json=args.json)
     api_key = os.environ.get("TCKDB_API_KEY")
     try:
         with TCKDBClient(base_url, api_key=api_key) as client:
@@ -250,6 +292,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
         calculation_ref = int(calculation_ref)
 
     base_url = args.base_url or os.environ.get("TCKDB_BASE_URL")
+    if not base_url:
+        return _emit_missing_base_url(as_json=args.json)
     api_key = os.environ.get("TCKDB_API_KEY")
     try:
         with TCKDBClient(base_url, api_key=api_key) as client:
@@ -265,6 +309,181 @@ def _cmd_export(args: argparse.Namespace) -> int:
         print(f"wrote {args.out}")
     else:
         print(text)
+    return 0
+
+
+def _emit_missing_base_url(*, as_json: bool) -> int:
+    """No ``--base-url`` and no ``$TCKDB_BASE_URL``: one ERROR line, exit 1.
+
+    Checked before the client is built -- ``TCKDBClient`` itself raises a
+    bare ``ValueError`` for an empty base URL, which is not a
+    ``TCKDBError`` and used to end in a traceback.
+    """
+    message = (
+        "no TCKDB base URL: pass --base-url or set $TCKDB_BASE_URL to the "
+        "API root (e.g. https://<host>/api/v1)."
+    )
+    if as_json:
+        print(json.dumps({"error_code": "missing_base_url", "message": message}), file=sys.stderr)
+    else:
+        print(f"ERROR [missing_base_url]: {message}", file=sys.stderr)
+    return 1
+
+
+# ---------------------------------------------------------------------------
+# Scans (TorsionDriveResult + its parent OptimizationResult)
+# ---------------------------------------------------------------------------
+
+
+def _is_torsion_drive(path: Path) -> bool:
+    """Whether ``path`` reads as a TorsionDriveResult.
+
+    Any failure to read it answers False, so the ordinary path runs and
+    reports that failure with its own code.
+    """
+    try:
+        return read_document(path.read_bytes()).record_kind == "torsion_drive"
+    except (QCSchemaAdapterError, OSError):
+        return False
+
+
+def _parent_opt_misused() -> QCSchemaAdapterError:
+    from .errors import E_SCAN_PARENT_MISMATCH
+
+    return QCSchemaAdapterError(
+        E_SCAN_PARENT_MISMATCH,
+        "--parent-opt applies only to a TorsionDriveResult document; this "
+        "document is not one, so the option would be silently ignored.",
+    )
+
+
+def _map_scan_file(args: argparse.Namespace):
+    from .scan import build_scan_bundle_payload
+
+    path = Path(args.file)
+    raw_bytes = path.read_bytes()
+    record = read_document(raw_bytes)
+    raw_sha256 = sha256_bytes(raw_bytes)
+    parent_record = parent_raw = parent_sha = parent_path = None
+    if args.parent_opt:
+        parent_path = Path(args.parent_opt)
+        parent_raw = parent_path.read_bytes()
+        parent_record = read_document(parent_raw)
+        parent_sha = sha256_bytes(parent_raw)
+    bundle = build_scan_bundle_payload(
+        record,
+        raw_bytes=raw_bytes,
+        raw_artifact_filename=f"{path.stem}.qcschema.json",
+        raw_artifact_sha256=raw_sha256,
+        parent_record=parent_record,
+        parent_raw_bytes=parent_raw,
+        parent_artifact_filename=f"{parent_path.stem}.qcschema.json" if parent_path else None,
+        parent_artifact_sha256=parent_sha,
+        declared_smiles=args.smiles,
+        species_entry_kind=StationaryPointKind(args.species_entry_kind),
+    )
+    return raw_bytes, raw_sha256, record, parent_raw, parent_sha, parent_record, bundle
+
+
+def _scan_summary(record, raw_sha256, parent_record, bundle) -> dict:
+    return {
+        "family": record.family,
+        "record_kind": record.record_kind,
+        "canonical_document_sha256": record.canonical_sha256,
+        "raw_sha256": raw_sha256,
+        "parent_opt_canonical_document_sha256": parent_record.canonical_sha256,
+        "calculation_type": "scan",
+        "dimension": bundle.dimension,
+        "point_count": bundle.point_count,
+        "mapping_report": bundle.report.to_dict(),
+        "parent_opt_mapping_report": bundle.parent_report.to_dict(),
+    }
+
+
+def _print_scan_summary(result: dict) -> None:
+    print(f"family={result['family']} record_kind={result['record_kind']}")
+    print(
+        f"calculation.type=scan dimension={result['dimension']} "
+        f"points={result['point_count']} (attached to the parent opt)"
+    )
+    print(f"canonical_document_sha256={result['canonical_document_sha256']}")
+    print(f"parent_opt_canonical_document_sha256={result['parent_opt_canonical_document_sha256']}")
+    for bucket, paths in result["mapping_report"].items():
+        print(f"  {bucket}: {', '.join(paths) if paths else '(none)'}")
+
+
+def _cmd_report_scan(args: argparse.Namespace) -> int:
+    try:
+        _raw, raw_sha256, record, _praw, _psha, parent_record, bundle = _map_scan_file(args)
+    except QCSchemaAdapterError as exc:
+        return _emit_error(exc, as_json=args.json)
+    result = _scan_summary(record, raw_sha256, parent_record, bundle)
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        _print_scan_summary(result)
+    return 0
+
+
+def _cmd_import_scan(args: argparse.Namespace) -> int:
+    try:
+        raw, raw_sha256, record, parent_raw, parent_sha, parent_record, bundle = _map_scan_file(args)
+    except QCSchemaAdapterError as exc:
+        return _emit_error(exc, as_json=args.json)
+
+    if not (args.upload or args.dry_run):
+        return _cmd_report_scan(args)
+
+    from .uploader import upload_scan_bundle  # lazy: report/map stay client-free
+
+    upload_kwargs = dict(
+        record=record,
+        parent_record=parent_record,
+        payload=bundle.payload,
+        raw_bytes=raw,
+        raw_sha256=raw_sha256,
+        parent_raw_bytes=parent_raw,
+        parent_raw_sha256=parent_sha,
+        allow_duplicate=args.allow_duplicate,
+    )
+    if args.dry_run:
+        try:
+            outcome = upload_scan_bundle(None, dry_run=True, **upload_kwargs)
+        except QCSchemaAdapterError as exc:
+            return _emit_error(exc, as_json=args.json)
+        if args.json:
+            print(json.dumps(outcome, indent=2))
+        else:
+            print("DRY RUN: would POST a computed-species bundle (opt + scan)")
+            print(f"  computed-species key: {outcome['computed_species_idempotency_key']}")
+        return 0
+
+    import os
+
+    from tckdb_client import TCKDBClient, TCKDBError  # lazy
+
+    base_url = args.base_url or os.environ.get("TCKDB_BASE_URL")
+    if not base_url:
+        return _emit_missing_base_url(as_json=args.json)
+    api_key = os.environ.get("TCKDB_API_KEY")
+    try:
+        with TCKDBClient(base_url, api_key=api_key) as client:
+            outcome = upload_scan_bundle(client, **upload_kwargs)
+    except QCSchemaAdapterError as exc:
+        return _emit_error(exc, as_json=args.json)
+    except TCKDBError as exc:
+        return _emit_client_error(exc, as_json=args.json)
+
+    result = {
+        "scan_calculation_id": outcome.scan_calculation_id,
+        "opt_calculation_id": outcome.opt_calculation_id,
+        "replayed": outcome.replayed,
+    }
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        for key, value in result.items():
+            print(f"{key}={value}")
     return 0
 
 

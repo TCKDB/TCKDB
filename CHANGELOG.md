@@ -22,6 +22,26 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## QCSchema torsion drives in and out (2026-09-29)
+
+- tckdb-qcschema 0.6.0: `import` reads a QCSchema `TorsionDriveResult`
+  (families v1 and v2, one or more dihedrals) together with the optimization
+  it started from (`--parent-opt`) and posts both as one computed-species
+  bundle: the optimization becomes the conformer's `opt` and the drive a
+  `scan` calculation attached to it. Grid-point energies are stored exactly;
+  each grid angle is checked against its own geometry before it is stored.
+  `export` turns a stored relaxed dihedral scan back into a v2
+  `TorsionDriveResult`, validated by qcelemental, and refuses bond, angle,
+  improper and rigid scans and scans stored as a relative sweep rather than
+  mislabel them. IRCs stay unsupported: qcelemental 0.51.2 has no model for
+  them.
+- A torsion drive's mapping report names every field of the document once,
+  as the other record kinds' do: each grid point's geometry and energy
+  `transformed`, the per-point optimizations `retained_only`.
+- `import --upload` and `export` with no `--base-url` and no
+  `$TCKDB_BASE_URL` print one `ERROR [missing_base_url]` line, exit 1,
+  instead of a traceback.
+
 ## Supersede names submissions by public ref (2026-09-29)
 
 - Backend: `POST /api/v1/submissions/{submission_ref}/supersede` takes the

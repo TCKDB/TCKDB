@@ -1,0 +1,171 @@
+{
+  "record": {
+    "available_sections": {
+      "constraints_applicable": true,
+      "freq_modes_applicable": false,
+      "geometry_validation_applicable": false,
+      "has_artifacts": true,
+      "has_constraints": false,
+      "has_dependencies": true,
+      "has_energy_corrections": false,
+      "has_execution_environment": false,
+      "has_freq_modes": false,
+      "has_geometry_validation": false,
+      "has_hessian": false,
+      "has_input_geometries": true,
+      "has_irc": false,
+      "has_output_geometries": false,
+      "has_parameters": true,
+      "has_path_search": false,
+      "has_results": true,
+      "has_scan": true,
+      "has_scf_stability": false,
+      "has_spin_diagnostic": false,
+      "has_wavefunction_diagnostic": false,
+      "irc_applicable": false,
+      "path_search_applicable": false,
+      "scan_applicable": true
+    },
+    "calculation": {
+      "calculation_ref": "calc_v4r6au42fp6aodyhxeoqpojeui",
+      "created_at": "2026-09-29T15:11:08.878214",
+      "quality": "raw",
+      "review": {
+        "note": null,
+        "reviewed_at": null,
+        "reviewer_kind": null,
+        "status": "not_reviewed"
+      },
+      "type": "scan"
+    },
+    "conformer": {
+      "conformer_group_label": "conformer_1",
+      "conformer_group_ref": "cg_ghdmzojrass2wmmikpb63w2okm",
+      "conformer_observation_ref": "co_o2vhntuavflrkyqrrd3edkrmfu"
+    },
+    "input_geometries": [
+      {
+        "geom_hash": "f1be0d65c557e1722b8148a3cd7901485457de1fbb99500d34d377bd31633391",
+        "geometry_ref": "geom_2zszujjks7eh7g3qeod4sl3xfa",
+        "input_order": 1,
+        "natoms": 4,
+        "output_order": null,
+        "role": null,
+        "source": "deposited"
+      }
+    ],
+    "level_of_theory": {
+      "basis": "sto-3g",
+      "dispersion": null,
+      "display": "hf/sto-3g",
+      "label": null,
+      "level_of_theory_ref": "lot_sbjofmiyazlzjra5r5uhg6i4zy",
+      "method": "hf",
+      "solvent": null,
+      "spin_treatment": null
+    },
+    "literature": null,
+    "owner": {
+      "kind": "species_entry",
+      "species_entry": {
+        "canonical_smiles": "OO",
+        "charge": 0,
+        "electronic_state_kind": "ground",
+        "formula": "H2O2",
+        "inchi_key": "MHAJPDPJQMAIIY-UHFFFAOYSA-N",
+        "multiplicity": 1,
+        "species_entry_kind": "minimum",
+        "species_entry_label": null,
+        "species_entry_ref": "spe_yundfz63if4d4sc4t2pafbbwei",
+        "species_ref": "spc_cxvr2gvnalyko24zgwkod5ph44"
+      },
+      "transition_state_entry": null
+    },
+    "parameters": [
+      {
+        "canonical_key": null,
+        "canonical_value": null,
+        "created_at": "2026-09-29T15:11:08.878214",
+        "parameter_index": null,
+        "raw_key": "program",
+        "raw_value": "geometric",
+        "section": "qcschema.optimization_spec",
+        "unit": null,
+        "value_type": null
+      },
+      {
+        "canonical_key": null,
+        "canonical_value": null,
+        "created_at": "2026-09-29T15:11:08.878214",
+        "parameter_index": null,
+        "raw_key": "coordsys",
+        "raw_value": "tric",
+        "section": "qcschema.optimization_spec.keywords",
+        "unit": null,
+        "value_type": null
+      },
+      {
+        "canonical_key": null,
+        "canonical_value": null,
+        "created_at": "2026-09-29T15:11:08.878214",
+        "parameter_index": null,
+        "raw_key": "program",
+        "raw_value": "torsiondrive",
+        "section": "qcschema.torsiondrive",
+        "unit": null,
+        "value_type": null
+      }
+    ],
+    "provenance": {
+      "converged": null,
+      "convergence_applicable": false,
+      "geometry_validation_applicable": false,
+      "geometry_validation_status": "not_present",
+      "has_result": true,
+      "result_applicable": true,
+      "scf_stability_status": "not_present"
+    },
+    "results": {
+      "freq": null,
+      "irc": null,
+      "kind": "scan",
+      "opt": null,
+      "path_search": null,
+      "scan": {
+        "dimension": 1,
+        "is_relaxed": false,
+        "note": null,
+        "zero_energy_reference_hartree": null
+      },
+      "sp": null
+    },
+    "software_release": {
+      "software": "Psi4",
+      "software_release_ref": "srel_kkgfkhcl4x2rgm7pqqvyqroq5e",
+      "version": "1.11"
+    },
+    "workflow_tool_release": {
+      "version": "v1.2.0",
+      "workflow_tool": "TorsionDrive",
+      "workflow_tool_release_ref": "wfr_ebkbb3mn3oo7wlisksgel344xq"
+    }
+  },
+  "request": {
+    "include": [
+      "input_geometries",
+      "parameters",
+      "results"
+    ],
+    "profile": "exploratory",
+    "profile_recommendation": "none",
+    "profile_release_ref": null
+  },
+  "review_summary": {
+    "approved": 0,
+    "deprecated": 0,
+    "not_reviewed": 1,
+    "rejected": 0,
+    "total": 1,
+    "under_review": 0
+  }
+}

@@ -26,6 +26,7 @@ from tckdb_qcschema.errors import E_MAPPING_REPORT_INCOMPLETE, QCSchemaAdapterEr
 from tckdb_qcschema.mapping import build_conformer_upload_payload
 from tckdb_qcschema.reader import read_document
 from tckdb_qcschema.report_coverage import check_mapping_report, rule_paths
+from tckdb_qcschema.scan import build_scan_bundle_payload
 from tckdb_qcschema.uploader import sha256_bytes
 
 REPO_ROOT = Path(__file__).resolve().parents[5]
@@ -95,9 +96,47 @@ def _buckets_naming(report: dict, leaf: str) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
+def _scan_parent(path: Path) -> str | None:
+    """The parent optimization case of an adapter torsion-drive fixture."""
+    if path.parent.parent != FIXTURES:
+        return None
+    return load_case(path.parent.name)[1].get("parent_opt_case")
+
+
+def _import_any(path: Path) -> tuple[dict, dict]:
+    """``(the report stored in the payload, the report returned)``.
+
+    A torsion drive imports together with its parent optimization; its
+    report is the scan calculation's.
+    """
+    raw = path.read_bytes()
+    parent_case = _scan_parent(path)
+    if parent_case is None:
+        payload, report = _import(raw)
+        return payload["calculation"]["parameters_json"]["tckdb_qcschema"]["mapping_report"], report
+    parent_raw = load_case(parent_case)[0]
+    bundle = build_scan_bundle_payload(
+        read_document(raw),
+        raw_bytes=raw,
+        raw_artifact_filename="document.qcschema.json",
+        raw_artifact_sha256=sha256_bytes(raw),
+        parent_record=read_document(parent_raw),
+        parent_raw_bytes=parent_raw,
+        parent_artifact_filename="parent.qcschema.json",
+        parent_artifact_sha256=sha256_bytes(parent_raw),
+        declared_smiles=load_case(path.parent.name)[1]["smiles_arg"],
+    )
+    scan = bundle.payload["conformers"][0]["additional_calculations"][0]
+    return scan["parameters_json"]["tckdb_qcschema"]["mapping_report"], bundle.report.to_dict()
+
+
 def test_corpus_is_not_empty() -> None:
     """Red, never vacuously green, if a fixture tree goes missing."""
-    assert len([p for p in CORPUS if p.parent.parent == FIXTURES]) == 8
+    adapter = [p for p in CORPUS if p.parent.parent == FIXTURES]
+    # 8 energy/gradient/hessian/optimization cases plus the 3 optimizations
+    # the torsion drives start from; and the 3 torsion drives themselves.
+    assert len([p for p in adapter if _scan_parent(p) is None]) == 11
+    assert len([p for p in adapter if _scan_parent(p) is not None]) == 3
     assert len([p for p in CORPUS if p.parent.parent == BACKEND_CORPUS and p.name == "document.json"]) == 8
     for path in CORPUS:
         assert path.is_file(), path
@@ -106,7 +145,7 @@ def test_corpus_is_not_empty() -> None:
 @pytest.mark.parametrize("path", CORPUS, ids=_id)
 def test_every_field_is_in_exactly_one_bucket(path: Path) -> None:
     raw = path.read_bytes()
-    payload, report = _import(raw)
+    stored, report = _import_any(path)
     leaves = _leaves(json.loads(raw))
     assert len(leaves) > 20, "the walk found almost nothing; the oracle is broken"
     problems = {
@@ -118,7 +157,7 @@ def test_every_field_is_in_exactly_one_bucket(path: Path) -> None:
     for bucket, entries in report.items():
         assert len(entries) == len(set(entries)), f"{bucket} lists a path twice"
     # The stored copy is the returned report, not an earlier snapshot.
-    assert payload["calculation"]["parameters_json"]["tckdb_qcschema"]["mapping_report"] == report
+    assert stored == report
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +444,25 @@ _CLOSED_MODELS = {
         ("input_data.initial_molecule", qcel_v2.Molecule),
         ("input_data.specification", qcel_v2.OptimizationSpecification),
         ("input_data.specification.specification", qcel_v2.AtomicSpecification),
+    ],
+    # The grid-keyed containers (final_molecules, final_energies /
+    # scan_properties, optimization_history / scan_results) and the starting
+    # molecules are branch-owned: the scan branch classifies every field
+    # under them, per grid point (tckdb_qcschema.scan._classify_grid).
+    ("v1", "torsion_drive"): [
+        ("", qcel_v1.TorsionDriveResult),
+        ("keywords", qcel_v1.procedures.TDKeywords),
+        ("input_specification", qcel_v1.procedures.QCInputSpecification),
+        ("optimization_spec", qcel_v1.procedures.OptimizationSpecification),
+    ],
+    ("v2", "torsion_drive"): [
+        ("", qcel_v2.TorsionDriveResult),
+        ("properties", qcel_v2.TorsionDriveProperties),
+        ("input_data", qcel_v2.TorsionDriveInput),
+        ("input_data.specification", qcel_v2.TorsionDriveSpecification),
+        ("input_data.specification.keywords", qcel_v2.TorsionDriveKeywords),
+        ("input_data.specification.specification", qcel_v2.OptimizationSpecification),
+        ("input_data.specification.specification.specification", qcel_v2.AtomicSpecification),
     ],
 }
 

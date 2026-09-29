@@ -73,6 +73,7 @@ from . import __version__ as _ADAPTER_VERSION
 from .errors import (
     E_ENERGY_CONTRADICTION,
     E_ESS_PROVENANCE_UNAVAILABLE,
+    E_SCAN_PARENT_OPT_REQUIRED,
     E_SP_ENERGY_UNAVAILABLE,
     QCSchemaAdapterError,
 )
@@ -478,6 +479,17 @@ def build_conformer_upload_payload(
     """
     if raw_artifact_sha256 != __import__("hashlib").sha256(raw_bytes).hexdigest():
         raise ValueError("raw_artifact_sha256 does not match raw_bytes.")
+
+    if record.record_kind == "torsion_drive":
+        raise QCSchemaAdapterError(
+            E_SCAN_PARENT_OPT_REQUIRED,
+            "a TorsionDriveResult becomes a scan calculation attached to a "
+            "conformer, and a conformer is anchored by the unconstrained "
+            "optimization the drive started from -- none of the drive's own "
+            "constrained optimizations is that minimum. Import it with the "
+            "optimization document as --parent-opt "
+            "(tckdb_qcschema.scan.build_scan_bundle_payload).",
+        )
 
     report = MappingReport()
 

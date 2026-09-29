@@ -1,0 +1,19 @@
+{
+  "outcome": "route",
+  "expected": "opt",
+  "family": "v2",
+  "driver": null,
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "torsiondrive": "1.2.0",
+  "level": "hf/sto-3g",
+  "molecule": "hydrogen trioxide",
+  "smiles_arg": "OOO",
+  "pins": {
+    "final_energy_hartree": -222.58068013546833
+  },
+  "raw_sha256": "caa3ea7400b720794bf5aa5b3628d375b2286311c8b45aad79fe95c3cf7fb3d1"
+}

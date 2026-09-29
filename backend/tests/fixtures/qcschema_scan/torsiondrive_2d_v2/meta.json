@@ -1,0 +1,146 @@
+{
+  "expected_calculation_type": "scan",
+  "family": "v2",
+  "generator": {
+    "adapter_version": "0.6.0",
+    "qcelemental_version": "0.51.2",
+    "source_fixture": "clients/python/adapters/qcschema/tests/fixtures/torsiondrive_2d_v2"
+  },
+  "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
+  "parent_raw_sha256": "caa3ea7400b720794bf5aa5b3628d375b2286311c8b45aad79fe95c3cf7fb3d1",
+  "pins": {
+    "dimension": 2,
+    "point_count": 16,
+    "points": [
+      {
+        "coordinate_values": [
+          -90.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.58053521388396,
+        "grid_key": "-90,-90"
+      },
+      {
+        "coordinate_values": [
+          -90.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.57110645366586,
+        "grid_key": "-90,0"
+      },
+      {
+        "coordinate_values": [
+          -90.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.5769360020553,
+        "grid_key": "-90,90"
+      },
+      {
+        "coordinate_values": [
+          -90.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.57572873443917,
+        "grid_key": "-90,180"
+      },
+      {
+        "coordinate_values": [
+          0.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.57110645375653,
+        "grid_key": "0,-90"
+      },
+      {
+        "coordinate_values": [
+          0.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.54900914282246,
+        "grid_key": "0,0"
+      },
+      {
+        "coordinate_values": [
+          0.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.57110645367504,
+        "grid_key": "0,90"
+      },
+      {
+        "coordinate_values": [
+          0.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.56862503603674,
+        "grid_key": "0,180"
+      },
+      {
+        "coordinate_values": [
+          90.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.57693600213486,
+        "grid_key": "90,-90"
+      },
+      {
+        "coordinate_values": [
+          90.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.57110645380973,
+        "grid_key": "90,0"
+      },
+      {
+        "coordinate_values": [
+          90.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.58053521363598,
+        "grid_key": "90,90"
+      },
+      {
+        "coordinate_values": [
+          90.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.5757287357752,
+        "grid_key": "90,180"
+      },
+      {
+        "coordinate_values": [
+          180.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.5757287343893,
+        "grid_key": "180,-90"
+      },
+      {
+        "coordinate_values": [
+          180.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.56862503605885,
+        "grid_key": "180,0"
+      },
+      {
+        "coordinate_values": [
+          180.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.57572873589334,
+        "grid_key": "180,90"
+      },
+      {
+        "coordinate_values": [
+          180.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.57071326976893,
+        "grid_key": "180,180"
+      }
+    ]
+  },
+  "raw_sha256": "90a765d36c8f863c94802553af678bd651d7a6f42f2c8bd1eeafa853b3e27074"
+}

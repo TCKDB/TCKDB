@@ -49,11 +49,16 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationDependency,
     CalculationFreqMode,
     CalculationHessian,
     CalculationInputGeometry,
     CalculationOptResult,
     CalculationOutputGeometry,
+    CalculationScanCoordinate,
+    CalculationScanPoint,
+    CalculationScanPointCoordinateValue,
+    CalculationScanResult,
     CalculationSPResult,
 )
 from app.db.models.common import ArtifactKind, CalculationGeometryRole
@@ -362,3 +367,201 @@ def test_no_duplicate_software_rows_across_the_whole_corpus(client, db_session: 
         select(func.count()).select_from(WorkflowTool).where(WorkflowTool.name == "geomeTRIC")
     )
     assert geometric_count == 1, f"expected exactly 1 'geomeTRIC' WorkflowTool row, got {geometric_count}"
+
+
+# ---------------------------------------------------------------------------
+# Scans: TorsionDrive documents, posted as computed-species bundles
+# ---------------------------------------------------------------------------
+#
+# ``backend/tests/fixtures/qcschema_scan/<case>/`` holds the three
+# TorsionDrive route cases (hydrogen peroxide 1-D in QCSchema families v1
+# and v2, methyl hydroperoxide 2-D in v2; HF/STO-3G, Psi4 + geomeTRIC +
+# torsiondrive through qcengine), each mapped by the real
+# ``tckdb_qcschema.scan.build_scan_bundle_payload`` together with the
+# optimization the drive started from -- see
+# ``clients/python/adapters/qcschema/scripts/emit_backend_corpus.py``. A
+# drive becomes a ``scan`` calculation attached to that optimization's
+# conformer, so it posts to ``/uploads/computed-species`` as one bundle
+# carrying both raw documents inline. A separate directory from the
+# conformer corpus above so neither discovery sees the other's cases.
+
+SCAN_CORPUS_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "qcschema_scan"
+
+#: Exactly these. Not "at least one": a case this test was never written to
+#: check must not slip in, and a missing one must not pass as a smaller
+#: green.
+EXPECTED_SCAN_CASES = ["torsiondrive_2d_v2", "torsiondrive_v1", "torsiondrive_v2"]
+
+
+def _discover_scan_cases() -> list[str]:
+    if not SCAN_CORPUS_DIR.exists():
+        return []
+    return sorted(
+        d.name
+        for d in SCAN_CORPUS_DIR.iterdir()
+        if d.is_dir() and (d / "payload.json").exists() and (d / "meta.json").exists()
+    )
+
+
+SCAN_CASES = _discover_scan_cases()
+
+
+def _load_scan(case: str) -> tuple[dict, dict]:
+    case_dir = SCAN_CORPUS_DIR / case
+    return (
+        json.loads((case_dir / "payload.json").read_text()),
+        json.loads((case_dir / "meta.json").read_text()),
+    )
+
+
+def test_scan_corpus_is_exactly_the_three_torsion_drives() -> None:
+    assert SCAN_CASES == EXPECTED_SCAN_CASES, (
+        f"expected scan corpus {EXPECTED_SCAN_CASES}, found {SCAN_CASES} -- "
+        "regenerate with clients/python/adapters/qcschema/scripts/emit_backend_corpus.py"
+    )
+
+
+def _row_counts(db_session: Session) -> dict[str, int]:
+    return {
+        model.__tablename__: db_session.scalar(select(func.count()).select_from(model)) or 0
+        for model in (
+            Calculation,
+            CalculationArtifact,
+            CalculationScanPoint,
+            CalculationScanPointCoordinateValue,
+            IdempotencyRecord,
+        )
+    }
+
+
+@pytest.mark.parametrize("case", SCAN_CASES, ids=SCAN_CASES)
+def test_qcschema_scan_case_accepted_and_persisted(
+    case: str, client, db_session: Session, stub_store_artifact
+) -> None:
+    payload, meta = _load_scan(case)
+    pins = meta["pins"]
+    key = f"qcschema-scan-corpus-{case}-v1"
+
+    resp = client.post(
+        "/api/v1/uploads/computed-species", json=payload, headers={"Idempotency-Key": key}
+    )
+    assert resp.status_code == 201, f"{case}: {resp.status_code}\n{resp.text[:2000]}"
+    body = resp.json()
+    (conformer,) = body["conformers"]
+    opt_id = conformer["primary_calculation"]["calculation_id"]
+    assert conformer["primary_calculation"]["type"] == "opt"
+    (scan_ref,) = conformer["additional_calculations"]
+    assert scan_ref["type"] == "scan"
+    scan_id = scan_ref["calculation_id"]
+
+    db_session.expire_all()
+
+    # --- scan result + coordinates -----------------------------------------
+    result = db_session.get(CalculationScanResult, scan_id)
+    assert result is not None, f"{case}: no calc_scan_result row"
+    assert result.dimension == pins["dimension"]
+    assert result.is_relaxed is True
+    coordinates = db_session.scalars(
+        select(CalculationScanCoordinate)
+        .where(CalculationScanCoordinate.calculation_id == scan_id)
+        .order_by(CalculationScanCoordinate.coordinate_index)
+    ).all()
+    assert len(coordinates) == pins["dimension"]
+    sent = payload["conformers"][0]["additional_calculations"][0]["scan_result"]["coordinates"]
+    for row, sent_coordinate in zip(coordinates, sent, strict=True):
+        assert row.coordinate_kind.value == "dihedral"
+        assert (row.atom1_index, row.atom2_index, row.atom3_index, row.atom4_index) == (
+            sent_coordinate["atom1_index"],
+            sent_coordinate["atom2_index"],
+            sent_coordinate["atom3_index"],
+            sent_coordinate["atom4_index"],
+        )
+        assert row.step_size == sent_coordinate["step_size"]
+
+    # --- points: exact count, exact energies, exact coordinate values ------
+    points = db_session.scalars(
+        select(CalculationScanPoint)
+        .where(CalculationScanPoint.calculation_id == scan_id)
+        .order_by(CalculationScanPoint.point_index)
+    ).all()
+    assert len(points) == pins["point_count"], (
+        f"{case}: stored {len(points)} points, expected exactly {pins['point_count']}"
+    )
+    values = db_session.scalars(
+        select(CalculationScanPointCoordinateValue)
+        .where(CalculationScanPointCoordinateValue.calculation_id == scan_id)
+        .order_by(
+            CalculationScanPointCoordinateValue.point_index,
+            CalculationScanPointCoordinateValue.coordinate_index,
+        )
+    ).all()
+    assert len(values) == pins["point_count"] * pins["dimension"]
+    by_point: dict[int, list[float]] = {}
+    for value in values:
+        by_point.setdefault(value.point_index, []).append(value.coordinate_value)
+    for point, pinned in zip(points, pins["points"], strict=True):
+        assert point.electronic_energy_hartree == pinned["electronic_energy_hartree"], (
+            f"{case}: point {point.point_index} energy changed in storage"
+        )
+        assert by_point[point.point_index] == pinned["coordinate_values"]
+        assert point.geometry_id is not None
+
+    # --- the scan hangs off the opt it started from ------------------------
+    edge = db_session.scalar(
+        select(CalculationDependency).where(CalculationDependency.child_calculation_id == scan_id)
+    )
+    assert edge is not None and edge.parent_calculation_id == opt_id
+    assert edge.dependency_role.value == "scan_parent"
+    scan_inputs = db_session.scalars(
+        select(CalculationInputGeometry).where(CalculationInputGeometry.calculation_id == scan_id)
+    ).all()
+    assert len(scan_inputs) == 1
+
+    scan_calc = db_session.get(Calculation, scan_id)
+    assert scan_calc.type.value == "scan"
+    assert db_session.get(SoftwareRelease, scan_calc.software_release_id).software.name == "Psi4"
+    wtr = db_session.get(WorkflowToolRelease, scan_calc.workflow_tool_release_id)
+    assert wtr.workflow_tool.name == "TorsionDrive"
+    opt_calc = db_session.get(Calculation, opt_id)
+    assert db_session.get(WorkflowToolRelease, opt_calc.workflow_tool_release_id).workflow_tool.name == "geomeTRIC"
+
+    # --- both raw documents, as ancillary artifacts ------------------------
+    for calc_id, expected_sha in (
+        (scan_id, meta["raw_sha256"]),
+        (opt_id, meta["parent_raw_sha256"]),
+    ):
+        artifacts = db_session.scalars(
+            select(CalculationArtifact).where(CalculationArtifact.calculation_id == calc_id)
+        ).all()
+        assert [(a.kind, a.sha256) for a in artifacts] == [(ArtifactKind.ancillary, expected_sha)]
+
+    pj = scan_calc.parameters_json
+    assert pj["tckdb_qcschema"]["record_kind"] == "torsion_drive"
+    assert pj["tckdb_qcschema"]["adapter_version"] == meta["generator"]["adapter_version"]
+    _assert_no_username_key(pj)
+
+    # --- the read the exporter uses serves the same numbers ----------------
+    read = client.get(
+        f"/api/v1/scientific/calculations/{scan_id}/scan",
+        params={"include_geometries": "true", "limit": 200},
+    )
+    assert read.status_code == 200, read.text[:2000]
+    read_body = read.json()
+    assert read_body["pagination"]["total"] == pins["point_count"]
+    assert read_body["scan"]["is_relaxed"] is True
+    assert [
+        [v["coordinate_value"] for v in p["coordinate_values"]] for p in read_body["points"]
+    ] == [p["coordinate_values"] for p in pins["points"]]
+    assert [p["electronic_energy_hartree"] for p in read_body["points"]] == [
+        p["electronic_energy_hartree"] for p in pins["points"]
+    ]
+
+    # --- replay: same key + same body -> same body, no new rows ------------
+    before = _row_counts(db_session)
+    replay = client.post(
+        "/api/v1/uploads/computed-species", json=payload, headers={"Idempotency-Key": key}
+    )
+    assert replay.status_code == 201
+    assert replay.json() == body, f"{case}: replay body differs from the original"
+    db_session.expire_all()
+    assert _row_counts(db_session) == before, f"{case}: replay created rows"

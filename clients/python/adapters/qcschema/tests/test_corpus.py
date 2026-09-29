@@ -18,7 +18,9 @@ import pytest
 from tckdb_qcschema.errors import QCSchemaAdapterError
 from tckdb_qcschema.mapping import build_conformer_upload_payload
 from tckdb_qcschema.reader import read_document
+from tckdb_qcschema.scan import build_scan_bundle_payload
 from tckdb_qcschema.uploader import sha256_bytes
+from tckdb_schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
 from tckdb_schemas.workflows.conformer_upload import ConformerUploadRequest
 
 from conftest import discover_corpus_cases, load_case
@@ -43,6 +45,59 @@ def test_corpus_is_not_empty() -> None:
     assert len(CASES) >= 12, f"expected at least 12 corpus cases, found {len(CASES)}: {CASES}"
 
 
+def _map_scan_case(case: str, raw: bytes, meta: dict):
+    """A TorsionDrive case maps together with its parent optimization case."""
+    parent_raw, _parent_meta = load_case(meta["parent_opt_case"])
+    record = read_document(raw)
+    parent_record = read_document(parent_raw)
+    return build_scan_bundle_payload(
+        record,
+        raw_bytes=raw,
+        raw_artifact_filename=f"{case}.qcschema.json",
+        raw_artifact_sha256=sha256_bytes(raw),
+        parent_record=parent_record,
+        parent_raw_bytes=parent_raw,
+        parent_artifact_filename=f"{meta['parent_opt_case']}.qcschema.json",
+        parent_artifact_sha256=sha256_bytes(parent_raw),
+        declared_smiles=meta.get("smiles_arg", "O"),
+    )
+
+
+def _assert_scan_pins(case: str, meta: dict, payload: dict) -> None:
+    """Exact counts and exact values: never "not empty", never approx."""
+    pins = meta["pins"]
+    (conformer,) = payload["conformers"]
+    assert conformer["primary_calculation"]["type"] == "opt"
+    (scan_calc,) = conformer["additional_calculations"]
+    assert scan_calc["type"] == "scan"
+    assert scan_calc["depends_on"] == [
+        {"parent_calculation_key": conformer["primary_calculation"]["key"], "role": "scan_parent"}
+    ]
+    scan = scan_calc["scan_result"]
+    assert scan["dimension"] == pins["dimension"]
+    assert scan["is_relaxed"] is True
+    assert len(scan["coordinates"]) == pins["dimension"]
+    assert [c["coordinate_kind"] for c in scan["coordinates"]] == ["dihedral"] * pins["dimension"]
+    assert len(scan["points"]) == pins["point_count"], (
+        f"{case}: {len(scan['points'])} points, expected exactly {pins['point_count']}"
+    )
+    for point, pinned in zip(scan["points"], pins["points"], strict=True):
+        assert point["electronic_energy_hartree"] == pinned["electronic_energy_hartree"], (
+            f"{case}: point {point['point_index']} energy is not the document's own number"
+        )
+        assert [v["coordinate_value"] for v in point["coordinate_values"]] == pinned[
+            "coordinate_values"
+        ], f"{case}: point {point['point_index']} coordinate values"
+        assert [v["coordinate_index"] for v in point["coordinate_values"]] == list(
+            range(1, pins["dimension"] + 1)
+        )
+    # Both raw documents travel inline, byte-exact, as ancillary artifacts.
+    (artifact,) = scan_calc["artifacts"]
+    assert artifact["kind"] == "ancillary" and artifact["sha256"] == meta["raw_sha256"]
+    (parent_artifact,) = conformer["primary_calculation"]["artifacts"]
+    assert parent_artifact["sha256"] == load_case(meta["parent_opt_case"])[1]["raw_sha256"]
+
+
 @pytest.mark.parametrize("case", CASES)
 def test_corpus_case(case: str) -> None:
     raw, meta = load_case(case)
@@ -54,6 +109,21 @@ def test_corpus_case(case: str) -> None:
     )
 
     smiles_arg = meta.get("smiles_arg", "O")
+
+    if meta.get("parent_opt_case"):
+        if meta["outcome"] == "route":
+            bundle = _map_scan_case(case, raw, meta)
+            ComputedSpeciesUploadRequest.model_validate(bundle.payload)
+            assert bundle.point_count == meta["pins"]["point_count"]
+            _assert_scan_pins(case, meta, bundle.payload)
+            return
+        with pytest.raises(QCSchemaAdapterError) as excinfo:
+            _map_scan_case(case, raw, meta)
+        assert excinfo.value.code == meta["expected"], (
+            f"{case}: expected refusal code {meta['expected']!r}, got "
+            f"{excinfo.value.code!r} ({excinfo.value.message})"
+        )
+        return
 
     if meta["outcome"] == "route":
         record = read_document(raw)
@@ -164,6 +234,8 @@ def test_route_case_payload_is_deterministic(case: str) -> None:
     smiles_arg = meta.get("smiles_arg", "O")
 
     def _build() -> dict:
+        if meta.get("parent_opt_case"):
+            return _map_scan_case(case, raw, meta).payload
         record = read_document(raw)  # fresh QCRecord each time, not shared state
         payload, _report = build_conformer_upload_payload(
             record,
