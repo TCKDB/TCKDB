@@ -86,6 +86,10 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "kinetics_third_body_efficiency",
         "kinetics_tunneling_application",
         "level_of_theory",
+        # #574: a merged level of theory resolves to the row named here.
+        # Without it a restored archive would answer a merged ref with the
+        # merged row itself.
+        "level_of_theory_merge",
         "literature",
         "literature_author",
         "machine_review_curator_task",
