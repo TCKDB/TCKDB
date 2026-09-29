@@ -2469,6 +2469,46 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
+### `software_version_attestation`
+
+**Role:** role not stated on the model
+
+**Purpose:** One person's statement of the version of a program they ran.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `software_release_id` | BIGINT | no | — | software_release.id | — | not documented |
+| `attested_version` | TEXT | no | — | — | — | not documented |
+| `statement` | TEXT | no | — | — | — | not documented |
+| `evidence_kind` | SoftwareVersionEvidenceKind (enum) | no | — | — | `owner_attestation` | not documented |
+| `attested_by` | BIGINT | no | — | app_user.id | — | not documented |
+| `attested_at` | TIMESTAMP WITHOUT TIME ZONE | no | — | — | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_software_version_attestation_statement_nonblank`: `length(btrim(statement)) > 0`
+- `ck_software_version_attestation_version_nonblank`: `length(btrim(attested_version)) > 0`
+
+### `software_version_attestation_calculation`
+
+**Role:** role not stated on the model
+
+**Purpose:** One calculation re-pointed under an attestation, before and after.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `attestation_id` | BIGINT | no | — | software_version_attestation.id | — | not documented |
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `before_software_release_id` | BIGINT | no | — | software_release.id | — | not documented |
+| `after_software_release_id` | BIGINT | no | — | software_release.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_software_version_attestation_calculation_release_changed`: `before_software_release_id <> after_software_release_id`
+
 ### `statmech`
 
 **Role:** role not stated on the model

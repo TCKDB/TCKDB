@@ -704,6 +704,19 @@ class ParameterSource(str, Enum):
     curated = "curated"
 
 
+class SoftwareVersionEvidenceKind(str, Enum):
+    """What a ``software_version_attestation`` rests on (issue #305, decision (a)).
+
+    * ``owner_attestation`` — a person's own statement about the version of
+      a program they ran, recorded verbatim, for calculations whose stored
+      artifacts carry no banner (or were never stored). Artifact banners are
+      not recorded here: they are observations and live on the calculation
+      (``observed_software_banner``, DR-0008).
+    """
+
+    owner_attestation = "owner_attestation"
+
+
 class SoftwareReconciliationStatus(str, Enum):
     """Outcome of reconciling user-declared vs parser-observed software
     provenance on a ``calculation`` (DR-0008).

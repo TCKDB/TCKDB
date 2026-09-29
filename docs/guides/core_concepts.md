@@ -185,6 +185,12 @@ and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visib
   (`backend/app/services/software_banner_extraction.py`), unless an
   execution-environment manifest fixes its release; stored logs are
   handled by `backend/app/services/software_release_version_fill.py`.
+  Where no log can speak, the person who ran the calculations can: an
+  owner's statement of the version is recorded verbatim in the append-only
+  `software_version_attestation` table, with one
+  `software_version_attestation_calculation` row per calculation it
+  re-pointed (before and after release), by the same tool's
+  `--attest-version` mode.
 - **`workflow_tool` / `workflow_tool_release`** identifies the
   high-level pipeline that produced the records (ARC, a custom RMG
   pipeline, …). TCKDB itself is workflow-tool agnostic.

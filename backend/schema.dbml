@@ -551,6 +551,10 @@ enum SoftwareReconciliationStatus {
   parsed_only
 }
 
+enum SoftwareVersionEvidenceKind {
+  owner_attestation
+}
+
 enum SpeciesEntryReviewRole {
   curator
   reviewer
@@ -3059,6 +3063,47 @@ Table software_release {
   }
 
   Note: 'Exact release metadata for a software package.'
+}
+
+Table software_version_attestation {
+  id bigint [pk, not null]
+  software_release_id bigint [not null, ref: > software_release.id]
+  attested_version text [not null]
+  statement text [not null]
+  evidence_kind SoftwareVersionEvidenceKind [not null]
+  attested_by bigint [not null, ref: > app_user.id]
+  attested_at timestamp [not null]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    software_release_id [name: 'ix_software_version_attestation_software_release_id']
+  }
+
+  checks {
+    `length(btrim(statement)) > 0` [name: 'ck_software_version_attestation_statement_nonblank']
+    `length(btrim(attested_version)) > 0` [name: 'ck_software_version_attestation_version_nonblank']
+  }
+
+  Note: 'One person\'s statement of the version of a program they ran.'
+}
+
+Table software_version_attestation_calculation {
+  id bigint [pk, not null]
+  attestation_id bigint [not null, ref: > software_version_attestation.id]
+  calculation_id bigint [not null, ref: > calculation.id]
+  before_software_release_id bigint [not null, ref: > software_release.id]
+  after_software_release_id bigint [not null, ref: > software_release.id]
+
+  indexes {
+    calculation_id [name: 'ix_software_version_attestation_calculation_calculation_id']
+    (attestation_id, calculation_id) [unique, name: 'uq_sva_calculation_attestation_calculation']
+  }
+
+  checks {
+    `before_software_release_id <> after_software_release_id` [name: 'ck_software_version_attestation_calculation_release_changed']
+  }
+
+  Note: 'One calculation re-pointed under an attestation, before and after.'
 }
 
 Table species {
