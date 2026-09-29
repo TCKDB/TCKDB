@@ -535,6 +535,52 @@ Read the dry run before committing. The script:
 
 ---
 
+## Method-name identity re-key and merge guards (revisions `c8424fe82997`, `e88231299733`)
+
+`c8424fe82997` (#585) makes `lot_hash` hash the method name by an identity
+key (stripped, lower-cased), the way `38b06819f099` did for basis names:
+ARC's `ccsd(t)-f12` and a stored `CCSD(T)-F12` are one level of theory. It
+re-keys existing rows in place, writes no DDL, and prints the duplicate groups
+it could not collapse, by `public_ref`. Punctuation aliases (`wb97xd` /
+`wB97X-D`) stay separate: they need an alias table, not a spelling rule.
+
+**Same consequences as the basis re-key** for anything holding an old
+`lot_hash` (see the section above): every row whose method has an upper-case
+letter gets a new hash; `public_ref` is untouched. A merged row (one with a
+`level_of_theory_merge` row) is never re-hashed and never chosen as the
+holder of a key.
+
+**After the deploy, run the merge script's dry run again**, for the same
+reason as after `38b06819f099` (an upload served by the old API during the
+migration hashes the old way) and because the re-key itself leaves duplicate
+groups (two cases of one method) for the script to join:
+
+```bash
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py            # dry run (default)
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py --commit --i-know-this-is-deployed
+```
+
+The script also now blocks a group when an **approved
+`molecular_property_observation`** cites a calculation it would move. The
+database does not freeze observations (no guard trigger), so the script's
+check is the only thing standing between an approved observation and a
+change of the level of theory it rests on.
+
+`e88231299733` (#591) adds two triggers, no data change:
+
+- `trg_lot_merge_guard` on `level_of_theory_merge` refuses a chain or loop
+  (`into_lot_id` already merged, or `merged_lot_id` already a target) and
+  refuses to merge a row that calculations still use;
+- `trg_calculation_lot_not_merged` on `calculation` refuses a `lot_id` that
+  names a merged row (on insert, or when `lot_id` changes).
+
+The upgrade prints how many chain links and stranded calculations already
+exist. Both should be 0; existing rows are reported, not rejected. The
+downgrade prints how many merges the table holds: downgrading further, past
+`38b06819f099`, drops `level_of_theory_merge` and forgets them.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
