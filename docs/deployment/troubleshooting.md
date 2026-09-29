@@ -227,6 +227,31 @@ or `read only ... (e.g. bucket over quota)`). SeaweedFS bucket quotas are not
 enforced on write: `s3.bucket.quota` alone refuses nothing until
 `s3.bucket.quota.enforce -apply` runs.
 
+**An enforced SeaweedFS bucket quota cannot be classified from TCKDB, and this
+is a measured limit, not a gap awaiting a patch (#545).** Measured on 4.47
+(the pinned image, `weed mini`, the compose lockdown): with a 20 MiB quota set
+and enforced on a bucket holding 30 MiB, every write is refused, including a
+1-byte and a 0-byte `PutObject` and `CreateMultipartUpload`, with HTTP 500,
+`Code: InternalError`, `Message: We encountered an internal error, please try
+again.` and no quota-specific header; reads and deletes still work. The quota
+is stored only in the filer (the bucket entry's `quota` field, and a
+`readOnly: true` rule for `/buckets/<bucket>/` in `/etc/seaweedfs/filer.conf`).
+From a container on the `storage` network under the lockdown, the master page
+(`GET :9333/`) and volume `/status` do not mention it, the S3 API has no call
+that returns it (`HeadBucket`, `ListBuckets`, `GetBucketPolicy`,
+`GetBucketVersioning` carry nothing), the filer HTTP port answers 401 without a
+signed token, and `/dir/status` answers 401. Reading it would need the filer
+JWT read key in the API container (which would let it read and write every
+object on the filer, bypassing S3) or the unauthenticated filer gRPC port
+(the residual tracked in #548, and not something to build on). TCKDB does
+neither, and does not guess from the refusal: a real fault and a quota look the
+same. So a quota refusal reads as `503 artifact_storage_unavailable` with
+`/status` healthy. To check for it, on the host run
+`weed shell` `s3.bucket.list` (each bucket line shows `quota:` and `usage:`),
+or `fs.cat /etc/seaweedfs/filer.conf` and look for `"readOnly": true`; lift it
+with `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` (or
+`-op=remove`) followed by `s3.bucket.quota.enforce -apply` (run under `lock`).
+
 **Recovery.** While a refusal is outstanding, each `/status` poll asks the
 store again, and clears the refusal once it reports at least the refused size
 free (on SeaweedFS: the smaller of free disk and free slot room). Deleting
