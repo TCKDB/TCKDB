@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
@@ -16,8 +18,11 @@ from app.db.models.common import AppUserRole
 from app.services.auth import (
     API_KEY_HEADER,
     SESSION_COOKIE_NAME,
-    authenticate_api_key,
+    record_api_key_use,
     resolve_session,
+)
+from app.services.auth import (
+    authenticate_api_key as _authenticate_api_key,
 )
 from app.services.deposit_ownership import (
     ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES,
@@ -26,6 +31,33 @@ from app.services.deposit_ownership import (
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _stamp_api_key_use(key_id: int) -> None:
+    """Record that an API key was just used, without ever failing the request.
+
+    Every route that authenticates by API key goes through
+    :func:`authenticate_api_key` below, so read, write, legacy-read and
+    optional-auth routes all stamp ``last_used_at`` the same way: in a
+    transaction of their own (``SessionLocal``), not the request's session.
+    Session-cookie auth has no ``last_used_at`` column and is unaffected.
+    """
+    try:
+        record_api_key_use(SessionLocal, key_id)
+    except (SQLAlchemyError, OSError):
+        # Database and connection failures only: a bug elsewhere (and any
+        # coded refusal) must stay loud rather than be logged and forgotten.
+        logger.warning("could not record api_key.last_used_at", exc_info=True)
+
+
+def authenticate_api_key(session: Session, raw_key: str) -> AppUser | None:
+    """Authenticate *raw_key* and stamp its ``last_used_at`` out of band."""
+    return _authenticate_api_key(
+        session, raw_key, on_authenticated=_stamp_api_key_use
+    )
 
 
 def _install_statement_timeout_listener(target_engine) -> None:
