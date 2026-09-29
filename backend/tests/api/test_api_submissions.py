@@ -337,12 +337,19 @@ class TestReject:
 
 
 # ---------------------------------------------------------------------------
-# POST /submissions/{id}/supersede
+# POST /submissions/{submission_ref}/supersede
 # ---------------------------------------------------------------------------
 
 
 class TestSupersede:
-    def test_supersede_marks_old_and_appends_audit(
+    """Supersede names both submissions by public ref, never by row id (#571).
+
+    It is the one write on this router open to any authenticated caller,
+    which makes it a producer surface, and producer surfaces do not take
+    database ids -- in the body or in the path.
+    """
+
+    def test_supersede_by_public_ref_marks_old_and_appends_audit(
         self, client, db_session, _api_test_user
     ):
         old = _seed_submission(db_session, created_by=_api_test_user, title="old")
@@ -352,25 +359,123 @@ class TestSupersede:
             title="new",
             supersedes_submission_id=old.id,
         )
+        assert old.public_ref.startswith("sub_")
 
         resp = client.post(
-            f"/api/v1/submissions/{old.id}/supersede",
-            json={"new_submission_id": new.id},
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_ref": new.public_ref},
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["status"] == SubmissionStatus.superseded.value
+        body = resp.json()
+        assert body["status"] == SubmissionStatus.superseded.value
+        # The response names the submission by the same handle the request
+        # used, so a producer can chain without ever holding a row id.
+        assert body["public_ref"] == old.public_ref
 
         events = client.get(f"/api/v1/submissions/{old.id}/audit-events").json()
         kinds = [e["event_kind"] for e in events]
         assert SubmissionAuditEventKind.submission_superseded.value in kinds
+
+    @staticmethod
+    def _pair(db_session, user_id):
+        old = _seed_submission(db_session, created_by=user_id, title="old")
+        new = _seed_submission(
+            db_session,
+            created_by=user_id,
+            title="new",
+            supersedes_submission_id=old.id,
+        )
+        return old, new
+
+    @staticmethod
+    def _refused_at(resp) -> set[tuple]:
+        """The request locations a 422 blames, and nothing else."""
+        assert resp.status_code == 422, resp.text
+        return {tuple(err["loc"]) for err in resp.json()["detail"]}
+
+    def _control_succeeds(self, client, db_session, old, new) -> None:
+        """The same pair, named properly, supersedes.
+
+        Each refusal test ends here, so a 422 caused by something *other*
+        than the row id under test -- the other half of the request being
+        wrong -- cannot pass for the refusal.
+        """
+        db_session.refresh(old)
+        assert old.status is not SubmissionStatus.superseded
+        resp = client.post(
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_ref": new.public_ref},
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_integer_new_submission_id_is_refused(
+        self, client, db_session, _api_test_user
+    ):
+        """The old body shape is gone, not quietly accepted alongside."""
+        old, new = self._pair(db_session, _api_test_user)
+
+        resp = client.post(
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_id": new.id},
+        )
+        assert self._refused_at(resp) == {
+            ("body", "new_submission_ref"),
+            ("body", "new_submission_id"),
+        }
+        self._control_succeeds(client, db_session, old, new)
+
+    def test_row_id_as_new_submission_ref_is_refused(
+        self, client, db_session, _api_test_user
+    ):
+        """A row id smuggled into the ref field fails the ref pattern."""
+        old, new = self._pair(db_session, _api_test_user)
+
+        for smuggled in (new.id, str(new.id)):
+            resp = client.post(
+                f"/api/v1/submissions/{old.public_ref}/supersede",
+                json={"new_submission_ref": smuggled},
+            )
+            assert self._refused_at(resp) == {("body", "new_submission_ref")}
+        self._control_succeeds(client, db_session, old, new)
+
+    def test_row_id_in_path_is_refused(
+        self, client, db_session, _api_test_user
+    ):
+        old, new = self._pair(db_session, _api_test_user)
+
+        resp = client.post(
+            f"/api/v1/submissions/{old.id}/supersede",
+            json={"new_submission_ref": new.public_ref},
+        )
+        assert self._refused_at(resp) == {("path", "submission_ref")}
+        self._control_succeeds(client, db_session, old, new)
+
+    def test_unknown_ref_returns_404_without_row_ids(
+        self, client, db_session, _api_test_user
+    ):
+        old = _seed_submission(db_session, created_by=_api_test_user, title="old")
+        missing = "sub_" + "0" * 26
+
+        resp = client.post(
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_ref": missing},
+        )
+        assert resp.status_code == 404, resp.text
+        body = resp.json()
+        assert missing in json.dumps(body)
+        leaked = [
+            key for key in (body.get("context") or {})
+            if key == "id" or key.endswith("_id")
+        ]
+        assert leaked == []
 
     def test_self_supersede_returns_400(
         self, client, db_session, _api_test_user
     ):
         sub = _seed_submission(db_session, created_by=_api_test_user)
         resp = client.post(
-            f"/api/v1/submissions/{sub.id}/supersede",
-            json={"new_submission_id": sub.id},
+            f"/api/v1/submissions/{sub.public_ref}/supersede",
+            json={"new_submission_ref": sub.public_ref},
         )
         assert resp.status_code == 400
 
@@ -383,8 +488,8 @@ class TestSupersede:
         )  # no supersedes_submission_id
 
         resp = client.post(
-            f"/api/v1/submissions/{old.id}/supersede",
-            json={"new_submission_id": new.id},
+            f"/api/v1/submissions/{old.public_ref}/supersede",
+            json={"new_submission_ref": new.public_ref},
         )
         assert resp.status_code == 400
 

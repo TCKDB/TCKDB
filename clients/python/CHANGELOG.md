@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.95.1 - 2026-09-29
+
+The parity table follows the server renaming the submission supersede route
+(issue #571): it is now `POST /api/v1/submissions/{submission_ref}/supersede`,
+and its body is `{"new_submission_ref": "sub_..."}`. Both submissions are named
+by their public ref (`public_ref` on a submission read), and a row id is
+refused with 422 in the path and in the body. The client has no typed method
+for this route and never sent the integer, so nothing here changes behaviour;
+a raw `post_json` caller must send the refs.
+
 ## 0.95.0 - 2026-09-29
 
 A 2xx response that is not the API's answer now raises the new

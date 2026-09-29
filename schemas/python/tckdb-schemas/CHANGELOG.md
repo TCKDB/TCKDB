@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.53.0 - 2026-09-29
+
+Producer contract only; no model in this package changes. The submission
+supersede surface is now `POST /api/v1/submissions/{submission_ref}/supersede`
+with body `{"new_submission_ref": "sub_..."}` (issue #571): both submissions
+are named by public ref, and a row id is refused with 422 in the path and in
+the body. **Breaking for that route:** the 0.52.0 contract's
+`new_submission_id` (an integer) is no longer accepted. A submission's ref is
+`public_ref` on a submission read.
+
 ## 0.52.0 - 2026-09-29
 
 Ship a **producer contract** inside the package:

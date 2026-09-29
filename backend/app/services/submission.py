@@ -95,6 +95,21 @@ def _require_submission(session: Session, submission_id: int) -> Submission:
     return submission
 
 
+def get_submission_by_ref(session: Session, submission_ref: str) -> Submission:
+    """Return the submission whose public ref is ``submission_ref``, or 404.
+
+    The resolver for producer-facing requests, which name a submission by
+    its ``sub_`` ref rather than its row id. The 404 echoes the ref -- the
+    caller supplied it -- and nothing else.
+    """
+    submission = session.scalars(
+        select(Submission).where(Submission.public_ref == submission_ref)
+    ).first()
+    if submission is None:
+        raise not_found("submission", ref=submission_ref)
+    return submission
+
+
 def get_submission(session: Session, submission_id: int) -> Submission:
     """Return a submission by id or raise :class:`NotFoundError`.
 
