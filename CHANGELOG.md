@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A QCSchema import names every field it does not store (2026-09-29)
+
+- tckdb-qcschema 0.5.0: every field of an imported document is now in exactly
+  one list of the mapping report (`transformed`, `retained_only`,
+  `unsupported`, `rejected`), named by its path in the document's own family
+  (`input_data.specification.model.method` for v2). Before, a Hessian
+  document's `properties.return_energy`, `extras.qcvars` and nine other
+  `properties.*` fields were dropped without being named (issue #573). A key
+  the adapter does not know is listed `unsupported`; if a mapping branch
+  leaves its own result unclassified, the import refuses with the new code
+  `mapping_report_incomplete` and posts nothing.
+- A Hessian document's energy is still not stored, and is now listed
+  `retained_only`: a `freq` record has no energy field, and an `sp` beside it
+  would be joined to it by a `single_point_on` edge, whose parent must be an
+  `opt`.
+- The exporter declares `fix_com` and `fix_orientation` on a Hessian export,
+  because the matrix is expressed in the exported coordinates' axes.
+
 ## A web-site base URL is named, not a TypeError (2026-09-29)
 
 - tckdb-client 0.95.0: a JSON endpoint answering 2xx with a body that is not

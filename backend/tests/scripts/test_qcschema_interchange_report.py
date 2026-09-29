@@ -149,9 +149,16 @@ def test_round_trip_is_exact_and_every_measurement_is_reported(db_session, requi
     assert report["round_trip"]["energy"]["exported_return_energy_hartree"] is None
     assert report["round_trip"]["hessian_reanalysis_status"] == "frequency_list_missing"
     assert report["round_trip"]["loss_list"]["lost"] == sorted(report_script.EXPECTED_LOST_PATHS)
-    assert "properties.return_energy" in report["round_trip"]["loss_list"]["lost_by_import_accounting"][
-        "not_named_by_import_report"
-    ]
+    # Issue #573: every loss is named by the import report, and the Hessian
+    # document's energy is named retained_only rather than dropped silently.
+    accounting = report["round_trip"]["loss_list"]["lost_by_import_accounting"]
+    assert accounting["not_named_by_import_report"] == []
+    assert "properties.return_energy" in accounting["reported_retained_only"]
+    assert report["round_trip"]["energy"]["import_report_bucket"] == "retained_only"
+    assert report["round_trip"]["exported_frame"] == {
+        "molecule": {"fix_com": True, "fix_orientation": True},
+        "input_data.molecule": {"fix_com": True, "fix_orientation": True},
+    }
 
     # Non-vacuity: water is non-linear, so 3N - 6 = 3 vibrations per side.
     cross = report["cross_program"]

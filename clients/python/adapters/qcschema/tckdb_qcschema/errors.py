@@ -174,3 +174,13 @@ E_EXPORT_ISOTOPES_UNAVAILABLE = "export_isotopes_unavailable"
 #: refused rather than silently exporting mismatched coordinates and
 #: isotopes.
 E_EXPORT_GEOMETRY_MISMATCH = "export_geometry_mismatch"
+
+#: The mapping report does not account for every field of the imported
+#: document (issue #573): a field this adapter's own mapping branch must
+#: classify (``return_result``, ``properties.return_energy``, a mapped
+#: molecule's geometry, ...) was left unclassified, or one field landed in
+#: more than one bucket. This is a defect in the adapter, never in the
+#: document, and it is raised instead of posting a deposit whose report
+#: would silently omit what it dropped. See
+#: :mod:`tckdb_qcschema.report_coverage`.
+E_MAPPING_REPORT_INCOMPLETE = "mapping_report_incomplete"

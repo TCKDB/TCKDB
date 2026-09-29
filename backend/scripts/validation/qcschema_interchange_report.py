@@ -49,11 +49,21 @@ read needs it; see the exporter's "calculation-id gap"). Then:
 * **Identity.** Symbols, charge, multiplicity and mass numbers equal.
 * **Energy.** Not carried, and asserted not carried. The C1 mapping maps a
   driver-``hessian`` document to a ``freq`` record holding only the matrix;
-  ``properties.return_energy`` is not stored, and the exporter fills
-  ``properties.return_energy`` only from a same-level ``sp`` record on the same
-  conformer, of which there is none. The check is that the export carries no
-  energy rather than a wrong one. The energy enters the cross-program
-  comparison below directly from the fixture.
+  ``properties.return_energy`` is not stored, and since tckdb-qcschema 0.5.0
+  (issue #573) the import's mapping report names it ``retained_only``: a
+  ``freq`` record has no energy field, and a sibling ``sp`` would need a
+  dependency edge the schema does not allow from a ``freq``. The exporter
+  fills ``properties.return_energy`` only from a same-level ``sp`` record on
+  the same conformer, of which there is none. The check is that the export
+  carries no energy rather than a wrong one, and that the import report names
+  the energy it did not store. The energy enters the cross-program comparison
+  below directly from the fixture.
+* **Import report, complete.** Every field the round trip loses is named by the
+  import's mapping report (issue #573): stored but not exported, or listed
+  ``retained_only`` or ``unsupported``. None may be missing from it.
+* **Fixed frame.** The export declares ``fix_com`` and ``fix_orientation``
+  true on both molecules, because the exported Hessian is expressed in those
+  coordinates' axes.
 * **Loss list, complete.** Every field path of the document is classified as
   equal, changed, lost, added, or checked separately (geometry, Hessian); the
   measured ``lost`` and ``changed`` sets must equal the declared
@@ -180,6 +190,8 @@ ROUND_TRIP_CHECKS = (
     "exported_geometry_within_bound",
     "identity_preserved",
     "energy_not_carried",
+    "import_report_names_every_loss",
+    "export_declares_fixed_frame",
     "loss_list_complete",
     "export_reimport_refused",
 )
@@ -187,9 +199,11 @@ ROUND_TRIP_CHECKS = (
 #: Field paths of the Psi4 v2 document, as qcelemental parses it, that the
 #: export does not carry. The report splits them by what the import said
 #: about each (``lost_by_import_accounting``): stored but not exported,
-#: reported unsupported, or dropped without the mapping report naming it
-#: (``extras.qcvars`` and the ``properties.*`` entries; they survive only in
-#: the raw document).
+#: listed ``retained_only`` (``extras.qcvars`` and the ``properties.*``
+#: entries, including the energy; they survive only in the raw document), or
+#: listed ``unsupported``. Before tckdb-qcschema 0.5.0 (issue #573) the
+#: ``properties.*`` entries and ``extras.qcvars`` were in none of the import
+#: report's lists.
 EXPECTED_LOST_PATHS = (
     "extras.qcvars",
     "input_data.specification.keywords",
@@ -213,15 +227,11 @@ EXPECTED_LOST_PATHS = (
     "stdout",
 )
 
-#: Paths present on both sides with a different value. ``fix_com`` and
-#: ``fix_orientation`` are ``true`` in the Psi4 input and read back
-#: ``false``: the exporter does not set them, so the export does not declare
-#: that its frame is fixed. The top-level ``provenance`` is TCKDB's own.
+#: Paths present on both sides with a different value. The top-level
+#: ``provenance`` is TCKDB's own. (``fix_com`` and ``fix_orientation`` were
+#: listed here until tckdb-qcschema 0.5.0: the exporter now declares the
+#: frame fixed, as the Psi4 input did, so they compare equal.)
 EXPECTED_CHANGED_PATHS = (
-    "input_data.molecule.fix_com",
-    "input_data.molecule.fix_orientation",
-    "molecule.fix_com",
-    "molecule.fix_orientation",
     "provenance.creator",
     "provenance.routine",
     "provenance.version",
@@ -675,35 +685,41 @@ def _round_trip(session: Session, adapter: SimpleNamespace, fixtures: SimpleName
     }
 
 
-#: Where a v2 document path appears under a different name in the import's
-#: mapping report (which names v1/v2-neutral field names).
-_MAPPING_REPORT_NAMES = {"input_data.specification.keywords": "keywords"}
+def _named_by(path: str, entries: list[str]) -> bool:
+    """``path`` is a report entry or lies under one. The import's report
+    names paths as the v2 document spells them (tckdb-qcschema 0.5.0)."""
+    return any(path == entry or path.startswith(entry + ".") for entry in entries)
 
 
 def _lost_by_import_accounting(lost: list[str], trip: dict[str, Any]) -> dict[str, list[str]]:
     """What the import said about each path the export does not carry.
 
-    ``stored_not_exported``: the import mapped or retained it (keywords
-    become parameter observations; the allow-listed provenance keys go to
-    ``parameters_json``), and the exporter has no QCSchema field it writes
-    them back to. ``reported_unsupported``: the import's mapping report
-    names it as unsupported. ``not_named_by_import_report``: dropped without
-    the mapping report saying so; it survives only in the raw document.
+    ``stored_not_exported``: the import mapped it, or copied it into
+    ``parameters_json`` (keywords become parameter observations; the
+    allow-listed provenance keys are copied), and the exporter has no
+    QCSchema field it writes them back to. ``reported_retained_only`` and
+    ``reported_unsupported``: the import's mapping report lists it in that
+    bucket; it survives only in the raw document. ``not_named_by_import_report``:
+    dropped without the report saying so -- must be empty (issue #573).
     """
     report = trip["mapping_report"]
-    transformed = set(report["transformed"])
-    unsupported = set(report["unsupported"]) | set(report["retained_only"])
-    retained = {
+    copied = {
         f"provenance.{key}"
         for key in trip["payload"]["calculation"]["parameters_json"]["tckdb_qcschema"]["provenance"]
     }
-    out: dict[str, list[str]] = {"stored_not_exported": [], "reported_unsupported": [], "not_named_by_import_report": []}
+    out: dict[str, list[str]] = {
+        "stored_not_exported": [],
+        "reported_retained_only": [],
+        "reported_unsupported": [],
+        "not_named_by_import_report": [],
+    }
     for path in lost:
-        name = _MAPPING_REPORT_NAMES.get(path, path)
-        if name in unsupported:
-            out["reported_unsupported"].append(path)
-        elif name in transformed or path in retained:
+        if _named_by(path, report["transformed"]) or path in copied:
             out["stored_not_exported"].append(path)
+        elif _named_by(path, report["retained_only"]):
+            out["reported_retained_only"].append(path)
+        elif _named_by(path, report["unsupported"]):
+            out["reported_unsupported"].append(path)
         else:
             out["not_named_by_import_report"].append(path)
     return {key: sorted(value) for key, value in out.items()}
@@ -804,17 +820,35 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
     )
 
     exported_energy = (exported.get("properties") or {}).get("return_energy")
-    checks["energy_not_carried"] = exported_energy is None and trip["payload"]["calculation"].get("sp_result") is None
+    energy_named_retained = "properties.return_energy" in trip["mapping_report"]["retained_only"]
+    checks["energy_not_carried"] = (
+        exported_energy is None
+        and trip["payload"]["calculation"].get("sp_result") is None
+        and not trip["payload"].get("additional_calculations")
+        and energy_named_retained
+    )
     details["energy"] = {
         "document_return_energy_hartree": original["properties"]["return_energy"],
         "stored": False,
+        "import_report_bucket": "retained_only" if energy_named_retained else None,
         "exported_return_energy_hartree": exported_energy,
         "reason": (
-            "profile v1 maps a driver-hessian document to a freq record holding the matrix only; "
-            "the exporter fills properties.return_energy only from a same-level sp record on the "
-            "same conformer, and none exists"
+            "a freq record has no energy field, and a sibling sp would need a single_point_on edge, "
+            "whose parent must be an opt, so the import lists properties.return_energy as "
+            "retained_only; the exporter fills properties.return_energy only from a same-level sp "
+            "record on the same conformer, and none exists"
         ),
     }
+
+    frame = {
+        where: {flag: bool((molecule or {}).get(flag)) for flag in ("fix_com", "fix_orientation")}
+        for where, molecule in (
+            ("molecule", exported.get("molecule")),
+            ("input_data.molecule", (exported.get("input_data") or {}).get("molecule")),
+        )
+    }
+    checks["export_declares_fixed_frame"] = all(all(flags.values()) for flags in frame.values())
+    details["exported_frame"] = frame
 
     diff = structural_diff(_as_parsed(original), _as_parsed(exported))
     checks["loss_list_complete"] = diff["lost"] == sorted(EXPECTED_LOST_PATHS) and diff["changed"] == sorted(
@@ -832,6 +866,9 @@ def _check_round_trip(adapter: SimpleNamespace, fixtures: SimpleNamespace, trip:
         "missing_from_changed": sorted(set(EXPECTED_CHANGED_PATHS) - set(diff["changed"])),
         "lost_by_import_accounting": _lost_by_import_accounting(diff["lost"], trip),
     }
+    checks["import_report_names_every_loss"] = (
+        details["loss_list"]["lost_by_import_accounting"]["not_named_by_import_report"] == []
+    )
 
     try:
         adapter.reader.read_document(json.dumps(exported).encode("utf-8"))
