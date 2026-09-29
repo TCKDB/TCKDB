@@ -122,6 +122,40 @@ def get_submission(session: Session, submission_id: int) -> Submission:
     return _require_submission(session, submission_id)
 
 
+def resolve_submission_handle(session: Session, handle: str) -> Submission:
+    """Return the submission a path *handle* names: its integer id or its ``sub_`` ref.
+
+    The deprecation-window resolver for the producer routes that used to take
+    only the integer (``docs/specs/public_identifier_policy.md``, "Route
+    behavior"). It resolves and nothing more: both forms return the same
+    :class:`Submission` row, and the caller applies the same permission check
+    to that row whichever way it was named, so a ref is neither a way around a
+    check the integer path makes nor the reverse.
+
+    An integer that matches no row and a ref that matches none are the same
+    404, as ``get_submission`` and ``get_submission_by_ref`` already give.
+
+    :raises ValueError: 422 ``invalid_handle`` for a string that is neither
+        shape; :class:`~app.api.error_contract.CodedValueError`
+        ``handle_type_mismatch`` for a ref carrying another resource's prefix.
+    :raises NotFoundError: 404 when no such submission exists.
+    """
+    from app.services.public_refs import PREFIXES
+    from app.services.scientific_read.handles import (
+        _handle_type_mismatch,
+        parse_handle,
+    )
+
+    kind, parsed = parse_handle(handle)
+    if kind == "id":
+        return get_submission(session, parsed)
+    expected = PREFIXES["Submission"]
+    prefix = parsed.split("_", 1)[0]
+    if prefix != expected:
+        raise _handle_type_mismatch("submission", expected, prefix, noun="handle")
+    return get_submission_by_ref(session, parsed)
+
+
 def _require_curator(user: AppUser) -> None:
     if user.role not in _CURATION_ROLES:
         raise DomainError("Curator or admin role required for this action")

@@ -23,9 +23,11 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import SessionLocal
+from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionStatus, UploadJobKind, UploadJobStatus
 from app.db.models.submission import Submission
 from app.db.models.upload_job import UploadJob
+from app.services.public_refs import public_refs_by_id
 from app.services.record_review import ReviewPolicy
 from app.services.submission import mark_ingestion_failed, mark_ingestion_succeeded
 from app.services.upload_submission import review_policy_for_submission
@@ -168,7 +170,20 @@ def _run_computed_reaction(session: Session, job: UploadJob, review_policy: Revi
     from app.workflows.computed_reaction import persist_computed_reaction_upload
 
     request = ComputedReactionUploadRequest.model_validate(job.payload)
-    return persist_computed_reaction_upload(session, request, created_by=job.created_by, review_policy=review_policy)
+    result = persist_computed_reaction_upload(
+        session, request, created_by=job.created_by, review_policy=review_policy
+    )
+    # The calc-key map, with each calculation also named by its ``calc_`` ref
+    # (the sibling-ref rule): a depositor polling the job result needs the ref
+    # to address the calculation in the second-phase artifact upload.
+    key_to_id = result.get("calculation_keys") or {}
+    refs = public_refs_by_id(session, Calculation, key_to_id.values())
+    return {
+        **result,
+        "calculation_key_refs": {
+            key: refs[cid] for key, cid in key_to_id.items() if cid in refs
+        },
+    }
 
 
 def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy) -> dict:
@@ -180,6 +195,14 @@ def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy
         session, request, created_by=job.created_by, review_policy=review_policy
     )
     obs = outcome.observation
+    calc_refs = public_refs_by_id(
+        session,
+        Calculation,
+        [
+            outcome.primary_calculation.calculation_id,
+            *(ref.calculation_id for ref in outcome.additional_calculations),
+        ],
+    )
     return {
         "type": "conformer_observation",
         "id": obs.id,
@@ -188,6 +211,7 @@ def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy
         "primary_calculation": {
             "request_index": outcome.primary_calculation.request_index,
             "calculation_id": outcome.primary_calculation.calculation_id,
+            "calculation_ref": calc_refs.get(outcome.primary_calculation.calculation_id),
             "type": outcome.primary_calculation.type.value,
             "role": outcome.primary_calculation.role,
         },
@@ -195,6 +219,7 @@ def _run_conformer(session: Session, job: UploadJob, review_policy: ReviewPolicy
             {
                 "request_index": ref.request_index,
                 "calculation_id": ref.calculation_id,
+                "calculation_ref": calc_refs.get(ref.calculation_id),
                 "type": ref.type.value,
                 "role": ref.role,
             }
@@ -494,7 +519,11 @@ def run_one_job(session: Session, job: UploadJob) -> None:
     if submission is not None:
         _append_ingestion_audit(session, job, submission)
         if isinstance(result, dict):
-            result = {**result, "submission_id": submission.id}
+            result = {
+                **result,
+                "submission_id": submission.id,
+                "submission_ref": submission.public_ref,
+            }
 
     # The exactly-once fence, flushed outside any savepoint.
     job.status = UploadJobStatus.complete

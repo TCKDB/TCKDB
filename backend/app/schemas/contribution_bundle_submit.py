@@ -115,6 +115,8 @@ class ContributionBundleSubmitResult(SchemaBase):
     bundle kinds surface as 422 from the bundle schema itself.
 
     :param submission_id: Hosted ``submission`` row id.
+    :param submission_ref: The ``sub_`` ref of the same submission; name it
+        in later requests.
     :param status: Raw moderation-lifecycle status on the submission row
         (``pending`` in v0; reserved so future statuses surface here without
         a schema change).
@@ -128,6 +130,7 @@ class ContributionBundleSubmitResult(SchemaBase):
     """
 
     submission_id: int
+    submission_ref: str | None = None
     status: SubmissionStatus
     review_status: SubmitReviewStatus = SubmitReviewStatus.unreviewed
     bundle_kind: BundleKind
