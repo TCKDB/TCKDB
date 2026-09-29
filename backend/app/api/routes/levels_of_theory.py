@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import PaginationParams, get_db
 from app.api.errors import NotFoundError
 from app.api.routes._pagination import PaginatedResponse
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
 
 router = APIRouter()
@@ -25,7 +25,11 @@ def list_levels_of_theory(
     solvent: str | None = Query(None),
     lot_hash: str | None = Query(None),
 ):
-    base = select(LevelOfTheory.id)
+    # A merged row (#574) is another spelling of a listed row; it is not a
+    # level of theory of its own.
+    base = select(LevelOfTheory.id).where(
+        LevelOfTheory.id.not_in(select(LevelOfTheoryMerge.merged_lot_id))
+    )
     if method is not None:
         base = base.where(LevelOfTheory.method == method)
     if basis is not None:

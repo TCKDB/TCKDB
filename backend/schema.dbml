@@ -2197,6 +2197,22 @@ Table level_of_theory {
   Note: 'Method/basis provenance used by calculations.'
 }
 
+Table level_of_theory_merge {
+  merged_lot_id bigint [pk, not null, ref: > level_of_theory.id]
+  into_lot_id bigint [not null, ref: > level_of_theory.id]
+  created_at timestamp [not null, default: 'now']
+
+  indexes {
+    into_lot_id [name: 'ix_level_of_theory_merge_into_lot_id']
+  }
+
+  checks {
+    `merged_lot_id <> into_lot_id` [name: 'ck_level_of_theory_merge_not_merged_into_itself']
+  }
+
+  Note: 'A level-of-theory row merged into another spelling of the same level (#574).'
+}
+
 Table literature {
   id bigint [pk, not null]
   kind LiteratureKind [not null]

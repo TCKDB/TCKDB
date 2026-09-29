@@ -253,18 +253,45 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
 def test_downgrade_restores_every_hash_and_upgrade_again_converges(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
-        _seed(conn)
+        ids = _seed(conn)
     original = _snapshot(harness.engine)
 
     harness.run("upgrade", _MIGRATION.revision)
     first_upgrade = _snapshot(harness.engine)
     assert first_upgrade != original
+    assert _has_merge_table(harness.engine)
+
+    # A merge done by the ops script between upgrade and downgrade: the
+    # merged row keeps its ref, and the downgrade forgets only the pointer.
+    with harness.engine.begin() as conn:
+        params = {"h": ids["psi4"], "d": ids["gaussian"]}
+        conn.execute(text("UPDATE calculation SET lot_id = :h WHERE lot_id = :d"), params)
+        conn.execute(
+            text(
+                "INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) "
+                "VALUES (:d, :h)"
+            ),
+            params,
+        )
 
     harness.run("downgrade", _MIGRATION.parent)
     assert _snapshot(harness.engine) == original
+    assert not _has_merge_table(harness.engine)
 
     harness.run("upgrade", _MIGRATION.revision)
     assert _snapshot(harness.engine) == first_upgrade
+
+
+def _has_merge_table(engine) -> bool:
+    with engine.connect() as conn:
+        return bool(
+            conn.scalar(
+                text(
+                    "SELECT count(*) FROM information_schema.tables "
+                    "WHERE table_name = 'level_of_theory_merge'"
+                )
+            )
+        )
 
 
 def test_upgrade_on_an_empty_table_is_a_no_op(harness):
@@ -272,3 +299,44 @@ def test_upgrade_on_an_empty_table_is_a_no_op(harness):
     completed = harness.run("upgrade", _MIGRATION.revision)
     assert "0 row(s) re-hashed, 0 duplicate group(s)" in completed.stdout
     assert _snapshot(harness.engine) == {}
+
+
+def _insert_lot(conn, method, basis, lot_hash) -> int:
+    return conn.scalar(
+        text(
+            "INSERT INTO level_of_theory (method, basis, lot_hash) "
+            "VALUES (:m, :b, :h) RETURNING id"
+        ),
+        {"m": method, "b": basis, "h": lot_hash},
+    )
+
+
+@pytest.mark.parametrize("basis", ["def2-TZVP", "def2-tzvp"])
+def test_a_demo_seeded_row_beside_an_uploaded_twin_round_trips(harness, basis):
+    """``seed_scientific_demo_data.py`` writes ``sha256("method|basis")``.
+
+    So before this revision a seeded row and an uploaded row with identical
+    content could coexist under two hashes. The pre-#574 formula maps both to
+    one value, which only one row can hold on downgrade.
+    """
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        seeded = _insert_lot(
+            conn, "b3lyp", basis, hashlib.sha256(f"b3lyp|{basis}".encode()).hexdigest()
+        )
+        uploaded = _insert_lot(conn, "b3lyp", basis, _pre_574_hash("b3lyp", basis, None))
+    original = _snapshot(harness.engine)
+
+    harness.run("upgrade", _MIGRATION.revision)
+    hashes = [row[1] for row in _snapshot(harness.engine).values()]
+    assert len(set(hashes)) == 2
+    assert _keyed_hash("b3lyp", basis, None) in hashes
+
+    harness.run("downgrade", _MIGRATION.parent)
+    downgraded = _snapshot(harness.engine)
+    # The uploaded row gets its formula hash back exactly.
+    assert downgraded[uploaded] == original[uploaded]
+    # The seeded row keeps a unique hash; exact when its key never moved.
+    if basis == "def2-tzvp":
+        assert downgraded[seeded] == original[seeded]
+    assert len({row[1] for row in downgraded.values()}) == 2

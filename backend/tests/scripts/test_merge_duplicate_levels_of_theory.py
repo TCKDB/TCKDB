@@ -23,7 +23,7 @@ from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
 from app.db.models.common import AppUserRole, RecordReviewStatus, SubmissionRecordType
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.db.models.record_review import RecordReview
 from app.services.calculation_resolution import _level_of_theory_hash
 from tests.services.scientific_read._factories import (
@@ -113,15 +113,18 @@ def _calc(db_session, lot: LevelOfTheory, *, approved: bool = False) -> Calculat
     return calc
 
 
-def _approve(db_session, calc: Calculation) -> None:
+def _approve(db_session, record, record_type=SubmissionRecordType.calculation) -> None:
     when = datetime(2026, 9, 1)
-    curator = AppUser(username=f"lotmerge-curator-{calc.id}", role=AppUserRole.curator)
+    curator = AppUser(
+        username=f"lotmerge-curator-{record_type.value}-{record.id}",
+        role=AppUserRole.curator,
+    )
     db_session.add(curator)
     db_session.flush()
     db_session.add(
         RecordReview(
-            record_type=SubmissionRecordType.calculation,
-            record_id=calc.id,
+            record_type=record_type,
+            record_id=record.id,
             status=RecordReviewStatus.approved,
             reviewed_by=curator.id,
             reviewed_at=when,
@@ -177,7 +180,10 @@ def test_plan_finds_the_groups_and_their_blockers(merge, db_session, seeded):
     assert pair.blockers() == []
 
     approved = _group(plan, seeded["approved_holder"])
-    assert any("approved calculation" in b for b in approved.blockers())
+    assert any(
+        f"calculation {seeded['approved_calc'].public_ref} is approved" in b
+        for b in approved.blockers()
+    )
 
     cited = _group(plan, seeded["fsf_holder"])
     assert any("frequency_scale_factor.level_of_theory_id" in b for b in cited.blockers())
@@ -204,14 +210,17 @@ def test_commit_merges_only_the_unblocked_group(merge, db_session, seeded):
     # The Gaussian calculations now cite the Psi4 row; the duplicate is gone.
     for calc in seeded["gaussian_calcs"]:
         assert db_session.get(Calculation, calc.id).lot_id == seeded["psi4"].id
-    assert db_session.get(LevelOfTheory, gaussian_id) is None
+    # Kept as a merged row, not deleted: its ref still resolves.
+    merged_row = db_session.get(LevelOfTheory, gaussian_id)
+    assert _merged_into(db_session, gaussian_id) == seeded["psi4"].id
+    assert merged_row.basis == "def2tzvp"
     holder = db_session.get(LevelOfTheory, seeded["psi4"].id)
     assert (holder.public_ref, holder.basis) == (ref_before, "def2-tzvp")
 
     # Blocked groups: untouched.
     assert db_session.get(Calculation, seeded["approved_calc"].id).lot_id == seeded["approved_dup"].id
-    assert db_session.get(LevelOfTheory, seeded["approved_dup"].id) is not None
-    assert db_session.get(LevelOfTheory, seeded["fsf_dup"].id) is not None
+    assert _merged_into(db_session, seeded["approved_dup"].id) is None
+    assert _merged_into(db_session, seeded["fsf_dup"].id) is None
 
 
 def test_an_approval_after_the_plan_keeps_the_group(merge, db_session, seeded):
@@ -253,12 +262,13 @@ def test_dry_run_prints_the_plan_and_changes_nothing(
 ):
     assert _run_main(merge, monkeypatch, db_session, []) == 0
     out = capsys.readouterr().out
-    assert "calculation.lot_id  (repointed)" in out
+    assert "calculation.lot_id  (rewritten)" in out
+    assert "frequency_scale_factor.level_of_theory_id  (blocks a merge)" in out
     assert seeded["gaussian"].public_ref in out
     assert "BLOCKED" in out
     assert "Dry run" in out
     db_session.expire_all()
-    assert db_session.get(LevelOfTheory, seeded["gaussian"].id) is not None
+    assert _merged_into(db_session, seeded["gaussian"].id) is None
     rows = db_session.scalars(
         select(Calculation.lot_id).where(
             Calculation.id.in_([c.id for c in seeded["gaussian_calcs"]])
@@ -273,7 +283,7 @@ def test_commit_through_main(merge, monkeypatch, db_session, seeded, capsys):
     out = capsys.readouterr().out
     assert f"into {seeded['psi4'].public_ref}: 2 calculation(s) repointed" in out
     db_session.expire_all()
-    assert db_session.get(LevelOfTheory, gaussian_id) is None
+    assert _merged_into(db_session, gaussian_id) == seeded["psi4"].id
 
 
 def test_commit_refuses_a_deployed_database_name(merge, monkeypatch, db_session, seeded):
@@ -281,5 +291,113 @@ def test_commit_refuses_a_deployed_database_name(merge, monkeypatch, db_session,
         _run_main(merge, monkeypatch, db_session, ["--commit"], db_name="tckdb_prod") == 2
     )
     db_session.expire_all()
-    assert db_session.get(LevelOfTheory, seeded["gaussian"].id) is not None
+    assert _merged_into(db_session, seeded["gaussian"].id) is None
 
+
+
+# ---------------------------------------------------------------------------
+# Review findings on #582: releases cite the duplicate's ref, and accepted
+# products cite the moved calculations.
+# ---------------------------------------------------------------------------
+
+
+def test_a_merged_duplicate_ref_still_resolves_to_the_holder(merge, db_session, seeded):
+    """A published release freezes ``level_of_theory_ref`` per cited calculation."""
+    from app.services.release.records import calculation_provenance
+    from app.services.scientific_read.handles import resolve_level_of_theory_handle
+
+    calc_id = seeded["gaussian_calcs"][0].id
+    old_ref = seeded["gaussian"].public_ref
+    frozen = calculation_provenance(db_session, [calc_id])[calc_id]
+    assert frozen["level_of_theory"]["level_of_theory_ref"] == old_ref
+
+    merge.commit_plan(db_session, merge.build_plan(db_session))
+    db_session.expire_all()
+
+    assert resolve_level_of_theory_handle(db_session, old_ref) == seeded["psi4"].id
+
+
+def test_a_calculation_cited_by_an_accepted_thermo_blocks_the_group(
+    merge, db_session, seeded
+):
+    from app.db.models.common import ThermoCalculationRole
+    from app.db.models.thermo import ThermoSourceCalculation
+    from tests.services.scientific_read._factories import make_thermo_scalar
+
+    calc = seeded["gaussian_calcs"][0]
+    thermo = make_thermo_scalar(
+        db_session, species_entry=_entry_of(db_session, calc)
+    )
+    db_session.add(
+        ThermoSourceCalculation(
+            thermo_id=thermo.id, calculation_id=calc.id, role=ThermoCalculationRole.sp
+        )
+    )
+    db_session.flush()
+    _approve(db_session, thermo, SubmissionRecordType.thermo)
+
+    plan = merge.build_plan(db_session)
+    blockers = _group(plan, seeded["psi4"]).blockers()
+    assert any(thermo.public_ref in b for b in blockers), blockers
+
+    merge.commit_plan(db_session, plan)
+    db_session.expire_all()
+    assert db_session.get(Calculation, calc.id).lot_id == seeded["gaussian"].id
+
+
+def test_an_accepted_thermo_two_hops_away_blocks_the_group(merge, db_session, seeded):
+    """calculation <- statmech_source_calculation -> statmech <- thermo.statmech_id."""
+    from app.db.models.common import StatmechCalculationRole
+    from app.db.models.statmech import StatmechSourceCalculation
+    from tests.services.scientific_read._factories import make_statmech, make_thermo_scalar
+
+    calc = seeded["gaussian_calcs"][1]
+    entry = _entry_of(db_session, calc)
+    statmech = make_statmech(db_session, species_entry=entry)
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id, calculation_id=calc.id, role=StatmechCalculationRole.opt
+        )
+    )
+    db_session.flush()
+    thermo = make_thermo_scalar(db_session, species_entry=entry, statmech_id=statmech.id)
+    _approve(db_session, thermo, SubmissionRecordType.thermo)
+
+    blockers = _group(merge.build_plan(db_session), seeded["psi4"]).blockers()
+    assert any(thermo.public_ref in b for b in blockers), blockers
+    # The statmech itself is not approved and must not be named as accepted.
+    assert not any(statmech.public_ref in b and "accepted" in b and thermo.public_ref not in b for b in blockers)
+
+
+def _entry_of(db_session, calc):
+    from app.db.models.species import SpeciesEntry
+
+    return db_session.get(SpeciesEntry, calc.species_entry_id)
+
+
+def test_a_second_run_finds_nothing_to_merge(merge, db_session, seeded):
+    merge.commit_plan(db_session, merge.build_plan(db_session))
+    db_session.expire_all()
+    again = merge.build_plan(db_session)
+    assert not any(
+        g.holder and g.holder.row_id == seeded["psi4"].id for g in again.groups
+    )
+
+
+def test_rows_merged_into_a_duplicate_are_re_aimed_at_the_holder(merge, db_session, seeded):
+    """A merge is always one hop: nothing may point at a row that is itself merged."""
+    earlier = _lot(db_session, "b3lyp-lotm", "DEF2TZVP", holder=False)
+    db_session.add(LevelOfTheoryMerge(merged_lot_id=earlier.id, into_lot_id=seeded["gaussian"].id))
+    db_session.flush()
+
+    merge.commit_plan(db_session, merge.build_plan(db_session))
+    db_session.expire_all()
+
+    assert _merged_into(db_session, earlier.id) == seeded["psi4"].id
+    assert _merged_into(db_session, seeded["gaussian"].id) == seeded["psi4"].id
+
+
+def _merged_into(db_session, lot_id: int) -> int | None:
+    return db_session.scalar(
+        select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == lot_id)
+    )

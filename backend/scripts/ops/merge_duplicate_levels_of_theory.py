@@ -7,42 +7,57 @@ two rows. Alembic revision ``38b06819f099`` re-keyed the existing rows: in
 each group of rows that are now one level of theory, one row (the *holder*)
 got the identity-keyed hash and every new upload resolves to it. The other
 rows (the *duplicates*) kept their old hash and their calculations. This
-script moves those calculations onto the holder and deletes the duplicate.
+script moves those calculations onto the holder and turns each duplicate
+into a *merged row*.
 
-Run it after ``38b06819f099`` is applied. The group is found by recomputing
-each row's hash with the application's own formula
+Run it after ``38b06819f099`` is applied, and again after any deploy that
+migrated while the old API was still serving (an upload in that window
+hashes the old way and can recreate a duplicate). Groups are found by
+recomputing each row's hash with the application's own formula
 (``calculation_resolution._level_of_theory_hash``), so this script and the
 upload path cannot disagree about what one level of theory is.
 
-**What it refuses.** A group is merged only if every one of these holds for
-each duplicate row, and is reported as blocked otherwise:
+**Merged rows are kept, not deleted.** A published release freezes, for
+every calculation it cites, the calculation's ``level_of_theory_ref``
+(``app/services/release/records.py``, ``calculation_provenance``) into
+``release_artifact.content``. Deleting a duplicate would leave that ref
+resolving to nothing. Instead the duplicate keeps its ``public_ref`` and its
+old ``lot_hash``, and a ``level_of_theory_merge`` row names the holder. The read layer
+resolves a merged row's ref to the holder
+(``scientific_read.handles.canonical_level_of_theory_id`` and
+``level_of_theory_ref_clause``). No calculation points at a merged row.
 
-* none of its calculations has ever been approved
-  (``tckdb_record_is_accepted``). Repointing an approved calculation needs
-  a declared accepted-science repair (ADR 0015). This script never
-  declares one, so it never changes approved science;
-* nothing else references it. ``frequency_scale_factor`` and
+**What it refuses.** A group is merged only if every one of these holds, and
+is reported as blocked otherwise:
+
+* **No accepted science rests on a moved calculation.** Not the
+  calculation's own approval only: every accepted-science record that cites
+  it, directly or through other records, is found by walking foreign keys
+  from ``pg_constraint`` and ownership from the accepted-science guard
+  triggers (``tckdb_guard_accepted_child`` / ``_via_child``), checked with
+  ``tckdb_record_is_accepted``. An approved thermo citing a statmech citing
+  the calculation blocks the group. Repointing that science would need a
+  declared accepted-science repair (ADR 0015); this script never declares
+  one;
+* **Nothing else references the duplicate.** ``frequency_scale_factor`` and
   ``energy_correction_scheme`` carry ``level_of_theory_id`` inside their own
   unique identity keys, so repointing them can collide with a row the
-  holder already has. Every foreign key into ``level_of_theory`` is read
-  from ``pg_constraint`` at run time; only ``calculation.lot_id`` is ever
-  repointed;
-* a holder exists, meaning a row whose ``lot_hash`` already equals the
-  group's identity-keyed hash. If none does, ``38b06819f099`` has not run
-  and the script plans nothing for that group.
+  holder already has. Every foreign key into ``level_of_theory`` is read at
+  run time; only ``calculation.lot_id`` (repointed) and
+  ``level_of_theory_merge`` (earlier merges, re-aimed at the holder) are
+  handled;
+* **A holder exists**: a row whose ``lot_hash`` already equals the group's
+  identity-keyed hash. If none does, ``38b06819f099`` has not run.
 
 **What changes on commit.** For each unblocked group, in its own savepoint:
-``calculation.lot_id`` moves from each duplicate to the holder, then the
-duplicate row is deleted. The holder's verbatim ``basis`` and its
-``public_ref`` are not touched. The duplicate's ``public_ref`` stops
-resolving. Nothing in the codebase cites a level of theory by
-``public_ref`` in stored data (dataset releases cite records, not levels),
-but an external bookmark of it would break.
-
-Each repoint re-checks approval in the statement that writes, and the
-accepted-science trigger is the backstop. A calculation approved after the
-plan was printed makes the savepoint fail, and the group is kept and
-reported.
+``calculation.lot_id`` moves from each duplicate to the holder, any row
+already merged into the duplicate is re-aimed at the holder (so a merge is
+always one hop), and a ``level_of_theory_merge`` row records the duplicate
+as merged into the holder. The holder's verbatim names, ``lot_hash`` and ``public_ref`` are not
+touched. The group is re-planned inside the savepoint, so an approval or
+reference that appeared after the plan was printed keeps the group, and the
+accepted-science trigger is the backstop for the calculation's own
+approval.
 
 Usage::
 
@@ -76,8 +91,24 @@ from sqlalchemy.orm import Session  # noqa: E402
 
 _TEST_DB_NAME = re.compile(r"^tckdb_test(?:_[A-Za-z0-9_]+)?$")
 
-#: The only reference this script ever rewrites.
-_REPOINTABLE = ("calculation", "lot_id")
+#: References into ``level_of_theory`` this script rewrites. Any other one
+#: that cites a duplicate blocks its group.
+_REPOINTED = {
+    ("calculation", "lot_id"),
+    ("level_of_theory_merge", "merged_lot_id"),
+    ("level_of_theory_merge", "into_lot_id"),
+}
+
+#: Ownership columns that are also citations. ``calculation_dependency`` is
+#: guarded as a child of *both* its calculations, but only the child depends
+#: on the parent: arriving at a calculation through
+#: ``child_calculation_id`` names a calculation it depends on, not one that
+#: depends on it.
+_NOT_A_CITATION = {("calculation_dependency", "child_calculation_id")}
+
+#: Upper bound on the citation walk. Real chains are two or three hops
+#: (calculation <- statmech <- thermo); the bound only stops a cycle.
+_MAX_HOPS = 8
 
 _LOT_COLUMNS = (
     "method",
@@ -104,16 +135,15 @@ class LotRow:
 class Duplicate:
     row: LotRow
     calculations: int = 0
-    approved_calculations: int = 0
+    #: One line per accepted record resting on a calculation that would move.
+    accepted_science: list[str] = field(default_factory=list)
     other_references: dict[str, int] = field(default_factory=dict)
 
     def blockers(self) -> list[str]:
-        reasons = []
-        if self.approved_calculations:
-            reasons.append(
-                f"{self.approved_calculations} approved calculation(s); a repoint "
-                "would change accepted science"
-            )
+        reasons = [
+            f"{line}; a repoint would change accepted science"
+            for line in self.accepted_science
+        ]
         for ref, count in sorted(self.other_references.items()):
             reasons.append(f"cited by {count} {ref} row(s)")
         return reasons
@@ -138,10 +168,29 @@ class Group:
         ]
 
 
+@dataclass(frozen=True)
+class Schema:
+    """What the walk needs from the catalog, read once per run."""
+
+    #: ``(table, column)`` for every foreign key into ``level_of_theory``.
+    lot_references: list[tuple[str, str]]
+    #: Tables that are accepted-science roots (``tckdb_is_accepted_science_type``).
+    roots: frozenset[str]
+    #: target table -> ``(source table, column)`` for every foreign key into it.
+    incoming: dict[str, list[tuple[str, str]]]
+    #: child table -> ``(root type, ownership column, via table, via owner column)``;
+    #: ``via`` is ``None`` for a direct child.
+    owners: dict[str, list[tuple[str, str, str | None, str | None]]]
+
+
 @dataclass
 class Plan:
-    references: list[tuple[str, str]]
+    schema: Schema
     groups: list[Group]
+
+    @property
+    def references(self) -> list[tuple[str, str]]:
+        return self.schema.lot_references
 
     def mergeable(self) -> list[Group]:
         return [g for g in self.groups if not g.blockers()]
@@ -156,27 +205,196 @@ class CommitResult:
     kept: list[tuple[Group, str]] = field(default_factory=list)
 
 
-def discover_references(session: Session) -> list[tuple[str, str]]:
-    """Every ``(table, column)`` whose foreign key targets ``level_of_theory``."""
-    rows = session.execute(
+# ---------------------------------------------------------------------------
+# Catalog
+# ---------------------------------------------------------------------------
+
+
+def read_schema(session: Session) -> Schema:
+    """Foreign keys, accepted-science roots and ownership, from the catalog."""
+    fks = session.execute(
         text(
             """
             SELECT src.relname,
                    (SELECT a.attname FROM pg_attribute a
-                     WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1])
+                     WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1]),
+                   tgt.relname
               FROM pg_constraint c
               JOIN pg_class src ON src.oid = c.conrelid
-             WHERE c.contype = 'f'
-               AND c.confrelid = 'public.level_of_theory'::regclass
+              JOIN pg_namespace ns ON ns.oid = src.relnamespace
+              JOIN pg_class tgt ON tgt.oid = c.confrelid
+             WHERE c.contype = 'f' AND ns.nspname = 'public'
+               AND array_length(c.conkey, 1) = 1
              ORDER BY 1, 2
             """
         )
     ).all()
-    return [(table, column) for table, column in rows]
+    roots = frozenset(
+        session.scalars(
+            text(
+                """
+                SELECT e.enumlabel
+                  FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                 WHERE t.typname = 'submission_record_type'
+                   AND tckdb_is_accepted_science_type(
+                           CAST(e.enumlabel AS submission_record_type))
+                   AND to_regclass('public.' || e.enumlabel) IS NOT NULL
+                """
+            )
+        ).all()
+    )
+    triggers = session.execute(
+        text(
+            """
+            SELECT t.tgrelid::regclass::text, p.proname,
+                   encode(t.tgargs, 'escape')
+              FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
+             WHERE NOT t.tgisinternal
+               AND p.proname IN ('tckdb_guard_accepted_child',
+                                 'tckdb_guard_accepted_via_child')
+            """
+        )
+    ).all()
+
+    incoming: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for src, column, target in fks:
+        incoming[target].append((src, column))
+    owners: dict[str, list[tuple[str, str, str | None, str | None]]] = defaultdict(list)
+    for table, function, raw in triggers:
+        args = [a for a in raw.split("\\000") if a]
+        if function == "tckdb_guard_accepted_child":
+            root_type, *columns = args
+            for column in columns:
+                owners[table].append((root_type, column, None, None))
+        else:
+            # (root type, fk column, via table, via id column, via owner column)
+            root_type, column, via_table, _via_id, via_owner = args
+            owners[table].append((root_type, column, via_table, via_owner))
+    return Schema(
+        lot_references=[(s, c) for s, c, t in fks if t == "level_of_theory"],
+        roots=roots,
+        incoming=dict(incoming),
+        owners=dict(owners),
+    )
 
 
 def _quote(session: Session, name: str) -> str:
     return session.get_bind().dialect.identifier_preparer.quote(name)
+
+
+# ---------------------------------------------------------------------------
+# Accepted science resting on a calculation
+# ---------------------------------------------------------------------------
+
+
+def _citers(
+    session: Session, schema: Schema, table: str, ids: set[int]
+) -> list[tuple[int, str, int]]:
+    """Accepted-science records that cite rows ``ids`` of root ``table``.
+
+    :returns: ``(cited id, citing root table, citing id)`` triples.
+    """
+    found: list[tuple[int, str, int]] = []
+    for src, column in schema.incoming.get(table, []):
+        if (src, column) in _NOT_A_CITATION:
+            continue
+        own = schema.owners.get(src, [])
+        if any(c == column and via is None for _t, c, via, _o in own):
+            # ``src`` rows arriving through their ownership column are this
+            # record's own children, which do not cite it.
+            others = [o for o in own if o[1] != column]
+            if not others:
+                continue
+        else:
+            others = own
+        q_src, q_col = _quote(session, src), _quote(session, column)
+        if src in schema.roots:
+            rows = session.execute(
+                text(f"SELECT {q_col}, id FROM public.{q_src} WHERE {q_col} = ANY(:ids)"),
+                {"ids": sorted(ids)},
+            ).all()
+            found.extend((cited, src, citer) for cited, citer in rows)
+            continue
+        for root_type, owner_col, via_table, via_owner in others:
+            q_owner = _quote(session, owner_col)
+            if via_table is None:
+                sql = (
+                    f"SELECT s.{q_col}, s.{q_owner} FROM public.{q_src} s "
+                    f"WHERE s.{q_col} = ANY(:ids) AND s.{q_owner} IS NOT NULL"
+                )
+            else:
+                sql = (
+                    f"SELECT s.{q_col}, v.{_quote(session, via_owner)} "
+                    f"FROM public.{q_src} s "
+                    f"JOIN public.{_quote(session, via_table)} v ON v.id = s.{q_owner} "
+                    f"WHERE s.{q_col} = ANY(:ids)"
+                )
+            rows = session.execute(text(sql), {"ids": sorted(ids)}).all()
+            found.extend((cited, root_type, citer) for cited, citer in rows)
+    return found
+
+
+def accepted_science_on(
+    session: Session, schema: Schema, calculation_ids: list[int]
+) -> dict[int, list[str]]:
+    """For each calculation, the accepted records resting on it.
+
+    Includes the calculation's own approval, then walks citing records
+    outwards (``calculation <- statmech <- thermo``), checking each with
+    ``tckdb_record_is_accepted``.
+
+    :returns: calculation id -> human-readable lines naming public refs.
+    """
+    out: dict[int, list[str]] = {cid: [] for cid in calculation_ids}
+    if not calculation_ids:
+        return out
+    # (table, id) -> the calculations it rests on
+    origin: dict[tuple[str, int], set[int]] = {("calculation", c): {c} for c in calculation_ids}
+    frontier: dict[str, set[int]] = {"calculation": set(calculation_ids)}
+    seen: set[tuple[str, int]] = set(origin)
+    for _hop in range(_MAX_HOPS):
+        if not frontier:
+            break
+        nxt: dict[str, set[int]] = defaultdict(set)
+        for table, ids in frontier.items():
+            for cited, citer_table, citer_id in _citers(session, schema, table, ids):
+                node = (citer_table, citer_id)
+                origin.setdefault(node, set()).update(origin[(table, cited)])
+                if node not in seen:
+                    seen.add(node)
+                    nxt[citer_table].add(citer_id)
+        frontier = dict(nxt)
+
+    for (table, record_id), calcs in sorted(origin.items()):
+        accepted = session.scalar(
+            text(
+                "SELECT tckdb_record_is_accepted("
+                "CAST(:t AS submission_record_type), :id)"
+            ),
+            {"t": table, "id": record_id},
+        )
+        if not accepted:
+            continue
+        ref = session.scalar(
+            text(f"SELECT public_ref FROM public.{_quote(session, table)} WHERE id = :id"),
+            {"id": record_id},
+        )
+        for cid in calcs:
+            calc_ref = session.scalar(
+                text("SELECT public_ref FROM calculation WHERE id = :id"), {"id": cid}
+            )
+            if table == "calculation" and record_id == cid:
+                out[cid].append(f"calculation {calc_ref} is approved")
+            else:
+                out[cid].append(
+                    f"calculation {calc_ref} is cited by accepted {table} {ref}"
+                )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Plan and commit
+# ---------------------------------------------------------------------------
 
 
 def _identity_hash(mapping) -> str:
@@ -196,14 +414,15 @@ def _label(mapping) -> str:
     return " ".join(parts)
 
 
-def build_plan(session: Session) -> Plan:
-    """Group rows by identity-keyed hash; describe every group of two or more."""
-    references = discover_references(session)
+def build_plan(session: Session, schema: Schema | None = None) -> Plan:
+    """Group unmerged rows by identity-keyed hash; describe groups of two or more."""
+    schema = schema or read_schema(session)
     columns = ", ".join(_LOT_COLUMNS)
     rows = session.execute(
         text(
             f"SELECT id, public_ref, lot_hash, {columns} "
-            "FROM level_of_theory ORDER BY id"
+            "FROM level_of_theory WHERE id NOT IN "
+            "(SELECT merged_lot_id FROM level_of_theory_merge) ORDER BY id"
         )
     ).mappings().all()
 
@@ -220,20 +439,16 @@ def build_plan(session: Session) -> Plan:
         ]
         holder = next((r for r in lot_rows if r.lot_hash == identity_hash), None)
         duplicates = [
-            _describe_duplicate(session, r, references)
-            for r in lot_rows
-            if r is not holder
+            _describe_duplicate(session, schema, r) for r in lot_rows if r is not holder
         ]
         groups.append(Group(identity_hash, holder, duplicates))
     groups.sort(key=lambda g: g.holder.public_ref if g.holder else g.identity_hash)
-    return Plan(references=references, groups=groups)
+    return Plan(schema=schema, groups=groups)
 
 
-def _describe_duplicate(
-    session: Session, row: LotRow, references: list[tuple[str, str]]
-) -> Duplicate:
+def _describe_duplicate(session: Session, schema: Schema, row: LotRow) -> Duplicate:
     duplicate = Duplicate(row=row)
-    for table, column in references:
+    for table, column in schema.lot_references:
         count = session.scalar(
             text(
                 f"SELECT count(*) FROM public.{_quote(session, table)} "
@@ -241,34 +456,31 @@ def _describe_duplicate(
             ),
             {"id": row.row_id},
         )
-        if (table, column) == _REPOINTABLE:
+        if (table, column) == ("calculation", "lot_id"):
             duplicate.calculations = count
-        elif count:
+        elif (table, column) not in _REPOINTED and count:
             duplicate.other_references[f"{table}.{column}"] = count
-    duplicate.approved_calculations = session.scalar(
-        text(
-            "SELECT count(*) FROM calculation c WHERE c.lot_id = :id "
-            "AND tckdb_record_is_accepted("
-            "CAST('calculation' AS submission_record_type), c.id)"
-        ),
-        {"id": row.row_id},
+    calc_ids = list(
+        session.scalars(
+            text("SELECT id FROM calculation WHERE lot_id = :id ORDER BY id"),
+            {"id": row.row_id},
+        )
     )
+    on = accepted_science_on(session, schema, calc_ids)
+    duplicate.accepted_science = [line for cid in calc_ids for line in on[cid]]
     return duplicate
 
 
 def commit_plan(session: Session, plan: Plan) -> CommitResult:
-    """Merge every unblocked group, each in its own savepoint. The caller commits.
-
-    Each group is re-planned inside its savepoint, so a reference or an
-    approval that appeared after the plan was printed keeps the group.
-    """
+    """Merge every unblocked group, each in its own savepoint. The caller commits."""
     result = CommitResult()
     for group in plan.mergeable():
         assert group.holder is not None
+        holder_id = group.holder.row_id
         try:
             with session.begin_nested():
                 fresh = [
-                    _describe_duplicate(session, d.row, plan.references)
+                    _describe_duplicate(session, plan.schema, d.row)
                     for d in group.duplicates
                 ]
                 reasons = [r for d in fresh for r in d.blockers()]
@@ -277,21 +489,42 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
                     continue
                 moved = 0
                 for duplicate in group.duplicates:
+                    dup_id = duplicate.row.row_id
                     moved += session.execute(
                         text(
                             "UPDATE calculation SET lot_id = :holder "
                             "WHERE lot_id = :dup AND NOT tckdb_record_is_accepted("
                             "CAST('calculation' AS submission_record_type), id)"
                         ),
-                        {"holder": group.holder.row_id, "dup": duplicate.row.row_id},
+                        {"holder": holder_id, "dup": dup_id},
                     ).rowcount
                     session.execute(
-                        text("DELETE FROM level_of_theory WHERE id = :dup"),
-                        {"dup": duplicate.row.row_id},
+                        text(
+                            "UPDATE level_of_theory_merge SET into_lot_id = :holder "
+                            "WHERE into_lot_id = :dup"
+                        ),
+                        {"holder": holder_id, "dup": dup_id},
                     )
-        except DBAPIError as exc:
-            reason = str(exc.orig).splitlines()[0] if exc.orig else str(exc)
-            result.kept.append((group, f"refused by the database: {reason}"))
+                    session.execute(
+                        text(
+                            "INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) "
+                            "VALUES (:dup, :holder)"
+                        ),
+                        {"holder": holder_id, "dup": dup_id},
+                    )
+                    left = session.scalar(
+                        text("SELECT count(*) FROM calculation WHERE lot_id = :dup"),
+                        {"dup": dup_id},
+                    )
+                    if left:
+                        raise RuntimeError(
+                            f"{duplicate.row.public_ref} still carries {left} "
+                            "calculation(s) after the repoint"
+                        )
+        except (DBAPIError, RuntimeError) as exc:
+            orig = getattr(exc, "orig", None)
+            reason = str(orig).splitlines()[0] if orig else str(exc)
+            result.kept.append((group, f"refused: {reason}"))
             continue
         result.merged.append((group, moved))
     return result
@@ -300,7 +533,7 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
 def _print_plan(plan: Plan) -> None:
     print("Foreign keys into level_of_theory (discovered from pg_constraint):")
     for table, column in plan.references:
-        note = "  (repointed)" if (table, column) == _REPOINTABLE else "  (blocks a merge)"
+        note = "  (rewritten)" if (table, column) in _REPOINTED else "  (blocks a merge)"
         print(f"  {table}.{column}{note}")
     print(f"\nDuplicate groups: {len(plan.groups)}")
     for group in plan.groups:
@@ -365,10 +598,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nMerged {len(result.merged)} group(s):")
         for group, moved in result.merged:
             assert group.holder is not None
-            removed = ", ".join(d.row.public_ref for d in group.duplicates)
+            merged = ", ".join(d.row.public_ref for d in group.duplicates)
             print(
                 f"  into {group.holder.public_ref}: {moved} calculation(s) repointed, "
-                f"removed {removed}"
+                f"{merged} kept as merged row(s) resolving to it"
             )
         if result.kept:
             print(f"Kept {len(result.kept)} group(s):")

@@ -42,11 +42,15 @@ the whole of the second:
 
 What is deliberately not normalised
 -----------------------------------
-Every other character is kept, because it distinguishes real basis sets:
+Every other character is kept. Most of them distinguish real basis sets;
+some are only a second notation for one, and are kept apart anyway:
 
 * ``*``, ``**``, ``+``, ``++`` and parenthesised polarisation --
-  ``6-31G*`` / ``6-31G**`` / ``6-31+G`` / ``6-31G(d)`` / ``6-31G(d,p)``
-  are five basis sets.
+  ``6-31G`` / ``6-31+G`` / ``6-31G*`` / ``6-31G**`` are four different
+  basis sets. ``6-31G*`` *is* ``6-31G(d)`` and ``6-31G**`` *is*
+  ``6-31G(d,p)``, but each pair keeps two keys on purpose: equating them
+  needs a notation table, not a spelling rule, and a split is the safe
+  error.
 * Diffuse and calendar prefixes -- ``aug-``, ``d-aug-``, ``jun-``,
   ``may-``, ``apr-``, ``heavy-aug-``, ``ma-``. The hyphen after the prefix
   is kept too, so PySCF's ``augccpvtz`` stays apart from

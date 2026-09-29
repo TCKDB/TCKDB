@@ -135,6 +135,8 @@ NOT_EQUATED: list[tuple[str, str, str]] = [
     ("augccpvtz", "aug-cc-pvtz", "PySCF key: the hyphen after aug- is kept"),
     ("vtz", "cc-pVTZ", "Molpro shorthand"),
     ("avtz", "aug-cc-pVTZ", "Molpro shorthand"),
+    ("6-31G*", "6-31G(d)", "star notation for d on heavy atoms"),
+    ("6-31G**", "6-31G(d,p)", "star notation for d,p"),
 ]
 
 
@@ -290,3 +292,20 @@ def test_migration_hash_matches_the_application(migration, spelling):
     assert migration._lot_hash(row, keyed=True) == _level_of_theory_hash(
         LevelOfTheoryRef(**fields)
     )
+
+
+def test_the_merge_record_adds_no_column_to_level_of_theory():
+    """Merges live in ``level_of_theory_merge``, not on the row (#574 review).
+
+    Consistency-check inputs (``consistency.core.snapshot``) and
+    reproducibility context hashes (``reproducibility_rubric._mapped_columns``)
+    snapshot every column of a level of theory. A new column would change
+    both for every row, re-keyed or not.
+    """
+    from app.db.models.level_of_theory import LevelOfTheory
+
+    assert {c.key for c in LevelOfTheory.__table__.columns} == {
+        "id", "method", "basis", "aux_basis", "cabs_basis", "dispersion",
+        "solvent", "solvent_model", "keywords", "spin_treatment", "lot_hash",
+        "created_at", "public_ref",
+    }

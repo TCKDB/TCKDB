@@ -482,6 +482,59 @@ backfill against a large corpus in batches.
 
 ---
 
+## Basis-name identity re-key (revision `38b06819f099` + merge script)
+
+`38b06819f099` (#574) makes `lot_hash` hash basis names by an identity key
+(`def2tzvp` = `def2-TZVP`), re-keys existing rows in place, and adds the
+empty table `level_of_theory_merge`. It prints the duplicate groups it could
+not collapse (two spellings that were already two rows), by `public_ref`.
+
+**What changes for consumers of `lot_hash`.** Every row whose basis
+spelling differs from its key gets a new `lot_hash`. `public_ref` is not
+touched. Anything holding an old hash value stops matching:
+
+- `GET /scientific/calculations/search?lot_hash=` and the legacy
+  `/levels-of-theory?lot_hash=` filter;
+- the ML dataset export, which carries `lot_hash` per row
+  (`scientific_read/ml_dataset.py`);
+- the MCP scientific-read tool and the Python client's `lot_hash` filters;
+- stored Hess consistency reviews: their input snapshot includes the source
+  calculation's level-of-theory row (`consistency/hess.py`), so a review of
+  a kinetics record whose source calculation sits on a re-keyed row no
+  longer matches the live context digest (`consistency.core.currency`
+  reports it not current) until the check is run again;
+- stored reproducibility assessments: their context hash snapshots the
+  calculation's level-of-theory row (`reproducibility_rubric.py`), so an
+  assessment of a calculation on a re-keyed row goes stale the same way.
+  A merge by the script below does the same for every calculation it moves
+  (its `lot_id` changes).
+
+**Deploy window.** `tckdb_deploy.sh` migrates while the old API is still
+serving. An upload in that window hashes the old way and can create a new
+duplicate of a re-keyed row. So after every deploy that includes this
+revision, run the merge script's dry run:
+
+```bash
+# From an operator shell with DB_* pointed at the target database.
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py            # dry run (default)
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py --commit --i-know-this-is-deployed
+```
+
+Read the dry run before committing. The script:
+
+- merges a group only if no accepted-science record rests on a calculation
+  it would move (its own approval, or an approved thermo, statmech,
+  kinetics, ... citing it directly or through other records), and nothing
+  but `calculation.lot_id` cites the duplicate (a `frequency_scale_factor`
+  or `energy_correction_scheme` blocks it). Blocked groups are listed with
+  the refs that block them;
+- **never deletes a level of theory.** A merged row keeps its `public_ref`
+  (published releases freeze it) and gets a `level_of_theory_merge` row;
+  reads resolve its ref to the kept row;
+- is idempotent: merged rows are out of scope on the next run.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

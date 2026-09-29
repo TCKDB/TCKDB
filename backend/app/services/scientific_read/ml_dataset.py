@@ -104,6 +104,7 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     visible_statuses,
 )
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     current_read_profile,
@@ -1502,7 +1503,8 @@ def _resolve_lot_ref(session: Session, lot_ref: str | None) -> int | None:
     )
     if lot_id is None:
         raise ValueError(f"ml_export_lot_unresolved: lot ref not found: {lot_ref!r}")
-    return lot_id
+    # A merged row's ref names the row it was merged into (#574).
+    return canonical_level_of_theory_id(session, lot_id)
 
 
 __all__ = [

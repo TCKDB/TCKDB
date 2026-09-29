@@ -97,6 +97,7 @@ from app.services.scientific_read.common import (
     visible_statuses,
 )
 from app.services.scientific_read.handles import (
+    level_of_theory_ref_clause,
     resolve_filter_ref,
 )
 from app.services.scientific_read.internal_ids import (
@@ -653,7 +654,7 @@ def _apply_lot_filters(stmt, request: CalculationsSearchRequest):
     if request.basis is not None:
         stmt = stmt.where(LevelOfTheory.basis == request.basis)
     if request.lot_ref is not None:
-        stmt = stmt.where(LevelOfTheory.public_ref == request.lot_ref)
+        stmt = stmt.where(level_of_theory_ref_clause(request.lot_ref))
     if request.lot_hash is not None:
         stmt = stmt.where(LevelOfTheory.lot_hash == request.lot_hash)
     return stmt
