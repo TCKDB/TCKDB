@@ -17,6 +17,7 @@ from tckdb_client.errors import (
     TCKDBHTTPError,
     TCKDBIdempotencyConflictError,
     TCKDBPaginationError,
+    TCKDBUnexpectedResponseError,
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import make_idempotency_key, validate_idempotency_key
@@ -119,6 +120,7 @@ __all__ = [
     "TCKDBConflictError",
     "TCKDBIdempotencyConflictError",
     "TCKDBPaginationError",
+    "TCKDBUnexpectedResponseError",
     "CONFLICT_REJECTION_CODES",
     "NON_RETRYABLE_CODES",
     "REJECTION_STATUSES",

@@ -13,6 +13,12 @@ the mapping report; it is what ``--dry-run`` also uses internally. ``import
 --upload`` and ``export`` are the only commands that contact a live TCKDB
 instance -- see :mod:`tckdb_qcschema.exporter` for what ``export`` supports
 and refuses.
+
+Exit codes: 0 success, 2 an adapter refusal (``REFUSED [code]: ...``), 1 the
+TCKDB API could not be used -- a transport failure, an HTTP error, or a
+response that is not the API's (``ERROR [...]: ...``; e.g. a ``--base-url``
+naming the web site rather than its ``/api/v1`` root). Neither prints a
+traceback.
 """
 
 from __future__ import annotations
@@ -145,6 +151,22 @@ def _emit_error(exc: QCSchemaAdapterError, *, as_json: bool) -> int:
     return 2
 
 
+def _emit_client_error(exc: Exception, *, as_json: bool) -> int:
+    """Print a ``tckdb_client`` failure as one line, the way refusals are.
+
+    Not a refusal -- the adapter did not reject the data, it could not get
+    a usable answer from the API -- so it says ``ERROR`` and exits 1. The
+    bracket carries the server's error code when there is one, else the
+    client's exception class, so the line is still matchable.
+    """
+    code = getattr(exc, "code", None) or type(exc).__name__
+    if as_json:
+        print(json.dumps({"error_code": code, "message": str(exc)}), file=sys.stderr)
+    else:
+        print(f"ERROR [{code}]: {exc}", file=sys.stderr)
+    return 1
+
+
 def _cmd_import(args: argparse.Namespace) -> int:
     path = Path(args.file)
     try:
@@ -181,7 +203,7 @@ def _cmd_import(args: argparse.Namespace) -> int:
 
     import os
 
-    from tckdb_client import TCKDBClient  # lazy
+    from tckdb_client import TCKDBClient, TCKDBError  # lazy
 
     base_url = args.base_url or os.environ.get("TCKDB_BASE_URL")
     api_key = os.environ.get("TCKDB_API_KEY")
@@ -199,6 +221,8 @@ def _cmd_import(args: argparse.Namespace) -> int:
             )
     except QCSchemaAdapterError as exc:
         return _emit_error(exc, as_json=args.json)
+    except TCKDBError as exc:
+        return _emit_client_error(exc, as_json=args.json)
 
     result = {
         "calculation_id": outcome.calculation_id,
@@ -217,7 +241,7 @@ def _cmd_import(args: argparse.Namespace) -> int:
 def _cmd_export(args: argparse.Namespace) -> int:
     import os
 
-    from tckdb_client import TCKDBClient  # lazy
+    from tckdb_client import TCKDBClient, TCKDBError  # lazy
 
     from .exporter import export_calculation
 
@@ -232,6 +256,8 @@ def _cmd_export(args: argparse.Namespace) -> int:
             document = export_calculation(client, calculation_ref)
     except QCSchemaAdapterError as exc:
         return _emit_error(exc, as_json=args.json)
+    except TCKDBError as exc:
+        return _emit_client_error(exc, as_json=args.json)
 
     text = json.dumps(document) if args.json else json.dumps(document, indent=2)
     if args.out:
