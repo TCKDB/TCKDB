@@ -1329,7 +1329,14 @@ class ComputedReactionUploadRequest(SchemaBase):
     species: list[BundleSpeciesIn] = Field(min_length=1)
 
     # Reaction
-    reversible: bool = True
+    reversible: bool = Field(
+        default=True,
+        description=(
+            "Whether the reaction is reversible. Omitted means true: an "
+            "elementary step is reversible by microscopic reversibility. "
+            "Send false only to state the step is irreversible."
+        ),
+    )
     reaction_family: str | None = None
     reaction_family_source_note: str | None = None
     reactant_keys: list[str] = Field(min_length=1)

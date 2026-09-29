@@ -53,14 +53,25 @@ class TSReactionParticipantUpload(SchemaBase):
 class TSReactionUpload(SchemaBase):
     """Embedded reaction content for a transition-state upload.
 
-    :param reversible: Whether the reaction is reversible.
+    :param reversible: Whether the reaction is reversible. Omitted means
+        ``true``, the same as on the computed-reaction route: a transition
+        state belongs to an elementary step, and an elementary step is
+        reversible by microscopic reversibility. Send ``false`` only to state
+        that the step is irreversible.
     :param reaction_family: Optional reaction-family label.
     :param reaction_family_source_note: Required when the family is non-canonical.
     :param reactants: Ordered reactant participants.
     :param products: Ordered product participants.
     """
 
-    reversible: bool
+    reversible: bool = Field(
+        default=True,
+        description=(
+            "Whether the reaction is reversible. Omitted means true: an "
+            "elementary step is reversible by microscopic reversibility. "
+            "Send false only to state the step is irreversible."
+        ),
+    )
     reaction_family: str | None = None
     reaction_family_source_note: str | None = None
     reactants: list[TSReactionParticipantUpload] = Field(min_length=1)
