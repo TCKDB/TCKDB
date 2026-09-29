@@ -249,8 +249,9 @@ same. So a quota refusal reads as `503 artifact_storage_unavailable` with
 `/status` healthy. To check for it, on the host run
 `weed shell` `s3.bucket.list` (each bucket line shows `quota:` and `usage:`),
 or `fs.cat /etc/seaweedfs/filer.conf` and look for `"readOnly": true`; lift it
-with `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` (or
-`-op=remove`) followed by `s3.bucket.quota.enforce -apply` (run under `lock`).
+with `s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` followed by
+`s3.bucket.quota.enforce -apply` (run under `lock`). Measured: after that the
+rule read `"readOnly": false` and the next write returned 200.
 
 **Recovery.** While a refusal is outstanding, each `/status` poll asks the
 store again, and clears the refusal once it reports at least the refused size
