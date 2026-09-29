@@ -804,8 +804,10 @@ fixture moved up.
 GitHub Actions runs the backend gate in
 [`../../.github/workflows/backend-ci.yml`](../../.github/workflows/backend-ci.yml)
 for pull requests and pushes that touch backend code, backend tests,
-the backend package, the shared `tckdb-schemas` package, or the CI
-workflow itself.
+the backend package, the shared `tckdb-schemas` package, the Python
+client's source (`clients/python/src/`, `clients/python/pyproject.toml`,
+because the builder contract tests below run here), or the CI workflow
+itself.
 
 The workflow uses the same RDKit-enabled Postgres image as local
 development:
@@ -820,12 +822,21 @@ indexes.
 
 The CI job creates the `tckdb_env` conda environment from
 [`../environment.yml`](../environment.yml), then installs the shared
-schema package and backend package in editable mode:
+schema package, backend package and Python client in editable mode:
 
 ```bash
 python -m pip install -e schemas/python/tckdb-schemas
 python -m pip install -e "backend[dev]"
+python -m pip install -e clients/python
 ```
+
+The client is there for `tests/client_builder_contract/`, which validates
+the client's builder payloads against the backend's upload schemas and so
+needs both packages in one interpreter. Those modules load the client
+through `tests/_ci_dependency.require_module`: without it they skip
+locally, with the install command in the reason, and fail on CI
+(`GITHUB_ACTIONS=true`). Before #575 the CI job did not install the client
+and all nine modules skipped on every run while the gate passed.
 
 The gate runs:
 

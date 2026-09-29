@@ -129,6 +129,16 @@ tckdb_pytest_run_args() {
         TCKDB_PYTEST_ARGS+=("--randomly-seed=${seed}")
     fi
 
+    # Itemise every skip with its reason in the summary, alongside pytest's
+    # default failures and errors (``fE``). Under ``-q`` a skip is otherwise a
+    # bare count, and a count cannot say *what* skipped: the nine builder
+    # contract modules skipped on every CI run for want of tckdb_client (#575),
+    # inside "40 skipped" that nobody could read. A caller's own ``-r``
+    # replaces this one, since pytest keeps the last.
+    if [[ "$caller_args" != *" -r"* ]]; then
+        TCKDB_PYTEST_ARGS+=("-rfEs")
+    fi
+
     # ``-n0`` is xdist's own "run in this process" mode; asking for it via the
     # flag rather than omitting it keeps the plugin's reporting consistent.
     if [[ "$caller_args" != *" -n "* && "$caller_args" != *"-n"[0-9]* && "$caller_args" != *"--numprocesses"* ]]; then

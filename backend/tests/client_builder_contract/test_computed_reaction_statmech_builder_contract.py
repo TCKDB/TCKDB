@@ -7,9 +7,10 @@ exercise the on-wire emission of those links.
 
 from __future__ import annotations
 
-import pytest
+from tests._ci_dependency import require_module
 
-pytest.importorskip("tckdb_client.builders")
+# Skips locally without the client; fails on CI, which installs it (#575).
+require_module("tckdb_client.builders", install="pip install -e clients/python")
 
 from tckdb_client.builders import (
     Calculation,
