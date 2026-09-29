@@ -216,6 +216,11 @@ The run and the Gaussian reference are committed as fixtures under
 - **Dependency.** `qcelemental==0.51.2` joined the backend `[dev]` extra.
 - **Mutation check.** A landed mutation turned the gate test red: the
   importer packing the Hessian in transposed order.
+- **Follow-up (issue #573, tckdb-qcschema 0.5.0).** The import's mapping
+  report now names every field of the document, the Hessian document's energy
+  as `retained_only`, and the export declares its frame fixed. Two checks were
+  added, `import_report_names_every_loss` and `export_declares_fixed_frame`;
+  all 13 pass.
 
 Write-up: `docs/validation/qcschema_interchange.md`.
 

@@ -9,14 +9,23 @@ document (already family-dispatched and strictly validated by
 * driver ``gradient``               -> ``sp`` (energy from
   ``properties.return_energy``; the gradient array is retained-only)
 * driver ``hessian``                -> ``freq`` (``HessianPayload`` with
-  ``source=uploaded``; no ``freq_result``, no derived modes)
+  ``source=uploaded``; no ``freq_result``, no derived modes). The
+  document's ``properties.return_energy`` is not stored and is reported
+  ``retained_only`` (issue #573): a ``freq`` record has no energy field,
+  and an ``sp`` sibling would be tied to it by a ``single_point_on`` edge,
+  whose parent must be an ``opt``.
 * ``OptimizationResult``            -> ``opt``
 
 No QCSchema field name leaks into the emitted payload except inside the
 ``parameters_json["tckdb_qcschema"]`` namespace (sovereignty: TCKDB's own
 vocabulary everywhere else). The full field-path accounting lives in the
 returned :class:`MappingReport`, mirrored into
-``parameters_json["tckdb_qcschema"]["mapping_report"]``.
+``parameters_json["tckdb_qcschema"]["mapping_report"]``. Every present
+field of the document is in exactly one of its buckets, named by its path
+in the document's own family (``model.method`` in v1,
+``input_data.specification.model.method`` in v2); the import refuses
+``mapping_report_incomplete`` otherwise. The buckets and the rules for
+fields no branch reads are in :mod:`tckdb_qcschema.report_coverage`.
 
 ``rejected`` is always empty for this adapter's own report: every rejection
 this module can make is a whole-document refusal (a raised
@@ -70,6 +79,7 @@ from .errors import (
 from .hessian import pack_lower_triangle
 from .molecule import BOHR_TO_ANGSTROM, resolve_identity, to_geometry_payload
 from .reader import QCRecord
+from .report_coverage import complete_mapping_report
 
 #: Absolute tolerance, hartree, for comparing an independently supplied
 #: energy against ``properties.return_energy`` for the same record.
@@ -113,7 +123,10 @@ _SPIN_TREATMENT_BY_REFERENCE = {
 
 @dataclass
 class MappingReport:
-    """Field-path accounting for one mapped QCSchema document."""
+    """Field-path accounting for one mapped QCSchema document.
+
+    What each bucket means is defined in :mod:`tckdb_qcschema.report_coverage`.
+    """
 
     transformed: list[str] = field(default_factory=list)
     retained_only: list[str] = field(default_factory=list)
@@ -335,6 +348,14 @@ def _filter_provenance(provenance: dict, *, report: MappingReport) -> dict:
     """
     dropped = sorted(k for k in provenance if k not in _PROVENANCE_RETAINED_KEYS)
     report.unsupported.extend(f"provenance.{k}" for k in dropped)
+    # The allow-listed keys the branches did not already map (creator and
+    # version become a software/workflow-tool release) are copied, not
+    # mapped: retained_only (issue #573 -- they were in no bucket before).
+    report.retained_only.extend(
+        f"provenance.{k}"
+        for k in provenance
+        if k in _PROVENANCE_RETAINED_KEYS and f"provenance.{k}" not in report.transformed
+    )
     return {k: v for k, v in provenance.items() if k in _PROVENANCE_RETAINED_KEYS}
 
 
@@ -477,10 +498,15 @@ def build_conformer_upload_payload(
     payload["species_entry"]["charge"] = identity.charge
     payload["species_entry"]["multiplicity"] = identity.multiplicity
     payload["species_entry"]["species_entry_kind"] = species_entry_kind
+    identity_prefix = "molecule" if record.record_kind == "atomic" else "final_molecule"
     report.transformed.append(
-        "identifiers.smiles" if identity.source == "identifiers_smiles" else "--smiles"
+        f"{identity_prefix}.identifiers.smiles"
+        if identity.source == "identifiers_smiles"
+        else "--smiles"
     )
-    report.transformed.extend(["molecule.molecular_charge", "molecule.molecular_multiplicity"])
+    report.transformed.extend(
+        [f"{identity_prefix}.molecular_charge", f"{identity_prefix}.molecular_multiplicity"]
+    )
 
     unsupported = _unsupported_fields(record.raw_document)
     report.unsupported.extend(unsupported)
@@ -498,6 +524,11 @@ def build_conformer_upload_payload(
             report=report,
         ),
     }
+    # Every field of the document in exactly one bucket, or refuse (#573).
+    # After the block above, because the provenance allowlist writes its
+    # entries while the block is built; the report is then re-snapshotted.
+    complete_mapping_report(record, report)
+    payload["calculation"]["parameters_json"]["tckdb_qcschema"]["mapping_report"] = report.to_dict()
     payload["calculation"]["parameters_parser_version"] = _parser_version()
     # Deliberately NOT datetime.now(): the backend hashes the whole
     # canonical request body per idempotency key, so a wall-clock stamp
@@ -564,6 +595,9 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
         calc_kwargs["type"] = CalculationType.sp
         calc_kwargs["sp_result"] = SPResultPayload(electronic_energy_hartree=return_result)
         report.transformed.append("return_result")
+        if return_energy is not None:
+            # Read by the contradiction check above; equal to what is stored.
+            report.transformed.append("properties.return_energy")
 
     elif driver == "gradient":
         return_energy = view["return_energy"]
@@ -589,6 +623,16 @@ def _build_atomic(record: QCRecord, report: MappingReport) -> tuple[dict, str | 
             source=HessianSource.uploaded,
         )
         report.transformed.append("return_result")
+        if view["return_energy"] is not None:
+            # The Hessian job's own energy at this geometry is NOT stored
+            # (issue #573). TCKDB has no energy column on a freq result, and
+            # the one other place -- an sp sibling in additional_calculations
+            # -- would be wired to this freq by a single_point_on edge, a role
+            # whose parent must be an opt (DR-0028; see
+            # _DEPENDENCY_ROLE_TO_PARENT_TYPE in the backend's
+            # calculation_resolution). The value stays in the raw artifact
+            # and is named here instead of being dropped silently.
+            report.retained_only.append("properties.return_energy")
 
     else:
         raise QCSchemaAdapterError(
@@ -618,8 +662,10 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
     initial_geometry = to_geometry_payload(view["initial_molecule"])
     final_geometry = to_geometry_payload(view["final_molecule"])
     report.transformed.extend(["initial_molecule.geometry", "final_molecule.geometry"])
-    if initial_geometry.isotopes or final_geometry.isotopes:
-        report.transformed.append("molecule.mass_numbers")
+    if initial_geometry.isotopes:
+        report.transformed.append("initial_molecule.mass_numbers")
+    if final_geometry.isotopes:
+        report.transformed.append("final_molecule.mass_numbers")
 
     # The ESS (Psi4, etc.) that computed the trajectory, not the optimizer
     # that drove it -- see _ess_software_release_for_optimization's
@@ -634,9 +680,11 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
     if workflow_tool_release is not None:
         report.transformed.extend(["provenance.creator", "provenance.version"])
     level_of_theory = _level_of_theory(method, basis, keywords)
-    report.transformed.extend(["model.method", "model.basis"])
+    report.transformed.extend(
+        ["input_specification.model.method", "input_specification.model.basis"]
+    )
     if level_of_theory.spin_treatment is not None:
-        report.transformed.append("keywords.reference")
+        report.transformed.append("input_specification.keywords.reference")
 
     if view["final_energy"] is None:
         raise QCSchemaAdapterError(
@@ -651,9 +699,9 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
         final_energy_hartree=float(view["final_energy"]),
     )
     report.transformed.extend(["success", "trajectory (length)"])
-    report.transformed.append("trajectory[-1].properties.return_energy")
+    report.transformed.append("energies[-1]")
     if view["step_energies"]:
-        report.retained_only.append("energies (per-step)")
+        report.retained_only.append("energies")
     report.retained_only.append("trajectory")
 
     calc_kwargs = dict(
@@ -669,7 +717,7 @@ def _build_optimization(record: QCRecord, report: MappingReport) -> tuple[dict, 
         parameters=_parameter_observations(keywords) or None,
     )
     if keywords:
-        report.transformed.append("keywords")
+        report.transformed.append("input_specification.keywords")
 
     calc = ConformerCalculationIn(**{k: v for k, v in calc_kwargs.items() if v is not None or k == "type"})
     payload = {
