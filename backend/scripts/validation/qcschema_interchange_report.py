@@ -124,6 +124,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import numpy as np
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -359,6 +360,13 @@ def adapter_modules() -> Iterator[SimpleNamespace]:
             origin = Path(module.__file__).resolve()
             if REPO_ROOT not in origin.parents:
                 raise FixtureError(f"{module.__name__} resolved outside this checkout: {origin}")
+        # ``tckdb_client.__version__`` comes from installed distribution
+        # metadata: "0.0.0+local" when the package is not installed (backend
+        # CI), or another checkout's version when an older copy is. The code
+        # loaded here is this checkout's, so state this checkout's version.
+        # The client sends it as X-TCKDB-Client-Version, and the upload
+        # route answers 426 to anything below the supported minimum.
+        modules.client.__version__ = _pyproject_version(CLIENT_SRC.parent / "pyproject.toml")
         yield modules
     finally:
         for entry in inserted:
@@ -367,6 +375,33 @@ def adapter_modules() -> Iterator[SimpleNamespace]:
         for name in [n for n in sys.modules if _owned(n)]:
             del sys.modules[name]
         sys.modules.update(stashed)
+
+
+class _TestClientForwarder(httpx.BaseTransport):
+    """An ``httpx`` transport that hands each request to a ``TestClient``.
+
+    Through the ``TestClient``'s public ``request()`` only. Borrowing its
+    private ``_transport`` worked on Starlette 0.52 and broke on the 1.3.1
+    that ``backend/environment.yml`` pins: its transport's response stream is
+    not the ``SyncByteStream`` a plain ``httpx.Client`` asserts on. The
+    response is rebuilt from the already-decoded body, so the headers that
+    describe the wire encoding are dropped rather than applied twice.
+    """
+
+    _ENCODING_HEADERS = frozenset({"content-encoding", "content-length", "transfer-encoding"})
+
+    def __init__(self, test_client: Any) -> None:
+        self._test_client = test_client
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        forwarded = self._test_client.request(
+            request.method,
+            str(request.url),
+            headers=[(k, v) for k, v in request.headers.items() if k.lower() != "content-length"],
+            content=request.read(),
+        )
+        headers = [(k, v) for k, v in forwarded.headers.items() if k.lower() not in self._ENCODING_HEADERS]
+        return httpx.Response(forwarded.status_code, headers=headers, content=forwarded.content, request=request)
 
 
 class _InProcessClient:
@@ -587,7 +622,7 @@ def _round_trip(session: Session, adapter: SimpleNamespace, fixtures: SimpleName
         client = adapter.client.TCKDBClient(
             "http://testserver/api/v1",
             api_key=api_key,
-            transport=test_client._transport,
+            transport=_TestClientForwarder(test_client),
         )
 
         upload = client.request_json(
