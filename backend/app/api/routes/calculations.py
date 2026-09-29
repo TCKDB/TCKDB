@@ -93,12 +93,12 @@ from app.services.hessian_extraction import (
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
-from app.services.software_banner_extraction import (
-    try_reconcile_software_from_output_uploads,
-)
 from app.services.scientific_read.handles import (
     parse_handle,
     resolve_calculation_handle,
+)
+from app.services.software_banner_extraction import (
+    try_reconcile_software_from_output_uploads,
 )
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,

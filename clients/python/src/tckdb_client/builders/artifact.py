@@ -133,6 +133,11 @@ class PlannedArtifactUpload:
     ``calculation_id`` is the server-assigned id resolved from the
     upload result; ``calculation_key`` is the bundle-local key the
     builder minted (kept for diagnostics and logging).
+
+    ``calculation_ref`` is the calculation's public ``calc_`` ref from the
+    same response, when the server returned one. :meth:`TCKDBClient.upload_artifacts`
+    addresses the calculation by it in preference to the integer; it is
+    ``None`` against a server that predates the ref.
     """
 
     calculation_key: str
@@ -142,6 +147,7 @@ class PlannedArtifactUpload:
     label: str | None
     sha256: str | None
     bytes: int | None
+    calculation_ref: str | None = None
 
 
 def _ensure_kind(kind: str) -> str:

@@ -307,7 +307,8 @@ class ComputedSpeciesUpload:
           doesn't appear in the response — typically a workflow bug.
         """
         key_to_id = _extract_computed_species_calc_keys(upload_result)
-        return _build_plan(self.calculations, key_to_id)
+        key_to_ref = _extract_computed_species_calc_refs(upload_result)
+        return _build_plan(self.calculations, key_to_id, key_to_ref)
 
     def artifact_plan_preview(
         self, *, starting_calculation_id: int = 1000,
@@ -544,6 +545,40 @@ def _extract_computed_species_calc_keys(
     return out
 
 
+def _extract_computed_species_calc_refs(upload_result: Any) -> dict[str, str]:
+    """Bundle-local calc key -> ``calc_`` ref, where the response carries one.
+
+    Lenient where :func:`_extract_computed_species_calc_keys` is strict: a
+    server that predates ``calculation_ref`` simply yields an empty map and the
+    plan falls back to the integer id. The shape was already validated by the
+    strict extractor, so a malformed entry is skipped here, not re-raised.
+    """
+    out: dict[str, str] = {}
+    conformers = upload_result.get("conformers") if isinstance(upload_result, dict) else None
+    for conf in conformers or []:
+        if not isinstance(conf, dict):
+            continue
+        refs = [conf.get("primary_calculation"), *conf.get("additional_calculations", [])]
+        for ref in refs:
+            if isinstance(ref, dict) and isinstance(ref.get("key"), str) and isinstance(
+                ref.get("calculation_ref"), str
+            ):
+                out[ref["key"]] = ref["calculation_ref"]
+    return out
+
+
+def _extract_computed_reaction_calc_refs(upload_result: Any) -> dict[str, str]:
+    """Bundle-local calc key -> ``calc_`` ref from ``calculation_key_refs``.
+
+    Empty against a server that predates the field; see
+    :func:`_extract_computed_species_calc_refs`.
+    """
+    mapping = upload_result.get("calculation_key_refs") if isinstance(upload_result, dict) else None
+    if not isinstance(mapping, dict):
+        return {}
+    return {k: v for k, v in mapping.items() if isinstance(k, str) and isinstance(v, str)}
+
+
 def _extract_computed_reaction_calc_keys(
     upload_result: Any,
 ) -> dict[str, int]:
@@ -600,6 +635,7 @@ def _record_calc_ref(
 def _build_plan(
     calculations: "list[Calculation]",
     key_to_id: dict[str, int],
+    key_to_ref: dict[str, str] | None = None,
 ) -> list[PlannedArtifactUpload]:
     """Render one ``PlannedArtifactUpload`` per attached artifact.
 
@@ -637,6 +673,7 @@ def _build_plan(
                     label=art.label,
                     sha256=art.sha256,
                     bytes=art.bytes,
+                    calculation_ref=(key_to_ref or {}).get(calc_key),
                 )
             )
     return plan
@@ -1510,10 +1547,11 @@ class ComputedReactionUpload:
         ``reaction.unique_species()`` order).
         """
         key_to_id = _extract_computed_reaction_calc_keys(upload_result)
+        key_to_ref = _extract_computed_reaction_calc_refs(upload_result)
         plan: list[PlannedArtifactUpload] = []
-        plan.extend(_build_plan(self.calculations, key_to_id))
+        plan.extend(_build_plan(self.calculations, key_to_id, key_to_ref))
         for _sp, sp_calcs in self._species_calc_pairs:
-            plan.extend(_build_plan(sp_calcs, key_to_id))
+            plan.extend(_build_plan(sp_calcs, key_to_id, key_to_ref))
         return plan
 
     def artifact_plan_preview(

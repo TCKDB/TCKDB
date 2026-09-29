@@ -313,6 +313,19 @@ to make a routing decision every call. A single dispatching path
 parameter keeps the URL contract small while supporting both forms
 during the transition window.
 
+### Producer write routes (#578)
+
+The two producer write routes that named a record by row id in the path,
+`POST /submissions/{submission_id}/rights-attestations` and
+`POST /calculations/{calculation_id}/artifacts`, accept a handle: the integer
+or the `sub_` / `calc_` ref. Ownership, approval-freeze and role checks run on
+the resolved row, so both forms meet the same checks. Every upload, job and
+bundle response, and the polled job result, returns `submission_ref` beside
+`submission_id`, and `calculation_ref` (or `calculation_key_refs` on a
+computed reaction) beside each calculation id. The integer form is deprecated;
+it is removed, and the guard's `DEFERRED_PARAM_LEAKS` entries with it, once no
+supported `tckdb-client` or ARC adapter release still sends it.
+
 ### Query-param refs
 
 Anywhere `<thing>_id=` is currently a query param, also accept

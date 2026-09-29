@@ -61,7 +61,6 @@ from app.services.frequency_geometry_linearity import (
     transition_state_upload_linearity_warnings,
 )
 from app.services.idempotency import IDEMPOTENCY_HEADER
-from app.services.public_refs import public_refs_by_id
 from app.services.provenance_warnings import (
     collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
@@ -71,6 +70,7 @@ from app.services.provenance_warnings import (
     collect_transport_provenance_warnings,
     statmech_has_rotational_structure,
 )
+from app.services.public_refs import public_refs_by_id
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
 )

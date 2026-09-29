@@ -64,12 +64,12 @@ from app.services.submission import (
     get_latest_llm_precheck_audit_event,
     get_submission,
     get_submission_by_ref,
-    resolve_submission_handle,
     list_audit_events,
     list_my_submissions,
     list_record_links,
     list_submissions_for_review,
     reject_submission,
+    resolve_submission_handle,
     supersede_submission,
 )
 

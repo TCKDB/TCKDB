@@ -159,8 +159,8 @@ def test_artifact_upload_response_carries_the_calculation_ref(client, db_session
 
 def test_worker_job_result_carries_the_refs(client, db_session) -> None:
     """The polled job result is a producer response too."""
-    from app.workers.upload_worker import run_one_job
     from app.db.models.upload_job import UploadJob
+    from app.workers.upload_worker import run_one_job
 
     enq = client.post("/api/v1/jobs/conformer", json=CONFORMER)
     assert enq.status_code == 202, enq.text
@@ -278,8 +278,12 @@ def test_rights_attestation_checks_are_the_same_for_both_forms(
     assert r.json()["code"] == "rights_attestation_not_depositor"
 
     # A stranger cannot see the submission at all.
+    # (The view check answers first, in its own words: a depositor_agreement
+    # would also be refused as "not the depositor", so pin which check spoke.)
     login_as(_api_other_user)
-    assert _attest(client, handle).status_code == 403
+    stranger = _attest(client, handle)
+    assert stranger.status_code == 403
+    assert stranger.json()["detail"] == "Not authorized to view this submission."
 
 
 def test_rights_attestation_rejects_unknown_and_mistyped_handles(client) -> None:

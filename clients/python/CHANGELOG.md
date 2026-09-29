@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.97.0 - 2026-09-29
+
+Artifact uploads address a calculation by its `calc_` ref. Upload results now
+carry `calculation_ref` beside `calculation_id` (and `calculation_key_refs`
+beside `calculation_keys` on a computed reaction), and `submission_ref` beside
+`submission_id`. `PlannedArtifactUpload` gains an optional `calculation_ref`,
+filled from those responses, and `upload_artifacts` / `upload_artifact` send it
+in the path when they have one, falling back to the integer against a server
+that predates it. `upload_artifact` now accepts either form. Nothing existing
+is removed: plans built without refs behave as before.
+
 ## 0.96.0 - 2026-09-29
 
 Adds `RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER` (HTTP 403). The server now
