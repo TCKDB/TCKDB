@@ -126,6 +126,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
@@ -666,9 +667,9 @@ def _query_candidate_calculations(
     if lot_filter is not None:
         stmt = stmt.where(Calculation.lot_id == lot_filter)
     if request.method is not None:
-        stmt = stmt.where(LevelOfTheory.method == request.method)
+        stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
-        stmt = stmt.where(LevelOfTheory.basis == request.basis)
+        stmt = stmt.where(basis_matches(request.basis))
     if request.software is not None:
         stmt = stmt.where(Software.name == request.software)
     if request.workflow_tool is not None:

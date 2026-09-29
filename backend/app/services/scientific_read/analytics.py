@@ -121,6 +121,7 @@ from app.services.scientific_read.keyset import (
     query_signature,
     watermark_predicate,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.profile import current_read_profile
 from app.services.scientific_read.sql_review import (
     join_review,
@@ -1239,9 +1240,9 @@ def search_calculation_analytics(
     ):
         stmt = stmt.join(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
         if request.method is not None:
-            stmt = stmt.where(LevelOfTheory.method == request.method)
+            stmt = stmt.where(method_matches(request.method))
         if request.basis is not None:
-            stmt = stmt.where(LevelOfTheory.basis == request.basis)
+            stmt = stmt.where(basis_matches(request.basis))
         if request.lot_ref is not None:
             stmt = stmt.where(level_of_theory_ref_clause(request.lot_ref))
 

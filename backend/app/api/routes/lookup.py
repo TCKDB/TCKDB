@@ -40,6 +40,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.errors import NotFoundError
+from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.method_names import method_identity_key
 from app.chemistry.reaction_family_display import reaction_family_display_name
 from app.chemistry.species import canonical_species_identity
 from app.db.models.calculation import (
@@ -65,6 +67,7 @@ from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.services.reaction_resolution import reaction_stoichiometry_hash
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 router = APIRouter()
 
@@ -265,14 +268,14 @@ def _lot_match(
     lot_status: MatchStatus = "exact"
 
     if method is not None:
-        if lot.method == method.lower():
+        if method_identity_key(lot.method) == method_identity_key(method):
             mb.add(LOT_METHOD_EXACT, "method matched exactly")
         else:
             mb.add(LOT_METHOD_MISMATCH, f"method mismatch: have {lot.method}, want {method}")
             lot_status = "partial"
 
     if basis is not None:
-        if lot.basis == basis.lower():
+        if basis_identity_key(lot.basis) == basis_identity_key(basis):
             mb.add(LOT_BASIS_EXACT, "basis matched exactly")
         else:
             mb.add(LOT_BASIS_MISMATCH, f"basis mismatch: have {lot.basis}, want {basis}")
@@ -764,9 +767,9 @@ def lookup_calculations(
         stmt = stmt.where(Calculation.type == type)
     stmt = stmt.outerjoin(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
     if method is not None:
-        stmt = stmt.where(LevelOfTheory.method == method.lower())
+        stmt = stmt.where(method_matches(method))
     if basis is not None:
-        stmt = stmt.where(LevelOfTheory.basis == basis.lower())
+        stmt = stmt.where(basis_matches(basis))
 
     calcs = list(session.scalars(stmt.order_by(Calculation.id)).all())
     calcs = _apply_selection(calcs, selection, session, mb)
@@ -963,10 +966,10 @@ def lookup_species_calculation(
         .where(Calculation.species_entry_id == entry.id)
         .where(Calculation.type == type)
         .outerjoin(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
-        .where(LevelOfTheory.method == method.lower())
+        .where(method_matches(method))
     )
     if basis is not None:
-        stmt = stmt.where(LevelOfTheory.basis == basis.lower())
+        stmt = stmt.where(basis_matches(basis))
 
     calcs = list(session.scalars(stmt.order_by(Calculation.id)).all())
     calcs = _apply_selection(calcs, selection, session, mb)

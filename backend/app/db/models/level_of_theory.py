@@ -50,6 +50,10 @@ class LevelOfTheoryMerge(Base, TimestampMixin):
     published release's frozen provenance) still resolves; the read layer
     resolves that ref to ``into_lot_id``. No calculation points at a merged
     row, and ``into_lot_id`` is never itself merged, so one hop is enough.
+    Both rules are enforced by database triggers (revision ``e88231299733``,
+    #591), not only by the script: ``trg_lot_merge_guard`` refuses a chain, a
+    loop, or a merge of a row calculations still use, and
+    ``trg_calculation_lot_not_merged`` refuses a calculation on a merged row.
 
     A separate table rather than a column on ``level_of_theory``: whole-row
     snapshots of a level of theory (consistency-check inputs, reproducibility

@@ -267,6 +267,38 @@ def test_species_export_lot_filter(db_session):
     assert record["energies"][0]["level_of_theory"]["label"] == "ccsd(t)/cc-pvtz"
 
 
+def test_species_export_lot_filter_follows_a_merged_ref(db_session):
+    """A merged level of theory's ref names the row it was merged into (#591).
+
+    A dataset request that cites the ref of a duplicate the merge script
+    retired must select the kept row's energies, not silently match nothing.
+    """
+    from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
+
+    entry, geometry, species, opt_lot, sp_lot = _species_with_structure(db_session)
+    retired = LevelOfTheory(
+        method="CCSD(T)", basis="cc-pVTZ", lot_hash="e" * 64
+    )
+    db_session.add(retired)
+    db_session.flush()
+    db_session.add(
+        LevelOfTheoryMerge(merged_lot_id=retired.id, into_lot_id=sp_lot.id)
+    )
+    db_session.flush()
+    assert retired.public_ref != sp_lot.public_ref
+
+    lines = list(
+        iter_ml_species_ndjson(
+            db_session,
+            species_refs=[entry.public_ref],
+            filters=MLFilters(lot_ref=retired.public_ref),
+        )
+    )
+    (record,) = [p for p in _parse(lines) if p["record_type"] == "ml_species"]
+    assert len(record["energies"]) == 1
+    assert record["energies"][0]["level_of_theory"]["label"] == "ccsd(t)/cc-pvtz"
+
+
 def test_species_export_element_filter_excludes(db_session):
     entry, *_ = _species_with_structure(db_session, smiles="O")
     # Water needs O and H; an allow-list of only C drops the geometry row.

@@ -52,6 +52,7 @@ from app.schemas.entities.species_entry_review import (
 from app.schemas.entities.statmech import StatmechRead
 from app.schemas.entities.thermo import ThermoRead
 from app.schemas.entities.transport import TransportRead
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 from app.services.species_entry_review import (
     create_species_entry_review,
     list_species_entry_reviews,
@@ -375,6 +376,9 @@ def get_lowest_sp_conformer_observation_for_entry(
     entry = session.get(SpeciesEntry, entry_id)
     if entry is None:
         raise NotFoundError("SpeciesEntry not found")
+    # A merged row's id names the row it was merged into (#591): its
+    # calculations were moved there.
+    lot_id = canonical_level_of_theory_id(session, lot_id)
     if session.get(LevelOfTheory, lot_id) is None:
         raise NotFoundError("LevelOfTheory not found")
 

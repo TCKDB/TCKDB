@@ -45,6 +45,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "frequency_scale_factor_ref",
@@ -132,9 +133,9 @@ def search_frequency_scale_factors(
             LevelOfTheory.id == FrequencyScaleFactor.level_of_theory_id,
         )
         if request.method is not None:
-            stmt = stmt.where(LevelOfTheory.method == request.method)
+            stmt = stmt.where(method_matches(request.method))
         if request.basis is not None:
-            stmt = stmt.where(LevelOfTheory.basis == request.basis)
+            stmt = stmt.where(basis_matches(request.basis))
     if request.software is not None or request.software_version is not None:
         # FSF stores software_release_id (correction-scheme-provenance
         # plan v2 §6), so both the program-name filter and the
