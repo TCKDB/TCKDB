@@ -118,6 +118,12 @@ class Package:
     # the history walk has to recognise the package on both sides of such a
     # move; every path that exists at a given commit contributes.
     dist_paths: tuple[str, ...]
+    # Generated files shipped inside ``dist_paths``, each with the command
+    # that regenerates it. A change to one is a change to the wheel like any
+    # other, so it needs a bump like any other -- but the author did not edit
+    # it by hand and may not know why the package "changed", so a failure
+    # names the file and the whole repair sequence.
+    generated: tuple[tuple[str, str], ...] = ()
 
 
 PACKAGES: tuple[Package, ...] = (
@@ -136,6 +142,12 @@ PACKAGES: tuple[Package, ...] = (
         dist_paths=(
             "schemas/python/tckdb-schemas/tckdb_schemas",
             "schemas/python/tckdb-schemas/src",
+        ),
+        generated=(
+            (
+                "schemas/python/tckdb-schemas/tckdb_schemas/contract",
+                "conda run -n tckdb_env python backend/scripts/generate_producer_contract.py",
+            ),
         ),
     ),
     Package(
@@ -427,7 +439,8 @@ def check(
                         f"{package.name}: the distributed package changed, but "
                         f"the version {head_state.version} {verb} the version "
                         f"{base_state.version} at the merge base "
-                        f"({merge_base[:9]}). Raise it.",
+                        f"({merge_base[:9]}). Raise it."
+                        + _generated_hint(git, merge_base, head, package),
                     )
                 )
             elif not content_changed and order < 0:
@@ -503,6 +516,26 @@ def check(
             )
 
     return report
+
+
+def _generated_hint(git: Git, base: str, head: str, package: Package) -> str:
+    """Name the generated files that changed and the full repair, or ''."""
+    changed = [
+        (path, command)
+        for path, command in package.generated
+        if git.tree_id(base, path) != git.tree_id(head, path)
+    ]
+    if not changed:
+        return ""
+    changelog = package.pyproject.rsplit("/", 1)[0] + "/CHANGELOG.md"
+    parts = []
+    for path, command in changed:
+        parts.append(
+            f" The generated {path} changed and ships in the wheel. Bump `version` in "
+            f"{package.pyproject}, add a {changelog} entry for the new version, regenerate "
+            f"({command}) so the file carries that version, and commit the result."
+        )
+    return "".join(parts)
 
 
 def _find_conflicting_claim(

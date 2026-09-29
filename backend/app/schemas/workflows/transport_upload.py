@@ -11,7 +11,7 @@ through the backend's stationary-point seam.
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from tckdb_schemas.local_key_codes import (
     W_CALCULATION_KEY_UNDECLARED,
     undeclared_key_error,
@@ -84,6 +84,26 @@ class TransportUploadRequest(TransportUploadPayload):
     :param source_calculations: Transport → supporting-calculation links,
         addressed by local key and role.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species_entry": {
+                        "smiles": "C",
+                        "charge": 0,
+                        "multiplicity": 1
+                    },
+                    "scientific_origin": "experimental",
+                    "sigma_angstrom": 3.746,
+                    "epsilon_over_k_k": 141.4
+                }
+            ]
+        },
+    )
 
     species_entry: SpeciesEntryIdentityPayload
 

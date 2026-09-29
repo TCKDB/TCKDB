@@ -1,6 +1,7 @@
 # QCSchema interchange: a Psi4 water Hessian through TCKDB and back (Phase C, C-Q4)
 
-Measured 2026-09-29. This is the demonstration for the QCSchema half of the
+Measured 2026-09-29; the round trip re-measured the same day with
+tckdb-qcschema 0.5.0 (issue #573). This is the demonstration for the QCSchema half of the
 [Phase C plan](../research/tckdb-phase-c-implementation-plan.md) (section C1,
 "Demonstration"). Its evidence entry is in the
 [Phase C verification record](../research/tckdb-phase-c-verification.md).
@@ -151,12 +152,23 @@ scientific read does not return. Everything the import writes is rolled back.
    of the unprojected mass-weighted Hessian.
 10. **The energy is not carried by the round trip, and the check says so.**
     Profile v1 maps a document with driver `hessian` to a `freq` record that
-    holds only the matrix, so `properties.return_energy` is not stored. The
-    exporter fills `properties.return_energy` only from a `sp` record at the
-    same level on the same conformer, and there is none. The check
+    holds only the matrix, so `properties.return_energy` is not stored. Since
+    tckdb-qcschema 0.5.0 (issue #573) the import's mapping report lists it as
+    `retained_only`, instead of dropping it without a word. It is not stored
+    because TCKDB has no place for it that is right:
+    - a `freq` result has no energy field;
+    - an `sp` sent alongside the `freq` in the same conformer upload is
+      joined to it by a `single_point_on` edge, and that role's parent must
+      be an `opt` (the table `_DEPENDENCY_ROLE_TO_PARENT_TYPE` in
+      `backend/app/services/calculation_resolution.py`). The conformer upload
+      does not check this, so the adapter must not rely on it.
+
+    The exporter fills `properties.return_energy` only from a `sp` record at
+    the same level on the same conformer, and there is none. The check
     `energy_not_carried` asserts that the export carries **no** energy, rather
-    than a wrong one. The energy for the comparison between programs is read
-    directly from the fixture.
+    than a wrong one, and that the import report names the energy it did not
+    store. The energy for the comparison between programs is read directly
+    from the fixture.
 11. **The Hessian is compared exactly after TCKDB's packing and unpacking.**
     The Psi4 matrix is not bit-symmetric: four upper-triangle elements differ
     from their mirror by at most 2.1e-17 hartree/bohr^2. Packed lower-triangle
@@ -189,7 +201,7 @@ scientific read does not return. Everything the import writes is rolled back.
 
 ## Round trip
 
-All 11 checks pass:
+All 13 checks pass:
 
 | check | result | measured |
 | --- | --- | --- |
@@ -201,7 +213,9 @@ All 11 checks pass:
 | `stored_geometry_within_bound` | pass | 4.29e-11 Angstrom against a 5e-11 bound, using the backend's `BOHR_TO_ANGSTROM` = 0.52917721067 |
 | `exported_geometry_within_bound` | pass | 8.11e-11 bohr against a 9.45e-11 bound |
 | `identity_preserved` | pass | O/H/H; charge 0; multiplicity 1; mass numbers 16/1/1; one fragment |
-| `energy_not_carried` | pass | no `sp_result` in the payload; no `properties.return_energy` in the export |
+| `energy_not_carried` | pass | no `sp_result` and no additional calculation in the payload; `properties.return_energy` listed `retained_only` by the import; none in the export |
+| `import_report_names_every_loss` | pass | each of the 20 lost fields is stored or named by the import's mapping report |
+| `export_declares_fixed_frame` | pass | `fix_com` and `fix_orientation` are `true` on `molecule` and `input_data.molecule` |
 | `loss_list_complete` | pass | measured lost and changed lists equal the declared ones |
 | `export_reimport_refused` | pass | `tckdb_export_reimport_refused` |
 
@@ -217,13 +231,15 @@ Fields are grouped by what the import said about them.
 | group | fields | why |
 | --- | --- | --- |
 | Stored, not exported | `input_data.specification.keywords` (5 keywords); `provenance.hostname`, `.memory`, `.nthreads`, `.wall_time` | Keywords become parameter observations, and the four provenance keys go into `parameters_json`. The exporter has no QCSchema field to write them back to. |
-| Reported unsupported at import | `stdout`; `provenance.cpu`, `.module`, `.qcengine_version`, `.username` | The mapping report names these. They survive only in the raw document. |
-| Dropped at import without being named | `extras.qcvars`; `properties.return_energy`, `.return_gradient`, `.return_hessian`, `.nuclear_repulsion_energy`, `.calcinfo_nbasis`, `.calcinfo_nmo`, `.calcinfo_nalpha`, `.calcinfo_nbeta`, `.calcinfo_natom` | Profile v1 maps none of these. The import's mapping report does not name them either; see "Findings". |
+| Listed `retained_only` at import | `extras.qcvars`; `properties.return_energy`, `.return_gradient`, `.return_hessian`, `.nuclear_repulsion_energy`, `.calcinfo_nbasis`, `.calcinfo_nmo`, `.calcinfo_nalpha`, `.calcinfo_nbeta`, `.calcinfo_natom` | Profile v1 maps none of these. They survive only in the raw document. Before tckdb-qcschema 0.5.0 the mapping report named none of them (issue #573). |
+| Listed `unsupported` at import | `stdout`; `provenance.cpu`, `.module`, `.qcengine_version`, `.username` | Outside profile v1, or operator-identifying. They survive only in the raw document. |
 | Changed | `provenance.creator`, `.routine`, `.version` | Replaced by TCKDB's own export provenance, which is what makes the export refuse re-import. |
-| Changed | `molecule.fix_com`, `.fix_orientation`, and the same two under `input_data.molecule` | `true` in the Psi4 input; they read back `false` because the exporter does not set them. |
 
-Everything else in the document compares equal after parsing: 54 field
-paths. The Hessian and the two geometries are checked separately above.
+No field is lost without the import report naming it. Everything else in
+the document compares equal after parsing: 58 field paths, including
+`fix_com` and `fix_orientation` on both molecules (`true` in the Psi4 input
+and, since tckdb-qcschema 0.5.0, in the export). The Hessian and the two
+geometries are checked separately above.
 
 ## Measurements
 
@@ -300,7 +316,10 @@ Reading the table:
   - composition, charge, multiplicity and mass numbers are identical;
   - the export cannot be re-imported as new evidence.
 - Every field that does not survive is listed, with the reason, and the list
-  is asserted. Its v1 twin maps to the same payload.
+  is asserted. Each one is also named by the import's own mapping report. Its
+  v1 twin maps to the same payload.
+- The export declares its frame fixed (`fix_com` and `fix_orientation`), so
+  a consumer is told not to move the coordinates the Hessian is expressed in.
 - Beside the Gaussian 16 record at the same geometry and nominal level, the
   measured differences are:
   - energy: 3.2e-8 hartree;
@@ -316,23 +335,33 @@ Reading the table:
   grid, pruning and Hessian method.
 - That the grids match. Gaussian's is assumed from its default and was not
   read from the record.
-- That the energy of a Hessian document round-trips. It is not stored.
+- That the energy of a Hessian document round-trips. It is not stored; the
+  import lists it as `retained_only`, and it stays in the raw document.
 - QCSchema support beyond profile v1: one fragment, real atoms only, drivers
   energy, gradient and hessian, plus `OptimizationResult`.
 - Anything about other molecules, levels of theory or programs.
-- That the export carries a fixed frame. It does not declare
-  `fix_com`/`fix_orientation`, so a consumer that lets qcelemental reorient
-  the molecule must rotate the Hessian with it.
+- That a consumer honours the frame flags. qcelemental writes them into a
+  program's input (`no_com`/`no_reorient` for Psi4), but its own
+  `orient_molecule` ignores them.
 
-## Findings for later (not fixed here)
+## Findings
 
-- **The import's mapping report does not name every field it drops.**
+Fixed in tckdb-qcschema 0.5.0 (issue #573):
+
+- **The import's mapping report did not name every field it dropped.**
   `extras.qcvars` and nine `properties.*` fields, including
-  `properties.return_energy`, appear in none of its four lists. The raw
-  document keeps them, but the report is incomplete. A fix belongs in
-  `tckdb_qcschema.mapping` and needs a version bump.
-- **The exporter does not set `fix_com`/`fix_orientation`.** A Hessian
-  depends on the frame, so the export should arguably declare it.
+  `properties.return_energy`, appeared in none of its four lists. Every
+  field of an imported document is now in exactly one list, and the import
+  refuses `mapping_report_incomplete` otherwise.
+- **The exporter did not set `fix_com`/`fix_orientation`.** A Hessian export
+  now declares both.
+
+For later (not fixed here):
+
+- **A Hessian document's energy has no home.** Storing it needs a schema
+  change: either an energy on the `freq` result, read back like the
+  single-point energy the read API already derives from an `opt`, or a
+  dependency role that ties an `sp` to the `freq` job that produced it.
 - **The level of theory is spelled differently by the two programs.** Psi4
   writes `b3lyp`/`def2-tzvp`; the Gaussian record's level is `b3lyp/def2tzvp`.
   The level-of-theory hash was byte-exact, so these were two different rows.

@@ -1,0 +1,98 @@
+{
+  "$defs": {
+    "ArtifactIn": {
+      "additionalProperties": false,
+      "description": "An artifact (file) attached to a calculation — upload transport only.\n\nProvide ``content_base64`` to upload file content inline.  The server\nvalidates the content (ESS signature, size limits, SHA-256 integrity),\nwrites it to a content-addressed store, and creates a\n``CalculationArtifact`` row with the final URI.\n\nThis schema is strictly upload-facing.  The DB model\n(``CalculationArtifact``) stores ``uri``, ``sha256``, ``bytes``, and\n``kind`` — no inline content. The ``uri`` is backend-generated only\nand is intentionally not exposed on this schema.\n\n:param kind: Artifact type (input, output_log, checkpoint, etc.).\n:param filename: Original filename (provenance metadata, not used for\n    storage path).  E.g. ``\"input.log\"``. Extension must be in\n    :data:`KIND_ALLOWED_EXTENSIONS` for the supplied ``kind`` and\n    must pass the character / length / leading-character rules in\n    :func:`_validate_filename`.\n:param content_base64: Base64-encoded file content.\n:param sha256: Optional SHA-256 hash declared by the uploader. Must be\n    64 lowercase hex characters; if provided, the server verifies it\n    matches the content.\n:param bytes: Optional declared file size; must be > 0. If provided,\n    the server verifies it matches the decoded content length.",
+      "properties": {
+        "bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bytes"
+        },
+        "content_base64": {
+          "minLength": 1,
+          "title": "Content Base64",
+          "type": "string"
+        },
+        "filename": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "kind",
+        "filename",
+        "content_base64"
+      ],
+      "title": "ArtifactIn",
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "input",
+        "output_log",
+        "checkpoint",
+        "formatted_checkpoint",
+        "hessian",
+        "ancillary"
+      ],
+      "title": "ArtifactKind",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Inline batch artifact upload payload.\n\nAll artifacts in the batch are validated end-to-end before any\nstorage write fires. A single per-artifact failure rejects the\nwhole batch with no DB rows and no S3 writes.",
+  "examples": [
+    {
+      "artifacts": [
+        {
+          "content_base64": "IEVudGVyaW5nIEdhdXNzaWFuIFN5c3RlbSwgTGluayAwPWcxNgogTm9ybWFsIHRlcm1pbmF0aW9uIG9mIEdhdXNzaWFuIDE2Lgo=",
+          "filename": "opt.log",
+          "kind": "output_log"
+        }
+      ]
+    }
+  ],
+  "properties": {
+    "artifacts": {
+      "items": {
+        "$ref": "#/$defs/ArtifactIn"
+      },
+      "minItems": 1,
+      "title": "Artifacts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifacts"
+  ],
+  "title": "ArtifactsUploadRequest",
+  "type": "object",
+  "x-tckdb-example-requires": "a calculation the caller deposited (or owns through a live submission), named by the calculation_id in the path; a conformer upload returns one"
+}

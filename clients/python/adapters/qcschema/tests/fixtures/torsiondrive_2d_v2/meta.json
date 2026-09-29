@@ -1,0 +1,166 @@
+{
+  "outcome": "route",
+  "expected": "scan",
+  "family": "v2",
+  "driver": null,
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "torsiondrive": "1.2.0",
+  "level": "hf/sto-3g",
+  "molecule": "hydrogen trioxide",
+  "smiles_arg": "OOO",
+  "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
+  "pins": {
+    "dimension": 2,
+    "point_count": 16,
+    "points": [
+      {
+        "grid_key": "-90,-90",
+        "coordinate_values": [
+          -90.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.58053521388396
+      },
+      {
+        "grid_key": "-90,0",
+        "coordinate_values": [
+          -90.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.57110645366586
+      },
+      {
+        "grid_key": "-90,90",
+        "coordinate_values": [
+          -90.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.5769360020553
+      },
+      {
+        "grid_key": "-90,180",
+        "coordinate_values": [
+          -90.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.57572873443917
+      },
+      {
+        "grid_key": "0,-90",
+        "coordinate_values": [
+          0.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.57110645375653
+      },
+      {
+        "grid_key": "0,0",
+        "coordinate_values": [
+          0.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.54900914282246
+      },
+      {
+        "grid_key": "0,90",
+        "coordinate_values": [
+          0.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.57110645367504
+      },
+      {
+        "grid_key": "0,180",
+        "coordinate_values": [
+          0.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.56862503603674
+      },
+      {
+        "grid_key": "90,-90",
+        "coordinate_values": [
+          90.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.57693600213486
+      },
+      {
+        "grid_key": "90,0",
+        "coordinate_values": [
+          90.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.57110645380973
+      },
+      {
+        "grid_key": "90,90",
+        "coordinate_values": [
+          90.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.58053521363598
+      },
+      {
+        "grid_key": "90,180",
+        "coordinate_values": [
+          90.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.5757287357752
+      },
+      {
+        "grid_key": "180,-90",
+        "coordinate_values": [
+          180.0,
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.5757287343893
+      },
+      {
+        "grid_key": "180,0",
+        "coordinate_values": [
+          180.0,
+          0.0
+        ],
+        "electronic_energy_hartree": -222.56862503605885
+      },
+      {
+        "grid_key": "180,90",
+        "coordinate_values": [
+          180.0,
+          90.0
+        ],
+        "electronic_energy_hartree": -222.57572873589334
+      },
+      {
+        "grid_key": "180,180",
+        "coordinate_values": [
+          180.0,
+          180.0
+        ],
+        "electronic_energy_hartree": -222.57071326976893
+      }
+    ],
+    "coordinate_atoms": [
+      [
+        1,
+        2,
+        3,
+        4
+      ],
+      [
+        2,
+        3,
+        4,
+        5
+      ]
+    ]
+  },
+  "harness_patch": "qcengine 0.51.0 TorsionDriveProcedure._spawn_optimization splits the grid id on whitespace; torsiondrive 1.2.0 names 2-D grid points '180,-60'. The split was changed to treat commas as separators; nothing else. See tests/fixtures/README.md.",
+  "raw_sha256": "90a765d36c8f863c94802553af678bd651d7a6f42f2c8bd1eeafa853b3e27074"
+}

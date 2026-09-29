@@ -1,0 +1,1984 @@
+{
+  "$defs": {
+    "ActivationEnergyUnits": {
+      "enum": [
+        "j_mol",
+        "kj_mol",
+        "cal_mol",
+        "kcal_mol"
+      ],
+      "title": "ActivationEnergyUnits",
+      "type": "string"
+    },
+    "ArrheniusAUnits": {
+      "enum": [
+        "per_s",
+        "cm3_mol_s",
+        "cm3_molecule_s",
+        "m3_mol_s",
+        "cm6_mol2_s",
+        "cm6_molecule2_s",
+        "m6_mol2_s"
+      ],
+      "title": "ArrheniusAUnits",
+      "type": "string"
+    },
+    "ChebyshevUpload": {
+      "additionalProperties": false,
+      "description": "A standalone Chebyshev k(T,P) surface (DR-0032 Part C).\n\n``coefficients`` is the n_temperature × n_pressure coefficient matrix\n(list of rows).",
+      "properties": {
+        "coefficients": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "title": "Coefficients",
+          "type": "array"
+        },
+        "n_pressure": {
+          "minimum": 1,
+          "title": "N Pressure",
+          "type": "integer"
+        },
+        "n_temperature": {
+          "minimum": 1,
+          "title": "N Temperature",
+          "type": "integer"
+        },
+        "pmax_bar": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pmax Bar"
+        },
+        "pmin_bar": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pmin Bar"
+        },
+        "tmax_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tmax K"
+        },
+        "tmin_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tmin K"
+        }
+      },
+      "required": [
+        "n_temperature",
+        "n_pressure",
+        "coefficients"
+      ],
+      "title": "ChebyshevUpload",
+      "type": "object"
+    },
+    "ConformerSelectionContentRef": {
+      "additionalProperties": false,
+      "description": "Content-first locator for a conformer-selection interpretation.\n\nSet the optional conformer_group_ref (a cg_ public ref, as returned by\nGET /scientific/conformer-groups) when one species entry owns more than\none conformer group. Without it the other three fields can describe\nseveral stored selections at once, and the upload is refused with\nambiguous_conformer_selection_locator listing the refs to choose from.",
+      "properties": {
+        "assignment_scheme_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assignment Scheme Ref"
+        },
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "selection_kind": {
+          "minLength": 1,
+          "title": "Selection Kind",
+          "type": "string"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        }
+      },
+      "required": [
+        "species_entry",
+        "selection_kind"
+      ],
+      "title": "ConformerSelectionContentRef",
+      "type": "object"
+    },
+    "DepositRights": {
+      "additionalProperties": false,
+      "description": "Deposit-time agreement that the records may be licensed as stated.",
+      "properties": {
+        "depositor_attests_right_to_license": {
+          "const": true,
+          "title": "Depositor Attests Right To License",
+          "type": "boolean"
+        },
+        "license": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "source_terms": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Terms"
+        }
+      },
+      "required": [
+        "license",
+        "depositor_attests_right_to_license"
+      ],
+      "title": "DepositRights",
+      "type": "object"
+    },
+    "EnergyCorrectionConvention": {
+      "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
+      "enum": [
+        "electronic_only",
+        "electronic_plus_zpe",
+        "atom_and_bond_corrected",
+        "thermal_enthalpy_298k",
+        "other"
+      ],
+      "title": "EnergyCorrectionConvention",
+      "type": "string"
+    },
+    "EnergyZeroConvention": {
+      "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
+      "enum": [
+        "lowest_state",
+        "entrance_channel",
+        "separated_reactants",
+        "absolute",
+        "other"
+      ],
+      "title": "EnergyZeroConvention",
+      "type": "string"
+    },
+    "FalloffUpload": {
+      "additionalProperties": false,
+      "description": "Pressure-dependent falloff parameters (DR-0032 Part B).\n\nThe high-pressure-limit (k∞) Arrhenius parameters are the top-level\n``a``/``n``/``reported_ea`` on the kinetics request; this block carries\nthe low-pressure-limit (k0) Arrhenius and the broadening coefficients.\nWhich broadening columns matter is set by the request ``model_kind``\n(``lindemann`` = none; ``troe`` = ``troe_*``; ``sri`` = ``sri_*``).",
+      "properties": {
+        "low_a": {
+          "title": "Low A",
+          "type": "number"
+        },
+        "low_a_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArrheniusAUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "low_ea_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low Ea Kj Mol"
+        },
+        "low_n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low N"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "sri_a": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sri A"
+        },
+        "sri_b": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sri B"
+        },
+        "sri_c": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sri C"
+        },
+        "sri_d": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sri D"
+        },
+        "sri_e": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sri E"
+        },
+        "troe_alpha": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Troe Alpha"
+        },
+        "troe_t1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Troe T1"
+        },
+        "troe_t2": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Troe T2"
+        },
+        "troe_t3": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Troe T3"
+        }
+      },
+      "required": [
+        "low_a"
+      ],
+      "title": "FalloffUpload",
+      "type": "object"
+    },
+    "KineticsDegeneracyConvention": {
+      "description": "Whether a stored reaction-path degeneracy is already in the rate.",
+      "enum": [
+        "already_applied",
+        "not_applied",
+        "unknown"
+      ],
+      "title": "KineticsDegeneracyConvention",
+      "type": "string"
+    },
+    "KineticsDegeneracyInterpretation": {
+      "description": "How reaction-path degeneracy/symmetry was handled for this subject.\n\nDistinct from :class:`KineticsDegeneracyConvention`, which records whether\nthe *stored scalar* already includes degeneracy. This records how the\nsubject's own partition function treated symmetry.",
+      "enum": [
+        "external_symmetry_number",
+        "reaction_path_degeneracy",
+        "symmetry_number_and_path_degeneracy",
+        "no_symmetry_treatment",
+        "other"
+      ],
+      "title": "KineticsDegeneracyInterpretation",
+      "type": "string"
+    },
+    "KineticsDirection": {
+      "description": "Direction a reaction-level kinetics fit describes (DR-0036).\n\nGraph-level ``chem_reaction.reversible`` only says a reaction *can* run\nboth ways; it cannot tell apart a forward-rate fit from a reverse-rate\nfit deposited against the same ``reaction_entry``. This per-record enum\ndisambiguates the two so both can coexist distinctly (needed for\nChemkin/Cantera round-trip, where forward and reverse rates are given\nas separate expressions).\n\n``forward`` / ``reverse`` are relative to the reaction_entry's stored\nreactant→product orientation. ``net`` marks a rate that already folds\nboth directions (e.g. an apparent/observed net rate). A ``NULL`` column\nmeans the producer did not specify — the historical default, so existing\nrows are unaffected.",
+      "enum": [
+        "forward",
+        "reverse",
+        "net"
+      ],
+      "title": "KineticsDirection",
+      "type": "string"
+    },
+    "KineticsEnsemblePolicy": {
+      "description": "How multiple structures of one subject were combined into a partition\nfunction used for a rate coefficient.",
+      "enum": [
+        "single_structure",
+        "lowest_energy_conformer",
+        "boltzmann_weighted_conformers",
+        "multi_structural_torsional",
+        "other"
+      ],
+      "title": "KineticsEnsemblePolicy",
+      "type": "string"
+    },
+    "KineticsInterpretationAssignmentUpload": {
+      "additionalProperties": false,
+      "description": "Exact statmech/conformer/TS interpretation for one rate role.\n\nThe three convention fields are machine tokens, not free text: a rate\ncoefficient is not reproducible without knowing how conformers were\ncombined, which standard state the partition functions use, and how\nsymmetry was counted. ``other`` on any of them requires\n``convention_note``.",
+      "properties": {
+        "conformer_selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConformerSelectionContentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "degeneracy_interpretation": {
+          "$ref": "#/$defs/KineticsDegeneracyInterpretation"
+        },
+        "ensemble_policy": {
+          "$ref": "#/$defs/KineticsEnsemblePolicy"
+        },
+        "participant_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Participant Index"
+        },
+        "role": {
+          "pattern": "^(reactant|product|transition_state)$",
+          "title": "Role",
+          "type": "string"
+        },
+        "standard_state_convention": {
+          "$ref": "#/$defs/KineticsStandardStateConvention"
+        },
+        "statmech_ref": {
+          "minLength": 1,
+          "title": "Statmech Ref",
+          "type": "string"
+        },
+        "transition_state_entry_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transition State Entry Ref"
+        }
+      },
+      "required": [
+        "role",
+        "statmech_ref",
+        "ensemble_policy",
+        "standard_state_convention",
+        "degeneracy_interpretation"
+      ],
+      "title": "KineticsInterpretationAssignmentUpload",
+      "type": "object"
+    },
+    "KineticsModelKind": {
+      "enum": [
+        "arrhenius",
+        "modified_arrhenius",
+        "multi_arrhenius",
+        "lindemann",
+        "troe",
+        "sri",
+        "plog",
+        "chebyshev"
+      ],
+      "title": "KineticsModelKind",
+      "type": "string"
+    },
+    "KineticsReactionParticipantUpload": {
+      "additionalProperties": false,
+      "description": "Workflow-facing ordered participant slot for a kinetics upload.\n\n:param species_entry: Species-entry identity payload to resolve or create.\n:param note: Optional note stored on the structured participant row.",
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        }
+      },
+      "required": [
+        "species_entry"
+      ],
+      "title": "KineticsReactionParticipantUpload",
+      "type": "object"
+    },
+    "KineticsReactionUpload": {
+      "additionalProperties": false,
+      "description": "Workflow-facing reaction content embedded in a kinetics upload.\n\n:param reversible: Whether the uploaded reaction is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.\n:param reactants: Ordered structured participants on the reactant side.\n:param products: Ordered structured participants on the product side.",
+      "properties": {
+        "products": {
+          "items": {
+            "$ref": "#/$defs/KineticsReactionParticipantUpload"
+          },
+          "minItems": 1,
+          "title": "Products",
+          "type": "array"
+        },
+        "reactants": {
+          "items": {
+            "$ref": "#/$defs/KineticsReactionParticipantUpload"
+          },
+          "minItems": 1,
+          "title": "Reactants",
+          "type": "array"
+        },
+        "reaction_family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Family"
+        },
+        "reaction_family_source_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Family Source Note"
+        },
+        "reversible": {
+          "title": "Reversible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reversible",
+        "reactants",
+        "products"
+      ],
+      "title": "KineticsReactionUpload",
+      "type": "object"
+    },
+    "KineticsStandardStateConvention": {
+      "description": "The standard state the rate's partition functions are referenced to.",
+      "enum": [
+        "ideal_gas_1_bar",
+        "ideal_gas_1_atm",
+        "concentration_1_mol_cm3",
+        "concentration_1_mol_l",
+        "other"
+      ],
+      "title": "KineticsStandardStateConvention",
+      "type": "string"
+    },
+    "KineticsTunnelingApplicationUpload": {
+      "additionalProperties": false,
+      "description": "Typed tunneling inputs/results, linked by public TS handle.\n\n:param model: The correction family. ``other`` is accepted only when the\n    deposit is still replayable: it must carry a ``model_identifier``\n    machine token naming the actual correction plus a result-artifact\n    locator, so a reader who does not recognise the model can still see\n    what was computed and by what.\n:param source_calculation_ref: The calculation the energies/barriers below\n    were read from. Without it the numbers this block returns are\n    untraceable.",
+      "properties": {
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "energy_correction_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyCorrectionConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "energy_zero_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyZeroConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "forward_barrier_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Forward Barrier Kj Mol"
+        },
+        "frequency_sign_convention": {
+          "default": "negative_imaginary_cm1",
+          "title": "Frequency Sign Convention",
+          "type": "string"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "model": {
+          "$ref": "#/$defs/TunnelingModel"
+        },
+        "model_identifier": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Identifier"
+        },
+        "product_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Product Energy Kj Mol"
+        },
+        "reactant_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reactant Energy Kj Mol"
+        },
+        "result_artifact_calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Artifact Calculation Ref"
+        },
+        "result_artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Artifact Sha256"
+        },
+        "reverse_barrier_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reverse Barrier Kj Mol"
+        },
+        "sct_path_integral_artifact_calculation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sct Path Integral Artifact Calculation Ref"
+        },
+        "sct_path_integral_artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sct Path Integral Artifact Sha256"
+        },
+        "source_calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Ref"
+        },
+        "transition_state_entry_ref": {
+          "minLength": 1,
+          "title": "Transition State Entry Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "transition_state_entry_ref"
+      ],
+      "title": "KineticsTunnelingApplicationUpload",
+      "type": "object"
+    },
+    "KineticsUncertaintyKind": {
+      "description": "Interpretation of a kinetics scalar uncertainty.\n\n``multiplicative``: factor f, where the true value lies in\n``[value/f, value*f]`` (must be >= 1). The convention for Arrhenius A.\n\n``additive``: same units as the value; symmetric ±delta. Rare for A\nbut supported for completeness.",
+      "enum": [
+        "additive",
+        "multiplicative"
+      ],
+      "title": "KineticsUncertaintyKind",
+      "type": "string"
+    },
+    "LevelOfTheoryRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a level of theory.",
+      "properties": {
+        "aux_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aux Basis"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "cabs_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cabs Basis"
+        },
+        "dispersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dispersion"
+        },
+        "keywords": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keywords"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "solvent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent"
+        },
+        "solvent_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent Model"
+        },
+        "spin_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "LevelOfTheoryRef",
+      "type": "object"
+    },
+    "LiteratureKind": {
+      "enum": [
+        "article",
+        "book",
+        "thesis",
+        "report",
+        "dataset",
+        "webpage"
+      ],
+      "title": "LiteratureKind",
+      "type": "string"
+    },
+    "LiteratureUploadRequest": {
+      "additionalProperties": false,
+      "description": "Literature fragment embedded in other upload requests.\n\nNot a standalone upload body — there is no ``/uploads/literature`` route.\nA request may be identifier-driven (DOI and/or ISBN) or manual. Identifier\nlookup can enrich missing metadata before a canonical literature row is\ncreated.\n\n:param kind: Optional literature kind. Can be inferred from DOI/ISBN when omitted.\n:param title: Optional manual title. Required only for fully manual submissions.\n:param journal: Optional journal or container title.\n:param year: Optional publication year.\n:param volume: Optional volume.\n:param issue: Optional issue.\n:param pages: Optional page range.\n:param doi: Optional DOI identifier.\n:param isbn: Optional ISBN identifier.\n:param url: Optional canonical URL.\n:param publisher: Optional publisher name.\n:param institution: Optional institution name.",
+      "properties": {
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "institution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Institution"
+        },
+        "isbn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isbn"
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue"
+        },
+        "journal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Journal"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pages": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pages"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "maximum": 3000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        }
+      },
+      "title": "LiteratureUploadRequest",
+      "type": "object"
+    },
+    "MoleculeKind": {
+      "enum": [
+        "molecule",
+        "pseudo",
+        "electron"
+      ],
+      "title": "MoleculeKind",
+      "type": "string"
+    },
+    "MultiArrheniusEntryUpload": {
+      "additionalProperties": false,
+      "description": "One modified-Arrhenius term of a sum-of-Arrhenius rate (DR-0036).\n\nA Chemkin ``DUPLICATE`` channel's rate coefficient is the sum of these\nterms. Unlike a PLOG entry there is no pressure — the terms are summed,\nnot interpolated. ``reported_ea``/``reported_ea_units`` are converted to\n``ea_kj_mol`` by the workflow, mirroring the top-level Arrhenius fields.",
+      "properties": {
+        "a": {
+          "title": "A",
+          "type": "number"
+        },
+        "a_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArrheniusAUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entry_index": {
+          "minimum": 1,
+          "title": "Entry Index",
+          "type": "integer"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "reported_ea": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reported Ea"
+        },
+        "reported_ea_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActivationEnergyUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "entry_index",
+        "a"
+      ],
+      "title": "MultiArrheniusEntryUpload",
+      "type": "object"
+    },
+    "PlogEntryUpload": {
+      "additionalProperties": false,
+      "description": "One pressure entry of a standalone PLOG rate (DR-0032 Part C).",
+      "properties": {
+        "a": {
+          "title": "A",
+          "type": "number"
+        },
+        "a_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArrheniusAUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ea_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ea Kj Mol"
+        },
+        "entry_index": {
+          "minimum": 1,
+          "title": "Entry Index",
+          "type": "integer"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "pressure_bar": {
+          "exclusiveMinimum": 0,
+          "title": "Pressure Bar",
+          "type": "number"
+        }
+      },
+      "required": [
+        "entry_index",
+        "pressure_bar",
+        "a"
+      ],
+      "title": "PlogEntryUpload",
+      "type": "object"
+    },
+    "PressureContext": {
+      "description": "What a rate coefficient means with respect to pressure (DR-0032).\n\n``high_p_limit``: the high-pressure-limit rate k∞.\n``apparent_at_pressure``: an apparent rate at a specific pressure\n    (requires ``kinetics.pressure_bar``).\n``pressure_dependent``: a record whose full P-dependence lives in an\n    associated model (a network solve, or a falloff/PLOG table).\nNULL (unset) means the pressure context was not specified.",
+      "enum": [
+        "high_p_limit",
+        "apparent_at_pressure",
+        "pressure_dependent"
+      ],
+      "title": "PressureContext",
+      "type": "string"
+    },
+    "ScientificOriginKind": {
+      "enum": [
+        "computed",
+        "experimental",
+        "estimated"
+      ],
+      "title": "ScientificOriginKind",
+      "type": "string"
+    },
+    "SoftwareReleaseRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a software release.",
+      "properties": {
+        "build": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "release_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Date"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SoftwareReleaseRef",
+      "type": "object"
+    },
+    "SpeciesEntryIdentityPayload": {
+      "additionalProperties": false,
+      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+      "properties": {
+        "charge": {
+          "title": "Charge",
+          "type": "integer"
+        },
+        "electronic_state_kind": {
+          "$ref": "#/$defs/SpeciesEntryStateKind",
+          "default": "ground"
+        },
+        "electronic_state_label": {
+          "anyOf": [
+            {
+              "maxLength": 8,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic State Label"
+        },
+        "molecule_kind": {
+          "$ref": "#/$defs/MoleculeKind",
+          "default": "molecule"
+        },
+        "multiplicity": {
+          "minimum": 1,
+          "title": "Multiplicity",
+          "type": "integer"
+        },
+        "smiles": {
+          "minLength": 1,
+          "title": "Smiles",
+          "type": "string"
+        },
+        "species_entry_kind": {
+          "$ref": "#/$defs/StationaryPointKind",
+          "default": "minimum"
+        },
+        "stereo_kind": {
+          "$ref": "#/$defs/StereoKind",
+          "default": "unspecified"
+        },
+        "stereo_label": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stereo Label"
+        },
+        "term_symbol": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Term Symbol"
+        },
+        "term_symbol_raw": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Term Symbol Raw"
+        },
+        "unmapped_smiles": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unmapped Smiles"
+        }
+      },
+      "required": [
+        "smiles",
+        "charge",
+        "multiplicity"
+      ],
+      "title": "SpeciesEntryIdentityPayload",
+      "type": "object"
+    },
+    "SpeciesEntryStateKind": {
+      "enum": [
+        "ground",
+        "excited"
+      ],
+      "title": "SpeciesEntryStateKind",
+      "type": "string"
+    },
+    "SpinTreatment": {
+      "description": "Spin treatment of the electronic-structure method (DR-0034).",
+      "enum": [
+        "restricted",
+        "unrestricted",
+        "restricted_open",
+        "unknown"
+      ],
+      "title": "SpinTreatment",
+      "type": "string"
+    },
+    "StationaryPointKind": {
+      "enum": [
+        "minimum",
+        "vdw_complex"
+      ],
+      "title": "StationaryPointKind",
+      "type": "string"
+    },
+    "StereoKind": {
+      "enum": [
+        "unspecified",
+        "achiral",
+        "enantiomer",
+        "diastereomer",
+        "ez_isomer"
+      ],
+      "title": "StereoKind",
+      "type": "string"
+    },
+    "ThirdBodyEfficiencyUpload": {
+      "additionalProperties": false,
+      "description": "A per-collider third-body efficiency for a falloff/third-body rate.\n\nThe collider is given by scientific content (a species identity), which\nthe workflow resolves to a graph-level species. ``efficiency`` scales\nthe effective bath-gas concentration [M] contributed by that collider.",
+      "properties": {
+        "collider": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        },
+        "efficiency": {
+          "minimum": 0,
+          "title": "Efficiency",
+          "type": "number"
+        }
+      },
+      "required": [
+        "collider",
+        "efficiency"
+      ],
+      "title": "ThirdBodyEfficiencyUpload",
+      "type": "object"
+    },
+    "TunnelingModel": {
+      "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
+      "enum": [
+        "none",
+        "wigner",
+        "eckart",
+        "sct",
+        "other"
+      ],
+      "title": "TunnelingModel",
+      "type": "string"
+    },
+    "WorkflowToolReleaseRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a workflow tool code state.",
+      "properties": {
+        "git_commit": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Commit"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "release_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Date"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkflowToolReleaseRef",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+  "examples": [
+    {
+      "a": 1230000000000.0,
+      "a_units": "cm3_mol_s",
+      "model_kind": "modified_arrhenius",
+      "n": 0.0,
+      "reaction": {
+        "products": [
+          {
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "[H][H]"
+            }
+          }
+        ],
+        "reactants": [
+          {
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 2,
+              "smiles": "[H]"
+            }
+          },
+          {
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 2,
+              "smiles": "[H]"
+            }
+          }
+        ],
+        "reversible": false
+      },
+      "scientific_origin": "computed"
+    }
+  ],
+  "properties": {
+    "a": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "A"
+    },
+    "a_uncertainty": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "A Uncertainty"
+    },
+    "a_uncertainty_kind": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KineticsUncertaintyKind"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "a_units": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArrheniusAUnits"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "arrhenius_entries": {
+      "items": {
+        "$ref": "#/$defs/MultiArrheniusEntryUpload"
+      },
+      "title": "Arrhenius Entries",
+      "type": "array"
+    },
+    "chebyshev": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ChebyshevUpload"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "d_reported_ea": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "D Reported Ea"
+    },
+    "degeneracy": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Degeneracy"
+    },
+    "degeneracy_convention": {
+      "$ref": "#/$defs/KineticsDegeneracyConvention",
+      "default": "unknown"
+    },
+    "direction": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KineticsDirection"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "energy_level_of_theory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LevelOfTheoryRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "falloff": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FalloffUpload"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "interpretation_assignments": {
+      "items": {
+        "$ref": "#/$defs/KineticsInterpretationAssignmentUpload"
+      },
+      "title": "Interpretation Assignments",
+      "type": "array"
+    },
+    "is_third_body": {
+      "default": false,
+      "title": "Is Third Body",
+      "type": "boolean"
+    },
+    "literature": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LiteratureUploadRequest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "model_kind": {
+      "$ref": "#/$defs/KineticsModelKind",
+      "default": "modified_arrhenius"
+    },
+    "n": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N"
+    },
+    "n_uncertainty": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "N Uncertainty"
+    },
+    "network_kinetics_ref": {
+      "anyOf": [
+        {
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Network Kinetics Ref"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    },
+    "plog_entries": {
+      "items": {
+        "$ref": "#/$defs/PlogEntryUpload"
+      },
+      "title": "Plog Entries",
+      "type": "array"
+    },
+    "pressure_bar": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Pressure Bar"
+    },
+    "pressure_context": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PressureContext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "reaction": {
+      "$ref": "#/$defs/KineticsReactionUpload"
+    },
+    "reported_ea": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reported Ea"
+    },
+    "reported_ea_units": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ActivationEnergyUnits"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rights": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DepositRights"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "scientific_origin": {
+      "$ref": "#/$defs/ScientificOriginKind"
+    },
+    "software_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SoftwareReleaseRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "third_body_efficiencies": {
+      "items": {
+        "$ref": "#/$defs/ThirdBodyEfficiencyUpload"
+      },
+      "title": "Third Body Efficiencies",
+      "type": "array"
+    },
+    "tmax_k": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tmax K"
+    },
+    "tmin_k": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tmin K"
+    },
+    "tunneling_application": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/KineticsTunnelingApplicationUpload"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tunneling_model": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TunnelingModel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "workflow_tool_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowToolReleaseRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "reaction",
+    "scientific_origin"
+  ],
+  "title": "KineticsUploadRequest",
+  "type": "object"
+}

@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     RightsBasisKind,
@@ -51,6 +51,9 @@ class SubmissionCreate(SchemaBase):
 class SubmissionRead(TimestampedReadSchema):
     """Read schema for a persisted :class:`Submission`."""
 
+    #: The handle a producer uses to name this submission in a request
+    #: (for example ``POST /submissions/{submission_ref}/supersede``).
+    public_ref: str
     created_by: int
     submission_kind: SubmissionKind
     source_kind: SubmissionSourceKind
@@ -167,15 +170,40 @@ class SubmissionPrecheckRequest(SchemaBase):
     details_json: dict[str, Any] | None = None
 
 
+#: A submission's public ref: ``sub_`` and an opaque body. Deliberately
+#: rejects an all-digit string, so a row id cannot be passed where a ref goes.
+SUBMISSION_REF_PATTERN = r"^sub_[A-Za-z0-9]+$"
+
+
 class SubmissionSupersedeRequest(SchemaBase):
     """Payload for marking a submission as superseded by a newer one.
 
-    The replacing submission must have been created with
-    ``supersedes_submission_id`` pointing back at the old id; the service
-    enforces that link rather than mutating it here.
+    Names the replacing submission by its public ref (``public_ref`` on
+    :class:`SubmissionRead`), never by row id; the server resolves it. The
+    replacing submission must have been created declaring the old one as
+    the submission it supersedes; the service enforces that link rather
+    than creating it here.
     """
 
-    new_submission_id: int
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "x-tckdb-example-requires": (
+                "two submissions of the caller's own: the one whose public ref is in the "
+                "path, and a newer one created declaring that it supersedes it, whose "
+                "public ref (public_ref on a submission read) replaces this one"
+            ),
+            "examples": [
+                {
+                    "new_submission_ref": "sub_01j9x8k3y2rm4f0x8k3y2rm4f0"
+                }
+            ]
+        },
+    )
+
+    new_submission_ref: str = Field(pattern=SUBMISSION_REF_PATTERN, max_length=40)
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +218,24 @@ class RightsAttestationCreate(SchemaBase):
     every other basis needs the curator or admin role. ``source_terms`` is
     required exactly when ``basis`` is ``source_terms``.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "x-tckdb-example-requires": (
+                "a submission the caller created, named by the submission_id in the path; "
+                "every upload response returns one"
+            ),
+            "examples": [
+                {
+                    "license": "CC-BY-4.0",
+                    "basis": "depositor_agreement"
+                }
+            ]
+        },
+    )
 
     license: str = Field(min_length=1, max_length=64)
     basis: RightsBasisKind

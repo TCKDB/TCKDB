@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "DepositRights": {
+      "additionalProperties": false,
+      "description": "Deposit-time agreement that the records may be licensed as stated.",
+      "properties": {
+        "depositor_attests_right_to_license": {
+          "const": true,
+          "title": "Depositor Attests Right To License",
+          "type": "boolean"
+        },
+        "license": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "source_terms": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Terms"
+        }
+      },
+      "required": [
+        "license",
+        "depositor_attests_right_to_license"
+      ],
+      "title": "DepositRights",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One ThermoML XML document, uploaded directly (not from the NIST\nbulk archive — that path is the ``--archive``/``--doi`` CLI only).\n\n:param filename: Provenance metadata only — recorded verbatim (as\n    ``f\"upload:{filename}\"``) in the custody row's\n    ``mapping_report_json[\"source_label\"]``. Never used as a storage\n    path (the object store is content-addressed by SHA-256) and never\n    used as a fallback ``raw_uri`` the way an archive member path is\n    (see ``app.services.thermoml_cp_import._raw_uri_for``'s\n    ``allow_member_path_fallback``) — it is a display label, not a\n    retrievable location.\n:param content_base64: Base64-encoded ThermoML XML bytes.\n:param doi: The article's own DOI, if the depositor wants to assert\n    it explicitly. Optional — when omitted, the DOI is taken from the\n    file's own ``Citation/sDOI`` element, if present. Supplying one\n    that disagrees with the file's own ``sDOI`` is a refusal\n    (``thermoml_doi_conflict``), never a silent override.\n:param rights: The depositor's deposit-time license agreement.\n    Required — deliberately **not** optional like ``DepositRights`` on\n    every other upload schema. Every other upload route can fall back\n    on \"attested later, at release time\" because the underlying\n    science already exists in TCKDB under someone's authority; this\n    route's whole content *is* a third-party document the depositor\n    is asserting the right to submit, and unlike the CLI's\n    ``--archive`` path there is no NIST/TRC ``source_terms`` to stand\n    on instead. Omitting it is refused by ordinary Pydantic\n    field-requiredness (422, the same mechanism every other required\n    field on every other schema in this codebase already uses — not\n    a new bespoke refusal). Recorded as an ordinary\n    ``depositor_agreement`` attestation, never ``source_terms``.\n\nNo ``dry_run`` field: none of the sibling ``/uploads/*`` routes in\nthis router preview a request before committing it (the one preview\nmechanism in this codebase, ``POST /bundles/dry-run``, is a wholly\nseparate endpoint from its commit sibling, not a boolean flag shared\nwith one). This route follows that precedent and always commits, like\nevery other route in ``app.api.routes.uploads``; a caller who wants a\npreview runs the same document through the backend CLI's default\n(no ``--commit``) dry-run mode instead.",
+  "examples": [
+    {
+      "content_base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPERhdGFSZXBvcnQgeG1sbnM9Imh0dHA6Ly93d3cuaXVwYWMub3JnL25hbWVzcGFjZXMvVGhlcm1vTUwiPgogIDxWZXJzaW9uPgogICAgPG5WZXJzaW9uTWFqb3I+NDwvblZlcnNpb25NYWpvcj4KICAgIDxuVmVyc2lvbk1pbm9yPjA8L25WZXJzaW9uTWlub3I+CiAgPC9WZXJzaW9uPgogIDxDaXRhdGlvbj4KICAgIDxzQXV0aG9yPkRvZSwgSi48L3NBdXRob3I+CiAgICA8c1B1Yk5hbWU+RXhhbXBsZSBKb3VybmFsPC9zUHViTmFtZT4KICAgIDx5clB1YllyPjIwMjY8L3lyUHViWXI+CiAgICA8c1RpdGxlPkV4YW1wbGU6IGFuIGlkZWFsLWdhcyBoZWF0IGNhcGFjaXR5IG9mIGJlbnplbmUgKGludmVudGVkIHZhbHVlKTwvc1RpdGxlPgogIDwvQ2l0YXRpb24+CiAgPENvbXBvdW5kPgogICAgPFJlZ051bT4KICAgICAgPG5PcmdOdW0+MTwvbk9yZ051bT4KICAgIDwvUmVnTnVtPgogICAgPHNTdGFuZGFyZEluQ2hJPkluQ2hJPTFTL0M2SDYvYzEtMi00LTYtNS0zLTEvaDEtNkg8L3NTdGFuZGFyZEluQ2hJPgogICAgPHNTdGFuZGFyZEluQ2hJS2V5PlVIT1ZRTlpKWVNPUk5CLVVIRkZGQU9ZU0EtTjwvc1N0YW5kYXJkSW5DaElLZXk+CiAgICA8c0NvbW1vbk5hbWU+YmVuemVuZTwvc0NvbW1vbk5hbWU+CiAgICA8c0Zvcm11bGFNb2xlYz5DNkg2PC9zRm9ybXVsYU1vbGVjPgogIDwvQ29tcG91bmQ+CiAgPFB1cmVPck1peHR1cmVEYXRhPgogICAgPG5QdXJlT3JNaXh0dXJlRGF0YU51bWJlcj4xPC9uUHVyZU9yTWl4dHVyZURhdGFOdW1iZXI+CiAgICA8Q29tcG9uZW50PgogICAgICA8UmVnTnVtPgogICAgICAgIDxuT3JnTnVtPjE8L25PcmdOdW0+CiAgICAgIDwvUmVnTnVtPgogICAgPC9Db21wb25lbnQ+CiAgICA8UHJvcGVydHk+CiAgICAgIDxuUHJvcE51bWJlcj4xPC9uUHJvcE51bWJlcj4KICAgICAgPFByb3BlcnR5LU1ldGhvZElEPgogICAgICAgIDxQcm9wZXJ0eUdyb3VwPgogICAgICAgICAgPEhlYXRDYXBhY2l0eUFuZERlcml2ZWRQcm9wPgogICAgICAgICAgICA8ZVByb3BOYW1lPk1vbGFyIGhlYXQgY2FwYWNpdHkgYXQgY29uc3RhbnQgcHJlc3N1cmUsIEovSy9tb2w8L2VQcm9wTmFtZT4KICAgICAgICAgICAgPHNNZXRob2ROYW1lPnN0YXRpc3RpY2FsIHRoZXJtb2R5bmFtaWNzPC9zTWV0aG9kTmFtZT4KICAgICAgICAgIDwvSGVhdENhcGFjaXR5QW5kRGVyaXZlZFByb3A+CiAgICAgICAgPC9Qcm9wZXJ0eUdyb3VwPgogICAgICA8L1Byb3BlcnR5LU1ldGhvZElEPgogICAgICA8UHJvcFBoYXNlSUQ+CiAgICAgICAgPGVQcm9wUGhhc2U+SWRlYWwgZ2FzPC9lUHJvcFBoYXNlPgogICAgICA8L1Byb3BQaGFzZUlEPgogICAgICA8ZVByZXNlbnRhdGlvbj5EaXJlY3QgdmFsdWUsIFg8L2VQcmVzZW50YXRpb24+CiAgICA8L1Byb3BlcnR5PgogICAgPFBoYXNlSUQ+CiAgICAgIDxlUGhhc2U+SWRlYWwgZ2FzPC9lUGhhc2U+CiAgICA8L1BoYXNlSUQ+CiAgICA8Q29uc3RyYWludD4KICAgICAgPG5Db25zdHJhaW50TnVtYmVyPjE8L25Db25zdHJhaW50TnVtYmVyPgogICAgICA8Q29uc3RyYWludElEPgogICAgICAgIDxDb25zdHJhaW50VHlwZT4KICAgICAgICAgIDxlUHJlc3N1cmU+UHJlc3N1cmUsIGtQYTwvZVByZXNzdXJlPgogICAgICAgIDwvQ29uc3RyYWludFR5cGU+CiAgICAgIDwvQ29uc3RyYWludElEPgogICAgICA8Q29uc3RyYWludFBoYXNlSUQ+CiAgICAgICAgPGVDb25zdHJhaW50UGhhc2U+SWRlYWwgZ2FzPC9lQ29uc3RyYWludFBoYXNlPgogICAgICA8L0NvbnN0cmFpbnRQaGFzZUlEPgogICAgICA8bkNvbnN0cmFpbnRWYWx1ZT4xMDA8L25Db25zdHJhaW50VmFsdWU+CiAgICAgIDxuQ29uc3RyRGlnaXRzPjE8L25Db25zdHJEaWdpdHM+CiAgICA8L0NvbnN0cmFpbnQ+CiAgICA8VmFyaWFibGU+CiAgICAgIDxuVmFyTnVtYmVyPjE8L25WYXJOdW1iZXI+CiAgICAgIDxWYXJpYWJsZUlEPgogICAgICAgIDxWYXJpYWJsZVR5cGU+CiAgICAgICAgICA8ZVRlbXBlcmF0dXJlPlRlbXBlcmF0dXJlLCBLPC9lVGVtcGVyYXR1cmU+CiAgICAgICAgPC9WYXJpYWJsZVR5cGU+CiAgICAgIDwvVmFyaWFibGVJRD4KICAgIDwvVmFyaWFibGU+CiAgICA8TnVtVmFsdWVzPgogICAgICA8VmFyaWFibGVWYWx1ZT4KICAgICAgICA8blZhck51bWJlcj4xPC9uVmFyTnVtYmVyPgogICAgICAgIDxuVmFyVmFsdWU+Mjk4LjE1PC9uVmFyVmFsdWU+CiAgICAgICAgPG5WYXJEaWdpdHM+NTwvblZhckRpZ2l0cz4KICAgICAgPC9WYXJpYWJsZVZhbHVlPgogICAgICA8UHJvcGVydHlWYWx1ZT4KICAgICAgICA8blByb3BOdW1iZXI+MTwvblByb3BOdW1iZXI+CiAgICAgICAgPG5Qcm9wVmFsdWU+ODIuNDQ8L25Qcm9wVmFsdWU+CiAgICAgICAgPG5Qcm9wRGlnaXRzPjQ8L25Qcm9wRGlnaXRzPgogICAgICA8L1Byb3BlcnR5VmFsdWU+CiAgICA8L051bVZhbHVlcz4KICA8L1B1cmVPck1peHR1cmVEYXRhPgo8L0RhdGFSZXBvcnQ+Cg==",
+      "filename": "benzene_cp_example.xml",
+      "rights": {
+        "depositor_attests_right_to_license": true,
+        "license": "CC-BY-4.0"
+      }
+    }
+  ],
+  "properties": {
+    "content_base64": {
+      "minLength": 1,
+      "title": "Content Base64",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "maxLength": 255,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "filename": {
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Filename",
+      "type": "string"
+    },
+    "rights": {
+      "$ref": "#/$defs/DepositRights"
+    }
+  },
+  "required": [
+    "filename",
+    "content_base64",
+    "rights"
+  ],
+  "title": "ThermoMLUploadRequest",
+  "type": "object"
+}

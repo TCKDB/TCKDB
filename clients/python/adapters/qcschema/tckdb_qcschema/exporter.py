@@ -20,11 +20,16 @@ Only two calculation types are supported:
   :func:`_same_level_sp_energy`) -- best-effort, opportunistic enrichment,
   never required; omitted (not ``null``) otherwise.
 
-``opt`` (and every other calculation type -- ``scan``, ``irc``,
-``path_search``, ``composite``, ``imported``) is refused with
-``export_unsupported_type``: no trajectory is stored for an ``opt`` record,
-so relabelling its final energy as a single point would be a claim the
-record does not support.
+A ``scan`` is handed to :func:`tckdb_qcschema.scan_export.export_scan`,
+which exports it as a v2 ``TorsionDriveResult`` when it is one (relaxed,
+every coordinate a proper dihedral) and refuses it otherwise.
+
+``opt`` (and every other calculation type -- ``irc``, ``path_search``,
+``composite``, ``imported``) is refused with ``export_unsupported_type``: no
+trajectory is stored for an ``opt`` record, so relabelling its final energy
+as a single point would be a claim the record does not support; and
+qcelemental 0.51.2 defines no IRC or reaction-path model in either family,
+so an ``irc`` or ``path_search`` record has nothing standard to become.
 
 Molecule: geometry Å -> bohr using the *same* ``BOHR_TO_ANGSTROM`` constant
 the importer uses (:data:`tckdb_qcschema.molecule.BOHR_TO_ANGSTROM`),
@@ -34,7 +39,10 @@ and multiplicity from the geometry's owning species-entry or
 transition-state-entry identity; a single fragment, every atom real (TCKDB
 has no ghost-atom representation to begin with, so this is automatic, not
 re-checked). ``model.method``/``model.basis`` are the calculation's level
-of theory, verbatim.
+of theory, verbatim. A ``hessian`` export declares ``fix_com`` and
+``fix_orientation`` true, because the matrix is expressed in the exported
+coordinates' axes; an ``energy`` export leaves them at qcelemental's
+``false`` default (see :data:`_FRAME_DEPENDENT_DRIVERS`).
 
 **Isotopes, closed by reading the legacy surface.** The scientific
 geometry read (``GET /scientific/geometries/{handle}``,
@@ -146,6 +154,15 @@ _periodic_table = qcel.periodictable
 #: Calculation types this adapter can export. Every other type (``opt``
 #: above all -- see the module docstring) is refused.
 _EXPORTABLE_TYPES = frozenset({"sp", "freq"})
+
+#: Drivers whose ``return_result`` is expressed in the molecule's Cartesian
+#: frame. Exporting one declares that frame fixed (``fix_com`` and
+#: ``fix_orientation``, issue #573): a consumer that recentres or rotates the
+#: molecule would otherwise detach the matrix from the axes it was computed
+#: in. qcelemental's own guidance on ``fix_orientation`` names exactly this
+#: case ("frame-sensitive results (e.g., molecular vibrations)"). An energy
+#: is frame-invariant, so an ``sp`` export keeps qcelemental's defaults.
+_FRAME_DEPENDENT_DRIVERS = frozenset({"gradient", "hessian"})
 
 
 def _client_version(client: Any) -> tuple[str, str]:
@@ -324,11 +341,18 @@ def _mass_numbers_from_isotope_atoms(
     return mass_numbers
 
 
-def _build_molecule(geometry: dict, isotope_atoms: list[dict]) -> qcel_v2.Molecule:
+def _build_molecule(
+    geometry: dict, isotope_atoms: list[dict], *, fixed_frame: bool = False
+) -> qcel_v2.Molecule:
     """One exported ``Molecule``: Å -> bohr (inverse of the importer's
     conversion, same constant), per-atom ``mass_numbers`` read from the
     legacy isotope surface (see the module docstring's "Isotopes"
     section), single fragment, every atom real.
+
+    :param fixed_frame: Declare ``fix_com`` and ``fix_orientation`` true
+        (see :data:`_FRAME_DEPENDENT_DRIVERS`). The stored coordinates are
+        exported unchanged either way; the flags tell a consumer not to move
+        them.
     """
     atoms = sorted(geometry.get("atoms") or [], key=lambda a: a["atom_index"])
     if not atoms:
@@ -355,6 +379,8 @@ def _build_molecule(geometry: dict, isotope_atoms: list[dict]) -> qcel_v2.Molecu
         molecular_charge=charge,
         molecular_multiplicity=multiplicity,
         mass_numbers=mass_numbers,
+        fix_com=fixed_frame,
+        fix_orientation=fixed_frame,
         # masses is deliberately never passed: qcelemental.models.v2.Molecule
         # derives it itself from symbols + mass_numbers (measured 2026-09-20:
         # mass_numbers [16, 2, 1] for O/D/H yields masses
@@ -557,14 +583,24 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
     record = detail["record"]
     calc_type = record["calculation"]["type"]
 
+    if calc_type == "scan":
+        # Imported here, not at module level: scan_export reuses this
+        # module's molecule/isotope helpers.
+        from .scan_export import export_scan
+
+        document, _report = export_scan(client, calculation_ref_or_id)
+        return document
+
     if calc_type not in _EXPORTABLE_TYPES:
         raise QCSchemaAdapterError(
             E_EXPORT_UNSUPPORTED_TYPE,
             f"calculation type {calc_type!r} is not exportable by "
-            f"tckdb-qcschema -- only {sorted(_EXPORTABLE_TYPES)} are. "
+            f"tckdb-qcschema -- only {sorted(_EXPORTABLE_TYPES | {'scan'})} are. "
             f"'opt' in particular is refused deliberately: no trajectory "
             f"is stored, so relabelling a final energy as a single point "
-            f"would be a claim the record does not support.",
+            f"would be a claim the record does not support. 'irc' and "
+            f"'path_search' have no QCSchema model to become: qcelemental "
+            f"0.51.2 defines no IRC or reaction-path schema.",
             calculation_type=calc_type,
         )
 
@@ -639,7 +675,9 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
             client, record=record, level_of_theory_ref=level_of_theory_ref
         )
 
-    molecule = _build_molecule(geometry, isotope_atoms)
+    molecule = _build_molecule(
+        geometry, isotope_atoms, fixed_frame=driver in _FRAME_DEPENDENT_DRIVERS
+    )
 
     software_release = record.get("software_release") or {}
     api_version, api_version_source = _client_version(client)

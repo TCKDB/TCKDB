@@ -1,0 +1,1039 @@
+{
+  "/geometries?geom_hash=083a5072bd744609b1ac3253b4e831c013deda4031ddc035a0bb0a4d17a97fa3": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 18,
+            "isotope_mass_number": null,
+            "x": 1.2654945102,
+            "y": 0.7396505022,
+            "z": 0.351729632
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 18,
+            "isotope_mass_number": null,
+            "x": 0.9572390894,
+            "y": 0.022432019,
+            "z": -0.2795036194
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 18,
+            "isotope_mass_number": null,
+            "x": -0.0734500742,
+            "y": -0.5814075391,
+            "z": 0.4262604313
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 18,
+            "isotope_mass_number": null,
+            "x": -1.2473316275,
+            "y": 0.1160707939,
+            "z": 0.0717243374
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 18,
+            "isotope_mass_number": null,
+            "x": -0.901951898,
+            "y": 0.8032542199,
+            "z": -0.5702107813
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "083a5072bd744609b1ac3253b4e831c013deda4031ddc035a0bb0a4d17a97fa3",
+        "id": 18,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.265494510200 0.739650502200 0.351729632000\nO 0.957239089400 0.022432019000 -0.279503619400\nO -0.073450074200 -0.581407539100 0.426260431300\nO -1.247331627500 0.116070793900 0.071724337400\nH -0.901951898000 0.803254219900 -0.570210781300"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=0e13ae78c68c15d1c88aba27372f3d007ea6ede518e904734e7f97d7ae59cc6a": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 11,
+            "isotope_mass_number": null,
+            "x": 1.3991564467,
+            "y": 0.389364762,
+            "z": -0.2673433442
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 11,
+            "isotope_mass_number": null,
+            "x": 0.9731767675,
+            "y": 0.4247650524,
+            "z": 0.6419009136
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 11,
+            "isotope_mass_number": null,
+            "x": -0.1196884264,
+            "y": -0.4264502892,
+            "z": 0.4971417138
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 11,
+            "isotope_mass_number": null,
+            "x": -1.1713284135,
+            "y": 0.3775078655,
+            "z": 0.0640271711
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 11,
+            "isotope_mass_number": null,
+            "x": -1.0813163744,
+            "y": 0.3348126052,
+            "z": -0.9357264543
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "0e13ae78c68c15d1c88aba27372f3d007ea6ede518e904734e7f97d7ae59cc6a",
+        "id": 11,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.399156446700 0.389364762000 -0.267343344200\nO 0.973176767500 0.424765052400 0.641900913600\nO -0.119688426400 -0.426450289200 0.497141713800\nO -1.171328413500 0.377507865500 0.064027171100\nH -1.081316374400 0.334812605200 -0.935726454300"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=13a89c06c686ade7a01a3a9df07e7208ebb739da0e927eb20336e42f56d38b1d": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 10,
+            "isotope_mass_number": null,
+            "x": 1.3877234137,
+            "y": 0.1813932228,
+            "z": -0.2606913413
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 10,
+            "isotope_mass_number": null,
+            "x": 0.8184106029,
+            "y": 0.6565046963,
+            "z": 0.4160886776
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 10,
+            "isotope_mass_number": null,
+            "x": -0.1352440684,
+            "y": -0.2991753535,
+            "z": 0.7358756147
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 10,
+            "isotope_mass_number": null,
+            "x": -1.1991242965,
+            "y": -0.1041070262,
+            "z": -0.1698158335
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 10,
+            "isotope_mass_number": null,
+            "x": -0.8717656518,
+            "y": 0.6653844565,
+            "z": -0.7214571174
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "13a89c06c686ade7a01a3a9df07e7208ebb739da0e927eb20336e42f56d38b1d",
+        "id": 10,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.387723413700 0.181393222800 -0.260691341300\nO 0.818410602900 0.656504696300 0.416088677600\nO -0.135244068400 -0.299175353500 0.735875614700\nO -1.199124296500 -0.104107026200 -0.169815833500\nH -0.871765651800 0.665384456500 -0.721457117400"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=24031d64b75f1eb9cf921637fb94abbfbc8ac41496bca67e4edb7277f05d3c36": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 16,
+            "isotope_mass_number": null,
+            "x": 1.2608018707,
+            "y": 0.7407720241,
+            "z": -0.0207732611
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 16,
+            "isotope_mass_number": null,
+            "x": 1.1589136025,
+            "y": -0.0003028237,
+            "z": 0.6456581812
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 16,
+            "isotope_mass_number": null,
+            "x": -0.1874505776,
+            "y": -0.3638284487,
+            "z": 0.4846866015
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 16,
+            "isotope_mass_number": null,
+            "x": -0.6409955802,
+            "y": 0.5104013504,
+            "z": -0.5174097043
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 16,
+            "isotope_mass_number": null,
+            "x": -1.5912693154,
+            "y": 0.2129578938,
+            "z": -0.5921618172
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "24031d64b75f1eb9cf921637fb94abbfbc8ac41496bca67e4edb7277f05d3c36",
+        "id": 16,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.260801870700 0.740772024100 -0.020773261100\nO 1.158913602500 -0.000302823700 0.645658181200\nO -0.187450577600 -0.363828448700 0.484686601500\nO -0.640995580200 0.510401350400 -0.517409704300\nH -1.591269315400 0.212957893800 -0.592161817200"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=314f16ee5b75bfa7dfb3dd55ff662958bc82d8468d4eff74874d676028a536ac": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 13,
+            "isotope_mass_number": null,
+            "x": 0.8717656966,
+            "y": 0.6653844207,
+            "z": 0.7214570959
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 13,
+            "isotope_mass_number": null,
+            "x": 1.1991242825,
+            "y": -0.1041070789,
+            "z": 0.1698158078
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 13,
+            "isotope_mass_number": null,
+            "x": 0.1352440269,
+            "y": -0.2991753594,
+            "z": -0.7358756048
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 13,
+            "isotope_mass_number": null,
+            "x": -0.818410595,
+            "y": 0.6565047267,
+            "z": -0.416088666
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 13,
+            "isotope_mass_number": null,
+            "x": -1.387723411,
+            "y": 0.1813932869,
+            "z": 0.260691367
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "314f16ee5b75bfa7dfb3dd55ff662958bc82d8468d4eff74874d676028a536ac",
+        "id": 13,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 0.871765696600 0.665384420700 0.721457095900\nO 1.199124282500 -0.104107078900 0.169815807800\nO 0.135244026900 -0.299175359400 -0.735875604800\nO -0.818410595000 0.656504726700 -0.416088666000\nH -1.387723411000 0.181393286900 0.260691367000"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=3aea3f48c7c6589c3286068bf25768e796de9d480def9d0996073d5a815fcefe": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 20,
+            "isotope_mass_number": null,
+            "x": 1.3892111201,
+            "y": 0.3722054,
+            "z": 0.8471333575
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 20,
+            "isotope_mass_number": null,
+            "x": 1.2420523825,
+            "y": 0.292356807,
+            "z": -0.1423756056
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 20,
+            "isotope_mass_number": null,
+            "x": 0.029574189,
+            "y": -0.3755895118,
+            "z": -0.2095510501
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 20,
+            "isotope_mass_number": null,
+            "x": -0.910148315,
+            "y": 0.6759293483,
+            "z": -0.2233709872
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 20,
+            "isotope_mass_number": null,
+            "x": -1.7506893763,
+            "y": 0.1350979522,
+            "z": -0.2718357148
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "3aea3f48c7c6589c3286068bf25768e796de9d480def9d0996073d5a815fcefe",
+        "id": 20,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.389211120100 0.372205400000 0.847133357500\nO 1.242052382500 0.292356807000 -0.142375605600\nO 0.029574189000 -0.375589511800 -0.209551050100\nO -0.910148315000 0.675929348300 -0.223370987200\nH -1.750689376300 0.135097952200 -0.271835714800"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=3b4dac70f78bcea41d1f61153f1a54c525466630adcece4550d38f738a27624b": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 17,
+            "isotope_mass_number": null,
+            "x": 1.0813163803,
+            "y": 0.3348125774,
+            "z": 0.9357264377
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 17,
+            "isotope_mass_number": null,
+            "x": 1.1713284184,
+            "y": 0.3775078548,
+            "z": -0.0640271883
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 17,
+            "isotope_mass_number": null,
+            "x": 0.1196884129,
+            "y": -0.4264502873,
+            "z": -0.4971417226
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 17,
+            "isotope_mass_number": null,
+            "x": -0.9731767762,
+            "y": 0.4247650749,
+            "z": -0.6419008984
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 17,
+            "isotope_mass_number": null,
+            "x": -1.3991564354,
+            "y": 0.3893647759,
+            "z": 0.2673433715
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "3b4dac70f78bcea41d1f61153f1a54c525466630adcece4550d38f738a27624b",
+        "id": 17,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.081316380300 0.334812577400 0.935726437700\nO 1.171328418400 0.377507854800 -0.064027188300\nO 0.119688412900 -0.426450287300 -0.497141722600\nO -0.973176776200 0.424765074900 -0.641900898400\nH -1.399156435400 0.389364775900 0.267343371500"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=3cbd6af02f07b8d4d345f8343f806679f2ddc606fe21edb3e642cdceffcc7e2e": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 15,
+            "isotope_mass_number": null,
+            "x": 0.9019519222,
+            "y": 0.8032541995,
+            "z": 0.5702107533
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 15,
+            "isotope_mass_number": null,
+            "x": 1.2473316251,
+            "y": 0.1160707541,
+            "z": -0.0717243645
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 15,
+            "isotope_mass_number": null,
+            "x": 0.0734500413,
+            "y": -0.5814075477,
+            "z": -0.4262604202
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 15,
+            "isotope_mass_number": null,
+            "x": -0.9572390884,
+            "y": 0.0224320526,
+            "z": 0.2795036457
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 15,
+            "isotope_mass_number": null,
+            "x": -1.2654945001,
+            "y": 0.7396505374,
+            "z": -0.3517296143
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "3cbd6af02f07b8d4d345f8343f806679f2ddc606fe21edb3e642cdceffcc7e2e",
+        "id": 15,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 0.901951922200 0.803254199500 0.570210753300\nO 1.247331625100 0.116070754100 -0.071724364500\nO 0.073450041300 -0.581407547700 -0.426260420200\nO -0.957239088400 0.022432052600 0.279503645700\nH -1.265494500100 0.739650537400 -0.351729614300"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=3f961ff74748e00e1ee8de38d4c4f89d04b4055d9ee865b99af3ba5d036e2626": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 21,
+            "isotope_mass_number": null,
+            "x": 1.6903924007,
+            "y": 0.0201039728,
+            "z": 0.4986654095
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 21,
+            "isotope_mass_number": null,
+            "x": 0.8100719206,
+            "y": 0.4850650333,
+            "z": 0.5996443693
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 21,
+            "isotope_mass_number": null,
+            "x": 0.1784434893,
+            "y": 0.0211966523,
+            "z": -0.5728948868
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 21,
+            "isotope_mass_number": null,
+            "x": -1.0674972352,
+            "y": 0.6253507001,
+            "z": -0.5141505716
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 21,
+            "isotope_mass_number": null,
+            "x": -1.6114105754,
+            "y": -0.0517163626,
+            "z": -0.0112643204
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "3f961ff74748e00e1ee8de38d4c4f89d04b4055d9ee865b99af3ba5d036e2626",
+        "id": 21,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.690392400700 0.020103972800 0.498665409500\nO 0.810071920600 0.485065033300 0.599644369300\nO 0.178443489300 0.021196652300 -0.572894886800\nO -1.067497235200 0.625350700100 -0.514150571600\nH -1.611410575400 -0.051716362600 -0.011264320400"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=405cf4070b345aa6df19198831cdef125cf8f0a67b24cd5c093b0ac89d3ec6d9": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 23,
+            "isotope_mass_number": null,
+            "x": 1.7506893869,
+            "y": 0.135097976,
+            "z": 0.2718356608
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 23,
+            "isotope_mass_number": null,
+            "x": 0.9101483178,
+            "y": 0.6759293676,
+            "z": 0.223370952
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 23,
+            "isotope_mass_number": null,
+            "x": -0.0295741741,
+            "y": -0.3755895084,
+            "z": 0.2095510608
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 23,
+            "isotope_mass_number": null,
+            "x": -1.242052383,
+            "y": 0.2923567938,
+            "z": 0.1423756452
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 23,
+            "isotope_mass_number": null,
+            "x": -1.3892111479,
+            "y": 0.3722053669,
+            "z": -0.8471333186
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "405cf4070b345aa6df19198831cdef125cf8f0a67b24cd5c093b0ac89d3ec6d9",
+        "id": 23,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.750689386900 0.135097976000 0.271835660800\nO 0.910148317800 0.675929367600 0.223370952000\nO -0.029574174100 -0.375589508400 0.209551060800\nO -1.242052383000 0.292356793800 0.142375645200\nH -1.389211147900 0.372205366900 -0.847133318600"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=58723642b45ecb5e5a829904333b5478d90116f20ce27d73974621bb62e1110f": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 14,
+            "isotope_mass_number": null,
+            "x": 0.6563868097,
+            "y": 0.4607353992,
+            "z": 0.8802274063
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 14,
+            "isotope_mass_number": null,
+            "x": 1.1652662018,
+            "y": 0.0221958277,
+            "z": 0.1355715149
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 14,
+            "isotope_mass_number": null,
+            "x": 0.2227557656,
+            "y": -0.2154182443,
+            "z": -0.8816880929
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 14,
+            "isotope_mass_number": null,
+            "x": -1.066197713,
+            "y": 0.2239823906,
+            "z": -0.5280902229
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 14,
+            "isotope_mass_number": null,
+            "x": -0.9782110641,
+            "y": 0.6085046227,
+            "z": 0.3939793945
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "58723642b45ecb5e5a829904333b5478d90116f20ce27d73974621bb62e1110f",
+        "id": 14,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 0.656386809700 0.460735399200 0.880227406300\nO 1.165266201800 0.022195827700 0.135571514900\nO 0.222755765600 -0.215418244300 -0.881688092900\nO -1.066197713000 0.223982390600 -0.528090222900\nH -0.978211064100 0.608504622700 0.393979394500"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=5e1caa893bc4024c647d3789349ea1eb61b70fc9d11afa7cdd754a7a7a19faa6": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 7,
+            "isotope_mass_number": null,
+            "x": 1.401574149,
+            "y": 0.5159521564,
+            "z": 0.6867270727
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 7,
+            "isotope_mass_number": null,
+            "x": 1.0818985852,
+            "y": 0.303880633,
+            "z": -0.2394933254
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 7,
+            "isotope_mass_number": null,
+            "x": 0.0,
+            "y": -0.5396655831,
+            "z": 0.0
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 7,
+            "isotope_mass_number": null,
+            "x": -1.0818985852,
+            "y": 0.303880633,
+            "z": 0.2394933254
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 7,
+            "isotope_mass_number": null,
+            "x": -1.401574149,
+            "y": 0.5159521564,
+            "z": -0.6867270727
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "5e1caa893bc4024c647d3789349ea1eb61b70fc9d11afa7cdd754a7a7a19faa6",
+        "id": 7,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.401574149000 0.515952156400 0.686727072700\nO 1.081898585200 0.303880633000 -0.239493325400\nO 0.000000000000 -0.539665583100 0.000000000000\nO -1.081898585200 0.303880633000 0.239493325400\nH -1.401574149000 0.515952156400 -0.686727072700"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=6164b931c03b43e4307f4e4511f0be2816bb0755e0bc426d914fe3f85b476080": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 12,
+            "isotope_mass_number": null,
+            "x": 1.622414593,
+            "y": 0.4142721543,
+            "z": -0.0250853258
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 12,
+            "isotope_mass_number": null,
+            "x": 0.9951643793,
+            "y": 0.3237149617,
+            "z": 0.7530615696
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 12,
+            "isotope_mass_number": null,
+            "x": -0.0654906171,
+            "y": -0.3761156658,
+            "z": 0.1998258817
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 12,
+            "isotope_mass_number": null,
+            "x": -0.9089019976,
+            "y": 0.6504619257,
+            "z": -0.27321957
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 12,
+            "isotope_mass_number": null,
+            "x": -1.6431863576,
+            "y": 0.0876666198,
+            "z": -0.6545825556
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "6164b931c03b43e4307f4e4511f0be2816bb0755e0bc426d914fe3f85b476080",
+        "id": 12,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.622414593000 0.414272154300 -0.025085325800\nO 0.995164379300 0.323714961700 0.753061569600\nO -0.065490617100 -0.376115665800 0.199825881700\nO -0.908901997600 0.650461925700 -0.273219570000\nH -1.643186357600 0.087666619800 -0.654582555600"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=7e60f674f1b2ba5d5c2d5db1a1d17f44788901fb277ed6e6f5e0579a3607dff7": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 19,
+            "isotope_mass_number": null,
+            "x": 1.4502455645,
+            "y": 0.4670539576,
+            "z": 0.6989906468
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 19,
+            "isotope_mass_number": null,
+            "x": 1.0843249429,
+            "y": 0.3369299557,
+            "z": -0.225001983
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 19,
+            "isotope_mass_number": null,
+            "x": 2.27582e-05,
+            "y": -0.5079674834,
+            "z": -1.19303e-05
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 19,
+            "isotope_mass_number": null,
+            "x": -1.0843063488,
+            "y": 0.3369041062,
+            "z": 0.2249913893
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 19,
+            "isotope_mass_number": null,
+            "x": -1.4502869166,
+            "y": 0.4670794596,
+            "z": -0.6989681228
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "7e60f674f1b2ba5d5c2d5db1a1d17f44788901fb277ed6e6f5e0579a3607dff7",
+        "id": 19,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.450245564500 0.467053957600 0.698990646800\nO 1.084324942900 0.336929955700 -0.225001983000\nO 0.000022758200 -0.507967483400 -0.000011930300\nO -1.084306348800 0.336904106200 0.224991389300\nH -1.450286916600 0.467079459600 -0.698968122800"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=810419ada5e12e495a8292e69c5763e947258ab9ff8f670a6178d8fae54041b3": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 22,
+            "isotope_mass_number": null,
+            "x": 1.6710333282,
+            "y": 0.2585978955,
+            "z": 0.2983258635
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 22,
+            "isotope_mass_number": null,
+            "x": 0.8071516348,
+            "y": 0.5306755158,
+            "z": -0.1221048852
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 22,
+            "isotope_mass_number": null,
+            "x": -0.0696124342,
+            "y": -0.3622060372,
+            "z": 0.5168210882
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 22,
+            "isotope_mass_number": null,
+            "x": -1.3200395794,
+            "y": -0.0349946493,
+            "z": -0.0310152424
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 22,
+            "isotope_mass_number": null,
+            "x": -1.0885329493,
+            "y": 0.707927271,
+            "z": -0.6620268241
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "810419ada5e12e495a8292e69c5763e947258ab9ff8f670a6178d8fae54041b3",
+        "id": 22,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.671033328200 0.258597895500 0.298325863500\nO 0.807151634800 0.530675515800 -0.122104885200\nO -0.069612434200 -0.362206037200 0.516821088200\nO -1.320039579400 -0.034994649300 -0.031015242400\nH -1.088532949300 0.707927271000 -0.662026824100"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=9e0360b27a19b64488c80815a5d2d7adb159243e6ecee5d7b825865429b59ff1": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 9,
+            "isotope_mass_number": null,
+            "x": 1.5256047185,
+            "y": 0.610746637,
+            "z": 0.4156725804
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 9,
+            "isotope_mass_number": null,
+            "x": 0.855024161,
+            "y": -0.1004127428,
+            "z": 0.6373990765
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 9,
+            "isotope_mass_number": null,
+            "x": 0.1478163932,
+            "y": -0.2259922463,
+            "z": -0.5560374661
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 9,
+            "isotope_mass_number": null,
+            "x": -0.9025222775,
+            "y": 0.6836883506,
+            "z": -0.4588090157
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 9,
+            "isotope_mass_number": null,
+            "x": -1.6259229953,
+            "y": 0.1319699975,
+            "z": -0.0382251751
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "9e0360b27a19b64488c80815a5d2d7adb159243e6ecee5d7b825865429b59ff1",
+        "id": 9,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.525604718500 0.610746637000 0.415672580400\nO 0.855024161000 -0.100412742800 0.637399076500\nO 0.147816393200 -0.225992246300 -0.556037466100\nO -0.902522277500 0.683688350600 -0.458809015700\nH -1.625922995300 0.131969997500 -0.038225175100"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  },
+  "/geometries?geom_hash=e0bff6a1a378ab3976d4269f5a263acad2b69fe2ccb0b3b23e7f5c4b3bfe9300": {
+    "items": [
+      {
+        "atoms": [
+          {
+            "atom_index": 1,
+            "element": "H ",
+            "geometry_id": 24,
+            "isotope_mass_number": null,
+            "x": 1.7943941889,
+            "y": 0.0497626751,
+            "z": 0.3907512098
+          },
+          {
+            "atom_index": 2,
+            "element": "O ",
+            "geometry_id": 24,
+            "isotope_mass_number": null,
+            "x": 0.9851115025,
+            "y": 0.6332759024,
+            "z": 0.4714905578
+          },
+          {
+            "atom_index": 3,
+            "element": "O ",
+            "geometry_id": 24,
+            "isotope_mass_number": null,
+            "x": 0.0579067543,
+            "y": -0.1875106484,
+            "z": -0.1912569462
+          },
+          {
+            "atom_index": 4,
+            "element": "O ",
+            "geometry_id": 24,
+            "isotope_mass_number": null,
+            "x": -1.0983949947,
+            "y": 0.6041209881,
+            "z": -0.0972415161
+          },
+          {
+            "atom_index": 5,
+            "element": "H ",
+            "geometry_id": 24,
+            "isotope_mass_number": null,
+            "x": -1.739017451,
+            "y": 0.0003510786,
+            "z": -0.5737433053
+          }
+        ],
+        "created_at": "2026-09-29T15:11:08.878214",
+        "geom_hash": "e0bff6a1a378ab3976d4269f5a263acad2b69fe2ccb0b3b23e7f5c4b3bfe9300",
+        "id": 24,
+        "natoms": 5,
+        "xyz_text": "5\n\nH 1.794394188900 0.049762675100 0.390751209800\nO 0.985111502500 0.633275902400 0.471490557800\nO 0.057906754300 -0.187510648400 -0.191256946200\nO -1.098394994700 0.604120988100 -0.097241516100\nH -1.739017451000 0.000351078600 -0.573743305300"
+      }
+    ],
+    "limit": 50,
+    "skip": 0,
+    "total": 1
+  }
+}

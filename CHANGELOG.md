@@ -22,6 +22,61 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## QCSchema torsion drives in and out (2026-09-29)
+
+- tckdb-qcschema 0.6.0: `import` reads a QCSchema `TorsionDriveResult`
+  (families v1 and v2, one or more dihedrals) together with the optimization
+  it started from (`--parent-opt`) and posts both as one computed-species
+  bundle: the optimization becomes the conformer's `opt` and the drive a
+  `scan` calculation attached to it. Grid-point energies are stored exactly;
+  each grid angle is checked against its own geometry before it is stored.
+  `export` turns a stored relaxed dihedral scan back into a v2
+  `TorsionDriveResult`, validated by qcelemental, and refuses bond, angle,
+  improper and rigid scans and scans stored as a relative sweep rather than
+  mislabel them. IRCs stay unsupported: qcelemental 0.51.2 has no model for
+  them.
+- Several drives from one optimization (one per rotor) are imported together
+  (`import rotor1.json rotor2.json --parent-opt opt.json`): one `opt`, one
+  `scan` per drive. A second rotor imported on its own later is refused with
+  `scan_parent_already_imported` instead of storing the optimization twice.
+- A torsion drive's mapping report names every field of the document once,
+  as the other record kinds' do: each grid point's geometry and energy
+  `transformed`, the per-point optimizations `retained_only`.
+- `import --upload` and `export` with no `--base-url` and no
+  `$TCKDB_BASE_URL` print one `ERROR [missing_base_url]` line, exit 1,
+  instead of a traceback.
+
+## Supersede names submissions by public ref (2026-09-29)
+
+- Backend: `POST /api/v1/submissions/{submission_ref}/supersede` takes the
+  old submission's `sub_...` ref in the path and `{"new_submission_ref":
+  "sub_..."}` in the body; a row id is refused with 422 in either place
+  (issue #571). Submission reads now carry `public_ref`, so the ref is
+  obtainable. No caller sent the integer, so there is no deprecation window.
+- The no-database-id guard walks every producer-facing write route, chosen
+  by the producer contract's classification rather than a path-prefix list,
+  and now checks path and query parameters as well as request bodies.
+- tckdb-schemas 0.53.0: the producer contract describes the new shape.
+- tckdb-client 0.95.1: parity table follows the renamed route.
+
+## A QCSchema import names every field it does not store (2026-09-29)
+
+- tckdb-qcschema 0.5.0: every field of an imported document is now in exactly
+  one list of the mapping report (`transformed`, `retained_only`,
+  `unsupported`, `rejected`), named by its path in the document's own family
+  (`input_data.specification.model.method` for v2). Before, a Hessian
+  document's `properties.return_energy`, `extras.qcvars` and nine other
+  `properties.*` fields were dropped without being named (issue #573). A key
+  the adapter does not know is listed `unsupported`; if a mapping branch
+  leaves its own result unclassified, the import refuses with the new code
+  `mapping_report_incomplete` and posts nothing.
+- A Hessian document's energy is still not stored, and is now listed
+  `retained_only`: a `freq` record has no energy field, and an `sp` beside it
+  would be joined to it by a `single_point_on` edge, whose parent must be an
+  `opt`.
+- The exporter declares `fix_com` and `fix_orientation` on a Hessian export,
+  because the matrix is expressed in the exported coordinates' axes.
+
 ## A web-site base URL is named, not a TypeError (2026-09-29)
 
 - tckdb-client 0.95.0: a JSON endpoint answering 2xx with a body that is not

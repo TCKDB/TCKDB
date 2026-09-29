@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tckdb-schemas"
-version = "0.51.0"
+version = "0.53.0"
 description = "Pure Pydantic wire-contract schemas for TCKDB upload payloads."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,7 +52,14 @@ where = ["."]
 include = ["tckdb_schemas*"]
 
 [tool.setuptools.package-data]
-tckdb_schemas = ["py.typed"]
+# The producer contract is generated into the package (see
+# backend/scripts/generate_producer_contract.py) and must ship in the wheel:
+# an adapter reads it from the installed package, never from a checkout.
+tckdb_schemas = [
+    "py.typed",
+    "contract/PRODUCER_CONTRACT.md",
+    "contract/schemas/*.schema.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -31,6 +31,8 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
+from tests._ci_dependency import require_module
+
 # The CHEMKIN importer adapter (``tckdb_chemkin``) lives under
 # clients/python/adapters/chemkin and is not installed into tckdb_env, so its
 # package root is prepended to sys.path here — inline (rather than in a
@@ -561,7 +563,7 @@ def test_multi_arrhenius_duplicate_round_trips(round_trip):
 # own lenient parser.
 # ---------------------------------------------------------------------------
 
-pytest.importorskip("cantera")
+require_module("cantera", install="conda install -c conda-forge cantera=3.2.0 (backend/environment.yml)")
 
 
 def test_handauthored_export_passes_cantera_validation(round_trip):

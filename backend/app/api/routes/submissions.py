@@ -9,7 +9,11 @@ module only exposes:
 * read access (``GET /mine``, ``GET /for-review``, ``GET /{id}``,
   ``GET /{id}/audit-events``, ``GET /{id}/record-links``), and
 * curator actions (``POST /{id}/approve``, ``POST /{id}/reject``,
-  ``POST /{id}/supersede``).
+  ``POST /{submission_ref}/supersede``).
+
+The supersede action is the one producer-facing write here (any
+authenticated caller, not only a curator), so it names both submissions
+by public ref and never by row id (#571).
 
 Direct ``/uploads/*`` ingestion is intentionally NOT routed through this
 module — trusted ingest stays free of moderation overhead.
@@ -17,7 +21,7 @@ module — trusted ingest stays free of moderation overhead.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.client_version import require_supported_tckdb_client
@@ -32,6 +36,7 @@ from app.db.models.common import SubmissionStatus
 from app.db.models.submission import Submission
 from app.db.models.submission_rights import SubmissionRightsAttestation
 from app.schemas.entities.submission import (
+    SUBMISSION_REF_PATTERN,
     RightsAttestationActor,
     RightsAttestationCreate,
     RightsAttestationRead,
@@ -54,6 +59,7 @@ from app.services.submission import (
     approve_submission,
     get_latest_llm_precheck_audit_event,
     get_submission,
+    get_submission_by_ref,
     list_audit_events,
     list_my_submissions,
     list_record_links,
@@ -267,26 +273,34 @@ def reject(
 
 
 @router.post(
-    "/{submission_id}/supersede",
+    "/{submission_ref}/supersede",
     response_model=SubmissionRead,
     dependencies=[Depends(require_supported_tckdb_client)],
 )
 def supersede(
-    submission_id: int,
     body: SubmissionSupersedeRequest,
+    submission_ref: str = Path(
+        pattern=SUBMISSION_REF_PATTERN,
+        max_length=40,
+        description="Public ref (``sub_...``) of the submission being superseded.",
+    ),
     session: Session = Depends(get_write_db),
     actor: AppUser = Depends(get_current_user),
 ) -> SubmissionRead:
     """Mark a submission as superseded by another.
 
-    The replacing submission must already declare ``supersedes_submission_id``
-    pointing back at this one — supersession asserts the link, it does not
-    create it. Returns the newly-superseded *old* submission.
+    Both submissions are named by public ref: the old one in the path, the
+    replacing one in the body. A row id is refused by the ref pattern (422)
+    in either place. The replacing submission must already declare the old
+    one as the submission it supersedes -- supersession asserts the link, it
+    does not create it. Returns the newly-superseded *old* submission.
     """
+    old = get_submission_by_ref(session, submission_ref)
+    new = get_submission_by_ref(session, body.new_submission_ref)
     old = supersede_submission(
         session,
-        old_submission_id=submission_id,
-        new_submission_id=body.new_submission_id,
+        old_submission_id=old.id,
+        new_submission_id=new.id,
         actor=actor,
     )
     return SubmissionRead.model_validate(old)
