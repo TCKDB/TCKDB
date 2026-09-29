@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Self, TypeAlias
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
@@ -651,6 +651,43 @@ class ComputedSpeciesUploadRequest(SchemaBase):
     of its own to carry a bundle-level note, and choosing one is a
     separate decision from wiring a field that already has a home.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species_entry": {
+                        "smiles": "O",
+                        "charge": 0,
+                        "multiplicity": 1
+                    },
+                    "conformers": [
+                        {
+                            "key": "conf0",
+                            "geometry": {
+                                "xyz_text": "3\nwater\nO 0.000000 0.000000 0.117300\nH 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200"
+                            },
+                            "primary_calculation": {
+                                "key": "opt0",
+                                "type": "opt",
+                                "software_release": {
+                                    "name": "Gaussian",
+                                    "version": "16"
+                                },
+                                "level_of_theory": {
+                                    "method": "wb97xd",
+                                    "basis": "def2-tzvp"
+                                }
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+    )
 
     species_entry: SpeciesEntryIdentityPayload
 

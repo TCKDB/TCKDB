@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.common import (
     RightsBasisKind,
@@ -175,6 +175,24 @@ class SubmissionSupersedeRequest(SchemaBase):
     enforces that link rather than mutating it here.
     """
 
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "x-tckdb-example-requires": (
+                "two submissions of the caller's own: the one in the path, and a newer one "
+                "created with supersedes_submission_id pointing back at it, whose id "
+                "replaces 42"
+            ),
+            "examples": [
+                {
+                    "new_submission_id": 42
+                }
+            ]
+        },
+    )
+
     new_submission_id: int
 
 
@@ -190,6 +208,24 @@ class RightsAttestationCreate(SchemaBase):
     every other basis needs the curator or admin role. ``source_terms`` is
     required exactly when ``basis`` is ``source_terms``.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "x-tckdb-example-requires": (
+                "a submission the caller created, named by the submission_id in the path; "
+                "every upload response returns one"
+            ),
+            "examples": [
+                {
+                    "license": "CC-BY-4.0",
+                    "basis": "depositor_agreement"
+                }
+            ]
+        },
+    )
 
     license: str = Field(min_length=1, max_length=64)
     basis: RightsBasisKind

@@ -24,7 +24,7 @@ See DR-0001 for design rationale.
 import math
 from typing import Literal, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -1192,6 +1192,39 @@ class NetworkPDepUploadRequest(SchemaBase):
     This schema expects one connected network — disconnected subnetworks
     are rejected when channels are explicitly provided.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species": [
+                        {
+                            "key": "c2h5",
+                            "species_entry": {
+                                "smiles": "C[CH2]",
+                                "charge": 0,
+                                "multiplicity": 2
+                            }
+                        }
+                    ],
+                    "states": [
+                        {
+                            "key": "w1",
+                            "kind": "well",
+                            "participants": [
+                                {
+                                    "species_key": "c2h5"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+    )
 
     name: str | None = None
     description: str | None = None

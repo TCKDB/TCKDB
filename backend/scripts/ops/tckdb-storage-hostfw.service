@@ -1,0 +1,43 @@
+[Unit]
+Description=Close the TCKDB object store's internal ports to this host (#548)
+# SeaweedFS's filer, master and volume ports, and their gRPC ports, take no
+# credentials. The compose `storage` network keeps other containers away from
+# them; this keeps the host's own processes (and host-network containers such
+# as cloudflared) away too. See tckdb_storage_hostfw.sh for the rule and
+# docs/deployment/self_hosted_single_node.md for install, verify and remove.
+#
+# Docker must be up so the network's subnet can be read. Requires= also means
+# a restart of docker.service restarts this unit, which re-reads the subnet.
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# The rule lives in the kernel, not in a process, so the unit stays "active"
+# after the script exits. `systemctl restart` re-applies it; the script is
+# idempotent (exactly one rule per subnet, however often it runs).
+RemainAfterExit=yes
+
+# Name the network if Compose made more than one `storage` network on this
+# host (another project, a test stack): the script refuses to guess. Leave
+# it unset and the script uses the only network Compose labelled `storage`.
+#Environment=TCKDB_STORAGE_NETWORK=tckdbv2_storage
+#
+# The container port(s) left open, comma-separated. The default, 9000, is
+# the S3 gateway that docker-proxy forwards to. Widen it only for a forward
+# you published yourself (e.g. 9000,9333,9340 for a host API that reads the
+# master's status page); never for a gRPC port.
+#Environment=TCKDB_STORAGE_ALLOW_PORTS=9000
+
+# Runs as root (iptables needs it), so the script is a root-owned copy, not
+# the one in a user's checkout: root must not execute a file its user can
+# edit. Re-copy it after pulling a change to it.
+#
+# --wait 60: at boot, give Docker up to 60 s to answer and the network to
+# appear. A missing network then fails the unit, visibly, rather than
+# leaving the host open without a trace.
+ExecStart=/usr/local/sbin/tckdb_storage_hostfw.sh --wait 60
+
+[Install]
+WantedBy=multi-user.target

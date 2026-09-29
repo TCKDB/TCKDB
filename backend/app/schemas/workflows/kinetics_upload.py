@@ -1,7 +1,7 @@
 import math
 from typing import Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.rights import DepositRights
 
@@ -461,6 +461,51 @@ class KineticsUploadRequest(SchemaBase):
     :param tunneling_model: Optional tunneling model label.
     :param note: Optional free-text note.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "reaction": {
+                        "reversible": False,
+                        "reactants": [
+                            {
+                                "species_entry": {
+                                    "smiles": "[H]",
+                                    "charge": 0,
+                                    "multiplicity": 2
+                                }
+                            },
+                            {
+                                "species_entry": {
+                                    "smiles": "[H]",
+                                    "charge": 0,
+                                    "multiplicity": 2
+                                }
+                            }
+                        ],
+                        "products": [
+                            {
+                                "species_entry": {
+                                    "smiles": "[H][H]",
+                                    "charge": 0,
+                                    "multiplicity": 1
+                                }
+                            }
+                        ]
+                    },
+                    "scientific_origin": "computed",
+                    "model_kind": "modified_arrhenius",
+                    "a": 1230000000000.0,
+                    "a_units": "cm3_mol_s",
+                    "n": 0.0
+                }
+            ]
+        },
+    )
 
     reaction: KineticsReactionUpload
     scientific_origin: ScientificOriginKind

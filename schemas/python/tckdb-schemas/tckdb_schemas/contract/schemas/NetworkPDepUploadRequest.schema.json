@@ -1,0 +1,3980 @@
+{
+  "$defs": {
+    "ArrheniusAUnits": {
+      "enum": [
+        "per_s",
+        "cm3_mol_s",
+        "cm3_molecule_s",
+        "m3_mol_s",
+        "cm6_mol2_s",
+        "cm6_molecule2_s",
+        "m6_mol2_s"
+      ],
+      "title": "ArrheniusAUnits",
+      "type": "string"
+    },
+    "ArtifactIn": {
+      "additionalProperties": false,
+      "description": "An artifact (file) attached to a calculation — upload transport only.\n\nProvide ``content_base64`` to upload file content inline.  The server\nvalidates the content (ESS signature, size limits, SHA-256 integrity),\nwrites it to a content-addressed store, and creates a\n``CalculationArtifact`` row with the final URI.\n\nThis schema is strictly upload-facing.  The DB model\n(``CalculationArtifact``) stores ``uri``, ``sha256``, ``bytes``, and\n``kind`` — no inline content. The ``uri`` is backend-generated only\nand is intentionally not exposed on this schema.\n\n:param kind: Artifact type (input, output_log, checkpoint, etc.).\n:param filename: Original filename (provenance metadata, not used for\n    storage path).  E.g. ``\"input.log\"``. Extension must be in\n    :data:`KIND_ALLOWED_EXTENSIONS` for the supplied ``kind`` and\n    must pass the character / length / leading-character rules in\n    :func:`_validate_filename`.\n:param content_base64: Base64-encoded file content.\n:param sha256: Optional SHA-256 hash declared by the uploader. Must be\n    64 lowercase hex characters; if provided, the server verifies it\n    matches the content.\n:param bytes: Optional declared file size; must be > 0. If provided,\n    the server verifies it matches the decoded content length.",
+      "properties": {
+        "bytes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bytes"
+        },
+        "content_base64": {
+          "minLength": 1,
+          "title": "Content Base64",
+          "type": "string"
+        },
+        "filename": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Filename",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "kind",
+        "filename",
+        "content_base64"
+      ],
+      "title": "ArtifactIn",
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "input",
+        "output_log",
+        "checkpoint",
+        "formatted_checkpoint",
+        "hessian",
+        "ancillary"
+      ],
+      "title": "ArtifactKind",
+      "type": "string"
+    },
+    "BathGasIn": {
+      "additionalProperties": false,
+      "description": "Bath gas component for a network solve.\n\n:param species_key: Local key referencing a species in the ``species`` list.\n:param mole_fraction: Mole fraction of this bath gas component (0–1].",
+      "properties": {
+        "mole_fraction": {
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Mole Fraction",
+          "type": "number"
+        },
+        "species_key": {
+          "minLength": 1,
+          "title": "Species Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "species_key",
+        "mole_fraction"
+      ],
+      "title": "BathGasIn",
+      "type": "object"
+    },
+    "CalculationIn": {
+      "additionalProperties": false,
+      "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n\n    This names **this calculation's geometry** and nothing else. It used\n    to carry a second job -- deciding which conformer observation a\n    species calculation is anchored to -- and the two questions come\n    apart for any calculation whose geometry is not a declared conformer\n    geometry. A coarse pre-optimisation is the worked example: its output\n    geometry is genuinely not the basin's geometry, so a producer\n    correctly omits ``geometry_key``, and until ``conformer_key`` existed\n    that silently cost the calculation its anchor. Use ``conformer_key``\n    to say which basin a calculation belongs to.\n:param conformer_key: Local key of the conformer, declared by this\n    calculation's own species, whose observation this calculation is\n    evidence for. This is the anchor, and it is the only field that means\n    it. A sibling species's conformer is not in scope.\n\n    Optional, and resolved server-side against the request's own\n    conformer namespace -- never a database id. When it is absent the\n    workflow still falls back to ``geometry_key``, so payloads written\n    before this field existed keep anchoring exactly as they did. When\n    neither field resolves, the calculation is stored unanchored and the\n    upload reports a warning rather than dropping the anchor silently.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature: Optional inline literature provenance, resolved (or\n    created) by the workflow. Replaces the former ``literature_id``,\n    which was a database primary key on an upload surface — usable only\n    by a client that had already queried this database, which a\n    depositor has not. Matches ``CalculationInBundle.literature`` on the\n    species bundle, which took the inline fragment from the start.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactIn"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        },
+        "conformer_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Key"
+        },
+        "execution_environment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExecutionEnvironmentManifestPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "freq_frequencies_cm1": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq Frequencies Cm1"
+        },
+        "freq_imag_freq_cm1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq Imag Freq Cm1"
+        },
+        "freq_imaginary_dispositions": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/ImaginaryModeDisposition"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq Imaginary Dispositions"
+        },
+        "freq_n_imag": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq N Imag"
+        },
+        "freq_reaction_coordinate_mode_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq Reaction Coordinate Mode Index"
+        },
+        "freq_zpe_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Freq Zpe Hartree"
+        },
+        "geometry_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Key"
+        },
+        "hessian": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HessianPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "level_of_theory": {
+          "$ref": "#/$defs/LevelOfTheoryRef"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "opt_converged": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opt Converged"
+        },
+        "opt_final_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opt Final Energy Hartree"
+        },
+        "opt_n_steps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opt N Steps"
+        },
+        "parameters": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CalculationParameterObservation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameters"
+        },
+        "parameters_extracted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameters Extracted At"
+        },
+        "parameters_json": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameters Json"
+        },
+        "parameters_parser_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameters Parser Version"
+        },
+        "quality": {
+          "$ref": "#/$defs/CalculationQuality",
+          "default": "raw"
+        },
+        "scf_stability": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SCFStabilityContent"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "software_release": {
+          "$ref": "#/$defs/SoftwareReleaseRef"
+        },
+        "sp_electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sp Electronic Energy Hartree"
+        },
+        "spin_diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinDiagnosticPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "$ref": "#/$defs/CalculationType"
+        },
+        "wavefunction_diagnostic": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WavefunctionDiagnosticPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "type",
+        "software_release",
+        "level_of_theory"
+      ],
+      "title": "CalculationIn",
+      "type": "object"
+    },
+    "CalculationParameterObservation": {
+      "additionalProperties": false,
+      "description": "Upload-facing payload for one parsed execution-control parameter.\n\nMirrors the ``calculation_parameter`` row contract: ``raw_key`` and\n``raw_value`` are the always-present capture surface, every other field\nis optional enrichment. ``canonical_key`` is best-effort — when the\nparser emits a key that is not yet in ``calculation_parameter_vocab``\nthe persistence layer demotes it to ``None`` rather than failing the\nupload.\n\n:param raw_key: Raw, software-specific key as parsed (e.g. ``\"calcfc\"``).\n:param raw_value: Raw value as parsed.\n:param canonical_key: Optional canonical key for cross-software queries.\n:param canonical_value: Optional normalized value paired with the key.\n:param section: Optional route-line section (``opt``, ``scf``, ...).\n:param value_type: Optional consumer hint (``bool``, ``int``, ...).\n:param unit: Optional unit string when the value carries dimensionality.\n:param parameter_index: Optional ordering for repeated/positional options.",
+      "properties": {
+        "canonical_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Key"
+        },
+        "canonical_value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Canonical Value"
+        },
+        "parameter_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameter Index"
+        },
+        "raw_key": {
+          "minLength": 1,
+          "title": "Raw Key",
+          "type": "string"
+        },
+        "raw_value": {
+          "title": "Raw Value",
+          "type": "string"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Type"
+        }
+      },
+      "required": [
+        "raw_key",
+        "raw_value"
+      ],
+      "title": "CalculationParameterObservation",
+      "type": "object"
+    },
+    "CalculationQuality": {
+      "enum": [
+        "raw",
+        "curated",
+        "rejected"
+      ],
+      "title": "CalculationQuality",
+      "type": "string"
+    },
+    "CalculationType": {
+      "enum": [
+        "opt",
+        "freq",
+        "sp",
+        "irc",
+        "scan",
+        "path_search",
+        "conf"
+      ],
+      "title": "CalculationType",
+      "type": "string"
+    },
+    "ChannelBarrierIn": {
+      "additionalProperties": false,
+      "description": "A solve barrier tied to one channel/reaction/TS path, never endpoints alone.\n\n``forward``/``reverse`` are oriented by the *channel* (source → sink), not\nby the micro reaction's own written direction — the channel is the\ndirected object this barrier is keyed on.\n\nBarriers are signed relative to ``energy_zero_convention``: a submerged\nentrance barrier sits *below* the entrance channel and is legitimately\nnegative, so no positivity bound applies. Only non-finite values are\nrejected. A barrierless path has no barrier and must not appear here.",
+      "properties": {
+        "channel_key": {
+          "minLength": 1,
+          "title": "Channel Key",
+          "type": "string"
+        },
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "correction_convention": {
+          "$ref": "#/$defs/EnergyCorrectionConvention"
+        },
+        "energy_zero_convention": {
+          "$ref": "#/$defs/EnergyZeroConvention"
+        },
+        "forward_barrier_kj_mol": {
+          "title": "Forward Barrier Kj Mol",
+          "type": "number"
+        },
+        "micro_reaction_key": {
+          "minLength": 1,
+          "title": "Micro Reaction Key",
+          "type": "string"
+        },
+        "reverse_barrier_kj_mol": {
+          "title": "Reverse Barrier Kj Mol",
+          "type": "number"
+        },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        },
+        "transition_state_key": {
+          "minLength": 1,
+          "title": "Transition State Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "energy_zero_convention",
+        "correction_convention",
+        "channel_key",
+        "micro_reaction_key",
+        "transition_state_key",
+        "forward_barrier_kj_mol",
+        "reverse_barrier_kj_mol"
+      ],
+      "title": "ChannelBarrierIn",
+      "type": "object"
+    },
+    "ChebyshevKineticsIn": {
+      "additionalProperties": false,
+      "description": "Chebyshev-polynomial fit of a phenomenological k(T,P).\n\n:param n_temperature: Number of temperature basis polynomials (rows).\n:param n_pressure: Number of pressure basis polynomials (columns).\n:param coefficients: 2D coefficient grid, ``n_temperature`` rows each of\n    length ``n_pressure``. Persisted as ``{\"coeffs\": [[...], ...]}`` JSONB\n    to match the network-kinetics read path.",
+      "properties": {
+        "coefficients": {
+          "items": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array"
+          },
+          "minItems": 1,
+          "title": "Coefficients",
+          "type": "array"
+        },
+        "n_pressure": {
+          "minimum": 1,
+          "title": "N Pressure",
+          "type": "integer"
+        },
+        "n_temperature": {
+          "minimum": 1,
+          "title": "N Temperature",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n_temperature",
+        "n_pressure",
+        "coefficients"
+      ],
+      "title": "ChebyshevKineticsIn",
+      "type": "object"
+    },
+    "CondaRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "lockfile": {
+          "$ref": "#/$defs/ContentAddressedReference"
+        },
+        "runtime_kind": {
+          "const": "conda",
+          "title": "Runtime Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime_kind",
+        "lockfile"
+      ],
+      "title": "CondaRuntime",
+      "type": "object"
+    },
+    "ConformerIn": {
+      "additionalProperties": false,
+      "description": "A conformer for a species, with its geometry and optimization calculation.\n\n:param key: Local key for this conformer.\n:param geometry: Geometry payload with a reusable key.\n:param calculation: The optimization calculation that produced this conformer.\n    Must have ``type == \"opt\"``.\n:param scientific_origin: Scientific origin for the conformer observation.\n:param label: Optional user hint carried with the upload; basin dedupe still\n    happens at the conformer-group layer.\n:param note: Optional note on the conformer observation.\n\nEach payload item creates one new ``conformer_observation`` row. Matching an\nexisting basin reuses the ``conformer_group`` only.",
+      "properties": {
+        "calculation": {
+          "$ref": "#/$defs/CalculationIn"
+        },
+        "geometry": {
+          "$ref": "#/$defs/GeometryIn"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        }
+      },
+      "required": [
+        "key",
+        "geometry",
+        "calculation"
+      ],
+      "title": "ConformerIn",
+      "type": "object"
+    },
+    "ContainerRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Image",
+          "type": "string"
+        },
+        "runtime_kind": {
+          "const": "container",
+          "title": "Runtime Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime_kind",
+        "image"
+      ],
+      "title": "ContainerRuntime",
+      "type": "object"
+    },
+    "ContentAddressedReference": {
+      "additionalProperties": false,
+      "description": "One safe locator whose referenced bytes are fixed by ``digest``.",
+      "properties": {
+        "digest": {
+          "title": "Digest",
+          "type": "string"
+        },
+        "locator": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locator",
+        "digest"
+      ],
+      "title": "ContentAddressedReference",
+      "type": "object"
+    },
+    "DepositRights": {
+      "additionalProperties": false,
+      "description": "Deposit-time agreement that the records may be licensed as stated.",
+      "properties": {
+        "depositor_attests_right_to_license": {
+          "const": true,
+          "title": "Depositor Attests Right To License",
+          "type": "boolean"
+        },
+        "license": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "source_terms": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Terms"
+        }
+      },
+      "required": [
+        "license",
+        "depositor_attests_right_to_license"
+      ],
+      "title": "DepositRights",
+      "type": "object"
+    },
+    "DescribedRuntime": {
+      "additionalProperties": false,
+      "description": "A named-but-unpinned environment — the ordinary shared-cluster case.\n\nAccepted on purpose. ``module load gaussian/16`` on a site install is real\nprovenance: it is enough to compare two records and to ask an operator what\nwas there, even though it fixes no bytes.",
+      "properties": {
+        "description": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "modules": {
+          "items": {
+            "$ref": "#/$defs/ModuleDescription"
+          },
+          "maxItems": 64,
+          "title": "Modules",
+          "type": "array"
+        },
+        "runtime_kind": {
+          "const": "described",
+          "title": "Runtime Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime_kind",
+        "description"
+      ],
+      "title": "DescribedRuntime",
+      "type": "object"
+    },
+    "EnergyCorrectionConvention": {
+      "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
+      "enum": [
+        "electronic_only",
+        "electronic_plus_zpe",
+        "atom_and_bond_corrected",
+        "thermal_enthalpy_298k",
+        "other"
+      ],
+      "title": "EnergyCorrectionConvention",
+      "type": "string"
+    },
+    "EnergyTransferIn": {
+      "additionalProperties": false,
+      "description": "Energy transfer model parameters for a network solve.\n\n``scope`` declares what the model was specified over. ⟨ΔE⟩down is a\nproperty of a (well, collider) pair, and ``per_well`` — the default —\nrecords it that way. But Arkane, RMG and MESS inputs routinely declare one\nsingle-exponential-down for the entire network, and demanding a per-pair\nentry for such a run would force the depositor to paste one number N\ntimes, fabricating specificity the calculation never had. ``network_wide``\nlets that be said honestly. See ADR 0009.\n\n:param scope: ``per_well`` (names a state and a collider) or\n    ``network_wide`` (names neither, by declaration).\n:param state_key: Local key of the well this applies to. Required for\n    ``per_well``, forbidden for ``network_wide``.\n:param collider_species_key: Local key of the collider species. Required\n    for ``per_well``, forbidden for ``network_wide``.\n:param model: Energy transfer model name (e.g. ``single_exponential_down``).\n:param alpha0_cm_inv: Average downward energy transfer at reference temperature.\n:param t_exponent: Temperature exponent for the energy transfer model.\n:param t_ref_k: Reference temperature in K.\n:param note: Optional note.",
+      "properties": {
+        "alpha0_cm_inv": {
+          "exclusiveMinimum": 0,
+          "title": "Alpha0 Cm Inv",
+          "type": "number"
+        },
+        "collider_species_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collider Species Key"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "scope": {
+          "$ref": "#/$defs/NetworkEnergyTransferScope",
+          "default": "per_well"
+        },
+        "state_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State Key"
+        },
+        "t_exponent": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "T Exponent"
+        },
+        "t_ref_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "T Ref K"
+        }
+      },
+      "required": [
+        "model",
+        "alpha0_cm_inv"
+      ],
+      "title": "EnergyTransferIn",
+      "type": "object"
+    },
+    "EnergyZeroConvention": {
+      "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
+      "enum": [
+        "lowest_state",
+        "entrance_channel",
+        "separated_reactants",
+        "absolute",
+        "other"
+      ],
+      "title": "EnergyZeroConvention",
+      "type": "string"
+    },
+    "EnvironmentClosureEntry": {
+      "additionalProperties": false,
+      "description": "A named, unambiguous content-addressed component of the closure.",
+      "properties": {
+        "digest": {
+          "title": "Digest",
+          "type": "string"
+        },
+        "locator": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "runtime",
+            "executable",
+            "lockfile",
+            "module_closure",
+            "dependency_manifest"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locator",
+        "digest",
+        "role"
+      ],
+      "title": "EnvironmentClosureEntry",
+      "type": "object"
+    },
+    "ExecutableReference": {
+      "additionalProperties": false,
+      "description": "Where the scientific executable was, and its digest when that is known.\n\n``digest`` is optional because the great majority of uploaders run a shared\nor site-installed binary and have no reason to have hashed it. A pinned\n``runtime_kind`` still requires it, because a byte closure that omits the\nexecutable is not a closure.",
+      "properties": {
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "locator": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "title": "Locator",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locator"
+      ],
+      "title": "ExecutableReference",
+      "type": "object"
+    },
+    "ExecutionEnvironmentManifestPayload": {
+      "additionalProperties": false,
+      "description": "An execution environment recorded at the tier the uploader could supply.\n\nA ``described`` runtime carries no digests and is fully acceptable; the\npinned runtimes additionally fix the environment by bytes. See the module\ndocstring for why both are accepted.",
+      "properties": {
+        "closure": {
+          "items": {
+            "$ref": "#/$defs/EnvironmentClosureEntry"
+          },
+          "maxItems": 5,
+          "title": "Closure",
+          "type": "array"
+        },
+        "executable": {
+          "$ref": "#/$defs/ExecutableReference"
+        },
+        "runtime": {
+          "discriminator": {
+            "mapping": {
+              "conda": "#/$defs/CondaRuntime",
+              "container": "#/$defs/ContainerRuntime",
+              "described": "#/$defs/DescribedRuntime",
+              "hpc_module": "#/$defs/HPCModuleRuntime"
+            },
+            "propertyName": "runtime_kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/DescribedRuntime"
+            },
+            {
+              "$ref": "#/$defs/ContainerRuntime"
+            },
+            {
+              "$ref": "#/$defs/CondaRuntime"
+            },
+            {
+              "$ref": "#/$defs/HPCModuleRuntime"
+            }
+          ],
+          "title": "Runtime"
+        },
+        "schema_version": {
+          "const": "tckdb.execution-environment.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "software_release": {
+          "$ref": "#/$defs/ScientificSoftwareReleaseIdentity"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "schema_version",
+        "runtime",
+        "software_release",
+        "executable"
+      ],
+      "title": "ExecutionEnvironmentManifestPayload",
+      "type": "object"
+    },
+    "FreqScaleFactorRef": {
+      "additionalProperties": false,
+      "description": "Content-keyed reference to a frequency scale factor.\n\nThe service layer finds or creates the immutable\n``frequency_scale_factor`` registry row whose identity matches the\nsupplied fields. Identity is the full tuple\n``(level_of_theory, software_release, scale_kind, value,\nsource_literature, workflow_tool_release)`` and matches the DB unique\nindex on ``frequency_scale_factor``. ``note`` is descriptive only and\nnever participates in identity/dedupe.\n\nSource handling:\n\n* If structured literature is available, pass ``source_literature``;\n  it is resolved/created via the standard literature pipeline.\n* If only a citation string is available, pass it in ``note`` and\n  leave ``source_literature`` null. Do not synthesize placeholder\n  literature rows from raw citation strings.\n* If a workflow tool's curated data file is the proximate source,\n  pass ``workflow_tool_release`` and put any descriptive file/source\n  reference in ``note``.\n\nNull ``frequency_scale_factor_id`` on a statmech row means\n\"unknown/not recorded\". Pass ``value=1.0`` with no source to represent\nexplicitly unscaled (a real registry row exists, just with value 1.0).\n\n:param level_of_theory: Level of theory this factor applies to.\n:param scale_kind: Type of scaling (fundamental, ZPE, enthalpy, etc.).\n:param value: The scale factor value.\n:param software: The ESS program *release* the factor was fit against\n    (e.g. Gaussian 16, Revision C.02). A harmonic frequency scale\n    factor is fit against a program's own build-level vibrational\n    frequencies, which change between releases of the same program\n    (correction-scheme-provenance plan v2 §6, mirroring\n    ``EnergyCorrectionSchemeRef.software``'s reasoning) -- so the\n    factor is release-specific, not merely program-specific. Only\n    ``name`` is required; a depositor who knows only the program\n    resolves to the version-less release row for it. Null means\n    software-agnostic or unknown.\n:param source_literature: Structured literature provenance, when\n    available. Mutually informative with ``workflow_tool_release``;\n    either, both, or neither may be supplied.\n:param workflow_tool_release: Workflow tool (e.g. ARC) whose data\n    file was the proximate source, when the factor was looked up\n    from a tool table rather than directly from a paper.\n:param note: Optional descriptive note. Never used for dedupe.",
+      "properties": {
+        "level_of_theory": {
+          "$ref": "#/$defs/LevelOfTheoryRef"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "scale_kind": {
+          "$ref": "#/$defs/FrequencyScaleKind",
+          "default": "fundamental"
+        },
+        "software": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "level_of_theory",
+        "value"
+      ],
+      "title": "FreqScaleFactorRef",
+      "type": "object"
+    },
+    "FrequencyScaleKind": {
+      "enum": [
+        "fundamental",
+        "zpe",
+        "enthalpy",
+        "entropy",
+        "heat_capacity"
+      ],
+      "title": "FrequencyScaleKind",
+      "type": "string"
+    },
+    "GeometryIn": {
+      "additionalProperties": false,
+      "description": "A geometry defined within this upload, with a local key for reuse.\n\n:param key: Globally unique local key for this geometry.\n:param xyz_text: Raw XYZ text block.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number. See\n    :class:`tckdb_schemas.fragments.geometry.GeometryPayload`.",
+      "properties": {
+        "isotopes": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isotopes"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "xyz_text": {
+          "minLength": 1,
+          "title": "Xyz Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "xyz_text"
+      ],
+      "title": "GeometryIn",
+      "type": "object"
+    },
+    "GeometryPayload": {
+      "additionalProperties": false,
+      "description": "Upload-facing geometry payload.\n\n:param xyz_text: Raw XYZ text block for the uploaded geometry.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number (``2`` for\n    deuterium, ``13`` for carbon-13, ...). Only substituted atoms need an\n    entry; every unlisted atom is taken to be at its most abundant\n    natural isotope. Omit the field entirely for an ordinary geometry.",
+      "properties": {
+        "isotopes": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isotopes"
+        },
+        "xyz_text": {
+          "minLength": 1,
+          "title": "Xyz Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "xyz_text"
+      ],
+      "title": "GeometryPayload",
+      "type": "object"
+    },
+    "HPCModuleRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "dependency_manifest_digest": {
+          "title": "Dependency Manifest Digest",
+          "type": "string"
+        },
+        "modules": {
+          "items": {
+            "$ref": "#/$defs/ModuleDescription"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Modules",
+          "type": "array"
+        },
+        "resolved_environment_digest": {
+          "title": "Resolved Environment Digest",
+          "type": "string"
+        },
+        "runtime_kind": {
+          "const": "hpc_module",
+          "title": "Runtime Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "runtime_kind",
+        "modules",
+        "resolved_environment_digest",
+        "dependency_manifest_digest"
+      ],
+      "title": "HPCModuleRuntime",
+      "type": "object"
+    },
+    "HessianPayload": {
+      "additionalProperties": false,
+      "description": "Optional inline Cartesian Hessian (second-derivative) matrix.\n\nThe Hessian is the primitive from which harmonic frequencies, normal\nmodes, and thermochemistry are derived. It is meaningful only relative\nto a specific atomic configuration, ordering, and orientation, so the\npayload carries its own ``geometry``: the resolution layer dedupes it\nthrough the content-addressed geometry seam (so it usually coincides\nwith the calculation's input geometry with no duplication) and stores\nthe resulting ``geometry_id`` as a mandatory binding.\n\nOnly the lower triangle including the diagonal of the symmetric 3N×3N\nmatrix is stored, row-major, in fixed units of hartree/bohr². For\n``N`` atoms that is exactly ``3N(3N+1)/2`` values.\n\nAttaches to ``freq`` calculations and to ``opt`` calculations run with\nan analytic Hessian (``opt=calcall``-style). See DR-0030.\n\n:param geometry: The geometry the Hessian was computed at.\n:param lower_triangle_hartree_bohr2: Packed lower triangle (with\n    diagonal), row-major, length ``3N(3N+1)/2``, in hartree/bohr².\n:param source: Where the matrix was obtained from.\n:param parser_version: Optional version tag of the parser that\n    produced the matrix.\n:param note: Optional free-text annotation.",
+      "properties": {
+        "geometry": {
+          "$ref": "#/$defs/GeometryPayload"
+        },
+        "lower_triangle_hartree_bohr2": {
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Lower Triangle Hartree Bohr2",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "parser_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parser Version"
+        },
+        "source": {
+          "$ref": "#/$defs/HessianSource"
+        }
+      },
+      "required": [
+        "geometry",
+        "lower_triangle_hartree_bohr2",
+        "source"
+      ],
+      "title": "HessianPayload",
+      "type": "object"
+    },
+    "HessianSource": {
+      "description": "Where a stored Cartesian Hessian matrix was obtained from.",
+      "enum": [
+        "parsed_fchk",
+        "parsed_hess",
+        "parsed_log",
+        "uploaded",
+        "derived"
+      ],
+      "title": "HessianSource",
+      "type": "string"
+    },
+    "ImaginaryModeDisposition": {
+      "enum": [
+        "rigid_body_residue",
+        "torsion",
+        "ring_pucker",
+        "intermolecular",
+        "symmetry_breaking",
+        "unassigned"
+      ],
+      "title": "ImaginaryModeDisposition",
+      "type": "string"
+    },
+    "LevelOfTheoryRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a level of theory.",
+      "properties": {
+        "aux_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Aux Basis"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "cabs_basis": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cabs Basis"
+        },
+        "dispersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dispersion"
+        },
+        "keywords": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keywords"
+        },
+        "method": {
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "solvent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent"
+        },
+        "solvent_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Solvent Model"
+        },
+        "spin_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpinTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "LevelOfTheoryRef",
+      "type": "object"
+    },
+    "LiteratureKind": {
+      "enum": [
+        "article",
+        "book",
+        "thesis",
+        "report",
+        "dataset",
+        "webpage"
+      ],
+      "title": "LiteratureKind",
+      "type": "string"
+    },
+    "LiteratureUploadRequest": {
+      "additionalProperties": false,
+      "description": "Literature fragment embedded in other upload requests.\n\nNot a standalone upload body — there is no ``/uploads/literature`` route.\nA request may be identifier-driven (DOI and/or ISBN) or manual. Identifier\nlookup can enrich missing metadata before a canonical literature row is\ncreated.\n\n:param kind: Optional literature kind. Can be inferred from DOI/ISBN when omitted.\n:param title: Optional manual title. Required only for fully manual submissions.\n:param journal: Optional journal or container title.\n:param year: Optional publication year.\n:param volume: Optional volume.\n:param issue: Optional issue.\n:param pages: Optional page range.\n:param doi: Optional DOI identifier.\n:param isbn: Optional ISBN identifier.\n:param url: Optional canonical URL.\n:param publisher: Optional publisher name.\n:param institution: Optional institution name.",
+      "properties": {
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "institution": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Institution"
+        },
+        "isbn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Isbn"
+        },
+        "issue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Issue"
+        },
+        "journal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Journal"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pages": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pages"
+        },
+        "publisher": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Publisher"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "format": "uri",
+              "maxLength": 2083,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "volume": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Volume"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "maximum": 3000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        }
+      },
+      "title": "LiteratureUploadRequest",
+      "type": "object"
+    },
+    "MicroReactionParticipantUpload": {
+      "additionalProperties": false,
+      "description": "An ordered participant in a micro reaction.\n\n:param species_key: Local key referencing a species in the ``species`` list.\n:param note: Optional note stored on the structured participant row.",
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "species_key": {
+          "minLength": 1,
+          "title": "Species Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "species_key"
+      ],
+      "title": "MicroReactionParticipantUpload",
+      "type": "object"
+    },
+    "ModuleDescription": {
+      "additionalProperties": false,
+      "description": "Descriptive HPC module identity; never sufficient closure evidence.",
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ModuleDescription",
+      "type": "object"
+    },
+    "MoleculeKind": {
+      "enum": [
+        "molecule",
+        "pseudo",
+        "electron"
+      ],
+      "title": "MoleculeKind",
+      "type": "string"
+    },
+    "NetworkChannelIn": {
+      "additionalProperties": false,
+      "description": "A directed phenomenological channel between two network states.\n\n:param source_state_key: Local key of the source state.\n:param sink_state_key: Local key of the sink state.\n:param kind: Macroscopic channel classification (association, ...).\n:param mechanism: Mechanistic attribution. Defaults to ``elementary``, so\n    an existing payload that names its ``microreaction_paths`` is\n    unaffected.\n:param microreaction_paths: The elementary step(s) this channel is\n    attributed to.\n\nThe two classification axes are orthogonal. ``kind`` says what the channel\ndoes macroscopically; ``mechanism`` says what evidence stands behind it:\n\n- ``elementary`` (the default) requires at least one ``microreaction_path``.\n  Omitting the paths is an incomplete deposit, not a declaration, and is\n  rejected.\n- ``well_skipping`` declares a chemically-activated channel whose flux\n  passes *through* one or more energized wells before the products separate\n  — ``NH2 + NH2 → H + N2H3`` proceeding via energized ``N2H4*`` is the\n  canonical case. There is no single elementary step or saddle point to\n  name, so ``microreaction_paths`` must be empty; the channel's backing is\n  the network topology plus the master-equation solve. Declaring it is not\n  taken on trust: ``NetworkPDepUploadRequest`` checks that the endpoints are\n  *not* joined by a single elementary step and *are* joined by a chain of\n  elementary steps whose intermediates are all wells.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NetworkChannelKind"
+        },
+        "mechanism": {
+          "$ref": "#/$defs/NetworkChannelMechanism",
+          "default": "elementary"
+        },
+        "microreaction_paths": {
+          "items": {
+            "$ref": "#/$defs/NetworkChannelMicroReactionIn"
+          },
+          "title": "Microreaction Paths",
+          "type": "array"
+        },
+        "sink_state_key": {
+          "minLength": 1,
+          "title": "Sink State Key",
+          "type": "string"
+        },
+        "source_state_key": {
+          "minLength": 1,
+          "title": "Source State Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "source_state_key",
+        "sink_state_key",
+        "kind"
+      ],
+      "title": "NetworkChannelIn",
+      "type": "object"
+    },
+    "NetworkChannelKind": {
+      "enum": [
+        "isomerization",
+        "association",
+        "dissociation",
+        "stabilization",
+        "exchange"
+      ],
+      "title": "NetworkChannelKind",
+      "type": "string"
+    },
+    "NetworkChannelMechanism": {
+      "description": "How a phenomenological channel is mechanistically attributed.\n\nOrthogonal to :class:`NetworkChannelKind`, which classifies the channel's\n*macroscopic* reaction type (association, isomerization, ...). This axis\nsays what scientific evidence stands behind the channel.\n\n``elementary``\n    The channel is one elementary step, or several parallel elementary\n    steps, each named on ``network_channel_microreaction``. Every\n    saddle-point path carries a barrier.\n\n``well_skipping``\n    A chemically-activated / well-skipping channel: the reactants form an\n    energized intermediate that reacts onward before collisional\n    stabilization, so the phenomenological k(T,P) is produced by the\n    master equation and there is no single elementary step or saddle point\n    to attribute it to. Its backing is the network topology plus the ME\n    solve, and it therefore carries **zero**\n    ``network_channel_microreaction`` rows *by declaration*, never by\n    omission.\n\nThere is deliberately no ``unknown``/``other`` member. An escape hatch here\nwould be indistinguishable from \"the producer did not supply the paths\",\nwhich is exactly the silent gap this discriminator exists to close.",
+      "enum": [
+        "elementary",
+        "well_skipping"
+      ],
+      "title": "NetworkChannelMechanism",
+      "type": "string"
+    },
+    "NetworkChannelMicroReactionIn": {
+      "additionalProperties": false,
+      "description": "One elementary reaction supporting a channel, and how it proceeds.\n\n:param micro_reaction_key: Local key of the elementary step.\n:param transition_state_key: Local key of the saddle point on this path.\n    Omit it (or send ``null``) for a barrierless or variational path —\n    radical-radical association and simple bond fission have no saddle\n    point, and they are ubiquitous in multi-well PDep networks. A\n    barrierless path carries no ``channel_barriers`` entry.",
+      "properties": {
+        "micro_reaction_key": {
+          "minLength": 1,
+          "title": "Micro Reaction Key",
+          "type": "string"
+        },
+        "transition_state_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transition State Key"
+        }
+      },
+      "required": [
+        "micro_reaction_key"
+      ],
+      "title": "NetworkChannelMicroReactionIn",
+      "type": "object"
+    },
+    "NetworkEnergyTransferScope": {
+      "description": "What a collisional energy-transfer declaration was specified *over*.\n\n⟨ΔE⟩down is physically a property of a (well, collider) pair, but master-\nequation inputs do not always resolve it that far. Arkane, RMG and MESS\nruns routinely declare one single-exponential-down model for the whole\nnetwork. Recording which of the two happened is the difference between\nN independently determined values and one value copied N times; without\nthis axis the database cannot tell them apart. See ADR 0009.\n\n``per_well``\n    The declaration names one network state and one collider species, and\n    applies only to that pair. This is the preferred, more informative\n    form: it is what the physics is a property of.\n\n``network_wide``\n    A single declaration the producer applied to every collisionally\n    stabilised well and to the bath gas as a whole. It names no state and\n    no collider *by declaration* — not by omission — and the well-resolved\n    values it stands in for were never determined.",
+      "enum": [
+        "per_well",
+        "network_wide"
+      ],
+      "title": "NetworkEnergyTransferScope",
+      "type": "string"
+    },
+    "NetworkKineticsIn": {
+      "additionalProperties": false,
+      "description": "Fitted phenomenological k(T,P) for one channel under this solve.\n\nSupports Chebyshev and PLOG fits. The channel is referenced by its\n``(source_state_key, sink_state_key)`` state-key pair (channels carry no\nlocal key of their own).\n\n:param source_state_key: Local key of the referenced channel's source state.\n:param sink_state_key: Local key of the referenced channel's sink state.\n:param model_kind: Parameterization kind (``chebyshev`` or ``plog``).\n:param chebyshev: Chebyshev coefficients (required when\n    ``model_kind == chebyshev``).\n:param plog: PLOG entries (required when ``model_kind == plog``).\n:param tmin_k: Minimum temperature of validity in K.\n:param tmax_k: Maximum temperature of validity in K.\n:param pmin_bar: Minimum pressure of validity in bar.\n:param pmax_bar: Maximum pressure of validity in bar.\n:param rate_units: Units of the fitted rate coefficient.\n:param pressure_units: Units the fit's pressure axis is expressed in.\n:param temperature_units: Units the fit's temperature axis is expressed in.\n:param stores_log10_k: Whether the coefficients fit ``log10(k)`` (Chebyshev\n    convention) rather than ``k`` directly.\n:param note: Optional free-text note.",
+      "properties": {
+        "channel_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel Key"
+        },
+        "chebyshev": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChebyshevKineticsIn"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "model_kind": {
+          "$ref": "#/$defs/NetworkKineticsModelKind"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "plog": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlogKineticsIn"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pmax_bar": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pmax Bar"
+        },
+        "pmin_bar": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pmin Bar"
+        },
+        "pressure_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PressureUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rate_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArrheniusAUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sink_state_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sink State Key"
+        },
+        "source_state_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source State Key"
+        },
+        "stores_log10_k": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stores Log10 K"
+        },
+        "temperature_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TemperatureUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tmax_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tmax K"
+        },
+        "tmin_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tmin K"
+        }
+      },
+      "required": [
+        "model_kind"
+      ],
+      "title": "NetworkKineticsIn",
+      "type": "object"
+    },
+    "NetworkKineticsModelKind": {
+      "enum": [
+        "chebyshev",
+        "plog",
+        "tabulated"
+      ],
+      "title": "NetworkKineticsModelKind",
+      "type": "string"
+    },
+    "NetworkMicroReactionIn": {
+      "additionalProperties": false,
+      "description": "An elementary reaction step in the network (ME input).\n\n:param key: Local key for this micro reaction.\n:param reversible: Whether this elementary step is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is non-canonical.\n:param reactants: Ordered reactant participants.\n:param products: Ordered product participants.\n:param label: Optional human-readable label.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "products": {
+          "items": {
+            "$ref": "#/$defs/MicroReactionParticipantUpload"
+          },
+          "minItems": 1,
+          "title": "Products",
+          "type": "array"
+        },
+        "reactants": {
+          "items": {
+            "$ref": "#/$defs/MicroReactionParticipantUpload"
+          },
+          "minItems": 1,
+          "title": "Reactants",
+          "type": "array"
+        },
+        "reaction_family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Family"
+        },
+        "reaction_family_source_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reaction Family Source Note"
+        },
+        "reversible": {
+          "default": true,
+          "title": "Reversible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "key",
+        "reactants",
+        "products"
+      ],
+      "title": "NetworkMicroReactionIn",
+      "type": "object"
+    },
+    "NetworkSolveCalculationRole": {
+      "enum": [
+        "well_energy",
+        "barrier_energy",
+        "well_freq",
+        "barrier_freq",
+        "master_equation_run",
+        "fit_source"
+      ],
+      "title": "NetworkSolveCalculationRole",
+      "type": "string"
+    },
+    "NetworkSolveIn": {
+      "additionalProperties": false,
+      "description": "Master-equation solve configuration and provenance.\n\n:param me_method: ME solution method.\n:param interpolation_model: Interpolation model for the ME solution.\n:param tmin_k: Minimum temperature in K for the ME solve.\n:param tmax_k: Maximum temperature in K for the ME solve.\n:param pmin_bar: Minimum pressure in bar for the ME solve.\n:param pmax_bar: Maximum pressure in bar for the ME solve.\n:param grain_size_cm_inv: Energy grain size in cm⁻¹.\n:param grain_count: Number of energy grains.\n:param emax_kj_mol: Maximum energy in kJ/mol for the ME solve.\n:param kind: Whether the master equation was solved here (``computed``,\n    the default and preferred form) or the k(T,P) were transcribed from a\n    publication (``reported``). A ``reported`` solve is not held to the\n    state-energy, channel-barrier or energy-transfer coverage rules — it\n    holds none of those inputs — and must supply ``literature`` instead.\n    See ADR 0010.\n:param literature: Optional literature submission payload. Required when\n    ``kind='reported'``.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param bath_gas: Bath gas composition.\n:param energy_transfer: Energy transfer model parameters — either one\n    ``per_well`` entry per (well, bath collider) pair, or a single\n    ``network_wide`` entry.\n:param source_calculations: Calculations used in this solve, by local key and role.\n:param channel_kinetics: Fitted phenomenological k(T,P) for channels, each\n    referencing its channel by ``(source_state_key, sink_state_key)``.\n:param note: Optional free-text note.",
+      "properties": {
+        "bath_gas": {
+          "items": {
+            "$ref": "#/$defs/BathGasIn"
+          },
+          "title": "Bath Gas",
+          "type": "array"
+        },
+        "channel_barriers": {
+          "items": {
+            "$ref": "#/$defs/ChannelBarrierIn"
+          },
+          "title": "Channel Barriers",
+          "type": "array"
+        },
+        "channel_kinetics": {
+          "items": {
+            "$ref": "#/$defs/NetworkKineticsIn"
+          },
+          "title": "Channel Kinetics",
+          "type": "array"
+        },
+        "emax_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Emax Kj Mol"
+        },
+        "energy_transfer": {
+          "items": {
+            "$ref": "#/$defs/EnergyTransferIn"
+          },
+          "title": "Energy Transfer",
+          "type": "array"
+        },
+        "grain_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grain Count"
+        },
+        "grain_size_cm_inv": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Grain Size Cm Inv"
+        },
+        "interpolation_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpolation Model"
+        },
+        "kind": {
+          "$ref": "#/$defs/NetworkSolveKind",
+          "default": "computed"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "me_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Me Method"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "pmax_bar": {
+          "exclusiveMinimum": 0,
+          "title": "Pmax Bar",
+          "type": "number"
+        },
+        "pmin_bar": {
+          "exclusiveMinimum": 0,
+          "title": "Pmin Bar",
+          "type": "number"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/SolveSourceCalculationIn"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "state_energies": {
+          "items": {
+            "$ref": "#/$defs/StateEnergyIn"
+          },
+          "title": "State Energies",
+          "type": "array"
+        },
+        "tmax_k": {
+          "exclusiveMinimum": 0,
+          "title": "Tmax K",
+          "type": "number"
+        },
+        "tmin_k": {
+          "exclusiveMinimum": 0,
+          "title": "Tmin K",
+          "type": "number"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "tmin_k",
+        "tmax_k",
+        "pmin_bar",
+        "pmax_bar"
+      ],
+      "title": "NetworkSolveIn",
+      "type": "object"
+    },
+    "NetworkSolveKind": {
+      "description": "Where a network's phenomenological k(T,P) came from.\n\n``network_solve`` is the provenance envelope for one coherent set of\nk(T,P): it carries the T/P range they are valid over and the literature /\nsoftware / workflow-tool triple they are attributed to. This axis says\nwhat stands behind that attribution. Without it the database can only hold\nrates whose master-equation inputs it also holds, which excludes every\nrate ever read out of a paper's supplementary table. See ADR 0010.\n\n``computed``\n    The master equation was solved here and its inputs were deposited\n    with it: an energy for every network state, a barrier for every\n    saddle-point path, and a collisional energy-transfer model. The rates\n    can be re-derived, the fit can be checked, and the network can be\n    re-solved at other conditions. This is the preferred form.\n\n``reported``\n    The rates were transcribed from a publication, which is credited via\n    the required ``literature_id``. The master-equation inputs are not in\n    this database — usually because the paper never published them — so\n    none of the three things above is possible. The numbers are as\n    trustworthy as their source; what is missing is the derivation.",
+      "enum": [
+        "computed",
+        "reported"
+      ],
+      "title": "NetworkSolveKind",
+      "type": "string"
+    },
+    "NetworkSpeciesIn": {
+      "additionalProperties": false,
+      "description": "A species defined within this network upload.\n\n:param key: Local key used to reference this species elsewhere in the payload.\n:param species_entry: Species-entry identity payload to resolve or create.\n:param label: Optional human-readable display label.\n:param conformers: Optional conformer uploads (geometry + opt calculation).\n:param calculations: Additional calculations on this species (sp, freq, etc.).\n    Their ``geometry_key``, when given, must point to one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job. This docstring used to\n    attribute it to ``geometry_key``, matching a helper in\n    ``app.workflows.network_pdep`` that dropped the anchor without a word\n    whenever ``geometry_key`` was absent. Both said the same wrong thing,\n    so neither contradicted the other. See\n    ``app.services.conformer_anchoring``.\n:param statmech: Optional statistical-mechanics interpretation for this\n    species (external symmetry, optical isomers, hindered rotors, etc.).\n    Reuses the bundle's statmech payload; ``source_calculations`` reference\n    calculation keys defined anywhere in this request.",
+      "properties": {
+        "calculations": {
+          "items": {
+            "$ref": "#/$defs/CalculationIn"
+          },
+          "title": "Calculations",
+          "type": "array"
+        },
+        "conformers": {
+          "items": {
+            "$ref": "#/$defs/ConformerIn"
+          },
+          "title": "Conformers",
+          "type": "array"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        },
+        "statmech": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechInBundle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransportUploadPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "species_entry"
+      ],
+      "title": "NetworkSpeciesIn",
+      "type": "object"
+    },
+    "NetworkStateIn": {
+      "additionalProperties": false,
+      "description": "A macroscopic state in the network (well or bimolecular channel).\n\n:param key: Local key used to reference this state elsewhere in the payload.\n:param kind: State kind — ``well``, ``bimolecular``, or ``termolecular``.\n:param label: Optional human-readable display label.\n:param participants: Species composition of this state.",
+      "properties": {
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "well",
+            "bimolecular",
+            "termolecular"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/NetworkStateParticipantIn"
+          },
+          "minItems": 1,
+          "title": "Participants",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "kind",
+        "participants"
+      ],
+      "title": "NetworkStateIn",
+      "type": "object"
+    },
+    "NetworkStateParticipantIn": {
+      "additionalProperties": false,
+      "description": "One species within a network state definition.\n\n:param species_key: Local key referencing a species in the ``species`` list.\n:param stoichiometry: Stoichiometric coefficient (defaults to 1).",
+      "properties": {
+        "species_key": {
+          "minLength": 1,
+          "title": "Species Key",
+          "type": "string"
+        },
+        "stoichiometry": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Stoichiometry",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "species_key"
+      ],
+      "title": "NetworkStateParticipantIn",
+      "type": "object"
+    },
+    "PlogEntryIn": {
+      "additionalProperties": false,
+      "description": "One PLOG entry: modified-Arrhenius parameters at a discrete pressure.\n\nMirrors one ``network_kinetics_plog`` row. Multiple entries at the same\npressure are distinguished by ``entry_index`` (duplicate-Arrhenius PLOG,\nas emitted by Arkane/Cantera when a single pressure carries two Arrhenius\nterms whose rates sum).\n\n:param pressure_bar: Discrete pressure of this entry in bar (> 0).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units of ``a`` (dimensionality varies with molecularity;\n    e.g. ``per_s`` for unimolecular, ``cm3_mol_s`` for bimolecular).\n:param n: Temperature exponent.\n:param ea_kj_mol: Activation energy in kJ/mol.\n:param entry_index: Discriminator for multiple Arrhenius terms sharing one\n    pressure (defaults to 1).",
+      "properties": {
+        "a": {
+          "title": "A",
+          "type": "number"
+        },
+        "a_units": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArrheniusAUnits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ea_kj_mol": {
+          "title": "Ea Kj Mol",
+          "type": "number"
+        },
+        "entry_index": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Entry Index",
+          "type": "integer"
+        },
+        "n": {
+          "title": "N",
+          "type": "number"
+        },
+        "pressure_bar": {
+          "exclusiveMinimum": 0,
+          "title": "Pressure Bar",
+          "type": "number"
+        }
+      },
+      "required": [
+        "pressure_bar",
+        "a",
+        "n",
+        "ea_kj_mol"
+      ],
+      "title": "PlogEntryIn",
+      "type": "object"
+    },
+    "PlogKineticsIn": {
+      "additionalProperties": false,
+      "description": "Pressure-log (PLOG) interpolation of a phenomenological k(T,P).\n\nA set of pressure-indexed modified-Arrhenius entries. Persisted as one\n``network_kinetics_plog`` row per entry under a shared ``network_kinetics``\nparent.\n\n:param entries: PLOG entries (at least one). No two entries may share the\n    same ``(pressure_bar, entry_index)`` pair — that maps to the child\n    table's composite primary key.",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/PlogEntryIn"
+          },
+          "minItems": 1,
+          "title": "Entries",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entries"
+      ],
+      "title": "PlogKineticsIn",
+      "type": "object"
+    },
+    "PressureUnit": {
+      "enum": [
+        "bar",
+        "atm"
+      ],
+      "title": "PressureUnit",
+      "type": "string"
+    },
+    "RigidRotorKind": {
+      "enum": [
+        "atom",
+        "linear",
+        "spherical_top",
+        "symmetric_top",
+        "asymmetric_top"
+      ],
+      "title": "RigidRotorKind",
+      "type": "string"
+    },
+    "SCFStabilityContent": {
+      "additionalProperties": false,
+      "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+      "properties": {
+        "instability_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instability Count"
+        },
+        "instability_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instability Type"
+        },
+        "lowest_eigenvalue": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lowest Eigenvalue"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "reoptimized_wavefunction": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reoptimized Wavefunction"
+        },
+        "status": {
+          "$ref": "#/$defs/SCFStabilityStatus"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "SCFStabilityContent",
+      "type": "object"
+    },
+    "SCFStabilityStatus": {
+      "enum": [
+        "stable",
+        "unstable",
+        "stabilized",
+        "inconclusive"
+      ],
+      "title": "SCFStabilityStatus",
+      "type": "string"
+    },
+    "ScientificOriginKind": {
+      "enum": [
+        "computed",
+        "experimental",
+        "estimated"
+      ],
+      "title": "ScientificOriginKind",
+      "type": "string"
+    },
+    "ScientificSoftwareReleaseIdentity": {
+      "additionalProperties": false,
+      "description": "Portable identity of the scientific executable's declared release.\n\nThis deliberately contains only the four fields used by the software\nrelease registry's dedupe identity.  Dates and notes are descriptive,\nmutable provenance and must not affect a manifest's byte identity.",
+      "properties": {
+        "build": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ScientificSoftwareReleaseIdentity",
+      "type": "object"
+    },
+    "SoftwareReleaseRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a software release.",
+      "properties": {
+        "build": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "release_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Date"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Revision"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SoftwareReleaseRef",
+      "type": "object"
+    },
+    "SolveSourceCalculationIn": {
+      "additionalProperties": false,
+      "description": "Links a calculation (by local key) to the solve with a specific role.\n\n:param calculation_key: Local key of a calculation defined elsewhere in the payload.\n:param role: The scientific role of this calculation in the ME solve.",
+      "properties": {
+        "calculation_key": {
+          "minLength": 1,
+          "title": "Calculation Key",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/NetworkSolveCalculationRole"
+        }
+      },
+      "required": [
+        "calculation_key",
+        "role"
+      ],
+      "title": "SolveSourceCalculationIn",
+      "type": "object"
+    },
+    "SpeciesEntryIdentityPayload": {
+      "additionalProperties": false,
+      "description": "Reusable upload fragment for resolved species-entry identity.\n\n:param species_entry_kind: Stationary-point kind for the resolved entry.\n:param unmapped_smiles: Optional display/search SMILES for the resolved entry.\n:param stereo_kind: Stereo classification for the resolved entry.\n:param stereo_label: Optional stereo label such as ``R`` or ``E``.\n:param electronic_state_kind: Electronic-state classification.\n:param electronic_state_label: Optional state label such as ``X`` or ``A``.\n:param term_symbol_raw: Optional raw uploaded term symbol.\n:param term_symbol: Optional canonicalized term symbol.\n\nIsotopic resolution is *not* a field on this payload. It is derived\nserver-side from the atom-resolved isotope labels in ``smiles`` (see\n``SpeciesIdentityPayload.smiles``). The former free-text\n``isotopologue_label`` has been removed: an arbitrary string could mint\ntwo species identities that no scientific content distinguished, and a\nderived key may never be accepted from an uploader.",
+      "properties": {
+        "charge": {
+          "title": "Charge",
+          "type": "integer"
+        },
+        "electronic_state_kind": {
+          "$ref": "#/$defs/SpeciesEntryStateKind",
+          "default": "ground"
+        },
+        "electronic_state_label": {
+          "anyOf": [
+            {
+              "maxLength": 8,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic State Label"
+        },
+        "molecule_kind": {
+          "$ref": "#/$defs/MoleculeKind",
+          "default": "molecule"
+        },
+        "multiplicity": {
+          "minimum": 1,
+          "title": "Multiplicity",
+          "type": "integer"
+        },
+        "smiles": {
+          "minLength": 1,
+          "title": "Smiles",
+          "type": "string"
+        },
+        "species_entry_kind": {
+          "$ref": "#/$defs/StationaryPointKind",
+          "default": "minimum"
+        },
+        "stereo_kind": {
+          "$ref": "#/$defs/StereoKind",
+          "default": "unspecified"
+        },
+        "stereo_label": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stereo Label"
+        },
+        "term_symbol": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Term Symbol"
+        },
+        "term_symbol_raw": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Term Symbol Raw"
+        },
+        "unmapped_smiles": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unmapped Smiles"
+        }
+      },
+      "required": [
+        "smiles",
+        "charge",
+        "multiplicity"
+      ],
+      "title": "SpeciesEntryIdentityPayload",
+      "type": "object"
+    },
+    "SpeciesEntryStateKind": {
+      "enum": [
+        "ground",
+        "excited"
+      ],
+      "title": "SpeciesEntryStateKind",
+      "type": "string"
+    },
+    "SpinDiagnosticPayload": {
+      "additionalProperties": false,
+      "description": "Optional inline spin-contamination ``<S^2>`` evidence parsed from a\ncalculation's output.\n\nThe companion block to :class:`WavefunctionDiagnosticPayload`: T1/D1 stay\nthere, spin-contamination signals land here. Carries the observed\n``<S^2>`` and, when the ESS reports them, the ideal ``S(S+1)`` for the\ntarget spin state and the ``<S^2>`` after annihilation of the first spin\ncontaminant.\n\nApplies to any UNRESTRICTED calculation (not just coupled cluster). The\nproducer contract is to emit the block only when ``<S^2>`` was actually\nparsed; ``s_squared`` is required because the row exists precisely because\nthat observation is present. Omit the block entirely for restricted /\nclosed-shell runs that have no contamination to report.\n\n:param s_squared: Observed ``<S^2>`` expectation value.\n:param s_squared_expected: Ideal ``S(S+1)`` for the target spin state as\n    reported by the ESS, when reported.\n:param s_squared_annihilated: ``<S^2>`` after annihilation of the first\n    spin contaminant (e.g. Gaussian's \"after annihilation\" value), when\n    reported.\n:param note: Optional free-text annotation.",
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "s_squared": {
+          "minimum": 0,
+          "title": "S Squared",
+          "type": "number"
+        },
+        "s_squared_annihilated": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "S Squared Annihilated"
+        },
+        "s_squared_expected": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "S Squared Expected"
+        }
+      },
+      "required": [
+        "s_squared"
+      ],
+      "title": "SpinDiagnosticPayload",
+      "type": "object"
+    },
+    "SpinTreatment": {
+      "description": "Spin treatment of the electronic-structure method (DR-0034).",
+      "enum": [
+        "restricted",
+        "unrestricted",
+        "restricted_open",
+        "unknown"
+      ],
+      "title": "SpinTreatment",
+      "type": "string"
+    },
+    "StateEnergyIn": {
+      "additionalProperties": false,
+      "description": "One solve-state energy on a declared, reproducible energy zero.",
+      "properties": {
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "correction_convention": {
+          "$ref": "#/$defs/EnergyCorrectionConvention"
+        },
+        "energy_kj_mol": {
+          "title": "Energy Kj Mol",
+          "type": "number"
+        },
+        "energy_zero_convention": {
+          "$ref": "#/$defs/EnergyZeroConvention"
+        },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        },
+        "state_key": {
+          "minLength": 1,
+          "title": "State Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "energy_zero_convention",
+        "correction_convention",
+        "state_key",
+        "energy_kj_mol"
+      ],
+      "title": "StateEnergyIn",
+      "type": "object"
+    },
+    "StationaryPointKind": {
+      "enum": [
+        "minimum",
+        "vdw_complex"
+      ],
+      "title": "StationaryPointKind",
+      "type": "string"
+    },
+    "StatmechCalculationRole": {
+      "enum": [
+        "opt",
+        "freq",
+        "sp",
+        "scan",
+        "composite",
+        "imported"
+      ],
+      "title": "StatmechCalculationRole",
+      "type": "string"
+    },
+    "StatmechInBundle": {
+      "additionalProperties": false,
+      "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links; never persisted.\n:param note: Optional free-text note.",
+      "properties": {
+        "energy_level_of_theory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelOfTheoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "external_symmetry": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Symmetry"
+        },
+        "freq_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "is_linear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Linear"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "optical_isomers": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optical Isomers"
+        },
+        "point_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Point Group"
+        },
+        "rigid_rotor_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RigidRotorKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotational_constant_a_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant A Cm1"
+        },
+        "rotational_constant_b_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant B Cm1"
+        },
+        "rotational_constant_c_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant C Cm1"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/StatmechSourceCalcIn"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "statmech_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "torsions": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionInBundle"
+          },
+          "title": "Torsions",
+          "type": "array"
+        },
+        "uses_projected_frequencies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uses Projected Frequencies"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "StatmechInBundle",
+      "type": "object"
+    },
+    "StatmechSourceCalcIn": {
+      "additionalProperties": false,
+      "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
+      "properties": {
+        "calculation_key": {
+          "minLength": 1,
+          "title": "Calculation Key",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/StatmechCalculationRole"
+        }
+      },
+      "required": [
+        "calculation_key",
+        "role"
+      ],
+      "title": "StatmechSourceCalcIn",
+      "type": "object"
+    },
+    "StatmechTorsionCoordinateIn": {
+      "additionalProperties": false,
+      "description": "Atom indices for one torsional coordinate.\n\n:param coordinate_index: One-based coordinate number within the rotor.\n:param atom1_index: First atom index.\n:param atom2_index: Second atom index.\n:param atom3_index: Third atom index.\n:param atom4_index: Fourth atom index.",
+      "properties": {
+        "atom1_index": {
+          "minimum": 1,
+          "title": "Atom1 Index",
+          "type": "integer"
+        },
+        "atom2_index": {
+          "minimum": 1,
+          "title": "Atom2 Index",
+          "type": "integer"
+        },
+        "atom3_index": {
+          "minimum": 1,
+          "title": "Atom3 Index",
+          "type": "integer"
+        },
+        "atom4_index": {
+          "minimum": 1,
+          "title": "Atom4 Index",
+          "type": "integer"
+        },
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "atom1_index",
+        "atom2_index",
+        "atom3_index",
+        "atom4_index"
+      ],
+      "title": "StatmechTorsionCoordinateIn",
+      "type": "object"
+    },
+    "StatmechTorsionInBundle": {
+      "additionalProperties": false,
+      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "properties": {
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionCoordinateIn"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "source_scan_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scan Calculation Key"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "top_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top Description"
+        },
+        "torsion_index": {
+          "minimum": 1,
+          "title": "Torsion Index",
+          "type": "integer"
+        },
+        "treatment_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TorsionTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "torsion_index"
+      ],
+      "title": "StatmechTorsionInBundle",
+      "type": "object"
+    },
+    "StatmechTreatmentKind": {
+      "enum": [
+        "rrho",
+        "rrho_1d",
+        "rrho_nd",
+        "rrho_1d_nd",
+        "rrho_ad",
+        "rrao"
+      ],
+      "title": "StatmechTreatmentKind",
+      "type": "string"
+    },
+    "StereoKind": {
+      "enum": [
+        "unspecified",
+        "achiral",
+        "enantiomer",
+        "diastereomer",
+        "ez_isomer"
+      ],
+      "title": "StereoKind",
+      "type": "string"
+    },
+    "TemperatureUnit": {
+      "enum": [
+        "kelvin"
+      ],
+      "title": "TemperatureUnit",
+      "type": "string"
+    },
+    "TorsionTreatmentKind": {
+      "enum": [
+        "hindered_rotor",
+        "free_rotor",
+        "rigid_top",
+        "hindered_rotor_dos"
+      ],
+      "title": "TorsionTreatmentKind",
+      "type": "string"
+    },
+    "TransitionStateIn": {
+      "additionalProperties": false,
+      "description": "A transition state for one micro reaction.\n\n:param key: Local key for this transition state.\n:param micro_reaction_key: Local key referencing a micro reaction.\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param geometry: Geometry of the saddle point (with a reusable key).\n:param calculation: The optimization calculation that produced this TS geometry.\n:param calculations: Additional calculations on this TS (freq, sp, irc).\n:param label: Optional human-readable label.\n:param note: Optional note.",
+      "properties": {
+        "calculation": {
+          "$ref": "#/$defs/CalculationIn"
+        },
+        "calculations": {
+          "items": {
+            "$ref": "#/$defs/CalculationIn"
+          },
+          "title": "Calculations",
+          "type": "array"
+        },
+        "charge": {
+          "title": "Charge",
+          "type": "integer"
+        },
+        "geometry": {
+          "$ref": "#/$defs/GeometryIn"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "micro_reaction_key": {
+          "minLength": 1,
+          "title": "Micro Reaction Key",
+          "type": "string"
+        },
+        "multiplicity": {
+          "minimum": 1,
+          "title": "Multiplicity",
+          "type": "integer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "statmech": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechInBundle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "validation_evidence": {
+          "description": "Structured IRC evidence. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. source_calculation_key resolves within this transition state's calculation namespace and must name an irc-type calculation.",
+          "items": {
+            "$ref": "#/$defs/TransitionStateValidationEvidenceIn"
+          },
+          "title": "Validation Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "key",
+        "micro_reaction_key",
+        "charge",
+        "multiplicity",
+        "geometry",
+        "calculation"
+      ],
+      "title": "TransitionStateIn",
+      "type": "object"
+    },
+    "TransitionStateValidationEvidenceIn": {
+      "additionalProperties": false,
+      "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+      "properties": {
+        "kind": {
+          "const": "irc",
+          "title": "Kind",
+          "type": "string"
+        },
+        "passed": {
+          "title": "Passed",
+          "type": "boolean"
+        },
+        "product_participant_mapping": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Product Participant Mapping"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "reactant_participant_mapping": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reactant Participant Mapping"
+        },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        }
+      },
+      "required": [
+        "kind",
+        "passed",
+        "rationale"
+      ],
+      "title": "TransitionStateValidationEvidenceIn",
+      "type": "object"
+    },
+    "TransportUploadPayload": {
+      "additionalProperties": false,
+      "description": "Upload payload for species-level transport properties.\n\nThe backend resolves provenance refs and creates a ``Transport`` row\nattached to the resolved species entry.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param sigma_angstrom: Lennard-Jones collision diameter in Å.\n:param epsilon_over_k_k: Lennard-Jones well depth ε/k_B in K.\n:param dipole_debye: Dipole moment in Debye.\n:param polarizability_angstrom3: Polarizability in Å³.\n:param rotational_relaxation: Rotational relaxation collision number (Z_rot).\n:param note: Optional free-text note.",
+      "properties": {
+        "dipole_debye": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dipole Debye"
+        },
+        "epsilon_over_k_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Epsilon Over K K"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "polarizability_angstrom3": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Polarizability Angstrom3"
+        },
+        "rotational_relaxation": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Relaxation"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "sigma_angstrom": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sigma Angstrom"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TransportUploadPayload",
+      "type": "object"
+    },
+    "WavefunctionDiagnosticPayload": {
+      "additionalProperties": false,
+      "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: Janowski D1 diagnostic.\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
+      "properties": {
+        "d1_diagnostic": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "D1 Diagnostic"
+        },
+        "largest_t2_amplitude": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Largest T2 Amplitude"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "t1_diagnostic": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "T1 Diagnostic"
+        },
+        "t1_norm": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "T1 Norm"
+        }
+      },
+      "title": "WavefunctionDiagnosticPayload",
+      "type": "object"
+    },
+    "WorkflowToolReleaseIdentity": {
+      "additionalProperties": false,
+      "description": "Portable identity of the optional workflow-tool code state.",
+      "properties": {
+        "git_commit": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Commit"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkflowToolReleaseIdentity",
+      "type": "object"
+    },
+    "WorkflowToolReleaseRef": {
+      "additionalProperties": false,
+      "description": "Upload-facing reference to a workflow tool code state.",
+      "properties": {
+        "git_commit": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Commit"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "release_date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Release Date"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "WorkflowToolReleaseRef",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Unified upload payload for a pressure-dependent reaction network.\n\nA single request contains species (with conformers and calculations),\ntransition states (with geometries and calculations), micro reactions,\nnetwork topology (states and channels), and an optional master-equation\nsolve configuration.\n\nKey uniqueness: calculation and geometry keys are globally unique across\nthe entire request. Species, state, reaction, and TS keys are unique\nwithin their own collections (different namespaces).\n\nThis schema expects one connected network — disconnected subnetworks\nare rejected when channels are explicitly provided.",
+  "examples": [
+    {
+      "species": [
+        {
+          "key": "c2h5",
+          "species_entry": {
+            "charge": 0,
+            "multiplicity": 2,
+            "smiles": "C[CH2]"
+          }
+        }
+      ],
+      "states": [
+        {
+          "key": "w1",
+          "kind": "well",
+          "participants": [
+            {
+              "species_key": "c2h5"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "properties": {
+    "channels": {
+      "items": {
+        "$ref": "#/$defs/NetworkChannelIn"
+      },
+      "title": "Channels",
+      "type": "array"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "literature": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LiteratureUploadRequest"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "micro_reactions": {
+      "items": {
+        "$ref": "#/$defs/NetworkMicroReactionIn"
+      },
+      "title": "Micro Reactions",
+      "type": "array"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Name"
+    },
+    "rights": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DepositRights"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "software_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SoftwareReleaseRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "solve": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/NetworkSolveIn"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "species": {
+      "items": {
+        "$ref": "#/$defs/NetworkSpeciesIn"
+      },
+      "minItems": 1,
+      "title": "Species",
+      "type": "array"
+    },
+    "states": {
+      "items": {
+        "$ref": "#/$defs/NetworkStateIn"
+      },
+      "minItems": 1,
+      "title": "States",
+      "type": "array"
+    },
+    "transition_states": {
+      "items": {
+        "$ref": "#/$defs/TransitionStateIn"
+      },
+      "title": "Transition States",
+      "type": "array"
+    },
+    "workflow_tool_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WorkflowToolReleaseRef"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "species",
+    "states"
+  ],
+  "title": "NetworkPDepUploadRequest",
+  "type": "object"
+}

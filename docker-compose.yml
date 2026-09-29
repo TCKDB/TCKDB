@@ -133,14 +133,15 @@ services:
   # through seaweedfs:8888, raw data on :9340, the master growing volumes on
   # request -- and, over gRPC with `weed shell`, an object deleted
   # (`fs.rm`) and the bucket's whole collection deleted
-  # (`collection.delete -apply`). Two layers close it:
+  # (`collection.delete -apply`). Three layers close it:
   #
-  # 1. Network isolation, which is what closes gRPC. `seaweedfs` is on the
-  #    `storage` network ONLY. Nothing on `default` (db, anything else
-  #    started in this project) can reach any SeaweedFS port, gRPC included.
-  #    Only services that talk to the store join `storage`: the worker
-  #    here, and the API container, which tckdb_deploy.sh connects when
-  #    TCKDB_EXTRA_NETWORKS names this network. The API already holds S3
+  # 1. Network isolation, which closes gRPC to other containers.
+  #    `seaweedfs` is on the `storage` network ONLY. Nothing on `default`
+  #    (db, anything else started in this project) can reach any SeaweedFS
+  #    port, gRPC included. Only services that talk to the store join
+  #    `storage`: the worker here, and the API container, which
+  #    tckdb_deploy.sh connects when TCKDB_EXTRA_NETWORKS names this
+  #    network. The API already holds S3
   #    credentials that can delete every object, so reaching gRPC gives it
   #    nothing it does not have; that is why isolation, rather than gRPC
   #    mTLS (which needs certificate files), is the chosen fix.
@@ -163,7 +164,20 @@ services:
   # What the HTTP layer does NOT cover: the gRPC ports, which a container on
   # the `storage` network can still use destructively (SeaweedFS secures
   # gRPC only with mTLS). Only join `storage` from something you would
-  # trust with the S3 secret key. Readable without credentials, on purpose:
+  # trust with the S3 secret key.
+  #
+  # 3. A host firewall rule, for the one route the network does not close
+  #    (#548). Docker bridge addresses are routable from the host's own
+  #    network namespace, so a local process or a host-network container
+  #    (cloudflared) could otherwise reach every SeaweedFS port, gRPC
+  #    included. backend/scripts/ops/tckdb_storage_hostfw.sh, run at boot
+  #    by tckdb-storage-hostfw.service, rejects new TCP from the host to
+  #    the `storage` subnet except to 9000 (docker-proxy's S3 forward).
+  #    Install it on every Linux host that runs this service: see
+  #    docs/deployment/self_hosted_single_node.md, "Closing the object
+  #    store to the host".
+  #
+  # Readable without credentials, on purpose:
   # the volume server's /status and the master's status page (GET /), which
   # the API reads for free space when S3_SEAWEEDFS_MASTER_URL is set. No
   # SeaweedFS port other than 9000 on loopback is published, and none may be.
