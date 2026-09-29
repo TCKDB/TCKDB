@@ -555,9 +555,9 @@ def plan_attestation(
         raise VersionFillRefused("the attestation statement must not be blank.")
     if release.revision is not None or release.build is not None:
         raise VersionFillRefused(
-            f"release_has_revision_or_build: {release.public_ref} declares "
-            f"revision={release.revision!r} build={release.build!r}; attesting a "
-            "version on it would mint a mixed release tuple. Not attested."
+            f"{release.public_ref} declares revision={release.revision!r} "
+            f"build={release.build!r}; attesting a version on it would mint a "
+            "mixed release tuple. Not attested (release_has_revision_or_build)."
         )
     if (
         attestation.covers_depositor.id != attestation.attested_by.id
