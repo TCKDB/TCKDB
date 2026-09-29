@@ -94,6 +94,42 @@ You should see the `rdkit` extension listed.
 
 ---
 
+### `Connection refused` from the host to a SeaweedFS port other than 9000
+
+**Symptom**
+
+From the host, or from a host-network container, SeaweedFS's filer,
+master, volume or gRPC ports refuse at once, and so does a port you
+published yourself on `127.0.0.1` (for example 9333 for
+`S3_SEAWEEDFS_MASTER_URL`). The S3 API on 9000 works. `weed shell` run
+on the host cannot connect.
+
+**Cause**
+
+The host firewall rule from
+[Closing the object store to the host](self_hosted_single_node.md#closing-the-object-store-to-the-host)
+is working as intended. It resets new TCP connections from the host to
+the `storage` network, except to 9000. The gRPC ports take no credentials,
+so this is the only thing keeping local processes away from them.
+
+**Fix**
+
+- To run `weed shell` or read a status page, do it from inside the
+  container: `docker compose exec seaweedfs weed shell`.
+- For a forward you published yourself, allow its container port:
+  `sudo /usr/local/sbin/tckdb_storage_hostfw.sh --allow-ports 9000,9333,9340`,
+  and set the same value as `TCKDB_STORAGE_ALLOW_PORTS` in the unit
+  (`sudo systemctl edit tckdb-storage-hostfw`) so it survives a reboot.
+  Never allow the gRPC ports (18888, 19333, 19340, 19000).
+
+**Verify**
+
+`--check` compares against the ports it is given, so give it the same list:
+`sudo /usr/local/sbin/tckdb_storage_hostfw.sh --check --allow-ports 9000,9333,9340`.
+The rule as installed is in `sudo iptables -S OUTPUT | grep tckdb-548`.
+
+---
+
 ### Uploads with files return 503, but everything else works
 
 **Symptom**

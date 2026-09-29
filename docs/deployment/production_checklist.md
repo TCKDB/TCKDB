@@ -153,6 +153,7 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] `X-Request-ID` is present on every response (try `curl -i https://your-host/api/v1/health` and confirm the header). Clients may set their own `X-Request-ID` on requests for correlation; the server echoes it when safe.
 - [ ] `LOG_FORMAT=json` is set so hosted logs are structured and include `request_id`, `level`, `logger`, `message`. (Local/dev defaults to human-readable text.)
 - [ ] Reverse-proxy / tunnel terminates TLS at the edge; the API itself listens only on `127.0.0.1`.
+- [ ] On a Linux host running the bundled `seaweedfs` service, the host firewall rule that keeps local processes and host-network containers off the object store's unauthenticated gRPC ports is installed, and `sudo /usr/local/sbin/tckdb_storage_hostfw.sh --check` exits 0. See [Closing the object store to the host](self_hosted_single_node.md#closing-the-object-store-to-the-host).
 - [ ] Backups are configured and verified by running a restore drill at least once (see [shared-private-deployment.md §Backup and restore basics](shared-private-deployment.md#backup-and-restore-basics)).
 
 A deploy that ticks every row in both tables and the pre-flight checklist is safe to expose. A deploy that does not is not.
