@@ -107,6 +107,7 @@ from app.services.scientific_read.common import (
     validate_temperature_range,
     visible_statuses,
 )
+from app.services.scientific_read.handles import level_of_theory_ref_clause
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -1242,7 +1243,7 @@ def search_calculation_analytics(
         if request.basis is not None:
             stmt = stmt.where(LevelOfTheory.basis == request.basis)
         if request.lot_ref is not None:
-            stmt = stmt.where(LevelOfTheory.public_ref == request.lot_ref)
+            stmt = stmt.where(level_of_theory_ref_clause(request.lot_ref))
 
     if request.software is not None:
         stmt = (

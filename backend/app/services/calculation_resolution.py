@@ -12,6 +12,7 @@ from sqlalchemy.sql import ColumnElement
 from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
+from app.chemistry.basis_set_names import basis_identity_key
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -122,15 +123,20 @@ def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement
 def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     """Compute the canonical level-of-theory hash used for dedupe.
 
+    Basis-set names enter the hash through
+    :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
+    so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory. The row still
+    stores the name verbatim. Every other field is hashed as written.
+
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
     """
 
     payload = {
         "method": ref.method,
-        "basis": ref.basis,
-        "aux_basis": ref.aux_basis,
-        "cabs_basis": ref.cabs_basis,
+        "basis": basis_identity_key(ref.basis),
+        "aux_basis": basis_identity_key(ref.aux_basis),
+        "cabs_basis": basis_identity_key(ref.cabs_basis),
         "dispersion": ref.dispersion,
         "solvent": ref.solvent,
         "solvent_model": ref.solvent_model,

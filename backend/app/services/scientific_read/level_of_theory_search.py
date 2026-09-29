@@ -54,7 +54,10 @@ from app.services.scientific_read.common import (
     validate_includes,
     validate_pagination,
 )
-from app.services.scientific_read.handles import resolve_filter_ref
+from app.services.scientific_read.handles import (
+    canonical_level_of_theory_id,
+    resolve_filter_ref,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -179,6 +182,9 @@ def _run_lot_query(
     )
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
+    if lot_id is not None:
+        # A merged row's ref names the row it was merged into (#574).
+        lot_id = canonical_level_of_theory_id(session, lot_id)
 
     stmt = select(LevelOfTheory.id).where(
         exists().where(Calculation.lot_id == LevelOfTheory.id)
