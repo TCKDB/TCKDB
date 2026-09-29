@@ -161,10 +161,11 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #: * the disk itself full (128 MiB volume, slots raised above what the
 #:   disk holds; refused at 127 MiB, the server log reading "no space left
 #:   on device");
-#: * a bucket over quota. ``s3.bucket.quota -sizeMB=20`` alone refused
-#:   nothing: 60 × 1 MiB writes were all accepted. Only after
-#:   ``s3.bucket.quota.enforce -apply`` marked the bucket read-only were
-#:   writes refused, again as ``InternalError``/500.
+#: * a bucket over quota. Writes past a quota are accepted until 4.47's own
+#:   60 s sweep (or ``s3.bucket.quota.enforce -apply``) marks the bucket
+#:   read-only; from then on every write, of any size, is refused, again as
+#:   ``InternalError``/500. Unlike the other two, this one is readable over
+#:   signed S3 (:func:`_store_reports_quota_exceeded`).
 #:
 #: ``InternalError`` is also SeaweedFS's answer to any internal failure,
 #: so it does not mean "full", and admitting it would turn every transient
@@ -201,10 +202,25 @@ _STORAGE_FULL_CODES = frozenset(
 #: when it is full, so the store is asked for its room before the refusal is
 #: classified. Only SeaweedFS's ``InternalError`` (measured: disk full,
 #: volume slots exhausted and an enforced bucket quota all answer it), and
-#: only when ``S3_SEAWEEDFS_MASTER_URL`` is set. A bucket quota is not
-#: detected this way: free disk and free slots cannot see it, so an enforced
-#: quota refusal stays unclassified.
+#: only when ``S3_SEAWEEDFS_MASTER_URL`` is set. Free disk and free slots
+#: cannot see a bucket quota, so that is a separate question, asked after
+#: this one finds no shortage of room: :data:`_QUOTA_SECOND_OPINION_CODES`.
 _SECOND_OPINION_CODES = frozenset({"InternalError"})
+
+#: Codes after which a SeaweedFS store is asked about an enforced bucket
+#: quota (:func:`_store_reports_quota_exceeded`), read over signed S3.
+#: ``InternalError`` is what 4.47 answers (measured, HTTP 500, for a 1-MiB,
+#: 1-byte and 0-byte write alike). Upstream maps a read-only bucket to
+#: ``AccessDenied``/403, and the 500 is only the error arriving flattened
+#: from the volume assign, so a later image may answer 403. ``AccessDenied``
+#: is safe to include for one reason: the quota read is signed with the same
+#: credentials, so if they are the problem that read fails too and the
+#: refusal stays unclassified. A 403 is never called a quota on its own.
+_QUOTA_SECOND_OPINION_CODES = frozenset({"InternalError", "AccessDenied"})
+
+#: The code a refusal explained by an enforced SeaweedFS quota is recorded
+#: under. See :data:`app.services.artifact_storage_seaweedfs.QUOTA_EXCEEDED_CODE`.
+_SEAWEEDFS_QUOTA_CODE = "SeaweedFSBucketQuotaExceeded"
 
 # ---------------------------------------------------------------------------
 # Kinds that must be valid UTF-8 text (no binary allowed).
@@ -394,6 +410,43 @@ def _store_reports_no_room(attempted_bytes: int | None) -> str | None:
         return None
 
 
+def _store_reports_quota_exceeded(attempted_bytes: int | None) -> str | None:
+    """Ask a SeaweedFS store whether an enforced bucket quota explains a refusal.
+
+    A sentence if so, ``None`` otherwise (unset variable, no quota, room left
+    under it, no answer, or a shape not measured). Two signed ``GET``s with
+    the credentials TCKDB writes with, so nothing is mutated and no new
+    access is opened. Never raises, for the same reason
+    :func:`_store_reports_no_room` does not.
+    """
+    if not S3_SEAWEEDFS_MASTER_URL:
+        return None
+    try:
+        from app.services import artifact_storage_seaweedfs as seaweedfs
+
+        quota = seaweedfs.report_quota(
+            endpoint_url=S3_ENDPOINT_URL,
+            access_key=S3_ACCESS_KEY,
+            secret_key=S3_SECRET_KEY,
+            region=S3_REGION,
+            bucket=S3_BUCKET,
+        )
+        if not seaweedfs.refusal_is_over_quota(quota, attempted_bytes):
+            return None
+        assert quota is not None  # refusal_is_over_quota is False on None
+        return (
+            f"SeaweedFS reports a {quota.quota_bytes}-byte bucket quota with "
+            f"{quota.available_bytes} bytes available ({quota.used_bytes} used)"
+        )
+    except Exception as exc:
+        logger.warning(
+            "SeaweedFS quota check after a refused write failed (%r); "
+            "the refusal stays unclassified",
+            exc,
+        )
+        return None
+
+
 def _raise_write_refusal(
     exc: ClientError,
     *,
@@ -421,6 +474,17 @@ def _raise_write_refusal(
         if room is not None:
             full = True
             detail = f"{detail}; {room}"
+    if not full and code in _QUOTA_SECOND_OPINION_CODES:
+        quota = _store_reports_quota_exceeded(attempted_bytes)
+        if quota is not None:
+            full = True
+            detail = f"{detail}; {quota}"
+            # Recorded under TCKDB's own quota code, not the store's vague
+            # one: a quota refusal is answerable only by a write or an
+            # operator, never by a free-space report (see
+            # ``artifact_storage_capacity._QUOTA_CODES``). The store's code
+            # stays in ``detail``.
+            code = _SEAWEEDFS_QUOTA_CODE
     if full:
         # Lazy import: the capacity log reaches for the app's session
         # factory, and this module must stay importable without it.

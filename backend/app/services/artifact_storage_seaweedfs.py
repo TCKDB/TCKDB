@@ -87,6 +87,41 @@ labelled cells or no opinion, and the live test in
 every CI run, so an image bump that changes the page fails loudly instead of
 going quiet.
 
+A bucket quota is a fourth way, and it is readable over S3
+----------------------------------------------------------
+An enforced bucket quota refuses every write (a 1-byte and a 0-byte ``PUT``
+too) with the same ``InternalError``/500 as any fault, and free disk and free
+slots cannot see it. An earlier reading of this problem concluded the quota
+could not be read from the API container; that was wrong. SeaweedFS 4.47
+answers two SigV4-signed S3 requests with the credentials the API already
+holds (both refuse an unsigned request with 403), measured with a 20 MiB
+quota, 30 MiB used and writes refused:
+
+* ``GET /{bucket}?seaweedfs-quota`` returns
+  ``{"quota_size":20971520,"quota_unit":"B","quota_enabled":true}``. With no
+  quota set: ``{"quota_size":0,"quota_unit":"B","quota_enabled":false}``.
+* ``GET /{bucket}/.system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml``
+  (SeaweedFS's SOSAPI capacity object) returns
+  ``<CapacityInfo><Capacity>20971520</Capacity><Available>0</Available>
+  <Used>31457840</Used></CapacityInfo>``. With no quota set it reports the
+  cluster's capacity instead, which is why the two answers are cross-checked
+  (``Capacity`` must equal the quota) and anything else is no opinion.
+
+Two facts about the numbers. ``Used`` is the gross volume size, while the
+enforcer compares the *logical* size, so ``Available`` can read 0 for up to
+about 60 s after a deletion or a raised quota while the bucket is already
+writable again. That can only mislabel a refusal that has some other cause in
+that window, and never misses a real quota refusal, because gross is never
+smaller than logical. And 4.47 enforces on a 60 s sweep of its own, with
+nobody running ``s3.bucket.quota.enforce``: a quota set and written past
+starts refusing about a minute later, and raising it clears within about a
+minute.
+
+The wire code is a 4.47 fact. Upstream maps a read-only bucket to
+``AccessDenied``/403 and the ``InternalError``/500 is the error arriving
+flattened from the volume assign; the write path therefore asks this question
+for either code (see :func:`report_quota`).
+
 Addresses
 ---------
 One setting, ``S3_SEAWEEDFS_MASTER_URL`` (e.g. ``http://seaweedfs:9333``).
@@ -109,7 +144,11 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from typing import Optional
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import quote, urlsplit, urlunsplit
+
+from botocore.auth import SigV4Auth
+from botocore.awsrequest import AWSRequest
+from botocore.credentials import Credentials
 
 logger = logging.getLogger(__name__)
 
@@ -365,6 +404,173 @@ def report_capacity(
         return None
 
 
+#: What a refusal that is explained by an enforced bucket quota is recorded
+#: as. Not a code the store sent (it sent ``InternalError``); TCKDB's own
+#: name for the fact it established, so the recorded refusal is honest about
+#: who classified it and is one of
+#: :data:`app.services.artifact_storage_capacity._QUOTA_CODES`, which keeps a
+#: free-space report from ever clearing it.
+QUOTA_EXCEEDED_CODE = "SeaweedFSBucketQuotaExceeded"
+
+#: SeaweedFS's SOSAPI capacity object, a fixed key in every bucket.
+_CAPACITY_KEY = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
+
+#: Neither answer is large; a store answering with more is not the one
+#: measured.
+_MAX_BODY_BYTES = 64 * 1024
+
+_CAPACITY_XML = re.compile(
+    r"^\s*(?:<\?xml[^>]*\?>\s*)?<CapacityInfo>\s*"
+    r"<Capacity>(\d+)</Capacity>\s*<Available>(\d+)</Available>\s*<Used>(\d+)</Used>\s*"
+    r"</CapacityInfo>\s*$"
+)
+
+
+@dataclass(frozen=True)
+class SeaweedQuota:
+    """An enabled bucket quota and what the store says is left of it."""
+
+    quota_bytes: int
+    #: ``Available`` from the SOSAPI capacity object: quota minus gross use,
+    #: clamped at zero.
+    available_bytes: int
+    #: ``Used`` from the same object (gross volume size).
+    used_bytes: int
+
+
+def parse_quota_answers(quota_body: bytes, capacity_body: bytes) -> Optional[SeaweedQuota]:
+    """A :class:`SeaweedQuota` from the two recorded answers, or ``None``.
+
+    ``None`` unless the quota is enabled, in bytes, and the capacity object
+    is exactly the measured shape and agrees with it (``Capacity`` equal to
+    the quota). No quota set is also ``None``: there is nothing to exceed.
+    """
+    try:
+        quota = json.loads(quota_body.decode("utf-8"))
+        if not isinstance(quota, dict):
+            return None
+        size = quota.get("quota_size")
+        unit = quota.get("quota_unit")
+        enabled = quota.get("quota_enabled")
+        # ``bool`` is an ``int`` and would sail through as one byte.
+        if enabled is not True or unit != "B" or not isinstance(size, int) or isinstance(size, bool):
+            return None
+        if size <= 0:
+            return None
+        matched = _CAPACITY_XML.match(capacity_body.decode("utf-8"))
+        if matched is None:
+            return None
+        capacity, available, used = (int(g) for g in matched.groups())
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if capacity != size or available > capacity:
+        return None
+    return SeaweedQuota(quota_bytes=size, available_bytes=available, used_bytes=used)
+
+
+def _get_signed(url: str, timeout: float, *, access_key: str, secret_key: str, region: str) -> bytes:
+    request = AWSRequest(method="GET", url=url)
+    SigV4Auth(Credentials(access_key, secret_key), "s3", region).add_auth(request)
+    prepared = urllib.request.Request(url, headers=dict(request.headers.items()), method="GET")
+    with urllib.request.urlopen(prepared, timeout=timeout) as response:
+        body = response.read(_MAX_BODY_BYTES + 1)
+    if len(body) > _MAX_BODY_BYTES:
+        raise ValueError("answer larger than any SeaweedFS quota answer")
+    return body
+
+
+def _quota_fetch_within_deadline(
+    endpoint_url: str,
+    bucket: str,
+    timeout: float,
+    deadline: float,
+    credentials: dict[str, str],
+) -> tuple[bytes, bytes]:
+    outcome: dict[str, object] = {}
+    base = endpoint_url.rstrip("/") + "/" + quote(bucket, safe="")
+
+    def _fetch() -> None:
+        try:
+            quota = _get_signed(base + "?seaweedfs-quota", timeout, **credentials)
+            capacity = _get_signed(base + "/" + _CAPACITY_KEY, timeout, **credentials)
+            outcome["value"] = (quota, capacity)
+        except Exception as exc:  # handed to the caller, which absorbs it
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=_fetch, name="seaweedfs-quota-probe", daemon=True)
+    worker.start()
+    worker.join(deadline)
+    if worker.is_alive():
+        raise TimeoutError(f"no complete answer within {deadline}s")
+    if "error" in outcome:
+        raise outcome["error"]  # type: ignore[misc]
+    return outcome["value"]  # type: ignore[return-value]
+
+
+def report_quota(
+    *,
+    endpoint_url: str,
+    access_key: str,
+    secret_key: str,
+    region: str,
+    bucket: str,
+    timeout: float = _TIMEOUT_SECONDS,
+    deadline: float = _DEADLINE_SECONDS,
+) -> Optional[SeaweedQuota]:
+    """Ask the store, over signed S3, about the bucket's quota. Never raises.
+
+    Reads only (two ``GET``s), with the credentials TCKDB already writes
+    with, so it opens no new access and mutates nothing. ``None`` means *no
+    opinion*: an unset endpoint or credential, any failure (a 403 included:
+    if the credentials are bad, the refusal that prompted this is theirs and
+    not a quota), a quota that is not enabled, or an answer that is not the
+    shape measured against 4.47. The same 2 s per socket operation and 4 s
+    overall deadline as :func:`report_capacity`.
+    """
+    try:
+        if not (endpoint_url and access_key and secret_key and region and bucket):
+            return None
+        quota_body, capacity_body = _quota_fetch_within_deadline(
+            endpoint_url,
+            bucket,
+            timeout,
+            deadline,
+            {"access_key": access_key, "secret_key": secret_key, "region": region},
+        )
+        quota = parse_quota_answers(quota_body, capacity_body)
+        if quota is None:
+            logger.debug("seaweedfs quota probe: no enabled quota, or unfamiliar shape; no opinion")
+        return quota
+    except urllib.error.HTTPError as exc:
+        logger.debug(
+            "seaweedfs quota probe: %s answered HTTP %s; no opinion",
+            _sanitized(endpoint_url),
+            exc.code,
+        )
+        return None
+    except Exception as exc:
+        logger.debug(
+            "seaweedfs quota probe: %s did not answer (%s); no opinion",
+            _sanitized(endpoint_url),
+            type(exc).__name__,
+        )
+        return None
+
+
+def refusal_is_over_quota(quota: Optional[SeaweedQuota], attempted_bytes: Optional[int]) -> bool:
+    """Whether a refused write is explained by an enabled bucket quota.
+
+    True only when the quota leaves less room than the write needed; a
+    write of unknown size is explained only by no room left at all. No
+    opinion is never an explanation.
+    """
+    if quota is None:
+        return False
+    if attempted_bytes is None:
+        return quota.available_bytes <= 0
+    return quota.available_bytes < attempted_bytes
+
+
 def refusal_is_full(capacity: Optional[SeaweedCapacity], attempted_bytes: Optional[int]) -> bool:
     """Whether a refused write is explained by the store having no room.
 
@@ -393,11 +599,16 @@ def _sanitized(url: str) -> str:
 
 
 __all__ = [
+    "QUOTA_EXCEEDED_CODE",
     "VOLUME_SERVER_PORT",
     "SeaweedCapacity",
+    "SeaweedQuota",
     "capacity_from_status",
     "parse_master_page",
+    "parse_quota_answers",
     "refusal_is_full",
+    "refusal_is_over_quota",
     "report_capacity",
+    "report_quota",
     "volume_status_url",
 ]

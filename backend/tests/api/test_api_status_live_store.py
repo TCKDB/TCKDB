@@ -29,6 +29,7 @@ always provides one (see :mod:`tests.services._live_object_store`).
 
 from __future__ import annotations
 
+import json
 import os
 import urllib.error
 import urllib.request
@@ -271,3 +272,51 @@ def test_the_master_refuses_admin_requests_from_elsewhere(seaweedfs_master) -> N
         "/dir/lookup?volumeId=1",
     ):
         assert _status_of("GET", f"{seaweedfs_master}{path}") == 401, path
+
+
+def _s3_url(path: str) -> str:
+    return artifact_storage.S3_ENDPOINT_URL.rstrip("/") + path
+
+
+def test_the_seaweedfs_quota_endpoints_answer_signed_reads_in_the_measured_shape(
+    seaweedfs_master,
+) -> None:
+    """Pins both quota reads against the image CI pins (#545).
+
+    ``report_quota`` classifies an enforced quota from two signed S3 reads.
+    The bucket here has no quota (an enforced one needs the admin shell, which
+    a test cannot reach), so this pins the parts an image bump could change:
+    both endpoints answer a signed request in exactly the shape the parser
+    accepts, both refuse an unsigned one, and the parser reads "no quota" as
+    no opinion rather than as room. The enforced-quota bodies are pinned by the
+    recordings in ``tests/fixtures/seaweedfs_4_47/``, captured from the same
+    digest.
+    """
+    bucket = artifact_storage.S3_BUCKET
+    credentials = {
+        "access_key": artifact_storage.S3_ACCESS_KEY,
+        "secret_key": artifact_storage.S3_SECRET_KEY,
+        "region": artifact_storage.S3_REGION,
+    }
+    quota_url = _s3_url(f"/{bucket}?seaweedfs-quota")
+    capacity_url = _s3_url(f"/{bucket}/{artifact_storage_seaweedfs._CAPACITY_KEY}")
+
+    quota_body = artifact_storage_seaweedfs._get_signed(quota_url, 5, **credentials)
+    capacity_body = artifact_storage_seaweedfs._get_signed(capacity_url, 5, **credentials)
+
+    quota = json.loads(quota_body)
+    assert set(quota) == {"quota_size", "quota_unit", "quota_enabled"}, quota
+    assert quota["quota_unit"] == "B", quota
+    assert isinstance(quota["quota_enabled"], bool), quota
+    assert isinstance(quota["quota_size"], int), quota
+    assert artifact_storage_seaweedfs._CAPACITY_XML.match(capacity_body.decode()), capacity_body
+
+    parsed = artifact_storage_seaweedfs.parse_quota_answers(quota_body, capacity_body)
+    assert (parsed is not None) == quota["quota_enabled"], (quota, capacity_body)
+    reported = artifact_storage_seaweedfs.report_quota(
+        endpoint_url=artifact_storage.S3_ENDPOINT_URL, bucket=bucket, **credentials
+    )
+    assert (reported is not None) == quota["quota_enabled"], reported
+
+    for url in (quota_url, capacity_url):
+        assert _status_of("GET", url) == 403, url

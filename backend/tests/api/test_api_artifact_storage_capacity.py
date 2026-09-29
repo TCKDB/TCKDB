@@ -224,6 +224,9 @@ def _no_seaweedfs_capacity_opinion_by_default(monkeypatch):
     behaviour, and the tests that exercise the SeaweedFS arm set it back.
     """
     monkeypatch.setattr(artifact_storage, "S3_SEAWEEDFS_MASTER_URL", "")
+    # Likewise the quota read, which goes to the configured S3 endpoint: a
+    # live store on CI must not answer for a scripted refusal.
+    monkeypatch.setattr(seaweedfs, "report_quota", lambda **_kwargs: None)
 
 
 def _outstanding(factory) -> capacity.StorageFullState | None:
@@ -985,10 +988,12 @@ def test_unset_asks_nothing(capacity_db, monkeypatch) -> None:
     assert refused.full is False
 
 
-def test_only_internal_error_earns_a_second_opinion(
+def test_access_denied_earns_no_capacity_opinion(
     capacity_db, seaweed_answers
 ) -> None:
-    """``AccessDenied`` on a full store is still a credentials problem."""
+    """``AccessDenied`` is not what a full disk or exhausted slots answer, so
+    the master is not asked about room; only the quota read (below) applies,
+    and with no opinion from it the refusal stays a credentials problem."""
     asked = seaweed_answers(_SLOTS_EXHAUSTED)
     with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
         artifact_storage.store_artifact(
@@ -1000,6 +1005,194 @@ def test_only_internal_error_earns_a_second_opinion(
         )
     assert caught.value.full is False
     assert asked == []
+
+
+# ---------------------------------------------------------------------------
+# SeaweedFS: an enforced bucket quota, read over signed S3 (#545)
+# ---------------------------------------------------------------------------
+#
+# Measured on 4.47 with a 20 MiB quota and 30 MiB in the bucket: every write
+# refused with ``InternalError``/500 while free disk and free slots read
+# healthy, and a signed ``GET /{bucket}?seaweedfs-quota`` plus the SOSAPI
+# capacity object said no room was left. Same shape and status semantics as
+# the MinIO quota refusal: 507, degraded, and not clearable by free space.
+
+#: Recorded (fixture ``quota_enforced``).
+_QUOTA_EXHAUSTED = seaweedfs.SeaweedQuota(
+    quota_bytes=20_971_520, available_bytes=0, used_bytes=31_457_840
+)
+_QUOTA_WITH_ROOM = seaweedfs.SeaweedQuota(
+    quota_bytes=20_971_520, available_bytes=10_485_760, used_bytes=10_485_760
+)
+
+
+@pytest.fixture
+def quota_answers(monkeypatch, seaweed_answers):
+    """A SeaweedFS with room on disk and slots, and a scripted quota read."""
+    asked: list[dict] = []
+
+    def _install(answer, *, capacity=_ROOMY):
+        seaweed_answers(capacity)
+
+        def _report_quota(**kwargs):
+            asked.append(kwargs)
+            if isinstance(answer, BaseException):
+                raise answer
+            return answer
+
+        monkeypatch.setattr(seaweedfs, "report_quota", _report_quota)
+        return asked
+
+    return _install
+
+
+def _refused(capacity_db, *, code="InternalError", status=500):
+    with pytest.raises(artifact_storage.ArtifactStorageUnavailable) as caught:
+        artifact_storage.store_artifact(
+            _BYTES,
+            _SHA256,
+            client=_FullStore(code=code, status=status),
+            bucket="b",
+            session_factory=capacity_db,
+        )
+    return caught.value
+
+
+@pytest.mark.parametrize("code, status", [("InternalError", 500), ("AccessDenied", 403)])
+def test_a_refusal_on_an_exhausted_seaweedfs_quota_is_full_and_a_quota(
+    capacity_db, quota_answers, code, status
+) -> None:
+    asked = quota_answers(_QUOTA_EXHAUSTED)
+    refused = _refused(capacity_db, code=code, status=status)
+
+    assert refused.full is True
+    assert refused.s3_code == seaweedfs.QUOTA_EXCEEDED_CODE
+    assert asked == [
+        {
+            "endpoint_url": artifact_storage.S3_ENDPOINT_URL,
+            "access_key": artifact_storage.S3_ACCESS_KEY,
+            "secret_key": artifact_storage.S3_SECRET_KEY,
+            "region": artifact_storage.S3_REGION,
+            "bucket": artifact_storage.S3_BUCKET,
+        }
+    ]
+
+    observation = _outstanding(capacity_db)
+    assert observation is not None
+    assert observation.s3_code == seaweedfs.QUOTA_EXCEEDED_CODE
+    assert observation.attempted_bytes == len(_BYTES)
+    # The MinIO quota semantics: free space cannot answer it.
+    assert observation.clearable_by_capacity_report is False
+
+    with capacity_db() as session:
+        detail = session.scalars(
+            select(ArtifactStorageCapacityEvent.detail).order_by(
+                ArtifactStorageCapacityEvent.id.desc()
+            )
+        ).first()
+    # What the store actually said stays on the row.
+    assert code in detail, detail
+    assert "20971520-byte bucket quota with 0 bytes available" in detail, detail
+
+
+def test_a_quota_refusal_is_not_cleared_by_free_space_on_status(
+    client, capacity_db, quota_answers, status_sees_only_seaweedfs
+) -> None:
+    """The store reports ample room, and the quota is still exceeded: the
+    refusal must survive the ``/status`` poll (MinIO measured 418 MiB free
+    while a 2 MiB write was refused)."""
+    quota_answers(_QUOTA_EXHAUSTED)
+    _refused(capacity_db)
+
+    body = client.get("/api/v1/status").json()
+    block = body["components"]["artifact_storage"]
+    assert block["storage_full"] is True, block
+    assert "artifact_storage" in body["degraded"], body
+    assert seaweedfs.QUOTA_EXCEEDED_CODE in block["reason"], block
+
+
+def test_a_successful_write_of_the_refused_size_clears_a_quota_refusal(
+    capacity_db, quota_answers
+) -> None:
+    quota_answers(_QUOTA_EXHAUSTED)
+    _refused(capacity_db)
+    assert _outstanding(capacity_db) is not None
+
+    capacity.note_successful_write(accepted_bytes=len(_BYTES), session_factory=capacity_db)
+    assert _outstanding(capacity_db) is None
+
+
+def test_a_seaweedfs_quota_with_room_stays_unclassified(capacity_db, quota_answers) -> None:
+    """Room left under the quota, and room on disk: a fault, not a full store."""
+    asked = quota_answers(_QUOTA_WITH_ROOM)
+    refused = _refused(capacity_db)
+    assert len(asked) == 1
+    assert refused.full is False
+    assert refused.s3_code == "InternalError"
+    assert _outstanding(capacity_db) is None
+
+
+@pytest.mark.parametrize("answer", [None, RuntimeError("probe blew up")], ids=["no-opinion", "raises"])
+def test_a_quota_read_with_no_answer_leaves_the_refusal_as_it_was(
+    capacity_db, quota_answers, answer
+) -> None:
+    asked = quota_answers(answer)
+    refused = _refused(capacity_db)
+    assert len(asked) == 1
+    assert refused.full is False
+    assert refused.s3_code == "InternalError"
+    assert _outstanding(capacity_db) is None
+
+
+def test_a_full_disk_is_named_before_a_quota_is_asked(capacity_db, quota_answers) -> None:
+    asked = quota_answers(_QUOTA_EXHAUSTED, capacity=_SLOTS_EXHAUSTED)
+    refused = _refused(capacity_db)
+    assert refused.full is True
+    assert refused.s3_code == "InternalError"
+    assert asked == []
+
+
+def test_access_denied_with_no_quota_opinion_stays_a_credentials_problem(
+    capacity_db, quota_answers
+) -> None:
+    """The signed quota read fails with the same bad credentials, so a 403 is
+    never called a quota on its own."""
+    asked = quota_answers(None)
+    refused = _refused(capacity_db, code="AccessDenied", status=403)
+    assert len(asked) == 1
+    assert refused.full is False
+    assert refused.s3_code == "AccessDenied"
+
+
+def test_other_codes_are_not_asked_about_a_quota(capacity_db, quota_answers) -> None:
+    asked = quota_answers(_QUOTA_EXHAUSTED)
+    refused = _refused(capacity_db, code="SlowDown", status=503)
+    assert refused.full is False
+    assert asked == []
+
+
+def test_the_quota_is_not_read_without_the_seaweedfs_setting(capacity_db, monkeypatch) -> None:
+    def _must_not_be_called(**_kwargs):
+        raise AssertionError("read a quota with S3_SEAWEEDFS_MASTER_URL unset")
+
+    monkeypatch.setattr(seaweedfs, "report_quota", _must_not_be_called)
+    assert _refused(capacity_db).full is False
+    assert _refused(capacity_db, code="AccessDenied", status=403).full is False
+
+
+def test_a_seaweedfs_quota_reaches_the_depositor_as_507(
+    client, use_store, capacity_db, quota_answers, status_sees_only_seaweedfs
+) -> None:
+    """Through the route: before this, an enforced quota answered 503."""
+    quota_answers(_QUOTA_EXHAUSTED)
+    use_store(_FullStore(code="InternalError", status=500))
+    calc_id = _a_calculation(client)
+
+    response = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts", json=_artifact_request()
+    )
+    assert response.status_code == 507, response.text
+    assert response.json()["code"] == "artifact_storage_full"
 
 
 @pytest.fixture
