@@ -732,6 +732,14 @@ def banner_supplies_missing_version(
 #: artifact, or both.
 W_CONVERGED_OPT_NO_USABLE_ENERGY = "converged_opt_no_usable_energy"
 
+#: Emitted when an additional calculation is stored but the server did not
+#: link it to the primary calculation, because the role that link would
+#: carry needs a parent of a different type (e.g. ``single_point_on`` needs
+#: an ``opt`` parent and the primary is an ``sp``). An absence warning: the
+#: calculation and its observation anchor are kept, only the inferred edge
+#: is missing. Never a refusal -- the depositor did not declare the edge.
+W_DEPENDENCY_EDGE_NOT_INFERRED = "dependency_edge_not_inferred"
+
 
 def _load_sp_owner_ids(
     session: Session,
@@ -1975,6 +1983,7 @@ def persist_additional_calculations(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     created_by: int | None = None,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[Calculation]:
     """Persist additional calculations with dependency edges to a primary.
 
@@ -1989,6 +1998,10 @@ def persist_additional_calculations(
     :param species_entry_id: Owner species-entry id (mutually exclusive with TS).
     :param transition_state_entry_id: Owner TS-entry id.
     :param created_by: Optional application user id.
+    :param warnings: Optional out-list; an :class:`UploadWarning` with code
+        ``W_DEPENDENCY_EDGE_NOT_INFERRED`` is appended for each inferred
+        edge that was skipped because the primary's type does not fit the
+        edge's role.
     :returns: List of newly created ``Calculation`` rows.
     """
 
@@ -2032,25 +2045,45 @@ def persist_additional_calculations(
         )
 
         # These edges are inferred by the server, not declared by the
-        # depositor, so one DR-0028 forbids (e.g. ``single_point_on`` under
-        # a primary that is not an ``opt``) is skipped, not refused: the
-        # calculation is still stored and anchored to the observation.
+        # depositor, so one the dependency-role table
+        # (``_DEPENDENCY_ROLE_TO_PARENT_TYPE``) forbids (e.g.
+        # ``single_point_on`` under a primary that is not an ``opt``) is
+        # skipped, not refused: DAG edges are opportunistic enrichment, and
+        # the calculation stays stored and anchored to the observation. The
+        # skip is disclosed as a warning so it is not silent.
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
-        if dep_role is not None and dependency_role_type_compatible(
-            primary_calc, dep_role
-        ):
-            session.add(
-                CalculationDependency(
-                    parent_calculation_id=primary_calc.id,
-                    child_calculation_id=child_calc.id,
-                    dependency_role=dep_role,
+        if dep_role is not None:
+            if dependency_role_type_compatible(primary_calc, dep_role):
+                session.add(
+                    CalculationDependency(
+                        parent_calculation_id=primary_calc.id,
+                        child_calculation_id=child_calc.id,
+                        dependency_role=dep_role,
+                    )
                 )
-            )
+            elif warnings is not None:
+                expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE[dep_role]
+                warnings.append(
+                    UploadWarning(
+                        field=f"additional_calculations[{position}]",
+                        code=W_DEPENDENCY_EDGE_NOT_INFERRED,
+                        message=(
+                            f"{upload_label} was stored but not linked to the "
+                            f"primary calculation: role '{dep_role.value}' "
+                            f"needs a parent of type '{expected.value}' and "
+                            f"the primary calculation is type "
+                            f"'{primary_calc.type.value}'."
+                        ),
+                    )
+                )
 
         # Inverted-edge case: path_search is a TS-guess generator, so the
         # primary opt is ``optimized_from`` the path search rather than the
         # other way around.
         inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
+        # Guard cannot fire today: the child is always ``path_search``,
+        # which ``optimized_from`` always accepts. Kept so a new inverted
+        # mapping is checked too.
         if inverted_role is not None and dependency_role_type_compatible(
             child_calc, inverted_role
         ):

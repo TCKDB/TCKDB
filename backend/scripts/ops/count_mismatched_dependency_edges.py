@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Count calculation_dependency edges whose parent type breaks DR-0028 (#581).
+"""Count calculation_dependency edges whose parent type does not fit the role (#581).
 
 READ-ONLY. This script issues one ``SELECT`` and nothing else; it never
 writes, and it does not repair what it finds. Calculations may be approved
@@ -7,8 +7,9 @@ and therefore immutable, so a mismatched edge is reported for a person to
 decide about, not rewritten.
 
 An edge is *mismatched* when its role pins a parent type
-(``_DEPENDENCY_ROLE_TO_PARENT_TYPE``; ``optimized_from`` accepts ``opt`` or
-``path_search``) and the parent calculation has a different type -- for
+(``_DEPENDENCY_ROLE_TO_PARENT_TYPE`` in
+``app/services/calculation_resolution.py``; ``optimized_from`` accepts ``opt``
+or ``path_search``) and the parent calculation has a different type -- for
 example a ``single_point_on`` edge whose parent is an ``sp``. The role table
 is read from the application code, so this query cannot drift from the rule
 the upload paths enforce.
@@ -17,8 +18,9 @@ Usage (uses the same ``DB_*`` environment variables as the app)::
 
     python scripts/ops/count_mismatched_dependency_edges.py
 
-Exit status: 0 when no edge is mismatched, 1 when at least one is, so a
-non-zero exit is a finding, not a failure to run.
+Exit status: 0 when no edge is mismatched, 1 when at least one is (a
+finding), 2 when the query could not be run (for example the database is
+unreachable). A 2 says nothing about the edges.
 """
 
 from __future__ import annotations
@@ -79,21 +81,36 @@ def count_mismatched(session: Session) -> tuple[int, list[tuple[str, str, str, i
     return total, rows
 
 
+EXIT_OK = 0
+EXIT_MISMATCHED = 1
+EXIT_ERROR = 2
+
+
+def count_mismatched_read_only(
+    session: Session,
+) -> tuple[int, list[tuple[str, str, str, int]]]:
+    """``count_mismatched`` inside a transaction the database will not let write."""
+    session.execute(text("SET TRANSACTION READ ONLY"))
+    return count_mismatched(session)
+
+
 def main() -> int:
     from app.api.deps import SessionLocal
 
     print(build_mismatch_sql())
     print()
-    with SessionLocal() as session:
-        # Belt and braces: nothing this script does may write.
-        session.execute(text("SET TRANSACTION READ ONLY"))
-        total, rows = count_mismatched(session)
+    try:
+        with SessionLocal() as session:
+            total, rows = count_mismatched_read_only(session)
+    except Exception as exc:  # noqa: BLE001 -- any failure to measure is exit 2
+        print(f"could not run the measurement: {type(exc).__name__}", file=sys.stderr)
+        return EXIT_ERROR
     mismatched = sum(r[3] for r in rows)
     print(f"calculation_dependency edges: {total}")
     print(f"mismatched edges:             {mismatched}")
     for role, parent, child, n in rows:
         print(f"  role={role} parent={parent} child={child}: {n}")
-    return 1 if mismatched else 0
+    return EXIT_MISMATCHED if mismatched else EXIT_OK
 
 
 if __name__ == "__main__":

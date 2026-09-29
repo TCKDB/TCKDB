@@ -458,6 +458,8 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
+            # Guard cannot fire today: ``ConformerInBundle.validate_primary_is_opt``
+            # requires an opt primary. Kept as defence in depth.
             if dep_role is not None and dependency_role_type_compatible(
                 primary_calc, dep_role
             ):
@@ -477,6 +479,8 @@ def persist_computed_species_upload(
             inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(
                 additional_in.type
             )
+            # Guard cannot fire today: the child is always ``path_search``,
+            # which ``optimized_from`` always accepts. Kept as defence in depth.
             if inverted_role is not None and dependency_role_type_compatible(
                 child_calc, inverted_role
             ):

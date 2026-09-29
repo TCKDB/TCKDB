@@ -1,10 +1,13 @@
-"""Automatic dependency edges on ``additional_calculations`` obey DR-0028.
+"""Automatic dependency edges on ``additional_calculations`` fit their role.
 
 A conformer upload may carry extra calculations beside its primary one, and
 the server links each to the primary ("this single point ran on that
 optimisation"). Those links are inferred, not declared by the depositor, so
-when the primary is not an ``opt`` the link DR-0028 forbids is not written --
-and the upload is not refused for a link nobody asked for.
+when the primary is not an ``opt`` the link the role table forbids
+(``_DEPENDENCY_ROLE_TO_PARENT_TYPE``) is not written -- DAG edges are
+opportunistic enrichment -- and the upload is not refused for a link nobody
+asked for. The skip is disclosed as a ``dependency_edge_not_inferred``
+warning.
 """
 
 from __future__ import annotations
@@ -41,6 +44,14 @@ def _edges(session) -> list[tuple]:
     return out
 
 
+def _edge_warnings(resp) -> list[dict]:
+    return [
+        w
+        for w in resp.json()["warnings"]
+        if w["code"] == "dependency_edge_not_inferred"
+    ]
+
+
 def _count_calcs(session) -> int:
     return len(session.scalars(select(Calculation.id)).all())
 
@@ -64,6 +75,7 @@ class TestAutoEdgesNeedAnOptParent:
             CalculationDependencyRole.single_point_on,
             CalculationType.sp,
         ) in edges
+        assert _edge_warnings(resp) == []
 
     def test_sp_primary_with_extra_freq_writes_no_freq_on_edge(self, client):
         resp = client.post(
@@ -75,6 +87,10 @@ class TestAutoEdgesNeedAnOptParent:
         # The extra calculation is still stored; only the forbidden link is not.
         assert _count_calcs(session) == 2
         assert _edges(session) == []
+        (warning,) = _edge_warnings(resp)
+        assert warning["field"] == "additional_calculations[0]"
+        for fragment in ("freq_on", "'opt'", "'sp'", "type='freq'"):
+            assert fragment in warning["message"]
 
     def test_freq_primary_with_extra_sp_writes_no_single_point_on_edge(
         self, client
@@ -87,3 +103,7 @@ class TestAutoEdgesNeedAnOptParent:
         session = client._db_session
         assert _count_calcs(session) == 2
         assert _edges(session) == []
+        (warning,) = _edge_warnings(resp)
+        assert warning["field"] == "additional_calculations[0]"
+        for fragment in ("single_point_on", "'opt'", "'freq'", "type='sp'"):
+            assert fragment in warning["message"]
