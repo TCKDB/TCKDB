@@ -11,9 +11,19 @@ DR-0008). The version-less release is never modified; a recorded version is
 never overwritten. See ``app/services/software_release_version_fill.py`` for
 why the row is not filled in place.
 
-Evidence is the artifact only. An owner's attestation is not accepted here:
-there is nowhere structured to record who said what and when, and adding one
-is a schema decision (see the #305 PR).
+Attestation mode (``--attest-version``; issue #305, decision (a)): where no
+stored artifact carries a banner, the person who ran the calculations can
+state the version. The statement is recorded verbatim in
+``software_version_attestation`` (who, when, which release, which version),
+and each calculation it re-points gets a
+``software_version_attestation_calculation`` row with its release before and
+after, all in one transaction. Only calculations deposited (``created_by``)
+by the covered depositor are eligible -- the attester by default, or
+``--for-depositor`` when the attester is an admin; one whose stored artifact names a version is
+reported ``banner_available`` and left to the banner mode. The target is the
+version-less release's own fields with ``version`` set exactly as attested
+-- ``("6", NULL, NULL)`` for a bare ORCA row; nothing else is inferred. A
+second run finds nothing left to move and writes nothing.
 
 Calculations that were ever approved are reported as ``accepted`` and left
 alone -- ``trg_as_root_calculation`` refuses the UPDATE without an
@@ -38,6 +48,12 @@ Usage::
     # --commit on a database not named tckdb_test* also needs:
     ... --commit --i-know-this-is-deployed
 
+    # Attestation mode -- dry run first, then the same with --commit.
+    python backend/scripts/ops/fill_software_release_version.py --software ORCA \
+        --attest-version 6 --attested-by <username> --attested-on 2026-09-12 \
+        [--for-depositor <username>] [--release srel_...] \
+        --statement "ORCA 6 was used for all ORCA runs deposited by <owner>"
+
 Prints public refs only, never primary keys.
 """
 
@@ -47,6 +63,7 @@ import argparse
 import re
 import sys
 from collections import Counter
+from datetime import date, datetime, time, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -102,25 +119,7 @@ def _print_plan(plan) -> None:
         )
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--software", required=True, help="program name, e.g. ORCA")
-    parser.add_argument("--commit", action="store_true", help="re-point; default is a dry run")
-    parser.add_argument(
-        "--i-know-this-is-deployed",
-        action="store_true",
-        help="required alongside --commit on a database not named tckdb_test*",
-    )
-    args = parser.parse_args(argv)
-
-    from app.api.config import settings
-    from app.api.deps import SessionLocal
-    from app.services.software_release_version_fill import (
-        apply_release_fill,
-        plan_release_fill,
-        version_less_releases,
-    )
-
+def _refuse_commit(args, settings) -> bool:
     if (
         args.commit
         and not _TEST_DB_NAME.match(settings.db_name)
@@ -132,6 +131,154 @@ def main(argv: list[str] | None = None) -> int:
             "database, pass --i-know-this-is-deployed as well.",
             file=sys.stderr,
         )
+        return True
+    return False
+
+
+def _attest(args, settings, SessionLocal) -> int:
+    """Attestation mode: record the statement and re-point, or dry-run it."""
+
+    from sqlalchemy import select
+
+    from app.db.models.app_user import AppUser
+    from app.services.software_release_version_fill import (
+        Attestation,
+        VersionFillRefused,
+        apply_attestation,
+        plan_attestation,
+        version_less_releases,
+    )
+
+    if _refuse_commit(args, settings):
+        return 2
+    with SessionLocal() as session:
+        attester = session.scalar(select(AppUser).where(AppUser.username == args.attested_by))
+        if attester is None:
+            print(f"No app_user named {args.attested_by!r}.", file=sys.stderr)
+            return 2
+        depositor_name = args.for_depositor or args.attested_by
+        depositor = session.scalar(select(AppUser).where(AppUser.username == depositor_name))
+        if depositor is None:
+            print(f"No app_user named {depositor_name!r}.", file=sys.stderr)
+            return 2
+        attested_at = (
+            datetime.combine(args.attested_on, time())
+            if args.attested_on is not None
+            else datetime.now(timezone.utc).replace(tzinfo=None)
+        )
+        attestation = Attestation(
+            attested_version=args.attest_version,
+            statement=args.statement,
+            attested_by=attester,
+            attested_at=attested_at,
+            covers_depositor=depositor,
+        )
+        releases = version_less_releases(session, args.software)
+        if not releases:
+            print(f"No version-less software_release for {args.software!r}. Nothing to do.")
+            return 0
+        # One statement is never applied to several version-less releases of
+        # a program silently: with more than one, the operator names it.
+        if args.release is not None:
+            releases = [r for r in releases if r.public_ref == args.release]
+            if not releases:
+                print(
+                    f"{args.release!r} is not a version-less {args.software} release.",
+                    file=sys.stderr,
+                )
+                return 2
+        elif len(releases) > 1:
+            print(
+                f"{args.software} has {len(releases)} version-less releases; name one "
+                "with --release: " + ", ".join(r.public_ref for r in releases),
+                file=sys.stderr,
+            )
+            return 2
+        print(
+            f"Attestation by {attester.username!r} on {attested_at.date().isoformat()}, "
+            f"covering deposits by {depositor.username!r}: "
+            f"{args.software} version {args.attest_version!r}\n"
+            f"  statement (verbatim): {args.statement!r}"
+        )
+        total = 0
+        try:
+            for release in releases:
+                if args.commit:
+                    plan, moved = apply_attestation(session, release, attestation)
+                    _print_plan(plan)
+                    print(f"  re-pointed {len(moved)} calculation(s) under the attestation:")
+                    for calc_ref, release_ref in moved.items():
+                        print(f"    {calc_ref} -> {release_ref}")
+                    total += len(moved)
+                else:
+                    _print_plan(plan_attestation(session, release, attestation))
+        except VersionFillRefused as exc:
+            # Nothing is committed: leaving the session block discards the
+            # whole run, so no release is half-attested.
+            print(f"Refused: {exc}", file=sys.stderr)
+            return 2
+        if args.commit:
+            session.commit()
+            if total == 0:
+                print("Nothing to re-point; no attestation was recorded.")
+        else:
+            print("Dry run -- nothing was written. Re-run with --commit to record and re-point.")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--software", required=True, help="program name, e.g. ORCA")
+    parser.add_argument("--commit", action="store_true", help="re-point; default is a dry run")
+    parser.add_argument(
+        "--i-know-this-is-deployed",
+        action="store_true",
+        help="required alongside --commit on a database not named tckdb_test*",
+    )
+    attest = parser.add_argument_group(
+        "attestation mode",
+        "record an owner's statement of the version instead of reading banners",
+    )
+    attest.add_argument("--attest-version", help='the version exactly as attested, e.g. "6"')
+    attest.add_argument("--statement", help="the attesting person's statement, recorded verbatim")
+    attest.add_argument("--attested-by", help="username of the attesting app_user")
+    attest.add_argument(
+        "--for-depositor",
+        help=(
+            "username whose deposits the statement covers (default: the attester); "
+            "another account is allowed only when the attester is an admin"
+        ),
+    )
+    attest.add_argument(
+        "--release",
+        help="public ref of the version-less release; required when the program has several",
+    )
+    attest.add_argument(
+        "--attested-on",
+        type=date.fromisoformat,
+        help="date the statement was made (YYYY-MM-DD); default: now",
+    )
+    args = parser.parse_args(argv)
+
+    attest_args = (args.attest_version, args.statement, args.attested_by)
+    optional = (args.attested_on, args.for_depositor, args.release)
+    if any(a is not None for a in (*attest_args, *optional)) and not all(
+        a is not None for a in attest_args
+    ):
+        parser.error("--attest-version, --statement and --attested-by go together")
+
+    from app.api.config import settings
+    from app.api.deps import SessionLocal
+    from app.services.software_release_version_fill import (
+        apply_release_fill,
+        plan_release_fill,
+        version_less_releases,
+    )
+
+    if args.attest_version is not None:
+        return _attest(args, settings, SessionLocal)
+
+    if _refuse_commit(args, settings):
         return 2
 
     with SessionLocal() as session:

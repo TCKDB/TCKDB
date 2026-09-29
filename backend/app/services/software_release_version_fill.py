@@ -71,9 +71,35 @@ Gaussian banner the build string is filled as well (DR-0008 ``enriched``),
 so the target can be a near-duplicate of an existing build-less release;
 the plan says so.
 
-Owner attestation is deliberately not an evidence source here: recording
-who attested what, when, needs somewhere structured to put it, and there is
-no such column today (see the #305 PR for the proposed design).
+Owner attestation (issue #305, decision (a))
+--------------------------------------------
+Where no banner can speak -- the playground's version-less ORCA and Molpro
+calculations have no stored artifacts at all -- the person who ran them can.
+:func:`plan_attestation` / :func:`apply_attestation` record that statement in
+``software_version_attestation`` (who, when, which release, the version, the
+words verbatim) and re-point each eligible calculation, writing one
+``software_version_attestation_calculation`` row per calculation with its
+release before and after. The same guards as the banner path apply
+(``accepted``, ``environment_bound``), plus two of its own:
+
+* ``other_depositor`` -- only calculations ``created_by`` the statement's
+  ``covers_depositor`` are eligible (the attester, unless an admin attests
+  for another account);
+* ``banner_available`` / ``unreadable`` / ``banners_disagree`` -- a
+  calculation whose stored artifact names a version (or any of whose
+  artifacts could not be read) is left to the banner path: an observation
+  outranks a statement, and a read failure is not an absence;
+* ``banner_names_other_program`` -- the same status as in the banner mode.
+
+A version-less release that declares a ``revision`` or ``build`` is refused
+outright (``release_has_revision_or_build``): attesting a version on it would
+mint a mixed tuple.
+
+The target release is the version-less one's own fields with ``version``
+set to exactly the attested string: ``("6", NULL, NULL)`` for a bare ORCA
+row. Nothing else is inferred. A second run finds nothing left on the
+version-less release and writes nothing; an identical statement is reused,
+never recorded twice.
 
 Never prints or returns a database primary key -- only public refs.
 """
@@ -82,17 +108,29 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation, CalculationArtifact
-from app.db.models.common import ArtifactKind, SubmissionRecordType
+from app.db.models.common import (
+    AppUserRole,
+    ArtifactKind,
+    SoftwareVersionEvidenceKind,
+    SubmissionRecordType,
+)
 from app.db.models.record_review import RecordReview
 from app.db.models.reproducibility_assessment import RecordReproducibilityAssessment
 from app.db.models.software import Software, SoftwareRelease
+from app.db.models.software_version_attestation import (
+    SoftwareVersionAttestation,
+    SoftwareVersionAttestationCalculation,
+)
 from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.schemas.fragments.refs import SoftwareReleaseRef
 from app.services.artifact_storage import load_artifact_bytes
 from app.services.calculation_resolution import (
     banner_supplies_missing_version,
@@ -100,8 +138,14 @@ from app.services.calculation_resolution import (
     software_release_to_declared_ref,
 )
 from app.services.software_banner_extraction import observe_software_banner
-from app.services.software_reconciliation import reconcile_software_provenance
-from app.services.software_resolution import normalize_software_name
+from app.services.software_reconciliation import (
+    parsed_dict_to_ref,
+    reconcile_software_provenance,
+)
+from app.services.software_resolution import (
+    normalize_software_name,
+    resolve_software_release_ref,
+)
 
 #: Output logs carry the banner; inputs almost never do, but are tried last
 #: rather than skipped, because a producer can deposit a log under ``input``.
@@ -116,7 +160,12 @@ class CalculationOutcome:
     calculation is accepted science), ``environment_bound`` (fillable, but
     pinned to an immutable execution-environment manifest naming the
     version-less release), ``no_artifact``, ``no_banner``,
-    ``other_program``, ``disagrees``, ``unreadable``.
+    ``banner_names_other_program``, ``banners_disagree``, ``disagrees``,
+    ``unreadable`` (any artifact unreadable). Attestation mode adds
+    ``other_depositor`` (not created by the covered depositor) and
+    ``banner_available`` (a stored artifact names a version of this program;
+    the banner mode, not an attestation, is the route). A banner naming
+    another program is ``banner_names_other_program`` in both modes.
 
     The ``consequences`` fields are reporting only, for a fillable
     calculation: what re-pointing it would touch beyond the calculation.
@@ -189,10 +238,17 @@ def _observe_banner(
     calculation: Calculation,
     load_bytes: Callable[[str], bytes] | None,
 ) -> tuple[dict | None, str | None, str | None]:
-    """First parseable ``(parsed_software, program, failure)`` for the calculation.
+    """The calculation's banner as ``(parsed_software, program, failure)``.
 
-    ``failure`` is ``no_artifact`` / ``unreadable`` / ``no_banner`` when
-    nothing parsed.
+    Every ``output_log`` and ``input`` artifact is read. ``failure`` is:
+
+    * ``no_artifact`` -- nothing to read;
+    * ``unreadable`` -- **any** artifact could not be read. One unreadable
+      file among readable ones is not evidence of absence: it may hold the
+      banner the others lack, or one that contradicts theirs;
+    * ``banners_disagree`` -- two artifacts name different programs or
+      releases (the ingest hook's rule for two logs in one batch);
+    * ``no_banner`` -- everything was read and nothing named a version.
     """
 
     artifacts = list(
@@ -210,19 +266,24 @@ def _observe_banner(
     # test) reads whatever store is configured at the time.
     load = load_bytes or load_artifact_bytes
 
-    unreadable = 0
+    found: list[tuple[dict, str | None]] = []
     for artifact in artifacts:
         try:
             text = load(artifact.sha256).decode("utf-8", errors="replace")
         except Exception:  # storage down, object missing, digest mismatch
-            unreadable += 1
-            continue
+            return None, None, "unreadable"
         parsed, program = observe_software_banner(text)
         if parsed is not None:
-            return parsed, program, None
-    if unreadable and unreadable == len(artifacts):
-        return None, None, "unreadable"
-    return None, None, "no_banner"
+            found.append((parsed, program))
+    if not found:
+        return None, None, "no_banner"
+    distinct = {
+        ((program or "").lower(), ref.version, ref.revision, ref.build)
+        for ref, program in ((parsed_dict_to_ref(p), prog) for p, prog in found)
+    }
+    if len(distinct) > 1:
+        return None, None, "banners_disagree"
+    return found[0][0], found[0][1], None
 
 
 def plan_release_fill(
@@ -265,7 +326,7 @@ def plan_release_fill(
             plan.outcomes.append(
                 CalculationOutcome(
                     calc.public_ref,
-                    "other_program",
+                    "banner_names_other_program",
                     observed_version=parsed["version"],
                     observed_banner=banner,
                     detail=f"banner names {program!r}",
@@ -406,7 +467,7 @@ def apply_release_fill(
         # The ingest seam's own rule (DR-0008; #305 decision (c)): records
         # observed_software_banner + software_reconciliation_status, and
         # re-points at the release the banner describes. Its identity-
-        # correction branch cannot fire here because other_program was
+        # correction branch cannot fire here because banner_names_other_program was
         # filtered above, and environment-bound calculations never reach it.
         result = record_software_reconciliation(
             session, calc, declared_ref=declared, parsed_software=parsed
@@ -415,5 +476,262 @@ def apply_release_fill(
         assert calc.software_release is not None
         assert calc.software_release_id != release.id
         moved[calc.public_ref] = calc.software_release.public_ref
+    session.flush()
+    return plan, moved
+
+
+# ---------------------------------------------------------------------------
+# Owner attestation (issue #305, decision (a))
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Attestation:
+    """The statement being recorded. ``attested_at`` is when it was made."""
+
+    attested_version: str
+    statement: str
+    attested_by: AppUser
+    attested_at: datetime
+    #: Whose deposits the statement covers; the attester unless an admin
+    #: attests for another account.
+    covers_depositor: AppUser
+    evidence_kind: SoftwareVersionEvidenceKind = SoftwareVersionEvidenceKind.owner_attestation
+
+
+@dataclass
+class AttestationPlan:
+    release_ref: str
+    software_name: str
+    #: ``(version, revision, build)`` the eligible calculations would cite.
+    target: tuple[str, str | None, str | None]
+    outcomes: list[CalculationOutcome] = field(default_factory=list)
+
+    def by_status(self, status: str) -> list[CalculationOutcome]:
+        return [o for o in self.outcomes if o.status == status]
+
+
+def _attestation_target(release: SoftwareRelease, attested_version: str) -> SoftwareReleaseRef:
+    """The version-less release's own fields, with ``version`` as attested.
+
+    Nothing is inferred: the attested string is not widened ("6" stays "6"),
+    and ``revision``/``build`` are whatever the release already declared --
+    NULL for the playground's ORCA and Molpro rows.
+    """
+
+    return SoftwareReleaseRef(
+        name=release.software.name,
+        version=attested_version,
+        revision=release.revision,
+        build=release.build,
+    )
+
+
+def plan_attestation(
+    session: Session,
+    release: SoftwareRelease,
+    attestation: Attestation,
+    *,
+    load_bytes: Callable[[str], bytes] | None = None,
+) -> AttestationPlan:
+    """Classify every calculation citing *release* for an attestation. Writes nothing.
+
+    :raises VersionFillRefused: *release* already has a version, or the
+        attested version is blank or padded.
+    """
+
+    if release.version is not None:
+        raise VersionFillRefused(
+            f"{release.public_ref} already has version={release.version!r}; "
+            "a recorded version is never overwritten."
+        )
+    version = attestation.attested_version
+    if not version.strip() or version != version.strip():
+        raise VersionFillRefused(
+            f"attested version {version!r} must be non-blank with no surrounding "
+            "whitespace; it is recorded exactly as given."
+        )
+    if not attestation.statement.strip():
+        raise VersionFillRefused("the attestation statement must not be blank.")
+    if release.revision is not None or release.build is not None:
+        raise VersionFillRefused(
+            f"{release.public_ref} declares revision={release.revision!r} "
+            f"build={release.build!r}; attesting a version on it would mint a "
+            "mixed release tuple. Not attested (release_has_revision_or_build)."
+        )
+    if (
+        attestation.covers_depositor.id != attestation.attested_by.id
+        and attestation.attested_by.role != AppUserRole.admin
+    ):
+        raise VersionFillRefused(
+            f"{attestation.attested_by.username!r} may attest only for their own "
+            f"deposits, not {attestation.covers_depositor.username!r}'s; an admin "
+            "may attest for another account."
+        )
+    target = _attestation_target(release, version)
+    plan = AttestationPlan(
+        release.public_ref,
+        release.software.name,
+        (version, target.revision, target.build),
+    )
+    calculations = session.scalars(
+        select(Calculation)
+        .where(Calculation.software_release_id == release.id)
+        .order_by(Calculation.public_ref)
+    )
+    for calc in calculations:
+        if calc.created_by != attestation.covers_depositor.id:
+            plan.outcomes.append(
+                CalculationOutcome(
+                    calc.public_ref,
+                    "other_depositor",
+                    detail="not deposited by the covered depositor",
+                )
+            )
+            continue
+        parsed, program, failure = _observe_banner(session, calc, load_bytes)
+        if parsed is not None and (program or "").lower() != release.software.name.lower():
+            plan.outcomes.append(
+                CalculationOutcome(
+                    calc.public_ref,
+                    "banner_names_other_program",
+                    observed_version=parsed["version"],
+                    detail=f"banner names {program!r}; neither mode will act",
+                )
+            )
+            continue
+        if parsed is not None:
+            plan.outcomes.append(
+                CalculationOutcome(
+                    calc.public_ref,
+                    "banner_available",
+                    observed_version=parsed["version"],
+                    detail="a stored artifact names a version; use the banner mode",
+                )
+            )
+            continue
+        if failure in ("unreadable", "banners_disagree"):
+            plan.outcomes.append(
+                CalculationOutcome(
+                    calc.public_ref,
+                    failure,
+                    detail=(
+                        "a stored artifact could not be read; not treated as absent"
+                        if failure == "unreadable"
+                        else "stored artifacts name different releases"
+                    ),
+                )
+            )
+            continue
+        if _is_accepted(session, calc):
+            status = "accepted"
+        elif calc.execution_environment_manifest_id is not None:
+            status = "environment_bound"
+        else:
+            status = "fillable"
+        stale, approved = (
+            _consequences(session, calc) if status == "fillable" else ((), ())
+        )
+        plan.outcomes.append(
+            CalculationOutcome(
+                calc.public_ref,
+                status,
+                target=plan.target,
+                stale_assessment_refs=stale,
+                approved_product_refs=approved,
+            )
+        )
+    return plan
+
+
+def _existing_attestation(
+    session: Session, release: SoftwareRelease, attestation: Attestation
+) -> SoftwareVersionAttestation | None:
+    """An identical statement already on record, so it is never recorded twice."""
+
+    return session.scalar(
+        select(SoftwareVersionAttestation)
+        .where(
+            SoftwareVersionAttestation.software_release_id == release.id,
+            SoftwareVersionAttestation.attested_version == attestation.attested_version,
+            SoftwareVersionAttestation.statement == attestation.statement,
+            SoftwareVersionAttestation.attested_by == attestation.attested_by.id,
+            SoftwareVersionAttestation.covers_depositor == attestation.covers_depositor.id,
+            SoftwareVersionAttestation.attested_at == attestation.attested_at,
+            SoftwareVersionAttestation.evidence_kind == attestation.evidence_kind,
+        )
+        .order_by(SoftwareVersionAttestation.id)
+        .limit(1)
+    )
+
+
+def apply_attestation(
+    session: Session,
+    release: SoftwareRelease,
+    attestation: Attestation,
+    *,
+    load_bytes: Callable[[str], bytes] | None = None,
+) -> tuple[AttestationPlan, dict[str, str]]:
+    """Record the attestation and re-point every ``fillable`` calculation.
+
+    Re-plans rather than trusting an earlier dry run. Writes nothing when no
+    calculation is fillable, so a second run is a no-op; otherwise writes the
+    attestation row (or reuses an identical one) and one link row per
+    re-pointed calculation. The version-less release is never modified. The
+    caller owns the commit, so the whole run is one transaction.
+
+    :returns: the plan it acted on, and ``{calculation_ref: new release ref}``.
+    """
+
+    plan = plan_attestation(session, release, attestation, load_bytes=load_bytes)
+    fillable = plan.by_status("fillable")
+    if not fillable:
+        return plan, {}
+
+    target = resolve_software_release_ref(
+        session, _attestation_target(release, attestation.attested_version)
+    )
+    record = _existing_attestation(session, release, attestation)
+    if record is None:
+        record = SoftwareVersionAttestation(
+            software_release_id=release.id,
+            attested_version=attestation.attested_version,
+            statement=attestation.statement,
+            evidence_kind=attestation.evidence_kind,
+            attested_by=attestation.attested_by.id,
+            covers_depositor=attestation.covers_depositor.id,
+            attested_at=attestation.attested_at,
+        )
+        session.add(record)
+        session.flush()
+
+    moved: dict[str, str] = {}
+    for outcome in fillable:
+        calc = session.scalars(
+            select(Calculation).where(Calculation.public_ref == outcome.calculation_ref)
+        ).one()
+        before_id = calc.software_release_id
+        calc.software_release_id = target.id
+        calc.software_release = target
+        session.flush()
+        # Checked here, at write time, not by the link trigger: "cites
+        # ``after`` now" stops being true if the calculation is re-pointed
+        # later, and an archive restore replays the link INSERT then.
+        cited = session.scalar(
+            select(Calculation.software_release_id).where(Calculation.id == calc.id)
+        )
+        if cited != target.id:
+            raise VersionFillRefused(
+                f"{calc.public_ref} does not cite {target.public_ref} after the re-point."
+            )
+        session.add(
+            SoftwareVersionAttestationCalculation(
+                attestation_id=record.id,
+                calculation_id=calc.id,
+                before_software_release_id=before_id,
+                after_software_release_id=target.id,
+            )
+        )
+        moved[calc.public_ref] = target.public_ref
     session.flush()
     return plan, moved

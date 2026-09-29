@@ -122,6 +122,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
         "release_selection",
         "software",
         "software_release",
+        # Who attested a software version, and the calculations it moved
+        # (issue #305). Provenance of the release a calculation cites: a
+        # restore without it would keep the re-pointed release and lose the
+        # only account of why.
+        "software_version_attestation",
+        "software_version_attestation_calculation",
         "scientific_record_supersession",
         "species",
         "species_entry",
