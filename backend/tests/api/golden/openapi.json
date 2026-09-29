@@ -86221,7 +86221,7 @@
     },
     "/api/v1/submissions/{submission_ref}/supersede": {
       "post": {
-        "description": "Mark a submission as superseded by another.\n\nBoth submissions are named by public ref: the old one in the path, the\nreplacing one in the body. A row id is refused by the ref pattern (422)\nin either place. The replacing submission must already declare the old\none as the submission it supersedes -- supersession asserts the link, it\ndoes not create it. Returns the newly-superseded *old* submission.",
+        "description": "Mark a submission as superseded by another.\n\nBoth submissions are named by public ref: the old one in the path, the\nreplacing one in the body. A row id is refused by the ref pattern (422)\nin either place. The replacing submission must already declare the old\none as the submission it supersedes -- supersession asserts the link, it\ndoes not create it. Returns the newly-superseded *old* submission.\n\nThe caller must have created both submissions, or hold the curator or\nadmin role -- the rule every read on this router applies, here applied\nto each of the two. Otherwise 403 ``submission_supersede_not_owner``.\nAn unknown ref is 404 whoever asks.",
         "operationId": "supersede_api_v1_submissions__submission_ref__supersede_post",
         "parameters": [
           {
