@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.55.0 - 2026-09-29
+
+Producer contract only; no model in this package changes. New refusal code
+on `POST /api/v1/submissions/{submission_ref}/supersede`:
+`submission_supersede_not_owner` (403). The caller must have created both
+submissions -- the one in the path and the one named by `new_submission_ref`
+-- or hold the curator or admin role. An unknown ref is still 404.
+
 ## 0.54.0 - 2026-09-29
 
 The producer contract now shows the enthalpy-reference rule

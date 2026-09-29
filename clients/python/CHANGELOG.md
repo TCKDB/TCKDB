@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.96.0 - 2026-09-29
+
+Adds `RejectionCode.SUBMISSION_SUPERSEDE_NOT_OWNER` (HTTP 403). The server now
+refuses `POST /api/v1/submissions/{submission_ref}/supersede` unless the caller
+created both submissions or holds the curator or admin role. The client has no
+typed method for this route; a raw `post_json` caller can branch on the code.
+
 ## 0.95.1 - 2026-09-29
 
 The parity table follows the server renaming the submission supersede route
