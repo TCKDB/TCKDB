@@ -10853,6 +10853,7 @@
           },
           "reversible": {
             "default": true,
+            "description": "Whether the reaction is reversible. Omitted means true: an elementary step is reversible by microscopic reversibility. Send false only to state the step is irreversible.",
             "title": "Reversible",
             "type": "boolean"
           },
@@ -44257,7 +44258,7 @@
       },
       "TSReactionUpload": {
         "additionalProperties": false,
-        "description": "Embedded reaction content for a transition-state upload.\n\n:param reversible: Whether the reaction is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when the family is non-canonical.\n:param reactants: Ordered reactant participants.\n:param products: Ordered product participants.",
+        "description": "Embedded reaction content for a transition-state upload.\n\n:param reversible: Whether the reaction is reversible. Omitted means\n    ``true``, the same as on the computed-reaction route: a transition\n    state belongs to an elementary step, and an elementary step is\n    reversible by microscopic reversibility. Send ``false`` only to state\n    that the step is irreversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when the family is non-canonical.\n:param reactants: Ordered reactant participants.\n:param products: Ordered product participants.",
         "properties": {
           "products": {
             "items": {
@@ -44298,12 +44299,13 @@
             "title": "Reaction Family Source Note"
           },
           "reversible": {
+            "default": true,
+            "description": "Whether the reaction is reversible. Omitted means true: an elementary step is reversible by microscopic reversibility. Send false only to state the step is irreversible.",
             "title": "Reversible",
             "type": "boolean"
           }
         },
         "required": [
-          "reversible",
           "reactants",
           "products"
         ],

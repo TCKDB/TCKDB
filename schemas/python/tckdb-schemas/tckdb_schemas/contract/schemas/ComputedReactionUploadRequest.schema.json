@@ -5047,6 +5047,7 @@
     },
     "reversible": {
       "default": true,
+      "description": "Whether the reaction is reversible. Omitted means true: an elementary step is reversible by microscopic reversibility. Send false only to state the step is irreversible.",
       "title": "Reversible",
       "type": "boolean"
     },
