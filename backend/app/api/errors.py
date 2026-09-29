@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import json
 import logging
 from functools import lru_cache
 from typing import Any
@@ -702,6 +704,33 @@ def _idempotency_conflict_handler(
         },
     }
     return JSONResponse(status_code=409, content=body)
+
+
+def render_handled_exception(
+    request: Request, exc: Exception
+) -> tuple[int, dict[str, Any]] | None:
+    """Render ``exc`` exactly as the app would, without raising it.
+
+    Looks the exception up in the handlers this app registered -- by MRO,
+    the way Starlette dispatches -- and returns ``(status, body)`` from the
+    handler's own response. ``None`` when no registered handler takes it
+    (it would be a bare 500).
+
+    For a route that must *report* another route's refusal rather than
+    return it: ``/bundles/dry-run`` states the refusal ``/bundles/submit``
+    would give, and rendering it through the same handler is what keeps the
+    code and the sentence identical rather than similar.
+    """
+    handlers = request.app.exception_handlers
+    handler = next(
+        (handlers[cls] for cls in type(exc).__mro__ if cls in handlers), None
+    )
+    if handler is None or inspect.iscoroutinefunction(handler):
+        # Every handler registered below is synchronous; an async one could
+        # not be awaited from a sync route, so it falls back to raising.
+        return None
+    response = handler(request, exc)
+    return response.status_code, json.loads(bytes(response.body))
 
 
 def register_exception_handlers(app: FastAPI) -> None:

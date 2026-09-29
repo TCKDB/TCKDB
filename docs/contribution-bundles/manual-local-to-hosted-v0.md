@@ -169,9 +169,10 @@ the structural and family-level validators.
 
 ## Step 2: Dry-run the bundle against hosted
 
-Dry-run is the **read-only preview** endpoint — it never mutates the
-hosted database. It tells you what a real import would do for each
-identity in the bundle. Full reference:
+Dry-run is the **preview** endpoint — it never mutates the hosted
+database. It tells you what a real import would do for each identity in
+the bundle, and whether submit would accept the bundle at all (it
+rehearses submit and rolls the rehearsal back). Full reference:
 [`hosted-dry-run-v0.md`](hosted-dry-run-v0.md).
 
 ### Thermo dry-run

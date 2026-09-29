@@ -28,6 +28,8 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import event
+from sqlalchemy.exc import ResourceClosedError
 from sqlalchemy.orm import Session
 
 from app.api.errors import DomainError
@@ -436,7 +438,80 @@ def submit_contribution_bundle(
     )
 
 
+class DryRunCommitRefused(RuntimeError):
+    """Something tried to commit while a dry run was rehearsing a submit."""
+
+
+def rehearse_contribution_bundle_submit(
+    session: Session,
+    bundle: ContributionBundleV0,
+    *,
+    actor: AppUser,
+) -> Exception | None:
+    """Run :func:`submit_contribution_bundle` and undo it; return its refusal.
+
+    This is how ``/bundles/dry-run`` answers "will this submit?" (#577). It
+    used to answer from the read-only preview alone, which is only submit's
+    *gate*: every check inside ``persist_thermo_upload`` /
+    ``persist_kinetics_upload`` -- the enthalpy-reference rule, reference
+    resolution, ownership, role/type, reaction anchoring, database
+    constraints -- ran on submit and never on a dry run, so a bundle could
+    pass one and be refused by the other. Copying those checks into the
+    preview would give the two routes a second place to disagree, so the
+    dry run calls the very function the submit route calls.
+
+    It runs inside a ``SAVEPOINT`` that is rolled back whether submit
+    succeeds or fails, so nothing it wrote survives the call. Two things are
+    not undone by a rollback and are accepted: sequence values it drew, and
+    the Crossref/ISBN metadata lookup ``resolve_or_create_literature`` makes
+    for a reference not yet held -- the same lookup submit makes.
+
+    A commit during the rehearsal would publish the rehearsal's writes, so
+    one is refused outright: the session raises :class:`DryRunCommitRefused`
+    and the rehearsal returns it like any other failure, which the route
+    re-raises as a 500. Nothing in the submit path commits today; this is
+    what keeps a future one from turning a dry run into a submit.
+
+    :returns: ``None`` when submit would succeed, otherwise the exception it
+        raised -- rendered by the caller through the app's own handlers.
+    """
+
+    savepoint = session.begin_nested()
+
+    def _refuse_commit(target: Session) -> None:
+        # ``before_commit`` fires for every SAVEPOINT release too, and
+        # submit releases one of its own inside this one
+        # (``_append_import_audit``); that is harmless. Releasing *this*
+        # savepoint, or committing the transaction around it, is not: a
+        # ``Session.commit()`` releases every savepoint on its way to the
+        # root, innermost first, so refusing when this one's turn comes stops
+        # it before the rehearsal's writes leave the savepoint.
+        if target.get_nested_transaction() is not savepoint and target.in_nested_transaction():
+            return
+        raise DryRunCommitRefused(
+            "a dry run tried to commit; its writes must be rolled back"
+        )
+
+    event.listen(session, "before_commit", _refuse_commit)
+    try:
+        submit_contribution_bundle(session, bundle, actor=actor)
+    except Exception as exc:  # every failure is the verdict, whatever its type
+        return exc
+    else:
+        return None
+    finally:
+        event.remove(session, "before_commit", _refuse_commit)
+        try:
+            savepoint.rollback()
+        except ResourceClosedError:
+            # Already rolled back: SQLAlchemy does that itself when a commit
+            # of it is refused above.
+            pass
+
+
 __all__ = [
+    "DryRunCommitRefused",
     "_is_blocking",  # exported for unit tests
+    "rehearse_contribution_bundle_submit",
     "submit_contribution_bundle",
 ]

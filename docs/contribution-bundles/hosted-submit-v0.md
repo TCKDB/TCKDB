@@ -214,13 +214,20 @@ Dry-run (`POST /api/v1/bundles/dry-run`) and submit
 (`POST /api/v1/bundles/submit`) share the same input schema and the same
 underlying validation service. Submit additionally:
 
-- requires the dry-run to report no blocking errors,
+- requires the dry-run preview to report no blocking errors,
 - writes through the existing thermo/kinetics workflows,
 - creates the submission/audit/link rows.
 
+Since #577 the dry run also *rehearses* submit -- the same
+`submit_contribution_bundle` call, in a savepoint that is always rolled
+back -- so every refusal submit can give, the dry run gives first, with
+the same `code` and message. Before that, the checks inside the
+thermo/kinetics workflows (the enthalpy-reference rule among them) ran on
+submit only, and a bundle could pass a dry run and then be refused.
+
 A client that wants to preview before committing can call `/dry-run`
-first; submit also runs it internally as a gate, so the preview is not
-strictly required.
+first; submit also runs the preview internally as a gate, so the preview
+is not strictly required.
 
 ## What this milestone is not
 

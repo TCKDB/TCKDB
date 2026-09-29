@@ -5,9 +5,10 @@ The hosted dry-run endpoint lets an authenticated user POST a
 real import would do — without creating any scientific records,
 submissions, upload jobs, audit events, or record links.
 
-This is a preview-only milestone (milestone 6 of the
-local-offline-and-hosted-submission implementation plan).
-There is intentionally no hosted submit/import route yet.
+This was milestone 6 of the local-offline-and-hosted-submission
+implementation plan. The submit route it anticipated now exists
+([`hosted-submit-v0.md`](hosted-submit-v0.md)), and since #577 a dry run
+rehearses it.
 
 ## Endpoint
 
@@ -23,8 +24,9 @@ POST /api/v1/bundles/dry-run
   by the existing bundle schema; structurally invalid bundles fail with
   the normal `422` validation response.
 - **Response:** `ContributionBundleDryRunResult` (HTTP `200`).
-- **Side effects:** none. The endpoint runs only `SELECT` queries
-  through a non-committing session.
+- **Side effects:** nothing is kept. The endpoint rehearses the real
+  submit inside a savepoint that is always rolled back, on a session
+  that never commits (see [No-mutation guarantee](#no-mutation-guarantee)).
 
 ## Supported bundle kinds
 
@@ -37,16 +39,71 @@ Other families (`network`, `statmech`, `transport`, `computed_reaction`,
 mixed) are rejected by `ContributionBundleV0` validation before they
 reach this endpoint.
 
+## Will submit accept it? (#577)
+
+A dry run answers two things: the per-record preview below, and whether
+`POST /bundles/submit` would accept the same bundle.
+
+The second answer comes from **running submit itself**. After building
+the preview, the route calls `submit_contribution_bundle` -- the function
+the submit route calls -- inside a savepoint, and rolls the savepoint back
+whatever happens. If submit would refuse, the result carries one extra
+`messages[]` entry:
+
+```json
+{
+  "level": "error",
+  "code": "enthalpy_declaration_absent",
+  "message": "Enthalpy content requires enthalpy_reference_kind. ...",
+  "field": "enthalpy_reference_kind"
+}
+```
+
+`code` and `message` are exactly what submit returns for the same bundle:
+the refusal is rendered by the same exception handler. `bundle_valid` is
+then `false`, and `summary.errors` counts it. A refusal that would be a
+server error on submit (5xx) is a server error here too.
+
+Until #577 the dry run ran only the preview, which is submit's *gate* but
+not everything submit checks. Every check inside the thermo and kinetics
+upload workflows -- the enthalpy-reference rule, `existing_*_id` and
+public-ref resolution, ownership, role/type compatibility, reaction
+anchoring, SP resolution for `energy_level_of_theory`, database
+constraints -- ran on submit and never on a dry run. Copying those checks
+into the preview would give the two routes a second place to disagree, so
+the dry run calls submit instead. `backend/tests/api/test_api_bundle_dry_run_submit_parity.py`
+holds both routes to identical refusals and requires the dry run to run
+every backend function submit runs.
+
+Like submit, the dry run reports the **first** refusal only: submit stops
+at the first failing record, and so does its rehearsal.
+
 ## No-mutation guarantee
 
-The dry-run service performs **only read-only queries**. It never calls
-`resolve_or_create_*` and never relies on transaction-rollback safety.
-The route binds the read-only `get_db` session, not the committing
-`get_write_db` session.
+Nothing a dry run does is kept:
+
+- The route binds the non-committing `get_db` session, not the committing
+  `get_write_db` session.
+- The submit rehearsal runs inside a `SAVEPOINT` that is rolled back
+  whether it succeeds or fails.
+- While it runs, a commit is refused: anything that tries to commit the
+  session, or release the rehearsal's savepoint, raises instead, and the
+  request fails with a 500 rather than keeping a write.
+
+Two things a rollback does not undo, both accepted: sequence values the
+rehearsal drew (ids are not contiguous anyway), and the Crossref/ISBN
+metadata lookup made for a literature reference not already on the
+instance -- the same lookup submit makes.
+
+This reverses the v0 milestone's rule that the dry run "never relies on
+transaction-rollback safety". That rule was written before submit
+existed, and a preview that refuses to run submit's checks cannot predict
+submit; the savepoint plus the commit refusal is what now carries the
+guarantee.
 
 Tests assert that row counts in the following tables are unchanged
-across a successful dry-run: `species`, `species_entry`, `chem_reaction`,
-`reaction_entry`, `thermo`, `kinetics`, `submission`,
+across a dry-run, accepted or refused: `species`, `species_entry`,
+`chem_reaction`, `reaction_entry`, `thermo`, `kinetics`, `submission`,
 `submission_audit_event`, `submission_record_link`, `upload_job`.
 
 ## Conservative preview semantics
@@ -68,7 +125,9 @@ Provenance items only describe whether the referenced identity already
 exists on hosted. They do **not** imply moderation acceptance, curation
 status, or that the bundle has been imported.
 
-What is **not** previewed in v0 (deferred to later milestones):
+What is **not** previewed item by item in v0 (deferred to later
+milestones) -- though every check submit applies to them is applied by the
+rehearsal above:
 
 - inline calculations and source-calculation links
 - applied energy corrections and their components
@@ -153,13 +212,15 @@ What is **not** previewed in v0 (deferred to later milestones):
 
 ## Difference vs. submit/import
 
-| Aspect | Dry-run (this endpoint) | Real submit/import (future milestone) |
+| Aspect | Dry-run (this endpoint) | Submit/import (`hosted-submit-v0.md`) |
 |---|---|---|
-| HTTP method/path | `POST /api/v1/bundles/dry-run` | not implemented yet |
-| Mutates database | never | yes — creates submission, upload job, scientific rows |
+| HTTP method/path | `POST /api/v1/bundles/dry-run` | `POST /api/v1/bundles/submit` |
+| Checks applied | every check submit applies (it runs submit) | all of them |
+| Refusal | HTTP `200`, an `error` message with submit's `code` and message | HTTP `4xx` with that `code` and message |
+| Mutates database | never -- the rehearsal is rolled back | yes -- creates submission and scientific rows |
 | Creates submission row | no | yes |
 | Creates audit/record-link rows | no | yes |
-| Returns | preview result with per-record `would_*` actions | submission/upload-job IDs and moderation state |
-| Idempotency | trivially idempotent (read-only) | governed by submission/moderation lifecycle |
+| Returns | preview result with per-record `would_*` actions | submission id and moderation state |
+| Idempotency | nothing is kept, so repeating it changes nothing | `Idempotency-Key` header |
 
 Dry-run answers *"what would happen?"* without making it happen.
