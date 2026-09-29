@@ -30,6 +30,7 @@ from app.services.idempotency import (
     IdempotencyConflict,
     InvalidIdempotencyKey,
 )
+from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
 
@@ -706,6 +707,38 @@ def _idempotency_conflict_handler(
     return JSONResponse(status_code=409, content=body)
 
 
+def _rehearsal_contended_handler(
+    request: Request, exc: RehearsalContended
+) -> JSONResponse:
+    """503 ``dry_run_contended``: a dry run gave way to a real writer.
+
+    Only ``/bundles/dry-run`` rehearses, so only it can reach this. The
+    rehearsal met another transaction's lock and abandoned itself rather than
+    delay or deadlock that transaction (see ``app.workflows.rehearsal``). It
+    decided nothing about the bundle, so it is neither a 200 verdict nor the
+    generic ``database_unavailable``: a named, retryable 503 with the reason
+    in ``context`` and a ``Retry-After`` a client's backoff can honour.
+    """
+    logger.info(
+        "dry-run rehearsal contended on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc.reason,
+    )
+    return JSONResponse(
+        status_code=503,
+        content=error_envelope(
+            "The dry run gave way to another deposit that was writing the "
+            "same records, rather than delay it. Nothing was decided about "
+            "this bundle; retry the dry run.",
+            code="dry_run_contended",
+            context={"reason": exc.reason},
+            fallback_code="dry_run_contended",
+        ),
+        headers={"Retry-After": "1"},
+    )
+
+
 def render_handled_exception(
     request: Request, exc: Exception
 ) -> tuple[int, dict[str, Any]] | None:
@@ -748,3 +781,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(IdempotencyConflict, _idempotency_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactIntegrityError, _artifact_integrity_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactStorageUnavailable, _artifact_storage_unavailable_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RehearsalContended, _rehearsal_contended_handler)  # type: ignore[arg-type]

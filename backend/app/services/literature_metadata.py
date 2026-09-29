@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import copy
+import threading
+import time
+from collections import OrderedDict
+from collections.abc import Callable
 from typing import Any
 
 # Note: the runtime import path remains `isbnlib`, but in this project we
@@ -66,8 +71,53 @@ def normalize_isbn(isbn: str | None) -> str | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# In-process metadata cache
+# ---------------------------------------------------------------------------
+#
+# A bundle dry run rehearses submit (#577), so without a cache every dry run
+# of a bundle citing a new DOI repeated the same Crossref request -- and made
+# it while holding the rehearsal's row locks. The cache holds only what the
+# provider returned (no database ids, nothing instance-specific), keyed on
+# the normalized identifier, bounded in size and aged out, so a correction
+# upstream is seen within the TTL. A failed or empty lookup is *not* cached:
+# the next caller retries it, exactly as before.
+
+METADATA_CACHE_TTL_S = 24 * 60 * 60
+METADATA_CACHE_MAX_ENTRIES = 1024
+
+_cache: OrderedDict[tuple[str, str], tuple[float, dict[str, Any]]] = OrderedDict()
+_cache_lock = threading.Lock()
+
+
+def clear_metadata_cache() -> None:
+    """Forget every cached lookup."""
+    with _cache_lock:
+        _cache.clear()
+
+
+def _cached(
+    kind: str, key: str, fetch: Callable[[str], dict[str, Any] | None]
+) -> dict[str, Any] | None:
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _cache.get((kind, key))
+        if hit is not None and now - hit[0] < METADATA_CACHE_TTL_S:
+            _cache.move_to_end((kind, key))
+            return copy.deepcopy(hit[1])
+    value = fetch(key)
+    if value is None:
+        return None
+    with _cache_lock:
+        _cache[(kind, key)] = (now, copy.deepcopy(value))
+        _cache.move_to_end((kind, key))
+        while len(_cache) > METADATA_CACHE_MAX_ENTRIES:
+            _cache.popitem(last=False)
+    return value
+
+
 def fetch_doi_metadata(doi: str) -> dict[str, Any] | None:
-    """Fetch literature metadata from Crossref for a DOI.
+    """Fetch literature metadata from Crossref for a DOI, through the cache.
 
     :param doi: DOI in canonical or raw form.
     :returns: Normalized metadata dictionary, or ``None`` when unavailable.
@@ -76,7 +126,10 @@ def fetch_doi_metadata(doi: str) -> dict[str, Any] | None:
     normalized_doi = normalize_doi(doi)
     if normalized_doi is None:
         return None
+    return _cached("doi", normalized_doi, _fetch_doi_metadata_uncached)
 
+
+def _fetch_doi_metadata_uncached(normalized_doi: str) -> dict[str, Any] | None:
     try:
         import requests
     except ImportError:
@@ -116,7 +169,7 @@ def fetch_doi_metadata(doi: str) -> dict[str, Any] | None:
 
 
 def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
-    """Fetch literature metadata from an ``isbnlib``-compatible provider.
+    """Fetch literature metadata from an ``isbnlib``-compatible provider, cached.
 
     :param isbn: ISBN in canonical or raw form.
     :returns: Normalized metadata dictionary, or ``None`` when unavailable.
@@ -125,7 +178,10 @@ def fetch_isbn_metadata(isbn: str) -> dict[str, Any] | None:
     normalized_isbn = normalize_isbn(isbn)
     if normalized_isbn is None:
         return None
+    return _cached("isbn", normalized_isbn, _fetch_isbn_metadata_uncached)
 
+
+def _fetch_isbn_metadata_uncached(normalized_isbn: str) -> dict[str, Any] | None:
     try:
         import isbnlib
     except ImportError:

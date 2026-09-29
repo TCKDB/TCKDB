@@ -29,6 +29,7 @@ from app.workflows.contribution_bundle_submit import (
     rehearse_contribution_bundle_submit,
     submit_contribution_bundle,
 )
+from app.workflows.rehearsal import discard_unflushed_writes
 
 router = APIRouter()
 
@@ -58,7 +59,16 @@ def dry_run_bundle(
     submit's own ``code`` and message, and ``bundle_valid`` is false.
     Nothing is kept: the rehearsal's writes are rolled back and this
     session never commits.
+
+    If another deposit holds a lock the rehearsal needs, the rehearsal gives
+    way rather than delay or deadlock that deposit, and this route answers
+    ``503 dry_run_contended`` with a ``Retry-After`` header: nothing was
+    decided about the bundle, and retrying is the right response.
     """
+    # Before the preview's first query can flush it: the request's own
+    # bookkeeping (``api_key.last_used_at``) would otherwise hold that row
+    # locked for the whole rehearsal. See ``discard_unflushed_writes``.
+    discard_unflushed_writes(session)
     result = dry_run_contribution_bundle(session, bundle)
     refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)
     if refusal is None:

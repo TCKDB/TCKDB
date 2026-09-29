@@ -23,7 +23,10 @@ POST /api/v1/bundles/dry-run
 - **Request body:** a `ContributionBundleV0` JSON document. Validated
   by the existing bundle schema; structurally invalid bundles fail with
   the normal `422` validation response.
-- **Response:** `ContributionBundleDryRunResult` (HTTP `200`).
+- **Response:** `ContributionBundleDryRunResult` (HTTP `200`), including when
+  submit would refuse the bundle. Exceptions: `503 dry_run_contended` when the
+  rehearsal gave way to a concurrent deposit (retry), and a 5xx where submit
+  itself would fail the same way.
 - **Side effects:** nothing is kept. The endpoint rehearses the real
   submit inside a savepoint that is always rolled back, on a session
   that never commits (see [No-mutation guarantee](#no-mutation-guarantee)).
@@ -85,20 +88,72 @@ Nothing a dry run does is kept:
 - The route binds the non-committing `get_db` session, not the committing
   `get_write_db` session.
 - The submit rehearsal runs inside a `SAVEPOINT` that is rolled back
-  whether it succeeds or fails.
-- While it runs, a commit is refused: anything that tries to commit the
-  session, or release the rehearsal's savepoint, raises instead, and the
-  request fails with a 500 rather than keeping a write.
+  whether it succeeds or fails (`app/workflows/rehearsal.py`).
+- While it runs, these attempts to publish its writes are refused, and
+  the request fails with a 500 rather than keeping a write:
+  - `Session.commit()`, and releasing the rehearsal's savepoint through
+    the ORM;
+  - `Connection.commit()` on the SQLAlchemy connection the session uses;
+  - SQL sent through that connection that would end or publish the
+    transaction: `COMMIT`, `END`, `PREPARE TRANSACTION`, or `RELEASE` of a
+    savepoint the rehearsal did not open.
+
+  A refusal below the ORM also discards the physical connection, so the
+  server aborts the transaction and no pooled connection can carry the
+  writes to the next request.
+- **Not guarded:** a raw DBAPI connection or cursor taken from under
+  SQLAlchemy, and any other connection, engine or session the rehearsed
+  code opens for itself. Nothing in the submit path does either; code that
+  starts to would be outside this guarantee.
+- Code being rehearsed cannot tell it is: no module under `app/workflows`,
+  `app/services` or `app/chemistry` other than the rehearsal itself may
+  ask whether it is inside a savepoint (a repo test enforces it), so the
+  dry run takes every branch submit takes.
 
 Two things a rollback does not undo, both accepted: sequence values the
 rehearsal drew (ids are not contiguous anyway), and the Crossref/ISBN
 metadata lookup made for a literature reference not already on the
-instance -- the same lookup submit makes.
+instance -- the same lookup submit makes. That lookup is made *before* the
+rehearsal opens, and cached in-process (by DOI/ISBN, no database ids, 24 h
+TTL, 1024 entries), so a repeated dry run -- or the submit that follows it
+-- does not fetch again. A lookup that failed is not cached; for that
+reference the rehearsal tries again and holds its locks across the
+attempt, as submit does.
+
+## Sharing the database with real deposits
+
+A rehearsal's inserts take the locks a real submit's do. Two rules keep a
+dry run from being the reason a real deposit fails:
+
+- It waits at most `lock_timeout` for another transaction's lock: 500 ms,
+  and never more than half the server's `deadlock_timeout` (default 1 s),
+  so it gives up before a real submit waiting on it would run its own
+  deadlock check.
+- Where the database role may (a superuser, as in the default
+  deployment), it runs with `deadlock_timeout` of 10 ms, so when it closes
+  a deadlock it finds the cycle, and is aborted, long before the submit
+  would. Without that privilege the submit can still lose a deadlock that
+  forms within the `lock_timeout` window.
+
+A dry run that gives way answers **`503 dry_run_contended`**, with
+`context.reason` `lock_timeout` or `deadlock` and `Retry-After: 1`. It
+decided nothing about the bundle; retry it.
+
+What this does not remove: a real submit that needs a row a dry run has
+just inserted waits for that dry run, and PostgreSQL keeps such a row
+locked until the dry-run *request's* transaction ends, not merely its
+savepoint -- which is when the route returns.
+
+Before the rehearsal opens, the route also discards the request's own
+unflushed bookkeeping (`api_key.last_used_at`), which would otherwise hold
+the API key's row locked for the whole rehearsal and queue a second dry
+run on the same key behind the first. A dry-run session never commits, so
+that value was never saved.
 
 This reverses the v0 milestone's rule that the dry run "never relies on
 transaction-rollback safety". That rule was written before submit
 existed, and a preview that refuses to run submit's checks cannot predict
-submit; the savepoint plus the commit refusal is what now carries the
+submit; the savepoint plus the guards above are what now carry the
 guarantee.
 
 Tests assert that row counts in the following tables are unchanged
@@ -217,6 +272,7 @@ rehearsal above:
 | HTTP method/path | `POST /api/v1/bundles/dry-run` | `POST /api/v1/bundles/submit` |
 | Checks applied | every check submit applies (it runs submit) | all of them |
 | Refusal | HTTP `200`, an `error` message with submit's `code` and message | HTTP `4xx` with that `code` and message |
+| Contention | HTTP `503 dry_run_contended` (retry; nothing was decided) | waits for the lock, as any write does |
 | Mutates database | never -- the rehearsal is rolled back | yes -- creates submission and scientific rows |
 | Creates submission row | no | yes |
 | Creates audit/record-link rows | no | yes |

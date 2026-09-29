@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 import threading
 from pathlib import Path
@@ -58,6 +59,7 @@ from app.db.models.submission import (
     SubmissionRecordLink,
 )
 from app.db.models.thermo import Thermo
+from app.workflows.rehearsal import RehearsalCommitRefused
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_chem_reaction,
@@ -276,10 +278,189 @@ REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
     ),
 }
 
-ACCEPTED: dict[str, Callable[[], dict]] = {
-    "thermo_example": lambda: _example("thermo-bundle-v0.json"),
-    "kinetics_example": lambda: _example("kinetics-bundle-v0.json"),
+_SOFTWARE = {"name": "Gaussian", "version": "16"}
+_WORKFLOW_TOOL = {"name": "ARC", "version": "1.0.0"}
+_LOT_DFT = {"method": "B3LYP", "basis": "6-31G(d)"}
+_LOT_CC = {"method": "CCSD(T)", "basis": "cc-pVTZ"}
+_DOI_METADATA = {"title": "A cited paper", "issued": 2024, "URL": "https://doi.org/x"}
+
+
+def _thermo_rich(_session: Session) -> dict:
+    """Every optional block a thermo record can carry that reaches a check:
+    literature, provenance releases, inline calculations, source links and
+    an applied correction. The two example bundles reach none of them, so a
+    check behind any of them was invisible to the trace test (review F5)."""
+    bundle = _example("thermo-bundle-v0.json")
+    record = bundle["records"]["thermo_uploads"][0]
+    record.update(
+        species_entry={"smiles": "CCCC", "charge": 0, "multiplicity": 1},
+        h298_kj_mol=-125.7,
+        literature={"doi": "10.5555/tckdb-577-thermo", "title": "A cited paper"},
+        software_release=_SOFTWARE,
+        workflow_tool_release=_WORKFLOW_TOOL,
+        calculations=[
+            {
+                "key": "sp_cc",
+                "calculation": {
+                    "type": "sp",
+                    "software_release": _SOFTWARE,
+                    "level_of_theory": _LOT_CC,
+                    "sp_result": {"electronic_energy_hartree": -158.3},
+                },
+            },
+            {
+                "key": "freq_dft",
+                "calculation": {
+                    "type": "freq",
+                    "software_release": _SOFTWARE,
+                    "level_of_theory": _LOT_DFT,
+                    "freq_result": {"n_imag": 0, "zpe_hartree": 0.13},
+                },
+            },
+        ],
+        source_calculations=[
+            {"calculation_key": "sp_cc", "role": "sp"},
+            {"calculation_key": "freq_dft", "role": "freq"},
+        ],
+        applied_energy_corrections=[
+            {
+                "frequency_scale_factor": {
+                    "level_of_theory": _LOT_DFT,
+                    "scale_kind": "zpe",
+                    "value": 0.977,
+                },
+                "application_role": "zpe",
+                "value": 0.13,
+                "value_unit": "hartree",
+                "source_calculation_key": "freq_dft",
+            }
+        ],
+    )
+    return bundle
+
+
+def _kinetics_rich(session: Session) -> dict:
+    """A computed rate with a full interpretation set and Wigner tunneling,
+    against statmech and a transition state deposited first -- the only way
+    the interpretation, TS-anchoring and tunneling checks are reached."""
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import ReactionRole
+    from app.db.models.statmech import Statmech
+    from app.db.models.transition_state import TransitionStateEntry
+    from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+    from app.workflows.network_pdep import persist_network_pdep_upload
+    from tests.workflows.test_network_pdep_upload import _parallel_path_payload
+
+    payload = _parallel_path_payload()
+    for species_key, freq_key, geometry_key in (
+        ("ethylperoxy", "etoo_kinetics_freq", "etoo_geom"),
+        ("ethene", "ethene_kinetics_freq", "ethene_geom"),
+        ("HO2", "ho2_kinetics_freq", "HO2_geom"),
+    ):
+        species = next(item for item in payload["species"] if item["key"] == species_key)
+        species.setdefault("calculations", []).append(
+            {"key": freq_key, "type": "freq", "geometry_key": geometry_key,
+             "software_release": _SOFTWARE, "level_of_theory": _LOT_DFT, "freq_n_imag": 0}
+        )
+        species["statmech"] = {
+            "statmech_treatment": "rrho",
+            "source_calculations": [{"calculation_key": freq_key, "role": "freq"}],
+        }
+    user_id = session.scalar(select(AppUser.id).where(AppUser.username == "testuser"))
+    persist_network_pdep_upload(
+        session, NetworkPDepUploadRequest(**payload), created_by=user_id
+    )
+    ts_entry = next(
+        entry
+        for entry in session.scalars(select(TransitionStateEntry)).all()
+        if sum(
+            p.role == ReactionRole.product
+            for p in entry.transition_state.reaction_entry.structure_participants
+        )
+        == 2
+    )
+    participants = sorted(
+        ts_entry.transition_state.reaction_entry.structure_participants,
+        key=lambda p: (p.role.value, p.participant_index),
+    )
+    by_entry = {
+        sm.species_entry_id: sm
+        for sm in session.scalars(select(Statmech).where(Statmech.species_entry_id.is_not(None)))
+    }
+    (reactant_sm,) = [by_entry[p.species_entry_id] for p in participants if p.role == ReactionRole.reactant]
+    product_sms = [by_entry[p.species_entry_id] for p in participants if p.role == ReactionRole.product]
+    ts_sm = session.scalars(
+        select(Statmech).where(Statmech.transition_state_entry_id == ts_entry.id)
+    ).first()
+
+    def _content(sm) -> dict:
+        species = sm.species_entry.species
+        return {"species_entry": {"smiles": species.smiles, "charge": species.charge,
+                                  "multiplicity": species.multiplicity}}
+
+    conventions = {
+        "ensemble_policy": "single_structure",
+        "standard_state_convention": "ideal_gas_1_bar",
+        "degeneracy_interpretation": "reaction_path_degeneracy",
+    }
+    bundle = _example("kinetics-bundle-v0.json")
+    bundle["records"]["kinetics_uploads"] = [
+        {
+            "reaction": {
+                "reversible": True,
+                "reactants": [_content(reactant_sm)],
+                "products": [_content(sm) for sm in product_sms],
+            },
+            "scientific_origin": "computed",
+            "model_kind": "modified_arrhenius",
+            "a": 1.0e12,
+            "a_units": "per_s",
+            "n": 0.0,
+            "reported_ea": 50.0,
+            "reported_ea_units": "kj_mol",
+            "tmin_k": 300.0,
+            "tmax_k": 2000.0,
+            "literature": {"doi": "10.5555/tckdb-577-kinetics", "title": "A cited paper"},
+            "software_release": _SOFTWARE,
+            "workflow_tool_release": _WORKFLOW_TOOL,
+            "tunneling_model": "wigner",
+            "interpretation_assignments": [
+                {"role": "reactant", "participant_index": 1, "statmech_ref": reactant_sm.public_ref, **conventions},
+                {"role": "product", "participant_index": 1, "statmech_ref": product_sms[0].public_ref, **conventions},
+                {"role": "product", "participant_index": 2, "statmech_ref": product_sms[1].public_ref, **conventions},
+                {"role": "transition_state", "statmech_ref": ts_sm.public_ref,
+                 "transition_state_entry_ref": ts_entry.public_ref, **conventions},
+            ],
+            "tunneling_application": {
+                "model": "wigner",
+                "transition_state_entry_ref": ts_entry.public_ref,
+                "imaginary_frequency_cm1": -1500.0,
+            },
+        }
+    ]
+    return bundle
+
+
+ACCEPTED: dict[str, Callable[[Session], dict]] = {
+    "thermo_example": lambda _s: _example("thermo-bundle-v0.json"),
+    "kinetics_example": lambda _s: _example("kinetics-bundle-v0.json"),
+    "thermo_rich": _thermo_rich,
+    "kinetics_rich": _kinetics_rich,
 }
+
+
+@pytest.fixture(autouse=True)
+def _doi_lookups_answer_offline(monkeypatch):
+    """A cited DOI resolves to fixed metadata, with no network and no
+    carry-over between tests through the in-process cache."""
+    from app.services import literature_metadata
+
+    literature_metadata.clear_metadata_cache()
+    monkeypatch.setattr(
+        literature_metadata, "_fetch_doi_metadata_uncached", lambda doi: dict(_DOI_METADATA)
+    )
+    yield
+    literature_metadata.clear_metadata_cache()
 
 
 def _dry_run_errors(body: dict) -> list[dict]:
@@ -359,7 +540,7 @@ def test_dry_run_and_submit_refuse_identically(client, case: str) -> None:
 
 @pytest.mark.parametrize("case", sorted(ACCEPTED))
 def test_dry_run_and_submit_accept_identically(client, case: str) -> None:
-    bundle = ACCEPTED[case]()
+    bundle = ACCEPTED[case](client._db_session)
 
     before = _counts(client._db_session)
     dry = client.post(DRY_RUN, json=copy.deepcopy(bundle))
@@ -439,7 +620,7 @@ def test_a_rehearsal_that_tries_to_commit_fails_loudly_and_keeps_nothing(
 
     session = client._db_session
     before = _counts(session)
-    with pytest.raises(submit_module.DryRunCommitRefused):
+    with pytest.raises(RehearsalCommitRefused):
         client.post(DRY_RUN, json=_example("thermo-bundle-v0.json"))
     assert _counts(session) == before
 
@@ -476,9 +657,26 @@ def _trace_calls(action: Callable[[], Any]) -> set[str]:
     return seen
 
 
+#: Checks each rich bundle exists to reach; pinned so a fixture that stops
+#: reaching one fails here instead of quietly narrowing the trace.
+_RICH_REACHES: dict[str, tuple[str, ...]] = {
+    "thermo_rich": (
+        "app.services.energy_correction_resolution.assert_bac_total_has_required_components",
+        "app.services.calculation_levels.assert_role_consistency",
+        "app.workflows.thermo._resolve_source_calculation",
+        "app.services.literature_resolution.resolve_or_create_literature",
+    ),
+    "kinetics_rich": (
+        "app.workflows.kinetics._resolve_ts_anchored_reaction_entry",
+        "app.workflows.kinetics._resolve_interpretation_assignments",
+        "app.services.literature_resolution.resolve_or_create_literature",
+    ),
+}
+
+
 @pytest.mark.parametrize("case", sorted(ACCEPTED))
 def test_dry_run_runs_every_step_submit_runs(client, case: str) -> None:
-    bundle = ACCEPTED[case]()
+    bundle = ACCEPTED[case](client._db_session)
 
     dry_calls = _trace_calls(
         lambda: client.post(DRY_RUN, json=copy.deepcopy(bundle)).raise_for_status()
@@ -492,9 +690,55 @@ def test_dry_run_runs_every_step_submit_runs(client, case: str) -> None:
     assert "app.workflows.contribution_bundle_submit.submit_contribution_bundle" in submit_calls
     if case.startswith("thermo"):
         assert "tckdb_schemas.enthalpy_reference.enthalpy_reference_error" in submit_calls
+    # And the rich bundles reach the checks the examples cannot (review F5).
+    for reached in _RICH_REACHES.get(case, ()):
+        assert reached in submit_calls, f"{case} no longer reaches {reached}"
 
     submit_only = submit_calls - dry_calls - set(_SUBMIT_ONLY_BY_DESIGN)
     assert submit_only == set(), (
         "submit ran these and the dry run did not; each is a check a dry "
         f"run cannot predict: {sorted(submit_only)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Nothing being rehearsed can tell it is being rehearsed
+# ---------------------------------------------------------------------------
+
+#: Ways code could ask "am I inside a savepoint / a dry run?". Any of them
+#: in rehearsed code would let the dry run take a branch submit does not --
+#: the review showed it by skipping ``assert_bac_total_has_required_components``
+#: behind ``if not session.in_nested_transaction()`` with every other test
+#: green (F5).
+_REHEARSAL_TELLS = re.compile(
+    r"in_nested_transaction|get_nested_transaction|_nested_transaction\b"
+    r"|\bRehearsal(?:CommitRefused|Contended)\b"
+)
+
+#: The one module allowed to know: it *is* the rehearsal.
+_MAY_KNOW = {"app/workflows/rehearsal.py"}
+
+_REHEARSED_PACKAGES = ("app/workflows", "app/services", "app/chemistry")
+
+
+def test_no_code_under_rehearsal_can_tell_it_is_rehearsed() -> None:
+    backend = Path(__file__).resolve().parents[2]
+    scanned = 0
+    offenders: list[str] = []
+    for package in _REHEARSED_PACKAGES:
+        for path in sorted((backend / package).rglob("*.py")):
+            rel = path.relative_to(backend).as_posix()
+            text = path.read_text()
+            if rel in _MAY_KNOW:
+                # The pattern must be live: it has to find the rehearsal's own.
+                assert _REHEARSAL_TELLS.search(text), f"{rel} no longer matches"
+                continue
+            scanned += 1
+            for number, line in enumerate(text.splitlines(), start=1):
+                if _REHEARSAL_TELLS.search(line):
+                    offenders.append(f"{rel}:{number}: {line.strip()}")
+    assert scanned > 200, f"only {scanned} files scanned; the scan is not looking"
+    assert offenders == [], (
+        "rehearsed code must not be able to tell it is inside a dry run:\n"
+        + "\n".join(offenders)
     )

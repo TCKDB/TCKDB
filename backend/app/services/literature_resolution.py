@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -302,6 +303,41 @@ def _select_existing_literature(
         raise ValueError("DOI and ISBN resolve to different existing literature rows")
 
     return existing_by_doi or existing_by_isbn
+
+
+def prefetch_literature_metadata(
+    session: Session,
+    requests: Iterable[LiteratureUploadRequest],
+) -> None:
+    """Warm the metadata cache for every reference that would be created.
+
+    Makes exactly the lookups :func:`resolve_or_create_literature` would
+    make -- DOI first, else ISBN, and only for a reference not already
+    held -- ahead of time, so a caller about to take row locks (the bundle
+    dry run's rehearsal, #577) does not make them while holding those locks.
+    The lookups are cached in :mod:`app.services.literature_metadata`, so
+    the later call answers from the cache. Never raises for an identifier it
+    cannot use; the real resolution reports that.
+    """
+    for request in requests:
+        normalized_doi = normalize_doi(request.doi)
+        normalized_isbn = normalize_isbn(request.isbn) if request.isbn is not None else None
+        if normalized_doi is None and normalized_isbn is None:
+            continue
+        try:
+            existing = _select_existing_literature(
+                session,
+                normalized_doi=normalized_doi,
+                normalized_isbn=normalized_isbn,
+            )
+        except ValueError:
+            continue
+        if existing is not None:
+            continue
+        if normalized_doi is not None:
+            fetch_doi_metadata(normalized_doi)
+        else:
+            fetch_isbn_metadata(normalized_isbn)
 
 
 def resolve_or_create_literature(
