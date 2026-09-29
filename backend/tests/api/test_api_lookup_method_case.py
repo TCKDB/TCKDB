@@ -91,7 +91,9 @@ def test_a_blank_basis_request_does_not_claim_a_match_with_a_row_that_has_none()
 
     from app.api.routes.lookup import _lot_match, _MatchBuilder
 
-    lot = SimpleNamespace(method="hf", basis=None, dispersion=None, solvent=None)
+    lot = SimpleNamespace(
+        method="hf", basis=None, aux_basis=None, dispersion=None, solvent=None, solvent_model=None
+    )
     mb = _MatchBuilder()
     _lot_match(lot, None, "", mb)
     assert "lot_basis_exact" not in mb.codes
