@@ -412,6 +412,41 @@ def transition_state_evidence(session: Session) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Phase C-Q4 demonstration -- QCSchema interchange
+# ---------------------------------------------------------------------------
+
+QCSCHEMA_INTERCHANGE_REPORT = BACKEND_ROOT / "scripts" / "validation" / "qcschema_interchange_report.py"
+
+
+def _qcschema_interchange_module():
+    """The validation script, loaded by path (``scripts/validation`` is not a package)."""
+    import importlib.util
+
+    name = "qcschema_interchange_report"
+    module = sys.modules.get(name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(name, QCSCHEMA_INTERCHANGE_REPORT)
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return module
+
+
+def qcschema_interchange(session: Session) -> dict[str, Any]:
+    """A Psi4 water Hessian through the QCSchema adapter and back, beside Gaussian.
+
+    Everything is read from the committed fixtures under
+    ``backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/``, never from
+    a live instance. ``session`` only lends a connection: the round trip
+    writes inside a SAVEPOINT that is rolled back before this returns, so the
+    database it runs against -- a restored deposit's included -- is left as
+    it was. Needs ``qcelemental`` (the backend's ``[dev]`` extra).
+    """
+    return _qcschema_interchange_module().paper_generator(session)
+
+
 def _distribution_version(name: str) -> str | None:
     try:
         return metadata.version(name)

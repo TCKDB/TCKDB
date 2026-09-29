@@ -1,0 +1,28 @@
+{
+  "source_calculation": "calc_cg3uwkx4ud4o7owh73orzxosfe",
+  "sp_calculation": "calc_y2snebt5z2ywvgaoj7omeffywy",
+  "geometry": "geom_yfbeuczxncz7kxfjnuaivx72ne",
+  "geometry_angstrom": {
+    "symbols": ["O", "H", "H"],
+    "coords": [
+      [0.0, 0.0, 0.116888],
+      [0.0, 0.765017, -0.467553],
+      [0.0, -0.765017, -0.467553]
+    ]
+  },
+  "software": "Gaussian 16 C.02",
+  "level": "b3lyp/def2tzvp",
+  "natoms": 3,
+  "hessian_lower_triangle_hartree_bohr2": [
+    1.13852e-05, 0, 0.675494, 0, 0, 0.440008, -5.69262e-06, 0, 0, 5.84701e-06,
+    0, -0.337747, 0.198205, 0, 0.368183, 0, 0.258017, -0.220004, 0, -0.228111,
+    0.208562, -5.69262e-06, 0, 0, 0, 0, 0, 5.84701e-06, 0, -0.337747,
+    -0.198205, 0, -0.0304357, -0.029906, 0, 0.368183, 0, -0.258017, -0.220004, 0,
+    0.029906, 0.0114426, 0, 0.228111, 0.208562
+  ],
+  "hessian_source": "parsed_log",
+  "hessian_parser_version": "arc-hessian-1",
+  "sp_electronic_energy_hartree": -76.4629956143,
+  "zpe_hartree": 0.0211728,
+  "read_from": "the development instance, read-only, 2026-09-29"
+}

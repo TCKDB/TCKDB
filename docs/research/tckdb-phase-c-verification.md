@@ -30,6 +30,7 @@ coverage`, and the language/backend/client suites) before a single-parent
 | #511 | C-Q3 export + round trip | first review FAIL (isotopes always exported as the standard nuclide, undetected by two mutations); PASS; a third pass found an uncoded crash on a D/T atom symbol, fixed | n/a — client-side package; adapter suite 113 passed (86 -> 102 -> 113 across the rounds) |
 | #509 | C-E3 persistence | PASS; a second review tightened one finding (a dry run had uploaded the article to the object store anyway) | main session's full local run: 6,044 / 3,885 / 2,882 |
 | #510 | C-E4 review check + generators | first independent review FAIL, HIGH (recording a Cp comparison restaled the thermo's current machine review); fixed; PASS; a third pass closed three LOW items | main session's full local run: 6,071 / 3,883 / 2,882 (plus two full-gate-only guards fixed after) |
+| #572 | C-Q4 QCSchema demonstration (2026-09-29, after the rest of this record) | independent review pending at the time of writing | complement gate 6,750 passed / 31 skipped; API and scientific gates not run locally |
 | #513 | C-E5 read, rights, attach (revision `d2f4a7c1b8e6`) | first review PASS with 7 test-coverage gaps and 2 design changes; second review FAIL (CCCBDB-imported rows had no submission link, locking every one of them out of the new curator attach route); fixed; third review PASS | PR's own initial run: scientific 2,903 / API 3,901 / REST 5,964, 14 skipped (2 real failures caught and fixed before a clean re-run); main session's full run after the final round: 6,097 / 3,923 / 2,905 |
 
 ## What the reviews and gates caught
@@ -180,6 +181,43 @@ element-for-element against the scientific-read atoms —
 mirroring `backend/app/chemistry/isotopes.py`), and an uncoded crash on a
 `D`/`T` atom symbol. Adapter suite: 113 passed (86 before the isotope
 fix, 102 after it); version 0.2.0 -> 0.3.0 -> 0.4.0.
+
+### C-Q4 — QCSchema interchange demonstration (#572)
+
+On 2026-09-29 the owner ran a Psi4 1.11 B3LYP/def2-TZVP Hessian on water,
+through qcengine 0.51.0 in the pinned `tckdb_qcschema_psi4` environment. The
+geometry was the Gaussian 16 record's input geometry, with the frame fixed.
+The run and the Gaussian reference are committed as fixtures under
+`backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/`.
+
+- **Script.** `backend/scripts/validation/qcschema_interchange_report.py`
+  reads only those fixtures. It imports the v2 document through the adapter
+  and the real upload route, and exports it back, inside a transaction it
+  rolls back.
+- **Round trip.** All 11 checks pass:
+  - the stored Hessian triangle is exact;
+  - the export is exact after pack/unpack; the only differences are 4
+    elements of at most 2.1e-17, the document's own asymmetry;
+  - the geometry is within the ten-decimal bound;
+  - the identity is preserved;
+  - the export asserts that it carries no energy (the profile does not store
+    a Hessian document's energy);
+  - the loss list is complete and pinned;
+  - re-importing the export is refused.
+- **Measured against Gaussian, no tolerance.**
+  - ΔE = +3.2e-8 hartree.
+  - Δν = -0.098, -0.086 and -0.070 cm^-1.
+  - ΔZPE = -5.8e-7 hartree.
+  - No imaginary modes on either side.
+  - Rigid-body residue of 13.9 cm^-1 (Gaussian) and 10.9 cm^-1 (Psi4),
+    against the 100 cm^-1 Phase B frame bound.
+- **Registration.** The script is registered as the `qcschema_interchange`
+  paper generator.
+- **Dependency.** `qcelemental==0.51.2` joined the backend `[dev]` extra.
+- **Mutation check.** A landed mutation turned the gate test red: the
+  importer packing the Hessian in transposed order.
+
+Write-up: `docs/validation/qcschema_interchange.md`.
 
 ### C-E1 — observation schema (#505)
 
@@ -349,10 +387,11 @@ method, then one new rejection code for the hint-conflict refusal).
 
 ## What needs the author
 
-1. The Psi4 run for the C-Q4 demonstration (water at the Gaussian
-   geometry) — C-Q4 itself (validation script, registry entry, validation
-   doc, decision record) has not started; it depends on C-Q3 (landed) and
-   this run.
+1. ~~The Psi4 run for the C-Q4 demonstration (water at the Gaussian
+   geometry)~~ — **done.** The owner ran it on 2026-09-29, and C-Q4 landed in
+   #572: validation script, registry entry and validation doc. The decisions
+   are recorded in the validation doc, not in a decision record. See "C-Q4"
+   above.
 2. A computed benzene thermo record (an ARC B3LYP/def2-TZVP opt+freq,
    author-run) for the Cp comparison demonstration — the C0 pilot decision
    names it as needed and none exists yet.
