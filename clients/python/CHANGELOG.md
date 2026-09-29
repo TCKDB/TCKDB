@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.94.0 - 2026-09-29
+
+`RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL` now also covers ARC
+and RMG (`RMG-Py`), not only Arkane: the server refuses a calculation whose
+`software_release.name` is any of them (issue #305, owner decision). A
+calculation's software is the electronic-structure program that ran the job;
+put ARC in `workflow_tool_release`. No enum member changed. A product's
+`analysis_software_release` is still unaffected, so RMG remains valid there.
+
+The server also now fills a missing version from an uploaded output log: a
+calculation declared with no `software_release.version` whose `output_log`
+banner names the same program with a version is re-pointed at that versioned
+release, and the upload returns an informational
+`software_release_version_filled_from_artifact` warning.
+
 ## 0.93.0 - 2026-09-28
 
 Adds `RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL` (HTTP 422). The

@@ -19,6 +19,15 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: dependent ingester (``scripts/pdep_ingestion/builder.py``) already records
 #: it as a ``workflow_tool_release``.
 #:
+#: ARC and RMG are workflow tools by the same argument (owner decision on
+#: #305, 2026-09-29, given as "I think so" and therefore reversible: delete
+#: the two entries to undo it). ARC orchestrates the electronic-structure
+#: jobs; RMG generates mechanisms and estimates. Neither runs the job whose
+#: output a calculation records. ``tckdb_schemas.software`` still
+#: canonicalises ``arc``/``rmg`` as software names on purpose: a product
+#: row's analysis ``software_release`` may legitimately name RMG (group-
+#: additivity thermo), and that slot is not checked here.
+#:
 #: Deliberately scoped to the *calculation* seam. A product row's
 #: ``software_release`` (thermo/statmech/kinetics, fed by the bundle-level
 #: ``analysis_software_release``) is documented as the analysis code --
@@ -26,7 +35,14 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: reaction deposit. Moving that slot is an owner decision with a schema
 #: dimension (the product's one ``workflow_tool_release`` slot already holds
 #: ARC), so it is not made here.
-WORKFLOW_TOOLS_NOT_ESS: dict[str, str] = {"arkane": "Arkane"}
+WORKFLOW_TOOLS_NOT_ESS: dict[str, str] = {
+    "arkane": "Arkane",
+    "arc": "ARC",
+    "rmg": "RMG",
+    # The spelling this repository itself uses for RMG elsewhere
+    # (``analysis_software_release`` fixtures, release metadata).
+    "rmg-py": "RMG",
+}
 
 
 def workflow_tool_named_as_ess(name: str | None) -> str | None:

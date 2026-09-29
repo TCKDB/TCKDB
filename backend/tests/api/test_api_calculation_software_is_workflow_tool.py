@@ -1,8 +1,10 @@
 """A calculation cannot name a workflow tool as its software (issue #305, item 1).
 
 Arkane computes thermochemistry and rate coefficients from the output of an
-electronic-structure program; it runs no calculation. A calculation whose
-``software_release.name`` is Arkane is refused with a coded 422, and -- the
+electronic-structure program; it runs no calculation. ARC orchestrates such
+programs and RMG generates mechanisms; neither runs one either (owner
+decision, 2026-09-29). A calculation whose ``software_release.name`` is any
+of them is refused with a coded 422, and -- the
 half that matters to the vocabulary -- no ``software`` row is created for it.
 
 The analysis-software slot on a product row (thermo/statmech/kinetics,
@@ -38,8 +40,25 @@ def _software_names(db_session) -> list[str]:
     return sorted(db_session.scalars(select(Software.name)).all())
 
 
-@pytest.mark.parametrize("declared", ["Arkane", "arkane", "  ARKANE "])
-def test_calculation_declaring_arkane_is_refused(client, db_session, declared):
+@pytest.mark.parametrize(
+    "declared, tool",
+    [
+        ("Arkane", "Arkane"),
+        ("arkane", "Arkane"),
+        ("  ARKANE ", "Arkane"),
+        # Owner decision on #305 (2026-09-29): ARC and RMG are workflow
+        # tools too. Before it, ``ARC 1.1.0`` was pinned as an accepted
+        # calculation software (test_api_software_release_version_guard).
+        ("ARC", "ARC"),
+        ("arc", "ARC"),
+        ("RMG", "RMG"),
+        (" rmg ", "RMG"),
+        ("RMG-Py", "RMG"),
+    ],
+)
+def test_calculation_declaring_a_workflow_tool_is_refused(
+    client, db_session, declared, tool
+):
     before = _software_names(db_session)
     calcs_before = db_session.scalar(select(func.count(Calculation.id)))
 
@@ -56,11 +75,11 @@ def test_calculation_declaring_arkane_is_refused(client, db_session, declared):
     assert body["context"] == {
         "field": "software_release.name",
         "declared_name": declared.strip(),
-        "workflow_tool": "Arkane",
+        "workflow_tool": tool,
     }
     # Nothing registered: the refusal happens before resolution.
     assert _software_names(db_session) == before
-    assert "Arkane" not in _software_names(db_session)
+    assert tool not in _software_names(db_session)
     assert db_session.scalar(select(func.count(Calculation.id))) == calcs_before
 
 
