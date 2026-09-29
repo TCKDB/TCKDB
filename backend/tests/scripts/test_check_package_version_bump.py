@@ -770,3 +770,54 @@ def test_the_gate_passes_a_base_and_a_separate_novelty_ref() -> None:
         "--base-ref should be the event's base sha; merge-base is computed "
         "from it inside the script"
     )
+
+
+def _demo_package(contract: str) -> object:
+    return checker.Package(
+        name="demo",
+        pyproject="pkg/pyproject.toml",
+        dist_paths=("pkg/lib",),
+        generated=((contract, "python regen.py"),),
+    )
+
+
+def test_an_unbumped_contract_regeneration_names_the_file_and_the_repair(tmp_path: Path) -> None:
+    """A regenerated contract with no bump says which file and what to do."""
+    contract = "pkg/lib/contract"
+    r = Repo(tmp_path / "repo")
+    r.write("pkg/pyproject.toml", '[project]\nname = "demo"\nversion = "1.0.0"\n')
+    r.write(f"{contract}/CONTRACT.md", "version 1.0.0, old rules\n")
+    r.commit("baseline")
+    r.branch("feat")
+    r.write(f"{contract}/CONTRACT.md", "version 1.0.0, new rules\n")
+    r.commit("regenerate without a bump")
+
+    report = checker.check(
+        r.git, base_ref="main", head_ref="feat", main_ref="main", packages=(_demo_package(contract),)
+    )
+
+    assert _codes(report) == {"not-bumped"}
+    message = report.findings[0].message
+    assert contract in message
+    assert "pkg/CHANGELOG.md" in message
+    assert "python regen.py" in message
+    assert "Bump `version`" in message
+
+
+def test_a_hand_edit_elsewhere_gets_no_contract_hint(tmp_path: Path) -> None:
+    """The hint is about the generated file, so it appears only when that file moved."""
+    r = Repo(tmp_path / "repo")
+    r.write("pkg/pyproject.toml", '[project]\nname = "demo"\nversion = "1.0.0"\n')
+    r.write("pkg/lib/contract/CONTRACT.md", "rules\n")
+    r.write("pkg/lib/code.py", "VALUE = 1\n")
+    r.commit("baseline")
+    r.branch("feat")
+    r.write("pkg/lib/code.py", "VALUE = 2\n")
+    r.commit("edit code without a bump")
+
+    report = checker.check(
+        r.git, base_ref="main", head_ref="feat", main_ref="main", packages=(_demo_package("pkg/lib/contract"),)
+    )
+
+    assert _codes(report) == {"not-bumped"}
+    assert "regen" not in report.findings[0].message

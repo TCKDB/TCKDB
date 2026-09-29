@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from tckdb_schemas import __version__
@@ -43,5 +44,20 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _run() -> int:
+    """``main``, quiet when the reader stops reading (``--print | head``)."""
+    try:
+        code = main()
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # The recipe from the Python docs (signal module, "Note on SIGPIPE"):
+        # point stdout at devnull so the interpreter's own flush at exit does
+        # not raise a second time, then exit without a traceback.
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        return 1
+    return code
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(_run())

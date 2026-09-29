@@ -86,6 +86,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import builtins
 import dataclasses
 import datetime as _dt
 import difflib
@@ -107,6 +108,29 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = BACKEND_ROOT.parent
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
+
+
+def _refuse_a_foreign_schemas_package() -> None:
+    """Refuse to render another checkout's wire models under this version.
+
+    In a git worktree the editable ``tckdb-schemas`` install resolves to the
+    checkout it was installed from, so without this the contract would describe
+    that checkout's models. Same comparison as ``backend/tests/conftest.py``.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "tckdb_schemas_checkout", BACKEND_ROOT / "scripts" / "lib" / "schemas_checkout.py"
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    message = module.foreign_schemas_message(REPO_ROOT)
+    if message is not None:
+        raise SystemExit(f"Cannot generate the producer contract: {message}")
+
+
+_refuse_a_foreign_schemas_package()
 
 from fastapi.dependencies.models import Dependant  # noqa: E402
 from fastapi.routing import APIRoute  # noqa: E402
@@ -342,7 +366,7 @@ class Tracer:
         if isinstance(node, ast.Name):
             if node.id in {"self", "cls"} and owner is not None:
                 return owner
-            return func.__globals__.get(node.id, _MISSING)
+            return func.__globals__.get(node.id, vars(builtins).get(node.id, _MISSING))
         if isinstance(node, ast.Attribute):
             base = self._resolve(node.value, func, owner)
             if isinstance(base, (types.ModuleType, type)):
@@ -577,11 +601,13 @@ class ModelNames:
 
     def display(self, model: type) -> str:
         if model.__name__ in self._ambiguous:
-            return f"{model.__name__} ({model.__module__})"
+            return f"{model.__name__} ({model.__module__.rsplit('.', 1)[-1]})"
         return model.__name__
 
     def anchor(self, model: type) -> str:
-        return _anchor("model", model.__module__, model.__name__)
+        if model.__name__ in self._ambiguous:
+            return _anchor("m", model.__name__, model.__module__.rsplit(".", 1)[-1])
+        return _anchor("m", model.__name__)
 
     def link(self, model: type) -> str:
         return f"[`{self.display(model)}`](#{self.anchor(model)})"
@@ -627,7 +653,7 @@ def format_type(annotation: object, names: ModelNames) -> str:
         if issubclass(annotation, BaseModel):
             return names.link(annotation)
         if issubclass(annotation, enum.Enum):
-            return f"`{annotation.__name__}` (enum)"
+            return f"`{annotation.__name__}`"
         for scalar, label in _JSON_SCALARS.items():
             if issubclass(annotation, scalar) and not (scalar is int and annotation is bool):
                 if annotation is bool:
@@ -650,6 +676,21 @@ def _enums_in(annotation: object) -> list[type[enum.Enum]]:
             continue
         stack.extend(typing.get_args(current))
     return found
+
+
+#: An enum with more members than this is printed once, in the enum section,
+#: and linked from each field; a smaller one is spelled out in the field row.
+ENUM_INLINE_MAX = 8
+
+
+def enum_anchor(enum_class: type[enum.Enum]) -> str:
+    return _anchor("e", enum_class.__name__)
+
+
+def enum_values_text(enum_class: type[enum.Enum]) -> str:
+    if len(enum_class) > ENUM_INLINE_MAX:
+        return f"[`{enum_class.__name__}`](#{enum_anchor(enum_class)}) ({len(enum_class)} values)"
+    return ", ".join(f"`{member.value}`" for member in enum_class)
 
 
 def _literal_values(annotation: object) -> list[object]:
@@ -757,8 +798,7 @@ class FieldRow:
     required: bool
     default: str
     unit: str
-    allowed: str
-    constraints: str
+    values: str
     description: str
 
 
@@ -768,11 +808,10 @@ def field_rows(model: type[BaseModel], names: ModelNames) -> list[FieldRow]:
     for name, field in model.model_fields.items():
         enums = _enums_in(field.annotation)
         literals = _literal_values(field.annotation)
-        allowed_parts = [
-            f"{e.__name__}: " + ", ".join(f"`{member.value}`" for member in e) for e in enums
-        ]
+        values_parts = [enum_values_text(e) for e in enums]
         if literals:
-            allowed_parts.append(", ".join(f"`{to_jsonable_python(v)}`" for v in literals))
+            values_parts.append(", ".join(f"`{to_jsonable_python(v)}`" for v in literals))
+        values_parts.extend(field_constraints(field))
         rows.append(
             FieldRow(
                 wire_name=field.alias or name,
@@ -780,8 +819,7 @@ def field_rows(model: type[BaseModel], names: ModelNames) -> list[FieldRow]:
                 required=field.is_required(),
                 default=_default_text(field),
                 unit=_unit_for(name),
-                allowed="; ".join(allowed_parts),
-                constraints=", ".join(field_constraints(field)),
+                values="; ".join(values_parts),
                 description=_one_line(field.description or docs.get(name, "")),
             )
         )
@@ -800,8 +838,8 @@ def render_field_table(model: type[BaseModel], names: ModelNames) -> list[str]:
     lines = [
         unknown,
         "",
-        "| Field | Type | Required | Default | Unit | Allowed values | Constraints | Description |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Field | Type | Req | Default | Unit | Values / constraints | Description |",
+        "|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         lines.append(
@@ -813,15 +851,14 @@ def render_field_table(model: type[BaseModel], names: ModelNames) -> list[str]:
                     "yes" if row.required else "no",
                     _cell(f"`{row.default}`" if row.default else ""),
                     _cell(row.unit),
-                    _cell(row.allowed),
-                    _cell(row.constraints),
+                    _cell(row.values),
                     _cell(row.description),
                 ]
             )
             + " |"
         )
     if not rows:
-        lines.append("| (no fields) | | | | | | | |")
+        lines.append("| (no fields) | | | | | | |")
     return lines
 
 
@@ -905,19 +942,116 @@ def helper_summaries(func: Callable[..., object], fields: tuple[str, ...]) -> li
     return lines
 
 
-def validator_raises(func: Callable[..., object]) -> bool:
+#: Exception types that reach a producer as a refusal: what Pydantic turns into
+#: a 422 inside a validator (``ValueError``, ``AssertionError``,
+#: ``PydanticCustomError``) and what the API's handlers turn into a 4xx.
+def _refusal_types() -> tuple[type[BaseException], ...]:
+    from fastapi import HTTPException
+    from pydantic_core import PydanticCustomError
+
+    from app.api.errors import DataIntegrityError, DomainError, NotFoundError
+
+    return (ValueError, AssertionError, PydanticCustomError, HTTPException, DomainError, NotFoundError, DataIntegrityError)
+
+
+#: How far :func:`refusal_site` follows calls. Deep enough for every chain in
+#: the payload models today (the deepest measured is 4); bounded so a cycle or
+#: a sprawling service graph cannot make generation unbounded.
+REFUSAL_SEARCH_DEPTH = 8
+
+
+def _is_refusal_class(obj: object) -> bool:
+    return isinstance(obj, type) and issubclass(obj, _refusal_types())
+
+
+def _raises_a_refusal(func: Callable[..., object], tracer: Tracer) -> bool:
+    """Whether ``func``'s own body raises (or asserts) something that refuses.
+
+    ``raise X(...)`` counts when ``X`` resolves to a refusal class, and
+    ``raise make_error(...)`` when ``make_error``'s return annotation does. A
+    bare re-raise, or raising a local variable, is not counted: nothing here
+    can say what it holds, and "can refuse" is printed only when it is shown.
+    """
     tree = _function_tree(func)
     if tree is None:
         return False
+    owner = _owner_class(func)
     for node in ast.walk(tree):
-        if isinstance(node, ast.Raise):
+        if isinstance(node, ast.Assert):
             return True
         if isinstance(node, ast.Call):
-            target = node.func
-            name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
-            if name.startswith("raise_") or name.startswith("assert_"):
+            # Validating input against a model refuses whatever the model
+            # refuses: ``Model(...)`` or ``Model.model_validate(...)``.
+            callee = node.func
+            base = callee.value if isinstance(callee, ast.Attribute) else callee
+            model = tracer._resolve(base, func, owner)
+            validates = isinstance(callee, ast.Name) or (
+                isinstance(callee, ast.Attribute) and callee.attr.startswith("model_validate")
+            )
+            if validates and isinstance(model, type) and issubclass(model, BaseModel) and model.model_fields:
+                return True
+            continue
+        if not isinstance(node, ast.Raise) or node.exc is None:
+            continue
+        exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
+        target = tracer._resolve(exc, func, owner)
+        if _is_refusal_class(target):
+            return True
+        if isinstance(target, types.FunctionType):
+            try:
+                returned = typing.get_type_hints(target).get("return")
+            except Exception:
+                returned = None
+            if _is_refusal_class(returned):
                 return True
     return False
+
+
+def _called(func: Callable[..., object], tracer: Tracer) -> list[Callable[..., object]]:
+    """Functions ``func`` *calls* (not merely names), in this repository's code."""
+    tree = _function_tree(func)
+    if tree is None:
+        return []
+    owner = _owner_class(func)
+    found: list[Callable[..., object]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = tracer._resolve(node.func, func, owner)
+        if target is _MISSING:
+            continue
+        facts = _Facts(callees=[], codes=set(), tables=set())
+        tracer._classify_target(target, facts)
+        found.extend(facts.callees)
+    return found
+
+
+def refusal_site(func: Callable[..., object], tracer: Tracer | None = None) -> str | None:
+    """The first function on a call path from ``func`` that raises a refusal.
+
+    Breadth-first through calls into ``app``/``tckdb_schemas`` code, to
+    :data:`REFUSAL_SEARCH_DEPTH`, with a visited set. ``None`` means no such
+    path was *found*, which is not a proof that none exists (a call through a
+    variable is invisible here) -- so the contract prints "can refuse" for a
+    hit and says nothing for a miss.
+    """
+    tracer = tracer or Tracer(frozenset())
+    frontier = [inspect.unwrap(func)]
+    seen: set[str] = set()
+    for _ in range(REFUSAL_SEARCH_DEPTH + 1):
+        following: list[Callable[..., object]] = []
+        for current in frontier:
+            key = _key(current)
+            if key in seen:
+                continue
+            seen.add(key)
+            if _raises_a_refusal(current, tracer):
+                return key
+            following.extend(_called(current, tracer))
+        if not following:
+            return None
+        frontier = following
+    return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -926,10 +1060,13 @@ class ValidatorRule:
     name: str
     kind: str
     fields: tuple[str, ...]
-    refuses: bool
+    refusal_site: str | None
     text: str
     text_source: str
     func: Callable[..., object]
+
+
+_RULE_TRACER = Tracer(frozenset())
 
 
 class UndocumentedRule(Exception):
@@ -961,9 +1098,9 @@ def validator_rules(model: type[BaseModel]) -> list[ValidatorRule]:
                 ValidatorRule(
                     model=model,
                     name=name,
-                    kind=f"{kind} validator ({getattr(dec.info, 'mode', 'after')})",
+                    kind=f"{kind}, {getattr(dec.info, 'mode', 'after')}",
                     fields=fields,
-                    refuses=validator_raises(func),
+                    refusal_site=refusal_site(func, _RULE_TRACER),
                     text=text,
                     text_source=source,
                     func=func,
@@ -976,16 +1113,25 @@ def _indent_block(text: str, prefix: str = "  ") -> list[str]:
     return [prefix + line if line.strip() else "" for line in text.splitlines()]
 
 
-def render_validator(rule: ValidatorRule, names: ModelNames, *, full: bool = True) -> list[str]:
+def render_validator(rule: ValidatorRule, names: ModelNames) -> list[str]:
+    """One rule: a bold header, then its text.
+
+    The header says whether a refusal was *found* on a call path from the
+    validator (:func:`refusal_site`). When none was found it says nothing:
+    absence of a found raise is not evidence that the check cannot refuse.
+    """
     target = f" on `{', '.join(rule.fields)}`" if rule.fields else ""
-    effect = "can refuse" if rule.refuses else "adjusts values, no refusal in its own body"
-    head = f"- **{names.display(rule.model)}.{rule.name}** ({rule.kind}{target}; {effect}; from its {rule.text_source}):"
-    if not full:
-        if rule.text_source == "docstring":
-            summary = _first_paragraph(rule.text)
-        else:
-            summary = "; ".join(line[2:] if line.startswith("- ") else line for line in rule.text.splitlines())
-        return [f"{head} {summary}"]
+    if rule.refusal_site is None:
+        effect = ""
+    elif rule.refusal_site == _key(rule.func):
+        effect = "; can refuse"
+    else:
+        effect = f"; can refuse via `{rule.refusal_site.split(':', 1)[1]}`"
+    head = f"- **{names.display(rule.model)}.{rule.name}** ({rule.kind}{target}{effect}):"
+    lines = rule.text.splitlines()
+    if len(lines) == 1:
+        single = lines[0][2:] if lines[0].startswith("- ") else lines[0]
+        return [f"{head} {single}"]
     return [head, "", *_indent_block(rule.text), ""]
 
 
@@ -1209,7 +1355,7 @@ class Surface:
 
     @property
     def anchor(self) -> str:
-        return _anchor("surface", self.model.__name__)
+        return _anchor("s", self.model.__name__)
 
     @property
     def schema_file(self) -> str:
@@ -1263,6 +1409,56 @@ def _examples(model: type[BaseModel]) -> list[dict[str, Any]]:
 
 class ExampleError(Exception):
     pass
+
+
+class ChangelogError(Exception):
+    """The package version has no CHANGELOG entry."""
+
+
+#: How many refusals a surface's "Will be refused if" list prints.
+TOP_REFUSALS = 8
+
+#: A field description that says the field is never defaulted is surfaced in
+#: the "At a glance" table: omitting such a field records "not stated".
+_NEVER_DEFAULTED = re.compile(r"\bnever defaulted\b", re.IGNORECASE)
+
+#: A route docstring paragraph opening with one of these is written for the
+#: people maintaining the route, not for a producer, and is not quoted.
+_INTERNAL_PARAGRAPH = re.compile(r"^(notes? for (future )?maintainers|implementation notes?|internal)\b", re.IGNORECASE)
+
+
+def producer_facing_doc(doc: str | None) -> str | None:
+    """``doc`` up to its first paragraph addressed to maintainers."""
+    if not doc:
+        return None
+    kept: list[str] = []
+    for paragraph in doc.split("\n\n"):
+        if _INTERNAL_PARAGRAPH.match(paragraph.strip()):
+            break
+        kept.append(paragraph)
+    return "\n\n".join(kept).strip() or None
+
+
+def _first_sentence(text: str) -> str:
+    text = _one_line(text)
+    match = re.search(r"(?<=[.!?])\s+(?=[A-Z`'\"(])", text)
+    return text[: match.start()] if match else text
+
+
+#: ``json_schema_extra`` key a model uses to say its example cannot be
+#: accepted on its own -- its route names an existing record in the path --
+#: and what it needs. The contract then prints the example as "shape only".
+EXAMPLE_REQUIRES_KEY = "x-tckdb-example-requires"
+
+
+def example_requires(model: type[BaseModel]) -> str | None:
+    """What the model's example needs before the server can accept it, if anything."""
+    extra = model.model_config.get("json_schema_extra")
+    if isinstance(extra, dict):
+        value = extra.get(EXAMPLE_REQUIRES_KEY)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def checked_example(model: type[BaseModel]) -> dict[str, Any]:
@@ -1440,68 +1636,164 @@ class ContractBuilder:
                 found.setdefault(code, []).append(surface.title)
         return found
 
+    # -- ranking and grouping ---------------------------------------------------
+
+    def _surfaces_by_code(self) -> dict[str, list[str]]:
+        if not hasattr(self, "_by_code_cache"):
+            self._by_code_cache = self.traced_codes()
+        return self._by_code_cache
+
+    def shared_checks(self) -> dict[str, tuple[ScientificCheck, list[str]]]:
+        """Register checks two or more surfaces' workflows reach: printed once."""
+        reached: dict[str, list[str]] = {}
+        checks: dict[str, ScientificCheck] = {}
+        for surface in self.surfaces:
+            for key, func, check in surface.workflow_rules:
+                if check is None or is_producer_rule(func):
+                    continue
+                reached.setdefault(key, []).append(surface.title)
+                checks[key] = check
+        return {key: (checks[key], titles) for key, titles in sorted(reached.items()) if len(titles) > 1}
+
+    def top_refusals(self, surface: Surface, limit: int = TOP_REFUSALS) -> list[str]:
+        """The surface's most specific client-facing refusals, most specific first.
+
+        Ranked, in order: codes raised by a ``@producer_rule`` the workflow
+        reaches; codes of scientific checks it reaches; codes raised by the
+        root model's own validators; then every other traced code. Within a
+        rank, a code traced on fewer surfaces comes first -- it says more
+        about *this* payload -- then alphabetical. Codes every request can
+        receive are left out, and codes only a route dependency raises (the
+        client-version check) rank last.
+        """
+        traced = self.surface_codes(surface)
+        common = set(self.global_trace.code_sites)
+        by_code = self._surfaces_by_code()
+        producer_keys = {key for key, func, _ in surface.workflow_rules if is_producer_rule(func)}
+        check_codes = {code for _, _, check in surface.workflow_rules if check is not None for code in check.codes}
+        root_prefix = f"{surface.model.__module__}:{surface.model.__qualname__}."
+
+        def rank(code: str) -> tuple[int, int, str]:
+            sites = surface.handler_trace.code_sites.get(code, set())
+            payload_sites = surface.payload_trace.code_sites.get(code, set())
+            if sites & producer_keys:
+                tier = 0
+            elif code in check_codes:
+                tier = 1
+            elif any(site.startswith(root_prefix) for site in payload_sites):
+                tier = 2
+            elif sites or payload_sites:
+                tier = 3
+            else:
+                # Only a route dependency (client version, idempotency) raises it.
+                tier = 4
+            return (tier, len(by_code.get(code, [])), code)
+
+        candidates = [
+            code
+            for code in traced
+            if code not in common and any(entry.is_client_facing for entry in self.catalogue[code])
+        ]
+        return sorted(candidates, key=rank)[:limit]
+
+    def _refusal_line(self, code: str) -> str:
+        facts = self.code_facts(code)
+        statuses = "/".join(str(s) for s in facts.statuses)
+        if facts.message:
+            said = _first_sentence(facts.message)
+        elif facts.check is not None:
+            said = _first_sentence(facts.check.asserts)
+        else:
+            said = "see the code reference"
+        return f"- [`{code}`](#{_anchor('c', code)}) ({statuses}): {said}"
+
     # -- rendering ----------------------------------------------------------
 
     def render_markdown(self) -> str:
         version = _package_version()
         entries = changelog_entries()
-        out: list[str] = []
-        out += [
+        if not entries or entries[0].version != version:
+            newest = entries[0].version if entries else "none"
+            raise ChangelogError(
+                f"tckdb-schemas is version {version} but the newest CHANGELOG.md entry is {newest}. "
+                f"Add a '## {version} - <date>' entry to {CHANGELOG.relative_to(REPO_ROOT)} saying what a "
+                "producer now sees differently, then regenerate."
+            )
+        out: list[str] = [
             "# TCKDB producer contract",
             "",
             "<!-- GENERATED FILE. Do not edit. Regenerate with:",
             f"     {REGENERATE}",
             "     and verify with --check. -->",
             "",
-            f"**Generated** by `{GENERATOR}` from the live API routes, the upload models,",
-            "the refusal-code catalogue (`backend/app/api/code_catalogue.py`) and the",
-            "scientific check register (`backend/app/scientific_checks/`).",
+            f"Generated by `{GENERATOR}` from the live API routes, the upload models, the",
+            "refusal-code catalogue and the scientific check register. **tckdb-schemas version"
+            f" `{version}`** ({len(self.producer_routes)} producer routes, {len(self.surfaces)} surfaces,"
+            f" {len(self.models)} models). No source commit is stamped: one version names one contract.",
             "",
-            f"- **tckdb-schemas version:** `{version}` -- this file ships inside that package.",
-            "- **Source commit:** not stamped. A version names exactly one contract; see",
-            f"  the module docstring of `{GENERATOR}` for why a commit stamp would make",
-            "  the file unverifiable.",
-            f"- **Producer routes documented:** {len(self.producer_routes)}, grouped into"
-            f" {len(self.surfaces)} payload surfaces.",
-            f"- **Payload models documented:** {len(self.models)}.",
+            "Read it in pieces: `python -m tckdb_schemas.contract --print` for all of it,"
+            " `--since <version>` for what changed, `--schemas` for the JSON Schema files.",
             "",
-            "Read it from the installed package:",
-            "",
-            "```",
-            "python -m tckdb_schemas.contract --print            # this file",
-            "python -m tckdb_schemas.contract --since 0.49.0     # what changed since a version",
-            "python -m tckdb_schemas.contract --schemas          # the JSON Schema files",
-            "```",
-            "",
+        ]
+        out += self._render_glance()
+        out += [
             "## Contents",
             "",
             "- [Conventions a producer must know](#conventions-a-producer-must-know)",
             "- [What changed](#what-changed)",
-            "- [Surfaces at a glance](#surfaces-at-a-glance)",
             "- [Every producer route](#every-producer-route)",
-        ]
-        for surface in self.surfaces:
-            out.append(f"- [Surface `{surface.title}`](#{surface.anchor})")
-        out += [
+            "- [Checks several surfaces apply](#checks-several-surfaces-apply)",
+            *[f"- [Surface `{surface.title}`](#{surface.anchor})" for surface in self.surfaces],
             "- [Model reference](#model-reference)",
+            "- [Enums](#enums)",
             "- [Refusal code reference](#refusal-code-reference)",
             "- [Write routes that are not producer surfaces](#write-routes-that-are-not-producer-surfaces)",
             "",
             PREAMBLE,
         ]
-        out += self._render_changes(version, entries)
-        out += self._render_glance()
+        out += self._render_changes(entries)
         out += self._render_common()
+        out += self._render_shared_checks()
         for surface in self.surfaces:
             out += self._render_surface(surface)
         out += self._render_model_reference()
+        out += self._render_enums()
         out += self._render_code_reference()
         out += self._render_route_classification()
         text = "\n".join(out)
         text = re.sub(r"\n{3,}", "\n\n", text)
         return text.rstrip("\n") + "\n"
 
-    def _render_changes(self, version: str, entries: list[ChangelogEntry]) -> list[str]:
+    def _render_glance(self) -> list[str]:
+        out = [
+            "## At a glance",
+            "",
+            "| Surface | Endpoints | Key rules | Most specific refusals |",
+            "|---|---|---|---|",
+        ]
+        for surface in self.surfaces:
+            endpoints = "<br>".join(f"`{info.label}`" for info in surface.routes)
+            rules = [
+                _first_paragraph(_own_doc(func))
+                for _, func, _ in surface.workflow_rules
+                if is_producer_rule(func)
+            ]
+            never = [
+                f"`{row.wire_name}`"
+                for row in field_rows(surface.model, self.names)
+                if _NEVER_DEFAULTED.search(row.description)
+            ]
+            if never:
+                rules.append("Never defaulted: " + ", ".join(never) + ".")
+            refusals = ", ".join(f"`{code}`" for code in self.top_refusals(surface, 3)) or "none traced"
+            out.append(
+                f"| [`{surface.title}`](#{surface.anchor}) | {endpoints} | "
+                f"{_cell(' '.join(rules)) or '-'} | {refusals} |"
+            )
+        out.append("")
+        return out
+
+    def _render_changes(self, entries: list[ChangelogEntry]) -> list[str]:
         out = [
             "## What changed",
             "",
@@ -1510,37 +1802,11 @@ class ContractBuilder:
             " only the entries newer than the version your adapter targets.",
             "",
         ]
-        if not entries or entries[0].version != version:
-            newest = entries[0].version if entries else "none"
-            out += [
-                f"> The package version is `{version}` but the newest changelog entry is `{newest}`:"
-                " this version has no changelog entry.",
-                "",
-            ]
         for entry in entries:
             # A heading inside an entry is demoted below the entry's own
             # level, so it can never end the section it is quoted in.
             body = re.sub(r"(?m)^(#+) ", lambda m: "###" + m.group(1) + " ", entry.body)
             out += [f"### {entry.heading}", "", body, ""]
-        return out
-
-    def _render_glance(self) -> list[str]:
-        out = [
-            "## Surfaces at a glance",
-            "",
-            "One row per payload model a producer route accepts. Routes that take the"
-            " same model are one surface.",
-            "",
-            "| Surface | Routes | JSON Schema | What it is |",
-            "|---|---|---|---|",
-        ]
-        for surface in self.surfaces:
-            routes = "<br>".join(f"`{info.label}`" for info in surface.routes)
-            out.append(
-                f"| [`{surface.title}`](#{surface.anchor}) | {routes} | `{surface.schema_file}` | "
-                f"{_cell(_first_paragraph(_own_doc(surface.model)))} |"
-            )
-        out.append("")
         return out
 
     def _render_common(self) -> list[str]:
@@ -1549,7 +1815,7 @@ class ContractBuilder:
             "## Every producer route",
             "",
             f"Every producer route requires an authenticated caller (`{AUTHENTICATED}`) and"
-            f" accepts any account role ({roles}); none is role-gated. Its headers:",
+            f" accepts any account role ({roles}); none is role-gated. Headers:",
             "",
             "| Header | Required | Declared by | What the declaring dependency says |",
             "|---|---|---|---|",
@@ -1567,21 +1833,44 @@ class ContractBuilder:
             out.append(f"| `{name}` | {_cell(required)} | `{header.source}` | {_cell(header.purpose)} |")
         out += [
             "",
-            "Codes any request can receive, traced from the application's exception handlers and"
-            " middleware (see the [refusal code reference](#refusal-code-reference) for each):",
+            "Codes any request can receive, traced from the application's exception handlers and middleware:",
+            "",
+            *[self._refusal_line(code) for code in sorted(self.global_trace.code_sites)],
             "",
         ]
-        out.append(self._code_list(sorted(self.global_trace.code_sites)))
-        out.append("")
         return out
 
-    def _code_list(self, codes: Iterable[str]) -> str:
-        items = [f"[`{code}`](#{_anchor('code', code)})" for code in codes]
-        return ", ".join(items) if items else "(none traced)"
+    def _render_shared_checks(self) -> list[str]:
+        out = [
+            "## Checks several surfaces apply",
+            "",
+            "Scientific checks the workflows of two or more surfaces reach, printed once and"
+            " linked from each surface. A marked `@producer_rule` is never moved here: it is"
+            " printed in full on every surface that reaches it.",
+            "",
+        ]
+        for key, (check, titles) in self.shared_checks().items():
+            codes = ", ".join(f"[`{code}`](#{_anchor('c', code)})" for code in check.codes) or "none"
+            out += [
+                f'<a id="{_anchor("k", key)}"></a>',
+                "",
+                f"### `{key.split(':', 1)[1]}`",
+                "",
+                f"`{key}`. {check.tier.value}; codes {codes}. Applied on: "
+                + ", ".join(f"[`{t}`](#{_anchor('s', t)})" for t in titles)
+                + ".",
+                "",
+                _one_line(check.asserts),
+                "",
+            ]
+            if check.escape_hatch:
+                out += [f"If your chemistry is legitimate: {_one_line(check.escape_hatch)}", ""]
+        return out
 
     def _render_surface(self, surface: Surface) -> list[str]:
         names = self.names
         model = surface.model
+        requires = example_requires(model)
         out = [
             f'<a id="{surface.anchor}"></a>',
             "",
@@ -1589,12 +1878,19 @@ class ContractBuilder:
             "",
             _first_paragraph(_own_doc(model)) or "(the model has no docstring)",
             "",
-            f"Payload model: {names.link(model)} (`{model.__module__}`). JSON Schema:"
+            f"Payload model `{model.__module__}.{model.__qualname__}`; JSON Schema"
             f" `tckdb_schemas/contract/{surface.schema_file}`.",
+            "",
+            "### Will be refused if",
+            "",
+            "The most specific refusals traced for this surface (ranking in the"
+            " [code reference](#refusal-code-reference) intro):",
+            "",
+            *[self._refusal_line(code) for code in self.top_refusals(surface)],
             "",
             "### Routes",
             "",
-            "| Method and path | Success status | Idempotency-Key | Path parameters | Handler |",
+            "| Method and path | Success | Idempotency-Key | Path parameters | Handler |",
             "|---|---|---|---|---|",
         ]
         for info in surface.routes:
@@ -1613,20 +1909,19 @@ class ContractBuilder:
             )
         out.append("")
         for info in surface.routes:
-            doc = _own_doc(inspect.unwrap(info.route.endpoint))
+            doc = producer_facing_doc(_own_doc(inspect.unwrap(info.route.endpoint)))
             if doc:
                 out += [f"`{info.label}` says:", "", *[f"> {line}" if line else ">" for line in doc.splitlines()], ""]
 
-        out += ["### Payload fields", "", f"Root model {names.link(model)}:", ""]
+        out += ["### Payload fields", ""]
         out += render_field_table(model, names)
         out.append("")
         nested = surface.closure[1:]
         if nested:
             out += [
-                f"Nested models this payload can contain ({len(nested)}; each is specified in the"
-                " [model reference](#model-reference)):",
+                f"Nested models ({len(nested)}; fields and rules in the [model reference](#model-reference)):",
                 "",
-                ", ".join(names.link(sub) for sub in nested),
+                *[f"- {names.link(sub)}" for sub in nested],
                 "",
             ]
 
@@ -1637,22 +1932,14 @@ class ContractBuilder:
                 out += render_validator(rule, names)
         else:
             out += ["The root model declares no validators.", ""]
-        nested_rules = [rule for sub in nested for rule in validator_rules(sub)]
-        if nested_rules:
-            out += [
-                f"Nested models add {len(nested_rules)} more (full text in the model reference):",
-                "",
-            ]
-            for rule in nested_rules:
-                out += render_validator(rule, names, full=False)
-            out.append("")
 
+        shared = self.shared_checks()
         out += [
             "### Rules the workflow applies",
             "",
             "Found by tracing each route's handler through its direct calls: every function"
-            " reached that is marked `@producer_rule` (its docstring is the rule) or declared in"
-            " the scientific check register (its `asserts` sentence).",
+            " reached that is marked `@producer_rule` (printed in full) or declared in the"
+            " scientific check register.",
             "",
         ]
         if not surface.workflow_rules:
@@ -1660,19 +1947,18 @@ class ContractBuilder:
         for key, func, check in surface.workflow_rules:
             routes = [label for label, reached in sorted(surface.rules_by_route.items()) if key in reached]
             via = ", ".join(f"`{label}`" for label in routes)
-            out += [f"- **`{key}`** (reached from {via}):", ""]
-            if check is not None:
-                codes = ", ".join(f"`{code}`" for code in check.codes) or "none"
-                out += _indent_block(f"Scientific check ({check.tier.value}, codes {codes}): {_one_line(check.asserts)}")
-                if check.escape_hatch:
-                    out += ["", *_indent_block(f"Escape hatch: {_one_line(check.escape_hatch)}")]
-                out.append("")
             if is_producer_rule(func):
-                out += _indent_block(_own_doc(func) or "")
-                out.append("")
+                out += [f"- **`{key}`** (reached from {via}):", "", *_indent_block(_own_doc(func) or ""), ""]
+            elif check is not None and key in shared:
+                codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
+                out.append(f"- [`{key.split(':', 1)[1]}`](#{_anchor('k', key)}) ({check.tier.value}; {codes})")
+            elif check is not None:
+                codes = ", ".join(f"`{code}`" for code in check.codes) or "no code"
+                out.append(f"- **`{key}`** (reached from {via}; {check.tier.value}; {codes}): {_one_line(check.asserts)}")
+        out.append("")
 
         out += self._render_surface_codes(surface)
-        out += self._render_example(surface)
+        out += self._render_example(surface, requires)
         return out
 
     def _render_surface_codes(self, surface: Surface) -> list[str]:
@@ -1682,129 +1968,145 @@ class ContractBuilder:
         out = [
             "### Refusal codes this surface can return",
             "",
-            "Traced statically from this surface's payload validators, route handlers and route"
-            " dependencies. A code listed is reachable from the route, not necessarily for every"
-            " payload; a code raised through dynamic dispatch can be missing. The codes every"
-            " request can receive are listed [once](#every-producer-route).",
+            "Traced statically from the payload validators, route handlers and route dependencies:"
+            " reachable from the route, not necessarily for every payload; a code raised through"
+            " dynamic dispatch can be missing. Codes every request can receive are listed"
+            " [once](#every-producer-route).",
             "",
         ]
         if not specific:
-            out += ["No surface-specific code traced.", ""]
-            return out
-        out += ["| Code | Status | Client-facing | Traced via |", "|---|---|---|---|"]
+            return [*out, "No surface-specific code traced.", ""]
+        out += ["| Code | Status | Traced via |", "|---|---|---|"]
         for code in sorted(specific):
-            entries = self.catalogue[code]
-            statuses = ", ".join(str(s) for s in sorted({e.status for e in entries}))
-            facing = "yes" if any(e.is_client_facing for e in entries) else "no"
+            statuses = ", ".join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))
             how = "; ".join(sorted(set(specific[code])))
-            out.append(f"| [`{code}`](#{_anchor('code', code)}) | {statuses} | {facing} | {_cell(how)} |")
+            out.append(f"| [`{code}`](#{_anchor('c', code)}) | {statuses} | {_cell(how)} |")
         out.append("")
         return out
 
-    def _render_example(self, surface: Surface) -> list[str]:
+    def _render_example(self, surface: Surface, requires: str | None) -> list[str]:
         example = checked_example(surface.model)
-        return [
-            "### Minimal valid example",
-            "",
-            f"Declared on the model and validated against it when this file was generated"
-            f" (`{surface.title}.model_validate`, round-tripped through `model_dump`):",
-            "",
-            "```json",
-            json.dumps(example, indent=2, ensure_ascii=False),
-            "```",
-            "",
-        ]
+        if requires:
+            head = [
+                "### Example (shape only)",
+                "",
+                f"Validated against `{surface.title}` when this file was generated, but not accepted"
+                f" on its own: it needs {requires}.",
+            ]
+        else:
+            head = [
+                "### Minimal valid example",
+                "",
+                f"Validated against `{surface.title}` when this file was generated, and accepted by"
+                " every route above in the test suite.",
+            ]
+        return [*head, "", "```json", json.dumps(example, indent=2, ensure_ascii=False), "```", ""]
 
     def _render_model_reference(self) -> list[str]:
         names = self.names
+        roots = {surface.model: surface for surface in self.surfaces}
         out = [
             "## Model reference",
             "",
-            "Every model any producer payload can contain, alphabetically. Field descriptions come"
-            " from the field's `description=` or the model's `:param name:` docstring entry; a"
-            " blank description means the source has neither.",
+            "Every model a producer payload can contain, alphabetically. A payload's root model is"
+            " specified in its surface section. Field descriptions come from the field's"
+            " `description=` or the model's `:param name:` docstring entry; a blank description"
+            " means the source has neither.",
             "",
         ]
         for model in self.models:
-            used_by = [s.title for s in self.surfaces if model in s.closure]
-            out += [
-                f'<a id="{names.anchor(model)}"></a>',
-                "",
-                f"### `{names.display(model)}`",
-                "",
-                f"`{model.__module__}`. Used by: " + ", ".join(f"[`{t}`](#{_anchor('surface', t)})" for t in used_by) + ".",
-                "",
-            ]
+            out += [f'<a id="{names.anchor(model)}"></a>', "", f"### `{names.display(model)}`", ""]
+            if model in roots:
+                out += [f"The root payload of [surface `{roots[model].title}`](#{roots[model].anchor}).", ""]
+                continue
+            out.append(f"`{model.__module__}`.")
             summary = _first_paragraph(_own_doc(model))
             if summary:
-                out += [summary, ""]
+                out += ["", summary]
+            out.append("")
             out += render_field_table(model, names)
             out.append("")
-            rules = validator_rules(model)
-            if rules:
-                out += ["Rules:", ""]
-                for rule in rules:
-                    out += render_validator(rule, names)
+            for rule in validator_rules(model):
+                out += render_validator(rule, names)
             out.append("")
+        return out
+
+    def _render_enums(self) -> list[str]:
+        used: dict[str, type[enum.Enum]] = {}
+        for model in self.models:
+            for field in model.model_fields.values():
+                for enum_class in _enums_in(field.annotation):
+                    if len(enum_class) > ENUM_INLINE_MAX:
+                        used.setdefault(enum_class.__name__, enum_class)
+        out = [
+            "## Enums",
+            "",
+            f"Enums with more than {ENUM_INLINE_MAX} values, linked from the fields that take them.",
+            "",
+        ]
+        for name in sorted(used):
+            values = ", ".join(f"`{member.value}`" for member in used[name])
+            out += [f'<a id="{enum_anchor(used[name])}"></a>', "", f"### `{name}`", "", values, ""]
         return out
 
     def _render_code_reference(self) -> list[str]:
         traced = self.traced_codes()
         global_codes = set(self.global_trace.code_sites)
-        client_facing = {entry.code for entry in CATALOGUE if entry.is_client_facing}
-        codes = sorted(set(traced) | global_codes | client_facing)
+        client_facing = sorted({entry.code for entry in CATALOGUE if entry.is_client_facing})
+        documented = sorted(set(traced) | global_codes)
+        shared = self.shared_checks()
         out = [
             "## Refusal code reference",
             "",
-            "Every code a producer route was traced to, plus every client-facing code in the"
-            " catalogue whether traced or not. `Message` is the sentence written beside the code"
-            " at its raise site, found by a static search and printed with `{placeholders}` for the"
-            " parts filled in at run time; where the search finds none it says so rather than"
-            " guessing.",
+            "Every code a producer route was traced to. `Message` is the sentence written beside the"
+            " code at its raise site, found by a static search, with `{placeholders}` for the parts"
+            " filled in at run time; where the search finds none it says so. A surface's \"Will be"
+            " refused if\" list ranks codes from a `@producer_rule`, then scientific checks, then the"
+            " root model's validators, then the rest, the most specific first.",
             "",
         ]
-        untraced: list[str] = []
-        for code in codes:
+        for code in documented:
             facts = self.code_facts(code)
-            surfaces = traced.get(code, [])
-            if code in global_codes:
-                reached = "every request (exception handlers and middleware)"
-            elif surfaces:
-                reached = ", ".join(f"[`{t}`](#{_anchor('surface', t)})" for t in surfaces)
-            else:
-                reached = "not traced to any producer route"
-                untraced.append(code)
             entries = facts.entries
-            out += [f'<a id="{_anchor("code", code)}"></a>', "", f"#### `{code}`", ""]
+            out += [f'<a id="{_anchor("c", code)}"></a>', "", f"#### `{code}`", ""]
             out.append(
-                f"- Status: {', '.join(str(s) for s in facts.statuses)}; client-facing: "
-                f"{'yes' if facts.client_facing else 'no'}; arrives as: "
+                f"- Status: {', '.join(str(s) for s in facts.statuses)}; "
+                + ("client-facing" if facts.client_facing else "not a client refusal")
+                + "; arrives as: "
                 + ", ".join(sorted({e.surface.value for e in entries}))
+                + "; defined in "
+                + ", ".join(sorted({f"`{e.origin}`" for e in entries}))
                 + "."
             )
-            out.append("- Defined in: " + ", ".join(sorted({f"`{e.origin}`" for e in entries})) + ".")
-            out.append(f"- Traced on: {reached}.")
+            if code in global_codes:
+                out.append("- Any request can receive it.")
             if any(e.shape is Shape.relationship for e in entries):
-                out.append("- Shape: relationship -- the body's `context` names the things involved.")
+                out.append("- The body's `context` names the things involved.")
             if any(e.is_replay_futile for e in entries):
-                out.append("- Replay: never succeeds; do not retry the identical request.")
+                out.append("- Never succeeds on replay; do not retry the identical request.")
             out.append(f"- Message: {facts.message!r}" if facts.message else "- Message: not found by the static search.")
             for note in sorted({e.note for e in entries if e.note}):
-                out.append(f"- Note: {_one_line(note)}")
-            if facts.check is not None:
+                out.append(f"- Note: {_first_sentence(note)}")
+            shared_key = next((key for key, (check, _) in shared.items() if check is facts.check), None)
+            if shared_key is not None:
+                out.append(f"- Scientific check: [`{shared_key.split(':', 1)[1]}`](#{_anchor('k', shared_key)}).")
+            elif facts.check is not None:
                 out.append(f"- Scientific check ({facts.check.tier.value}): {_one_line(facts.check.asserts)}")
                 if facts.check.escape_hatch:
-                    out.append(f"- What to do if your chemistry is legitimate: {_one_line(facts.check.escape_hatch)}")
+                    out.append(f"- If your chemistry is legitimate: {_one_line(facts.check.escape_hatch)}")
             out.append("")
+        untraced = [code for code in client_facing if code not in documented]
         out += [
             "### Client-facing codes not traced to any producer route",
             "",
-            "These are refusals a client can receive but that no producer route's code path was"
-            " traced to -- read-API, curation and account refusals, and any code raised through a"
-            " path the static trace cannot follow. Listed so that every client-facing code in the"
-            " catalogue appears in this file.",
+            "Refusals a client can receive that no producer route's code path was traced to: read-API,"
+            " curation and account refusals, and any code raised through a path the static trace"
+            " cannot follow.",
             "",
-            self._code_list(code for code in untraced if code in client_facing),
+            *[
+                f"- `{code}` ({'/'.join(str(s) for s in sorted({e.status for e in self.catalogue[code]}))})"
+                for code in untraced
+            ],
             "",
         ]
         return out
@@ -1813,9 +2115,8 @@ class ContractBuilder:
         out = [
             "## Write routes that are not producer surfaces",
             "",
-            "Every write route of the live application that the rule above left out, with the"
-            " reason. A producer surface is an authenticated write with a request body that is not"
-            " role-gated.",
+            "Every write route of the live application that the rule left out, with the reason. A"
+            " producer surface is an authenticated write with a request body that is not role-gated.",
             "",
             "| Route | Why it is not a producer surface |",
             "|---|---|",
@@ -1897,7 +2198,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         rendered = render()
-    except (ExampleError, UndocumentedRule) as exc:
+    except (ExampleError, UndocumentedRule, ChangelogError) as exc:
         print(f"Cannot generate the producer contract: {exc}", file=sys.stderr)
         if isinstance(exc, UndocumentedRule):
             print(

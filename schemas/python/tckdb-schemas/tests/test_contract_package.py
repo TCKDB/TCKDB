@@ -46,7 +46,7 @@ def test_the_contract_is_found_through_the_package() -> None:
 
 def test_the_contract_names_the_version_it_ships_in() -> None:
     """Regenerated after the last bump, or the stamp would name another version."""
-    assert f"**tckdb-schemas version:** `{_pyproject_version()}`" in contract.markdown()
+    assert f"**tckdb-schemas version `{_pyproject_version()}`**" in contract.markdown()
 
 
 def test_every_shipped_schema_is_json_with_an_example() -> None:
@@ -185,3 +185,19 @@ def test_the_wheel_ships_the_contract(tmp_path: pathlib.Path) -> None:
 
 def test_the_version_is_importable() -> None:
     assert tckdb_schemas.__version__
+
+
+def test_printing_into_a_closed_pipe_is_quiet() -> None:
+    """``--print | head`` must not end in a BrokenPipeError traceback."""
+    process = subprocess.Popen(
+        [sys.executable, "-m", "tckdb_schemas.contract", "--print"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    assert process.stdout is not None and process.stderr is not None
+    process.stdout.readline()
+    process.stdout.close()
+    stderr = process.stderr.read().decode()
+    process.wait(timeout=30)
+    assert "Traceback" not in stderr, stderr
+    assert "BrokenPipeError" not in stderr, stderr

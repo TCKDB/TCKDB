@@ -32,9 +32,12 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from fastapi.routing import APIRoute
+from pydantic import BaseModel, field_validator
 from tckdb_schemas import contract as shipped
 from tckdb_schemas.enthalpy_reference import enthalpy_reference_error
 
+from app.api.app import create_app
 from app.api.code_catalogue import CATALOGUE
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 
@@ -72,14 +75,9 @@ def committed_markdown() -> str:
 # ---------------------------------------------------------------------------
 
 
-def missing_routes(markdown: str, routes) -> list[str]:
-    """Producer routes the contract does not name, as ``METHOD path``."""
-    return [info.label for info in routes if f"`{info.label}`" not in markdown]
-
-
 def missing_codes(markdown: str, codes) -> list[str]:
-    """Codes without an entry of their own in the refusal code reference."""
-    return [code for code in codes if f"#### `{code}`" not in markdown]
+    """Codes with neither a reference entry nor a line in the untraced list."""
+    return [code for code in codes if f"#### `{code}`" not in markdown and f"\n- `{code}` (" not in markdown]
 
 
 def surface_section(markdown: str, model_name: str) -> str:
@@ -139,25 +137,37 @@ def test_the_generator_is_deterministic() -> None:
 def test_the_contract_is_stamped_with_the_package_version(committed_markdown: str) -> None:
     version = re.search(r'^version\s*=\s*"([^"]+)"', (PACKAGE_ROOT / "pyproject.toml").read_text(), re.M)
     assert version is not None
-    assert f"**tckdb-schemas version:** `{version.group(1)}`" in committed_markdown
+    assert f"**tckdb-schemas version `{version.group(1)}`**" in committed_markdown
 
 
-def test_an_unregenerated_wire_model_change_fails_check(tmp_path: Path) -> None:
-    """Mutation: edit a wire model's source, do not regenerate, run ``--check``.
+def _mirror_checkout(root: Path) -> Path:
+    """A throwaway checkout layout: the generator, the wire package, and ``app``.
 
-    The package is copied to a temporary directory and put first on
-    ``PYTHONPATH``, so the edit is real source the generator imports -- not
-    a monkeypatched object -- and the committed contract is never touched.
+    The generator refuses a ``tckdb_schemas`` that resolves outside its own
+    checkout, so a mutated copy of the package has to sit in a checkout of its
+    own. The package (with its committed contract) and the two generator files
+    are copied; ``backend/app`` is a symlink to the real one, so the routes,
+    catalogue and register are exactly the branch's.
     """
-    copy = tmp_path / "tckdb_schemas"
-    shutil.copytree(PACKAGE_ROOT / "tckdb_schemas", copy)
-    thermo = copy / "thermo.py"
-    source = thermo.read_text()
-    original = "    temperature_k: float = Field(gt=0)\n"
-    assert original in source, "the mutation target moved; pick another field"
-    thermo.write_text(source.replace(original, "    temperature_k: float = Field(ge=0)\n", 1))
+    package = root / "schemas" / "python" / "tckdb-schemas"
+    shutil.copytree(
+        PACKAGE_ROOT,
+        package,
+        ignore=shutil.ignore_patterns("build", "*.egg-info", "__pycache__", ".pytest_cache", "tests"),
+    )
+    (root / "backend" / "scripts" / "lib").mkdir(parents=True)
+    shutil.copy2(GENERATOR_PATH, root / "backend" / "scripts" / GENERATOR_PATH.name)
+    shutil.copy2(
+        BACKEND_ROOT / "scripts" / "lib" / "schemas_checkout.py",
+        root / "backend" / "scripts" / "lib" / "schemas_checkout.py",
+    )
+    (root / "backend" / "app").symlink_to(BACKEND_ROOT / "app", target_is_directory=True)
+    return package
 
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(tmp_path), str(BACKEND_ROOT)])}
+
+def _run_mirrored_check(root: Path) -> subprocess.CompletedProcess[str]:
+    package = root / "schemas" / "python" / "tckdb-schemas"
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(package), str(root / "backend")])}
     probe = subprocess.run(
         [sys.executable, "-c", "import tckdb_schemas.thermo as t; print(t.__file__)"],
         capture_output=True,
@@ -165,19 +175,59 @@ def test_an_unregenerated_wire_model_change_fails_check(tmp_path: Path) -> None:
         env=env,
         check=True,
     )
-    assert probe.stdout.strip().startswith(str(tmp_path)), probe.stdout
-
-    result = subprocess.run(
-        [sys.executable, str(GENERATOR_PATH), "--check"],
+    assert probe.stdout.strip().startswith(str(root)), probe.stdout
+    return subprocess.run(
+        [sys.executable, str(root / "backend" / "scripts" / GENERATOR_PATH.name), "--check"],
         capture_output=True,
         text=True,
         env=env,
-        cwd=str(REPO_ROOT),
+        cwd=str(root),
     )
+
+
+def test_an_unregenerated_wire_model_change_fails_check(tmp_path: Path) -> None:
+    """Mutation: edit a wire model's source, do not regenerate, run ``--check``.
+
+    Run in a mirrored checkout (:func:`_mirror_checkout`), so the edit is real
+    source the generator imports -- not a monkeypatched object -- and the
+    committed contract is never touched. The unmutated mirror is checked first:
+    it must pass, or the red below could be the mirror's fault.
+    """
+    package = _mirror_checkout(tmp_path)
+    clean = _run_mirrored_check(tmp_path)
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+
+    thermo = package / "tckdb_schemas" / "thermo.py"
+    source = thermo.read_text()
+    original = "    temperature_k: float = Field(gt=0)\n"
+    assert original in source, "the mutation target moved; pick another field"
+    thermo.write_text(source.replace(original, "    temperature_k: float = Field(ge=0)\n", 1))
+
+    result = _run_mirrored_check(tmp_path)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "temperature_k" in result.stderr
     assert ">= 0" in result.stderr
     assert "raise `version` in" in result.stderr, "the failure must say to bump the package version"
+
+
+def test_a_foreign_schemas_package_is_refused(tmp_path: Path) -> None:
+    """The generator will not render another checkout's wire models."""
+    copy = tmp_path / "elsewhere"
+    shutil.copytree(PACKAGE_ROOT / "tckdb_schemas", copy / "tckdb_schemas")
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(copy), str(BACKEND_ROOT)])}
+    result = subprocess.run(
+        [sys.executable, str(GENERATOR_PATH), "--check"], capture_output=True, text=True, env=env, cwd=str(REPO_ROOT)
+    )
+    assert result.returncode != 0
+    assert "resolves outside this checkout" in result.stderr
+
+
+def test_a_version_without_a_changelog_entry_fails_generation(monkeypatch) -> None:
+    """A bump with no CHANGELOG entry is refused, not papered over with a warning."""
+    monkeypatch.setattr(generator, "_package_version", lambda: "99.0.0")
+    with pytest.raises(generator.ChangelogError, match="99.0.0"):
+        generator.ContractBuilder().render_markdown()
+    assert generator.main(["--check"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -185,37 +235,71 @@ def test_an_unregenerated_wire_model_change_fails_check(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_every_producer_route_of_the_live_app_is_in_the_contract(committed_markdown: str) -> None:
-    routes = [info for info in generator.discover_routes() if info.category == "producer"]
+#: Write methods, spelled here rather than imported from the generator: the
+#: point of this section is a walk that does not share the generator's code.
+_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def write_routes_with_a_body(app) -> list[str]:
+    """``METHOD path`` for every route of ``app`` that writes and takes a body.
+
+    Computed from ``app.routes`` directly, independently of the generator's
+    ``discover_routes``/``classify_route``: a check that asked the generator
+    which routes exist would only ever confirm the generator agrees with
+    itself -- which is how dropping ``/uploads/networks`` from its walk once
+    left every test green.
+    """
+    labels: list[str] = []
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or route.body_field is None:
+            continue
+        for method in sorted(route.methods & _WRITE_METHODS):
+            labels.append(f"{method} {route.path}")
+    return labels
+
+
+def routes_the_contract_omits(markdown: str, labels: list[str]) -> list[str]:
+    """Routes that are neither a surface nor on the excluded-with-reason list."""
+    surfaces, _, rest = markdown.partition("\n## Write routes that are not producer surfaces\n")
+    excluded = rest.split("\n## ", 1)[0]
+    return [
+        label
+        for label in labels
+        if f"| `{label}` |" not in surfaces and f"| `{label}` |" not in excluded
+    ]
+
+
+def test_every_write_route_of_the_live_app_is_in_the_contract(committed_markdown: str) -> None:
+    labels = write_routes_with_a_body(create_app())
     # Guard the guard: an empty walk would make the next assertion vacuous.
-    assert len(routes) >= 20, [info.label for info in routes]
+    assert len(labels) >= 60, labels
     for expected in (
         "POST /api/v1/uploads/thermo",
-        "POST /api/v1/uploads/computed-species",
-        "POST /api/v1/uploads/computed-reaction",
+        "POST /api/v1/uploads/networks",
         "POST /api/v1/bundles/submit",
         "POST /api/v1/calculations/{calculation_id}/artifacts",
+        "POST /api/v1/releases",
     ):
-        assert expected in {info.label for info in routes}, expected
-    assert missing_routes(committed_markdown, routes) == []
+        assert expected in labels, expected
+    assert routes_the_contract_omits(committed_markdown, labels) == []
 
 
-def test_every_write_route_is_either_a_surface_or_listed_with_a_reason(committed_markdown: str) -> None:
-    """No write route falls through both lists."""
-    for info in generator.discover_routes():
-        if info.category == "read":
-            continue
-        assert f"`{info.label}`" in committed_markdown, f"{info.label} ({info.category}) is in neither list"
+def test_a_route_the_generator_stops_seeing_turns_the_check_red(monkeypatch) -> None:
+    """Mutation: the generator's own walk drops ``/uploads/networks``.
 
+    The independent walk above still expects it, so the regenerated contract
+    fails the check. With the check reading the generator's walk instead,
+    this mutation left every test green.
+    """
+    real = generator.discover_routes
 
-def test_a_route_dropped_from_the_walk_is_reported_missing() -> None:
-    """Mutation: render from a walk with one producer route removed."""
-    routes = generator.discover_routes()
-    dropped = next(info for info in routes if info.label == "POST /api/v1/uploads/transport")
-    mutated = [info for info in routes if info is not dropped]
-    markdown = generator.ContractBuilder(routes=mutated).render_markdown()
-    producer = [info for info in routes if info.category == "producer"]
-    assert missing_routes(markdown, producer) == [dropped.label]
+    def without_networks(app=None):
+        return [info for info in real(app) if info.path != "/api/v1/uploads/networks"]
+
+    monkeypatch.setattr(generator, "discover_routes", without_networks)
+    markdown = generator.ContractBuilder().render_markdown()
+    labels = write_routes_with_a_body(create_app())
+    assert routes_the_contract_omits(markdown, labels) == ["POST /api/v1/uploads/networks"]
 
 
 # ---------------------------------------------------------------------------
@@ -233,12 +317,37 @@ def test_every_client_facing_code_is_in_the_contract(committed_markdown: str) ->
 
 
 def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown: str) -> None:
-    """Mutation: remove one code's entry and show the check notices."""
+    """Mutation: remove one traced code's entry, and one untraced code's line."""
     code = "enthalpy_declaration_absent"
     start = committed_markdown.index(f"#### `{code}`")
     end = committed_markdown.index("\n#### ", start + 1)
     mutated = committed_markdown[:start] + committed_markdown[end + 1 :]
     assert missing_codes(mutated, [code]) == [code]
+
+    untraced = "email_taken"
+    assert f"\n- `{untraced}` (" in committed_markdown, "pick a code that is still untraced"
+    mutated = re.sub(rf"\n- `{untraced}` \([^\n]*", "", committed_markdown)
+    assert missing_codes(mutated, [untraced]) == [untraced]
+
+
+#: The contract was ~1 MB before it was trimmed; an agent cannot read that
+#: whole. This is a ceiling to notice regrowth, not a target.
+MARKDOWN_BYTE_CEILING = 700_000
+
+
+def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:
+    size = len(committed_markdown.encode("utf-8"))
+    assert size < MARKDOWN_BYTE_CEILING, f"{size} bytes; trim before raising the ceiling"
+    longest = max(len(line) for line in committed_markdown.splitlines() if not line.lstrip().startswith('"content_base64"'))
+    assert longest < 2000, longest
+
+
+def test_the_thermo_rules_are_within_a_screen_of_the_top(committed_markdown: str) -> None:
+    top = "\n".join(committed_markdown.splitlines()[:40])
+    thermo_row = next(line for line in top.splitlines() if line.startswith("| [`ThermoUploadRequest`]"))
+    assert "must declare what its enthalpies mean" in thermo_row
+    assert "`reference_pressure_bar`" in thermo_row
+    assert "`enthalpy_declaration_absent`" in thermo_row
 
 
 def test_the_thermo_surface_lists_the_enthalpy_refusals(builder) -> None:
@@ -355,3 +464,65 @@ def test_an_undocumented_validator_is_refused(monkeypatch) -> None:
     monkeypatch.setattr(validator, "__doc__", None)
     with pytest.raises(generator.UndocumentedRule):
         generator.validator_rules(ThermoUploadRequest)
+
+
+# ---------------------------------------------------------------------------
+# "can refuse" is printed only where a refusal is found, through helpers too
+# ---------------------------------------------------------------------------
+
+
+def _rule(model, name: str):
+    return next(rule for rule in generator.validator_rules(model) if rule.name == name)
+
+
+def test_a_check_that_refuses_through_a_helper_is_labelled_can_refuse() -> None:
+    """The two cases the review demonstrated were printed as "no refusal".
+
+    Both validators refuse only inside a helper they call, which a scan of
+    their own body cannot see.
+    """
+    from tckdb_schemas.fragments.artifact import ArtifactIn
+
+    from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+
+    kinetics = _rule(KineticsUploadRequest, "validate_a_units_vs_molecularity")
+    artifact = _rule(ArtifactIn, "_check_filename")
+    assert kinetics.refusal_site and kinetics.refusal_site.endswith(":validate_a_units_for_molecularity")
+    assert artifact.refusal_site and artifact.refusal_site.endswith(":_validate_filename")
+
+
+def test_the_contract_never_claims_a_check_cannot_refuse(committed_markdown: str) -> None:
+    """Absence of a found refusal is not printed as a claim."""
+    assert "no refusal" not in committed_markdown
+    assert "adjusts values" not in committed_markdown
+
+
+def _quiet_helper(value: str) -> str:
+    return value
+
+
+def _refusing_helper(value: str) -> str:
+    if not value.strip():
+        raise ValueError("value must not be blank")
+    return value
+
+
+class _Probe(BaseModel):
+    """A model whose only rule delegates to a module-level helper."""
+
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def check_value(cls, value: str) -> str:
+        """Pass ``value`` through the helper."""
+        return _quiet_helper(value)
+
+
+def test_making_the_helper_raise_changes_the_label(monkeypatch) -> None:
+    """Mutation: the helper starts refusing; the label must follow it."""
+    monkeypatch.setattr(generator, "_in_scope", lambda obj: getattr(obj, "__module__", "") == __name__)
+    assert _rule(_Probe, "check_value").refusal_site is None
+
+    monkeypatch.setitem(globals(), "_quiet_helper", _refusing_helper)
+    assert _rule(_Probe, "check_value").refusal_site == f"{__name__}:_refusing_helper"

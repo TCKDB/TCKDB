@@ -61,5 +61,6 @@
     "basis"
   ],
   "title": "RightsAttestationCreate",
-  "type": "object"
+  "type": "object",
+  "x-tckdb-example-requires": "a submission the caller created, named by the submission_id in the path; every upload response returns one"
 }

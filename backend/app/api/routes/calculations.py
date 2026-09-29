@@ -592,13 +592,17 @@ class ArtifactsUploadRequest(BaseModel):
     # against this model on every generation (generate_producer_contract.py).
     model_config = ConfigDict(
         json_schema_extra={
+            "x-tckdb-example-requires": (
+                "a calculation the caller deposited (or owns through a live submission), "
+                "named by the calculation_id in the path; a conformer upload returns one"
+            ),
             "examples": [
                 {
                     "artifacts": [
                         {
                             "kind": "output_log",
                             "filename": "opt.log",
-                            "content_base64": "IE5vcm1hbCB0ZXJtaW5hdGlvbiBvZiBHYXVzc2lhbiAxNi4K"
+                            "content_base64": "IEVudGVyaW5nIEdhdXNzaWFuIFN5c3RlbSwgTGluayAwPWcxNgogTm9ybWFsIHRlcm1pbmF0aW9uIG9mIEdhdXNzaWFuIDE2Lgo="
                         }
                     ]
                 }

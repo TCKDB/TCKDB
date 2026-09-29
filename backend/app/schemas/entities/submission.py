@@ -180,6 +180,11 @@ class SubmissionSupersedeRequest(SchemaBase):
     # against this model on every generation (generate_producer_contract.py).
     model_config = ConfigDict(
         json_schema_extra={
+            "x-tckdb-example-requires": (
+                "two submissions of the caller's own: the one in the path, and a newer one "
+                "created with supersedes_submission_id pointing back at it, whose id "
+                "replaces 42"
+            ),
             "examples": [
                 {
                     "new_submission_id": 42
@@ -209,6 +214,10 @@ class RightsAttestationCreate(SchemaBase):
     # against this model on every generation (generate_producer_contract.py).
     model_config = ConfigDict(
         json_schema_extra={
+            "x-tckdb-example-requires": (
+                "a submission the caller created, named by the submission_id in the path; "
+                "every upload response returns one"
+            ),
             "examples": [
                 {
                     "license": "CC-BY-4.0",

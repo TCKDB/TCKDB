@@ -17,5 +17,6 @@
     "new_submission_id"
   ],
   "title": "SubmissionSupersedeRequest",
-  "type": "object"
+  "type": "object",
+  "x-tckdb-example-requires": "two submissions of the caller's own: the one in the path, and a newer one created with supersedes_submission_id pointing back at it, whose id replaces 42"
 }
