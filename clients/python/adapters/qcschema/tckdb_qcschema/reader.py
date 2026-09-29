@@ -13,9 +13,15 @@ qcelemental==0.51.2, measured directly against the installed classes:
     =========================== ============================ ==============
     v1 AtomicResult               qcschema_output               1
     v1 OptimizationResult         qcschema_optimization_output  1
+    v1 TorsionDriveResult         qcschema_torsion_drive_output 1
     v2 AtomicResult                qcschema_atomic_result        2
     v2 OptimizationResult          qcschema_optimization_result  2
+    v2 TorsionDriveResult          qcschema_torsion_drive_result 2
     =========================== ============================ ==============
+
+``TorsionDriveResult`` is QCSchema's only scan model (``qcelemental.models.v1``
+``procedures`` and ``qcelemental.models.v2`` ``torsion_drive``); see
+:mod:`tckdb_qcschema.scan` for what it can and cannot carry.
 
 The version trap
 -----------------
@@ -37,8 +43,8 @@ class is even tried -- or the document is refused with
 ``schema_version_family_mismatch``. A document that claims v2 shape (has
 ``input_data``) but declares ``schema_version: 1`` inside it is exactly
 the case this catches. Only once that gate has passed is the document
-validated with that family's own ``AtomicResult``/``OptimizationResult``
-class -- it is never retried against the other family.
+validated with that family's own ``AtomicResult``/``OptimizationResult``/
+``TorsionDriveResult`` class -- it is never retried against the other family.
 
 (This structural pre-check is load-bearing, not merely a nicer error
 message: qcelemental itself types both fields as an exact ``Literal`` per
@@ -96,7 +102,7 @@ from .errors import (
 )
 
 Family = Literal["v1", "v2"]
-RecordKind = Literal["atomic", "optimization"]
+RecordKind = Literal["atomic", "optimization", "torsion_drive"]
 
 #: Declared (schema_name, schema_version) pair per (family, record_kind),
 #: measured directly against the pinned qcelemental==0.51.2 classes -- see
@@ -106,16 +112,27 @@ _DECLARED_PAIRS: dict[tuple[Family, RecordKind], tuple[str, int]] = {
     ("v1", "optimization"): ("qcschema_optimization_output", 1),
     ("v2", "atomic"): ("qcschema_atomic_result", 2),
     ("v2", "optimization"): ("qcschema_optimization_result", 2),
+    ("v1", "torsion_drive"): ("qcschema_torsion_drive_output", 1),
+    ("v2", "torsion_drive"): ("qcschema_torsion_drive_result", 2),
 }
 
-#: Both record kinds within one family share one ``schema_version`` integer.
+#: The Result class tried for each record kind, in this order. A document
+#: is validated against each in turn and takes the first that accepts it;
+#: it is never retried against the other family.
+_RECORD_CLASSES: tuple[tuple[RecordKind, str], ...] = (
+    ("atomic", "AtomicResult"),
+    ("optimization", "OptimizationResult"),
+    ("torsion_drive", "TorsionDriveResult"),
+)
+
+#: Every record kind within one family shares one ``schema_version`` integer.
 _FAMILY_VERSION: dict[Family, int] = {"v1": 1, "v2": 2}
 
-#: The two ``schema_name`` values a document in this family may legally
+#: The ``schema_name`` values a document in this family may legally
 #: declare (one per record kind).
 _FAMILY_VALID_NAMES: dict[Family, frozenset[str]] = {
     family: frozenset(
-        {_DECLARED_PAIRS[(family, "atomic")][0], _DECLARED_PAIRS[(family, "optimization")][0]}
+        name for (fam, _kind), (name, _version) in _DECLARED_PAIRS.items() if fam == family
     )
     for family in ("v1", "v2")
 }
@@ -131,8 +148,9 @@ class QCRecord:
 
     :param family: ``"v1"`` or ``"v2"`` -- which qcelemental namespace
         validated this document.
-    :param record_kind: ``"atomic"`` (an ``AtomicResult``) or
-        ``"optimization"`` (an ``OptimizationResult``).
+    :param record_kind: ``"atomic"`` (an ``AtomicResult``),
+        ``"optimization"`` (an ``OptimizationResult``) or
+        ``"torsion_drive"`` (a ``TorsionDriveResult``).
     :param schema_name: The document's own declared ``schema_name``.
     :param schema_version: The document's own declared ``schema_version``.
     :param result: The validated qcelemental model instance (family- and
@@ -274,17 +292,19 @@ def read_document(raw_bytes: bytes) -> QCRecord:
             declared_version=declared_version,
         )
 
-    result = _try_validate(module.AtomicResult, document)
-    record_kind: RecordKind | None = "atomic" if result is not None else None
-    if result is None:
-        result = _try_validate(module.OptimizationResult, document)
-        record_kind = "optimization" if result is not None else None
+    result = None
+    record_kind: RecordKind | None = None
+    for kind, class_name in _RECORD_CLASSES:
+        result = _try_validate(getattr(module, class_name), document)
+        if result is not None:
+            record_kind = kind
+            break
 
     if result is None or record_kind is None:
         raise QCSchemaAdapterError(
             E_DOCUMENT_INVALID,
-            f"document did not validate as either AtomicResult or "
-            f"OptimizationResult in family {family!r} (dispatched by the "
+            f"document did not validate as AtomicResult, OptimizationResult "
+            f"or TorsionDriveResult in family {family!r} (dispatched by the "
             f"presence of top-level 'input_data').",
         )
 

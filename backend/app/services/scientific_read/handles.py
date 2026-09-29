@@ -20,10 +20,11 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, aliased
+from sqlalchemy.sql import ColumnElement
 
 from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
@@ -34,7 +35,7 @@ from app.db.models.energy_correction import (
     FrequencyScaleFactor,
 )
 from app.db.models.geometry import Geometry
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.db.models.literature import Literature
 from app.db.models.network import Network
 from app.db.models.network_pdep import NetworkKinetics, NetworkSolve
@@ -427,8 +428,14 @@ def reconcile_id_ref(
     ref_value: str | None,
     kind_label: str,
     conflict_code: str,
+    canonicalize: Callable[[int], int] | None = None,
 ) -> int | object | None:
     """Reconcile sibling ``*_id`` and ``*_ref`` filter inputs.
+
+    ``canonicalize``, when given, maps each resolved id to the row it stands
+    for before the two are compared and returned (a merged level of theory
+    stands for the row it was merged into). Without it, behaviour is
+    unchanged.
 
     Returns one of:
 
@@ -447,11 +454,15 @@ def reconcile_id_ref(
     """
     if id_value is None and ref_value is None:
         return None
+    if canonicalize is not None and id_value is not None:
+        id_value = canonicalize(int(id_value))
     if ref_value is None:
         return int(id_value)
     resolved = resolve_filter_ref(
         session, model_cls, ref_value, kind_label=kind_label
     )
+    if canonicalize is not None and resolved is not None:
+        resolved = canonicalize(resolved)
     if id_value is None:
         return resolved if resolved is not None else NO_MATCH
     # Both supplied — require consistency.
@@ -608,14 +619,45 @@ def resolve_energy_correction_scheme_handle(
     )
 
 
+def canonical_level_of_theory_id(session: Session, lot_id: int) -> int:
+    """The level of theory a row stands for: itself, or the row it was merged into.
+
+    ``merge_duplicate_levels_of_theory.py`` (#574) keeps a merged row, with
+    its ``public_ref``, and records the kept row in ``level_of_theory_merge``.
+    It never merges into a row that is itself merged, so one hop is enough.
+    """
+    merged_into = session.scalar(
+        select(LevelOfTheoryMerge.into_lot_id).where(
+            LevelOfTheoryMerge.merged_lot_id == lot_id
+        )
+    )
+    return merged_into if merged_into is not None else lot_id
+
+
+def level_of_theory_ref_clause(ref: str) -> ColumnElement[bool]:
+    """``LevelOfTheory`` rows a ``lot_...`` filter ref names, merges followed."""
+    named = aliased(LevelOfTheory)
+    return LevelOfTheory.id.in_(
+        select(func.coalesce(LevelOfTheoryMerge.into_lot_id, named.id))
+        .select_from(named)
+        .outerjoin(LevelOfTheoryMerge, LevelOfTheoryMerge.merged_lot_id == named.id)
+        .where(named.public_ref == ref)
+    )
+
+
 def resolve_level_of_theory_handle(session: Session, handle: str) -> int:
-    """Resolve a level-of-theory path handle (int or ``lot_...``) → row id."""
-    return resolve_path_handle(
+    """Resolve a level-of-theory path handle (int or ``lot_...``) → row id.
+
+    A merged row's handle resolves to the row it was merged into, so a
+    citation frozen before the merge (a published release) still resolves.
+    """
+    row_id = resolve_path_handle(
         session,
         LevelOfTheory,
         handle,
         kind_label="level_of_theory",
     )
+    return canonical_level_of_theory_id(session, row_id)
 
 
 def reconcile_species_pair(
@@ -677,7 +719,11 @@ def reconcile_reaction_entry_pair(
 def reconcile_level_of_theory_pair(
     session: Session, *, id_value: int | None, ref_value: str | None
 ) -> int | object | None:
-    """Reconcile ``level_of_theory_id`` + ``level_of_theory_ref`` filter pair."""
+    """Reconcile ``level_of_theory_id`` + ``level_of_theory_ref`` filter pair.
+
+    Merged rows resolve to the row they were merged into
+    (:func:`canonical_level_of_theory_id`).
+    """
     return reconcile_id_ref(
         session,
         LevelOfTheory,
@@ -685,6 +731,7 @@ def reconcile_level_of_theory_pair(
         ref_value=ref_value,
         kind_label="level_of_theory",
         conflict_code="level_of_theory_handle_conflict",
+        canonicalize=lambda row_id: canonical_level_of_theory_id(session, row_id),
     )
 
 
@@ -704,8 +751,10 @@ def reconcile_calculation_pair(
 
 __all__ = [
     "NO_MATCH",
+    "canonical_level_of_theory_id",
     "is_integer_handle",
     "is_ref_handle",
+    "level_of_theory_ref_clause",
     "parse_handle",
     "prefix_for",
     "reconcile_calculation_pair",

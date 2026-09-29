@@ -20,11 +20,16 @@ Only two calculation types are supported:
   :func:`_same_level_sp_energy`) -- best-effort, opportunistic enrichment,
   never required; omitted (not ``null``) otherwise.
 
-``opt`` (and every other calculation type -- ``scan``, ``irc``,
-``path_search``, ``composite``, ``imported``) is refused with
-``export_unsupported_type``: no trajectory is stored for an ``opt`` record,
-so relabelling its final energy as a single point would be a claim the
-record does not support.
+A ``scan`` is handed to :func:`tckdb_qcschema.scan_export.export_scan`,
+which exports it as a v2 ``TorsionDriveResult`` when it is one (relaxed,
+every coordinate a proper dihedral) and refuses it otherwise.
+
+``opt`` (and every other calculation type -- ``irc``, ``path_search``,
+``composite``, ``imported``) is refused with ``export_unsupported_type``: no
+trajectory is stored for an ``opt`` record, so relabelling its final energy
+as a single point would be a claim the record does not support; and
+qcelemental 0.51.2 defines no IRC or reaction-path model in either family,
+so an ``irc`` or ``path_search`` record has nothing standard to become.
 
 Molecule: geometry Å -> bohr using the *same* ``BOHR_TO_ANGSTROM`` constant
 the importer uses (:data:`tckdb_qcschema.molecule.BOHR_TO_ANGSTROM`),
@@ -578,14 +583,24 @@ def export_calculation(client: Any, calculation_ref_or_id: str | int) -> dict:
     record = detail["record"]
     calc_type = record["calculation"]["type"]
 
+    if calc_type == "scan":
+        # Imported here, not at module level: scan_export reuses this
+        # module's molecule/isotope helpers.
+        from .scan_export import export_scan
+
+        document, _report = export_scan(client, calculation_ref_or_id)
+        return document
+
     if calc_type not in _EXPORTABLE_TYPES:
         raise QCSchemaAdapterError(
             E_EXPORT_UNSUPPORTED_TYPE,
             f"calculation type {calc_type!r} is not exportable by "
-            f"tckdb-qcschema -- only {sorted(_EXPORTABLE_TYPES)} are. "
+            f"tckdb-qcschema -- only {sorted(_EXPORTABLE_TYPES | {'scan'})} are. "
             f"'opt' in particular is refused deliberately: no trajectory "
             f"is stored, so relabelling a final energy as a single point "
-            f"would be a claim the record does not support.",
+            f"would be a claim the record does not support. 'irc' and "
+            f"'path_search' have no QCSchema model to become: qcelemental "
+            f"0.51.2 defines no IRC or reaction-path schema.",
             calculation_type=calc_type,
         )
 

@@ -240,6 +240,21 @@ Notes:
 - software release dedupe is enforced on `(software_id, version, revision, build)`
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
+- `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
+- A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. Revision `38b06819f099` re-keyed every row whose basis spelling differs from its identity key and left `public_ref` alone, so for those rows `public_ref` is no longer what their content would mint on a fresh instance. A LOT ref identifies a row; it is not re-derivable from content after a re-key.
+- `lot_hash` values of re-keyed rows changed in `38b06819f099`. Anything holding an old value (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot) no longer matches.
+
+`level_of_theory_merge` fields:
+
+- `merged_lot_id` (PK, FK `level_of_theory.id`)
+- `into_lot_id` (FK `level_of_theory.id`)
+- `created_at`
+
+Notes:
+
+- Written only by `backend/scripts/ops/merge_duplicate_levels_of_theory.py` (#574). A merged row is kept with its `public_ref`, because a published release freezes `level_of_theory_ref` per cited calculation; every read that accepts a LOT ref resolves a merged row's ref to `into_lot_id`.
+- No calculation points at a merged row, and `into_lot_id` is never itself merged (one hop).
+- A table rather than a column on `level_of_theory`, so whole-row snapshots of a level of theory (consistency-check inputs, reproducibility context hashes) do not change for every row.
 
 ### 3.6 Application Users and Upload Jobs
 

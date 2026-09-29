@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import CHAR, BigInteger, Text, UniqueConstraint
+from sqlalchemy import CHAR, BigInteger, CheckConstraint, ForeignKey, Text, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -40,3 +40,37 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     calculations: Mapped[list["Calculation"]] = relationship(back_populates="lot")
 
     __table_args__ = (UniqueConstraint("lot_hash"),)
+
+
+class LevelOfTheoryMerge(Base, TimestampMixin):
+    """A level-of-theory row merged into another spelling of the same level (#574).
+
+    Written only by ``scripts/ops/merge_duplicate_levels_of_theory.py``. The
+    merged row is kept, with its ``public_ref``, so a citation of it (a
+    published release's frozen provenance) still resolves; the read layer
+    resolves that ref to ``into_lot_id``. No calculation points at a merged
+    row, and ``into_lot_id`` is never itself merged, so one hop is enough.
+
+    A separate table rather than a column on ``level_of_theory``: whole-row
+    snapshots of a level of theory (consistency-check inputs, reproducibility
+    context hashes) would otherwise change for every row the day the column
+    appeared.
+    """
+
+    __tablename__ = "level_of_theory_merge"
+
+    merged_lot_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
+        primary_key=True,
+    )
+    into_lot_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+        index=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint("merged_lot_id <> into_lot_id", name="not_merged_into_itself"),
+    )

@@ -1,0 +1,12 @@
+{
+  "outcome": "refusal",
+  "expected": "job_failed",
+  "family": "v1",
+  "driver": null,
+  "generator": "hand-derived from a real torsion drive in this corpus",
+  "qcelemental": "0.51.2",
+  "smiles_arg": "OO",
+  "parent_opt_case": "torsiondrive_parent_opt_v1",
+  "edit": "torsiondrive_v1 with success changed from true to false (v1 types success as bool; v2 types it Literal[True], so only v1 can carry a false one); optimization_history emptied to keep the fixture small (the refusal happens before it is read)",
+  "raw_sha256": "3954059feb0f3b013c151f52d707eb223cf4ae16405a794013d621a95a29bbd4"
+}

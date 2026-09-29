@@ -150,6 +150,25 @@ any TCKDB instance. The truncation length (26) matches ULID's character
 count for visual consistency with opaque refs; collision risk over 2^130
 states is negligible for any TCKDB-scale corpus.
 
+### LoT refs are minted once (since #574)
+
+A LoT ref is derived from `lot_hash` **once, at insert**, and stored. It is
+never recomputed. When the hash formula changes, existing rows are re-keyed
+in place and keep the ref they were minted with: `e1a5c3f7b9d4` (spin
+treatment joined the identity) did this for every row, and `38b06819f099`
+(basis names hashed by identity key, #574) did it for every row whose basis
+spelling differs from its key. For those rows the stored ref is no longer
+what their content would mint on a fresh instance. So "same content → same
+ref" below holds for rows minted under the current formula, not for every
+row that exists. A LoT ref identifies a row; it is not re-derivable from its
+content.
+
+When two rows turn out to be one level of theory,
+`merge_duplicate_levels_of_theory.py` keeps both refs: the merged row stays,
+recorded in `level_of_theory_merge`, and every read that accepts a LoT ref
+resolves its ref to the kept row. A ref that has been cited (for example,
+frozen into a published release's provenance) keeps resolving.
+
 ### LoT in responses
 
 Every response that includes a calculation, thermo, kinetics, or
@@ -241,6 +260,12 @@ TCKDB scale.
 |---|---|---|---|
 | Content-identity (LoT, species, chem_reaction, geometry, software*, workflow_tool*, literature) | ✅ When canonical content matches | ✅ Same content → same ref on import | ✅ Same content → same ref on replay |
 | Opaque (calculation, kinetics, thermo, conformer*, transition_state*, species_entry, reaction_entry, submission) | ❌ No | ⚠ **Preserved if explicitly carried in the bundle**, otherwise re-generated | ⚠ Preserved if the replay carries the original ref; otherwise re-generated |
+
+**LoT exception.** The content-identity row holds for a LoT minted under
+the current hash formula. A LoT row re-keyed in place by a later formula
+change (`e1a5c3f7b9d4`, `38b06819f099`) keeps the ref it was minted with,
+so on replay into a fresh instance the same content mints a *different*
+ref. See "LoT refs are minted once" above.
 
 For export/import behavior, contribution bundles should carry the
 opaque refs of every record they include. On import:

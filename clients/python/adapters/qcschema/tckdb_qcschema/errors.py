@@ -184,3 +184,85 @@ E_EXPORT_GEOMETRY_MISMATCH = "export_geometry_mismatch"
 #: would silently omit what it dropped. See
 #: :mod:`tckdb_qcschema.report_coverage`.
 E_MAPPING_REPORT_INCOMPLETE = "mapping_report_incomplete"
+
+# ---------------------------------------------------------------------------
+# Scans: TorsionDrive import and export
+# ---------------------------------------------------------------------------
+
+#: A ``TorsionDriveResult`` was handed to the import without the
+#: optimization it was driven from. TCKDB stores a scan only as a
+#: calculation attached to a conformer, and a conformer is anchored by an
+#: unconstrained ``opt`` (``ConformerInBundle.primary_calculation`` must be
+#: ``opt``). The torsion drive holds only *constrained* optimizations, and
+#: none of them is that minimum. Pass the optimization document with
+#: ``--parent-opt``; nothing is posted without it.
+E_SCAN_PARENT_OPT_REQUIRED = "scan_parent_opt_required"
+
+#: The ``--parent-opt`` document is not an ``OptimizationResult``, or it is
+#: not the optimization this torsion drive started from: the atoms differ,
+#: the charge or multiplicity differs, or no ``initial_molecule`` of the
+#: drive matches the optimization's ``final_molecule`` geometry.
+E_SCAN_PARENT_MISMATCH = "scan_parent_mismatch"
+
+#: The ``--parent-opt`` document is already deposited (its raw sha256 is on
+#: an artifact). A torsion-drive import posts the parent again as the
+#: conformer's ``opt`` -- the computed-species bundle cannot point at a
+#: conformer an earlier upload created -- so importing a second rotor on its
+#: own would store the optimization twice. Import every drive from the same
+#: optimization together (``import d1.json d2.json --parent-opt opt.json``).
+E_SCAN_PARENT_ALREADY_IMPORTED = "scan_parent_already_imported"
+
+#: Several files were given to one import, but not all are torsion drives.
+#: Only drives sharing one ``--parent-opt`` are imported together.
+E_MULTIPLE_DOCUMENTS_UNSUPPORTED = "multiple_documents_unsupported"
+
+#: The drive's grid does not hold together: a grid key that is not one
+#: number per dihedral, ``grid_spacing`` or ``dihedral_ranges`` whose
+#: length is not the number of dihedrals, a grid point with a final
+#: molecule but no energy (or the reverse), or a drive with no grid points.
+E_SCAN_GRID_INVALID = "scan_grid_invalid"
+
+#: A grid point's final geometry does not hold the dihedral its grid key
+#: says it does (recomputed from the Cartesian coordinates, compared modulo
+#: 360 degrees). TCKDB stores the coordinate value as the coordinate
+#: itself (ADR 0020), so a key that disagrees with its own geometry cannot
+#: be stored as that value.
+E_SCAN_COORDINATE_GEOMETRY_MISMATCH = "scan_coordinate_geometry_mismatch"
+
+#: The drive's optimizer keywords carry extra ``constraints`` (frozen or
+#: set coordinates beyond the scanned dihedrals). They change which surface
+#: was scanned, and this adapter does not translate optimizer-specific
+#: constraint syntax into TCKDB constraint rows. Refused rather than stored
+#: as if the drive were unconstrained.
+E_SCAN_EXTRA_CONSTRAINTS_UNSUPPORTED = "scan_extra_constraints_unsupported"
+
+#: The stored scan scanned something other than proper dihedrals (a bond,
+#: an angle, or an improper torsion). QCSchema's only scan model is the
+#: TorsionDrive, whose coordinates are dihedrals by definition; writing a
+#: bond scan into one would mislabel it.
+E_EXPORT_SCAN_NOT_TORSION_DRIVE = "export_scan_not_torsion_drive"
+
+#: The stored scan is rigid (``is_relaxed`` false) or does not say
+#: (``null``). A TorsionDrive is a constrained optimization at every grid
+#: point; exporting a rigid scan as one would claim optimizations that
+#: never ran.
+E_EXPORT_SCAN_NOT_RELAXED = "export_scan_not_relaxed"
+
+#: A stored scan point cannot become a TorsionDrive grid point: it has no
+#: energy, no geometry, not exactly one value per coordinate, or two points
+#: land on the same grid point.
+E_EXPORT_SCAN_POINT_INCOMPLETE = "export_scan_point_incomplete"
+
+#: A stored coordinate value, or the coordinate's grid spacing, is not a
+#: whole number of degrees. TorsionDrive grid points and ``grid_spacing``
+#: are integers (qcelemental types ``grid_spacing`` as ``List[int]``;
+#: qcengine sets each constraint with ``int(angle)``); rounding a stored
+#: value to fit would change it.
+E_EXPORT_SCAN_GRID_NOT_INTEGRAL = "export_scan_grid_not_integral"
+
+#: A stored coordinate value disagrees with the dihedral recomputed from
+#: that point's own stored geometry. ADR 0020 fixes the value as the
+#: coordinate itself; the scans deposited before it hold a sweep relative
+#: to the first point instead, and exporting those as TorsionDrive grid
+#: angles would label every point with the wrong angle.
+E_EXPORT_SCAN_COORDINATE_NONCONFORMING = "export_scan_coordinate_nonconforming"

@@ -364,6 +364,9 @@ For later (not fixed here):
   dependency role that ties an `sp` to the `freq` job that produced it.
 - **The level of theory is spelled differently by the two programs.** Psi4
   writes `b3lyp`/`def2-tzvp`; the Gaussian record's level is `b3lyp/def2tzvp`.
-  The level-of-theory hash is byte-exact, so these are two different rows.
-  This demonstration pairs the two records by fixture, not by level identity.
-  The C1 plan already flags this risk.
+  The level-of-theory hash was byte-exact, so these were two different rows.
+  Since #574 basis names are hashed by an identity key, so both spellings
+  resolve to one row; rows split before that are merged by
+  `backend/scripts/ops/merge_duplicate_levels_of_theory.py`. This
+  demonstration still pairs the two records by fixture, not by level
+  identity.

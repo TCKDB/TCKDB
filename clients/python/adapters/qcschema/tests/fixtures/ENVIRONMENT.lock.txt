@@ -102,6 +102,7 @@ https://conda.anaconda.org/conda-forge/noarch/pint-0.25.3-pyhc364b38_0.conda
 https://conda.anaconda.org/conda-forge/noarch/pydantic-2.13.5-pyhcf101f3_0.conda
 https://conda.anaconda.org/conda-forge/noarch/pydantic-settings-2.15.0-pyhcf101f3_0.conda
 https://conda.anaconda.org/conda-forge/noarch/qcelemental-0.51.2-pyhd8ed1ab_0.conda
+https://conda.anaconda.org/conda-forge/noarch/torsiondrive-1.2.0-pyhd8ed1ab_0.conda
 https://conda.anaconda.org/conda-forge/noarch/qcengine-0.51.0-pyhd8ed1ab_0.conda
 https://conda.anaconda.org/conda-forge/noarch/qcmanybody-0.8.0-pyhd8ed1ab_0.conda
 https://conda.anaconda.org/conda-forge/noarch/optking-0.5.0-pyhd8ed1ab_0.conda

@@ -43,6 +43,98 @@ Measuring this shape directly is why `reader.py` checks `success` on the
 raw parsed dict before attempting any family-specific class validation —
 see the module docstring there.
 
+## Torsion drives (`torsiondrive_*`)
+
+Real runs, same environment, plus one package: `torsiondrive` 1.2.0
+(conda-forge, pure Python, 51 KB), which qcengine's `torsiondrive`
+procedure imports and which the environment did not have. Installed with
+`conda install -n tckdb_qcschema_psi4 -c conda-forge torsiondrive=1.2.0`
+(nothing else changed; `ENVIRONMENT.lock.txt` gained exactly that line).
+HF/STO-3G throughout. Every inner Psi4 gradient ran with
+`protocols.stdout = false` to keep the documents small; nothing the adapter
+reads depends on it.
+
+- **`torsiondrive_parent_opt_v2`** -- `qcengine.compute(OptimizationInput, "geometric")`
+  on hydrogen peroxide (atoms O, O, H, H; start geometry O at (0, +-0.70, 0) A,
+  H at (+-0.90, +-0.90, 0.30) A), `coordsys: tric`, trajectory `all`.
+  **`torsiondrive_parent_opt_v1`** is `.convert_v(1)` of that same result.
+- **`torsiondrive_v2`** -- `qcengine.compute(TorsionDriveInput, "torsiondrive")`
+  starting from `torsiondrive_parent_opt_v2`'s `final_molecule`: dihedral
+  H-O-O-H (0-based atoms 2, 0, 1, 3), `grid_spacing: [90]`,
+  `scan_results: all`, geomeTRIC `coordsys: tric` at every grid point.
+  Four grid points (-90, 0, 90, 180). **`torsiondrive_v1`** is
+  `.convert_v(1)` of that same result.
+- **`torsiondrive_2d_parent_opt_v2`** -- as above, on hydrogen trioxide
+  (H, O, O, O, H; start geometry H (1.2, 0.9, 0.4), O (1.1, 0, 0),
+  O (0, -0.7, 0), O (-1.1, 0, 0), H (-1.2, 0.9, -0.4) A).
+- **`torsiondrive_2d_v2`** -- a two-dimensional drive from that
+  optimization: dihedrals H-O-O-O (0, 1, 2, 3) and O-O-O-H (1, 2, 3, 4),
+  `grid_spacing: [90, 90]`, `scan_results: lowest`, trajectory `final`.
+  Sixteen grid points. **One change to qcengine was needed to run it, and it
+  is the only one:** qcengine 0.51.0's harness splits a grid id on
+  whitespace (`grid_point.split()` in
+  `TorsionDriveProcedure._spawn_optimization`), but torsiondrive 1.2.0 names
+  a 2-D grid point `"180,-60"`, so the unpatched run dies with
+  `ValueError: invalid literal for int() with base 10: '180,-60'`
+  (measured). The generator replaced that one line with a split that also
+  treats commas as separators. Every energy and geometry is still Psi4 +
+  geomeTRIC + torsiondrive, and the document is still built and validated by
+  the harness's own `TorsionDriveResult`. The keys it writes are
+  torsiondrive's own (`"180,-60"`), which is also the spelling the exporter
+  writes.
+
+  Why 90 degrees and not a coarser 120: with a spacing whose grid does not
+  contain 0 (120 gives -60, 60, 180), torsiondrive 1.2.0 never finishes.
+  `td_api.current_state_json_load` files each finished job under
+  `round(dihedral / spacing) * spacing` (a 0-origin grid) while the scanner
+  names grid points on a -180-origin grid, so a result at (60, 60) is filed
+  under (0, 0), the cache for (60, 60) never fills, and the same job is
+  resubmitted forever (measured: the (60, 60) optimization resubmitted on
+  every iteration with the same energy; two runs, methyl hydroperoxide and
+  hydrogen trioxide at 120 degrees, stopped by hand after 2 h and 30 min).
+  Any spacing that divides 180 keeps the two grids identical.
+
+- **`torsiondrive_rotor1_v2`**, **`torsiondrive_rotor2_v2`** -- two 1-D
+  drives from the *same* committed optimization,
+  `torsiondrive_2d_parent_opt_v2`: H-O-O-O (0, 1, 2, 3) and O-O-O-H
+  (1, 2, 3, 4), each at 90 degrees (4 points), `scan_results: lowest`,
+  trajectory `final`. The two-rotor case: both go up in one bundle with
+  one `opt` (`backend/tests/fixtures/qcschema_scan/torsiondrive_two_rotors_v2`).
+
+Each drive's `meta.json` names its `parent_opt_case`; the corpus test maps
+the pair with `tckdb_qcschema.scan.build_scan_bundle_payload` and pins the
+exact point count, every energy (exact), every coordinate value (exact)
+and each coordinate's 1-based atom quartet (`coordinate_atoms`); it also
+recomputes every stored value from the stored geometry over the stored
+atoms.
+
+Hand-derived torsion-drive refusals (one documented edit each, re-validated
+with qcelemental; `meta.json["edit"]` states it). To keep them small, the v2
+ones also have `scan_results` emptied with `protocols.scan_results = "none"`
+-- QCSchema's own way of dropping the per-point histories -- and the v1 one
+has `optimization_history` emptied; the refusal fires before either is read.
+
+- **`torsiondrive_failed_v1`** -- `success: false`. Only family v1 can carry
+  it: v2 types `TorsionDriveResult.success` as `Literal[True]`.
+- **`torsiondrive_family_drift`** -- a v2-shaped drive declaring
+  `schema_version: 1`.
+- **`torsiondrive_two_fragments`** -- `initial_molecule[0]` and every final
+  molecule declare two fragments (the two OH halves), atoms unchanged.
+
+### Pinned reads for the scan exporter (`reads_scan/`)
+
+`scripts/capture_scan_read_fixtures.py` posts the backend scan corpus
+(`backend/tests/fixtures/qcschema_scan/`, emitted from the three drives
+above by `scripts/emit_backend_corpus.py`) through the real
+`POST /uploads/computed-species` route and records the exact reads the
+exporter makes. It also posts three **hand-built** scans, each one edit of
+the stored drive, so the exporter's refusals see exactly what the backend
+serves for them: `bond_scan_hand_built` (the coordinate re-declared as the
+O-O bond, values measured from each point's geometry),
+`relative_sweep_hand_built` (values rewritten as a sweep relative to the
+first point, the pre-ADR-0020 convention) and `rigid_scan_hand_built`
+(`is_relaxed: false`).
+
 ## Identity-resolution case
 
 - **`identity_unavailable`** — `energy_v1.json` reused verbatim (no
@@ -132,7 +224,23 @@ conda run -n tckdb_qcschema_psi4 python gen_hand_fixtures.py <tmp_raw_dir> <tmp_
 python finalize_fixtures.py   # assembles tests/fixtures/<case>/{document.json,meta.json}
 ```
 
-(The three generator scripts are not committed to the repo — they are
+The torsion-drive raw documents come from a committed script,
+`scripts/generate_torsiondrive_fixtures.py`, which carries the exact
+one-line qcengine change the 2-D drive needs (as a monkeypatch of
+`TorsionDriveProcedure._spawn_optimization`) and the exact molecules,
+keywords and grids of every drive here (checked: its starting geometries
+and specifications match the committed documents'). A rerun reproduces the
+calculations, not the bytes: `provenance.wall_time`/`hostname`/`username`
+differ per run. The hand-derived torsion-drive edits are the ones stated in
+each `meta.json["edit"]`.
+
+```
+conda run -n tckdb_qcschema_psi4 python \
+    clients/python/adapters/qcschema/scripts/generate_torsiondrive_fixtures.py <tmp_raw_dir> \
+    [--only h2o2 hoooh hoooh_rotors]
+```
+
+(The three generator scripts for the other cases are not committed to the repo — they are
 one-off corpus-authoring tools, not part of the adapter or its test
 suite. Regenerating the corpus means recreating them from this README's
 description, or asking for them again.)

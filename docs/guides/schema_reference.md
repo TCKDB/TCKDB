@@ -411,6 +411,22 @@ the gap.
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
 
+### `level_of_theory_merge`
+
+**Role:** provenance
+
+**Purpose:** A level-of-theory row merged into another spelling of the same level (#574).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `merged_lot_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
+| `into_lot_id` | BIGINT | no | — | level_of_theory.id | — | not documented |
+| `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_level_of_theory_merge_not_merged_into_itself`: `merged_lot_id <> into_lot_id`
+
 ### `molecular_property_observation`
 
 **Role:** provenance

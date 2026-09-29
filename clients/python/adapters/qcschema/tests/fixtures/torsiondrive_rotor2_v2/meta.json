@@ -1,0 +1,59 @@
+{
+  "outcome": "route",
+  "expected": "scan",
+  "family": "v2",
+  "driver": null,
+  "generator": "psi4-via-qcengine (scripts/generate_torsiondrive_fixtures.py --only hoooh_rotors)",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "geometric": "1.1.1",
+  "torsiondrive": "1.2.0",
+  "level": "hf/sto-3g",
+  "molecule": "hydrogen trioxide, 1-D drive of O-O-O-H (1, 2, 3, 4) at 90 degrees",
+  "smiles_arg": "OOO",
+  "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
+  "pins": {
+    "dimension": 1,
+    "coordinate_atoms": [
+      [
+        2,
+        3,
+        4,
+        5
+      ]
+    ],
+    "point_count": 4,
+    "points": [
+      {
+        "grid_key": "-90",
+        "coordinate_values": [
+          -90.0
+        ],
+        "electronic_energy_hartree": -222.5770349806749
+      },
+      {
+        "grid_key": "0",
+        "coordinate_values": [
+          0.0
+        ],
+        "electronic_energy_hartree": -222.5718365814159
+      },
+      {
+        "grid_key": "90",
+        "coordinate_values": [
+          90.0
+        ],
+        "electronic_energy_hartree": -222.5806096708923
+      },
+      {
+        "grid_key": "180",
+        "coordinate_values": [
+          180.0
+        ],
+        "electronic_energy_hartree": -222.57580306326122
+      }
+    ]
+  },
+  "raw_sha256": "568cc62bce195d1876a42d185e09b94380d65e4b78f2dec142d4b6902db78b81"
+}
