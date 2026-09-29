@@ -52,6 +52,13 @@ export default function SpeciesEntryPage() {
     if ("status" in state) return <UnavailableEntry />
 
     const activeSection: EntrySection = isEntrySection(section) ? section : DEFAULT_SECTION
+    // The canonical path of what renders: the sectionless form stays
+    // sectionless, and a section segment is always the section on screen --
+    // a legacy alias becomes `DEFAULT_SECTION`, exactly as the
+    // canonicalization above rewrites it.
+    const entryPath = section === undefined
+        ? `/species-entries/${entryRef}`
+        : `/species-entries/${entryRef}/${activeSection}`
     return (
         <EntryDocument
             entry={state.entry}
@@ -59,6 +66,7 @@ export default function SpeciesEntryPage() {
             spEnergies={state.spEnergies}
             activeSection={activeSection}
             entryRef={entryRef}
+            entryPath={entryPath}
         />
     )
 }
@@ -168,14 +176,16 @@ function EmptyEntryEvidence() {
     )
 }
 
-function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef }: {
+function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef, entryPath }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
     spEnergies: SpeciesCalculationEnergyRecord[]
     activeSection: EntrySection
     entryRef: string
+    entryPath: string
 }) {
-    const [searchParams, setSearchParams] = useSearchParams()
+    const [searchParams] = useSearchParams()
+    const navigate = useNavigate()
     const requestedRef = searchParams.get("conformer")
     const requestedConformer = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === requestedRef)
     // Default to the FIRST CARD AS DISPLAYED, not the archive's top-ranked
@@ -186,6 +196,21 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
     // visible on the card, not encoded in which one starts selected.
     const selectedConformer = requestedConformer ?? sortConformersForDisplay(conformers)[0] ?? null
 
+    // Every `?conformer=` write names the canonical path of what's on screen
+    // (`entryPath`, never a legacy alias) instead of inheriting a pathname.
+    // `setSearchParams` -- functional form included -- resolves its `"?..."`
+    // target against the pathname captured at render time, and
+    // `BrowserRouter` commits each navigation inside `startTransition`, so
+    // that render can be stale: on a fresh load of a legacy `/calculations`
+    // link, `SpeciesEntryPage`'s canonicalization had already replaced the
+    // URL with `/geometry` when this page first rendered, but this render
+    // still saw `/calculations` and wrote it straight back (#562).
+    function writeConformerParam(conformerGroupRef: string) {
+        const next = new URLSearchParams(searchParams)
+        next.set("conformer", conformerGroupRef)
+        navigate({ pathname: entryPath, search: `?${next}` }, { replace: true })
+    }
+
     // Self-heal the URL to name what's actually selected: an empty/stale
     // `conformer` param becomes the first conformer's ref, once conformers
     // are known. Never fires when there is nothing to select.
@@ -193,9 +218,7 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
         if (!selectedConformer) return
         const canonicalRef = selectedConformer.conformer_group.conformer_group_ref
         if (requestedRef === canonicalRef) return
-        const next = new URLSearchParams(searchParams)
-        next.set("conformer", canonicalRef)
-        setSearchParams(next, { replace: true })
+        writeConformerParam(canonicalRef)
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the resolved conformer identity changes, not on every searchParams object identity change
     }, [selectedConformer?.conformer_group.conformer_group_ref])
 
@@ -204,9 +227,7 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
         : ""
 
     function selectConformer(conformerGroupRef: string) {
-        const next = new URLSearchParams(searchParams)
-        next.set("conformer", conformerGroupRef)
-        setSearchParams(next, { replace: true })
+        writeConformerParam(conformerGroupRef)
     }
 
     return <section className="entry-page">
