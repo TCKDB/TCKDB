@@ -102,7 +102,7 @@ def main() -> int:
     try:
         with SessionLocal() as session:
             total, rows = count_mismatched_read_only(session)
-    except Exception as exc:  # noqa: BLE001 -- any failure to measure is exit 2
+    except Exception as exc:  # any failure to measure is exit 2
         print(f"could not run the measurement: {type(exc).__name__}", file=sys.stderr)
         return EXIT_ERROR
     mismatched = sum(r[3] for r in rows)
