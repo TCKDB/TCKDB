@@ -19,6 +19,7 @@ from tckdb_schemas.coded_error import CodedValidationError
 from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
+from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionKind
 from app.db.models.species import SpeciesEntry
 from app.importers.thermoml.archive import build_standalone_article
@@ -69,6 +70,7 @@ from app.services.provenance_warnings import (
     collect_transport_provenance_warnings,
     statmech_has_rotational_structure,
 )
+from app.services.public_refs import public_refs_by_id
 from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
@@ -113,6 +115,8 @@ class ConformerUploadResult(BaseModel):
     id: int
     type: str = "conformer_observation"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     species_entry_id: int
     conformer_group_id: int
     primary_calculation: CalculationUploadRef
@@ -124,6 +128,8 @@ class ReactionUploadResult(BaseModel):
     id: int
     type: str = "reaction_entry"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     reaction_id: int
     warnings: list[UploadWarning] = []
 
@@ -132,6 +138,8 @@ class KineticsUploadResult(BaseModel):
     id: int
     type: str = "kinetics"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     reaction_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -140,6 +148,8 @@ class NetworkUploadResult(BaseModel):
     id: int
     type: str = "network"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     warnings: list[UploadWarning] = []
 
 
@@ -147,6 +157,8 @@ class NetworkPDepUploadResult(BaseModel):
     id: int
     type: str = "network_pdep"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     solve_id: int | None = None
     warnings: list[UploadWarning] = []
 
@@ -155,6 +167,8 @@ class StatmechUploadResult(BaseModel):
     id: int
     type: str = "statmech"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -163,6 +177,8 @@ class ThermoUploadResult(BaseModel):
     id: int
     type: str = "thermo"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -171,6 +187,8 @@ class TransitionStateUploadResult(BaseModel):
     id: int
     type: str = "transition_state_entry"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     transition_state_id: int
     reaction_entry_id: int
     warnings: list[UploadWarning] = []
@@ -180,6 +198,8 @@ class TransportUploadResult(BaseModel):
     id: int
     type: str = "transport"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     species_entry_id: int
     warnings: list[UploadWarning] = []
 
@@ -202,6 +222,8 @@ class ComputedReactionUploadResult(BaseModel):
 
     type: str = "computed_reaction"
     submission_id: int | None = None
+    #: The ``sub_`` ref of the same submission; name it in later requests.
+    submission_ref: str | None = None
     reaction_entry_id: int
     reaction_id: int
     transition_state_entry_id: int | None = None
@@ -226,7 +248,18 @@ class ComputedReactionUploadResult(BaseModel):
     # ``upload_artifacts(plan)`` glues the two together. Response-only
     # field; the request payload shape is unchanged.
     calculation_keys: dict[str, int] = Field(default_factory=dict)
+    #: The same map with each calculation named by its ``calc_`` ref, for the
+    #: second-phase ``POST /calculations/{handle}/artifacts``.
+    calculation_key_refs: dict[str, str] = Field(default_factory=dict)
     warnings: list[UploadWarning] = []
+
+
+def _calculation_refs_by_key(
+    session: Session, key_to_id: dict[str, int]
+) -> dict[str, str]:
+    """Bundle-local calculation key -> ``calc_`` ref, for the ids in *key_to_id*."""
+    refs = public_refs_by_id(session, Calculation, key_to_id.values())
+    return {key: refs[cid] for key, cid in key_to_id.items() if cid in refs}
 
 
 # ---------------------------------------------------------------------------
@@ -274,14 +307,24 @@ def upload_conformer(
     )
     warnings.extend(outcome.warnings)
     observation = outcome.observation
+    calc_refs = public_refs_by_id(
+        session,
+        Calculation,
+        [
+            outcome.primary_calculation.calculation_id,
+            *(ref.calculation_id for ref in outcome.additional_calculations),
+        ],
+    )
     result = ConformerUploadResult(
         id=observation.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         species_entry_id=observation.conformer_group.species_entry_id,
         conformer_group_id=observation.conformer_group_id,
         primary_calculation=CalculationUploadRef(
             request_index=outcome.primary_calculation.request_index,
             calculation_id=outcome.primary_calculation.calculation_id,
+            calculation_ref=calc_refs.get(outcome.primary_calculation.calculation_id),
             type=outcome.primary_calculation.type,
             role=outcome.primary_calculation.role,
         ),
@@ -289,6 +332,7 @@ def upload_conformer(
             CalculationUploadRef(
                 request_index=ref.request_index,
                 calculation_id=ref.calculation_id,
+                calculation_ref=calc_refs.get(ref.calculation_id),
                 type=ref.type,
                 role=ref.role,
             )
@@ -339,6 +383,7 @@ def upload_reaction(
     result = ReactionUploadResult(
         id=reaction_entry.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         reaction_id=reaction_entry.reaction_id,
         warnings=warnings,
     )
@@ -389,6 +434,7 @@ def upload_kinetics(
     result = KineticsUploadResult(
         id=kinetics.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         reaction_entry_id=kinetics.reaction_entry_id,
         warnings=warnings,
     )
@@ -426,7 +472,10 @@ def upload_network(
         warnings_out=warnings,
     )
     result = NetworkUploadResult(
-        id=network.id, submission_id=sub.submission_id, warnings=warnings
+        id=network.id,
+        submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
+        warnings=warnings,
     )
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))
@@ -469,6 +518,7 @@ def upload_network_pdep(
     result = NetworkPDepUploadResult(
         id=network.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         solve_id=solve_id,
         warnings=pdep_warnings,
     )
@@ -534,6 +584,7 @@ def upload_statmech(
     result = StatmechUploadResult(
         id=statmech.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         species_entry_id=statmech.species_entry_id,
         warnings=warnings,
     )
@@ -577,6 +628,7 @@ def upload_thermo(
     result = ThermoUploadResult(
         id=thermo.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         species_entry_id=thermo.species_entry_id,
         warnings=warnings,
     )
@@ -627,6 +679,7 @@ def upload_transition_state(
     result = TransitionStateUploadResult(
         id=ts_entry.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         transition_state_id=ts_entry.transition_state_id,
         reaction_entry_id=ts_entry.transition_state.reaction_entry_id,
         warnings=warnings,
@@ -678,6 +731,7 @@ def upload_transport(
     result = TransportUploadResult(
         id=transport.id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         species_entry_id=transport.species_entry_id,
         warnings=warnings,
     )
@@ -728,6 +782,7 @@ def upload_computed_species(
             primary_calculation=CalculationUploadRefInBundle(
                 key=co.conformer_in_bundle.primary_calculation.key,
                 calculation_id=co.primary_calculation.id,
+                calculation_ref=co.primary_calculation.public_ref,
                 type=co.primary_calculation.type,
                 role="primary",
             ),
@@ -735,6 +790,7 @@ def upload_computed_species(
                 CalculationUploadRefInBundle(
                     key=add_in.key,
                     calculation_id=add_calc.id,
+                    calculation_ref=add_calc.public_ref,
                     type=add_calc.type,
                     role="additional",
                 )
@@ -760,6 +816,7 @@ def upload_computed_species(
     result = ComputedSpeciesUploadResult(
         species_entry_id=outcome.species_entry_id,
         submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
         conformers=conformer_refs,
         thermo=thermo_ref,
         statmech=statmech_ref,
@@ -803,7 +860,12 @@ def upload_computed_reaction(
         *result_dict.get("warnings", []),
     ]
     result = ComputedReactionUploadResult(
-        **result_dict, submission_id=sub.submission_id
+        **result_dict,
+        submission_id=sub.submission_id,
+        submission_ref=sub.submission_ref,
+        calculation_key_refs=_calculation_refs_by_key(
+            session, result_dict.get("calculation_keys", {})
+        ),
     )
     mark_upload_ingested(session, sub)
     idem.record(session, status_code=201, body=result.model_dump(mode="json"))

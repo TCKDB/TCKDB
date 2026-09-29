@@ -22,6 +22,8 @@ module — trusted ingest stays free of moderation overhead.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
@@ -67,6 +69,7 @@ from app.services.submission import (
     list_record_links,
     list_submissions_for_review,
     reject_submission,
+    resolve_submission_handle,
     supersede_submission,
 )
 
@@ -394,7 +397,16 @@ def read_rights_attestations(
     dependencies=[Depends(require_supported_tckdb_client)],
 )
 def create_rights_attestation(
-    submission_id: int,
+    submission_id: Annotated[
+        str,
+        Path(
+            description=(
+                "The submission, by its ``sub_`` ref (preferred; every upload, "
+                "job and bundle response returns it as ``submission_ref``) or, "
+                "for a deprecation window, by its integer id."
+            ),
+        ),
+    ],
     body: RightsAttestationCreate,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
@@ -411,7 +423,7 @@ def create_rights_attestation(
         422 for a body the caller can correct (blank license, missing
         ``source_terms``).
     """
-    submission = get_submission(session, submission_id)
+    submission = resolve_submission_handle(session, submission_id)
     if not _can_view(submission, current_user):
         # Same answer as every other route on this router for a submission
         # the caller has no business with: not "who may attest", just "no".

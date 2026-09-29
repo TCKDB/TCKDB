@@ -3,7 +3,10 @@ plus the calculation-targeted artifact upload endpoint."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -16,7 +19,7 @@ from app.api.deps import (
     get_db,
     get_write_db,
 )
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, not_found
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.app_user import AppUser
@@ -91,6 +94,11 @@ from app.services.hessian_extraction import (
 from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
+from app.services.public_refs import PREFIXES
+from app.services.scientific_read.handles import (
+    handle_type_mismatch_error,
+    parse_handle,
+)
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
@@ -98,12 +106,42 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _calculation_for_handle(session: Session, handle: str) -> Calculation:
+    """The calculation a path handle (integer id or ``calc_`` ref) names, or 404.
+
+    Resolves only. The artifact route applies its approval-freeze and
+    ownership checks to the returned row, so both forms meet the same checks.
+    Both forms are a plain primary-key or ``public_ref`` lookup (no read-profile
+    floor: this is a write route), and an unknown one of either is the same
+    404, code ``handle_not_found``.
+    """
+    kind, parsed = parse_handle(handle)
+    if kind == "id":
+        calculation = session.get(Calculation, parsed)
+        if calculation is None:
+            logger.info("path_handle_not_found kind=calculation lookup=id row_id=%d", parsed)
+            raise not_found("calculation", code="handle_not_found")
+        return calculation
+    expected = PREFIXES["Calculation"]
+    prefix = parsed.split("_", 1)[0]
+    if prefix != expected:
+        raise handle_type_mismatch_error("calculation", expected, prefix, noun="handle")
+    calculation = session.scalars(
+        select(Calculation).where(Calculation.public_ref == parsed)
+    ).first()
+    if calculation is None:
+        raise not_found("calculation", ref=parsed, code="handle_not_found")
+    return calculation
 
 
 def _get_calculation_or_404(
@@ -615,6 +653,8 @@ class ArtifactsUploadRequest(BaseModel):
 
 class ArtifactsUploadResult(BaseModel):
     calculation_id: int
+    #: The ``calc_`` ref of the same calculation.
+    calculation_ref: str | None = None
     artifacts: list[CalculationArtifactRead]
     warnings: list[UploadWarning] = []
 
@@ -626,7 +666,16 @@ class ArtifactsUploadResult(BaseModel):
     dependencies=[Depends(require_supported_tckdb_client)],
 )
 def upload_calculation_artifacts(
-    calculation_id: int,
+    calculation_id: Annotated[
+        str,
+        Path(
+            description=(
+                "The calculation, by its ``calc_`` ref (preferred; upload "
+                "responses return it as ``calculation_ref``) or, for a "
+                "deprecation window, by its integer id."
+            ),
+        ),
+    ],
     request: ArtifactsUploadRequest,
     session: Session = Depends(get_write_db),
     current_user: AppUser = Depends(get_current_user),
@@ -675,11 +724,8 @@ def upload_calculation_artifacts(
     if (replay := idem.maybe_replay()) is not None:
         return replay
 
-    calculation = session.get(Calculation, calculation_id)
-    if calculation is None:
-        raise HTTPException(
-            status_code=404, detail="Calculation not found."
-        )
+    calculation = _calculation_for_handle(session, calculation_id)
+    calc_pk = calculation.id
 
     # Approval publishes the exact evidence set attached at review time.
     # Once a calculation has ever been approved, appending an artifact would
@@ -694,7 +740,7 @@ def upload_calculation_artifacts(
         )
         .where(
             RecordReview.record_type == SubmissionRecordType.calculation,
-            RecordReview.record_id == calculation_id,
+            RecordReview.record_id == calc_pk,
             (
                 (RecordReview.status == RecordReviewStatus.approved)
                 | (RecordReviewEvent.to_status == RecordReviewStatus.approved)
@@ -723,7 +769,7 @@ def upload_calculation_artifacts(
     # reclaimable orphans.
     rows = persist_artifact_batch(
         session,
-        calculation_id=calculation_id,
+        calculation_id=calc_pk,
         artifacts=request.artifacts,
         created_by=current_user.id,
     )
@@ -767,7 +813,8 @@ def upload_calculation_artifacts(
         warnings.append(software_warning)
 
     result = ArtifactsUploadResult(
-        calculation_id=calculation_id,
+        calculation_id=calc_pk,
+        calculation_ref=calculation.public_ref,
         artifacts=[CalculationArtifactRead.model_validate(r) for r in rows],
         warnings=warnings,
     )

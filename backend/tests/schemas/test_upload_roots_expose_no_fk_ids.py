@@ -217,19 +217,20 @@ DEFERRED_LEAKS: dict[str, str] = {
 #: precedes the call hands back an integer and no ref.
 DEFERRED_PARAM_LEAKS: dict[str, str] = {
     "POST /api/v1/submissions/{submission_id}/rights-attestations:submission_id": (
-        "A depositor attests rights on the submission an upload just opened, "
-        "and every upload, job and bundle response names that submission by "
-        "its integer submission_id only; none carries the sub_ ref. Taking a "
-        "ref here first needs those responses to return submission_ref, then "
-        "a handle (integer or ref) window per the public identifier policy. "
-        "Tracked in #578."
+        "Step 2 of #578 is done: every upload, job and bundle response now "
+        "returns submission_ref, and this path takes either the integer or "
+        "the sub_ ref (a handle, per the public identifier policy). The "
+        "integer is still accepted for a deprecation window that ends when "
+        "no supported tckdb-client, in-repo tckdb-qcschema adapter or ARC adapter "
+        "release still sends it; step 3 of #578 drops it and deletes this entry."
     ),
     "POST /api/v1/calculations/{calculation_id}/artifacts:calculation_id": (
-        "tckdb-client's upload_artifacts and the ARC adapter send the integer "
-        "a conformer or species upload returned for the calculation. Moving "
-        "to a calc_ ref needs those responses to carry the ref and a client "
-        "release that sends it, with the integer kept as a handle meanwhile. "
-        "Tracked in #578."
+        "Step 2 of #578 is done: upload responses return calculation_ref "
+        "beside calculation_id, tckdb-client sends the calc_ ref when it has "
+        "one, and this path takes either form. The integer is still accepted "
+        "for a deprecation window that ends when no supported tckdb-client, "
+        "in-repo tckdb-qcschema adapter (uploader.py) or ARC adapter release "
+        "still sends it; step 3 of #578 drops it and deletes this entry."
     ),
 }
 
