@@ -168,7 +168,13 @@ response body, status code, and headers:
 | 409 (`code=idempotency_conflict`) | `TCKDBIdempotencyConflictError` |
 | 409 (other) | `TCKDBConflictError` |
 | 4xx/5xx (other) | `TCKDBHTTPError` |
+| 2xx whose body is not JSON (e.g. an HTML page) | `TCKDBUnexpectedResponseError` |
 | network / timeout | `TCKDBConnectionError` |
+
+`TCKDBUnexpectedResponseError` (a `TCKDBHTTPError`) almost always means
+`base_url` names the web site rather than the API: use
+`https://host/api/v1`, not `https://host`. The message names the URL that
+was requested.
 
 ```python
 from tckdb_client import TCKDBValidationError

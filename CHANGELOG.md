@@ -22,6 +22,17 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## A web-site base URL is named, not a TypeError (2026-09-29)
+
+- tckdb-client 0.95.0: a JSON endpoint answering 2xx with a body that is not
+  JSON raises `TCKDBUnexpectedResponseError`, naming the URL requested and,
+  for an HTML page, the `/api/v1` base URL to use instead (issue #568).
+- tckdb-qcschema 0.4.1: `export` and `import --upload` print that, or any
+  other client failure, as one `ERROR [...]` line with exit status 1 instead
+  of a traceback. `import --upload` against a site root now stops at the
+  duplicate pre-check instead of reading the page as "no duplicate" and
+  posting the deposit to the web site.
+
 ## Enthalpy reference declaration (2026-09-23)
 
 - tckdb-schemas 0.47.0 and tckdb-client 0.89.0: explicit enthalpy references,
