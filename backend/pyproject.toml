@@ -120,6 +120,14 @@ dev = [
     "pytest-xdist>=3.6",
     "httpx>=0.27",
     "jsonschema>=4.22",
+    # The QCSchema interchange demonstration
+    # (scripts/validation/qcschema_interchange_report.py, registered as the
+    # qcschema_interchange paper generator) runs the client-side adapter under
+    # clients/python/adapters/qcschema, which validates documents with
+    # qcelemental. Same exact pin as that adapter. Test/dev only: the deployed
+    # image installs with --no-deps from environment.yml, so nothing here
+    # reaches it.
+    "qcelemental==0.51.2",
     "ruff>=0.4",
     "mypy>=1.10",
 ]

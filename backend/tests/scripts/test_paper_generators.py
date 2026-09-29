@@ -104,6 +104,7 @@ def test_registry_covers_every_data_claim_and_is_callable():
         "mechanism_fixture_provenance",
         "experimental_cp_comparison",
         "thermoml_source_provenance",
+        "qcschema_interchange",
     }
     assert expected <= set(GENERATORS)
     for name, generator in GENERATORS.items():

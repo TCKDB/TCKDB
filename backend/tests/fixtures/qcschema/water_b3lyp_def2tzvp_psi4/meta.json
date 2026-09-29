@@ -1,0 +1,53 @@
+{
+  "case": "water_b3lyp_def2tzvp_psi4",
+  "purpose": "Phase C C-Q4 QCSchema interchange demonstration; read by backend/scripts/validation/qcschema_interchange_report.py",
+  "documents": {
+    "water_b3lyp_def2tzvp_hessian_v1.json": {
+      "outcome": "route",
+      "expected": "freq",
+      "family": "v1",
+      "driver": "hessian",
+      "raw_sha256": "57627fbda4e64c4333c8f6c727d35e62a43e8d5594abbac8571112a0aac99442"
+    },
+    "water_b3lyp_def2tzvp_hessian_v2.json": {
+      "outcome": "route",
+      "expected": "freq",
+      "family": "v2",
+      "driver": "hessian",
+      "raw_sha256": "d85bc6ff0eddd8846a6c9f15eec6c2f36f61b505bf1b7b91a268fc332e75c8ed"
+    }
+  },
+  "smiles_arg": "O",
+  "identity_source": "depositor_declared",
+  "generator": "psi4-via-qcengine",
+  "psi4": "1.11",
+  "qcengine": "0.51.0",
+  "qcelemental": "0.51.2",
+  "conda_environment": "tckdb_qcschema_psi4",
+  "environment_lockfile": "clients/python/adapters/qcschema/tests/fixtures/ENVIRONMENT.lock.txt",
+  "environment_lockfile_sha256": "b4cd94c6ec0d91594f17df47931db7715e38890677aebe9ffe56e2c820eaed57",
+  "run_script": "run_psi4_water_hessian.py",
+  "run_date": "2026-09-29",
+  "level": "b3lyp/def2-tzvp",
+  "keywords": {
+    "scf_type": "pk",
+    "dft_radial_points": 99,
+    "dft_spherical_points": 590,
+    "e_convergence": 1e-10,
+    "d_convergence": 1e-10
+  },
+  "molecule": "water at the input geometry of the Gaussian 16 C.02 B3LYP/def2-TZVP record in gaussian_reference.json",
+  "reference": "gaussian_reference.json",
+  "pins": {
+    "return_energy_hartree": -76.4629955819491,
+    "hessian_full_length": 81,
+    "hessian_packed_length": 45,
+    "vibrational_mode_count": 3
+  },
+  "sha256": {
+    "gaussian_reference.json": "b4dc1ccf6c1137f403b898c7ee4833515c8861f4b6f8f847988e6f62c23532b6",
+    "run_psi4_water_hessian.py": "7285bfda0387a06e2853710e41dc721b1799dfc07a7239d7b535cb4f6b7b2f54",
+    "water_b3lyp_def2tzvp_hessian_v1.json": "57627fbda4e64c4333c8f6c727d35e62a43e8d5594abbac8571112a0aac99442",
+    "water_b3lyp_def2tzvp_hessian_v2.json": "d85bc6ff0eddd8846a6c9f15eec6c2f36f61b505bf1b7b91a268fc332e75c8ed"
+  }
+}
