@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.52.0 - 2026-09-29
+
+Ship a **producer contract** inside the package:
+`tckdb_schemas/contract/PRODUCER_CONTRACT.md` plus one JSON Schema per
+upload payload under `tckdb_schemas/contract/schemas/`. It states, per
+upload route, the payload fields (types, units, allowed values,
+constraints), the rules the payload models and the upload workflows
+enforce, the refusal codes the route can return, and a minimal valid
+example. It is generated from the backend's routes, models and code
+catalogue (`backend/scripts/generate_producer_contract.py`) and CI refuses a
+stale copy. Read it with `python -m tckdb_schemas.contract --print`, see
+what moved since the version you target with `--since <version>`, and load a
+schema with `tckdb_schemas.contract.json_schema("ThermoUploadRequest")`.
+
+Also new: `tckdb_schemas.producer_rule.producer_rule`, a marker for a
+shared rule a workflow applies outside the payload model; the contract
+prints every marked function a route reaches. `enthalpy_reference_error` is
+marked, and its docstring now states the rule in a producer's terms.
+`ThermoStateFields` gains field descriptions for `phase`,
+`enthalpy_reference_kind` and `reference_pressure_bar`, and the four upload
+request models this package defines declare a minimal valid example
+(`json_schema_extra["examples"]`). No field, value or validation behaviour
+changes: every 0.51.0 payload validates identically.
+
 ## 0.51.0 - 2026-09-27
 
 `enthalpy_reference.enthalpy_reference_error` now counts a tabulated Gibbs

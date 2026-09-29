@@ -2048,6 +2048,17 @@
       },
       "ArtifactsUploadRequest": {
         "description": "Inline batch artifact upload payload.\n\nAll artifacts in the batch are validated end-to-end before any\nstorage write fires. A single per-artifact failure rejects the\nwhole batch with no DB rows and no S3 writes.",
+        "examples": [
+          {
+            "artifacts": [
+              {
+                "content_base64": "IE5vcm1hbCB0ZXJtaW5hdGlvbiBvZiBHYXVzc2lhbiAxNi4K",
+                "filename": "opt.log",
+                "kind": "output_log"
+              }
+            ]
+          }
+        ],
         "properties": {
           "artifacts": {
             "items": {
@@ -3604,6 +3615,7 @@
                 "type": "null"
               }
             ],
+            "description": "What every enthalpy on this record means. The only accepted value is formation_298k. Required when the record carries any enthalpy or Gibbs-energy content and refused when it carries none; never defaulted or inferred.",
             "title": "Enthalpy Reference Kind"
           },
           "h298_kj_mol": {
@@ -3668,7 +3680,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Physical phase the record describes. Defaults to gas only when scientific_origin is computed and the field is omitted; an explicit null is kept as unknown."
           },
           "points": {
             "items": {
@@ -3687,6 +3700,7 @@
                 "type": "null"
               }
             ],
+            "description": "Standard-state reference pressure, in bar, that the entropy (and any Gibbs energy) was computed or reported at. Never defaulted, for any scientific_origin: an omitted value is stored as not stated. 1 atm is 1.01325 bar, not 1.0.",
             "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
@@ -10729,6 +10743,36 @@
       "ComputedReactionUploadRequest": {
         "additionalProperties": false,
         "description": "Unified upload for elementary kinetics from one computational workflow.\n\nOne payload = one Arkane run:\n- Species with conformers, calculations, and thermo\n- The reaction (reactants + products by species key)\n- Optional transition state with geometry and calculations\n- One or more kinetics fits (forward/reverse, with/without tunneling)\n- Provenance (literature, software, workflow tool)",
+        "examples": [
+          {
+            "product_keys": [
+              "h2"
+            ],
+            "reactant_keys": [
+              "h",
+              "h"
+            ],
+            "reversible": true,
+            "species": [
+              {
+                "key": "h",
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 2,
+                  "smiles": "[H]"
+                }
+              },
+              {
+                "key": "h2",
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 1,
+                  "smiles": "[H][H]"
+                }
+              }
+            ]
+          }
+        ],
         "properties": {
           "analysis_software_release": {
             "anyOf": [
@@ -10980,6 +11024,35 @@
       "ComputedSpeciesUploadRequest": {
         "additionalProperties": false,
         "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo and\nstatmech blocks fall back to it when they name no workflow tool of\ntheir own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
+        "examples": [
+          {
+            "conformers": [
+              {
+                "geometry": {
+                  "xyz_text": "3\nwater\nO 0.000000 0.000000 0.117300\nH 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200"
+                },
+                "key": "conf0",
+                "primary_calculation": {
+                  "key": "opt0",
+                  "level_of_theory": {
+                    "basis": "def2-tzvp",
+                    "method": "wb97xd"
+                  },
+                  "software_release": {
+                    "name": "Gaussian",
+                    "version": "16"
+                  },
+                  "type": "opt"
+                }
+              }
+            ],
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "O"
+            }
+          }
+        ],
         "properties": {
           "applied_energy_corrections": {
             "description": "Applied energy corrections targeting the bundle's species entry (one bundle = one species entry). Use this for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). Frequency-scale-factor corrections still belong on thermo/statmech blocks where their source calc lives. ``source_conformer_key`` resolves against this bundle's conformer keys.",
@@ -12885,6 +12958,29 @@
       "ConformerUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing conformer upload payload.\n\nThe backend resolves the species, species entry, geometry, and calculation\nprovenance, then assigns or creates a conformer group and creates one new\nprovenance-bearing observation row for this upload. If the geometry matches\nan existing basin, the group is reused but the observation is not silently\ndeduplicated. Optionally, additional calculations (freq, sp) can be\nattached alongside the primary calculation, and they anchor to that same\nobservation.",
+        "examples": [
+          {
+            "calculation": {
+              "level_of_theory": {
+                "basis": "def2-tzvp",
+                "method": "wb97xd"
+              },
+              "software_release": {
+                "name": "Gaussian",
+                "version": "16"
+              },
+              "type": "opt"
+            },
+            "geometry": {
+              "xyz_text": "3\nwater\nO 0.000000 0.000000 0.117300\nH 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200"
+            },
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "O"
+            }
+          }
+        ],
         "properties": {
           "additional_calculations": {
             "items": {
@@ -14012,6 +14108,44 @@
       "ContributionBundleV0": {
         "additionalProperties": false,
         "description": "Top-level contribution bundle v0 envelope.\n\nValidates without database access. Hosted identity resolution,\ndeduplication, and moderation are deferred to the hosted-import\nmilestone.",
+        "examples": [
+          {
+            "bundle_format": "tckdb-contribution-bundle",
+            "bundle_kind": "thermo",
+            "bundle_version": "0.1",
+            "created_at": "2026-09-29T00:00:00Z",
+            "exporter": {
+              "local_user_label": "depositor"
+            },
+            "manifest": {
+              "files": []
+            },
+            "records": {
+              "thermo_uploads": [
+                {
+                  "enthalpy_reference_kind": "formation_298k",
+                  "h298_kj_mol": -74.6,
+                  "reference_pressure_bar": 1.01325,
+                  "scientific_origin": "computed",
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "smiles": "C"
+                  }
+                }
+              ]
+            },
+            "source_instance": {
+              "instance_kind": "local",
+              "instance_name": "my-lab-tckdb",
+              "schema_version": "d861dfd60891"
+            },
+            "submission": {
+              "summary": "One formation-referenced thermo record.",
+              "title": "Methane thermo"
+            }
+          }
+        ],
         "properties": {
           "bundle_format": {
             "const": "tckdb-contribution-bundle",
@@ -20755,6 +20889,43 @@
       "KineticsUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+        "examples": [
+          {
+            "a": 1230000000000.0,
+            "a_units": "cm3_mol_s",
+            "model_kind": "modified_arrhenius",
+            "n": 0.0,
+            "reaction": {
+              "products": [
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "smiles": "[H][H]"
+                  }
+                }
+              ],
+              "reactants": [
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 2,
+                    "smiles": "[H]"
+                  }
+                },
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 2,
+                    "smiles": "[H]"
+                  }
+                }
+              ],
+              "reversible": false
+            },
+            "scientific_origin": "computed"
+          }
+        ],
         "properties": {
           "a": {
             "anyOf": [
@@ -26137,6 +26308,31 @@
       "NetworkPDepUploadRequest": {
         "additionalProperties": false,
         "description": "Unified upload payload for a pressure-dependent reaction network.\n\nA single request contains species (with conformers and calculations),\ntransition states (with geometries and calculations), micro reactions,\nnetwork topology (states and channels), and an optional master-equation\nsolve configuration.\n\nKey uniqueness: calculation and geometry keys are globally unique across\nthe entire request. Species, state, reaction, and TS keys are unique\nwithin their own collections (different namespaces).\n\nThis schema expects one connected network — disconnected subnetworks\nare rejected when channels are explicitly provided.",
+        "examples": [
+          {
+            "species": [
+              {
+                "key": "c2h5",
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 2,
+                  "smiles": "C[CH2]"
+                }
+              }
+            ],
+            "states": [
+              {
+                "key": "w1",
+                "kind": "well",
+                "participants": [
+                  {
+                    "species_key": "c2h5"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
         "properties": {
           "channels": {
             "items": {
@@ -29121,6 +29317,11 @@
       "NetworkUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing network upload payload.\n\nThe backend resolves literature and provenance refs, species-entry identity\npayloads, and reaction payloads, then creates the network and its links.\n\n:param name: Optional network name.\n:param description: Optional free-text network description.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference.\n:param workflow_tool_release: Optional workflow provenance reference.\n:param species_links: Workflow-facing species links for the network.\n:param reactions: Workflow-facing reaction links for the network.",
+        "examples": [
+          {
+            "name": "example network"
+          }
+        ],
         "properties": {
           "description": {
             "anyOf": [
@@ -32425,6 +32626,36 @@
       "ReactionUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing reaction upload payload.\n\nThe backend resolves the graph identity into ``ChemReaction`` and\n``ReactionParticipant`` rows, then creates a new ``ReactionEntry`` with\nordered structured participants for the resolved species-entry forms.\n\n:param reversible: Whether the uploaded reaction is reversible.\n:param reaction_family: Optional reaction-family label.\n:param reaction_family_source_note: Required when ``reaction_family`` is not a supported canonical family.\n:param reactants: Ordered structured participants on the reactant side.\n:param products: Ordered structured participants on the product side.",
+        "examples": [
+          {
+            "products": [
+              {
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 1,
+                  "smiles": "[H][H]"
+                }
+              }
+            ],
+            "reactants": [
+              {
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 2,
+                  "smiles": "[H]"
+                }
+              },
+              {
+                "species_entry": {
+                  "charge": 0,
+                  "multiplicity": 2,
+                  "smiles": "[H]"
+                }
+              }
+            ],
+            "reversible": true
+          }
+        ],
         "properties": {
           "products": {
             "items": {
@@ -33812,6 +34043,12 @@
       "RightsAttestationCreate": {
         "additionalProperties": false,
         "description": "Payload for recording who agreed to license a submission, and how.\n\n``depositor_agreement`` may only be recorded by the submission's creator;\nevery other basis needs the curator or admin role. ``source_terms`` is\nrequired exactly when ``basis`` is ``source_terms``.",
+        "examples": [
+          {
+            "basis": "depositor_agreement",
+            "license": "CC-BY-4.0"
+          }
+        ],
         "properties": {
           "basis": {
             "$ref": "#/components/schemas/RightsBasisKind"
@@ -42834,6 +43071,18 @@
       "StatmechUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing standalone statmech upload payload.\n\nThe backend resolves the target species entry, persists any inline\nsupporting calculations, resolves provenance references, and routes\nthe resulting scientific payload through the canonical statmech\nresolution service. Statmech is append-only — repeated uploads\nagainst the same species entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param scientific_origin: Scientific origin category for this record.\n:param literature: Optional literature submission payload.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param software_release: Optional software provenance.\n:param external_symmetry: Optional external symmetry number.\n:param rotational_constant_a_cm1: Optional A rotational constant (cm⁻¹).\n:param rotational_constant_b_cm1: Optional B rotational constant (cm⁻¹).\n:param rotational_constant_c_cm1: Optional C rotational constant (cm⁻¹).\n:param point_group: Optional point-group label.\n:param is_linear: Optional linearity flag.\n:param rigid_rotor_kind: Optional rigid-rotor classification.\n:param statmech_treatment: Optional treatment classification.\n:param freq_scale_factor: Optional frequency scale factor ref.\n:param uses_projected_frequencies: Optional projected-frequency flag.\n:param note: Optional free-text note.\n:param calculations: Inline supporting calculations declared by key.\n:param source_calculations: Statmech → calculation links by key/role.\n:param torsions: Torsion definitions (source scans addressed by key).\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. A depositor\n    may run the optimisation and the single point at two different\n    levels; when declared, this must agree with what is actually\n    linked (the linked 'sp' calculation's level, or the linked 'opt's\n    own level when no separate 'sp' is linked) — see\n    ``app.services.calculation_levels`` for the exact rule (R4/R5).\n    Never persisted: it is checked once, at upload time, against the\n    source calculations this same request links; the read-time\n    ``levels`` block is always re-derived from those links directly.",
+        "examples": [
+          {
+            "external_symmetry": 2,
+            "is_linear": false,
+            "scientific_origin": "computed",
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "O"
+            }
+          }
+        ],
         "properties": {
           "calculations": {
             "items": {
@@ -43849,6 +44098,11 @@
       "SubmissionSupersedeRequest": {
         "additionalProperties": false,
         "description": "Payload for marking a submission as superseded by a newer one.\n\nThe replacing submission must have been created with\n``supersedes_submission_id`` pointing back at the old id; the service\nenforces that link rather than mutating it here.",
+        "examples": [
+          {
+            "new_submission_id": 42
+          }
+        ],
         "properties": {
           "new_submission_id": {
             "title": "New Submission Id",
@@ -44522,6 +44776,7 @@
                 "type": "null"
               }
             ],
+            "description": "What every enthalpy on this record means. The only accepted value is formation_298k. Required when the record carries any enthalpy or Gibbs-energy content and refused when it carries none; never defaulted or inferred.",
             "title": "Enthalpy Reference Kind"
           },
           "h298_kj_mol": {
@@ -44586,7 +44841,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Physical phase the record describes. Defaults to gas only when scientific_origin is computed and the field is omitted; an explicit null is kept as unknown."
           },
           "points": {
             "items": {
@@ -44605,6 +44861,7 @@
                 "type": "null"
               }
             ],
+            "description": "Standard-state reference pressure, in bar, that the entropy (and any Gibbs energy) was computed or reported at. Never defaulted, for any scientific_origin: an omitted value is stored as not stated. 1 atm is 1.01325 bar, not 1.0.",
             "title": "Reference Pressure Bar"
           },
           "s298_j_mol_k": {
@@ -44752,6 +45009,16 @@
       "ThermoMLUploadRequest": {
         "additionalProperties": false,
         "description": "One ThermoML XML document, uploaded directly (not from the NIST\nbulk archive — that path is the ``--archive``/``--doi`` CLI only).\n\n:param filename: Provenance metadata only — recorded verbatim (as\n    ``f\"upload:{filename}\"``) in the custody row's\n    ``mapping_report_json[\"source_label\"]``. Never used as a storage\n    path (the object store is content-addressed by SHA-256) and never\n    used as a fallback ``raw_uri`` the way an archive member path is\n    (see ``app.services.thermoml_cp_import._raw_uri_for``'s\n    ``allow_member_path_fallback``) — it is a display label, not a\n    retrievable location.\n:param content_base64: Base64-encoded ThermoML XML bytes.\n:param doi: The article's own DOI, if the depositor wants to assert\n    it explicitly. Optional — when omitted, the DOI is taken from the\n    file's own ``Citation/sDOI`` element, if present. Supplying one\n    that disagrees with the file's own ``sDOI`` is a refusal\n    (``thermoml_doi_conflict``), never a silent override.\n:param rights: The depositor's deposit-time license agreement.\n    Required — deliberately **not** optional like ``DepositRights`` on\n    every other upload schema. Every other upload route can fall back\n    on \"attested later, at release time\" because the underlying\n    science already exists in TCKDB under someone's authority; this\n    route's whole content *is* a third-party document the depositor\n    is asserting the right to submit, and unlike the CLI's\n    ``--archive`` path there is no NIST/TRC ``source_terms`` to stand\n    on instead. Omitting it is refused by ordinary Pydantic\n    field-requiredness (422, the same mechanism every other required\n    field on every other schema in this codebase already uses — not\n    a new bespoke refusal). Recorded as an ordinary\n    ``depositor_agreement`` attestation, never ``source_terms``.\n\nNo ``dry_run`` field: none of the sibling ``/uploads/*`` routes in\nthis router preview a request before committing it (the one preview\nmechanism in this codebase, ``POST /bundles/dry-run``, is a wholly\nseparate endpoint from its commit sibling, not a boolean flag shared\nwith one). This route follows that precedent and always commits, like\nevery other route in ``app.api.routes.uploads``; a caller who wants a\npreview runs the same document through the backend CLI's default\n(no ``--commit``) dry-run mode instead.",
+        "examples": [
+          {
+            "content_base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPERhdGFSZXBvcnQgeG1sbnM9Imh0dHA6Ly93d3cuaXVwYWMub3JnL25hbWVzcGFjZXMvVGhlcm1vTUwiLz4K",
+            "filename": "article.xml",
+            "rights": {
+              "depositor_attests_right_to_license": true,
+              "license": "CC-BY-4.0"
+            }
+          }
+        ],
         "properties": {
           "content_base64": {
             "minLength": 1,
@@ -46801,6 +47068,21 @@
       "ThermoUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing thermo upload payload.\n\nThe backend resolves the species entry and provenance references,\nthen creates a ``Thermo`` row with optional tabulated points,\nNASA polynomial coefficients, and applied energy corrections.",
+        "examples": [
+          {
+            "enthalpy_reference_kind": "formation_298k",
+            "h298_kj_mol": -74.6,
+            "phase": "gas",
+            "reference_pressure_bar": 1.01325,
+            "s298_j_mol_k": 186.25,
+            "scientific_origin": "computed",
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "C"
+            }
+          }
+        ],
         "properties": {
           "applied_energy_corrections": {
             "items": {
@@ -46861,6 +47143,7 @@
                 "type": "null"
               }
             ],
+            "description": "What every enthalpy on this record means. The only accepted value is formation_298k. Required when the record carries any enthalpy or Gibbs-energy content and refused when it carries none; never defaulted or inferred.",
             "title": "Enthalpy Reference Kind"
           },
           "existing_statmech_id": {
@@ -46964,7 +47247,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Physical phase the record describes. Defaults to gas only when scientific_origin is computed and the field is omitted; an explicit null is kept as unknown."
           },
           "points": {
             "items": {
@@ -46983,6 +47267,7 @@
                 "type": "null"
               }
             ],
+            "description": "Standard-state reference pressure, in bar, that the entropy (and any Gibbs energy) was computed or reported at. Never defaulted, for any scientific_origin: an omitted value is stored as not stated. 1 atm is 1.01325 bar, not 1.0.",
             "title": "Reference Pressure Bar"
           },
           "rights": {
@@ -48437,6 +48722,61 @@
       "TransitionStateUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing transition-state upload payload.\n\nThe backend resolves the reaction from the embedded content, creates a\n``TransitionState`` concept and ``TransitionStateEntry``, resolves the\ngeometry and calculation provenance, and optionally attaches additional\ncalculations.\n\n:param reaction: Reaction described by scientific content (reactants/products).\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity of the TS structure.\n:param unmapped_smiles: Optional SMILES for the TS (no atom maps).\n:param geometry: Saddle-point geometry payload (XYZ text).\n:param primary_opt: Required primary optimisation calculation.\n:param additional_calculations: Optional freq / sp / irc / path_search\n    calculations. A ``path_search`` additional calculation models a\n    TS-guess generator (NEB, GSM, ...) and is wired as the parent of\n    the primary opt via ``calculation_dependency.role = optimized_from``.\n:param label: Optional human-readable label for the TS concept.\n:param note: Optional free-text note on the TS concept.",
+        "examples": [
+          {
+            "charge": 0,
+            "geometry": {
+              "xyz_text": "3\nH3 transition state\nH 0.0 0.0 -0.93\nH 0.0 0.0 0.0\nH 0.0 0.0 0.93"
+            },
+            "multiplicity": 2,
+            "primary_opt": {
+              "level_of_theory": {
+                "basis": "def2-tzvp",
+                "method": "wb97xd"
+              },
+              "software_release": {
+                "name": "Gaussian",
+                "version": "16"
+              },
+              "type": "opt"
+            },
+            "reaction": {
+              "products": [
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "smiles": "[H][H]"
+                  }
+                },
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 2,
+                    "smiles": "[H]"
+                  }
+                }
+              ],
+              "reactants": [
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 2,
+                    "smiles": "[H]"
+                  }
+                },
+                {
+                  "species_entry": {
+                    "charge": 0,
+                    "multiplicity": 1,
+                    "smiles": "[H][H]"
+                  }
+                }
+              ],
+              "reversible": true
+            }
+          }
+        ],
         "properties": {
           "additional_calculations": {
             "items": {
@@ -50004,6 +50344,18 @@
       "TransportUploadRequest": {
         "additionalProperties": false,
         "description": "Workflow-facing standalone transport upload payload.\n\nExtends :class:`TransportUploadPayload` with the fields needed to\nstand on its own: a resolvable owning species entry and optional\ninline supporting calculations linked by role.\n\nThe backend resolves the species entry, persists any inline\nsupporting calculations, resolves provenance references, and creates\na new ``Transport`` row with attached ``transport_source_calculation``\nlinks. Transport is append-only — repeated uploads against the same\nspecies entry create independent rows.\n\n:param species_entry: Identity payload used to resolve the owning\n    species entry.\n:param calculations: Inline supporting calculations declared by local\n    string key. Each is persisted and scoped to the resolved\n    species entry.\n:param source_calculations: Transport → supporting-calculation links,\n    addressed by local key and role.",
+        "examples": [
+          {
+            "epsilon_over_k_k": 141.4,
+            "scientific_origin": "experimental",
+            "sigma_angstrom": 3.746,
+            "species_entry": {
+              "charge": 0,
+              "multiplicity": 1,
+              "smiles": "C"
+            }
+          }
+        ],
         "properties": {
           "calculations": {
             "items": {

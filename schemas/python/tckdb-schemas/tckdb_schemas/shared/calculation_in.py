@@ -384,6 +384,7 @@ class GeometryIn(SchemaBase):
     @field_validator("xyz_text")
     @classmethod
     def strip_xyz(cls, value: str) -> str:
+        """Trim leading and trailing whitespace from ``xyz_text``."""
         return value.strip()
 
     def to_payload(self) -> "GeometryPayload":

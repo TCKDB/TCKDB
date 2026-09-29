@@ -10,7 +10,7 @@ resolves the geometry, and persists calculations.
 
 from typing import Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import CalculationType
@@ -124,6 +124,69 @@ class TransitionStateUploadRequest(SchemaBase):
     :param label: Optional human-readable label for the TS concept.
     :param note: Optional free-text note on the TS concept.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "reaction": {
+                        "reversible": True,
+                        "reactants": [
+                            {
+                                "species_entry": {
+                                    "smiles": "[H]",
+                                    "charge": 0,
+                                    "multiplicity": 2
+                                }
+                            },
+                            {
+                                "species_entry": {
+                                    "smiles": "[H][H]",
+                                    "charge": 0,
+                                    "multiplicity": 1
+                                }
+                            }
+                        ],
+                        "products": [
+                            {
+                                "species_entry": {
+                                    "smiles": "[H][H]",
+                                    "charge": 0,
+                                    "multiplicity": 1
+                                }
+                            },
+                            {
+                                "species_entry": {
+                                    "smiles": "[H]",
+                                    "charge": 0,
+                                    "multiplicity": 2
+                                }
+                            }
+                        ]
+                    },
+                    "charge": 0,
+                    "multiplicity": 2,
+                    "geometry": {
+                        "xyz_text": "3\nH3 transition state\nH 0.0 0.0 -0.93\nH 0.0 0.0 0.0\nH 0.0 0.0 0.93"
+                    },
+                    "primary_opt": {
+                        "type": "opt",
+                        "software_release": {
+                            "name": "Gaussian",
+                            "version": "16"
+                        },
+                        "level_of_theory": {
+                            "method": "wb97xd",
+                            "basis": "def2-tzvp"
+                        }
+                    }
+                }
+            ]
+        },
+    )
 
     reaction: TSReactionUpload
     charge: int

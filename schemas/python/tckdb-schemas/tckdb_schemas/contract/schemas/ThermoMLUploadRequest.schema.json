@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "DepositRights": {
+      "additionalProperties": false,
+      "description": "Deposit-time agreement that the records may be licensed as stated.",
+      "properties": {
+        "depositor_attests_right_to_license": {
+          "const": true,
+          "title": "Depositor Attests Right To License",
+          "type": "boolean"
+        },
+        "license": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "source_terms": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Terms"
+        }
+      },
+      "required": [
+        "license",
+        "depositor_attests_right_to_license"
+      ],
+      "title": "DepositRights",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One ThermoML XML document, uploaded directly (not from the NIST\nbulk archive — that path is the ``--archive``/``--doi`` CLI only).\n\n:param filename: Provenance metadata only — recorded verbatim (as\n    ``f\"upload:{filename}\"``) in the custody row's\n    ``mapping_report_json[\"source_label\"]``. Never used as a storage\n    path (the object store is content-addressed by SHA-256) and never\n    used as a fallback ``raw_uri`` the way an archive member path is\n    (see ``app.services.thermoml_cp_import._raw_uri_for``'s\n    ``allow_member_path_fallback``) — it is a display label, not a\n    retrievable location.\n:param content_base64: Base64-encoded ThermoML XML bytes.\n:param doi: The article's own DOI, if the depositor wants to assert\n    it explicitly. Optional — when omitted, the DOI is taken from the\n    file's own ``Citation/sDOI`` element, if present. Supplying one\n    that disagrees with the file's own ``sDOI`` is a refusal\n    (``thermoml_doi_conflict``), never a silent override.\n:param rights: The depositor's deposit-time license agreement.\n    Required — deliberately **not** optional like ``DepositRights`` on\n    every other upload schema. Every other upload route can fall back\n    on \"attested later, at release time\" because the underlying\n    science already exists in TCKDB under someone's authority; this\n    route's whole content *is* a third-party document the depositor\n    is asserting the right to submit, and unlike the CLI's\n    ``--archive`` path there is no NIST/TRC ``source_terms`` to stand\n    on instead. Omitting it is refused by ordinary Pydantic\n    field-requiredness (422, the same mechanism every other required\n    field on every other schema in this codebase already uses — not\n    a new bespoke refusal). Recorded as an ordinary\n    ``depositor_agreement`` attestation, never ``source_terms``.\n\nNo ``dry_run`` field: none of the sibling ``/uploads/*`` routes in\nthis router preview a request before committing it (the one preview\nmechanism in this codebase, ``POST /bundles/dry-run``, is a wholly\nseparate endpoint from its commit sibling, not a boolean flag shared\nwith one). This route follows that precedent and always commits, like\nevery other route in ``app.api.routes.uploads``; a caller who wants a\npreview runs the same document through the backend CLI's default\n(no ``--commit``) dry-run mode instead.",
+  "examples": [
+    {
+      "content_base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPERhdGFSZXBvcnQgeG1sbnM9Imh0dHA6Ly93d3cuaXVwYWMub3JnL25hbWVzcGFjZXMvVGhlcm1vTUwiLz4K",
+      "filename": "article.xml",
+      "rights": {
+        "depositor_attests_right_to_license": true,
+        "license": "CC-BY-4.0"
+      }
+    }
+  ],
+  "properties": {
+    "content_base64": {
+      "minLength": 1,
+      "title": "Content Base64",
+      "type": "string"
+    },
+    "doi": {
+      "anyOf": [
+        {
+          "maxLength": 255,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Doi"
+    },
+    "filename": {
+      "maxLength": 255,
+      "minLength": 1,
+      "title": "Filename",
+      "type": "string"
+    },
+    "rights": {
+      "$ref": "#/$defs/DepositRights"
+    }
+  },
+  "required": [
+    "filename",
+    "content_base64",
+    "rights"
+  ],
+  "title": "ThermoMLUploadRequest",
+  "type": "object"
+}

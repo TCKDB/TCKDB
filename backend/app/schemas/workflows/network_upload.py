@@ -1,6 +1,6 @@
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from tckdb_schemas.rights import DepositRights
 
 from app.db.models.common import NetworkSpeciesRole
@@ -46,6 +46,19 @@ class NetworkUploadRequest(SchemaBase):
     :param species_links: Workflow-facing species links for the network.
     :param reactions: Workflow-facing reaction links for the network.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "example network"
+                }
+            ]
+        },
+    )
 
     name: str | None = None
     description: str | None = None

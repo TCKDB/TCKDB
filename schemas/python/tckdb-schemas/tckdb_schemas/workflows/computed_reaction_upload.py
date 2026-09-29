@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
@@ -1276,6 +1276,44 @@ class ComputedReactionUploadRequest(SchemaBase):
     - One or more kinetics fits (forward/reverse, with/without tunneling)
     - Provenance (literature, software, workflow tool)
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species": [
+                        {
+                            "key": "h",
+                            "species_entry": {
+                                "smiles": "[H]",
+                                "charge": 0,
+                                "multiplicity": 2
+                            }
+                        },
+                        {
+                            "key": "h2",
+                            "species_entry": {
+                                "smiles": "[H][H]",
+                                "charge": 0,
+                                "multiplicity": 1
+                            }
+                        }
+                    ],
+                    "reactant_keys": [
+                        "h",
+                        "h"
+                    ],
+                    "product_keys": [
+                        "h2"
+                    ],
+                    "reversible": True
+                }
+            ]
+        },
+    )
 
     # Provenance (shared across the bundle)
     literature: LiteratureUploadRequest | None = None

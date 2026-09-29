@@ -15,7 +15,7 @@ only other schema in this codebase that carries inline file bytes; base64
 
 from __future__ import annotations
 
-from pydantic import Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
 from tckdb_schemas.rights import DepositRights
 
 from app.schemas.common import SchemaBase
@@ -63,6 +63,24 @@ class ThermoMLUploadRequest(SchemaBase):
     (no ``--commit``) dry-run mode instead.
     """
 
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "filename": "article.xml",
+                    "content_base64": "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPERhdGFSZXBvcnQgeG1sbnM9Imh0dHA6Ly93d3cuaXVwYWMub3JnL25hbWVzcGFjZXMvVGhlcm1vTUwiLz4K",
+                    "rights": {
+                        "license": "CC-BY-4.0",
+                        "depositor_attests_right_to_license": True
+                    }
+                }
+            ]
+        },
+    )
+
     filename: str = Field(min_length=1, max_length=255)
     content_base64: str = Field(min_length=1)
     doi: str | None = Field(default=None, max_length=255)
@@ -80,6 +98,7 @@ class ThermoMLUploadRequest(SchemaBase):
     @field_validator("doi")
     @classmethod
     def _normalize_doi(cls, value: str | None) -> str | None:
+        """Trim ``doi``; a blank DOI is treated as absent."""
         if value is None:
             return None
         value = value.strip()

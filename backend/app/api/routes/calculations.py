@@ -4,7 +4,7 @@ plus the calculation-targeted artifact upload endpoint."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -586,6 +586,25 @@ class ArtifactsUploadRequest(BaseModel):
     storage write fires. A single per-artifact failure rejects the
     whole batch with no DB rows and no S3 writes.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "artifacts": [
+                        {
+                            "kind": "output_log",
+                            "filename": "opt.log",
+                            "content_base64": "IE5vcm1hbCB0ZXJtaW5hdGlvbiBvZiBHYXVzc2lhbiAxNi4K"
+                        }
+                    ]
+                }
+            ]
+        },
+    )
 
     artifacts: list[ArtifactIn] = Field(min_length=1)
 
