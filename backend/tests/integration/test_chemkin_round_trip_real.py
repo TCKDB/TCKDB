@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 from rdkit import Chem
 
+from tests._ci_dependency import require_module
+
 # The CHEMKIN importer adapter (``tckdb_chemkin``) lives under
 # clients/python/adapters/chemkin and is not installed into tckdb_env, so its
 # package root is appended to sys.path here — inline (rather than in a
@@ -499,7 +501,7 @@ def test_duplicate_reactions_round_trip(round_trip):
 # undeclared duplicate reaction, which real CHEMKIN files frequently ship.
 # ---------------------------------------------------------------------------
 
-cantera = pytest.importorskip("cantera")
+cantera = require_module("cantera", install="conda install -c conda-forge cantera=3.2.0 (backend/environment.yml)")
 
 
 def test_exported_mechanism_passes_cantera_validation(round_trip):

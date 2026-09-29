@@ -21,6 +21,14 @@ on:
       # pull request touching only docs/specs/ matched no filter in any
       # workflow, so the one gate that could have caught it never started.
       - "docs/specs/**"
+      # tests/client_builder_contract/ runs here and exercises the client's
+      # builders. A pull request that changes only a builder is exactly the
+      # one that can break that contract, and it touches nothing above, so
+      # without these entries the gate that checks it could not be reached
+      # by it (#575). The client's own tests, docs and adapters cannot
+      # affect these tests and stay out.
+      - "clients/python/src/**"
+      - "clients/python/pyproject.toml"
   push:
     branches:
       - main
@@ -32,6 +40,8 @@ on:
       - "schemas/python/tckdb-schemas/**"
       - "integrations/mcp/**"
       - "docs/specs/**"
+      - "clients/python/src/**"
+      - "clients/python/pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -244,6 +254,16 @@ jobs:
           conda run -n tckdb_env python -m pip install --upgrade pip
           conda run -n tckdb_env python -m pip install -e schemas/python/tckdb-schemas
           conda run -n tckdb_env python -m pip install -e "backend[dev]"
+          # tests/client_builder_contract/ validates tckdb-client builder
+          # payloads against the backend's upload schemas, so it needs both
+          # packages in one interpreter and lives here, not in the client
+          # job (which has no backend). Until #575 this line was missing
+          # and all nine builder contract modules skipped on every run
+          # while the gate reported green. They now fail on CI rather than
+          # skip if the import breaks (tests/_ci_dependency.py). Installed
+          # after the schemas package so the editable one satisfies the
+          # client's tckdb-schemas requirement.
+          conda run -n tckdb_env python -m pip install -e clients/python
 
       - name: Lint (ruff)
         if: matrix.gate == 'api'

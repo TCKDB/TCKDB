@@ -284,11 +284,35 @@ def test_an_api_surface_change_expects_the_client_gate_too():
         assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed), changed
 
 
-def test_a_client_change_expects_the_client_gate():
-    changed = ["clients/python/src/tckdb_client/client.py"]
-    assert gates.workflow_is_expected(_real(CLIENT_CI), changed)
-    assert not gates.workflow_is_expected(_real(BACKEND_CI), changed)
-    assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed)
+def test_a_client_source_change_expects_the_client_and_backend_gates():
+    """Client *source* also wakes the backend gate (#575).
+
+    ``backend/tests/client_builder_contract/`` validates the client's
+    builder payloads against the backend's upload schemas and runs in the
+    backend job, the only one with both packages installed. A pull request
+    that changes only a builder is the one that can break that contract, so
+    it must reach the backend gate as well as the client gate.
+    """
+    for changed in (
+        ["clients/python/src/tckdb_client/builders/species.py"],
+        ["clients/python/pyproject.toml"],
+    ):
+        assert gates.workflow_is_expected(_real(CLIENT_CI), changed), changed
+        assert gates.workflow_is_expected(_real(BACKEND_CI), changed), changed
+        assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed), changed
+
+
+def test_a_client_change_outside_its_source_expects_only_the_client_gate():
+    """The client's own tests, docs and adapters cannot affect the backend's
+    builder contract tests, so they wake the client gate alone."""
+    for changed in (
+        ["clients/python/tests/test_client.py"],
+        ["clients/python/README.md"],
+        ["clients/python/adapters/chemkin/tckdb_chemkin/normalizer.py"],
+    ):
+        assert gates.workflow_is_expected(_real(CLIENT_CI), changed), changed
+        assert not gates.workflow_is_expected(_real(BACKEND_CI), changed), changed
+        assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed), changed
 
 
 def test_a_frontend_change_expects_only_the_frontend_gate():
