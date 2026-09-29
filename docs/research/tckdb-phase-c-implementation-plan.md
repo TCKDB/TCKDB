@@ -230,6 +230,12 @@ Design.
   `backend/scripts/validation/qcschema_interchange_report.py` registered in
   `backend/scripts/paper/registry.py:37`, `docs/validation/qcschema_interchange.md`,
   and a decision record for the profile.
+  As built (C-Q4, 2026-09-29): the script reads committed fixtures
+  (`backend/tests/fixtures/qcschema/water_b3lyp_def2tzvp_psi4/`), not a
+  deposited record. It performs the import and export itself, inside a
+  transaction it rolls back. The energy of a Hessian document is not stored,
+  so the round trip asserts that the export carries none. The decisions are
+  recorded in the validation doc rather than in a decision record.
 - Non-goals: a QCArchive connector; minting thermo, statmech or frequencies
   from an energy or Hessian; a gradient table; scans, IRC, NEB or
   transition-state records; execution-environment manifests from QCSchema
@@ -573,7 +579,7 @@ beyond the profile.
 | C-Q1 adapter core | `tckdb-qcschema` package, corpus, CI step | none | none |
 | C-Q2 backend acceptance and Hessian read | corpus test, `GET /calculations/{id}/hessian`, client method, golden, parity, client bump | none | Q1 payloads |
 | C-Q3 export and round trip | `exporter.py`, CLI, pinned read fixtures | none | Q2 |
-| C-Q4 QCSchema demonstration | validation script, registry entry, validation doc, decision record | none | Q3 and the author's Psi4 run |
+| C-Q4 QCSchema demonstration | validation script, registry entry, validation doc (decisions recorded there, no separate decision record) | none | Q3 and the author's Psi4 run |
 | C-E1 schema | enums, observation columns and CHECKs, custody tables, registry, wire schema, revision | one | none |
 | C-E2 importer | `importers/thermoml/`, XSD pin, fixtures, lxml extra | none | E1 |
 | C-E3 persistence | service, identity extraction, submission and attestation, CLI | none | E1, E2 |

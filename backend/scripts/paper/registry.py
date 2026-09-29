@@ -45,6 +45,10 @@ GENERATORS: dict[str, Generator] = {
     # review-tier external-Cp-comparison demonstration.
     "experimental_cp_comparison": generators.experimental_cp_comparison,
     "thermoml_source_provenance": generators.thermoml_source_provenance,
+    # Phase C-Q4 (same plan, C1 "Demonstration"): a Psi4 Hessian through the
+    # QCSchema adapter and back, and its Psi4-vs-Gaussian measurements. Reads
+    # committed fixtures; the session only hosts a rolled-back round trip.
+    "qcschema_interchange": generators.qcschema_interchange,
     # "hessian_reanalysis": added by B4b -- see the module docstring.
 }
 

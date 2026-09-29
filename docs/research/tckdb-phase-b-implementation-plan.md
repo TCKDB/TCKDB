@@ -238,6 +238,7 @@ Design of `tckdb.deposit.v1`:
 | `SI.md:25` fixture mechanism provenance and Cantera version | `mechanism_fixture_provenance` |
 | (Phase C demonstration, not a Phase B skeleton line) computed-vs-observed Cp(T) per thermo, with every review-tier finding field | `experimental_cp_comparison` (Phase C-E4) |
 | (Phase C demonstration, not a Phase B skeleton line) ThermoML article custody: source, digest, parser/mapping versions | `thermoml_source_provenance` (Phase C-E4) |
+| (Phase C demonstration, not a Phase B skeleton line) QCSchema round trip of a Psi4 water Hessian and the Psi4-vs-Gaussian measurements, from committed fixtures | `qcschema_interchange` (Phase C-Q4) |
 
 The two ethylene rows are served by the generalised generators (every species
 with a standing selection; every species entry with more than one thermo
