@@ -11,6 +11,12 @@ resolve-or-create write path uses (``Species.inchi_key``,
 ``ChemReaction.stoichiometry_hash``, ``Literature.doi``/``isbn``, the
 software/workflow-tool release composite keys), so a ``would_reuse``
 classification matches what the importer would later resolve to.
+
+This preview is also submit's *gate*, and it is not the whole of what submit
+checks. Whether a bundle would actually be accepted is decided by rehearsing
+submit itself (``app.workflows.contribution_bundle_submit.
+rehearse_contribution_bundle_submit``); the route folds that verdict in with
+:func:`with_submit_refusal` (#577).
 """
 
 from __future__ import annotations
@@ -106,6 +112,39 @@ def dry_run_contribution_bundle(
         summary=_summarize(items, messages),
         items=items,
         messages=messages,
+    )
+
+
+def with_submit_refusal(
+    result: ContributionBundleDryRunResult,
+    *,
+    code: str,
+    message: str,
+    field: str | None,
+) -> ContributionBundleDryRunResult:
+    """Record that submit would refuse this bundle, and with what.
+
+    ``code`` and ``message`` are exactly what ``/bundles/submit`` returns
+    for the same bundle -- the caller renders them through the app's own
+    exception handler -- so a client can branch on one code across both
+    routes. The refusal makes the bundle invalid: ``bundle_valid`` answers
+    "would submit accept this?", and here it would not.
+    """
+    messages = [
+        *result.messages,
+        ContributionBundleDryRunMessage(
+            level=DryRunMessageLevel.error,
+            code=code,
+            message=message,
+            field=field,
+        ),
+    ]
+    return result.model_copy(
+        update={
+            "bundle_valid": False,
+            "messages": messages,
+            "summary": _summarize(result.items, messages),
+        }
     )
 
 

@@ -1,6 +1,7 @@
 """Hosted contribution-bundle endpoints.
 
-Exposes the v0 dry-run preview and the v0 submit/import endpoints.
+Exposes the v0 dry-run preview and the v0 submit/import endpoints. The
+dry run rehearses submit itself (#577), so the two refuse identically.
 Submit/import imports a bundle through existing thermo/kinetics upload
 workflows and creates a ``submission`` row marked unreviewed/pending
 review — see ``docs/contribution-bundles/hosted-submit-v0.md``.
@@ -8,17 +9,27 @@ review — see ``docs/contribution-bundles/hosted-submit-v0.md``.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+import json
+
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_write_db
+from app.api.errors import render_handled_exception
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.schemas.contribution_bundle_dry_run import ContributionBundleDryRunResult
 from app.schemas.contribution_bundle_submit import ContributionBundleSubmitResult
 from app.schemas.workflows.contribution_bundle import ContributionBundleV0
-from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
-from app.workflows.contribution_bundle_submit import submit_contribution_bundle
+from app.services.contribution_bundle_dry_run import (
+    dry_run_contribution_bundle,
+    with_submit_refusal,
+)
+from app.workflows.contribution_bundle_submit import (
+    rehearse_contribution_bundle_submit,
+    submit_contribution_bundle,
+)
+from app.workflows.rehearsal import discard_unflushed_writes
 
 router = APIRouter()
 
@@ -30,18 +41,53 @@ router = APIRouter()
 )
 def dry_run_bundle(
     bundle: ContributionBundleV0,
+    request: Request,
     session: Session = Depends(get_db),
     current_user: AppUser = Depends(get_current_user),
 ) -> ContributionBundleDryRunResult:
-    """Preview what a real import would do for a contribution bundle.
+    """Preview what a real import would do, and whether submit would accept it.
 
     Requires authentication (session cookie or API key). Returns a
     structured preview describing which identities would be reused,
     which would be created, and that thermo/kinetics result rows would
-    be appended. Performs only read-only queries — never mutates the
-    database, even if a request fails partway through.
+    be appended.
+
+    Then rehearses ``/bundles/submit`` for the same bundle — the same
+    function, inside a savepoint that is always rolled back — so every
+    check submit applies is applied here too. If submit would refuse the
+    bundle, the result carries that refusal as an ``error`` message with
+    submit's own ``code`` and message, and ``bundle_valid`` is false.
+    Nothing is kept: the rehearsal's writes are rolled back and this
+    session never commits.
+
+    If another deposit holds a lock the rehearsal needs, the rehearsal gives
+    way rather than delay or deadlock that deposit, and this route answers
+    ``503 dry_run_contended`` with a ``Retry-After`` header: nothing was
+    decided about the bundle, and retrying is the right response.
     """
-    return dry_run_contribution_bundle(session, bundle)
+    # Before the preview's first query can flush it: the request's own
+    # bookkeeping (``api_key.last_used_at``) would otherwise hold that row
+    # locked for the whole rehearsal. See ``discard_unflushed_writes``.
+    discard_unflushed_writes(session)
+    result = dry_run_contribution_bundle(session, bundle)
+    refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)
+    if refusal is None:
+        return result
+    rendered = render_handled_exception(request, refusal)
+    if rendered is None or rendered[0] >= 500:
+        # Not a refusal of the bundle but a failure of the server: submit
+        # would answer with this status, so the dry run does too.
+        raise refusal
+    _status, body = rendered
+    detail = body.get("detail")
+    context = body.get("context")
+    field = context.get("field") if isinstance(context, dict) else None
+    return with_submit_refusal(
+        result,
+        code=body["code"],
+        message=detail if isinstance(detail, str) else json.dumps(detail),
+        field=field if isinstance(field, str) else None,
+    )
 
 
 @router.post(

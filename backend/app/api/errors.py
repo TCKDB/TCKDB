@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import json
 import logging
 from functools import lru_cache
 from typing import Any
@@ -28,6 +30,7 @@ from app.services.idempotency import (
     IdempotencyConflict,
     InvalidIdempotencyKey,
 )
+from app.workflows.rehearsal import RehearsalContended
 
 logger = logging.getLogger(__name__)
 
@@ -704,6 +707,65 @@ def _idempotency_conflict_handler(
     return JSONResponse(status_code=409, content=body)
 
 
+def _rehearsal_contended_handler(
+    request: Request, exc: RehearsalContended
+) -> JSONResponse:
+    """503 ``dry_run_contended``: a dry run gave way to a real writer.
+
+    Only ``/bundles/dry-run`` rehearses, so only it can reach this. The
+    rehearsal met another transaction's lock and abandoned itself rather than
+    delay or deadlock that transaction (see ``app.workflows.rehearsal``). It
+    decided nothing about the bundle, so it is neither a 200 verdict nor the
+    generic ``database_unavailable``: a named, retryable 503 with the reason
+    in ``context`` and a ``Retry-After`` a client's backoff can honour.
+    """
+    logger.info(
+        "dry-run rehearsal contended on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc.reason,
+    )
+    return JSONResponse(
+        status_code=503,
+        content=error_envelope(
+            "The dry run gave way to another deposit that was writing the "
+            "same records, rather than delay it. Nothing was decided about "
+            "this bundle; retry the dry run.",
+            code="dry_run_contended",
+            context={"reason": exc.reason},
+            fallback_code="dry_run_contended",
+        ),
+        headers={"Retry-After": "1"},
+    )
+
+
+def render_handled_exception(
+    request: Request, exc: Exception
+) -> tuple[int, dict[str, Any]] | None:
+    """Render ``exc`` exactly as the app would, without raising it.
+
+    Looks the exception up in the handlers this app registered -- by MRO,
+    the way Starlette dispatches -- and returns ``(status, body)`` from the
+    handler's own response. ``None`` when no registered handler takes it
+    (it would be a bare 500).
+
+    For a route that must *report* another route's refusal rather than
+    return it: ``/bundles/dry-run`` states the refusal ``/bundles/submit``
+    would give, and rendering it through the same handler is what keeps the
+    code and the sentence identical rather than similar.
+    """
+    handlers = request.app.exception_handlers
+    handler = next(
+        (handlers[cls] for cls in type(exc).__mro__ if cls in handlers), None
+    )
+    if handler is None or inspect.iscoroutinefunction(handler):
+        # Every handler registered below is synchronous; an async one could
+        # not be awaited from a sync route, so it falls back to raising.
+        return None
+    response = handler(request, exc)
+    return response.status_code, json.loads(bytes(response.body))
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach all custom exception handlers to *app*."""
     app.add_exception_handler(StarletteHTTPException, _http_exception_handler)  # type: ignore[arg-type]
@@ -719,3 +781,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(IdempotencyConflict, _idempotency_conflict_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactIntegrityError, _artifact_integrity_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactStorageUnavailable, _artifact_storage_unavailable_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(RehearsalContended, _rehearsal_contended_handler)  # type: ignore[arg-type]

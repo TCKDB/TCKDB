@@ -55869,7 +55869,7 @@
     },
     "/api/v1/bundles/dry-run": {
       "post": {
-        "description": "Preview what a real import would do for a contribution bundle.\n\nRequires authentication (session cookie or API key). Returns a\nstructured preview describing which identities would be reused,\nwhich would be created, and that thermo/kinetics result rows would\nbe appended. Performs only read-only queries — never mutates the\ndatabase, even if a request fails partway through.",
+        "description": "Preview what a real import would do, and whether submit would accept it.\n\nRequires authentication (session cookie or API key). Returns a\nstructured preview describing which identities would be reused,\nwhich would be created, and that thermo/kinetics result rows would\nbe appended.\n\nThen rehearses ``/bundles/submit`` for the same bundle — the same\nfunction, inside a savepoint that is always rolled back — so every\ncheck submit applies is applied here too. If submit would refuse the\nbundle, the result carries that refusal as an ``error`` message with\nsubmit's own ``code`` and message, and ``bundle_valid`` is false.\nNothing is kept: the rehearsal's writes are rolled back and this\nsession never commits.\n\nIf another deposit holds a lock the rehearsal needs, the rehearsal gives\nway rather than delay or deadlock that deposit, and this route answers\n``503 dry_run_contended`` with a ``Retry-After`` header: nothing was\ndecided about the bundle, and retrying is the right response.",
         "operationId": "dry_run_bundle_api_v1_bundles_dry_run_post",
         "parameters": [
           {

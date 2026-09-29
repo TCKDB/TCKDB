@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.54.0 - 2026-09-29
+
+The producer contract now shows the enthalpy-reference rule
+(`enthalpy_reference_error`) as reached from `POST /api/v1/bundles/dry-run`
+as well as `POST /api/v1/bundles/submit` (#577). A dry run used to skip
+every check inside the thermo and kinetics upload workflows, so a bundle
+could pass it and then be refused on submit; it now rehearses submit and
+reports the refusal submit would give, with the same `code` and message,
+as an `error` entry in `messages` (and `bundle_valid: false`). No wire
+model changed.
+
+New refusal code on `POST /api/v1/bundles/dry-run` only:
+`dry_run_contended` (503, `Retry-After: 1`, `context.reason` is
+`lock_timeout` or `deadlock`). The rehearsal gives way to a concurrent
+deposit writing the same records rather than delay or deadlock it; nothing
+was decided about the bundle, so retry the dry run.
+
 ## 0.53.0 - 2026-09-29
 
 Producer contract only; no model in this package changes. The submission

@@ -27,7 +27,9 @@ already happened. Only the latter is confined to a ``SAVEPOINT``; see
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.errors import DomainError
@@ -57,7 +59,9 @@ from app.schemas.workflows.contribution_bundle import (
     BundleKind,
     ContributionBundleV0,
 )
+from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.literature_resolution import prefetch_literature_metadata
 from app.services.record_review import ReviewPolicy
 from app.services.rights import attest_from_deposit
 from app.services.submission import (
@@ -66,6 +70,7 @@ from app.services.submission import (
     mark_ingestion_succeeded,
 )
 from app.workflows.kinetics import persist_kinetics_upload
+from app.workflows.rehearsal import discard_unflushed_writes, rehearsal
 from app.workflows.thermo import persist_thermo_upload
 
 logger = logging.getLogger(__name__)
@@ -436,7 +441,66 @@ def submit_contribution_bundle(
     )
 
 
+def _literature_requests(node: object) -> Iterator[LiteratureUploadRequest]:
+    """Every literature reference anywhere in a bundle, in document order."""
+    if isinstance(node, LiteratureUploadRequest):
+        yield node
+    elif isinstance(node, BaseModel):
+        for name in type(node).model_fields:
+            yield from _literature_requests(getattr(node, name))
+    elif isinstance(node, (list, tuple)):
+        for item in node:
+            yield from _literature_requests(item)
+    elif isinstance(node, dict):
+        for item in node.values():
+            yield from _literature_requests(item)
+
+
+def rehearse_contribution_bundle_submit(
+    session: Session,
+    bundle: ContributionBundleV0,
+    *,
+    actor: AppUser,
+) -> Exception | None:
+    """Run :func:`submit_contribution_bundle` and undo it; return its refusal.
+
+    This is how ``/bundles/dry-run`` answers "will this submit?" (#577). It
+    used to answer from the read-only preview alone, which is only submit's
+    *gate*: every check inside ``persist_thermo_upload`` /
+    ``persist_kinetics_upload`` -- the enthalpy-reference rule, reference
+    resolution, ownership, role/type, reaction anchoring, database
+    constraints -- ran on submit and never on a dry run, so a bundle could
+    pass one and be refused by the other. Copying those checks into the
+    preview would give the two routes a second place to disagree, so the
+    dry run calls the very function the submit route calls, inside
+    :func:`app.workflows.rehearsal.rehearsal` -- which rolls it back,
+    refuses any attempt to publish it, and keeps it from out-waiting a real
+    submit for a lock. The guarantees and their limits are stated there.
+
+    Literature metadata is fetched *before* the rehearsal opens, so the
+    Crossref/ISBN lookup a new reference needs is not made while the
+    rehearsal holds row locks: the fetch is cached in-process
+    (``app.services.literature_metadata``), and the rehearsal's own lookup
+    then answers from the cache. A fetch that failed is not cached, so for
+    that reference the rehearsal tries again -- and holds its locks across
+    that attempt, as submit does.
+
+    :returns: ``None`` when submit would succeed, otherwise the exception it
+        raised -- rendered by the caller through the app's own handlers --
+        or the rehearsal's own contention or commit-refusal error.
+    """
+    discard_unflushed_writes(session)
+    prefetch_literature_metadata(session, _literature_requests(bundle.records))
+    try:
+        with rehearsal(session):
+            submit_contribution_bundle(session, bundle, actor=actor)
+    except Exception as exc:  # every failure is the verdict, whatever its type
+        return exc
+    return None
+
+
 __all__ = [
     "_is_blocking",  # exported for unit tests
+    "rehearse_contribution_bundle_submit",
     "submit_contribution_bundle",
 ]

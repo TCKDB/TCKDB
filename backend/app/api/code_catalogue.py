@@ -1097,6 +1097,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("domain_error", 400, Surface.generic_fallback,
             "backend/app/api/errors.py"),
+    ApiCode("dry_run_contended", 503, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "Only /bundles/dry-run, which rehearses submit inside a "
+                "rolled-back savepoint (#577). The rehearsal waits at most a "
+                "short lock_timeout for another transaction's lock and runs "
+                "with a shorter deadlock_timeout than a real submit, so when "
+                "the two collide the dry run is the one that gives way "
+                "rather than delaying or deadlocking the submit. It decided "
+                "nothing about the bundle; context.reason is lock_timeout or "
+                "deadlock, and the response carries Retry-After: 1. Left at "
+                "the Replay.may_succeed default: waiting for the other "
+                "writer to finish is exactly what clears it."
+            )),
     ApiCode("email_taken", 409, Surface.message_prefix,
             "backend/app/api/routes/auth.py",
             note=(
