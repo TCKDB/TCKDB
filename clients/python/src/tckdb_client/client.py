@@ -30,6 +30,7 @@ from tckdb_client.errors import (
     TCKDBForbiddenError,
     TCKDBHTTPError,
     TCKDBIdempotencyConflictError,
+    TCKDBUnexpectedResponseError,
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import validate_idempotency_key
@@ -402,6 +403,7 @@ class TCKDBClient:
         params: Mapping[str, Any] | None = None,
         accept: str = "application/octet-stream",
         authenticated: bool = False,
+        refuse_html: bool = False,
     ) -> bytes:
         """Perform a request whose body is *not* JSON and return it verbatim.
 
@@ -410,6 +412,14 @@ class TCKDBClient:
         and corrupt anything that is not UTF-8, so they take this path —
         the error mapping and retry behaviour are shared, only the success
         branch differs.
+
+        ``refuse_html`` is for endpoints whose success body can never be an
+        HTML page (the NDJSON and Chemkin exports): a ``text/html`` 200 there
+        is the web app answering instead of the API, and is raised as
+        :class:`TCKDBUnexpectedResponseError` rather than returned as the
+        export. Artifact downloads leave it off -- the server labels those by
+        the stored filename, so an uploaded ``.html`` file is a legitimate
+        ``text/html`` 200.
         """
 
         response = self._send(
@@ -421,6 +431,8 @@ class TCKDBClient:
             extra_headers={"Accept": accept},
         )
         if response.is_success:
+            if refuse_html and _is_html(response):
+                raise _unexpected_response_error(response, self._base_url)
             return response.content
         parsed: Any = None
         text: str | None = None
@@ -516,8 +528,15 @@ class TCKDBClient:
             text = response.text or None
 
         if response.is_success:
+            # A JSON endpoint that answered 2xx with a body that is not JSON
+            # did not answer as the API. Returning the text as ``data`` (the
+            # old behaviour) handed callers an HTML string where they index a
+            # dict, and they failed far away with a bare TypeError (#568).
+            # An empty body (204, or a 200 with no content) is still ``None``.
+            if text is not None:
+                raise _unexpected_response_error(response, self._base_url)
             return TCKDBResponse(
-                data=parsed if parsed is not None else text,
+                data=parsed,
                 status_code=response.status_code,
                 headers=dict(response.headers),
             )
@@ -4028,7 +4047,11 @@ class TCKDBClient:
         """Issue an NDJSON export and parse it one object per line."""
 
         payload = self._request_raw(
-            "GET", path, params=params, accept="application/x-ndjson"
+            "GET",
+            path,
+            params=params,
+            accept="application/x-ndjson",
+            refuse_html=True,
         )
         return _iter_ndjson(payload.decode("utf-8"))
 
@@ -4159,6 +4182,7 @@ class TCKDBClient:
             "/scientific/export/chemkin",
             json={k: v for k, v in body.items() if v is not None},
             params={"profile": profile},
+            refuse_html=True,
         )
 
 
@@ -4214,6 +4238,70 @@ def _error_body_code(response: httpx.Response) -> str | None:
         return None
     code = parsed.get("code")
     return code if isinstance(code, str) else None
+
+
+#: The API root every ``base_url`` should end in. Used only to word the
+#: hint in :func:`_unexpected_response_error`; the client never appends it.
+_API_ROOT_SUFFIX = "/api/v1"
+
+
+def _is_html(response: httpx.Response) -> bool:
+    content_type = response.headers.get("content-type", "")
+    if content_type.split(";", 1)[0].strip().lower() in {"text/html", "application/xhtml+xml"}:
+        return True
+    head = response.content[:512].lstrip().lower()
+    return head.startswith((b"<!doctype html", b"<html"))
+
+
+def _unexpected_response_error(
+    response: httpx.Response, base_url: str
+) -> TCKDBUnexpectedResponseError:
+    """Build the error for a 2xx body that is not what the endpoint returns.
+
+    Names the URL that was requested and, when the body is an HTML page and
+    ``base_url`` does not already end in ``/api/v1``, the likely cause: a
+    base URL pointing at the site root, where the web app answers every
+    path with its own page. The client does not append ``/api/v1`` itself --
+    its documented contract is that ``base_url`` *is* the API root -- so the
+    message says what to pass instead.
+    """
+
+    url = str(response.request.url)
+    method = response.request.method
+    content_type = response.headers.get("content-type") or None
+    shown_type = content_type or "no content-type"
+    if _is_html(response):
+        what = f"an HTML page ({shown_type}), not JSON"
+        if not base_url.endswith(_API_ROOT_SUFFIX):
+            hint = (
+                " The base URL must point at the API root, not the web "
+                f"site: e.g. {base_url}{_API_ROOT_SUFFIX} "
+                f"(base URL used: {base_url})."
+            )
+        else:
+            hint = (
+                " The base URL already ends in /api/v1, so something in "
+                "front of the API (a proxy or the web app) answered "
+                f"instead (base URL used: {base_url})."
+            )
+    else:
+        what = f"a body that is not JSON ({shown_type})"
+        hint = (
+            " Check that the base URL points at a TCKDB API root, e.g. "
+            f"https://host/api/v1 (base URL used: {base_url})."
+        )
+    message = (
+        f"{method} {url} returned HTTP {response.status_code} with {what}."
+        + hint
+    )
+    return TCKDBUnexpectedResponseError(
+        message,
+        url=url,
+        content_type=content_type,
+        status_code=response.status_code,
+        response_text=response.text or None,
+        headers=response.headers,
+    )
 
 
 def _iter_ndjson(payload: str) -> Iterator[JSONDict]:

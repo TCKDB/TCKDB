@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.95.0 - 2026-09-29
+
+A 2xx response that is not the API's answer now raises the new
+`TCKDBUnexpectedResponseError` instead of being returned (issue #568). Before,
+a JSON endpoint that answered 200 with a body that is not JSON handed that
+body back as a string in `data`; the usual cause is a `base_url` naming the
+site root (`https://host`) rather than the API root (`https://host/api/v1`),
+where the web app answers every path with its HTML page, and callers then
+failed later with a bare `TypeError`. The message names the request
+(`GET https://host/scientific/calculations/... returned HTTP 200 with an
+HTML page`) and, for HTML, the base URL to use instead. The client still
+does not append `/api/v1` itself: `base_url` is documented as the API root.
+
+`TCKDBUnexpectedResponseError` subclasses `TCKDBHTTPError`, so existing
+`except TCKDBHTTPError` handlers catch it; it carries `url`, `content_type`,
+`status_code`, `response_text` and `headers`, and `code` is `None` because
+no server sent one. The NDJSON and Chemkin exports refuse an HTML 200 the
+same way. `download_artifact` does not: the server labels a download by its
+stored filename, so an uploaded `.html` file is a legitimate `text/html` 200.
+An empty success body (204) is still `data=None`.
+
 ## 0.94.0 - 2026-09-29
 
 `RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL` now also covers ARC

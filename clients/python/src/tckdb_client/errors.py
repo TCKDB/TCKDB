@@ -47,6 +47,37 @@ class TCKDBHTTPError(TCKDBError):
         self.headers = dict(headers) if headers is not None else None
 
 
+class TCKDBUnexpectedResponseError(TCKDBHTTPError):
+    """A success status whose body is not what the endpoint returns.
+
+    Raised when a JSON endpoint answers 2xx with a body that does not
+    parse as JSON, or an export endpoint answers 2xx with an HTML page.
+    The usual cause is a ``base_url`` that points at the site root
+    (``https://host``) instead of the API root (``https://host/api/v1``):
+    the web app's single-page fallback then answers every path with its
+    ``index.html`` and a 200. Before this existed the client handed that
+    HTML back as the response data, and the caller failed later with an
+    unrelated ``TypeError``.
+
+    A subclass of :class:`TCKDBHTTPError` so every existing
+    ``except TCKDBHTTPError`` handler already catches it. ``code`` stays
+    ``None``: it is reserved for codes the *server* sent, and no TCKDB
+    server sent this body.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        url: str | None = None,
+        content_type: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(message, **kwargs)
+        self.url = url
+        self.content_type = content_type
+
+
 class TCKDBAuthenticationError(TCKDBHTTPError):
     """401 — missing or invalid API key."""
 
@@ -72,6 +103,7 @@ __all__ = [
     "TCKDBConnectionError",
     "TCKDBPaginationError",
     "TCKDBHTTPError",
+    "TCKDBUnexpectedResponseError",
     "TCKDBAuthenticationError",
     "TCKDBForbiddenError",
     "TCKDBValidationError",
