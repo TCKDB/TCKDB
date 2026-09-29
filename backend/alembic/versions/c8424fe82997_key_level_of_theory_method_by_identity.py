@@ -293,8 +293,9 @@ def downgrade() -> None:
     if groups:
         print(
             f"level_of_theory downgrade: {len(groups)} group(s) of rows share one "
-            "pre-#585 hash (the same method in two cases); one row per group took "
-            "it and the others kept their current hash."
+            "pre-#585 hash (rows this revision moved onto a shared key, or "
+            "spellings left over from #582); one row per group took it and the "
+            "others kept their current hash."
         )
     for ref in blocked:
         print(f"  {ref} NOT re-hashed: a merged row already holds its pre-#585 hash.")

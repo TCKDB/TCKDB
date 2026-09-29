@@ -162,8 +162,10 @@ class Group:
     def blockers(self) -> list[str]:
         if self.holder is None:
             return [
-                "no row holds the identity-keyed hash; apply Alembic revision "
-                "38b06819f099 first"
+                "no unmerged row holds the identity-keyed hash: revisions "
+                "38b06819f099 / c8424fe82997 may not be applied, or the holder "
+                "is a merged row or was left un-re-hashed (see the upgrade's "
+                "'NOT re-hashed' lines); resolve by hand"
             ]
         return [
             f"{d.row.public_ref}: {reason}"

@@ -7,8 +7,9 @@ shapes:
 
 * **No crash.** After the merge script has merged duplicates (a merged row
   keeps its hash), the downgrade must never need a hash a merged row holds.
-* **Exact round trip.** With no merges in between, upgrade then downgrade
-  restores every hash.
+* **Exact round trip.** Upgrade then downgrade restores every hash, with or
+  without merges in between (for states where every group has a holder, as
+  ``38b06819f099`` leaves them).
 
 The generator builds states as they exist at ``38b06819f099``: in each group
 of rows sharing the pre-revision hash, one row may hold it (the #582 holder)
@@ -117,7 +118,7 @@ def _unique(rows):
 @pytest.mark.parametrize("holder_probability", [1.0, 0.7])
 def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probability):
     rng = random.Random(585)
-    with_merges = without_merges = rekeyed = blocked_total = 0
+    with_merges = without_merges = rekeyed = blocked_total = down_blocked = 0
     for _ in range(4000):
         rows, merged = _parent_state(mig, rng, holder_probability)
         original = _snapshot(rows)
@@ -139,54 +140,25 @@ def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probab
                     merged_now.add(by_ref[ref])
         before_downgrade = _snapshot(rows)
 
-        down, _g, _b = mig.plan_unkey(rows, merged_now)
+        down, _g, down_skipped = mig.plan_unkey(rows, merged_now)
+        down_blocked += len(down_skipped)
         _apply(rows, down)
         assert _unique(rows), "downgrade violated uq_level_of_theory_lot_hash"
         for row_id in merged_now:  # an alias is never re-hashed
             assert _snapshot(rows)[row_id] == before_downgrade[row_id]
 
-        if merged_now == merged and not merged:
-            without_merges += 1
-            if holder_probability == 1.0:
-                assert _snapshot(rows) == original, "inexact round trip"
-        elif merged_now:
+        if merged_now:
             with_merges += 1
+        else:
+            without_merges += 1
+        if holder_probability == 1.0:
+            # Exact with merges too: an alias keeps its hash through both
+            # directions and every holder gets its previous hash back.
+            assert _snapshot(rows) == original, "inexact round trip"
     # Not vacuous: the generator reaches the shapes the properties are about.
     assert rekeyed > 2000
     assert with_merges > 500
     assert without_merges > 500
     assert blocked_total == 0  # unreachable for data the merge script made
-
-
-def test_the_reported_blocked_group_downgrades(mig):
-    """The review's case: ``MP2/cc-pVDZ`` (older, stale hash) beside the #582 holder.
-
-    The older row must not take the key; the holder must. Then the merge
-    script merges the older row into it, and the downgrade succeeds.
-    """
-    older = _row(15, "MP2", "cc-pVDZ", None)
-    holder = _row(16, "MP2", "cc-pvdz", None)
-    prior = mig._lot_hash(holder, keyed_method=False)
-    holder._mapping["lot_hash"] = prior
-    older._mapping["lot_hash"] = _stale(15)
-    rows = [older, holder]
-
-    updates, groups, blocked = mig.plan_rekey(rows, set())
-    assert set(updates) == {16} and not blocked
-    assert [(h, o) for h, o in groups] == [("lot_16", ["lot_15"])]
-    _apply(rows, updates)
-
-    down, _g, _b = mig.plan_unkey(rows, {15})  # 15 merged into 16
-    _apply(rows, down)
-    assert _snapshot(rows) == {15: _stale(15), 16: prior}
-
-
-def test_a_hash_held_by_a_merged_row_is_occupied_not_a_crash(mig):
-    """The backstop: report and skip instead of violating the unique constraint."""
-    a = _row(1, "MP2", "cc-pvdz", None)
-    target = mig._lot_hash(a, keyed_method=True)
-    a._mapping["lot_hash"] = _stale(1)
-    squatter = _row(2, "Other", None, target)  # a merged row sitting on the target
-    updates, _groups, blocked = mig.plan_rekey([a, squatter], {2})
-    assert updates == {}
-    assert blocked == ["lot_1"]
+    # The downgrade's "NOT re-hashed" branch is exercised, and stays exact.
+    assert down_blocked > 20

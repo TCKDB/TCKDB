@@ -29,8 +29,12 @@ from app.db.models.level_of_theory import LevelOfTheory
 
 #: Edge whitespace, stripped in SQL to mirror ``str.strip`` in Python.
 #:
-#: Known divergences between the SQL key and the Python key (no real method or
-#: basis name is affected, and each errs toward "no match", never a false one):
+#: Known divergences between the SQL key and the Python key. No real method
+#: or basis name is affected, but they are not all harmless misses: a divergence
+#: can also match spuriously. A stored name with a capital I with a dot above
+#: is keyed in SQL to a plain ``i`` (so it matches a request spelled with ``i``),
+#: and a stored double capital sigma matches the request of two small sigmas,
+#: where Python's key would treat them as different.
 #:
 #: * Whitespace. ``LevelOfTheoryRef`` strips values on the wire, so every row
 #:   written through the API has none at its edges and the two agree. Rows that

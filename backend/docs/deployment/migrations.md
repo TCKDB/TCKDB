@@ -183,6 +183,24 @@ The expected recovery path for a failed deploy is:
 3. Re-deploy the previous application version.
 4. Investigate.
 
+**Rolling back the level-of-theory re-key (`c8424fe82997`) after a merge.**
+While the old code runs after the downgrade, an upload of a merged spelling
+hashes to the merged row and lands on it. Re-upgrading then reports stranded
+calculations (the guard revision's printed count), and the merge script does
+not move them. After re-upgrading and **before** the dry run, repoint them:
+
+```sql
+UPDATE calculation c
+   SET lot_id = m.into_lot_id
+  FROM level_of_theory_merge m
+ WHERE c.lot_id = m.merged_lot_id
+   AND NOT tckdb_record_is_accepted(CAST('calculation' AS submission_record_type), c.id);
+```
+
+Approved calculations are skipped by that statement (the accepted-science guard
+forbids changing them); any that remain on a merged row have to be handled by
+hand, with a declared accepted-science repair.
+
 Use `alembic downgrade` only for narrow, well-understood schema-only changes and only when you accept the data-loss surface.
 
 ---
