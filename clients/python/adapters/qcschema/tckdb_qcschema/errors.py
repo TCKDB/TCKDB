@@ -204,6 +204,18 @@ E_SCAN_PARENT_OPT_REQUIRED = "scan_parent_opt_required"
 #: drive matches the optimization's ``final_molecule`` geometry.
 E_SCAN_PARENT_MISMATCH = "scan_parent_mismatch"
 
+#: The ``--parent-opt`` document is already deposited (its raw sha256 is on
+#: an artifact). A torsion-drive import posts the parent again as the
+#: conformer's ``opt`` -- the computed-species bundle cannot point at a
+#: conformer an earlier upload created -- so importing a second rotor on its
+#: own would store the optimization twice. Import every drive from the same
+#: optimization together (``import d1.json d2.json --parent-opt opt.json``).
+E_SCAN_PARENT_ALREADY_IMPORTED = "scan_parent_already_imported"
+
+#: Several files were given to one import, but not all are torsion drives.
+#: Only drives sharing one ``--parent-opt`` are imported together.
+E_MULTIPLE_DOCUMENTS_UNSUPPORTED = "multiple_documents_unsupported"
+
 #: The drive's grid does not hold together: a grid key that is not one
 #: number per dihedral, ``grid_spacing`` or ``dihedral_ranges`` whose
 #: length is not the number of dihedrals, a grid point with a final

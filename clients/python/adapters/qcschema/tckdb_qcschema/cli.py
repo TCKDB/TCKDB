@@ -6,7 +6,7 @@
 
     tckdb-qcschema report result.json [--smiles O] [--json]
 
-    tckdb-qcschema import torsiondrive.json --parent-opt opt.json [--smiles OO] \
+    tckdb-qcschema import drive.json [drive2.json ...] --parent-opt opt.json [--smiles OO] \
         [--upload | --dry-run] [--allow-duplicate] [--json]
 
     tckdb-qcschema report result.json [--smiles O] [--json]
@@ -22,7 +22,10 @@ and refuses.
 A ``TorsionDriveResult`` (QCSchema's scan) is imported together with the
 ``OptimizationResult`` it started from (``--parent-opt``): TCKDB attaches a
 scan to a conformer, and the conformer is anchored by that optimization.
-Both go up as one ``POST /uploads/computed-species`` bundle -- see
+Every drive from one optimization (one per rotor, say) is named in the
+same import; they all go up with it as one ``POST /uploads/computed-species``
+bundle, because a later bundle could not reach the conformer this one
+creates and would store the optimization twice -- see
 :mod:`tckdb_qcschema.scan`. ``export`` of a stored ``scan`` produces a v2
 ``TorsionDriveResult`` when the scan is one, with what was not carried
 listed in ``extras.tckdb.export_report`` -- see
@@ -58,15 +61,20 @@ _PARENT_OPT_HELP = (
 )
 
 
+_FILE_HELP = (
+    "Path to a QCSchema AtomicResult/OptimizationResult/TorsionDriveResult "
+    "JSON file. Several TorsionDriveResult files may be given together: "
+    "every drive that started from the same --parent-opt goes up in one "
+    "bundle."
+)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="tckdb-qcschema")
     sub = p.add_subparsers(dest="command", required=True)
 
     imp = sub.add_parser("import", help="Map a QCSchema document and (optionally) upload it.")
-    imp.add_argument(
-        "file",
-        help="Path to a QCSchema AtomicResult/OptimizationResult/TorsionDriveResult JSON file.",
-    )
+    imp.add_argument("file", nargs="+", help=_FILE_HELP)
     imp.add_argument("--smiles", help="Depositor-declared identity SMILES (source=depositor_declared).")
     imp.add_argument("--parent-opt", help=_PARENT_OPT_HELP)
     imp.add_argument(
@@ -89,10 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--json", action="store_true", help="Emit machine-readable JSON to stdout.")
 
     rep = sub.add_parser("report", help="Read + map only; print the mapping report. Never touches the network.")
-    rep.add_argument(
-        "file",
-        help="Path to a QCSchema AtomicResult/OptimizationResult/TorsionDriveResult JSON file.",
-    )
+    rep.add_argument("file", nargs="+", help=_FILE_HELP)
     rep.add_argument("--smiles", help="Depositor-declared identity SMILES (source=depositor_declared).")
     rep.add_argument("--parent-opt", help=_PARENT_OPT_HELP)
     rep.add_argument(
@@ -148,9 +153,11 @@ def _map_file(path: Path, *, smiles: str | None, species_entry_kind: str):
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
-    path = Path(args.file)
+    path = Path(args.file[0])
     if _is_torsion_drive(path):
         return _cmd_report_scan(args)
+    if len(args.file) > 1:
+        return _emit_error(_several_non_drives(), as_json=args.json)
     if args.parent_opt:
         return _emit_error(_parent_opt_misused(), as_json=args.json)
     try:
@@ -204,9 +211,11 @@ def _emit_client_error(exc: Exception, *, as_json: bool) -> int:
 
 
 def _cmd_import(args: argparse.Namespace) -> int:
-    path = Path(args.file)
+    path = Path(args.file[0])
     if _is_torsion_drive(path):
         return _cmd_import_scan(args)
+    if len(args.file) > 1:
+        return _emit_error(_several_non_drives(), as_json=args.json)
     if args.parent_opt:
         return _emit_error(_parent_opt_misused(), as_json=args.json)
     try:
@@ -357,13 +366,27 @@ def _parent_opt_misused() -> QCSchemaAdapterError:
     )
 
 
-def _map_scan_file(args: argparse.Namespace):
-    from .scan import build_scan_bundle_payload
+def _several_non_drives() -> QCSchemaAdapterError:
+    from .errors import E_MULTIPLE_DOCUMENTS_UNSUPPORTED
 
-    path = Path(args.file)
-    raw_bytes = path.read_bytes()
-    record = read_document(raw_bytes)
-    raw_sha256 = sha256_bytes(raw_bytes)
+    return QCSchemaAdapterError(
+        E_MULTIPLE_DOCUMENTS_UNSUPPORTED,
+        "several files were given, but only TorsionDriveResult documents "
+        "sharing one --parent-opt are imported together; import any other "
+        "document on its own.",
+    )
+
+
+def _map_scan_file(args: argparse.Namespace):
+    from .scan import DriveDocument, build_scan_bundle_payload
+
+    documents = []
+    for name in args.file:
+        path = Path(name)
+        raw = path.read_bytes()
+        documents.append(DriveDocument(read_document(raw), raw, f"{path.stem}.qcschema.json", sha256_bytes(raw)))
+    first, *additional = documents
+    record, raw_bytes, raw_sha256 = first.record, first.raw_bytes, first.sha256
     parent_record = parent_raw = parent_sha = parent_path = None
     if args.parent_opt:
         parent_path = Path(args.parent_opt)
@@ -373,7 +396,7 @@ def _map_scan_file(args: argparse.Namespace):
     bundle = build_scan_bundle_payload(
         record,
         raw_bytes=raw_bytes,
-        raw_artifact_filename=f"{path.stem}.qcschema.json",
+        raw_artifact_filename=first.filename,
         raw_artifact_sha256=raw_sha256,
         parent_record=parent_record,
         parent_raw_bytes=parent_raw,
@@ -381,22 +404,39 @@ def _map_scan_file(args: argparse.Namespace):
         parent_artifact_sha256=parent_sha,
         declared_smiles=args.smiles,
         species_entry_kind=StationaryPointKind(args.species_entry_kind),
+        additional_drives=additional,
     )
-    return raw_bytes, raw_sha256, record, parent_raw, parent_sha, parent_record, bundle
+    return documents, parent_raw, parent_sha, parent_record, bundle
 
 
-def _scan_summary(record, raw_sha256, parent_record, bundle) -> dict:
+def _scan_summary(documents, parent_record, bundle) -> dict:
+    """The first drive at the top level; every drive under ``drives``."""
+    drives = [
+        {
+            "file": document.filename,
+            "family": document.record.family,
+            "canonical_document_sha256": document.record.canonical_sha256,
+            "raw_sha256": document.sha256,
+            "calculation_key": mapped.key,
+            "dimension": mapped.dimension,
+            "point_count": mapped.point_count,
+            "mapping_report": mapped.report.to_dict(),
+        }
+        for document, mapped in zip(documents, bundle.drives, strict=True)
+    ]
+    first = drives[0]
     return {
-        "family": record.family,
-        "record_kind": record.record_kind,
-        "canonical_document_sha256": record.canonical_sha256,
-        "raw_sha256": raw_sha256,
+        "family": first["family"],
+        "record_kind": "torsion_drive",
+        "canonical_document_sha256": first["canonical_document_sha256"],
+        "raw_sha256": first["raw_sha256"],
         "parent_opt_canonical_document_sha256": parent_record.canonical_sha256,
         "calculation_type": "scan",
-        "dimension": bundle.dimension,
-        "point_count": bundle.point_count,
-        "mapping_report": bundle.report.to_dict(),
+        "dimension": first["dimension"],
+        "point_count": first["point_count"],
+        "mapping_report": first["mapping_report"],
         "parent_opt_mapping_report": bundle.parent_report.to_dict(),
+        "drives": drives,
     }
 
 
@@ -408,16 +448,18 @@ def _print_scan_summary(result: dict) -> None:
     )
     print(f"canonical_document_sha256={result['canonical_document_sha256']}")
     print(f"parent_opt_canonical_document_sha256={result['parent_opt_canonical_document_sha256']}")
-    for bucket, paths in result["mapping_report"].items():
-        print(f"  {bucket}: {', '.join(paths) if paths else '(none)'}")
+    for drive in result["drives"]:
+        print(f"drive {drive['file']}: dimension={drive['dimension']} points={drive['point_count']}")
+        for bucket, paths in drive["mapping_report"].items():
+            print(f"  {bucket}: {', '.join(paths) if paths else '(none)'}")
 
 
 def _cmd_report_scan(args: argparse.Namespace) -> int:
     try:
-        _raw, raw_sha256, record, _praw, _psha, parent_record, bundle = _map_scan_file(args)
+        documents, _praw, _psha, parent_record, bundle = _map_scan_file(args)
     except QCSchemaAdapterError as exc:
         return _emit_error(exc, as_json=args.json)
-    result = _scan_summary(record, raw_sha256, parent_record, bundle)
+    result = _scan_summary(documents, parent_record, bundle)
     if args.json:
         print(json.dumps(result, indent=2))
     else:
@@ -427,7 +469,7 @@ def _cmd_report_scan(args: argparse.Namespace) -> int:
 
 def _cmd_import_scan(args: argparse.Namespace) -> int:
     try:
-        raw, raw_sha256, record, parent_raw, parent_sha, parent_record, bundle = _map_scan_file(args)
+        documents, parent_raw, parent_sha, parent_record, bundle = _map_scan_file(args)
     except QCSchemaAdapterError as exc:
         return _emit_error(exc, as_json=args.json)
 
@@ -436,15 +478,17 @@ def _cmd_import_scan(args: argparse.Namespace) -> int:
 
     from .uploader import upload_scan_bundle  # lazy: report/map stay client-free
 
+    first, *additional = documents
     upload_kwargs = dict(
-        record=record,
+        record=first.record,
         parent_record=parent_record,
         payload=bundle.payload,
-        raw_bytes=raw,
-        raw_sha256=raw_sha256,
+        raw_bytes=first.raw_bytes,
+        raw_sha256=first.sha256,
         parent_raw_bytes=parent_raw,
         parent_raw_sha256=parent_sha,
         allow_duplicate=args.allow_duplicate,
+        additional_drives=[(d.record, d.raw_bytes, d.sha256) for d in additional],
     )
     if args.dry_run:
         try:
@@ -454,7 +498,7 @@ def _cmd_import_scan(args: argparse.Namespace) -> int:
         if args.json:
             print(json.dumps(outcome, indent=2))
         else:
-            print("DRY RUN: would POST a computed-species bundle (opt + scan)")
+            print(f"DRY RUN: would POST a computed-species bundle (opt + {outcome['drive_count']} scan(s))")
             print(f"  computed-species key: {outcome['computed_species_idempotency_key']}")
         return 0
 
@@ -475,7 +519,7 @@ def _cmd_import_scan(args: argparse.Namespace) -> int:
         return _emit_client_error(exc, as_json=args.json)
 
     result = {
-        "scan_calculation_id": outcome.scan_calculation_id,
+        "scan_calculation_ids": outcome.scan_calculation_ids,
         "opt_calculation_id": outcome.opt_calculation_id,
         "replayed": outcome.replayed,
     }

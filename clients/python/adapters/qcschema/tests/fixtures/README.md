@@ -94,9 +94,19 @@ reads depends on it.
   hydrogen trioxide at 120 degrees, stopped by hand after 2 h and 30 min).
   Any spacing that divides 180 keeps the two grids identical.
 
+- **`torsiondrive_rotor1_v2`**, **`torsiondrive_rotor2_v2`** -- two 1-D
+  drives from the *same* committed optimization,
+  `torsiondrive_2d_parent_opt_v2`: H-O-O-O (0, 1, 2, 3) and O-O-O-H
+  (1, 2, 3, 4), each at 90 degrees (4 points), `scan_results: lowest`,
+  trajectory `final`. The two-rotor case: both go up in one bundle with
+  one `opt` (`backend/tests/fixtures/qcschema_scan/torsiondrive_two_rotors_v2`).
+
 Each drive's `meta.json` names its `parent_opt_case`; the corpus test maps
 the pair with `tckdb_qcschema.scan.build_scan_bundle_payload` and pins the
-exact point count, every energy (exact) and every coordinate value (exact).
+exact point count, every energy (exact), every coordinate value (exact)
+and each coordinate's 1-based atom quartet (`coordinate_atoms`); it also
+recomputes every stored value from the stored geometry over the stored
+atoms.
 
 Hand-derived torsion-drive refusals (one documented edit each, re-validated
 with qcelemental; `meta.json["edit"]` states it). To keep them small, the v2
@@ -214,11 +224,23 @@ conda run -n tckdb_qcschema_psi4 python gen_hand_fixtures.py <tmp_raw_dir> <tmp_
 python finalize_fixtures.py   # assembles tests/fixtures/<case>/{document.json,meta.json}
 ```
 
-The torsion-drive cases came from two more one-off scripts of the same kind
-(`gen_scan.py` for hydrogen peroxide, `gen_scan2d_hoooh.py` for the patched 2-D
-run, then a finalize step for the hand-derived edits), described above.
+The torsion-drive raw documents come from a committed script,
+`scripts/generate_torsiondrive_fixtures.py`, which carries the exact
+one-line qcengine change the 2-D drive needs (as a monkeypatch of
+`TorsionDriveProcedure._spawn_optimization`) and the exact molecules,
+keywords and grids of every drive here (checked: its starting geometries
+and specifications match the committed documents'). A rerun reproduces the
+calculations, not the bytes: `provenance.wall_time`/`hostname`/`username`
+differ per run. The hand-derived torsion-drive edits are the ones stated in
+each `meta.json["edit"]`.
 
-(The three generator scripts are not committed to the repo — they are
+```
+conda run -n tckdb_qcschema_psi4 python \
+    clients/python/adapters/qcschema/scripts/generate_torsiondrive_fixtures.py <tmp_raw_dir> \
+    [--only h2o2 hoooh hoooh_rotors]
+```
+
+(The three generator scripts for the other cases are not committed to the repo — they are
 one-off corpus-authoring tools, not part of the adapter or its test
 suite. Regenerating the corpus means recreating them from this README's
 description, or asking for them again.)

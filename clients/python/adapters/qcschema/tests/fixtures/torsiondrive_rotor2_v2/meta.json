@@ -3,18 +3,26 @@
   "expected": "scan",
   "family": "v2",
   "driver": null,
-  "generator": "psi4-via-qcengine",
+  "generator": "psi4-via-qcengine (scripts/generate_torsiondrive_fixtures.py --only hoooh_rotors)",
   "psi4": "1.11",
   "qcengine": "0.51.0",
   "qcelemental": "0.51.2",
   "geometric": "1.1.1",
   "torsiondrive": "1.2.0",
   "level": "hf/sto-3g",
-  "molecule": "hydrogen peroxide",
-  "smiles_arg": "OO",
-  "parent_opt_case": "torsiondrive_parent_opt_v2",
+  "molecule": "hydrogen trioxide, 1-D drive of O-O-O-H (1, 2, 3, 4) at 90 degrees",
+  "smiles_arg": "OOO",
+  "parent_opt_case": "torsiondrive_2d_parent_opt_v2",
   "pins": {
     "dimension": 1,
+    "coordinate_atoms": [
+      [
+        2,
+        3,
+        4,
+        5
+      ]
+    ],
     "point_count": 4,
     "points": [
       {
@@ -22,38 +30,30 @@
         "coordinate_values": [
           -90.0
         ],
-        "electronic_energy_hartree": -148.76416544459573
+        "electronic_energy_hartree": -222.5770349806749
       },
       {
         "grid_key": "0",
         "coordinate_values": [
           0.0
         ],
-        "electronic_energy_hartree": -148.75056290180424
+        "electronic_energy_hartree": -222.5718365814159
       },
       {
         "grid_key": "90",
         "coordinate_values": [
           90.0
         ],
-        "electronic_energy_hartree": -148.76416544456302
+        "electronic_energy_hartree": -222.5806096708923
       },
       {
         "grid_key": "180",
         "coordinate_values": [
           180.0
         ],
-        "electronic_energy_hartree": -148.7650133699291
+        "electronic_energy_hartree": -222.57580306326122
       }
-    ],
-    "coordinate_atoms": [
-      [
-        3,
-        1,
-        2,
-        4
-      ]
     ]
   },
-  "raw_sha256": "e0d5754f87e2ba1ec9d6c40fb9823ac5a45faf9d6a5587a786105754fc59c4b6"
+  "raw_sha256": "568cc62bce195d1876a42d185e09b94380d65e4b78f2dec142d4b6902db78b81"
 }

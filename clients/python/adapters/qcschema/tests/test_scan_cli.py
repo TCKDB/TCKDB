@@ -12,17 +12,21 @@ import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
 from tckdb_qcschema.cli import main
 from tckdb_qcschema.reader import read_document
-from tckdb_qcschema.uploader import scan_bundle_idempotency_key
+from tckdb_qcschema.uploader import scan_bundle_idempotency_key, sha256_bytes
 
 FIXTURES = Path(__file__).parent / "fixtures"
 TD = FIXTURES / "torsiondrive_v2" / "document.json"
 PARENT = FIXTURES / "torsiondrive_parent_opt_v2" / "document.json"
 ENERGY = FIXTURES / "energy_v1" / "document.json"
+ROTOR1 = FIXTURES / "torsiondrive_rotor1_v2" / "document.json"
+ROTOR2 = FIXTURES / "torsiondrive_rotor2_v2" / "document.json"
+PARENT_3 = FIXTURES / "torsiondrive_2d_parent_opt_v2" / "document.json"
 
 
 def _one_line(stderr: str) -> str:
@@ -62,7 +66,27 @@ def test_scan_dry_run_names_the_bundle_key(capsys) -> None:
         read_document(TD.read_bytes()).canonical_sha256,
         read_document(PARENT.read_bytes()).canonical_sha256,
     )
-    assert out == {"computed_species_idempotency_key": expected, "calculation_type": "scan"}
+    assert out == {"computed_species_idempotency_key": expected, "calculation_type": "scan", "drive_count": 1}
+
+
+def test_two_rotor_dry_run_is_one_bundle_over_all_three_documents(capsys) -> None:
+    rc = main(
+        ["import", str(ROTOR1), str(ROTOR2), "--parent-opt", str(PARENT_3), "--smiles", "OOO", "--dry-run", "--json"]
+    )
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    expected = scan_bundle_idempotency_key(
+        read_document(ROTOR1.read_bytes()).canonical_sha256,
+        read_document(PARENT_3.read_bytes()).canonical_sha256,
+        additional_canonical_sha256s=[read_document(ROTOR2.read_bytes()).canonical_sha256],
+    )
+    assert out == {"computed_species_idempotency_key": expected, "calculation_type": "scan", "drive_count": 2}
+
+
+def test_several_documents_that_are_not_drives_are_refused(capsys) -> None:
+    rc = main(["report", str(ENERGY), str(ENERGY), "--smiles", "O"])
+    assert rc == 2
+    assert _one_line(capsys.readouterr().err).startswith("REFUSED [multiple_documents_unsupported]:")
 
 
 @pytest.mark.parametrize(
@@ -84,21 +108,11 @@ def test_missing_base_url_is_one_error_line(argv, capsys, monkeypatch) -> None:
 
 
 @pytest.fixture
-def api() -> Iterator[tuple[str, list]]:
+def api() -> Iterator[tuple[str, list, set]]:
+    """A local API: the artifact search finds any sha256 in ``deposited``;
+    a bundle POST answers with ids 11 (the opt), 12, 13, ... (the scans)."""
     requests: list[tuple[str, str, dict | None, str | None]] = []
-    response = {
-        "species_entry_id": 1,
-        "submission_id": 1,
-        "conformers": [
-            {
-                "key": "qcschema_conformer",
-                "primary_calculation": {"key": "qcschema_opt", "calculation_id": 11, "type": "opt", "role": "primary"},
-                "additional_calculations": [
-                    {"key": "qcschema_scan", "calculation_id": 12, "type": "scan", "role": "additional"}
-                ],
-            }
-        ],
-    }
+    deposited: set[str] = set()
 
     class Handler(BaseHTTPRequestHandler):
         def _reply(self, body: dict, status: int = 200) -> None:
@@ -111,33 +125,57 @@ def api() -> Iterator[tuple[str, list]]:
 
         def do_GET(self):  # noqa: N802
             requests.append(("GET", self.path, None, None))
-            self._reply({"records": []})
+            sha = parse_qs(urlsplit(self.path).query).get("sha256", [""])[0]
+            records = [{"calculation": {"calculation_id": 7}}] if sha in deposited else []
+            self._reply({"records": records})
 
         def do_POST(self):  # noqa: N802
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length))
             requests.append(("POST", self.path, body, self.headers.get("Idempotency-Key")))
-            self._reply(response, 201)
+            conformer = body["conformers"][0]
+            self._reply(
+                {
+                    "species_entry_id": 1,
+                    "submission_id": 1,
+                    "conformers": [
+                        {
+                            "key": conformer["key"],
+                            "primary_calculation": {
+                                "key": conformer["primary_calculation"]["key"],
+                                "calculation_id": 11,
+                                "type": "opt",
+                                "role": "primary",
+                            },
+                            "additional_calculations": [
+                                {"key": c["key"], "calculation_id": 12 + i, "type": "scan", "role": "additional"}
+                                for i, c in enumerate(conformer["additional_calculations"])
+                            ],
+                        }
+                    ],
+                },
+                201,
+            )
 
         def log_message(self, *_args) -> None:
             pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{server.server_address[1]}/api/v1", requests
+    yield f"http://127.0.0.1:{server.server_address[1]}/api/v1", requests, deposited
     server.shutdown()
     server.server_close()
 
 
 def test_scan_upload_posts_one_bundle(api, capsys, monkeypatch) -> None:
-    base_url, requests = api
+    base_url, requests, _deposited = api
     monkeypatch.setenv("TCKDB_API_KEY", "tck_test_key_value_1234")
     rc = main(
         ["import", str(TD), "--parent-opt", str(PARENT), "--smiles", "OO", "--upload", "--base-url", base_url, "--json"]
     )
     assert rc == 0, capsys.readouterr().err
     assert json.loads(capsys.readouterr().out) == {
-        "scan_calculation_id": 12,
+        "scan_calculation_ids": [12],
         "opt_calculation_id": 11,
         "replayed": False,
     }
@@ -151,3 +189,57 @@ def test_scan_upload_posts_one_bundle(api, capsys, monkeypatch) -> None:
     assert key.endswith(":computed-species")
     (scan_calc,) = body["conformers"][0]["additional_calculations"]
     assert len(scan_calc["scan_result"]["points"]) == 4
+
+
+def test_two_rotors_go_up_in_one_bundle_with_one_opt(api, capsys, monkeypatch) -> None:
+    """Review finding: a second rotor imported on its own posts its parent
+    again. Imported together, the parent is one opt and each rotor a scan
+    hanging off it."""
+    base_url, requests, _deposited = api
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test_key_value_1234")
+    rc = main(
+        ["import", str(ROTOR1), str(ROTOR2), "--parent-opt", str(PARENT_3), "--smiles", "OOO",
+         "--upload", "--base-url", base_url, "--json"]
+    )
+    assert rc == 0, capsys.readouterr().err
+    assert json.loads(capsys.readouterr().out) == {
+        "scan_calculation_ids": [12, 13],
+        "opt_calculation_id": 11,
+        "replayed": False,
+    }
+    gets = [r for r in requests if r[0] == "GET"]
+    posts = [r for r in requests if r[0] == "POST"]
+    assert len(gets) == 3  # both drives and the parent
+    assert len(posts) == 1
+    conformer = posts[0][2]["conformers"][0]
+    opt_key = conformer["primary_calculation"]["key"]
+    assert conformer["primary_calculation"]["type"] == "opt"
+    assert [c["key"] for c in conformer["additional_calculations"]] == ["qcschema_scan", "qcschema_scan_2"]
+    for scan_calc, atoms in zip(conformer["additional_calculations"], ([1, 2, 3, 4], [2, 3, 4, 5]), strict=True):
+        assert scan_calc["type"] == "scan"
+        assert scan_calc["depends_on"] == [{"parent_calculation_key": opt_key, "role": "scan_parent"}]
+        (coordinate,) = scan_calc["scan_result"]["coordinates"]
+        assert [coordinate[f"atom{i}_index"] for i in range(1, 5)] == atoms
+        assert len(scan_calc["scan_result"]["points"]) == 4
+    assert [a["sha256"] for c in conformer["additional_calculations"] for a in c["artifacts"]] == [
+        sha256_bytes(ROTOR1.read_bytes()),
+        sha256_bytes(ROTOR2.read_bytes()),
+    ]
+
+
+def test_a_second_rotor_alone_is_refused_without_suggesting_a_duplicate(api, capsys, monkeypatch) -> None:
+    """The first rotor and its parent are already deposited. Importing the
+    second rotor alone would post the parent again; the refusal says to
+    import the drives together and does not suggest --allow-duplicate."""
+    base_url, requests, deposited = api
+    deposited.update({sha256_bytes(ROTOR1.read_bytes()), sha256_bytes(PARENT_3.read_bytes())})
+    monkeypatch.setenv("TCKDB_API_KEY", "tck_test_key_value_1234")
+    rc = main(
+        ["import", str(ROTOR2), "--parent-opt", str(PARENT_3), "--smiles", "OOO", "--upload", "--base-url", base_url]
+    )
+    line = _one_line(capsys.readouterr().err)
+    assert rc == 2
+    assert line.startswith("REFUSED [scan_parent_already_imported]:")
+    assert "DRIVE1.json DRIVE2.json" in line
+    assert "--allow-duplicate" not in line
+    assert not [r for r in requests if r[0] == "POST"]

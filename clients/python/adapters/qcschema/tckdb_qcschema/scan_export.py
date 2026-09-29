@@ -29,7 +29,12 @@ only when it *is* one:
   :data:`tckdb_qcschema.scan.DIHEDRAL_TOLERANCE_DEGREES`
   (``export_scan_coordinate_nonconforming``). This is ADR 0020's contract;
   the scans deposited before it store a sweep relative to the first point
-  and are refused here rather than exported under the wrong angles.
+  and are refused here rather than exported under the wrong angles. The ADR
+  0020 absolute-angle migration would fix their values, but not make them
+  exportable: their angles start at the measured dihedral (not a whole
+  degree) and a full 360-degree sweep repeats its first grid point, so they
+  would still be refused, as ``export_scan_grid_not_integral`` or
+  ``export_scan_point_incomplete``.
 
 Grid keys are torsiondrive's own grid ids (``"-90"``, ``"180,-60"``) with
 each angle wrapped into (-180, 180]; two points that wrap to the same key
@@ -332,9 +337,12 @@ def export_scan(client: Any, calculation_ref_or_id: str | int) -> tuple[dict, di
                     f"scan point {index}: coordinate {c['coordinate_index']} is "
                     f"stored as {stored!r} degrees but the point's own geometry "
                     f"holds {measured:.6f} (off by {residual:.3e}). ADR 0020 fixes "
-                    f"the stored value as the coordinate itself; this series does "
-                    f"not conform (the pre-ADR-0020 deposits hold a sweep relative "
-                    f"to the first point), so it is not exported under those angles.",
+                    f"the stored value as the coordinate itself, and this series "
+                    f"does not conform (the pre-ADR-0020 deposits hold a sweep "
+                    f"relative to the first point); it needs the ADR 0020 "
+                    f"absolute-angle migration. Even migrated, such a series "
+                    f"would still not fit a TorsionDrive: its angles are not whole "
+                    f"degrees and a full sweep repeats its first grid point.",
                     point_index=index,
                     stored=stored,
                     measured=measured,

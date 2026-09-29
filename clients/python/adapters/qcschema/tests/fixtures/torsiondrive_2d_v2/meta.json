@@ -145,6 +145,20 @@
         ],
         "electronic_energy_hartree": -222.57071326976893
       }
+    ],
+    "coordinate_atoms": [
+      [
+        1,
+        2,
+        3,
+        4
+      ],
+      [
+        2,
+        3,
+        4,
+        5
+      ]
     ]
   },
   "harness_patch": "qcengine 0.51.0 TorsionDriveProcedure._spawn_optimization splits the grid id on whitespace; torsiondrive 1.2.0 names 2-D grid points '180,-60'. The split was changed to treat commas as separators; nothing else. See tests/fixtures/README.md.",

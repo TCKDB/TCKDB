@@ -12,7 +12,7 @@ pip install -e clients/python/adapters/qcschema   # pins qcelemental==0.51.2
 ```
 tckdb-qcschema report  result.json [--smiles O]
 tckdb-qcschema import  result.json [--smiles O] [--upload | --dry-run] [--allow-duplicate]
-tckdb-qcschema import  torsiondrive.json --parent-opt opt.json [--smiles OO] [--upload | --dry-run]
+tckdb-qcschema import  drive.json [drive2.json ...] --parent-opt opt.json [--smiles OO] [--upload | --dry-run]
 tckdb-qcschema export  <calc_ref or id> [--out FILE]
 ```
 
@@ -57,6 +57,12 @@ on an integer grid, with a constrained optimization at every grid point.
   optimization trajectories have no TCKDB table; they stay in the raw
   artifact and are listed as `retained_only`. Extra optimizer constraints are
   refused.
+- **Several rotors, one import.** Name every drive that started from the
+  same optimization in one command (`import rotor1.json rotor2.json
+  --parent-opt opt.json`): the optimization is posted once and each drive
+  is a scan attached to it. Importing a second rotor on its own later is
+  refused (`scan_parent_already_imported`), because the upload would post
+  the optimization a second time.
 - **Export.** A stored scan exports as a v2 `TorsionDriveResult` when it is
   one: relaxed, every coordinate a proper dihedral, whole-degree values that
   agree with each point's stored geometry. Bond, angle and improper scans,

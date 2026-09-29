@@ -18,7 +18,12 @@ import pytest
 from tckdb_qcschema.errors import QCSchemaAdapterError
 from tckdb_qcschema.mapping import build_conformer_upload_payload
 from tckdb_qcschema.reader import read_document
-from tckdb_qcschema.scan import build_scan_bundle_payload
+from tckdb_qcschema.scan import (
+    DIHEDRAL_TOLERANCE_DEGREES,
+    build_scan_bundle_payload,
+    dihedral_degrees,
+    wrap_degrees,
+)
 from tckdb_qcschema.uploader import sha256_bytes
 from tckdb_schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
 from tckdb_schemas.workflows.conformer_upload import ConformerUploadRequest
@@ -63,6 +68,29 @@ def _map_scan_case(case: str, raw: bytes, meta: dict):
     )
 
 
+def _xyz(point: dict) -> list[list[float]]:
+    lines = point["geometry"]["xyz_text"].strip().splitlines()[2:]
+    return [[float(v) for v in line.split()[1:4]] for line in lines]
+
+
+def _assert_values_are_the_stored_geometry(case: str, stored_atoms: list, points: list) -> None:
+    """Every stored coordinate value is the dihedral its own stored geometry
+    holds over its own stored atoms (ADR 0020), recomputed here from what the
+    payload stores -- the xyz text and the 1-based quartets -- not from the
+    document. A value paired with another coordinate's atoms fails this."""
+    for point in points:
+        xyz = _xyz(point)
+        for value in point["coordinate_values"]:
+            atoms = tuple(i - 1 for i in stored_atoms[value["coordinate_index"] - 1])
+            measured = dihedral_degrees(xyz, atoms)
+            residual = wrap_degrees(measured - value["coordinate_value"])
+            assert abs(residual) <= DIHEDRAL_TOLERANCE_DEGREES, (
+                f"{case}: point {point['point_index']} coordinate {value['coordinate_index']} "
+                f"stores {value['coordinate_value']} but its geometry holds {measured:.6f} "
+                f"over atoms {stored_atoms[value['coordinate_index'] - 1]}"
+            )
+
+
 def _assert_scan_pins(case: str, meta: dict, payload: dict) -> None:
     """Exact counts and exact values: never "not empty", never approx."""
     pins = meta["pins"]
@@ -78,9 +106,15 @@ def _assert_scan_pins(case: str, meta: dict, payload: dict) -> None:
     assert scan["is_relaxed"] is True
     assert len(scan["coordinates"]) == pins["dimension"]
     assert [c["coordinate_kind"] for c in scan["coordinates"]] == ["dihedral"] * pins["dimension"]
+    stored_atoms = [
+        [c["atom1_index"], c["atom2_index"], c["atom3_index"], c["atom4_index"]]
+        for c in sorted(scan["coordinates"], key=lambda c: c["coordinate_index"])
+    ]
+    assert stored_atoms == pins["coordinate_atoms"], f"{case}: coordinate atom quartets"
     assert len(scan["points"]) == pins["point_count"], (
         f"{case}: {len(scan['points'])} points, expected exactly {pins['point_count']}"
     )
+    _assert_values_are_the_stored_geometry(case, stored_atoms, scan["points"])
     for point, pinned in zip(scan["points"], pins["points"], strict=True):
         assert point["electronic_energy_hartree"] == pinned["electronic_energy_hartree"], (
             f"{case}: point {point['point_index']} energy is not the document's own number"

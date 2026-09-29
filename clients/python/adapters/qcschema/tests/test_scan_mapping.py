@@ -27,6 +27,7 @@ from tckdb_qcschema.mapping import build_conformer_upload_payload
 from tckdb_qcschema.reader import read_document
 from tckdb_qcschema.scan import (
     DIHEDRAL_TOLERANCE_DEGREES,
+    DriveDocument,
     build_scan_bundle_payload,
     dihedral_degrees,
     parse_grid_key,
@@ -233,3 +234,66 @@ def test_near_collinear_dihedral_is_not_checkable() -> None:
     coords = [(-1, 0, 0), (0, 0, 0), (1, 0, 0), (1, 1, 0)]
     with pytest.raises(ValueError):
         dihedral_degrees(coords, (0, 1, 2, 3))
+
+
+def test_minus_180_and_180_are_one_grid_point() -> None:
+    """torsiondrive's grid is (-180, 180]: a document naming both -180 and
+    180 names one grid point twice, and would store two points for it."""
+
+    def edit(doc):
+        for block in ("final_molecules", "scan_properties", "scan_results"):
+            doc[block]["-180"] = doc[block]["180"]
+
+    assert _refusal(_edited(edit)) == E_SCAN_GRID_INVALID
+
+
+# --- several drives from one parent -----------------------------------------
+
+PARENT_3 = "torsiondrive_2d_parent_opt_v2"
+
+
+def _drive(case: str) -> DriveDocument:
+    raw = load_case(case)[0]
+    return DriveDocument(read_document(raw), raw, f"{case}.qcschema.json", sha256_bytes(raw))
+
+
+def _two_rotors(second: str = "torsiondrive_rotor2_v2"):
+    first = _drive("torsiondrive_rotor1_v2")
+    parent_raw = load_case(PARENT_3)[0]
+    return build_scan_bundle_payload(
+        first.record,
+        raw_bytes=first.raw_bytes,
+        raw_artifact_filename=first.filename,
+        raw_artifact_sha256=first.sha256,
+        parent_record=read_document(parent_raw),
+        parent_raw_bytes=parent_raw,
+        parent_artifact_filename="opt.qcschema.json",
+        parent_artifact_sha256=sha256_bytes(parent_raw),
+        declared_smiles="OOO",
+        additional_drives=[_drive(second)],
+    )
+
+
+def test_two_rotors_share_one_opt() -> None:
+    bundle = _two_rotors()
+    (conformer,) = bundle.payload["conformers"]
+    scans = conformer["additional_calculations"]
+    assert conformer["primary_calculation"]["type"] == "opt"
+    assert [s["key"] for s in scans] == ["qcschema_scan", "qcschema_scan_2"]
+    assert [d.point_count for d in bundle.drives] == [4, 4]
+    assert [s["scan_result"]["coordinates"][0]["atom1_index"] for s in scans] == [1, 2]
+    for scan, drive in zip(scans, bundle.drives, strict=True):
+        assert scan["depends_on"] == [{"parent_calculation_key": "qcschema_opt", "role": "scan_parent"}]
+        assert scan["parameters_json"]["tckdb_qcschema"]["mapping_report"] == drive.report.to_dict()
+
+
+def test_a_second_drive_from_another_parent_is_refused() -> None:
+    with pytest.raises(QCSchemaAdapterError) as excinfo:
+        _two_rotors(second=TD_V2)
+    assert excinfo.value.code == E_SCAN_PARENT_MISMATCH
+
+
+def test_the_same_drive_twice_is_refused() -> None:
+    with pytest.raises(QCSchemaAdapterError) as excinfo:
+        _two_rotors(second="torsiondrive_rotor1_v2")
+    assert excinfo.value.code == E_SCAN_GRID_INVALID

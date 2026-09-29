@@ -134,9 +134,10 @@ def test_corpus_is_not_empty() -> None:
     """Red, never vacuously green, if a fixture tree goes missing."""
     adapter = [p for p in CORPUS if p.parent.parent == FIXTURES]
     # 8 energy/gradient/hessian/optimization cases plus the 3 optimizations
-    # the torsion drives start from; and the 3 torsion drives themselves.
+    # the torsion drives start from; and the 5 torsion drives themselves
+    # (1-D v1 and v2, 2-D, and two 1-D rotors sharing the 2-D parent).
     assert len([p for p in adapter if _scan_parent(p) is None]) == 11
-    assert len([p for p in adapter if _scan_parent(p) is not None]) == 3
+    assert len([p for p in adapter if _scan_parent(p) is not None]) == 5
     assert len([p for p in CORPUS if p.parent.parent == BACKEND_CORPUS and p.name == "document.json"]) == 8
     for path in CORPUS:
         assert path.is_file(), path

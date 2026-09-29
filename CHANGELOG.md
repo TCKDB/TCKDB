@@ -35,6 +35,10 @@ dataset must never require a code release.
   improper and rigid scans and scans stored as a relative sweep rather than
   mislabel them. IRCs stay unsupported: qcelemental 0.51.2 has no model for
   them.
+- Several drives from one optimization (one per rotor) are imported together
+  (`import rotor1.json rotor2.json --parent-opt opt.json`): one `opt`, one
+  `scan` per drive. A second rotor imported on its own later is refused with
+  `scan_parent_already_imported` instead of storing the optimization twice.
 - A torsion drive's mapping report names every field of the document once,
   as the other record kinds' do: each grid point's geometry and energy
   `transformed`, the per-point optimizations `retained_only`.

@@ -45,6 +45,14 @@
         ],
         "electronic_energy_hartree": -148.7650133699291
       }
+    ],
+    "coordinate_atoms": [
+      [
+        3,
+        1,
+        2,
+        4
+      ]
     ]
   },
   "raw_sha256": "a3ba011ae78cadfddeaf50ec1f5bd8d985e644bef72104c690fb39c60dbd038f"

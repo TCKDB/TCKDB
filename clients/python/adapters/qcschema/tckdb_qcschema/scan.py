@@ -72,7 +72,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -471,14 +471,48 @@ def _parameters(view: _DriveView, report: MappingReport) -> list[CalculationPara
 
 
 @dataclass(frozen=True)
-class ScanBundle:
-    """One mapped TorsionDrive plus the optimization it started from."""
+class DriveDocument:
+    """One TorsionDriveResult to import, with the exact bytes it came from."""
 
-    payload: dict
+    record: QCRecord
+    raw_bytes: bytes
+    filename: str
+    sha256: str
+
+
+@dataclass(frozen=True)
+class MappedDrive:
+    """One drive as mapped: its ``scan`` calculation and its own report."""
+
+    key: str
+    calculation: dict
     report: MappingReport
-    parent_report: MappingReport
     dimension: int
     point_count: int
+
+
+@dataclass(frozen=True)
+class ScanBundle:
+    """One parent optimization and the drive(s) that started from it.
+
+    ``report``, ``dimension`` and ``point_count`` are the first drive's.
+    """
+
+    payload: dict
+    parent_report: MappingReport
+    drives: tuple[MappedDrive, ...]
+
+    @property
+    def report(self) -> MappingReport:
+        return self.drives[0].report
+
+    @property
+    def dimension(self) -> int:
+        return self.drives[0].dimension
+
+    @property
+    def point_count(self) -> int:
+        return self.drives[0].point_count
 
 
 def _artifact(raw_bytes: bytes, filename: str, sha256: str) -> dict:
@@ -489,6 +523,11 @@ def _artifact(raw_bytes: bytes, filename: str, sha256: str) -> dict:
         "sha256": sha256,
         "bytes": len(raw_bytes),
     }
+
+
+def scan_calculation_key(index: int) -> str:
+    """The bundle key of the ``index``-th drive (0-based)."""
+    return SCAN_CALCULATION_KEY if index == 0 else f"{SCAN_CALCULATION_KEY}_{index + 1}"
 
 
 def build_scan_bundle_payload(
@@ -503,19 +542,42 @@ def build_scan_bundle_payload(
     parent_artifact_sha256: str | None = None,
     declared_smiles: str | None = None,
     species_entry_kind: StationaryPointKind = StationaryPointKind.minimum,
+    additional_drives: Sequence[DriveDocument] = (),
 ) -> ScanBundle:
-    """Map a TorsionDrive and its parent optimization to one bundle.
+    """Map one parent optimization and the drive(s) started from it to one bundle.
+
+    Several drives from the same optimization -- one per rotor, say -- go in
+    one bundle: the optimization is the conformer's primary ``opt`` once,
+    and every drive is an additional ``scan`` with its own ``scan_parent``
+    edge to it. A second bundle for the same optimization would store it
+    twice (TCKDB's bundle upload cannot point at a conformer an earlier
+    upload created), so ``additional_drives`` is how a second rotor is
+    deposited.
 
     :returns: a :class:`ScanBundle` whose ``payload`` is a
         ``ComputedSpeciesUploadRequest`` body, validated before it is
-        returned, with both raw documents inline as ``ancillary`` artifacts.
+        returned, with every raw document inline as an ``ancillary``
+        artifact.
     :raises QCSchemaAdapterError: any of the refusal codes in
         :mod:`tckdb_qcschema.errors`.
     """
-    if hashlib.sha256(raw_bytes).hexdigest() != raw_artifact_sha256:
-        raise ValueError("raw_artifact_sha256 does not match raw_bytes.")
-    if record.record_kind != "torsion_drive":
-        raise ValueError(f"expected a torsion_drive record, got {record.record_kind!r}.")
+    drives = [
+        DriveDocument(record, raw_bytes, raw_artifact_filename, raw_artifact_sha256),
+        *additional_drives,
+    ]
+    for drive in drives:
+        if hashlib.sha256(drive.raw_bytes).hexdigest() != drive.sha256:
+            raise ValueError(f"{drive.filename}: sha256 does not match its bytes.")
+        if drive.record.record_kind != "torsion_drive":
+            raise QCSchemaAdapterError(
+                E_SCAN_GRID_INVALID,
+                f"{drive.filename} is a {drive.record.record_kind} document, not a "
+                f"TorsionDriveResult; only torsion drives are attached to the parent.",
+            )
+    if len({d.record.canonical_sha256 for d in drives}) != len(drives):
+        raise QCSchemaAdapterError(
+            E_SCAN_GRID_INVALID, "the same torsion drive was given twice."
+        )
     if parent_record is None:
         raise QCSchemaAdapterError(
             E_SCAN_PARENT_OPT_REQUIRED,
@@ -532,12 +594,6 @@ def build_scan_bundle_payload(
     if parent_raw_bytes is None or parent_artifact_sha256 is None or parent_artifact_filename is None:
         raise ValueError("parent_raw_bytes, parent_artifact_filename and parent_artifact_sha256 are required.")
 
-    report = MappingReport()
-    view = _drive_view(record)
-    # The reader refuses success=false before this point; a stored scan
-    # rests on it.
-    report.transformed.append("success")
-
     # --- the parent optimization (also validates its own identity) ------
     parent_payload, parent_report = build_conformer_upload_payload(
         parent_record,
@@ -547,8 +603,62 @@ def build_scan_bundle_payload(
         declared_smiles=declared_smiles,
         species_entry_kind=species_entry_kind,
     )
+
+    mapped = [
+        _map_drive(
+            drive,
+            calculation_key=scan_calculation_key(i),
+            parent_record=parent_record,
+            parent_payload=parent_payload,
+            parent_artifact_sha256=parent_artifact_sha256,
+            declared_smiles=declared_smiles,
+        )
+        for i, drive in enumerate(drives)
+    ]
+    additional_calculations = [drive.calculation for drive in mapped]
+
+    opt_calc = dict(parent_payload["calculation"])
+    opt_calc["key"] = OPT_CALCULATION_KEY
+    opt_calc["artifacts"] = [_artifact(parent_raw_bytes, parent_artifact_filename, parent_artifact_sha256)]
+
+    bundle = {
+        "species_entry": parent_payload["species_entry"],
+        "conformers": [
+            {
+                "key": CONFORMER_KEY,
+                "geometry": parent_payload["geometry"],
+                "primary_calculation": opt_calc,
+                "additional_calculations": additional_calculations,
+            }
+        ],
+    }
+    validated = ComputedSpeciesUploadRequest.model_validate(bundle)
+    wire = validated.model_dump(mode="json", exclude_none=True)
+    return ScanBundle(payload=wire, parent_report=parent_report, drives=tuple(mapped))
+
+
+def _map_drive(
+    drive: DriveDocument,
+    *,
+    calculation_key: str,
+    parent_record: QCRecord,
+    parent_payload: dict,
+    parent_artifact_sha256: str,
+    declared_smiles: str | None,
+) -> MappedDrive:
+    """One drive -> its ``scan`` calculation, checked against the parent."""
+    record = drive.record
+    raw_bytes = drive.raw_bytes
+    raw_artifact_filename = drive.filename
+    raw_artifact_sha256 = drive.sha256
     parent_final = parent_record.result.final_molecule
     species_entry = parent_payload["species_entry"]
+
+    report = MappingReport()
+    view = _drive_view(record)
+    # The reader refuses success=false before this point; a stored scan
+    # rests on it.
+    report.transformed.append("success")
 
     # --- grid shape ------------------------------------------------------
     n = len(view.dihedrals)
@@ -628,8 +738,14 @@ def build_scan_bundle_payload(
     for key in view.final_molecules:
         grid.append((parse_grid_key(key, n), key))
     grid.sort()
-    if len({angles for angles, _ in grid}) != len(grid):
-        raise QCSchemaAdapterError(E_SCAN_GRID_INVALID, "two grid keys name the same grid point.")
+    # -180 and 180 are one grid point (torsiondrive's grid is (-180, 180]):
+    # compare the wrapped angles, not the keys' spelling.
+    if len({tuple(wrap_degrees(a) for a in angles) for angles, _ in grid}) != len(grid):
+        raise QCSchemaAdapterError(
+            E_SCAN_GRID_INVALID,
+            "two grid keys name the same grid point (angles are compared "
+            "modulo 360 degrees, so -180 and 180 are one point).",
+        )
 
     points = []
     for point_index, (angles, key) in enumerate(grid, start=1):
@@ -782,7 +898,7 @@ def build_scan_bundle_payload(
     }
 
     scan_calc: dict = {
-        "key": SCAN_CALCULATION_KEY,
+        "key": calculation_key,
         "type": CalculationType.scan.value,
         "software_release": software_release.model_dump(mode="json", exclude_none=True),
         "level_of_theory": level_of_theory.model_dump(mode="json", exclude_none=True),
@@ -805,38 +921,17 @@ def build_scan_bundle_payload(
     if extracted_at is not None:
         scan_calc["parameters_extracted_at"] = extracted_at
     scan_calc = {k: v for k, v in scan_calc.items() if v is not None}
-
-    opt_calc = dict(parent_payload["calculation"])
-    opt_calc["key"] = OPT_CALCULATION_KEY
-    opt_calc["artifacts"] = [_artifact(parent_raw_bytes, parent_artifact_filename, parent_artifact_sha256)]
-
-    bundle = {
-        "species_entry": species_entry,
-        "conformers": [
-            {
-                "key": CONFORMER_KEY,
-                "geometry": parent_payload["geometry"],
-                "primary_calculation": opt_calc,
-                "additional_calculations": [scan_calc],
-            }
-        ],
-    }
-    validated = ComputedSpeciesUploadRequest.model_validate(bundle)
-    wire = validated.model_dump(mode="json", exclude_none=True)
-    return ScanBundle(
-        payload=wire,
-        report=report,
-        parent_report=parent_report,
-        dimension=n,
-        point_count=len(points),
-    )
+    return MappedDrive(key=calculation_key, calculation=scan_calc, report=report, dimension=n, point_count=len(points))
 
 
 __all__ = [
     "DIHEDRAL_TOLERANCE_DEGREES",
+    "DriveDocument",
+    "MappedDrive",
     "ScanBundle",
     "build_scan_bundle_payload",
     "dihedral_degrees",
     "parse_grid_key",
+    "scan_calculation_key",
     "wrap_degrees",
 ]
