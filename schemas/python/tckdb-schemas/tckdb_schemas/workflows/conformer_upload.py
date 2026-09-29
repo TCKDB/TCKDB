@@ -2,7 +2,7 @@
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
@@ -232,6 +232,37 @@ class ConformerUploadRequest(SchemaBase):
     attached alongside the primary calculation, and they anchor to that same
     observation.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "species_entry": {
+                        "smiles": "O",
+                        "charge": 0,
+                        "multiplicity": 1
+                    },
+                    "geometry": {
+                        "xyz_text": "3\nwater\nO 0.000000 0.000000 0.117300\nH 0.000000 0.757200 -0.469200\nH 0.000000 -0.757200 -0.469200"
+                    },
+                    "calculation": {
+                        "type": "opt",
+                        "software_release": {
+                            "name": "Gaussian",
+                            "version": "16"
+                        },
+                        "level_of_theory": {
+                            "method": "wb97xd",
+                            "basis": "def2-tzvp"
+                        }
+                    }
+                }
+            ]
+        },
+    )
 
     species_entry: SpeciesEntryIdentityPayload
     geometry: GeometryPayload

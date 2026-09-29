@@ -20,7 +20,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from tckdb_schemas.rights import DepositRights
 
 from app.schemas.common import SchemaBase
@@ -191,6 +191,53 @@ class ContributionBundleV0(SchemaBase):
     deduplication, and moderation are deferred to the hosted-import
     milestone.
     """
+
+    # A minimal valid payload. Published as the JSON Schema's ``examples``, in
+    # the OpenAPI document, and in the producer contract, which validates it
+    # against this model on every generation (generate_producer_contract.py).
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "bundle_format": "tckdb-contribution-bundle",
+                    "bundle_version": "0.1",
+                    "bundle_kind": "thermo",
+                    "created_at": "2026-09-29T00:00:00Z",
+                    "source_instance": {
+                        "instance_kind": "local",
+                        "instance_name": "my-lab-tckdb",
+                        "schema_version": "d861dfd60891"
+                    },
+                    "exporter": {
+                        "local_user_label": "depositor"
+                    },
+                    "submission": {
+                        "title": "Methane thermo",
+                        "summary": "One formation-referenced thermo record."
+                    },
+                    "records": {
+                        "thermo_uploads": [
+                            {
+                                "species_entry": {
+                                    "smiles": "C",
+                                    "charge": 0,
+                                    "multiplicity": 1
+                                },
+                                "scientific_origin": "computed",
+                                "h298_kj_mol": -74.6,
+                                "enthalpy_reference_kind": "formation_298k",
+                                "reference_pressure_bar": 1.01325
+                            }
+                        ]
+                    },
+                    "manifest": {
+                        "sha256": None,
+                        "files": []
+                    }
+                }
+            ]
+        },
+    )
 
     bundle_format: Literal["tckdb-contribution-bundle"]
     bundle_version: Literal["0.1"]

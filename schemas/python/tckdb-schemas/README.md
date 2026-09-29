@@ -16,6 +16,34 @@ validate TCKDB public upload payloads without installing the full backend
 
 All four are importable straight from `tckdb_schemas.workflows`.
 
+## Producer contract
+
+If you are writing a producer adapter -- code that turns another tool's
+output into TCKDB deposits -- read the producer contract that ships with
+this package before changing any mapping:
+
+```bash
+python -m tckdb_schemas.contract --print          # the whole contract (markdown)
+python -m tckdb_schemas.contract --since 0.49.0   # what changed since the version you target
+python -m tckdb_schemas.contract --schemas        # one JSON Schema per upload payload
+```
+
+It lists every upload route, every payload field with its unit and allowed
+values, the rules the server enforces (including the ones applied by the
+upload workflows rather than by the models), the refusal codes each route
+can return, and a minimal valid example. Validate the payloads your adapter
+builds against the shipped JSON Schemas in your own tests:
+
+```python
+from tckdb_schemas import contract
+
+schema = contract.json_schema("ThermoUploadRequest")
+```
+
+The contract is generated from the TCKDB backend and checked in CI, so the
+copy in a given version of this package is what that version of TCKDB
+accepts.
+
 Stability: the schemas mirror the backend's wire contract. Until the
 TCKDB API hits 1.0, expect coordinated bumps with the backend. A contract
 that lives here can be pinned, and a breaking change to it forces a

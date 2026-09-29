@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Payload for marking a submission as superseded by a newer one.\n\nThe replacing submission must have been created with\n``supersedes_submission_id`` pointing back at the old id; the service\nenforces that link rather than mutating it here.",
+  "examples": [
+    {
+      "new_submission_id": 42
+    }
+  ],
+  "properties": {
+    "new_submission_id": {
+      "title": "New Submission Id",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "new_submission_id"
+  ],
+  "title": "SubmissionSupersedeRequest",
+  "type": "object",
+  "x-tckdb-example-requires": "two submissions of the caller's own: the one in the path, and a newer one created with supersedes_submission_id pointing back at it, whose id replaces 42"
+}
