@@ -910,6 +910,45 @@ def test_artifact_persists_and_links_to_calculation(db_conn, monkeypatch) -> Non
         assert artifact.sha256 in artifact.uri
 
 
+def test_inline_output_log_fills_a_version_less_release(db_conn, monkeypatch) -> None:
+    """Issue #305 decision (c) on the reaction bundle path: a calculation
+    declared as "ORCA, no version" whose inline output log's banner states
+    ORCA 5.0.4 is re-pointed at the ORCA 5.0.4 release."""
+    from pathlib import Path
+
+    from app.db.models.software import Software, SoftwareRelease
+
+    _patch_artifact_storage(monkeypatch)
+    orca_log = (
+        Path(__file__).resolve().parents[1] / "fixtures" / "orca" / "sp_dlpno_ccsdt_orca.out"
+    ).read_bytes()
+    payload = _minimal_payload()
+    # The H atom (a neutral doublet, like the log) opt calculation.
+    calc_in = payload["species"][1]["conformers"][0]["calculation"]
+    calc_in["software_release"] = {"name": "ORCA"}
+    calc_in["artifacts"] = [
+        {
+            "kind": "output_log",
+            "filename": "h_opt.out",
+            "content_base64": base64.b64encode(orca_log).decode("ascii"),
+        }
+    ]
+
+    with _isolated_session(db_conn) as session:
+        persist_computed_reaction_upload(session, ComputedReactionUploadRequest(**payload))
+        artifact = session.scalars(select(CalculationArtifact)).one()
+        calc = session.get(Calculation, artifact.calculation_id)
+        release = session.get(SoftwareRelease, calc.software_release_id)
+        assert (release.software.name, release.version) == ("ORCA", "5.0.4")
+        assert calc.observed_software_banner == "orca 5.0.4"
+        # The version-less row the declaration created is left as it was.
+        assert session.scalar(
+            select(func.count(SoftwareRelease.id))
+            .join(Software, Software.id == SoftwareRelease.software_id)
+            .where(Software.name == "ORCA", SoftwareRelease.version.is_(None))
+        ) == 1
+
+
 # ---------------------------------------------------------------------------
 # 4. Kinetics source-calculation linkage
 # ---------------------------------------------------------------------------

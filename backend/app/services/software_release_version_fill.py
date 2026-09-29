@@ -5,11 +5,14 @@ recorded, its version was not. If the calculation's own stored output log
 carries the program's startup banner, the version is *observed* there --
 DR-0008's "parsed" source -- and the citation can be made exact.
 
-The ingest seam never did this for deposited logs. DR-0008 reconciliation
-runs inside parameter extraction, which reads only ``input`` artifacts, and
-an input deck carries no version banner; so ``observed_software_banner`` is
-NULL across the archive even where the ``output_log`` holding the banner
-was stored. This module reads the output log.
+Until #305 decision (c) the ingest seam never did this for deposited logs.
+DR-0008 reconciliation ran only inside parameter extraction, which reads
+only ``input`` artifacts, and an input deck carries no version banner; so
+``observed_software_banner`` is NULL across the archive even where the
+``output_log`` holding the banner was stored. New uploads now go through
+``software_banner_extraction`` at ingest, which applies the same rule
+(:func:`~app.services.calculation_resolution.banner_supplies_missing_version`)
+and the same re-point; this module reads the output logs already stored.
 
 What it does, per calculation citing the target release
 --------------------------------------------------------
@@ -90,28 +93,15 @@ from app.db.models.reproducibility_assessment import RecordReproducibilityAssess
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
-from app.services import (
-    gaussian_parameter_parser,
-    molpro_parameter_parser,
-    orca_parameter_parser,
-)
 from app.services.artifact_storage import load_artifact_bytes
 from app.services.calculation_resolution import (
+    banner_supplies_missing_version,
     record_software_reconciliation,
     software_release_to_declared_ref,
 )
-from app.services.ess_software_detection import detect_software_from_text
+from app.services.software_banner_extraction import observe_software_banner
 from app.services.software_reconciliation import reconcile_software_provenance
-from app.services.software_resolution import (
-    normalize_software_name,
-    resolve_software_release_ref,
-)
-
-_VERSION_PARSERS: dict[str, Callable[[str], dict | None]] = {
-    "gaussian": gaussian_parameter_parser.parse_software_version,
-    "orca": orca_parameter_parser.parse_software_version,
-    "molpro": molpro_parameter_parser.parse_software_version,
-}
+from app.services.software_resolution import normalize_software_name
 
 #: Output logs carry the banner; inputs almost never do, but are tried last
 #: rather than skipped, because a producer can deposit a log under ``input``.
@@ -227,12 +217,8 @@ def _observe_banner(
         except Exception:  # storage down, object missing, digest mismatch
             unreadable += 1
             continue
-        program = detect_software_from_text(text)
-        parser = _VERSION_PARSERS.get(program or "")
-        if parser is None:
-            continue
-        parsed = parser(text)
-        if parsed and parsed.get("version"):
+        parsed, program = observe_software_banner(text)
+        if parsed is not None:
             return parsed, program, None
     if unreadable and unreadable == len(artifacts):
         return None, None, "unreadable"
@@ -287,7 +273,7 @@ def plan_release_fill(
             )
             continue
         result = reconcile_software_provenance(declared=declared, parsed=parsed)
-        if result.match_status != "enriched" or "version" not in result.mismatches:
+        if not banner_supplies_missing_version(result):
             plan.outcomes.append(
                 CalculationOutcome(
                     calc.public_ref,
@@ -417,16 +403,17 @@ def apply_release_fill(
         ).one()
         parsed, _program, _failure = _observe_banner(session, calc, load_bytes)
         declared = software_release_to_declared_ref(calc.software_release)
-        # Records observed_software_banner + software_reconciliation_status
-        # exactly as the parser seam does (DR-0008); its identity-correction
-        # branch cannot fire here because other_program was filtered above.
+        # The ingest seam's own rule (DR-0008; #305 decision (c)): records
+        # observed_software_banner + software_reconciliation_status, and
+        # re-points at the release the banner describes. Its identity-
+        # correction branch cannot fire here because other_program was
+        # filtered above, and environment-bound calculations never reach it.
         result = record_software_reconciliation(
             session, calc, declared_ref=declared, parsed_software=parsed
         )
-        assert result is not None and result.match_status == "enriched"
-        new_release = resolve_software_release_ref(session, result.resolved_ref)
-        calc.software_release_id = new_release.id
-        calc.software_release = new_release
-        moved[calc.public_ref] = new_release.public_ref
+        assert banner_supplies_missing_version(result)
+        assert calc.software_release is not None
+        assert calc.software_release_id != release.id
+        moved[calc.public_ref] = calc.software_release.public_ref
     session.flush()
     return plan, moved

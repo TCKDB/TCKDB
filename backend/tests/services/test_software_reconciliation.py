@@ -210,3 +210,44 @@ class TestRealLogIntegration:
         assert result.match_status == "parsed_only"
         assert result.resolved_ref.version == "09"
         assert result.resolved_ref.revision == "D.01"
+
+
+# ---------------------------------------------------------------------------
+# Review findings on #565: version precision and declared build
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("declared", "observed", "agree"),
+    [
+        ("2015.1.37", "2015.1", True),
+        ("2015.1", "2015.1.37", True),
+        ("6", "6.1.0", True),
+        ("6.1.0", "6.1.0", True),
+        ("2015.1", "2015.10", False),
+        ("2015.10", "2015.1", False),
+        ("6.1.0", "6.2", False),
+        ("16", "09", False),
+    ],
+)
+def test_versions_agree_on_whole_dot_components(declared, observed, agree):
+    from app.services.software_reconciliation import versions_agree
+
+    assert versions_agree(declared, observed) is agree
+    result = reconcile_software_provenance(
+        declared=SoftwareReleaseRef(name="molpro", version=declared),
+        parsed={"name": "molpro", "version": observed, "build": None},
+    )
+    assert result.match_status == ("matched" if agree else "mismatch")
+    # Agreement never replaces the declared version.
+    assert result.resolved_ref.version == declared
+
+
+def test_a_contradicted_declared_build_is_a_mismatch():
+    result = reconcile_software_provenance(
+        declared=SoftwareReleaseRef(name="gaussian", build="EM64L-G09RevD.01"),
+        parsed={"name": "gaussian", "version": "16", "build": "ES64L-G16RevC.02"},
+    )
+    assert result.match_status == "mismatch"
+    assert result.mismatches["build"] == ("EM64L-G09RevD.01", "ES64L-G16RevC.02")
+    assert result.resolved_ref.build == "EM64L-G09RevD.01"

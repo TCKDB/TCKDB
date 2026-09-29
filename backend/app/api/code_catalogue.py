@@ -981,8 +981,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("calculation_software_is_workflow_tool", 422, Surface.coded_exception,
             "backend/app/services/calculation_resolution.py",
             note=(
-                "A calculation declared a workflow tool (Arkane) as the "
-                "program that ran it (issue #305). Refused, not routed: the "
+                "A calculation declared a workflow tool (Arkane, ARC or "
+                "RMG) as the program that ran it (issue #305). Refused, not "
+                "routed: the "
                 "electronic-structure program that produced the output is "
                 "absent, and moving the declared value into "
                 "workflow_tool_release would leave the calculation claiming "

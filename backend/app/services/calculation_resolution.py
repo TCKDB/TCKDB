@@ -327,7 +327,10 @@ def refuse_workflow_tool_as_calculation_software(
     ``software_release`` names the program that ran it. Arkane runs no such
     job -- it reads the output of one -- so ``software_release.name=
     "Arkane"`` on a calculation is a category error this database cannot
-    repair: the program that actually ran is simply absent. Accepting it is
+    repair: the program that actually ran is simply absent. ARC (which
+    orchestrates the jobs) and RMG (which generates mechanisms) are refused
+    for the same reason (owner decision on #305, 2026-09-29; reversible --
+    see ``software_resolution.WORKFLOW_TOOLS_NOT_ESS``). Accepting it is
     what lets ``Arkane`` sit in the ``software`` registry beside Gaussian,
     Molpro and ORCA and surface in the software vocabulary (issue #305,
     item 1).
@@ -469,7 +472,7 @@ def software_release_to_declared_ref(
     )
 
 
-def _format_observed_banner(parsed_software: dict | None) -> str | None:
+def format_observed_banner(parsed_software: dict | None) -> str | None:
     """Render the parser-observed software dict into a compact banner string.
 
     Joins the meaningful non-empty fields (name, version, build,
@@ -583,6 +586,20 @@ def record_software_reconciliation(
     rather than discarded. Use :func:`software_reconciliation_warning` to
     turn this into a depositor-facing warning.
 
+    **A missing version is filled by re-pointing** (owner decision (c) on
+    #305, 2026-09-29): when the banner names the same program and supplies a
+    version the declared release left NULL (:func:`banner_supplies_missing_
+    version`), the calculation is re-pointed at the release the banner
+    describes, resolved (get-or-create) from the exact version/revision/build
+    tuple. The version-less row itself is never modified. Skipped for a
+    calculation bound to an execution-environment manifest, which fixes its
+    release. Every caller runs at ingest or on an unapproved calculation
+    (the curator fill tool filters approved ones out first); the
+    accepted-science trigger would refuse the UPDATE otherwise.
+
+    A call with no banner after an earlier one recorded an observation
+    changes nothing and returns ``None``.
+
     When ``declared_ref`` is omitted the declared side is reconstructed
     from ``calculation.software_release``, so the parser seam can call
     this with only ``parsed_software``.
@@ -597,8 +614,16 @@ def record_software_reconciliation(
         parsed.
     :returns: The reconciliation result, or ``None`` when neither a declared
         ref nor a parsed banner is available (nothing recorded — the row is
-        left NULL rather than fabricating a status).
+        left NULL rather than fabricating a status), or when a banner-less
+        call would overwrite a recorded observation.
     """
+
+    if not parsed_software and calculation.observed_software_banner is not None:
+        # A banner-less artifact is no evidence. It must not erase an
+        # observation an earlier artifact recorded (an output log processed
+        # before the input deck in the same upload would otherwise have its
+        # ``enriched`` downgraded to ``declared_only``).
+        return None
 
     if declared_ref is None:
         declared_ref = software_release_to_declared_ref(calculation.software_release)
@@ -612,7 +637,7 @@ def record_software_reconciliation(
     calculation.software_reconciliation_status = SoftwareReconciliationStatus(
         result.match_status
     )
-    banner = _format_observed_banner(parsed_software)
+    banner = format_observed_banner(parsed_software)
     if banner is not None:
         calculation.observed_software_banner = banner
 
@@ -622,8 +647,43 @@ def record_software_reconciliation(
         calculation.declared_software_banner = _format_declared_banner(declared_ref)
         calculation.software_release_id = corrected_release.id
         calculation.software_release = corrected_release
+    elif (
+        banner_supplies_missing_version(result)
+        and calculation.execution_environment_manifest_id is None
+    ):
+        # Owner decision (c) on #305: the same program, a version the
+        # declaration lacked -> cite the release the banner describes.
+        # ``enriched`` means every differing field was NULL on the declared
+        # side, so a declared version is never overwritten. A calculation
+        # bound to an (immutable, content-addressed) execution-environment
+        # manifest keeps its declared release: the manifest names it, and
+        # trg_calculation_execution_environment_binding requires the two to
+        # agree. Its banner and status are still recorded above.
+        filled_release = resolve_software_release_ref(session, result.resolved_ref)
+        calculation.software_release_id = filled_release.id
+        calculation.software_release = filled_release
 
     return result
+
+
+def banner_supplies_missing_version(
+    result: SoftwareReconciliationResult | None,
+) -> bool:
+    """True when a banner fills a version the declared release left NULL.
+
+    DR-0008's ``enriched`` outcome (the same program; every field that
+    differs was NULL on the declared side) with ``version`` among the filled
+    fields. The one rule deciding a version fill, shared by ingest
+    (:func:`record_software_reconciliation`) and the curator fill tool
+    (``software_release_version_fill``). The target release is
+    ``result.resolved_ref``: exact version, revision and build tuple.
+    """
+
+    return (
+        result is not None
+        and result.match_status == "enriched"
+        and "version" in result.mismatches
+    )
 
 
 # ---------------------------------------------------------------------------

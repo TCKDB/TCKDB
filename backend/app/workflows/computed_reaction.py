@@ -131,6 +131,9 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.software_banner_extraction import (
+    try_reconcile_software_from_output_uploads,
+)
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
@@ -236,6 +239,15 @@ def _persist_calculation(
                     calculation, artifact_in
                 )
             )
+
+    # Output logs also carry the program's version banner; a version the
+    # declared release lacked re-points the calculation (#305 (c)). Once per
+    # calculation, so every log is compared with the declared release.
+    software_warning = try_reconcile_software_from_output_uploads(
+        session, calculation, calc_in.artifacts
+    )
+    if software_warning is not None and sp_energy_warnings is not None:
+        sp_energy_warnings.append(software_warning)
 
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:

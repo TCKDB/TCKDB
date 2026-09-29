@@ -173,14 +173,18 @@ and [`docs/specs/internal_ids_visibility_policy.md`](../specs/internal_ids_visib
 - **`software` / `software_release`** identifies a program and its
   exact release. On a **calculation** it is always the electronic
   structure program that ran the job (Gaussian 16 C.02, ORCA 6.1.0, …);
-  naming a workflow tool there (Arkane) is refused with
+  naming a workflow tool there (Arkane, ARC, RMG) is refused with
   `calculation_software_is_workflow_tool`. On a thermo, statmech or
   kinetics record it is the *analysis* code that produced the numbers
   (the bundle's `analysis_software_release` — Arkane, MESS, MultiWell),
   which is why Arkane can appear in the `software` table without any
   calculation citing it. A NULL `version` means "the program was
-  recorded, its version was not"; it is never filled in place (see
-  `backend/app/services/software_release_version_fill.py`).
+  recorded, its version was not"; it is never filled in place. When an
+  uploaded output log's banner names the same program with a version,
+  the calculation is re-pointed at that versioned release at ingest
+  (`backend/app/services/software_banner_extraction.py`), unless an
+  execution-environment manifest fixes its release; stored logs are
+  handled by `backend/app/services/software_release_version_fill.py`.
 - **`workflow_tool` / `workflow_tool_release`** identifies the
   high-level pipeline that produced the records (ARC, a custom RMG
   pipeline, …). TCKDB itself is workflow-tool agnostic.

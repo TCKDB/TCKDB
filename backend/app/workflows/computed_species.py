@@ -116,6 +116,9 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.software_banner_extraction import (
+    try_reconcile_software_from_output_uploads,
+)
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
@@ -683,6 +686,15 @@ def persist_computed_species_upload(
                     try_extract_input_geometry_from_artifact_upload(
                         session, calc_row, art_in
                     )
+                # Output logs also carry the program's version banner; a
+                # version the declared release lacked re-points the
+                # calculation (#305 (c)). Once per calculation, so every log
+                # is compared with the declared release.
+                software_warning = try_reconcile_software_from_output_uploads(
+                    session, calc_row, calc_in.artifacts
+                )
+                if software_warning is not None:
+                    upload_warnings.append(software_warning)
 
         thermo_row, thermo_aec_ids = _persist_thermo_block(
             session,

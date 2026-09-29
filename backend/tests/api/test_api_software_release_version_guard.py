@@ -140,10 +140,16 @@ def test_mismatched_name_uploads_cleanly_and_is_left_completely_untouched(
 
 
 def test_a_clean_version_uploads_with_no_software_release_warning(client):
-    """The live 329x ``ARC``/``"1.1.0"`` pair. A clean deposit must stay
-    completely silent -- no warning at all for this field."""
+    """A clean ``version`` must stay completely silent -- no warning at all
+    for this field.
+
+    This used to pin the live 329x ``ARC``/``"1.1.0"`` pair as an accepted
+    calculation software. ARC is a workflow tool and is now refused as a
+    calculation's software (owner decision on #305, 2026-09-29; see
+    ``test_api_calculation_software_is_workflow_tool``), so the clean case
+    is carried by a real electronic-structure release instead."""
     payload = _hydrogen_conformer_payload(
-        software_release={"name": "ARC", "version": "1.1.0"}
+        software_release={"name": "ORCA", "version": "6.1.0"}
     )
     resp = client.post("/api/v1/uploads/conformers", json=payload)
 
