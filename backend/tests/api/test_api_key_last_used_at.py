@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import select, text, update
+from sqlalchemy import create_engine, event, select, text, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -56,6 +57,7 @@ def factory(db_engine, _api_test_user, monkeypatch) -> Iterator[sessionmaker]:
     """Real connections; the ambient factory (the stamp's) is bound to them."""
     real = sessionmaker(bind=db_engine, expire_on_commit=False)
     monkeypatch.setattr(api_deps, "SessionLocal", real)
+    monkeypatch.setattr(api_deps, "StampSessionLocal", real)
 
     def _reset(value: datetime | None = None) -> None:
         with real() as session:
@@ -269,3 +271,163 @@ def test_a_failed_stamp_never_fails_the_request(
     assert resp.status_code == 201, resp.text
     assert "could not record api_key.last_used_at" in caplog.text
     assert _last_used(factory) is None
+
+
+# ---------------------------------------------------------------------------
+# #597 review: the stamp must never wait for a connection, and must not fire
+# when it cannot matter.
+# ---------------------------------------------------------------------------
+
+
+def _small_factory(db_engine, *, size: int, timeout: float) -> tuple[sessionmaker, object]:
+    engine = create_engine(
+        db_engine.url, pool_size=size, max_overflow=0, pool_timeout=timeout
+    )
+    return sessionmaker(bind=engine, expire_on_commit=False), engine
+
+
+def _app_over(main: sessionmaker) -> FastAPI:
+    app = FastAPI()
+
+    def _get_db() -> Iterator[Session]:
+        session = main()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = _get_db
+
+    @app.get("/probe")
+    def _probe(user: AppUser = Depends(get_current_user)):
+        return {}
+
+    return app
+
+
+def test_a_saturated_request_pool_does_not_stall_or_lose_the_stamp(
+    db_engine, factory, monkeypatch
+) -> None:
+    """The request's pool holds one connection and the request has it, so the
+    pool is full. The stamp used to draw a second connection from that same
+    pool, stalling the whole ``pool_timeout`` and then losing the stamp."""
+    main, main_engine = _small_factory(db_engine, size=1, timeout=6)
+    monkeypatch.setattr(api_deps, "SessionLocal", main)  # as in production
+    try:
+        app = _app_over(main)
+        with TestClient(app) as client:
+            start = time.monotonic()
+            resp = client.get("/probe", headers=API_KEY)
+            elapsed = time.monotonic() - start
+    finally:
+        main_engine.dispose()
+    assert resp.status_code == 200
+    assert elapsed < 3, f"the request waited {elapsed:.1f}s for a connection"
+    assert _last_used(factory) is not None
+
+
+def test_a_full_stamp_pool_skips_the_stamp_without_waiting(
+    db_engine, factory, monkeypatch, caplog
+) -> None:
+    stamp, stamp_engine = _small_factory(db_engine, size=1, timeout=0.25)
+    monkeypatch.setattr(api_deps, "StampSessionLocal", stamp)
+    held = stamp_engine.connect()  # the stamp pool's only connection
+    try:
+        app = _app_over(factory)
+        with TestClient(app) as client, caplog.at_level(
+            logging.WARNING, logger="app.api.deps"
+        ):
+            start = time.monotonic()
+            resp = client.get("/probe", headers=API_KEY)
+            elapsed = time.monotonic() - start
+    finally:
+        held.close()
+        stamp_engine.dispose()
+    assert resp.status_code == 200
+    assert elapsed < 3, f"the request waited {elapsed:.1f}s on the stamp"
+    assert "could not record api_key.last_used_at" in caplog.text
+    assert _last_used(factory) is None
+
+
+def test_a_route_restamps_a_key_last_used_long_ago(prod_client, factory) -> None:
+    old = _naive_now() - timedelta(hours=2)
+    factory.reset(old)
+    resp = prod_client.post(CONFORMER, json=PAYLOAD, headers=API_KEY)
+    assert resp.status_code == 201, resp.text
+    assert _last_used(factory) > old + timedelta(hours=1)
+
+
+def test_a_request_inside_the_window_opens_no_stamp_connection(
+    db_engine, factory, monkeypatch
+) -> None:
+    stamp, stamp_engine = _small_factory(db_engine, size=2, timeout=0.25)
+    monkeypatch.setattr(api_deps, "StampSessionLocal", stamp)
+    checkouts: list[int] = []
+    event.listen(stamp_engine, "checkout", lambda *_a: checkouts.append(1))
+    try:
+        app = _app_over(factory)
+        with TestClient(app) as client:
+            factory.reset(_naive_now() - timedelta(seconds=5))
+            assert client.get("/probe", headers=API_KEY).status_code == 200
+            assert checkouts == [], "a request inside the window opened a connection"
+            factory.reset(_naive_now() - timedelta(hours=1))
+            assert client.get("/probe", headers=API_KEY).status_code == 200
+            assert checkouts == [1], "the counter cannot see a stamp that is due"
+    finally:
+        stamp_engine.dispose()
+
+
+@pytest.fixture
+def _unusable_keys(factory, _api_test_user) -> Iterator[dict[str, str]]:
+    """A revoked key, and a live key whose user is inactive. Committed, so
+    removed by hand afterwards; ``api_key`` and ``app_user`` are not watched
+    by the commit tripwire."""
+    from app.db.models.common import AppUserRole
+
+    suffix = f"{time.monotonic_ns()}"
+    with factory() as session:
+        owner = session.get(AppUser, _api_test_user)
+        revoked_raw, inactive_raw = f"revoked-{suffix}", f"inactive-{suffix}"
+        ghost = AppUser(
+            username=f"inactive-{suffix}", role=AppUserRole.user, is_active=False
+        )
+        session.add(ghost)
+        session.flush()
+        import hashlib
+
+        rows = [
+            ApiKey(
+                user_id=owner.id,
+                key_hash=hashlib.sha256(revoked_raw.encode()).hexdigest(),
+                revoked_at=_naive_now(),
+            ),
+            ApiKey(
+                user_id=ghost.id,
+                key_hash=hashlib.sha256(inactive_raw.encode()).hexdigest(),
+            ),
+        ]
+        session.add_all(rows)
+        session.commit()
+        ids = [r.id for r in rows] + [ghost.id]
+    yield {"revoked": revoked_raw, "inactive": inactive_raw}
+    with factory() as session:
+        session.execute(text("DELETE FROM api_key WHERE id = ANY(:i)"), {"i": ids[:2]})
+        session.execute(text("DELETE FROM app_user WHERE id = :i"), {"i": ids[2]})
+        session.commit()
+
+
+@pytest.mark.parametrize("which", ["revoked", "inactive"])
+def test_a_rejected_key_is_never_stamped(factory, _unusable_keys, which) -> None:
+    import hashlib
+
+    raw = _unusable_keys[which]
+    app = _app_over(factory)
+    with TestClient(app) as client:
+        assert client.get("/probe", headers={"X-API-Key": raw}).status_code == 401
+    with factory() as session:
+        stamped = session.scalar(
+            select(ApiKey.last_used_at).where(
+                ApiKey.key_hash == hashlib.sha256(raw.encode()).hexdigest()
+            )
+        )
+    assert stamped is None

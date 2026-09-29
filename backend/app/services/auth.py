@@ -428,7 +428,7 @@ def record_api_key_use(
     once, so the stamp is kept whether or not the request's work commits, and
     the row lock the UPDATE takes lasts one statement, not one request.
 
-    The UPDATE picks its row with ``FOR UPDATE SKIP LOCKED``: if anything else
+    The UPDATE picks its row with ``FOR NO KEY UPDATE SKIP LOCKED``: if anything else
     holds the key row (a revocation in flight, another stamp) it is skipped
     rather than waited for, because a missed stamp costs nothing and a wait
     would queue requests on one key behind each other. The stamp is also
@@ -452,7 +452,7 @@ def record_api_key_use(
                             ApiKey.last_used_at < stale_before,
                         ),
                     )
-                    .with_for_update(skip_locked=True)
+                    .with_for_update(skip_locked=True, key_share=True)
                 )
             )
             .values(last_used_at=now)
@@ -465,7 +465,7 @@ def authenticate_api_key(
     session: Session,
     raw_key: str,
     *,
-    on_authenticated: Optional[Callable[[int], None]] = None,
+    on_authenticated: Optional[Callable[[int], None]],
 ) -> Optional[AppUser]:
     """Resolve a raw API key to its owning user, or ``None`` if invalid.
 

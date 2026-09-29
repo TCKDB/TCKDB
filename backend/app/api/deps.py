@@ -42,11 +42,12 @@ def _stamp_api_key_use(key_id: int) -> None:
     Every route that authenticates by API key goes through
     :func:`authenticate_api_key` below, so read, write, legacy-read and
     optional-auth routes all stamp ``last_used_at`` the same way: in a
-    transaction of their own (``SessionLocal``), not the request's session.
+    transaction of their own, on a dedicated pool (``StampSessionLocal``), not
+    the request's session and never waiting on the request's pool.
     Session-cookie auth has no ``last_used_at`` column and is unaffected.
     """
     try:
-        record_api_key_use(SessionLocal, key_id)
+        record_api_key_use(StampSessionLocal, key_id)
     except (SQLAlchemyError, OSError):
         # Database and connection failures only: a bug elsewhere (and any
         # coded refusal) must stay loud rather than be logged and forgotten.
@@ -93,6 +94,41 @@ def _install_statement_timeout_listener(target_engine) -> None:
 
 _install_statement_timeout_listener(engine)
 
+#: Pool shape of the engine that records ``api_key.last_used_at``. Two
+#: connections, no overflow, and a quarter-second wait: the stamp is a
+#: best-effort audit write made while the request still holds its own
+#: connection from ``SessionLocal``'s pool, so it must never queue for one.
+#: Drawing on that shared pool stalled every stamping request for the full
+#: ``pool_timeout`` once it was saturated, lost the stamp, and left the key
+#: due again on the next request (#597 review). A separate small pool cannot
+#: be starved by requests and adds at most two connections per process --
+#: unlike ``NullPool``, which would open one per stamp and let a burst of
+#: distinct keys exceed Postgres ``max_connections``.
+STAMP_POOL_SIZE = 2
+STAMP_POOL_TIMEOUT_S = 0.25
+
+
+def _derive_stamp_engine(source: Engine) -> Engine:
+    """A small dedicated engine that connects exactly as *source* does.
+
+    Reuses the source pool's connection factory rather than the URL, so an
+    engine that refuses to connect (see ``tests/conftest.py``) still refuses.
+    """
+    derived = create_engine(
+        source.url,
+        creator=source.pool._creator,  # type: ignore[attr-defined]
+        pool_size=STAMP_POOL_SIZE,
+        max_overflow=0,
+        pool_timeout=STAMP_POOL_TIMEOUT_S,
+        pool_pre_ping=True,
+    )
+    _install_statement_timeout_listener(derived)
+    return derived
+
+
+stamp_engine = _derive_stamp_engine(engine)
+StampSessionLocal = sessionmaker(bind=stamp_engine, expire_on_commit=False)
+
 
 def bind_ambient_session_factory(new_engine) -> Engine:
     """Re-point the module-level ``engine``/``SessionLocal`` at *new_engine*.
@@ -132,10 +168,14 @@ def bind_ambient_session_factory(new_engine) -> Engine:
 
     Called by ``backend/tests/conftest.py``; not used in deployment.
     """
-    global engine
+    global engine, stamp_engine
     previous = engine
     engine = new_engine
     SessionLocal.configure(bind=new_engine)
+    old_stamp_engine = stamp_engine
+    stamp_engine = _derive_stamp_engine(new_engine)
+    StampSessionLocal.configure(bind=stamp_engine)
+    old_stamp_engine.dispose()
     return previous
 
 
