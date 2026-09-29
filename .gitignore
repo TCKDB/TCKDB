@@ -324,3 +324,7 @@ docs/specs/read_api_mvp.md
 
 # Agent scratch (this task)
 .agent_scratch/
+
+# Psi4 writes run timings (including the hostname) to ./timer.dat in the
+# working directory; never commit it.
+timer.dat
