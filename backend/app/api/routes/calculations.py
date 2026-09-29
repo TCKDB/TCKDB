@@ -92,7 +92,7 @@ from app.services.input_geometry_extraction import (
     try_extract_input_geometry_from_artifact_upload,
 )
 from app.services.software_banner_extraction import (
-    try_reconcile_software_from_output_upload,
+    try_reconcile_software_from_output_uploads,
 )
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
@@ -719,13 +719,6 @@ def upload_calculation_artifacts(
         )
         if sp_warning is not None:
             warnings.append(sp_warning)
-        # Output logs also carry the program's version banner; a version the
-        # declared release lacked re-points the calculation (#305 (c)).
-        software_warning = try_reconcile_software_from_output_upload(
-            session, calculation, art_in
-        )
-        if software_warning is not None:
-            warnings.append(software_warning)
         # Output logs also state the charge and spin multiplicity the run
         # actually used; contradicting the declared identity is flagged.
         warnings.extend(
@@ -740,6 +733,15 @@ def upload_calculation_artifacts(
         # yields its true starting geometry, when none is on file yet or the
         # one on file only duplicates the output (see the module docstring).
         try_extract_input_geometry_from_artifact_upload(session, calculation, art_in)
+
+    # Output logs also carry the program's version banner; a version the
+    # declared release lacked re-points the calculation (#305 (c)). Once per
+    # batch, so every log is compared with the declared release.
+    software_warning = try_reconcile_software_from_output_uploads(
+        session, calculation, request.artifacts
+    )
+    if software_warning is not None:
+        warnings.append(software_warning)
 
     result = ArtifactsUploadResult(
         calculation_id=calculation_id,

@@ -154,9 +154,13 @@ def _compare_refs(
     if d_name and p_name and d_name != p_name:
         mismatches["name"] = (declared.name, parsed.name)
 
-    # Compare version
+    # Compare version. Two readings of one release at different precision
+    # agree: ARC reads Molpro's ``NAME : 2015.1.37`` header while the banner
+    # line says ``Version 2015.1``. Whole dot-components are compared, so
+    # ``2015.1`` never agrees with ``2015.10``. Agreement is not a fill: the
+    # declared (non-NULL) version stands and nothing is re-pointed.
     if declared.version is not None and parsed.version is not None:
-        if declared.version.strip() != parsed.version.strip():
+        if not versions_agree(declared.version, parsed.version):
             mismatches["version"] = (declared.version, parsed.version)
     elif declared.version is None and parsed.version is not None:
         mismatches["version"] = (None, parsed.version)
@@ -168,7 +172,31 @@ def _compare_refs(
     elif declared.revision is None and parsed.revision is not None:
         mismatches["revision"] = (None, parsed.revision)
 
+    # Compare build. A declared build the banner contradicts is a mismatch:
+    # enriching around it would mint a release tuple that never existed
+    # (a G16 version and revision on a declared G09 build). A NULL declared
+    # build stays a gap ``_enrich_ref`` may fill, as before.
+    if declared.build is not None and parsed.build is not None:
+        if declared.build.strip() != parsed.build.strip():
+            mismatches["build"] = (declared.build, parsed.build)
+
     return mismatches
+
+
+def versions_agree(declared: str, observed: str) -> bool:
+    """True when one version is the other read to fewer dot-components.
+
+    ``2015.1.37`` / ``2015.1`` and ``6`` / ``6.1.0`` agree; ``2015.1`` /
+    ``2015.10`` and ``6.1.0`` / ``6.2`` do not. Components are compared
+    whole, after stripping surrounding whitespace.
+    """
+
+    a = [part.strip() for part in declared.strip().split(".")]
+    b = [part.strip() for part in observed.strip().split(".")]
+    if not all(a) or not all(b):
+        return declared.strip() == observed.strip()
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    return longer[: len(shorter)] == shorter
 
 
 def _enrich_ref(

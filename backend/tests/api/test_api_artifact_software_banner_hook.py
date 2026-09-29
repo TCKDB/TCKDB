@@ -146,18 +146,16 @@ class TestVersionLessDeclarationIsRepointed:
     def test_a_banner_less_input_after_the_log_does_not_erase_the_observation(
         self, client, db_session, stub_store_artifact
     ):
-        """Output log first, input deck second, in one batch. The input path
-        reconciles too, with no banner; it must not downgrade ``enriched``."""
+        """The input deck arrives after the log, in a later request. The input
+        path reconciles too, with no banner; it must not downgrade
+        ``enriched``. (Within one batch the log hook runs last anyway.)"""
         calc_id = _create_calc(
             client, smiles="[H]", multiplicity=2, xyz="1\nH\nH 0 0 0",
             software_release={"name": "ORCA"},
         )
 
-        _post_artifacts(
-            client, calc_id,
-            _artifact(ORCA_LOG),
-            _artifact(ORCA_INPUT, kind="input", filename="job.in"),
-        )
+        _post_artifacts(client, calc_id, _artifact(ORCA_LOG))
+        _post_artifacts(client, calc_id, _artifact(ORCA_INPUT, kind="input", filename="job.in"))
 
         calc = db_session.get(Calculation, calc_id)
         db_session.refresh(calc)
@@ -285,3 +283,94 @@ def test_a_manifest_bound_calculation_records_the_banner_and_keeps_its_release(
     assert calc.software_reconciliation_status is SoftwareReconciliationStatus.enriched
     assert calc.observed_software_banner == "orca 5.0.4"
     assert W_FILLED not in _codes(resp)
+
+
+# Review findings on #565 ----------------------------------------------------
+
+# Molpro 2015.1.37 TS frequency run. ARC reads the ``NAME : 2015.1.37`` header;
+# the banner line TCKDB parses says ``Version 2015.1``.
+MOLPRO_2015_LOG = (FIXTURES / "molpro" / "molpro_TS_freq.out").read_bytes()
+# ORCA 6.1.0 optimisation (a different ORCA version from ORCA_LOG's 5.0.4).
+ORCA_610_LOG = (FIXTURES / "orca" / "opt_orca.out").read_bytes()
+
+
+def test_a_banner_that_is_a_coarser_reading_of_the_declared_version_is_a_match(
+    client, db_session, stub_store_artifact
+):
+    """Finding 1. ``2015.1`` is ``2015.1.37`` read to fewer components: the
+    same release, not a contradiction. ``mismatch`` would fail the
+    reproducibility rubric's ``calculation_metadata`` check for a deposit
+    that is internally consistent."""
+    calc_id = _create_calc(
+        client, smiles="C", multiplicity=1, xyz=XYZ_CH4,
+        software_release={"name": "Molpro", "version": "2015.1.37"},
+    )
+
+    _post_artifacts(client, calc_id, _artifact(MOLPRO_2015_LOG))
+
+    calc = db_session.get(Calculation, calc_id)
+    db_session.refresh(calc)
+    assert calc.software_reconciliation_status is SoftwareReconciliationStatus.matched
+    assert calc.observed_software_banner == "molpro 2015.1"
+    assert _release_of(db_session, calc_id) == ("Molpro", "2015.1.37", None, None)
+
+
+def test_a_declared_build_the_banner_contradicts_is_a_mismatch_not_a_fill(
+    client, db_session, stub_store_artifact
+):
+    """Finding 2. A declared G09 build with no version, and a G16 C.02 log:
+    filling the version would mint ``("16", "C.02", "EM64L-G09RevD.01")``,
+    a release that never existed."""
+    calc_id = _create_calc(
+        client, smiles="[O]", multiplicity=3, xyz="1\nO\nO 0 0 0",
+        software_release={"name": "Gaussian", "build": "EM64L-G09RevD.01"},
+    )
+
+    resp = _post_artifacts(client, calc_id, _artifact(GAUSSIAN_LOG))
+
+    assert _release_of(db_session, calc_id) == ("Gaussian", None, None, "EM64L-G09RevD.01")
+    calc = db_session.get(Calculation, calc_id)
+    db_session.refresh(calc)
+    assert calc.software_reconciliation_status is SoftwareReconciliationStatus.mismatch
+    assert W_FILLED not in _codes(resp)
+
+
+@pytest.mark.parametrize("order", ["5.0.4 first", "6.1.0 first"])
+def test_two_disagreeing_logs_in_one_batch_fill_nothing_in_either_order(
+    client, db_session, stub_store_artifact, order
+):
+    """Finding 3. Each banner is compared with the *declared* release. Two
+    logs naming different versions of the same program contradict each
+    other, so neither fills the version, whichever arrives first."""
+    calc_id = _create_calc(
+        client, smiles="[H]", multiplicity=2, xyz="1\nH\nH 0 0 0",
+        software_release={"name": "ORCA"},
+    )
+    logs = [_artifact(ORCA_LOG, filename="a.out"), _artifact(ORCA_610_LOG, filename="b.out")]
+    if order == "6.1.0 first":
+        logs.reverse()
+
+    resp = _post_artifacts(client, calc_id, *logs)
+
+    assert _release_of(db_session, calc_id) == ("ORCA", None, None, None)
+    calc = db_session.get(Calculation, calc_id)
+    db_session.refresh(calc)
+    assert calc.software_reconciliation_status is SoftwareReconciliationStatus.mismatch
+    assert calc.observed_software_banner == "orca 5.0.4 | orca 6.1.0"
+    assert W_FILLED not in _codes(resp)
+
+
+def test_two_agreeing_logs_in_one_batch_fill_once(client, db_session, stub_store_artifact):
+    calc_id = _create_calc(
+        client, smiles="[H]", multiplicity=2, xyz="1\nH\nH 0 0 0",
+        software_release={"name": "ORCA"},
+    )
+
+    _post_artifacts(
+        client, calc_id, _artifact(ORCA_LOG, filename="a.out"), _artifact(ORCA_LOG, filename="b.out")
+    )
+
+    assert _release_of(db_session, calc_id) == ("ORCA", "5.0.4", None, None)
+    calc = db_session.get(Calculation, calc_id)
+    db_session.refresh(calc)
+    assert calc.software_reconciliation_status is SoftwareReconciliationStatus.enriched

@@ -132,7 +132,7 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.software_banner_extraction import (
-    try_reconcile_software_from_output_upload,
+    try_reconcile_software_from_output_uploads,
 )
 from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
@@ -229,13 +229,6 @@ def _persist_calculation(
         )
         if sp_warning is not None and sp_energy_warnings is not None:
             sp_energy_warnings.append(sp_warning)
-        # Output logs also carry the program's version banner; a version the
-        # declared release lacked re-points the calculation (#305 (c)).
-        software_warning = try_reconcile_software_from_output_upload(
-            session, calculation, artifact_in
-        )
-        if software_warning is not None and sp_energy_warnings is not None:
-            sp_energy_warnings.append(software_warning)
         # Output logs also state the charge and spin multiplicity the run
         # actually used; a contradiction with the declared identity is
         # flagged for review. (``sp_energy_warnings`` is the shared
@@ -246,6 +239,15 @@ def _persist_calculation(
                     calculation, artifact_in
                 )
             )
+
+    # Output logs also carry the program's version banner; a version the
+    # declared release lacked re-points the calculation (#305 (c)). Once per
+    # calculation, so every log is compared with the declared release.
+    software_warning = try_reconcile_software_from_output_uploads(
+        session, calculation, calc_in.artifacts
+    )
+    if software_warning is not None and sp_energy_warnings is not None:
+        sp_energy_warnings.append(software_warning)
 
     resolved_geom_id = geometry_id
     if calc_in.geometry_key is not None:

@@ -54,6 +54,14 @@ def _software_names(db_session) -> list[str]:
         ("RMG", "RMG"),
         (" rmg ", "RMG"),
         ("RMG-Py", "RMG"),
+        # Review finding 4: separators, case and a trailing version token.
+        ("ARC 1.1.0", "ARC"),
+        ("ARC-1.1.0", "ARC"),
+        ("rmgpy", "RMG"),
+        ("rmg_py", "RMG"),
+        ("RMG Py", "RMG"),
+        ("RMG-Py 3.2.0", "RMG"),
+        ("Arkane v3.0", "Arkane"),
     ],
 )
 def test_calculation_declaring_a_workflow_tool_is_refused(
@@ -99,3 +107,18 @@ def test_an_electronic_structure_program_is_still_accepted(client, db_session):
     )
     release = db_session.get(SoftwareRelease, calc.software_release_id)
     assert (release.software.name, release.version) == ("ORCA", "6.1.0")
+
+
+@pytest.mark.parametrize("declared", ["ORCA 6.1.0", "Gaussian 16", "Molpro-2022.1", "ARChem"])
+def test_a_program_name_carrying_a_version_is_not_mistaken_for_a_workflow_tool(
+    client, db_session, declared
+):
+    """The control for the normalisation above: stripping a version token
+    and separators must not turn a real ESS name (or a name that merely
+    starts with "arc") into a refusal."""
+    resp = client.post(
+        "/api/v1/uploads/conformers",
+        json=_hydrogen_conformer_payload(software_release={"name": declared, "version": "1"}),
+    )
+
+    assert resp.status_code == 201, resp.text

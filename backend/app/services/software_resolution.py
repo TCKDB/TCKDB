@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,26 +37,49 @@ from app.schemas.fragments.refs import SoftwareReleaseRef
 #: reaction deposit. Moving that slot is an owner decision with a schema
 #: dimension (the product's one ``workflow_tool_release`` slot already holds
 #: ARC), so it is not made here.
+#:
+#: Keys are in :func:`_workflow_tool_key` form: lowercase, separators removed,
+#: a trailing version token stripped -- so ``ARC 1.1.0``, ``ARC-1.1.0``,
+#: ``rmgpy``, ``rmg_py``, ``RMG Py`` and ``RMG-Py 3.2.0`` all match.
 WORKFLOW_TOOLS_NOT_ESS: dict[str, str] = {
     "arkane": "Arkane",
     "arc": "ARC",
     "rmg": "RMG",
-    # The spelling this repository itself uses for RMG elsewhere
+    # RMG-Py, the spelling this repository itself uses for RMG elsewhere
     # (``analysis_software_release`` fixtures, release metadata).
-    "rmg-py": "RMG",
+    "rmgpy": "RMG",
 }
+
+#: A version token trailing a name: ``" 1.1.0"``, ``"-1.1.0"``, ``"_v3"``,
+#: ``" v3.0"``. Only a token that starts with a digit (optionally after a
+#: ``v``) counts, so a name like ``ARChem`` is never shortened.
+_TRAILING_VERSION = re.compile(r"[\s._-]+v?\d[\w.+-]*$", re.IGNORECASE)
+_SEPARATORS = re.compile(r"[\s._-]+")
 
 
 def workflow_tool_named_as_ess(name: str | None) -> str | None:
     """Return the canonical workflow-tool name if *name* is one, else ``None``.
 
     :param name: A declared software name, in any case or spacing.
-    :returns: e.g. ``"Arkane"`` for ``" arkane "``; ``None`` for ``"ORCA"``.
+    :returns: e.g. ``"Arkane"`` for ``" arkane "``, ``"ARC"`` for
+        ``"ARC-1.1.0"``; ``None`` for ``"ORCA"`` or ``"ORCA 6.1.0"``.
     """
 
     if not name:
         return None
-    return WORKFLOW_TOOLS_NOT_ESS.get(" ".join(name.split()).lower())
+    return WORKFLOW_TOOLS_NOT_ESS.get(_workflow_tool_key(name))
+
+
+def _workflow_tool_key(name: str) -> str:
+    """Normalise a declared name for the workflow-tool check.
+
+    Extends :func:`normalize_software_name`'s whitespace-and-case folding:
+    a trailing version token is stripped, then every separator removed.
+    ``"RMG-Py 3.2.0"`` -> ``"rmgpy"``; ``"ORCA 6.1.0"`` -> ``"orca"``.
+    """
+
+    folded = " ".join(name.split()).lower()
+    return _SEPARATORS.sub("", _TRAILING_VERSION.sub("", folded))
 
 
 def _null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:

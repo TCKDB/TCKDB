@@ -472,7 +472,7 @@ def software_release_to_declared_ref(
     )
 
 
-def _format_observed_banner(parsed_software: dict | None) -> str | None:
+def format_observed_banner(parsed_software: dict | None) -> str | None:
     """Render the parser-observed software dict into a compact banner string.
 
     Joins the meaningful non-empty fields (name, version, build,
@@ -637,7 +637,7 @@ def record_software_reconciliation(
     calculation.software_reconciliation_status = SoftwareReconciliationStatus(
         result.match_status
     )
-    banner = _format_observed_banner(parsed_software)
+    banner = format_observed_banner(parsed_software)
     if banner is not None:
         calculation.observed_software_banner = banner
 

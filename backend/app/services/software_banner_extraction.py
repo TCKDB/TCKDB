@@ -12,10 +12,13 @@ carries no version banner. So a calculation declared as "ORCA, no version"
 stayed on the version-less release even when its own output log said
 ``Program Version 6.1.0``.
 
-What it does, for an ``output_log`` artifact
---------------------------------------------
-1. Detect the program and parse its banner (:func:`observe_software_banner`).
-   No banner, nothing done.
+What it does, once per calculation per upload batch
+---------------------------------------------------
+1. Detect the program and parse the banner of every ``output_log`` in the
+   batch (:func:`observe_software_banner`). No banner, nothing done. Each
+   banner is compared with the *declared* release; two banners of the
+   declared program that disagree with each other fill nothing and are
+   recorded as ``mismatch``, so the result never depends on arrival order.
 2. **Different program: nothing done.** Correcting a declared software
    *identity* from an artifact stays where it already was, on the input
    path (``record_software_reconciliation``'s name-mismatch branch). This
@@ -28,6 +31,15 @@ What it does, for an ``output_log`` artifact
    re-points the calculation at it -- the same resolution the curator fill
    tool uses. A declared non-NULL version is never overwritten: a
    disagreeing banner records ``mismatch`` and the declared release stays.
+   A banner reading the declared version to fewer components (``2015.1``
+   for ``2015.1.37``) agrees with it (``matched``); a declared ``build``
+   the banner contradicts is a ``mismatch``, never filled around.
+
+This now runs for calculations that *declare* a version too, so their
+DR-0008 status moves from ``declared_only`` to ``matched`` / ``enriched`` /
+``mismatch`` when an output log arrives. The reproducibility rubric's
+``calculation_metadata`` check fails on ``mismatch`` -- which is the point
+of recording it, and why agreement is judged by whole version components.
 
 Execution-environment manifests
 -------------------------------
@@ -54,13 +66,13 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.calculation import Calculation
-from app.db.models.common import ArtifactKind
+from app.db.models.common import ArtifactKind, SoftwareReconciliationStatus
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services import (
     gaussian_parameter_parser,
@@ -68,8 +80,13 @@ from app.services import (
     orca_parameter_parser,
 )
 from app.services.best_effort import isolated_best_effort
-from app.services.calculation_resolution import record_software_reconciliation
+from app.services.calculation_resolution import (
+    format_observed_banner,
+    record_software_reconciliation,
+    software_release_to_declared_ref,
+)
 from app.services.ess_software_detection import detect_software_from_text
+from app.services.software_reconciliation import parsed_dict_to_ref
 
 logger = logging.getLogger(__name__)
 
@@ -109,34 +126,40 @@ def observe_software_banner(text: str) -> tuple[dict | None, str | None]:
     return parsed, program
 
 
-def try_reconcile_software_from_output_upload(
+def try_reconcile_software_from_output_uploads(
     session: Session,
     calculation: Calculation,
-    artifact_in: ArtifactIn,
+    artifacts: Sequence[ArtifactIn],
 ) -> UploadWarning | None:
-    """Reconcile the calculation's software release against an output log.
+    """Reconcile the calculation's software release against its output logs.
+
+    Called **once per calculation per upload batch**, after every artifact of
+    the batch is persisted, not once per artifact. Each banner is compared
+    with the *declared* release, never with a release an earlier log in the
+    same batch filled in, so the outcome does not depend on the order the
+    logs arrive in. When two logs naming the declared program disagree with
+    each other, nothing is filled: the disagreement is recorded instead
+    (``mismatch``, both banners on ``observed_software_banner``).
 
     :returns: an informational warning when the calculation was re-pointed
-        at the versioned release its log names, otherwise ``None`` (also for
-        non-output-log artifacts and on any failure).
+        at the versioned release its logs name, otherwise ``None`` (also when
+        there is no output log, and on any failure).
     """
 
-    # ``artifact_in.kind`` is the wire enum; value comparison works across
-    # the boundary with the ORM enum (see the sibling hooks).
-    if artifact_in.kind != ArtifactKind.output_log:
+    # ``kind`` is the wire enum; value comparison works across the boundary
+    # with the ORM enum (see the sibling hooks).
+    logs = [a for a in artifacts if a.kind == ArtifactKind.output_log]
+    if not logs:
         return None
     return isolated_best_effort(
         session,
-        lambda: _reconcile(session, calculation, artifact_in),
-        what=f"software banner reconciliation for artifact '{artifact_in.filename}'",
+        lambda: _reconcile(session, calculation, logs),
+        what="software banner reconciliation for "
+        + ", ".join(repr(a.filename) for a in logs),
     )
 
 
-def _reconcile(
-    session: Session,
-    calculation: Calculation,
-    artifact_in: ArtifactIn,
-) -> UploadWarning | None:
+def _banner(artifact_in: ArtifactIn) -> tuple[dict | None, str | None]:
     try:
         content = base64.b64decode(artifact_in.content_base64, validate=True)
     except (binascii.Error, ValueError):
@@ -145,25 +168,50 @@ def _reconcile(
             "be base64-decoded",
             artifact_in.filename,
         )
-        return None
+        return None, None
+    return observe_software_banner(content.decode("utf-8", errors="replace"))
 
-    parsed, program = observe_software_banner(
-        content.decode("utf-8", errors="replace")
-    )
-    if parsed is None:
-        return None
+
+def _reconcile(
+    session: Session,
+    calculation: Calculation,
+    logs: Sequence[ArtifactIn],
+) -> UploadWarning | None:
     release = calculation.software_release
-    if release is None or release.software is None:
+    if release is None or release.software is None or not release.software.name:
         return None
     declared_name = release.software.name
-    # Case-insensitive: parsers emit lowercase tokens and the alias table
-    # does not canonicalise every program ("molpro").
-    if not declared_name or (program or "").lower() != declared_name.lower():
+
+    # Banners naming the declared program, in filename order so the recorded
+    # text does not depend on arrival order either. Case-insensitive: parsers
+    # emit lowercase tokens and the alias table does not canonicalise every
+    # program ("molpro").
+    same_program: list[tuple[str, dict]] = []
+    for artifact_in in sorted(logs, key=lambda a: a.filename):
+        parsed, program = _banner(artifact_in)
+        if parsed is not None and (program or "").lower() == declared_name.lower():
+            same_program.append((artifact_in.filename, parsed))
+    if not same_program:
+        return None
+
+    distinct = {
+        (ref.version, ref.revision, ref.build)
+        for ref in (parsed_dict_to_ref(parsed) for _name, parsed in same_program)
+    }
+    if len(distinct) > 1:
+        # The logs contradict each other about which release ran. Nothing is
+        # filled and nothing is re-pointed; the disagreement is the record.
+        banners = sorted({format_observed_banner(parsed) or "" for _n, parsed in same_program})
+        calculation.software_reconciliation_status = SoftwareReconciliationStatus.mismatch
+        calculation.observed_software_banner = " | ".join(banners)
         return None
 
     before = release.public_ref
     result = record_software_reconciliation(
-        session, calculation, parsed_software=parsed
+        session,
+        calculation,
+        declared_ref=software_release_to_declared_ref(release),
+        parsed_software=same_program[0][1],
     )
     after = calculation.software_release
     if result is None or after is None or after.public_ref == before:
@@ -173,7 +221,7 @@ def _reconcile(
         code=W_SOFTWARE_RELEASE_VERSION_FILLED_FROM_ARTIFACT,
         message=(
             f"The declared {declared_name} release gave no version; the "
-            f"uploaded output log '{artifact_in.filename}' states version "
+            f"uploaded output log '{same_program[0][0]}' states version "
             f"{after.version!r}. This calculation now cites that release "
             f"({after.public_ref}). The banner is kept on "
             "observed_software_banner."
