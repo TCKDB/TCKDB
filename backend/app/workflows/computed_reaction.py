@@ -904,6 +904,7 @@ def persist_computed_reaction_upload(
         session,
         ((calc_in.key, calc_in.scf_stability) for calc_in in _stability_carriers),
         calculation_key_to_row,
+        warnings=sp_energy_warnings,
     )
 
     # ------------------------------------------------------------------
@@ -1503,6 +1504,7 @@ def persist_computed_reaction_upload(
     # transport service.
     # ------------------------------------------------------------------
     transport_ids: list[int] = []
+    transport_refs: list[str] = []
     for sp_index, sp in enumerate(request.species):
         if sp.transport is None:
             continue
@@ -1521,6 +1523,7 @@ def persist_computed_reaction_upload(
             field_prefix=f"species['{sp.key}'].transport",
         )
         transport_ids.append(transport_row.id)
+        transport_refs.append(transport_row.public_ref)
 
     # ------------------------------------------------------------------
     # 5. Kinetics fits
@@ -1787,6 +1790,7 @@ def persist_computed_reaction_upload(
         "thermo_ids": thermo_ids,
         "statmech_ids": statmech_ids,
         "transport_ids": transport_ids,
+        "transport_refs": transport_refs,
         "species_entry_ids": [e.id for e in species_key_to_entry.values()],
         "species_count": len(request.species),
         # Expose the bundle-local calc-key → assigned-id map so the

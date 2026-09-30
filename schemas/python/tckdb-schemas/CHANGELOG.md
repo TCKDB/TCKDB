@@ -19,7 +19,11 @@ and `POST /api/v1/uploads/computed-reaction`, could not say (#622), all additive
   and where it names none the bundle's fills in (`workflow_tool_release` on
   both bundles, `analysis_software_release` as well on the reaction bundle).
   The responses name what was written: `ComputedSpeciesUploadResult.transport`
-  (`{transport_id}`) and `transport_ids` on the reaction bundle's response.
+  (`{transport_id, transport_ref}`) and `transport_ids` with `transport_refs`
+  (`trn_...`, same order) on the reaction bundle's response. A source
+  calculation of another species on the reaction bundle is refused with the
+  coded `transport_source_calculation_owner_mismatch` (422, `context` has
+  `field`, `target`, `owner_kind`), now a code a depositor can receive.
   Provenance gaps are annotated as warnings under `transport.` /
   `species['<key>'].transport.`.
 - **Rejected rotors.** `invalidated_reason` on `StatmechTorsionInBundle` and on
@@ -29,13 +33,23 @@ and `POST /api/v1/uploads/computed-reaction`, could not say (#622), all additive
 - **Who measured the SCF stability.** `SCFStabilityContent.source_calculation_key`
   names the calculation (job) in the same bundle that measured the verdict, when
   it is not the calculation the block is attached to. It may point at a
-  calculation declared later in the payload. It must name a declared calculation
-  of the same species entry (or of the transition state, for a transition-state
-  calculation), and may not name the calculation itself. It is stored in the
+  calculation declared later in the payload. Rules: it must name a declared
+  calculation; of the same species entry (or of the transition state, for a
+  transition-state calculation), else the coded
+  `scf_stability_source_calculation_owner_mismatch`; on the same conformer as
+  the carrier (reaction bundle: the same `conformer_key`, or the conformer of
+  its `geometry_key`, where both are stated), else the coded
+  `scf_stability_source_geometry_mismatch` (422, `context` has `field`, `key`,
+  `carrier_key`), the sibling of `thermo_sp_geometry_mismatch`; it may not name
+  the carrier itself or close a cycle with other blocks' keys. A measuring job
+  at a different level of theory than the carrier is accepted with the upload
+  warning `scf_stability_source_level_mismatch`. The key is stored in the
   existing `calc_scf_stability.source_calculation_id` and read back as
   `source_calculation_ref`. No stability calculation type was added: the
-  measuring job keeps the type it has. The key is refused on the primitive
-  routes (`SCFStabilityPayload` names a calculation by id there) and on
+  measuring job keeps the type it has. `SCFStabilityPayload` (the primitive
+  routes, which name a calculation by id) and `SCFStabilityContent` now share
+  `SCFStabilityBase`, so the key is not in the primitive routes' schemas and is
+  refused there as an unknown field. It is also refused on
   `POST /api/v1/uploads/networks/pdep`, which has no pass to link it.
 - **Contract prose.** `SoftwareReleaseRef` now says what `version`, `revision`
   and `build` hold and that all three are part of release identity (`revision`

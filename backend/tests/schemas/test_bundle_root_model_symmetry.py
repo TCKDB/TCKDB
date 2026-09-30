@@ -364,28 +364,30 @@ def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     )
     assert hasattr(rx, "BundleKineticsIn"), "reaction root lost its kinetics model"
 
-    assert hasattr(sp, "TransportInBundle"), "species root lost its transport model"
-    assert rx.TransportInBundle is sp.TransportInBundle, (
-        "the reaction root now spells transport with its own class; add the "
-        "pair to MODEL_PAIRS or go back to the shared TransportInBundle."
+    species_field = sp.ComputedSpeciesUploadRequest.model_fields["transport"]
+    reaction_field = rx.BundleSpeciesIn.model_fields["transport"]
+    assert species_field.annotation == reaction_field.annotation, (
+        "the two roots type their transport block differently "
+        f"({species_field.annotation!r} vs {reaction_field.annotation!r}); "
+        "that is a second spelling, so add the pair to MODEL_PAIRS or go back "
+        "to one shared model."
     )
+    assert species_field.annotation == (sp.TransportInBundle | None), (
+        "the species root's transport block is no longer TransportInBundle"
+    )
+    assert rx.TransportInBundle is sp.TransportInBundle
+
     for module, label in ((sp, "species"), (rx, "reaction")):
         extra = [
             n
             for n in dir(module)
             if "Transport" in n
-            and getattr(module, n) is not sp.TransportInBundle
-            and n
-            not in {
-                "TransportCalculationRole",
-                "TransportSourceCalcInBundle",
-                "TransportUploadPayload",
-                "TransportUploadRefInBundle",
-            }
+            and not (hasattr(sp, n) and getattr(module, n) is getattr(sp, n))
         ]
         assert not extra, (
-            f"the {label} bundle root gained transport model(s) {extra}; "
-            "if both roots now have one, add the pair to MODEL_PAIRS."
+            f"the {label} bundle root gained transport model(s) {extra} that "
+            "the species root does not spell the same way; if both roots now "
+            "have one, add the pair to MODEL_PAIRS."
         )
 
 

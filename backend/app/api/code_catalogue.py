@@ -1874,22 +1874,27 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("schema_not_initialized", 503, Surface.response_literal,
             "backend/app/api/routes/health.py"),
     ApiCode("scf_stability_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py",
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
-            reach=Reach.guard,
             note=(
-                "No request produces it today, although the bundle routes "
-                "resolve scf_stability.source_calculation_key in a namespace "
-                "wider than the carrying calculation's owner: the request "
-                "schemas refuse a cross-owner key first (the "
-                "computed-reaction schema knows which species or transition "
-                "state each calculation belongs to; the computed-species "
-                "schema has one subject), with a generic validation message. "
-                "The workflow check in services/scf_stability_sources.py "
-                "stays as the tripwire for schema drift and is provoked "
-                "directly in tests/services/test_scf_stability_sources.py. "
-                "Promote it to a client-facing code by removing the schema "
-                "check, as thermo's owner rule is left to the workflow."
+                "scf_stability.source_calculation_key names a calculation "
+                "owned by another species entry or transition state than the "
+                "calculation carrying the verdict. Reachable on "
+                "/uploads/computed-reaction, whose key namespace spans every "
+                "species and the transition state; the request schema and "
+                "services/scf_stability_sources.py raise the same code and "
+                "context (ADR 0017)."
+            )),
+    ApiCode("scf_stability_source_geometry_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "The job named by scf_stability.source_calculation_key ran on "
+                "another conformer than the calculation carrying the verdict. "
+                "The sibling of thermo_sp_geometry_mismatch: one stability "
+                "analysis describes one wavefunction at one geometry. Raised "
+                "by the request schemas and by "
+                "services/scf_stability_sources.py with the same context."
             )),
     ApiCode("selection_already_stands", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
@@ -2164,23 +2169,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("transition_state_reaction_coordinate_not_designated", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transport_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py",
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
-            reach=Reach.guard,
             note=(
-                "No request produces it. The standalone guard, in "
-                "workflows/transport.py, reads a calculation the same loop "
-                "persisted two statements earlier with the transport "
-                "target's own species entry, and TransportSourceCalculationIn "
-                "carries only calculation_key and role, so no request can "
-                "name a foreign row. The bundle seam, persist_bundle_transport, "
-                "does resolve keys in a namespace wider than the species "
-                "(the computed-reaction bundle spans every species), but "
-                "ComputedReactionUploadRequest refuses a cross-species "
-                "transport source first, with a generic validation message, "
-                "so the workflow guard is reached by no request. The conformer "
-                "upload and the PDep bundle pass no source calculations at "
-                "all. The guard stays as the tripwire for schema drift."
+                "A transport source_calculations link names a calculation of "
+                "another species entry. Reachable only on "
+                "/uploads/computed-reaction, whose key namespace spans every "
+                "species: the standalone route scopes its inline calculations "
+                "to the target, and the computed-species bundle has one "
+                "subject. The request schema and persist_bundle_transport "
+                "raise the same code and context (ADR 0017)."
             )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py",

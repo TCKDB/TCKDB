@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.101.0 - 2026-09-30
+
+`RejectionCode` gains three members, regenerated from the server's catalogue:
+`transport_source_calculation_owner_mismatch`,
+`scf_stability_source_calculation_owner_mismatch` and
+`scf_stability_source_geometry_mismatch`. The first two are a cross-species
+source calculation on a computed-reaction bundle's transport or SCF-stability
+block; the third is a stability verdict whose measuring job is on another
+conformer than the calculation carrying it (#622, `tckdb-schemas` 0.61.0). The
+first was already a code the server could raise; it is now one a depositor can
+receive, so it is exported. Nothing else in the client changes.
+
 ## 0.100.0 - 2026-09-30
 
 `upload_artifacts(batch_by_calculation=True)` no longer keeps only the response

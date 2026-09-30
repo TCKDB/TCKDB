@@ -56,11 +56,9 @@ neither branch has quietly lost every route that exercises it.
 
 Not covered here, deliberately
 ------------------------------
-* ``transport_source_calculation_owner_mismatch`` and
-  ``scf_stability_source_calculation_owner_mismatch`` are catalogued
-  ``Reach.guard`` — no request can produce the condition, so no route
-  test can exist. They are excluded by reading the catalogue, not by name,
-  so promoting either to reachable makes this file demand a provocation.
+* Any code the catalogue marks ``Reach.guard`` would be excluded by
+  reading the catalogue, not by name, so promoting it to reachable makes
+  this file demand a provocation. None is a guard today.
 * The ``ValueError`` ``assert_owned_by`` raises when given neither owner
   is a programming-error guard with no code and no route; it is pinned in
   ``tests/invariants/test_structure_invariants.py``.
@@ -187,9 +185,9 @@ def test_every_reachable_ownership_code_is_asserted_by_a_route_test() -> None:
     # *absence* -- it passes perfectly against an empty ``reachable``, so
     # a catalogue edit marking every code ``Reach.guard`` would silence
     # it rather than fail it. Measured 2026-08-16: 8 codes, 1 guard.
-    assert len(reachable) >= 7, (
+    assert len(reachable) >= 9, (
         f"only {len(reachable)} ownership codes are reachable by a request; "
-        "7 were when this floor was measured. If a code genuinely became "
+        "9 were when this floor was measured. If a code genuinely became "
         "unreachable, lower the floor in the same change that says why."
     )
 
@@ -270,8 +268,8 @@ def test_the_scan_ignores_prose() -> None:
     assert "nested_owner_mismatch" not in literals
 
 
-def test_the_unreachable_ownership_codes_are_the_named_guards() -> None:
-    """The exemption is two named codes, not an open category.
+def test_no_ownership_code_is_left_as_a_guard() -> None:
+    """The exemption list is empty, and putting a code back on it is deliberate.
 
     ``test_every_reachable_ownership_code_is_asserted_by_a_route_test``
     excuses whatever the catalogue marks ``Reach.guard``, which means a
@@ -280,25 +278,15 @@ def test_the_unreachable_ownership_codes_are_the_named_guards() -> None:
     a deliberate, reviewable act rather than a way to make the check
     above go quiet.
 
-    Widened once, for #622: ``scf_stability_source_calculation_owner_mismatch``
-    joined ``transport_source_calculation_owner_mismatch``. Both are
-    workflow checks behind a request schema that refuses the same mistake
-    first, which is what makes each a guard rather than a refusal a
-    depositor can receive; each is provoked directly, with no schema in
-    front of it, in ``tests/services/test_scf_stability_sources.py`` and
-    ``tests/workflows/test_transport_upload.py``. Promoting either to a
-    client-facing code means deleting the schema-side owner check, as
-    thermo's owner rule is left to the workflow, and then it needs a route
-    test here like the others.
+    It held one code, ``transport_source_calculation_owner_mismatch``, until
+    #622 gave transport a bundle block whose keys resolve across the
+    computed-reaction bundle; that code and the new stability-source code are
+    now reachable, and ``tests/api/test_api_bundle_extras_622.py`` provokes
+    both on the wire.
     """
     codes = _ownership_codes()
-    assert _guard_only(codes) == frozenset(
-        {
-            "scf_stability_source_calculation_owner_mismatch",
-            "transport_source_calculation_owner_mismatch",
-        }
-    ), (
-        "the set of ownership codes no request can produce has changed. If a "
-        "code became unreachable, say why in its catalogue note; if one became "
-        "reachable, it now needs a route test that provokes it."
+    assert _guard_only(codes) == frozenset(), (
+        "an ownership code became unreachable by a request. Say why in its "
+        "catalogue note and list it here in the same change; if instead one "
+        "is reachable it needs a route test that provokes it."
     )

@@ -243,6 +243,8 @@ class ComputedReactionUploadResult(BaseModel):
     statmech_ids: list[int] = Field(default_factory=list)
     #: One id per ``transport`` row written for a species in this bundle.
     transport_ids: list[int] = Field(default_factory=list)
+    #: The ``trn_`` ref of each record in ``transport_ids``, in the same order.
+    transport_refs: list[str] = Field(default_factory=list)
     species_entry_ids: list[int]
     species_count: int
     # Bundle-local calc key → assigned ``calculation.id`` for every
@@ -833,7 +835,10 @@ def upload_computed_species(
         else None
     )
     transport_ref = (
-        TransportUploadRefInBundle(transport_id=outcome.transport.id)
+        TransportUploadRefInBundle(
+            transport_id=outcome.transport.id,
+            transport_ref=outcome.transport.public_ref,
+        )
         if outcome.transport is not None
         else None
     )

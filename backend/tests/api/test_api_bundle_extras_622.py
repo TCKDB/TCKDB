@@ -150,7 +150,7 @@ def test_species_bundle_stores_transport_on_the_bundles_species_entry(client, db
     rows = _transport_rows(db_session, body["species_entry_id"])
     assert len(rows) == 1, "one transport row per bundle"
     (row,) = rows
-    assert body["transport"] == {"transport_id": row.id}
+    assert body["transport"] == {"transport_id": row.id, "transport_ref": row.public_ref}
     assert (row.sigma_angstrom, row.epsilon_over_k_k) == (2.05, 145.0)
     assert row.dipole_debye == 0.0
     assert row.polarizability_angstrom3 == 4.47
@@ -450,10 +450,13 @@ def test_reaction_bundle_transport_takes_the_bundle_provenance_defaults(client, 
 def test_reaction_bundle_transport_source_must_belong_to_its_own_species(client):
     """H2's calculation cannot be what produced H's transport.
 
-    The key resolves, so only the owner rule can catch it. Mutation: drop the
-    owner check from ``validate_species_key_refs``; the workflow's guard still
-    refuses, so this stays a 422 -- the schema check exists to refuse it with a
-    message that names the field before any row is written.
+    The key resolves, so only the owner rule can catch it, and the refusal is
+    coded: the same ``code`` and ``context`` the workflow's guard carries
+    (ADR 0017), asserted on ``code`` and ``context`` rather than on prose.
+    The paired payload (H's own calculation) is accepted above.
+
+    Mutation: make the schema validator raise a bare ``ValueError`` instead
+    of ``owner_mismatch_error``; ``code`` becomes ``request_validation_error``.
     """
     bundle = _reaction_bundle()
     bundle["species"][0]["transport"] = {
@@ -462,8 +465,13 @@ def test_reaction_bundle_transport_source_must_belong_to_its_own_species(client)
     }
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:800]
-    assert "transport.source_calculations[0]" in resp.text
-    assert "one of this species' own" in resp.text
+    body = resp.json()
+    assert body["code"] == "transport_source_calculation_owner_mismatch", body
+    assert body["context"] == {
+        "field": "species['h'].transport.source_calculations[0].calculation_key",
+        "target": "transport",
+        "owner_kind": "species_entry",
+    }, body
 
 
 def test_reaction_bundle_transport_source_key_must_exist(client):
@@ -656,11 +664,10 @@ def test_reaction_bundle_stability_source_links_within_one_species(client, db_se
 
 
 def test_reaction_bundle_stability_source_may_not_be_another_species_job(client):
-    """H2's job cannot have measured H's stability.
+    """H2's job cannot have measured H's stability, and the refusal is coded.
 
-    Mutation: delete the owner rule from ``validate_species_key_refs``; the
-    workflow's check still answers 422, so this keeps passing -- the schema
-    rule exists for the message and for clients that validate offline.
+    Mutation: make the schema validator raise a bare ``ValueError``; ``code``
+    becomes ``request_validation_error`` and the context is empty.
     """
     bundle = _reaction_bundle()
     bundle["species"][0]["conformers"][0]["calculation"]["scf_stability"] = {
@@ -669,14 +676,24 @@ def test_reaction_bundle_stability_source_may_not_be_another_species_job(client)
     }
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:800]
-    assert "must be one of the same subject's own" in resp.text
+    body = resp.json()
+    assert body["code"] == "scf_stability_source_calculation_owner_mismatch", body
+    assert body["context"] == {
+        "field": "calculations['h-opt'].scf_stability.source_calculation_key",
+        "target": "scf stability",
+        "owner_kind": "species_entry",
+    }, body
 
 
-def test_primitive_route_refuses_the_local_key(client):
-    """``/uploads/conformers`` names rows by id; a local key has nothing to resolve against.
+def test_primitive_route_does_not_accept_the_local_key(client):
+    """``/uploads/conformers`` names rows by id; the key is not part of its shape.
 
-    Mutation: delete ``SCFStabilityPayload.refuse_local_key``; the route would
-    accept the block and silently store it with no source.
+    ``SCFStabilityPayload`` shares ``SCFStabilityBase`` with the bundle type
+    but not its ``source_calculation_key``, so the route refuses it as an
+    unknown field and does not publish it in its JSON schema either.
+
+    Mutation: declare ``source_calculation_key`` on ``SCFStabilityBase``; the
+    route then accepts the block and stores it with no source.
     """
     resp = client.post(
         "/api/v1/uploads/conformers",
@@ -693,7 +710,23 @@ def test_primitive_route_refuses_the_local_key(client):
         },
     )
     assert resp.status_code == 422, resp.text[:800]
-    assert "only valid inside a" in resp.text
+    (error,) = resp.json()["detail"]
+    assert error["type"] == "extra_forbidden"
+    assert error["loc"][-2:] == ["scf_stability", "source_calculation_key"]
+
+
+def test_primitive_payload_schema_does_not_publish_the_key():
+    """The 7 primitive routes' JSON schemas must not carry a field they refuse.
+
+    Mutation: move the field back onto the base class.
+    """
+    from tckdb_schemas.fragments.calculation import (
+        SCFStabilityContent,
+        SCFStabilityPayload,
+    )
+
+    assert "source_calculation_key" not in SCFStabilityPayload.model_json_schema()["properties"]
+    assert "source_calculation_key" in SCFStabilityContent.model_json_schema()["properties"]
 
 
 # ---------------------------------------------------------------------------

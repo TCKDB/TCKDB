@@ -684,7 +684,8 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
 #: back is a deliberate act with a test to change, not a silent widening
 #: of the client contract.
 #:
-#: It was three until #195, and the removal is the mechanism working.
+#: It was three until #195, and the removal is the mechanism working; #622
+#: removed the last ownership guard the same way (see below).
 #: ``applied_energy_correction_source_calculation_owner_mismatch`` was
 #: classified a guard because its three call sites all read a calculation
 #: the enclosing block had scoped to the target -- and its note named the
@@ -692,18 +693,20 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
 #: same key across the whole bundle and refused with a bare ``ValueError``.
 #: Routing those through the shared guard made the code reachable, so it
 #: left this tuple, gained ``Reach.request``, and is now exported.
-_GUARD_CODES = (
-    "idempotency_in_progress",
-    "scf_stability_source_calculation_owner_mismatch",
-    "transport_source_calculation_owner_mismatch",
-)
+_GUARD_CODES = ("idempotency_in_progress",)
 
 #: Codes that were ``Reach.guard`` and are not any more. Kept so the
 #: reclassification cannot silently reverse: a code that goes back to
 #: being a guard has stopped being reachable, which means a write path
 #: was removed, and that deserves the same deliberate edit the promotion
 #: did.
-_PROMOTED_FROM_GUARD = ("applied_energy_correction_source_calculation_owner_mismatch",)
+_PROMOTED_FROM_GUARD = (
+    "applied_energy_correction_source_calculation_owner_mismatch",
+    # #622: persist_bundle_transport resolves transport source keys across the
+    # computed-reaction bundle's whole namespace, so a sibling species'
+    # calculation is a request a client can send.
+    "transport_source_calculation_owner_mismatch",
+)
 
 
 def test_the_reach_rule_can_say_no() -> None:
@@ -939,78 +942,41 @@ def test_the_storage_pair_still_disagrees_about_replay() -> None:
         )
 
 
-def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
+def test_no_ownership_code_is_a_guard_any_more() -> None:
     """The classification rests on live schemas, so it is checked against them.
 
     An ownership guard can fire only when the field it guards can name a
     record the enclosing block did not itself scope to the target: a
     foreign row id, **or** a key resolved in a namespace wider than the
-    target's owner. Both clauses matter, and the second one is what #173
-    added after the first misclassified a guard that turned out to be
-    measurable on the wire.
+    target's owner.
 
-    ``transport_source_calculation_owner_mismatch`` is the last ownership
-    code where neither clause holds: its payload carries no
-    ``existing_*_id``, and its one write path reads a calculation the same
-    loop persisted against the transport target's own species entry. That
-    first half is a property of a live model, so it is asserted against
-    the model rather than described -- the day somebody adds the field,
-    this fails and names the entry to reclassify.
+    ``transport_source_calculation_owner_mismatch`` was the last ownership
+    code where neither clause held. #622 gave transport a bundle block
+    (``TransportInBundle``) whose ``source_calculations`` resolve in the
+    computed-reaction bundle's namespace, which spans every species, so the
+    second clause now holds and the code is reachable and exported. That is
+    asserted as the field's existence, and measured on the wire in
+    ``tests/api/test_api_bundle_extras_622.py``, which posts a sibling
+    species' calculation and reads the code and context back.
 
-    Two ownership codes with the same *shape* are deliberately not here.
-    ``statmech_torsion_scan_calculation_owner_mismatch`` is reachable on
-    two bundle routes (``tests/api/test_api_network_pdep_ownership.py``,
-    ``tests/api/test_api_bundle_torsion_scan_ownership.py``), and #195
-    moved ``applied_energy_correction_source_calculation_owner_mismatch``
-    into the same company: its payload still carries no foreign id, so
-    the first clause still fails, and it is reachable anyway because
-    ``/uploads/computed-reaction`` resolves ``source_calculation_key``
-    across every species and the transition state. That is asserted below
-    as the field's continued existence, and measured on the wire in
-    ``tests/api/test_api_bundle_ownership_codes.py``.
+    The two #622 codes for stability sources are reachable for the same
+    reason. A guard that returns would have to be added to ``_GUARD_CODES``
+    on purpose.
     """
-    from tckdb_schemas.energy_correction import (
-        AppliedEnergyCorrectionUploadPayload,
-    )
+    from tckdb_schemas.workflows.computed_species_upload import TransportInBundle
 
-    from app.schemas.workflows.transport_upload import (
-        TransportSourceCalculationIn,
-    )
-
-    def _foreign_row_fields(model) -> list[str]:
-        return sorted(
-            name
-            for name in model.model_fields
-            if name.endswith("_id") or name.startswith("existing_")
-        )
-
-    assert not _foreign_row_fields(TransportSourceCalculationIn), (
-        f"TransportSourceCalculationIn now carries "
-        f"{_foreign_row_fields(TransportSourceCalculationIn)}. A field that "
-        "accepts a row this request did not create is exactly what makes an "
-        "ownership guard reachable, so transport_source_calculation_owner_"
-        "mismatch is no longer Reach.guard and the client enum must "
-        "re-export it."
-    )
-
-    # The second clause, for the code that is reachable by it alone. The
-    # first clause is still false here -- the payload has no foreign id --
-    # so asserting only that would say the opposite of the truth.
-    assert not _foreign_row_fields(AppliedEnergyCorrectionUploadPayload), (
-        "AppliedEnergyCorrectionUploadPayload has gained a foreign row "
-        "field. That is a wider change than the wide-namespace "
-        "reachability this entry rests on, and the note on "
-        "applied_energy_correction_source_calculation_owner_mismatch "
-        "needs rewriting to say so."
-    )
-    assert "source_calculation_key" in AppliedEnergyCorrectionUploadPayload.model_fields, (
-        "the field whose bundle-wide resolution makes "
-        "applied_energy_correction_source_calculation_owner_mismatch "
-        "reachable is gone; the entry is a guard again"
+    assert "source_calculations" in TransportInBundle.model_fields, (
+        "the field whose bundle-wide resolution makes the transport owner "
+        "code reachable is gone; the entry is a guard again"
     )
     exported = {entry.code for entry in client_facing()}
-    assert "applied_energy_correction_source_calculation_owner_mismatch" in exported
-    assert "transport_source_calculation_owner_mismatch" not in exported
+    for code in (
+        "applied_energy_correction_source_calculation_owner_mismatch",
+        "transport_source_calculation_owner_mismatch",
+        "scf_stability_source_calculation_owner_mismatch",
+        "scf_stability_source_geometry_mismatch",
+    ):
+        assert code in exported, f"{code} is not exported to a client"
 
 
 # ---------------------------------------------------------------------------

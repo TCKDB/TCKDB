@@ -28,8 +28,14 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.bundle_source_rules import (
+    find_scf_source_cycle,
+    scf_source_geometry_error,
+)
 from tckdb_schemas.fragments.calculation import SCFStabilityContent
+from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation, CalculationSCFStability
 from app.services.calculation_ownership import (
     W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -37,11 +43,20 @@ from app.services.calculation_ownership import (
 )
 from app.services.local_key_resolution import resolve_calculation_key
 
+#: The measuring job ran at a different level of theory than the calculation
+#: carrying the verdict. A warning, not a refusal (ADR 0008: definitions block,
+#: expectations warn). The verdict is then about another wavefunction, which is
+#: worth telling the depositor, but a producer may legitimately run the check
+#: at a cheaper level and say so, so the record is kept.
+W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH = "scf_stability_source_level_mismatch"
+
 
 def link_scf_stability_sources(
     session: Session,
     declared: Iterable[tuple[str, SCFStabilityContent | None]],
     calculations_by_key: Mapping[str, Calculation],
+    *,
+    warnings: list[UploadWarning] | None = None,
 ) -> int:
     """Set ``source_calculation_id`` on each stability row that names a source key.
 
@@ -50,34 +65,74 @@ def link_scf_stability_sources(
         calculation in the bundle; blocks that are absent or name no source
         are skipped.
     :param calculations_by_key: The bundle's calculation-key namespace, which
-        must already hold every persisted calculation.
+        must already hold every persisted calculation, conformer anchors
+        included.
+    :param warnings: Out-list for the level-of-theory mismatch warning.
     :returns: How many stability rows were linked.
-    :raises CodedValueError: a key names no declared calculation.
-    :raises CodedValueError: the named job belongs to a different species
-        entry or transition state than the calculation carrying the verdict
-        (``scf_stability_source_calculation_owner_mismatch``). The request
-        schemas refuse this first; this is the layer that knows which entry
-        each key resolved to.
+    :raises CodedValueError: a key names no declared calculation; the named
+        job belongs to another species entry or transition state
+        (``scf_stability_source_calculation_owner_mismatch``); or it is on
+        another conformer (``scf_stability_source_geometry_mismatch``). The
+        request schemas refuse these first; this is the layer that knows which
+        entry and conformer each key resolved to.
+    :raises ValueError: the keys form a cycle.
     """
+    pairs = [
+        (owner_key, stability)
+        for owner_key, stability in declared
+        if stability is not None and stability.source_calculation_key is not None
+    ]
+    cycle = find_scf_source_cycle(
+        {key: stab.source_calculation_key for key, stab in pairs if stab.source_calculation_key}
+    )
+    if cycle is not None:
+        raise ValueError(
+            "scf_stability.source_calculation_key forms a cycle: "
+            + " -> ".join([*cycle, cycle[0]])
+        )
+
     linked = 0
-    for owner_key, stability in declared:
-        if stability is None or stability.source_calculation_key is None:
-            continue
+    for owner_key, stability in pairs:
+        source_key = stability.source_calculation_key
+        assert source_key is not None
         field = f"calculations['{owner_key}'].scf_stability.source_calculation_key"
         owner = resolve_calculation_key(
             owner_key, calculations_by_key, field=f"calculations['{owner_key}'].key"
         )
-        source = resolve_calculation_key(
-            stability.source_calculation_key, calculations_by_key, field=field
-        )
+        source = resolve_calculation_key(source_key, calculations_by_key, field=field)
         assert_calculation_owned_by(
             source,
             code=W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
             target="scf stability",
-            context=f"{field}='{stability.source_calculation_key}'",
+            context=f"{field}='{source_key}'",
             species_entry_id=owner.species_entry_id,
             transition_state_entry_id=owner.transition_state_entry_id,
         )
+        if source.conformer_observation_id != owner.conformer_observation_id:
+            wire = scf_source_geometry_error(
+                field=field, key=source_key, carrier_key=owner_key
+            )
+            raise CodedValueError(
+                wire.code, wire.detail, context=wire.context, message_prefix=False
+            )
+        if (
+            warnings is not None
+            and source.lot_id is not None
+            and owner.lot_id is not None
+            and source.lot_id != owner.lot_id
+        ):
+            warnings.append(
+                UploadWarning(
+                    field=field,
+                    code=W_SCF_STABILITY_SOURCE_LEVEL_MISMATCH,
+                    message=(
+                        f"'{source_key}', the job that measured the stability "
+                        f"verdict on '{owner_key}', ran at a different level "
+                        f"of theory. The verdict describes the measuring "
+                        f"job's wavefunction, not the carrying calculation's."
+                    ),
+                )
+            )
         row = session.get(CalculationSCFStability, owner.id)
         if row is None:
             # The block was declared, so its row was written when the

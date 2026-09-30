@@ -566,6 +566,11 @@ def persist_computed_species_upload(
         ):
             calc_keys_to_id[additional_in.key] = calc_row
 
+    # Non-blocking gaps surfaced on the upload response: single-point
+    # energy reconciliation, absent statmech evidence, and absent
+    # provenance on the scientific products this bundle carries.
+    upload_warnings: list[UploadWarning] = []
+
     # An ``scf_stability`` block may name the job that measured it. Every
     # calculation exists now, so a key pointing at one declared later in the
     # payload resolves too.
@@ -580,6 +585,7 @@ def persist_computed_species_upload(
             )
         ),
         calc_keys_to_id,
+        warnings=upload_warnings,
     )
 
     # Step 5: explicit dependency edges. The idempotent helper handles
@@ -627,10 +633,6 @@ def persist_computed_species_upload(
     # shas across all calcs in the bundle so a post-step-6 failure can
     # delete them.
     bundle_stored_shas: list[str] = []
-    # Non-blocking gaps surfaced on the upload response: single-point
-    # energy reconciliation, absent statmech evidence, and absent
-    # provenance on the scientific products this bundle carries.
-    upload_warnings: list[UploadWarning] = []
 
     # Provenance-presence warnings, the same ones /uploads/thermo and
     # /uploads/statmech have always returned. They were never wired here,

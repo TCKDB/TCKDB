@@ -163,7 +163,11 @@ and `POST /api/v1/uploads/computed-reaction`, could not say (#622), all additive
   and where it names none the bundle's fills in (`workflow_tool_release` on
   both bundles, `analysis_software_release` as well on the reaction bundle).
   The responses name what was written: `ComputedSpeciesUploadResult.transport`
-  (`{transport_id}`) and `transport_ids` on the reaction bundle's response.
+  (`{transport_id, transport_ref}`) and `transport_ids` with `transport_refs`
+  (`trn_...`, same order) on the reaction bundle's response. A source
+  calculation of another species on the reaction bundle is refused with the
+  coded `transport_source_calculation_owner_mismatch` (422, `context` has
+  `field`, `target`, `owner_kind`), now a code a depositor can receive.
   Provenance gaps are annotated as warnings under `transport.` /
   `species['<key>'].transport.`.
 - **Rejected rotors.** `invalidated_reason` on `StatmechTorsionInBundle` and on
@@ -173,13 +177,23 @@ and `POST /api/v1/uploads/computed-reaction`, could not say (#622), all additive
 - **Who measured the SCF stability.** `SCFStabilityContent.source_calculation_key`
   names the calculation (job) in the same bundle that measured the verdict, when
   it is not the calculation the block is attached to. It may point at a
-  calculation declared later in the payload. It must name a declared calculation
-  of the same species entry (or of the transition state, for a transition-state
-  calculation), and may not name the calculation itself. It is stored in the
+  calculation declared later in the payload. Rules: it must name a declared
+  calculation; of the same species entry (or of the transition state, for a
+  transition-state calculation), else the coded
+  `scf_stability_source_calculation_owner_mismatch`; on the same conformer as
+  the carrier (reaction bundle: the same `conformer_key`, or the conformer of
+  its `geometry_key`, where both are stated), else the coded
+  `scf_stability_source_geometry_mismatch` (422, `context` has `field`, `key`,
+  `carrier_key`), the sibling of `thermo_sp_geometry_mismatch`; it may not name
+  the carrier itself or close a cycle with other blocks' keys. A measuring job
+  at a different level of theory than the carrier is accepted with the upload
+  warning `scf_stability_source_level_mismatch`. The key is stored in the
   existing `calc_scf_stability.source_calculation_id` and read back as
   `source_calculation_ref`. No stability calculation type was added: the
-  measuring job keeps the type it has. The key is refused on the primitive
-  routes (`SCFStabilityPayload` names a calculation by id there) and on
+  measuring job keeps the type it has. `SCFStabilityPayload` (the primitive
+  routes, which name a calculation by id) and `SCFStabilityContent` now share
+  `SCFStabilityBase`, so the key is not in the primitive routes' schemas and is
+  refused there as an unknown field. It is also refused on
   `POST /api/v1/uploads/networks/pdep`, which has no pass to link it.
 - **Contract prose.** `SoftwareReleaseRef` now says what `version`, `revision`
   and `build` hold and that all three are part of release identity (`revision`
@@ -865,7 +879,8 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`rights_attestation_requires_curator`](#c-rights-attestation-requires-curator) | 403 | route handler |
 | [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
 | [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
-| [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | route handler |
+| [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
+| [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_key_undeclared`](#c-species-key-undeclared) | 422 | payload validation; route handler |
@@ -897,7 +912,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`transition_state_no_imaginary_mode`](#c-transition-state-no-imaginary-mode) | 422 | payload validation |
 | [`transition_state_reaction_coordinate_ambiguous`](#c-transition-state-reaction-coordinate-ambiguous) | 422 | payload validation |
 | [`transition_state_reaction_coordinate_not_designated`](#c-transition-state-reaction-coordinate-not-designated) | 422 | payload validation |
-| [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | route handler |
+| [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) | 422 | payload validation; route handler |
 
 ### Minimal valid example
 
@@ -1078,10 +1093,12 @@ Nested models (56; fields and rules in the [model reference](#model-reference)):
 - **ComputedSpeciesUploadRequest.validate_transport_source_keys_resolve** (model, after; can refuse): transport.source_calculations references undefined calculation_key '{sc.calculation_key}'.
 - **ComputedSpeciesUploadRequest.validate_scf_stability_source_keys_resolve** (model, after; can refuse):
 
-  ``scf_stability.source_calculation_key`` must name a bundle calculation.
+  ``scf_stability.source_calculation_key`` must name a usable job.
 
-  Every calculation in this bundle belongs to the one species entry,
-  so there is no owner to check beyond existence.
+  Every calculation in this bundle belongs to the one species entry, so
+  the owner rule is vacuous here. What is checked: the key is declared,
+  it is not the carrier itself, the job is on the same conformer as the
+  carrier, and no chain of keys closes into a cycle.
 
 - **ComputedSpeciesUploadRequest.validate_statmech_torsion_scan_keys_resolve** (model, after; can refuse):
 
@@ -1159,6 +1176,7 @@ Traced statically from the payload validators, route handlers and route dependen
 | [`rights_license_blank`](#c-rights-license-blank) | 422 | route handler |
 | [`rights_source_terms_required`](#c-rights-source-terms-required) | 422 | route handler |
 | [`scf_stability_source_calculation_owner_mismatch`](#c-scf-stability-source-calculation-owner-mismatch) | 422 | route handler |
+| [`scf_stability_source_geometry_mismatch`](#c-scf-stability-source-geometry-mismatch) | 422 | payload validation; route handler |
 | [`species_geometry_composition_mismatch`](#c-species-geometry-composition-mismatch) | 422 | route handler |
 | [`species_geometry_isotope_mismatch`](#c-species-geometry-isotope-mismatch) | 422 | route handler |
 | [`species_kind_conflict`](#c-species-kind-conflict) | 422 | route handler |
@@ -3124,8 +3142,8 @@ The most specific refusals traced for this surface (ranking in the [code referen
 - [`species_kind_conflict`](#c-species-kind-conflict) (422): This deposit declares molecule_kind={payload.molecule_kind.value}, but the species identity it resolves to (smiles={species.smiles}, charge={species.charge}, multiplicity={species.multiplicity}) is already stored as molecule_kind={species.kind.value} (species_kind_conflict).
 - [`species_smiles_charge_mismatch`](#c-species-smiles-charge-mismatch) (422): species_entry.charge={payload.charge} does not match SMILES charge {charge}
 - [`calculation_key_undeclared`](#c-calculation-key-undeclared) (422): Transition state '{ts.key}' validation evidence references undefined calculation_key '{evidence.source_calculation_key}'.
+- [`transport_source_calculation_owner_mismatch`](#c-transport-source-calculation-owner-mismatch) (422): see the code reference
 - [`calculation_software_is_workflow_tool`](#c-calculation-software-is-workflow-tool) (422): software_release.name={software_release.name} names {tool}, a workflow tool, not the electronic-structure program that ran this calculation.
-- [`freq_mode_index_not_unique`](#c-freq-mode-index-not-unique) (422): mode_index values must be unique within a freq result.
 
 ### Routes
 
@@ -6511,7 +6529,7 @@ The root payload of [surface `RightsAttestationCreate`](#s-rightsattestationcrea
 
 `tckdb_schemas.fragments.calculation`.
 
-Optional inline SCF wavefunction stability evidence.
+SCF stability evidence as a bundle carries it.
 
 Unknown keys are refused.
 
@@ -6522,8 +6540,8 @@ Unknown keys are refused.
 | `instability_count` | integer \| null | no | `null` |  | >= 0 | Number of distinct instabilities found. |
 | `instability_type` | string \| null | no | `null` |  |  | Free-text describing the instability class (e.g. ``"RHF→UHF"``, ``"internal"``). |
 | `reoptimized_wavefunction` | boolean \| null | no | `null` |  |  | Whether a stable wavefunction was obtained by stability optimisation / reoptimisation. |
-| `source_calculation_key` | string \| null | no | `null` |  | length >= 1 | Optional local key of the calculation (job) that measured this verdict, when that is a different job from the one this block hangs off. Meaningful only inside a bundle, where it must name a calculation the same bundle declares (on the computed-species bundle any conformer's, on the computed-reaction bundle any species or transition-state calculation). The job that measured it keeps its own type; there is no separate stability calculation type. The key is resolved after every calculation in the bundle exists, so it may point at a calculation declared later in the payload. Omit it when the calculation carrying the block is the one that measured the stability. |
 | `note` | string \| null | no | `null` |  |  |  |
+| `source_calculation_key` | string \| null | no | `null` |  | length >= 1 | Optional local key of the calculation (job) that measured this verdict, when that is a different job from the one this block hangs off. Meaningful only inside a bundle, where it must name a calculation the same bundle declares for the same species entry (or transition state) and on the same conformer as the calculation carrying the block. It may not name the carrier itself or form a cycle with another block's key, and a level of theory that differs from the carrier's is accepted with an upload warning. The job that measured it keeps its own type; there is no separate stability calculation type. The key is resolved after every calculation in the bundle exists, so it may point at a calculation declared later in the payload. Omit it when the calculation carrying the block is the one that measured the stability. |
 
 - **SCFStabilityContent.validate_status_consistency** (model, after; can refuse):
 
@@ -6556,7 +6574,6 @@ Unknown keys are refused.
 | `instability_count` | integer \| null | no | `null` |  | >= 0 | Number of distinct instabilities found. |
 | `instability_type` | string \| null | no | `null` |  |  | Free-text describing the instability class (e.g. ``"RHF→UHF"``, ``"internal"``). |
 | `reoptimized_wavefunction` | boolean \| null | no | `null` |  |  | Whether a stable wavefunction was obtained by stability optimisation / reoptimisation. |
-| `source_calculation_key` | string \| null | no | `null` |  | length >= 1 | Optional local key of the calculation (job) that measured this verdict, when that is a different job from the one this block hangs off. Meaningful only inside a bundle, where it must name a calculation the same bundle declares (on the computed-species bundle any conformer's, on the computed-reaction bundle any species or transition-state calculation). The job that measured it keeps its own type; there is no separate stability calculation type. The key is resolved after every calculation in the bundle exists, so it may point at a calculation declared later in the payload. Omit it when the calculation carrying the block is the one that measured the stability. |
 | `note` | string \| null | no | `null` |  |  |  |
 | `source_calculation_id` | integer \| null | no | `null` |  |  | Optional FK to the calculation whose log carries the stability evidence (when separate from the owning calculation). |
 | `source_artifact_id` | integer \| null | no | `null` |  |  | Optional FK to a ``calculation_artifact`` row holding the stability log bytes (e.g. an ``ancillary`` or ``output_log`` artifact). |
@@ -6574,15 +6591,6 @@ Unknown keys are refused.
   evidence-bearing fields (``lowest_eigenvalue`` /
   ``source_artifact_id``) for ``status = stable`` — that is left
   to the producer documentation.
-
-- **SCFStabilityPayload.refuse_local_key** (model, after; can refuse):
-
-  ``source_calculation_key`` only means something inside a bundle.
-
-  The primitive routes name other rows by id, and a local key has no
-  namespace to resolve against there. Accepting it would store the
-  stability block with no source and answer 201, so it is refused and
-  the repair is named.
 
 <a id="m-spresultpayload"></a>
 
@@ -8053,10 +8061,19 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 #### `scf_stability_source_calculation_owner_mismatch`
 
-- Status: 422; not a client refusal; arrives as: coded_exception; defined in `backend/app/services/calculation_ownership.py`.
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Note: No request produces it today, although the bundle routes resolve scf_stability.source_calculation_key in a namespace wider than the carrying calculation's owner: the request schemas refuse a cross-owner key first (the computed-reaction schema knows which species or transition state each calculation belongs to; the computed-species schema has one subject), with a generic validation message.
+- Note: scf_stability.source_calculation_key names a calculation owned by another species entry or transition state than the calculation carrying the verdict.
+
+<a id="c-scf-stability-source-geometry-mismatch"></a>
+
+#### `scf_stability_source_geometry_mismatch`
+
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
+- The body's `context` names the things involved.
+- Message: "{field}='{key}' names a calculation on a different conformer than '{carrier_key}'. A stability analysis describes one wavefunction at one geometry, so the job that measured a verdict must be on the same conformer as the calculation that carries it."
+- Note: The job named by scf_stability.source_calculation_key ran on another conformer than the calculation carrying the verdict.
 
 <a id="c-species-geometry-composition-mismatch"></a>
 
@@ -8396,10 +8413,10 @@ Every code a producer route was traced to. `Message` is the sentence written bes
 
 #### `transport_source_calculation_owner_mismatch`
 
-- Status: 422; not a client refusal; arrives as: coded_exception; defined in `backend/app/services/calculation_ownership.py`.
+- Status: 422; client-facing; arrives as: coded_exception; defined in `schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py`.
 - The body's `context` names the things involved.
 - Message: not found by the static search.
-- Note: No request produces it.
+- Note: A transport source_calculations link names a calculation of another species entry.
 
 <a id="c-unknown-calculation-artifact-ref"></a>
 

@@ -14,6 +14,10 @@ from typing import Any, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tckdb_schemas.bundle_source_rules import (
+    find_scf_source_cycle,
+    scf_source_geometry_error,
+)
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
 from tckdb_schemas.enums import (
@@ -1052,37 +1056,59 @@ class ComputedSpeciesUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_scf_stability_source_keys_resolve(self) -> Self:
-        """``scf_stability.source_calculation_key`` must name a bundle calculation.
+        """``scf_stability.source_calculation_key`` must name a usable job.
 
-        Every calculation in this bundle belongs to the one species entry,
-        so there is no owner to check beyond existence.
+        Every calculation in this bundle belongs to the one species entry, so
+        the owner rule is vacuous here. What is checked: the key is declared,
+        it is not the carrier itself, the job is on the same conformer as the
+        carrier, and no chain of keys closes into a cycle.
         """
         defined = self._all_calc_keys()
+        conformer_of: dict[str, str] = {}
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                conformer_of[calc.key] = conf.key
+        links: dict[str, str] = {}
         for conf in self.conformers:
             for calc in (conf.primary_calculation, *conf.additional_calculations):
                 stability = calc.scf_stability
                 if stability is None or stability.source_calculation_key is None:
                     continue
-                if stability.source_calculation_key == calc.key:
+                key = stability.source_calculation_key
+                field = (
+                    f"calculations['{calc.key}'].scf_stability."
+                    f"source_calculation_key"
+                )
+                if key == calc.key:
                     raise ValueError(
                         f"calculation '{calc.key}' scf_stability."
                         f"source_calculation_key names the calculation "
                         f"itself; omit it when this calculation measured "
                         f"the stability."
                     )
-                if stability.source_calculation_key not in defined:
+                if key not in defined:
                     raise undeclared_key_error(
                         W_CALCULATION_KEY_UNDECLARED,
                         f"calculation '{calc.key}' scf_stability."
                         f"source_calculation_key references undefined "
-                        f"calculation_key '{stability.source_calculation_key}'.",
-                        field=(
-                            f"calculations['{calc.key}'].scf_stability."
-                            f"source_calculation_key"
-                        ),
-                        key=stability.source_calculation_key,
+                        f"calculation_key '{key}'.",
+                        field=field,
+                        key=key,
                         declared=defined,
                     )
+                if conformer_of[key] != conf.key:
+                    raise scf_source_geometry_error(
+                        field=field, key=key, carrier_key=calc.key
+                    )
+                links[calc.key] = key
+        cycle = find_scf_source_cycle(links)
+        if cycle is not None:
+            raise ValueError(
+                "scf_stability.source_calculation_key forms a cycle: "
+                + " -> ".join([*cycle, cycle[0]])
+                + ". A stability verdict cannot be measured by a job whose "
+                "own verdict it measures."
+            )
         return self
 
     @model_validator(mode="after")
@@ -1201,6 +1227,8 @@ class StatmechUploadRefInBundle(SchemaBase):
 
 class TransportUploadRefInBundle(SchemaBase):
     transport_id: int
+    #: The ``trn_`` ref of the same record; name it in later requests.
+    transport_ref: str | None = None
 
 
 class ComputedSpeciesUploadResult(BaseModel):

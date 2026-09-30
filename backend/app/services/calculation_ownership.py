@@ -52,6 +52,13 @@ from __future__ import annotations
 
 import logging
 
+from tckdb_schemas.bundle_source_rules import (
+    W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    owner_mismatch_context,
+    owner_mismatch_detail,
+)
+
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
 from app.db.models.statmech import Statmech
@@ -106,39 +113,17 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
 
-#: An SCF stability verdict names, as the job that measured it, a
-#: calculation owned by another subject than the calculation carrying the
-#: verdict (``scf_stability.source_calculation_key`` on a bundle).
+#: Transport (``W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH``) and SCF
+#: stability (``W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH``) source
+#: links that cite a calculation owned by another subject. Both are defined in
+#: ``tckdb_schemas.bundle_source_rules`` and imported above, so the request
+#: schema and this module raise the same code (ADR 0017).
 #:
-#: A guard today, and for the reason that makes it one rather than an
-#: oversight. The bundle routes resolve the key in a namespace that spans
-#: every species (and the transition state) in the payload, which by the
-#: width-of-namespace clause would make it reachable. It is not, because
-#: the request schemas refuse a cross-owner key first, with a generic
-#: message, before any workflow runs: the computed-reaction schema knows
-#: which subject each calculation key belongs to, and the computed-species
-#: schema has only one subject. The workflow check stays because the schema
-#: lives in another distributable package and has drifted from its
-#: workflows before. Provoked directly, with no schema in front of it, in
-#: ``tests/services/test_scf_stability_sources.py``.
-W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = (
-    "scf_stability_source_calculation_owner_mismatch"
-)
-
-#: A transport source link cites a calculation owned by another subject.
-#:
-#: The one code here that no request can produce: the standalone guard reads
-#: a calculation the same loop persisted against the target's own species
-#: entry, its source-link payload carries no ``existing_calculation_id``, and
-#: the conformer and PDep callers of ``resolve_and_create_transport`` pass no
-#: source calculations at all. The bundle seam (``persist_bundle_transport``)
-#: does resolve keys across a wider namespace, but the computed-reaction
-#: schema refuses a cross-species transport source before the workflow runs.
-#: Catalogued as ``Reach.guard`` and not exported to clients; kept as the
-#: tripwire for the path that changes any of those facts.
-W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = (
-    "transport_source_calculation_owner_mismatch"
-)
+#: Reachable on ``/uploads/computed-reaction``, which resolves the keys in a
+#: namespace spanning every species and the transition state; the schema
+#: refuses first with the same code and context, and the workflow repeats the
+#: check where it knows which entry each key resolved to. The computed-species
+#: bundle has one subject, so nothing there can trip them.
 
 #: An applied energy correction names a source calculation owned by
 #: another subject.
@@ -286,14 +271,15 @@ def assert_owned_by(
     )
     raise CodedValueError(
         code,
-        f"{context}: this {subject_noun} belongs to another {owner_noun}, "
-        f"not to the {target} target. A supporting {subject_noun} must be "
-        f"one of the target {owner_noun}'s own.",
-        context={
-            "field": context,
-            "target": target,
-            "owner_kind": owner_noun.replace(" ", "_"),
-        },
+        owner_mismatch_detail(
+            context=context,
+            subject_noun=subject_noun,
+            owner_noun=owner_noun,
+            target=target,
+        ),
+        context=owner_mismatch_context(
+            field=context, target=target, owner_noun=owner_noun
+        ),
         message_prefix=False,
     )
 
@@ -358,6 +344,7 @@ __all__ = [
     "W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH",
+    "W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH",
     "W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH",

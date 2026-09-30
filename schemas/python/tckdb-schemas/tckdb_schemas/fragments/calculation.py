@@ -395,8 +395,8 @@ class SPResultPayload(SchemaBase):
     electronic_energy_hartree: float | None = None
 
 
-class SCFStabilityContent(SchemaBase):
-    """Optional inline SCF wavefunction stability evidence.
+class SCFStabilityBase(SchemaBase):
+    """The SCF wavefunction stability finding, with nothing that cites another row.
 
     Attaches to any calculation type — there is no calc_type restriction.
     Producers must only emit ``status = stable`` when an actual
@@ -415,24 +415,11 @@ class SCFStabilityContent(SchemaBase):
         (e.g. ``"RHF→UHF"``, ``"internal"``).
     :param reoptimized_wavefunction: Whether a stable wavefunction was
         obtained by stability optimisation / reoptimisation.
-    :param source_calculation_key: Optional local key of the calculation
-        (job) that measured this verdict, when that is a different job from
-        the one this block hangs off. Meaningful only inside a bundle, where
-        it must name a calculation the same bundle declares (on the
-        computed-species bundle any conformer's, on the computed-reaction
-        bundle any species or transition-state calculation). The job that
-        measured it keeps its own type; there is no separate stability
-        calculation type. The key is resolved after every calculation in the
-        bundle exists, so it may point at a calculation declared later in
-        the payload. Omit it when the calculation carrying the block is the
-        one that measured the stability.
 
-    Holds the stability finding and nothing that names another database
-    row, which is what lets a bundle carry it. A bundle upload identifies
-    everything by local key, so the one cross-reference here is a local
-    key; the two FK fields on :class:`SCFStabilityPayload` below would put
-    raw primary keys back on a surface a depositor is meant to be able to
-    write without ever having queried TCKDB.
+    Holds the stability finding and nothing that names another row. The
+    two routes that cite the measuring job do it differently, each in its own
+    subclass: a bundle by local key (:class:`SCFStabilityContent`), the
+    primitive routes by id (:class:`SCFStabilityPayload`).
     """
 
     status: SCFStabilityStatus
@@ -440,7 +427,6 @@ class SCFStabilityContent(SchemaBase):
     instability_count: int | None = Field(default=None, ge=0)
     instability_type: str | None = None
     reoptimized_wavefunction: bool | None = None
-    source_calculation_key: str | None = Field(default=None, min_length=1)
     note: str | None = None
 
     @model_validator(mode="after")
@@ -489,7 +475,31 @@ class SCFStabilityContent(SchemaBase):
         return self
 
 
-class SCFStabilityPayload(SCFStabilityContent):
+class SCFStabilityContent(SCFStabilityBase):
+    """SCF stability evidence as a bundle carries it.
+
+    The finding of :class:`SCFStabilityBase` plus, optionally, the local key of
+    the job that measured it.
+
+    :param source_calculation_key: Optional local key of the calculation
+        (job) that measured this verdict, when that is a different job from
+        the one this block hangs off. Meaningful only inside a bundle, where
+        it must name a calculation the same bundle declares for the same
+        species entry (or transition state) and on the same conformer as the
+        calculation carrying the block. It may not name the carrier itself
+        or form a cycle with another block's key, and a level of theory that
+        differs from the carrier's is accepted with an upload warning. The
+        job that measured it keeps its own type; there is no separate stability
+        calculation type. The key is resolved after every calculation in the
+        bundle exists, so it may point at a calculation declared later in
+        the payload. Omit it when the calculation carrying the block is the
+        one that measured the stability.
+    """
+
+    source_calculation_key: str | None = Field(default=None, min_length=1)
+
+
+class SCFStabilityPayload(SCFStabilityBase):
     """SCF stability evidence that may cite rows outside its own record.
 
     The primitive upload routes take this shape. They already accept
@@ -497,15 +507,10 @@ class SCFStabilityPayload(SCFStabilityContent):
     naming the calculation or artifact that carries the stability log is
     the same kind of claim they already support.
 
-    Bundle roots take :class:`SCFStabilityContent` instead. Not because
-    the citation is unwanted there, but because a bundle has no way to
-    make it: a bundle names things by local key, and the calculation this
-    block hangs off is persisted before its siblings exist, so a key
-    pointing sideways could not be resolved at the moment it is read. A
-    depositor who needs the citation has the primitive routes; a
-    depositor who has only what a parser found — a status, an eigenvalue,
-    a count — can now say it from a bundle, which is what they could not
-    do at all before.
+    Bundle roots take :class:`SCFStabilityContent` instead, which names the
+    measuring job by local key rather than by id. Both share
+    :class:`SCFStabilityBase`, so neither route publishes the other's
+    citation field.
 
     :param source_calculation_id: Optional FK to the calculation whose
         log carries the stability evidence (when separate from the
@@ -517,23 +522,6 @@ class SCFStabilityPayload(SCFStabilityContent):
 
     source_calculation_id: int | None = None
     source_artifact_id: int | None = None
-
-    @model_validator(mode="after")
-    def refuse_local_key(self) -> Self:
-        """``source_calculation_key`` only means something inside a bundle.
-
-        The primitive routes name other rows by id, and a local key has no
-        namespace to resolve against there. Accepting it would store the
-        stability block with no source and answer 201, so it is refused and
-        the repair is named.
-        """
-        if self.source_calculation_key is not None:
-            raise ValueError(
-                "scf_stability.source_calculation_key is only valid inside a "
-                "computed-species or computed-reaction bundle; on this route "
-                "name the measuring calculation with source_calculation_id."
-            )
-        return self
 
 
 class HessianPayload(SchemaBase):
