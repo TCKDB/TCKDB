@@ -289,8 +289,9 @@ def test_sp_only_atom_joins_the_conformer_group_the_fabricated_opt_created(
 ):
     """One atom, two deposits in two shapes: one group, two observations.
 
-    The single-atom fallback in ``resolve_conformer_group`` joins any group
-    with no torsion fingerprint, and does not look at the primary's type.
+    An atom still gets a (rotor-less) fingerprint, so the fingerprint match in
+    ``resolve_conformer_group`` joins the existing group; the no-fingerprint
+    fallback is not the path taken. Neither looks at the primary's type.
     """
     first = client.post(
         _SPECIES_URL,
@@ -428,6 +429,47 @@ def test_sp_only_atom_reads_back_with_its_geometry_and_levels(client, db_session
     assert statmech_record["levels"]["energy"]["method"] == "dlpno-ccsd(t)-f12"
     assert statmech_record["evidence_summary"]["has_opt_calculation"] is False
     assert statmech_record["evidence_summary"]["has_sp_calculation"] is True
+
+
+def _conformer_upload(smiles: str, multiplicity: int, xyz: str) -> dict:
+    return {
+        "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": multiplicity},
+        "geometry": {"xyz_text": xyz},
+        "calculation": {
+            "type": "sp",
+            "software_release": {"name": "orca", "version": "6.0.0"},
+            "level_of_theory": {"method": "dlpno-ccsd(t)-f12", "basis": "cc-pvtz-f12"},
+            "sp_result": {"electronic_energy_hartree": -0.49994557},
+        },
+    }
+
+
+def test_conformers_route_gives_an_atoms_sp_its_geometry_but_not_a_molecules(client, db_session):
+    """The primitive route matches the bundle routes for an atom (#610), and only for an atom."""
+    atom = client.post(
+        "/api/v1/uploads/conformers", json=_conformer_upload("[H]", 2, "1\nH atom\nH 0.0 0.0 0.0")
+    )
+    assert atom.status_code == 201, atom.text[:800]
+    assert _read_conformer_group(client, db_session)["evidence_summary"]["geometry_count"] == 1
+
+    molecule = client.post(
+        "/api/v1/uploads/conformers", json=_conformer_upload("[H][H]", 1, _H2_XYZ)
+    )
+    assert molecule.status_code == 201, molecule.text[:800]
+    (h2_calc,) = db_session.scalars(
+        select(Calculation)
+        .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .join(Species, Species.id == SpeciesEntry.species_id)
+        .where(Species.smiles == "[H][H]")
+    ).all()
+    assert (
+        db_session.scalars(
+            select(CalculationOutputGeometry).where(
+                CalculationOutputGeometry.calculation_id == h2_calc.id
+            )
+        ).all()
+        == []
+    )
 
 
 def _second_sp(primary: dict) -> dict:

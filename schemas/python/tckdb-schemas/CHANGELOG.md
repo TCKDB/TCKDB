@@ -17,7 +17,11 @@ existing producer breaks. The server stores the atom's `sp` with the conformer
 geometry as both its input and its final output, so the conformer reads back
 with a geometry; a further `sp` on the atom gets no inferred
 `single_point_on` edge and no `dependency_edge_not_inferred` warning, since the
-atom has no `opt` for the edge to name. What an atom should send is in the
+atom has no `opt` for the edge to name. With no `opt` linked, two `sp` links
+on one geometry (thermo or statmech) are refused `thermo_role_duplicate` /
+`statmech_role_duplicate`, as two on one optimisation always were; the
+`/uploads/conformers` route gives a one-atom `sp` primary the same geometry
+link. What an atom should send is in the
 producer contract, under the two conformer primary-calculation rules. The
 wire shape gains nothing: no field is added, removed or renamed.
 

@@ -11,6 +11,8 @@ calculation, and unchanged otherwise.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from sqlalchemy import select
 
 from app.db.models.calculation import Calculation, CalculationDependency
@@ -22,6 +24,10 @@ from app.services.trust import (
     evaluate_computed_calculation,
     evaluate_computed_statmech,
     evaluate_computed_thermo,
+)
+from app.services.trust.rubrics import (
+    _calculation_is_single_atom,
+    _check_calculation_dependencies_present,
 )
 from tests.api.test_api_bundle_monatomic_sp_primary import (
     _H2_XYZ,
@@ -84,3 +90,41 @@ def test_a_polyatomic_is_still_asked_for_its_optimisation(client, db_session):
     assert calc["calculation_dependencies_present_when_expected"] is EvidenceOutcome.missing
     assert statmech["opt_source_present"] is EvidenceOutcome.missing
     assert thermo["opt_source_present"] is EvidenceOutcome.missing
+
+
+# ---------------------------------------------------------------------------
+# The predicate and the check, on stand-in calculations (no database)
+# ---------------------------------------------------------------------------
+
+
+def _calc(*, natoms_in=(), natoms_out=(), parents=0, calc_type=CalculationType.sp):
+    def link(n):
+        return SimpleNamespace(geometry=SimpleNamespace(natoms=n))
+
+    return SimpleNamespace(
+        type=calc_type,
+        input_geometries=[link(n) for n in natoms_in],
+        output_geometries=[link(n) for n in natoms_out],
+        child_dependencies=[object()] * parents,
+    )
+
+
+def test_a_calculation_with_no_geometry_is_not_a_single_atom():
+    """Absence of geometry is not evidence of an atom."""
+    assert _calculation_is_single_atom(_calc()) is False
+    assert (
+        _check_calculation_dependencies_present(_calc()) is EvidenceOutcome.missing
+    )
+
+
+def test_a_calculation_is_a_single_atom_only_if_every_geometry_is():
+    assert _calculation_is_single_atom(_calc(natoms_in=[1], natoms_out=[1])) is True
+    assert _calculation_is_single_atom(_calc(natoms_in=[1], natoms_out=[2])) is False
+    assert _calculation_is_single_atom(_calc(natoms_in=[2, 1])) is False
+    assert _calculation_is_single_atom(_calc(natoms_in=[2])) is False
+
+
+def test_an_atoms_sp_that_has_a_parent_is_graded_on_that_parent():
+    """The exemption is for the parentless sp; one that has a parent passes on it."""
+    calc = _calc(natoms_in=[1], parents=1)
+    assert _check_calculation_dependencies_present(calc) is EvidenceOutcome.passed

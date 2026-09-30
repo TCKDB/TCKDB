@@ -1053,7 +1053,6 @@ Traced statically from the payload validators, route handlers and route dependen
 |---|---|---|
 | [`applied_energy_correction_source_calculation_owner_mismatch`](#c-applied-energy-correction-source-calculation-owner-mismatch) | 422 | route handler |
 | [`applied_energy_correction_source_key_undeclared`](#c-applied-energy-correction-source-key-undeclared) | 422 | payload validation; route handler |
-| [`atom_map_geometry_unparseable`](#c-atom-map-geometry-unparseable) | 422 | payload validation |
 | [`bac_total_requires_components`](#c-bac-total-requires-components) | 422 | route handler |
 | [`calculation_geometry_composition_mismatch`](#c-calculation-geometry-composition-mismatch) | 422 | route handler |
 | [`calculation_key_undeclared`](#c-calculation-key-undeclared) | 422 | payload validation; route handler |

@@ -57,8 +57,11 @@ _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
 )
 """Calculation types that the spec (§9.5) expects to produce an output geometry.
 
-``conf`` and ``sp`` calcs do not produce a separate output geometry; ``freq``
-reads back the input geometry; ``scan`` produces a sample, not a single output.
+``conf`` and ``sp`` calcs do not produce a separate output geometry (except the
+``sp`` primary of a one-atom conformer, which carries the atom as its final
+geometry -- see ``attach_calculation_output_geometries``; not expected of it
+here, so the check stays not_applicable); ``freq`` reads back the input
+geometry; ``scan`` produces a sample, not a single output.
 """
 
 _TYPES_REQUIRING_GEOMETRY_VALIDATION: frozenset[CalculationType] = frozenset(
@@ -1786,6 +1789,11 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
+# Rubric versions are not bumped for a change that only moves a check between
+# passed/missing/not_applicable (#610 made three checks not_applicable for a
+# one-atom calculation): trust is computed on read, and the machine-review
+# context_hash already folds in the per-check sets (context_adapter.py); same
+# ruling as #393, #463, #78.
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,

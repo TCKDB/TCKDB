@@ -41,10 +41,8 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
-from tckdb_schemas.frequency_completeness import (
-    atom_count_of_xyz,
-    evaluate_deposited_frequency_list,
-)
+from tckdb_schemas import frequency_completeness as _frequency_completeness
+from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.local_key_codes import (
@@ -347,7 +345,11 @@ def require_opt_primary_unless_monatomic(
     """
     if primary_type is CalculationType.opt:
         return
-    n_atoms = atom_count_of_xyz(xyz_text)
+    # Looked up by name on purpose. The counter raises
+    # ``atom_map_geometry_unparseable`` internally and swallows it (returning
+    # None), so the code is never this rule's refusal; a direct reference
+    # would make the producer-contract tracer list it as one.
+    n_atoms = getattr(_frequency_completeness, "atom_count_of_xyz")(xyz_text)
     if primary_type is CalculationType.sp and n_atoms == 1:
         return
     if primary_type is CalculationType.sp and n_atoms is not None:
