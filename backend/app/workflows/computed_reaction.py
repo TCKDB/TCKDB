@@ -27,6 +27,7 @@ from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticip
 from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
@@ -45,6 +46,7 @@ from app.schemas.workflows.computed_reaction_upload import (
     calculation_in_to_with_results_payload,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.atomic_electronic_warnings import collect_bundle_atomic_warnings
 from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -111,11 +113,11 @@ from app.services.local_key_resolution import (
     resolve_geometry_key,
     resolve_species_key,
 )
+from app.services.monatomic import statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     NOT_APPLICABLE,
     collect_provenance_warnings,
     collect_statmech_content_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.reaction_atom_map import (
     ResolvedAtomMapParticipant,
@@ -145,6 +147,7 @@ from app.services.statmech_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.services.upload_reconciliation import term_symbol_warnings
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 
 #: How a computed-reaction bundle declares a name in the calculation
@@ -389,6 +392,21 @@ def _collect_bundle_provenance_warnings(
                     field_prefix=f"species[{sp.key!r}].thermo.",
                 )
             )
+        warnings.extend(
+            f.model_copy(update={"field": f"species[{sp.key!r}].{f.field}"})
+            for f in term_symbol_warnings(sp.species_entry)
+        )
+        warnings.extend(
+            collect_bundle_atomic_warnings(
+                species_entry=sp.species_entry,
+                xyz_texts=[c.geometry.xyz_text for c in sp.conformers],
+                statmech=sp.statmech,
+                thermo=sp.thermo,
+                corrections=sp.applied_energy_corrections,
+                statmech_field=f"species[{sp.key!r}].statmech",
+                energy_field=f"species[{sp.key!r}].applied_energy_corrections",
+            )
+        )
         if sp.statmech is not None:
             warnings.extend(
                 collect_provenance_warnings(
@@ -406,25 +424,25 @@ def _collect_bundle_provenance_warnings(
                     field_prefix=f"species[{sp.key!r}].statmech.",
                 )
             )
+            # (The subject-is-an-atom decision is #608: a geometry, then
+            # ``rigid_rotor_kind``, then the identity -- not the absence of
+            # rotational constants, which 26 of 45 real ARC polyatomics lack.)
+            #
             # The species route has reported this since statmech landed
             # there; the reaction route reported nothing, so the same
             # untraceable partition function was named on one route and
             # silent on the other.
             #
-            # ``statmech_has_rotational_structure`` only became answerable
-            # on this route with #142: it reads the rotational constants,
-            # which ``BundleStatmechIn`` could not carry until now. Before
-            # that it could only ever see torsions, so a polyatomic
-            # deposited with constants and no torsions — the ordinary ARC
-            # shape — looked monatomic to it.
             warnings.extend(
                 collect_statmech_content_warnings(
                     scientific_origin=sp.statmech.scientific_origin,
                     source_calculation_roles={
                         item.role.value for item in sp.statmech.source_calculations
                     },
-                    has_rotational_structure=statmech_has_rotational_structure(
-                        sp.statmech
+                    is_polyatomic=statmech_subject_is_polyatomic(
+                        sp.statmech,
+                        xyz_texts=[c.geometry.xyz_text for c in sp.conformers],
+                        smiles=sp.species_entry.smiles,
                     ),
                     field=f"species[{sp.key!r}].statmech",
                 )
@@ -1339,6 +1357,16 @@ def persist_computed_reaction_upload(
             session.add(statmech)
             session.flush()
             statmech_ids.append(statmech.id)
+
+            for level in s.electronic_levels:
+                session.add(
+                    StatmechElectronicLevel(
+                        statmech_id=statmech.id,
+                        level_index=level.level_index,
+                        energy_cm1=level.energy_cm1,
+                        degeneracy=level.degeneracy,
+                    )
+                )
 
             # Link this species' COMPUTED thermo (persisted above) to the
             # statmech it was derived from. Correlated by species key so
