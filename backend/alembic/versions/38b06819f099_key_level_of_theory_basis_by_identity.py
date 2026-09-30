@@ -6,8 +6,12 @@ levels of theory. The application now hashes each basis name through
 ``app.chemistry.basis_set_names.basis_identity_key`` (lower case, plus the
 family hyphen in ``def2-`` and ``cc-p`` restored). This revision re-keys the
 rows that already exist, so that the next upload of any of them still finds
-it, and adds the column a later merge records itself in. The verbatim names
-are not touched.
+it, and adds the table (``level_of_theory_merge``, not a column) a later
+merge records itself in. The verbatim names are not touched.
+
+See also ``c8424fe82997`` (method names keyed the same way, #585) and
+``e88231299733`` (database triggers that enforce the one-hop and
+no-calculation-on-a-merged-row rules, #591).
 
 What this revision writes
 -------------------------

@@ -96,9 +96,11 @@ from app.services.input_geometry_extraction import (
 )
 from app.services.public_refs import PREFIXES
 from app.services.scientific_read.handles import (
+    canonical_level_of_theory_id,
     handle_type_mismatch_error,
     parse_handle,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
@@ -196,7 +198,10 @@ def list_calculations(
             Calculation.conformer_observation_id == conformer_observation_id
         )
     if lot_id is not None:
-        base = base.where(Calculation.lot_id == lot_id)
+        # A merged row's id names the row it was merged into (#591).
+        base = base.where(
+            Calculation.lot_id == canonical_level_of_theory_id(session, lot_id)
+        )
     if software_release_id is not None:
         base = base.where(Calculation.software_release_id == software_release_id)
     if workflow_tool_release_id is not None:
@@ -210,9 +215,9 @@ def list_calculations(
     if method is not None or basis is not None:
         base = base.join(LevelOfTheory, Calculation.lot_id == LevelOfTheory.id)
         if method is not None:
-            base = base.where(LevelOfTheory.method == method)
+            base = base.where(method_matches(method))
         if basis is not None:
-            base = base.where(LevelOfTheory.basis == basis)
+            base = base.where(basis_matches(basis))
     if software_name is not None:
         base = base.join(
             SoftwareRelease,

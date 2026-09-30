@@ -56,6 +56,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.networks import (
     _SOLVE_INTERNAL_INCLUDE_TOKENS,
     _SOLVE_LEGAL_INCLUDE_TOKENS,
@@ -337,9 +338,9 @@ def _apply_method_basis_software_filters(
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:
-            sub = sub.where(LevelOfTheory.method == request.method)
+            sub = sub.where(method_matches(request.method))
         if request.basis is not None:
-            sub = sub.where(LevelOfTheory.basis == request.basis)
+            sub = sub.where(basis_matches(request.basis))
     if sw_filter:
         sub = sub.join(
             SoftwareRelease,

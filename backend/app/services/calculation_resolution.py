@@ -13,6 +13,7 @@ from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -45,7 +46,7 @@ from app.db.models.common import (
     SoftwareReconciliationStatus,
 )
 from app.db.models.execution_environment import ExecutionEnvironmentManifest
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.db.models.software import SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.entities.calculation import CalculationCreateResolved
@@ -125,15 +126,17 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
 
     Basis-set names enter the hash through
     :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
-    so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory. The row still
-    stores the name verbatim. Every other field is hashed as written.
+    so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory, and the method
+    through :func:`~app.chemistry.method_names.method_identity_key` (issue
+    #585), so ``CCSD(T)-F12`` and ``ccsd(t)-f12`` are too. The row still
+    stores both names verbatim. Every other field is hashed as written.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
     """
 
     payload = {
-        "method": ref.method,
+        "method": method_identity_key(ref.method),
         "basis": basis_identity_key(ref.basis),
         "aux_basis": basis_identity_key(ref.aux_basis),
         "cabs_basis": basis_identity_key(ref.cabs_basis),
@@ -249,6 +252,17 @@ def resolve_level_of_theory_ref(
             level_of_theory = session.scalar(
                 select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
             )
+
+    # A merged row keeps its old hash so its ref still resolves (#574). If a
+    # spelling ever hashes to one, the calculation belongs on the row it was
+    # merged into: the database refuses a calculation on a merged row (#591).
+    kept_id = session.scalar(
+        select(LevelOfTheoryMerge.into_lot_id).where(
+            LevelOfTheoryMerge.merged_lot_id == level_of_theory.id
+        )
+    )
+    if kept_id is not None:
+        level_of_theory = session.get(LevelOfTheory, kept_id)
 
     return level_of_theory
 

@@ -35,6 +35,7 @@ from app.db.models.calculation import Calculation
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 
 class ProvenanceFilterRequest(Protocol):
@@ -99,11 +100,11 @@ def apply_calculation_provenance_filter(
         )
         if request.method is not None:
             sub_select = sub_select.where(
-                LevelOfTheory.method == request.method
+                method_matches(request.method)
             )
         if request.basis is not None:
             sub_select = sub_select.where(
-                LevelOfTheory.basis == request.basis
+                basis_matches(request.basis)
             )
     if sw_filter:
         sub_select = sub_select.join(

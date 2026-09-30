@@ -157,7 +157,8 @@ never recomputed. When the hash formula changes, existing rows are re-keyed
 in place and keep the ref they were minted with: `e1a5c3f7b9d4` (spin
 treatment joined the identity) did this for every row, and `38b06819f099`
 (basis names hashed by identity key, #574) did it for every row whose basis
-spelling differs from its key. For those rows the stored ref is no longer
+spelling differs from its key, and `c8424fe82997` (method names, #585) for
+every row whose method has an upper-case letter. For those rows the stored ref is no longer
 what their content would mint on a fresh instance. So "same content → same
 ref" below holds for rows minted under the current formula, not for every
 row that exists. A LoT ref identifies a row; it is not re-derivable from its
@@ -263,7 +264,7 @@ TCKDB scale.
 
 **LoT exception.** The content-identity row holds for a LoT minted under
 the current hash formula. A LoT row re-keyed in place by a later formula
-change (`e1a5c3f7b9d4`, `38b06819f099`) keeps the ref it was minted with,
+change (`e1a5c3f7b9d4`, `38b06819f099`, `c8424fe82997`) keeps the ref it was minted with,
 so on replay into a fresh instance the same content mints a *different*
 ref. See "LoT refs are minted once" above.
 

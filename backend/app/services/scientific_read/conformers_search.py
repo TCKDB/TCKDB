@@ -81,6 +81,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
@@ -560,9 +561,9 @@ def _apply_method_basis_software_filters(
     if method_or_basis:
         sub = sub.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
         if request.method is not None:
-            sub = sub.where(LevelOfTheory.method == request.method)
+            sub = sub.where(method_matches(request.method))
         if request.basis is not None:
-            sub = sub.where(LevelOfTheory.basis == request.basis)
+            sub = sub.where(basis_matches(request.basis))
     if sw_filter:
         sub = sub.join(
             SoftwareRelease,

@@ -24,6 +24,7 @@ from app.schemas.entities.energy_correction import (
     EnergyCorrectionSchemeRead,
     FrequencyScaleFactorRead,
 )
+from app.services.scientific_read.handles import canonical_level_of_theory_id
 
 schemes_router = APIRouter()
 scale_factors_router = APIRouter()
@@ -50,8 +51,10 @@ def list_energy_correction_schemes(
     if name is not None:
         base = base.where(EnergyCorrectionScheme.name == name)
     if level_of_theory_id is not None:
+        # A merged row's id names the row it was merged into (#591).
         base = base.where(
-            EnergyCorrectionScheme.level_of_theory_id == level_of_theory_id
+            EnergyCorrectionScheme.level_of_theory_id
+            == canonical_level_of_theory_id(session, level_of_theory_id)
         )
     if source_literature_id is not None:
         base = base.where(
@@ -118,8 +121,10 @@ def list_frequency_scale_factors(
 ):
     base = select(FrequencyScaleFactor.id)
     if level_of_theory_id is not None:
+        # A merged row's id names the row it was merged into (#591).
         base = base.where(
-            FrequencyScaleFactor.level_of_theory_id == level_of_theory_id
+            FrequencyScaleFactor.level_of_theory_id
+            == canonical_level_of_theory_id(session, level_of_theory_id)
         )
     if software_release_id is not None:
         base = base.where(
