@@ -467,9 +467,10 @@ def collect_kinetics_content_warnings_for(
     is not asked about it, so a new caller cannot accidentally emit advice
     it has no field to act on.
 
-    That the bundle must pass all three sentinels is a statement about the
-    bundle's schema, not an endorsement of it — see ``BundleKineticsIn``'s
-    docstring for the drift this records.
+    ``BundleKineticsIn`` gained all three fields in #620, so a payload with a
+    field can now be judged on it. The reaction route still does not call this
+    collector: it would ask a bundle for refs to records the same request
+    cannot have created yet.
 
     :param interpretation_assignments: The assignment list, or
         :data:`NOT_APPLICABLE` where the payload has no such field.

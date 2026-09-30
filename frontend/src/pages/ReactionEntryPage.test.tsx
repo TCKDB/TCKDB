@@ -634,6 +634,32 @@ describe("ReactionEntryPage -- kinetics card evidence prose and k(T) table forma
         expect(aRow?.nextElementSibling?.textContent).toContain("2.3400×10⁻³")
     })
 
+    // #620: A only means something beside the T0 it was fitted at.
+    const kineticsLabels = (container: HTMLElement) =>
+        Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).map((dt) => dt.textContent)
+
+    it("shows T0 when the record's reference temperature is not 1 K", async () => {
+        const record = kineticsRecordFixture(undefined)
+        record.parameters = { A: 1e10, A_units: "cm3_mol_s", n: 2, Ea_kj_mol: 0, T0_k: 298.15 } as never
+        handleFull(mockFull({ kinetics: [record] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(kineticsLabels(container)).toContain("T0")
+        const t0 = Array.from(container.querySelectorAll('section[aria-labelledby="kinetics-heading"] dt')).find((dt) => dt.textContent === "T0")
+        expect(t0?.nextElementSibling?.textContent).toContain("298.15")
+        expect(t0?.nextElementSibling?.textContent).toContain("K")
+    })
+
+    it("shows no T0 row when the reference temperature is 1 K", async () => {
+        const record = kineticsRecordFixture(undefined)
+        record.parameters = { A: 1e10, A_units: "cm3_mol_s", n: 2, Ea_kj_mol: 0, T0_k: 1 } as never
+        handleFull(mockFull({ kinetics: [record] }))
+        const { container } = page()
+        await screen.findByText("kin_test1")
+        expect(kineticsLabels(container)).toContain("Ea")
+        expect(kineticsLabels(container)).not.toContain("T0")
+    })
+
     it("evidence completeness rows render prose labels, not raw API keys", async () => {
         handleFull(mockFull())
         const { container } = page()

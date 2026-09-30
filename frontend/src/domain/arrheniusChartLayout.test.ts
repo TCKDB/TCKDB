@@ -50,6 +50,18 @@ describe("computeArrheniusSeries -- k(T) at the domain ends against the hand-com
         expect(series.maxK).toBe(3000)
     })
 
+    it("plots k with the record's own reference temperature T0 (#620)", () => {
+        // A=1e10, n=2, Ea=0: k(T0=298)/k(T0=1) = 1/298^2 at every T, derived here.
+        const at298 = computeArrheniusSeries(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, A_units: "cm3_mol_s", T0_k: 298 } }))!
+        const at1 = computeArrheniusSeries(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, A_units: "cm3_mol_s", T0_k: 1 } }))!
+        const last = at298.points.length - 1
+        expect(at298.points[last].k / at1.points[last].k).toBeCloseTo(1 / (298 * 298), 12)
+        // A record without the field (an older server) is the plain A T^n form.
+        const unset = computeArrheniusSeries(record())!
+        const explicit = computeArrheniusSeries(record({ parameters: { A, n, Ea_kj_mol: Ea, A_units: "cm3_mol_s", T0_k: 1 } }))!
+        expect(unset.points.map((p) => p.k)).toEqual(explicit.points.map((p) => p.k))
+    })
+
     it("carries the record's OWN deposited A_units, unconverted", () => {
         const series = computeArrheniusSeries(record())!
         expect(series.depositedUnits).toBe("cm3_mol_s")

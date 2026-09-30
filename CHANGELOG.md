@@ -22,6 +22,24 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Kinetics: an Arrhenius reference temperature, and parity on the bundle (2026-09-30)
+
+- tckdb-schemas 0.63.0, tckdb-backend, tckdb-client 0.102.0 (#620): a kinetics
+  record carries `t0_k`, the reference temperature of `k = A (T/T0)^n exp(-Ea/RT)`
+  (default 1 K, the plain `A T^n` form; `0 < t0_k <= 10000`; falloff, PLOG, Chebyshev and multi-Arrhenius records must stay at 1 K), on `POST /uploads/kinetics`, on the
+  reaction bundle, and on every read of the row
+  (`parameters.T0_k`, `t0_k` in the export, ML, lookup and analytics views).
+  The CHEMKIN export writes `A / T0^n` so the mechanism file is the same rate,
+  the thermo-kinetics consistency check does the same for Cantera, and the
+  web Arrhenius chart and k(T) table evaluate with T0. The reaction bundle's
+  kinetics block also takes `interpretation_assignments`, `tunneling_application`
+  and `network_kinetics_ref`, validated and stored exactly as the standalone
+  route does; every reference is to a record deposited earlier.
+- Migration `f1c8a4d7b263` adds `kinetics.t0_k` (NOT NULL, default 1): existing
+  rows read as 1 K, which is what they meant. It is metadata-only and touches no
+  row, so approved records are unaffected. Stored consistency and reproducibility
+  reviews stay current: a row at T0 = 1 K hashes as it did before the column.
+
 ## Writes are committed before the response is sent (2026-09-30)
 
 - tckdb-backend: every write route now commits its session before the

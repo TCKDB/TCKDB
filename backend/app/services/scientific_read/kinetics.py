@@ -603,7 +603,11 @@ def get_reaction_kinetics(
                 review=badges[k.id],
                 supersession=supersessions.get(k.id),
                 parameters=ArrheniusParameters(
-                    A=k.a, A_units=k.a_units, n=k.n, Ea_kj_mol=k.ea_kj_mol
+                    A=k.a,
+                    A_units=k.a_units,
+                    n=k.n,
+                    Ea_kj_mol=k.ea_kj_mol,
+                    T0_k=k.t0_k,
                 ),
                 multi_arrhenius=arrhenius_terms.get(k.id),
                 tunneling_model=k.tunneling_model,

@@ -216,6 +216,30 @@ def test_parse_pdep_arrhenius_reactions_per_pressure_values() -> None:
     assert last.ea_value == pytest.approx(39.5)
 
 
+def _plog_text(t0: str) -> str:
+    return (
+        "pdepreaction(\n"
+        "    reactants = ['N2H4'],\n"
+        "    products = ['H2', 'H2NN'],\n"
+        "    kinetics = PDepArrhenius(\n"
+        "        pressures = ([0.01, 100], 'bar'),\n"
+        "        arrhenius = [\n"
+        f"            Arrhenius(A=(1.0, 's^-1'), n=0.5, Ea=(0.0, 'kJ/mol'), T0={t0}),\n"
+        f"            Arrhenius(A=(2.0, 's^-1'), n=0.5, Ea=(0.0, 'kJ/mol'), T0={t0}),\n"
+        "        ],\n"
+        "    ),\n"
+        ")\n"
+    )
+
+
+def test_plog_terms_at_another_t0_are_refused_not_silently_stored() -> None:
+    """A PLOG term has no T0 column: a term fitted at 298 K would be stored as
+    though it were at 1 K, a wrong rate by 298**n. T0 = 1 K still parses."""
+    assert len(parse_pdep_arrhenius_reactions(_plog_text("(1, 'K')"))[0].entries) == 2
+    with pytest.raises(ValueError, match="stored at T0 = 1 K"):
+        parse_pdep_arrhenius_reactions(_plog_text("(298, 'K')"))
+
+
 # ---------------------------------------------------------------------------
 # Dual-form build: one network carrying BOTH Chebyshev and PLOG kinetics
 # ---------------------------------------------------------------------------

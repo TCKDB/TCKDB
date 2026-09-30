@@ -97,6 +97,7 @@ def _kinetics(**kw) -> SimpleNamespace:
         "a": None,
         "a_units": None,
         "n": None,
+        "t0_k": 1.0,  # a stored row always has one (NOT NULL, default 1 K)
         "ea_kj_mol": None,
         "falloff": None,
         "plog_entries": [],
@@ -580,3 +581,26 @@ def test_regression_chebyshev_lines_unchanged():
     assert any(ln.startswith("    PCHEB /") for ln in body)
     assert any(ln.startswith("    CHEB / 2 2 ") for ln in body)
     validate_chemkin_mechanism(export.files)
+
+
+def test_an_out_of_range_reference_temperature_is_an_export_gap_not_a_crash():
+    """A schema-valid T0 with a large |n| puts A / T0**n off the end of a float.
+
+    The record is reported as a ``kinetics`` gap and left out of the file;
+    before this it would have been an unhandled OverflowError (a 500).
+    """
+    sp = _third_body_species()
+    k = _kinetics(
+        model_kind=KineticsModelKind.modified_arrhenius,
+        a=1.0e10,
+        a_units=ArrheniusAUnits.cm3_mol_s,
+        n=-80.0,
+        t0_k=1.0e-5,
+        ea_kj_mol=0.0,
+    )
+    rxn = _reaction(["H-e", "O2-e"], ["HO2-e"], k, ref="R1")
+    export, _ = _serialize(sp, [rxn])
+    gaps = [g for g in export.gaps if g.kind == "kinetics"]
+    assert len(gaps) == 1
+    assert "out of numeric range" in gaps[0].detail
+    assert not any("<=>" in line for line in export.files["chem.inp"].splitlines())

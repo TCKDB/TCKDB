@@ -562,10 +562,12 @@
           "title": "Convention Note"
         },
         "correction_convention": {
-          "$ref": "#/$defs/EnergyCorrectionConvention"
+          "$ref": "#/$defs/EnergyCorrectionConvention",
+          "description": "Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note."
         },
         "energy_zero_convention": {
-          "$ref": "#/$defs/EnergyZeroConvention"
+          "$ref": "#/$defs/EnergyZeroConvention",
+          "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
         },
         "forward_barrier_kj_mol": {
           "title": "Forward Barrier Kj Mol",
@@ -854,7 +856,6 @@
       "type": "object"
     },
     "EnergyCorrectionConvention": {
-      "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "electronic_only",
         "electronic_plus_zpe",
@@ -953,7 +954,6 @@
       "type": "object"
     },
     "EnergyZeroConvention": {
-      "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "lowest_state",
         "entrance_channel",
@@ -2951,14 +2951,16 @@
           "title": "Convention Note"
         },
         "correction_convention": {
-          "$ref": "#/$defs/EnergyCorrectionConvention"
+          "$ref": "#/$defs/EnergyCorrectionConvention",
+          "description": "Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note."
         },
         "energy_kj_mol": {
           "title": "Energy Kj Mol",
           "type": "number"
         },
         "energy_zero_convention": {
-          "$ref": "#/$defs/EnergyZeroConvention"
+          "$ref": "#/$defs/EnergyZeroConvention",
+          "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
         },
         "source_calculation_key": {
           "anyOf": [

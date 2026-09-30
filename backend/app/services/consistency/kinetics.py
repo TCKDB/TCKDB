@@ -2,6 +2,7 @@
 from itertools import product
 from math import isfinite, log
 
+from app.chemistry.arrhenius import ArrheniusRangeError, a_at_unit_t0
 from app.services.consistency import engine
 from app.services.consistency.core import AdvisoryResult, encoded, finding, snapshot, temperatures, thermo_inputs
 from app.services.consistency.stoichiometry import element_balance, entry_facts, is_balanced, participant_slots
@@ -36,7 +37,14 @@ def _rate(record, order, ct):
         factor *= record.degeneracy
     elif record.degeneracy_convention != "already_applied":
         return None, "ambiguous_degeneracy_convention"
-    return ct.ArrheniusRate(record.a * factor, record.n, record.ea_kj_mol * 1e6), None
+    # Cantera's ArrheniusRate is A * T**b * exp(-Ea/RT) with no reference
+    # temperature, so a row stored at T0 != 1 K is rewritten to its exact
+    # T0 = 1 K equivalent first; without this the rate is wrong by (T0)**n.
+    try:
+        a_unit_t0 = a_at_unit_t0(record.a, record.n, record.t0_k)
+    except ArrheniusRangeError:
+        return None, "rate_out_of_numeric_range"
+    return ct.ArrheniusRate(a_unit_t0 * factor, record.n, record.ea_kj_mol * 1e6), None
 
 
 def compare_kinetics(forward, reverse, thermo_by_entry, *, temperature_grid):

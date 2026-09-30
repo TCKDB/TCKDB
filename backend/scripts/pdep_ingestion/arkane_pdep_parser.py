@@ -343,6 +343,15 @@ def parse_pdep_arrhenius_reactions(text: str) -> list[PlogFit]:
                     f"PDepArrhenius {reactants}->{products} Arrhenius term "
                     f"missing A/n/Ea."
                 )
+            # A PLOG term is stored at T0 = 1 K (there is no per-term T0 column),
+            # so a term fitted at another T0 would be silently mis-stored.
+            term_t0 = _extract_value_units(ab, "T0")
+            if term_t0 and term_t0[0] != 1.0:
+                raise ValueError(
+                    f"PDepArrhenius {reactants}->{products} Arrhenius term has "
+                    f"T0={term_t0[0]} {term_t0[1]}; PLOG terms are stored at T0 = 1 K. "
+                    f"Rescale A to A / T0**n before ingesting."
+                )
             entries.append(
                 PlogArrhenius(
                     pressure_value=pressure,

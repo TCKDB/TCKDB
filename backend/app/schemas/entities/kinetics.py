@@ -69,6 +69,7 @@ class KineticsBase(BaseModel):
     :param a: Optional Arrhenius pre-exponential factor.
     :param a_units: Optional units for the pre-exponential factor.
     :param n: Optional temperature exponent.
+    :param t0_k: Reference temperature T0 in K (``k = A (T/T0)^n exp(-Ea/RT)``).
     :param ea_kj_mol: Optional activation energy in kJ/mol.
     :param tmin_k: Optional minimum valid temperature in K.
     :param tmax_k: Optional maximum valid temperature in K.
@@ -92,6 +93,7 @@ class KineticsBase(BaseModel):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
+    t0_k: float = Field(default=1.0, gt=0, le=10000.0, allow_inf_nan=False)
     ea_kj_mol: float | None = None
 
     a_uncertainty: float | None = None
@@ -199,6 +201,7 @@ class KineticsUpdate(SchemaBase):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
+    t0_k: float | None = Field(default=None, gt=0, le=10000.0, allow_inf_nan=False)
     ea_kj_mol: float | None = None
 
     a_uncertainty: float | None = None

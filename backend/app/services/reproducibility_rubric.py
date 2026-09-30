@@ -90,6 +90,7 @@ from app.services.reproducibility_assessment import (
     append_reproducibility_assessment,
     resolve_reproducibility_record_model,
 )
+from app.services.snapshot_defaults import is_unchanged_default
 
 RUBRIC_NAME = "tckdb_reproducibility"
 RUBRIC_VERSION = "v1"
@@ -303,7 +304,14 @@ def _nonblank_text(value: Any) -> bool:
 def _mapped_columns(row: Any) -> dict[str, Any]:
     """Snapshot all persisted scalar columns on an ORM row."""
     mapper = sa_inspect(type(row))
-    return {column.key: _json_value(getattr(row, column.key)) for column in mapper.columns}
+    table = mapper.local_table.name
+    return {
+        column.key: _json_value(getattr(row, column.key))
+        for column in mapper.columns
+        # A column added after rows were assessed stays out of the digest
+        # while it holds its pre-existing value (see snapshot_defaults).
+        if not is_unchanged_default(table, column.key, getattr(row, column.key))
+    }
 
 
 def _rows(rows: Any) -> list[dict[str, Any]]:
