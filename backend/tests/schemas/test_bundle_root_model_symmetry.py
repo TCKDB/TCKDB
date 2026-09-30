@@ -347,15 +347,15 @@ def test_the_statmech_pair_needs_no_exemptions():
 def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     """Recorded because "cover those too" needs an answer either way.
 
-    Kinetics exists only on the reaction root — a species bundle has no
-    reaction to have a rate for — and transport has no bundle model on
-    either root; it is a standalone route only.
+    Kinetics exists only on the reaction root -- a species bundle has no
+    reaction to have a rate for. Transport (#622) is on both roots, but as
+    ONE class, ``TransportInBundle``, that both roots import, so there is no
+    second spelling to drift. A second transport class on either root would
+    be a pair and belongs in MODEL_PAIRS.
 
-    This used to conclude "neither is a pair, so neither can drift". The
-    first half is right and the second half was wrong, and the error was
-    load-bearing: kinetics has no second spelling *across the two bundle
-    roots*, but it does have one across the **bundle and the standalone
-    route**, and that is where it drifted. See
+    Kinetics has no second spelling *across the two bundle roots*, but it
+    does have one across the **bundle and the standalone route**, and that
+    is where it drifted. See
     :func:`test_bundle_kinetics_records_the_same_science_as_the_standalone_route`.
     """
     assert not hasattr(sp, "KineticsInBundle"), (
@@ -364,10 +364,27 @@ def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     )
     assert hasattr(rx, "BundleKineticsIn"), "reaction root lost its kinetics model"
 
+    assert hasattr(sp, "TransportInBundle"), "species root lost its transport model"
+    assert rx.TransportInBundle is sp.TransportInBundle, (
+        "the reaction root now spells transport with its own class; add the "
+        "pair to MODEL_PAIRS or go back to the shared TransportInBundle."
+    )
     for module, label in ((sp, "species"), (rx, "reaction")):
-        transport = [n for n in dir(module) if "Transport" in n]
-        assert not transport, (
-            f"the {label} bundle root gained transport model(s) {transport}; "
+        extra = [
+            n
+            for n in dir(module)
+            if "Transport" in n
+            and getattr(module, n) is not sp.TransportInBundle
+            and n
+            not in {
+                "TransportCalculationRole",
+                "TransportSourceCalcInBundle",
+                "TransportUploadPayload",
+                "TransportUploadRefInBundle",
+            }
+        ]
+        assert not extra, (
+            f"the {label} bundle root gained transport model(s) {extra}; "
             "if both roots now have one, add the pair to MODEL_PAIRS."
         )
 
