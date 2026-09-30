@@ -209,12 +209,18 @@ def test_the_stamp_engine_has_the_timeout_on_every_checkout(db_engine):
     """One mechanism: the stamp engine gets it from the engine it derives from."""
     if not settings.db_statement_timeout_ms:
         pytest.skip("DB_STATEMENT_TIMEOUT_MS is disabled in this environment")
-    stamp = api_deps.stamp_engine
-    assert stamp is not db_engine
-    shown, ids = _checkout(stamp, 3, _show)
-    assert len(set(ids)) == 1, "the stamp pool must hand back one connection for this to prove anything"
+    # A fresh derived engine, not the shared ``api_deps.stamp_engine``: that
+    # pool holds two connections and earlier tests leave it in an arbitrary
+    # rotation, so three checkouts of it are not three checkouts of one
+    # connection. Deriving is exactly what the module does at import.
+    stamp = api_deps._derive_stamp_engine(db_engine)
+    try:
+        shown, ids = _checkout(stamp, 3, _show)
+    finally:
+        stamp.dispose()
+    assert len(set(ids)) < len(ids), "at least one connection must be checked out again or this proves nothing"
     assert shown[0] != _server_default(db_engine)
-    assert len(set(shown)) == 1
+    assert len(set(shown)) == 1, shown
 
 
 def test_a_stamp_engine_derived_from_an_engine_without_the_option_has_no_timeout(db_engine):
@@ -320,6 +326,8 @@ def test_query_timeout_returns_sanitized_503(operational_error_client):
     assert r.status_code == 503
     body = r.json()
     assert body["code"] == "query_timeout"
+    # A lock wait counts against the limit, so the message must not blame the query alone.
+    assert "waited" in body["detail"] and "Retry" in body["detail"]
     # SQL must not leak.
     assert "SELECT" not in body["detail"]
     assert "secret_table" not in repr(body)

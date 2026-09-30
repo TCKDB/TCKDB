@@ -531,16 +531,38 @@ surface — they are a compatibility shim, not a contract.
 
 ### 7.9 Database statement timeout (F13)
 
-A PostgreSQL ``statement_timeout`` is applied on every new DBAPI
-connection through a SQLAlchemy ``connect`` listener. The setting
+A PostgreSQL ``statement_timeout`` is passed to every connection as a
+libpq *startup option* (``-c statement_timeout=N``, built by
+``app.api.deps.create_app_engine``), so it holds for the whole life of
+the pooled connection, on every checkout. (Until #604 it was a ``SET`` in
+a ``connect`` listener that the pool's rollback-on-return undid, so only a
+connection's first checkout was covered.) The setting
 ``DB_STATEMENT_TIMEOUT_MS`` (default ``30000``) is read at engine
 construction time:
 
 | Value      | Effect |
 | ---------- | ------ |
-| `30000`    | Every connection runs ``SET statement_timeout = 30000`` (30 s). |
+| `30000`    | Every connection starts with ``statement_timeout=30000`` (30 s). |
 | Positive N | Sets ``N`` milliseconds. |
-| `0` / null | Listener is not registered; the role-level / cluster default applies. |
+| `0` / null | No startup option is sent; the role-level / cluster default applies. |
+
+What the limit covers: the whole statement, **including time spent
+waiting for a lock** (the per-species advisory lock taken by uploads,
+unique-key insert waits, ``SELECT ... FOR UPDATE``). Two concurrent
+uploads that share a species can therefore give the second one a
+``503 query_timeout`` if the first holds the lock for over 30 s. The
+retry is safe (uploads are idempotency-keyed). It does not cover a
+``COMMIT`` (PostgreSQL disarms the timer before it), and the migration
+engine (``alembic/env.py``) is deliberately not given it. ``restore_archive``
+raises the ceiling to one hour for its own statements.
+
+Scripts that build their own engine (``bootstrap_admin``, ``bulk_load_*``,
+``seed_scientific_demo_data``, ``thermoml_cp_import``,
+``cccbdb_import_molecular_property_payloads``, ``export_contribution_bundle``,
+``extract_calculation_parameters``, ``inventory_thermo_contract``,
+``ops/backfill_observation_submission_links``, ``bench/run_benchmark``) do
+not go through it and run with only the role/cluster default. Scripts that
+use ``app.api.deps.SessionLocal`` or ``engine`` do get it.
 
 A query cancelled by PostgreSQL surfaces as a SQLAlchemy
 ``OperationalError`` with SQLSTATE ``57014``. The handler in
@@ -548,7 +570,7 @@ A query cancelled by PostgreSQL surfaces as a SQLAlchemy
 
 ```json
 {
-  "detail": "The request exceeded the database query timeout. Narrow the query or contact a curator for bulk access.",
+  "detail": "The database cancelled a statement that ran or waited longer than its time limit (waiting for a lock counts). Retry the request; if it keeps failing, narrow the query or contact a curator for bulk access.",
   "code": "query_timeout"
 }
 ```
@@ -560,9 +582,12 @@ shutdowns) collapse to a generic ``database_unavailable`` body.
 
 #### Hosted recommendation
 
-The app-level listener is a belt-and-braces safety net. Production
-deployments should also pin the timeout at the database role level
-so a forgetful or panicked deployment cannot disable it:
+The role-level value is a fallback, not a guard against the app: a
+startup option overrides the role setting in *both* directions, so the
+role value only applies when ``DB_STATEMENT_TIMEOUT_MS`` is ``0``/null,
+and a role value longer than the app's is overridden by the app's.
+Pinning it at the role still covers scripts and tools that connect
+without going through the app engine:
 
 ```sql
 ALTER ROLE tckdb SET statement_timeout = '30s';

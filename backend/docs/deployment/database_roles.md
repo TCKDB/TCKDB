@@ -94,3 +94,21 @@ After restarting the API, verify `/api/v1/readyz`, one anonymous scientific
 read, and one authenticated write. Keep `.env.db-admin` readable only by the
 operator account and use it solely for migrations, role maintenance, and
 recovery.
+
+## Statement timeout and which programs get it
+
+The API applies `DB_STATEMENT_TIMEOUT_MS` (default 30 s) to every pooled
+connection for its whole life, as a libpq startup option. It covers time spent
+waiting for a lock as well as running, but not `COMMIT`. A startup option
+overrides `ALTER ROLE ... SET statement_timeout` in both directions, so the
+role value only applies when the app value is `0`.
+
+Programs that use `app.api.deps.SessionLocal` or `engine` (the API, the upload
+worker, `tckdb_archive.py`, most of `scripts/ops/`) get it. Programs that build
+their own engine do not, and run with the role/cluster default only:
+`bootstrap_admin`, `bulk_load_arc`, `bulk_load_reactions`,
+`seed_scientific_demo_data`, `thermoml_cp_import`,
+`cccbdb_import_molecular_property_payloads`, `export_contribution_bundle`,
+`extract_calculation_parameters`, `inventory_thermo_contract`,
+`ops/backfill_observation_submission_links`, `bench/run_benchmark`. Migrations
+(`alembic`) never get it. `restore_archive` raises its own ceiling to one hour.

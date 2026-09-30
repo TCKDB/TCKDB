@@ -821,32 +821,48 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
     )
 
 
-#: Ceiling for one statement of a restore, in milliseconds (one hour).
+#: Defensive ceiling for one statement of a restore, in milliseconds (one hour).
 #:
 #: A restore is an operator-run, once-per-database load into an empty target,
 #: not a request, so the API's per-statement limit (``DB_STATEMENT_TIMEOUT_MS``,
-#: 30 s) does not describe it. Measured on a catalog-scale corpus (3.47 million
-#: rows, 50,000 species) on a 20-core workstation, every INSERT was under
-#: 250 ms, but the final ``COMMIT`` -- which runs every deferred foreign-key
-#: check for the whole load -- took 16.2 s, over half the limit on a machine
-#: that is far faster than the arm64 host the archive would be restored to.
-#: The bound is a backstop against a genuinely stuck statement, not a budget.
+#: 30 s) does not describe it. What the ceiling covers is the restore's
+#: statements -- the bulk INSERTs, the sequence repair and any lock wait --
+#: and *not* the final ``COMMIT``: PostgreSQL disarms ``statement_timeout``
+#: before COMMIT, so the deferred foreign-key checks that make that step slow
+#: (16.2 s at 3.47 million rows on a fast workstation) were never subject to
+#: the limit. The INSERTs measured under 250 ms each at that scale, so this is
+#: headroom for a slower host or a larger archive, not a fix for a failure
+#: seen. Raised only (see :func:`_long_restore_statements`).
 ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS = 3_600_000
 
 
-def _allow_long_restore_statements(session: Session) -> None:
-    """``SET LOCAL statement_timeout`` for this transaction, raising it only.
+@contextmanager
+def _long_restore_statements(session: Session) -> Iterator[None]:
+    """Raise ``statement_timeout`` to the restore ceiling, then put it back.
 
     Never lowers a limit and never adds one: an operator who disabled the
     timeout (``0``) keeps it disabled, and one who chose a longer ceiling
-    keeps that. ``SET LOCAL`` ends with the transaction, which includes the
-    ``COMMIT`` that carries the deferred constraint checks.
+    keeps that. The value is restored on exit rather than left to
+    ``SET LOCAL``'s transaction scope, because the restore runs in a
+    SAVEPOINT inside the caller's transaction (``_current_revisions``
+    autobegins it), and a released savepoint keeps its ``SET LOCAL``:
+    without the reset the caller's remaining statements would run with an
+    hour-long limit.
     """
-    current_ms = session.execute(
-        text("SELECT setting::bigint FROM pg_settings WHERE name = 'statement_timeout'")
-    ).scalar_one()
-    if 0 < current_ms < ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS:
-        session.execute(text(f"SET LOCAL statement_timeout = {int(ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS)}"))
+    previous, previous_ms = session.execute(
+        text(
+            "SELECT current_setting('statement_timeout'), setting::bigint "
+            "FROM pg_settings WHERE name = 'statement_timeout'"
+        )
+    ).one()
+    if not 0 < previous_ms < ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS:
+        yield
+        return
+    session.execute(text(f"SET LOCAL statement_timeout = {int(ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS)}"))
+    try:
+        yield
+    finally:
+        session.execute(text("SELECT set_config('statement_timeout', :previous, true)"), {"previous": previous})
 
 
 def restore_archive(
@@ -913,9 +929,9 @@ def restore_archive(
             )
             raise
 
-    transaction = session.begin_nested() if session.in_transaction() else session.begin()
-    with transaction:
-        _allow_long_restore_statements(session)
+    # ``_current_revisions`` above has already autobegun the session's
+    # transaction, so the restore is always a SAVEPOINT inside it.
+    with _long_restore_statements(session), session.begin_nested():
         _lock_snapshot_tables(session, target_tables)
         _ensure_restore_target(session, target_tables)
         session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
