@@ -216,22 +216,96 @@ tells you which of the two ran out:
   (`-volume.max=<n>` on the `seaweedfs` command) or more disk, then
   recreate the container.
 
+- **Bucket quota** (S3 code `SeaweedFSBucketQuotaExceeded` on `/status`, see
+  below). Free disk and free slots cannot see a quota, so it is a separate
+  question, asked only when the store reports room.
+
 Two cases still surface as `503 artifact_storage_unavailable` with `/status`
-healthy: `S3_SEAWEEDFS_MASTER_URL` is unset (the store is never asked), or the
-store reports room, which is how a real fault and an **enforced bucket quota**
-both look, since free disk and free slots cannot see a quota. If SeaweedFS
-uploads return 503 while `/status` shows the store reachable, check its disk
-(`df -h` on the volume) and its container log, which names the cause
-(`no space left on device`, `No writable volumes and no free volumes left`,
-or `read only ... (e.g. bucket over quota)`). SeaweedFS bucket quotas are not
-enforced on write: `s3.bucket.quota` alone refuses nothing until
-`s3.bucket.quota.enforce -apply` runs.
+healthy: `S3_SEAWEEDFS_MASTER_URL` is unset (neither the store's room nor its
+quota is ever asked about), or the store reports room and no exhausted quota,
+which is what a real fault looks like. If SeaweedFS uploads return 503 while
+`/status` shows the store reachable, check its disk (`df -h` on the volume)
+and its container log, which names the cause (`no space left on device`,
+`No writable volumes and no free volumes left`, or
+`read only ... (e.g. bucket over quota)`).
+
+**A SeaweedFS bucket quota is readable over S3, and TCKDB reads it (#545).**
+Measured on 4.47 (the pinned image, `weed mini`, the compose lockdown), with a
+20 MiB quota and 30 MiB in the bucket:
+
+- Once the bucket is read-only, every write is refused, including a 1-byte and
+  a 0-byte `PutObject` and `CreateMultipartUpload`, with HTTP 500, `Code:
+  InternalError`, `Message: We encountered an internal error, please try
+  again.` and no quota-specific header. Reads and deletes still work. That is
+  4.47's wire behaviour; it never answers a quota with 403. Upstream maps a
+  read-only bucket to `AccessDenied`, so a later image might, and the quota
+  probe should then be revisited (see below for why `AccessDenied` is not a
+  trigger today).
+- 4.47 enforces quotas on a 60 s sweep of its own. Nobody has to run
+  `s3.bucket.quota.enforce`: write past a quota and the writes start failing
+  about a minute later, and raising the quota clears it within about a minute.
+  `s3.bucket.quota -op=remove` lifts it at once (measured: the next write
+  returned 200).
+- The quota is readable with the credentials the API already holds (both
+  reads refuse an unsigned request with 403): `GET /<bucket>?seaweedfs-quota`
+  returns `{"quota_size":20971520,"quota_unit":"B","quota_enabled":true}`, and
+  the capacity object
+  `GET /<bucket>/.system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml`
+  returns `<Capacity>20971520</Capacity><Available>0</Available><Used>31457840</Used>`.
+
+So when `S3_SEAWEEDFS_MASTER_URL` is set, an `InternalError` write refusal that
+the room check did not explain is followed by those two signed reads (2 s per
+request, nothing written, no opinion on any failure). The room check and the
+quota reads share one 4 s budget, so a refusal waits at most 4 s in total. If
+the quota is enabled and `Available` is below the refused size, the refusal is
+classified full exactly as a MinIO quota is: the upload gets 507, `/status`
+goes degraded with S3 code `SeaweedFSBucketQuotaExceeded`, and **free space
+cannot clear it** (only a successful write of at least the refused size, or an
+operator clear, can; a copy refusal whose size could not be measured can only
+be cleared by an operator). The row's detail keeps the store's own code.
+
+Three limits, all deliberate:
+
+- **This is an approximation.** `Available` is the quota less the *gross*
+  volume size, while the enforcer compares the *logical* size. Deleted objects
+  keep their bytes until the volume is vacuumed, and `weed mini` never vacuums
+  a volume under 30 % garbage, so a bucket near its quota after deletions can
+  read `Available 0` for as long as that lasts, not for a minute: measured over
+  five minutes with 1 MiB writes succeeding throughout (logical 38.3 MB,
+  gross 46.2 MB, quota 41.9 MB). Any real `InternalError` in that band is
+  recorded as a quota. It never *misses* a real quota refusal, because gross is
+  never smaller than logical. Nothing cheap over S3 separates the two (the
+  logical size is a sum over a listing of every object), so the recorded detail
+  states the gross numbers and this caveat instead. If it names a quota while
+  uploads of that size work, compare `s3.bucket.list` (logical size) with the
+  quota and vacuum before raising it.
+- **`AccessDenied` is not a trigger.** On SeaweedFS it is never a
+  bad-credentials answer (a wrong secret is `SignatureDoesNotMatch`, an unknown
+  key `InvalidAccessKeyId`); a write `AccessDenied` is a bucket policy, and the
+  same credentials read the quota fine, so it would record a policy denial as a
+  quota. Measured: a `Deny s3:PutObject` policy on a bucket with room under its
+  quota was recorded full. Revisit if a pinned image starts answering 403 for a
+  quota.
+- **Abandoned probes are bounded.** A probe that runs past its budget is
+  abandoned, not killed. Each response body is read against a time budget, so
+  its thread ends within about 12 s (two reads, each bounded), and at most 4 probe threads exist at once
+  in a process: with none free a probe is no opinion without a request. What
+  the cap bounds is a server that withholds even the response headers a byte at
+  a time.
+
+To check on the host: `weed shell`, `s3.bucket.list` (each bucket line shows
+`quota:` and `usage:`). To lift it: raise it with
+`s3.bucket.quota -name=<bucket> -op=set -sizeMB=<larger>` (or `-op=remove`);
+no `lock` or `enforce` is needed.
 
 **Recovery.** While a refusal is outstanding, each `/status` poll asks the
 store again, and clears the refusal once it reports at least the refused size
 free (on SeaweedFS: the smaller of free disk and free slot room). Deleting
 objects on SeaweedFS does not return disk until the volume is vacuumed, so
-freeing disk on the host, or adding slots, is the faster lever.
+freeing disk on the host, or adding slots, is the faster lever. A quota
+refusal is the exception: free space never clears it, so after raising the
+quota it clears on the next successful upload of at least the refused size, or
+by an operator clear.
 
 **"Full" is not all-or-nothing, and this is the confusing part.** MinIO
 refuses a write that would breach its free-space threshold, sized against the
