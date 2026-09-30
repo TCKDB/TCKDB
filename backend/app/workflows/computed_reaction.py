@@ -1210,6 +1210,12 @@ def persist_computed_reaction_upload(
             thermo = Thermo(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
+                # Stored as declared, after ``assert_role_consistency`` above.
+                energy_level_of_theory_id=(
+                    thermo_declared_energy_lot.id
+                    if thermo_declared_energy_lot is not None
+                    else None
+                ),
                 literature_id=(
                     thermo_literature.id if thermo_literature is not None else None
                 ),
@@ -1373,6 +1379,12 @@ def persist_computed_reaction_upload(
             statmech = Statmech(
                 species_entry_id=species_entry.id,
                 scientific_origin=s.scientific_origin,
+                # Stored as declared, after ``assert_role_consistency`` above.
+                energy_level_of_theory_id=(
+                    statmech_declared_energy_lot.id
+                    if statmech_declared_energy_lot is not None
+                    else None
+                ),
                 literature_id=(
                     statmech_literature.id if statmech_literature is not None else None
                 ),

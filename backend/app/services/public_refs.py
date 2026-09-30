@@ -404,6 +404,13 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     refs, which the resolver never asks for but which would make this
     function disagree with the key it exists to mirror.
 
+    **Two forms, selected by ``data_revision``** (``f2c8a5d1e9b7``): a row
+    with no data revision keeps the six-field string above; a row with one
+    swaps ``workflow_tool_release_id`` for ``data_revision``, matching
+    ``uq_energy_correction_scheme_identity_revised``. The two strings name
+    different fields, so a revised and an unrevised scheme can never share
+    a ref.
+
     ``units`` and ``version`` were both here and are both gone.
     ``version`` no longer exists as a column at all: it was nullable
     free text, null on every live row, and versioned nothing.
@@ -413,14 +420,22 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     keeping it here is fixed at its cause: the resolver converts before
     it compares.
     """
-    return (
+    head = (
         f"ecs:kind={getattr(obj.kind, 'value', obj.kind)};"
         f"name={(obj.name or '').strip().lower()};"
         f"level_of_theory_id={obj.level_of_theory_id};"
         f"source_literature_id={obj.source_literature_id};"
         f"software_release_id={obj.software_release_id};"
-        f"workflow_tool_release_id={obj.workflow_tool_release_id}"
     )
+    data_revision = getattr(obj, "data_revision", None)
+    if data_revision is None:
+        # Byte-for-byte what this returned before ``data_revision``
+        # existed, so no existing row's ref changes.
+        return f"{head}workflow_tool_release_id={obj.workflow_tool_release_id}"
+    # A stated data revision replaces the tool build in the identity
+    # (``uq_energy_correction_scheme_identity_revised``), so the build must
+    # not reach the ref: two builds of one revision are one scheme.
+    return f"{head}data_revision={data_revision}"
 
 
 # Dispatch table from class name → canonical-identity extractor.

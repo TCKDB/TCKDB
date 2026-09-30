@@ -445,6 +445,10 @@ def persist_thermo_upload(
         update={
             "source_calculations": resolved_source_calcs,
             "statmech_id": resolved_statmech_id,
+            # Stored as declared, after ``assert_role_consistency`` above.
+            "energy_level_of_theory_id": (
+                declared_energy_lot.id if declared_energy_lot is not None else None
+            ),
         }
     )
     thermo = persist_thermo(session, thermo_create, created_by=created_by)

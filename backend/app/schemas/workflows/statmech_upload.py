@@ -225,9 +225,10 @@ class StatmechUploadRequest(SchemaBase):
         linked (the linked 'sp' calculation's level, or the linked 'opt's
         own level when no separate 'sp' is linked) — see
         ``app.services.calculation_levels`` for the exact rule (R4/R5).
-        Never persisted: it is checked once, at upload time, against the
-        source calculations this same request links; the read-time
-        ``levels`` block is always re-derived from those links directly.
+        Checked once, at upload time, against the source calculations this
+        same request links, then stored as declared and read back as
+        ``levels.declared_energy``. The read-time ``levels.energy`` is still
+        re-derived from the links; the two are separate answers.
     """
 
     # A minimal valid payload. Published as the JSON Schema's ``examples``, in

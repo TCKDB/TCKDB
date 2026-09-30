@@ -12,6 +12,7 @@ the statmech upload path; it is the single ref shape for all FSF use
 cases.
 """
 
+import re
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -19,6 +20,7 @@ from pydantic import Field, model_validator
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
     AppliedCorrectionComponentKind,
+    AtomParamApplication,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
@@ -38,13 +40,33 @@ from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
 # ---------------------------------------------------------------------------
 
 
+#: A data revision that looks like a git commit: 7 to 64 hex digits. Such a
+#: value is lower-cased so the same commit spelled ``ABC1234`` and
+#: ``abc1234`` is one revision. Anything else (a tag, a release name) is
+#: kept as written, because case can be meaningful there.
+_HEX_COMMIT = re.compile(r"[0-9a-fA-F]{7,64}")
+
+
 class EnergyCorrectionSchemeRef(SchemaBase):
     """Upload-facing reference to a correction scheme.
 
-    If a matching scheme already exists — by the full identity tuple
-    ``(kind, name, level_of_theory, source_literature, software_release,
-    workflow_tool_release)`` — it is reused. Otherwise a new scheme is
-    created. A citation or software release that differs from an existing
+    If a matching scheme already exists it is reused. Otherwise a new
+    scheme is created. Identity has two forms, chosen by ``data_revision``:
+
+    * ``data_revision`` **absent**: ``(kind, name, level_of_theory,
+      source_literature, software_release, workflow_tool_release)``. This is
+      the original identity, unchanged, so every scheme deposited before
+      ``data_revision`` existed keeps its identity and its public ref.
+    * ``data_revision`` **present**: ``(kind, name, level_of_theory,
+      source_literature, software_release, data_revision)``. The workflow
+      tool build is *not* part of this identity; see below.
+
+    A scheme deposited without ``data_revision`` never matches one
+    deposited with it, even when the tables are identical: absence says
+    nothing about which revision the numbers came from, so it is not
+    guessed.
+
+    A citation or software release that differs from an existing
     same-``(kind, name, level_of_theory)`` scheme is never dropped: it
     makes this a scientifically distinct scheme (a different citation, or
     a different program build's numbers), so it resolves to a
@@ -69,7 +91,31 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     :param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose
         data file was the proximate source, when the scheme was looked
         up from a tool table rather than directly from a paper. Mirrors
-        ``FreqScaleFactorRef.workflow_tool_release``.
+        ``FreqScaleFactorRef.workflow_tool_release``. When
+        ``data_revision`` is absent this is part of the scheme's identity
+        (each build is its own scheme). When ``data_revision`` is present
+        it is provenance only: it records the build that first deposited
+        the scheme, and a later deposit of the same revision by a different
+        build reuses the row and does not replace it.
+    :param data_revision: The revision of the *data* that holds the
+        parameter tables, for example the RMG-database commit that holds
+        Arkane's atom-energy and BAC tables. A tool build (the RMG-Py
+        commit recorded on ``workflow_tool_release``) does not say which
+        tables it read, because the tables live in a separate repository.
+        The same ``data_revision`` with the same tables is the same scheme
+        whichever build read it; a new ``data_revision`` is a new scheme,
+        so a one-parameter change in a new database revision is a new
+        scheme and not a conflict. Free text, at most 200 characters. A
+        value that is 7 to 64 hex digits is treated as a git commit and
+        lower-cased; any other value (a tag, say) is kept exactly as
+        written. Optional: omit it when the data revision is not known.
+    :param atom_params_applied_as: How ``atom_params`` enter the corrected
+        energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).
+        Applies to every entry of ``atom_params`` and to nothing else.
+        Optional: omit it when not known, and nothing is assumed. Giving
+        it without ``atom_params`` is refused. Sending a value that
+        differs from the one already stored on the matched scheme is a
+        conflict, as a differing parameter value is.
     """
 
     kind: EnergyCorrectionSchemeKind
@@ -85,7 +131,18 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     #: Re-depositing the same library in another unit therefore resolves
     #: to the same row, and the parameter values are converted before
     #: they are compared.
+    #:
+    #: For ``atom_params`` the unit applies to each element's value: for
+    #: ``kind=atom_energy`` the values are the level's atomic energies in
+    #: this unit (Arkane: hartree), and for ``atom_hf``/``atom_thermal``
+    #: the atomic enthalpies in this unit (Arkane: kcal/mol).
     units: EnergyUnit | None = None
+    #: Revision of the data holding the tables. Joins identity when present
+    #: (and then ``workflow_tool_release`` leaves it). See the class
+    #: docstring.
+    data_revision: str | None = Field(default=None, max_length=200)
+    #: How ``atom_params`` are applied. See the class docstring.
+    atom_params_applied_as: AtomParamApplication | None = None
     note: str | None = None
 
     # Optional inline parameter definitions (used when creating a new scheme)
@@ -97,6 +154,24 @@ class EnergyCorrectionSchemeRef(SchemaBase):
     def normalize_text_fields(self) -> Self:
         self.name = normalize_required_text(self.name)
         self.note = normalize_optional_text(self.note)
+        return self
+
+    @model_validator(mode="after")
+    def normalize_data_revision(self) -> Self:
+        """Strip, treat blank as absent, lower-case a commit-looking value."""
+        revision = normalize_optional_text(self.data_revision)
+        if revision is not None and _HEX_COMMIT.fullmatch(revision):
+            revision = revision.lower()
+        self.data_revision = revision
+        return self
+
+    @model_validator(mode="after")
+    def validate_applied_as_has_atom_params(self) -> Self:
+        if self.atom_params_applied_as is not None and not self.atom_params:
+            raise ValueError(
+                "atom_params_applied_as describes how atom_params are "
+                "applied, so it needs atom_params in the same scheme."
+            )
         return self
 
     @model_validator(mode="after")
@@ -124,6 +199,22 @@ class EnergyCorrectionSchemeRef(SchemaBase):
 
 
 class SchemeAtomParamPayload(SchemaBase):
+    """One element-keyed scalar of a scheme.
+
+    ``value`` is in the enclosing scheme's ``units``. What it means
+    depends on the scheme ``kind``, and how it is applied is stated by the
+    scheme's ``atom_params_applied_as``:
+
+    * ``atom_energy``: the level's atomic energy of ``element`` (the
+      energy of the isolated atom at the scheme's level of theory).
+      Arkane subtracts ``count * value`` from the molecule's energy. Arkane
+      also adds ``count * (atom_hf - atom_thermal)`` for each atom, which
+      is carried by the separate ``atom_hf`` and ``atom_thermal`` schemes.
+    * ``atom_hf``: the experimental enthalpy of formation of the atom.
+    * ``atom_thermal``: the atom's thermal enthalpy increment.
+    * ``soc``: the atom's spin-orbit correction.
+    """
+
     element: str = Field(min_length=1, max_length=3)
     value: float
 

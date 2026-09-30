@@ -95,7 +95,8 @@ class ConformerUploadStatmechPayload(SchemaBase):
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. Checked against the resolved role links (opt/sp) the
     # same way the standalone statmech upload's field is -- see
-    # ``app.services.calculation_levels`` on the backend. Never persisted.
+    # ``app.services.calculation_levels`` on the backend. Stored as declared
+    # once it passes, and read back as ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     @model_validator(mode="after")

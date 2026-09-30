@@ -362,7 +362,8 @@ class BundleThermoIn(ThermoStateFields):
         species entry; the workflow rejects both failures.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. Checked
-        against the resolved role links; never persisted.
+        against the resolved role links, then stored as declared and
+        read back as ``levels.declared_energy``.
     :param note: Optional note.
     """
 
@@ -385,7 +386,8 @@ class BundleThermoIn(ThermoStateFields):
     )
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 
@@ -563,7 +565,8 @@ class BundleStatmechIn(SchemaBase):
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. See
         ``app.services.calculation_levels`` on the backend for the exact
-        rule; never persisted.
+        rule, then stored as declared and read back as
+        ``levels.declared_energy``.
     :param note: Optional note.
     """
 
@@ -591,7 +594,8 @@ class BundleStatmechIn(SchemaBase):
     electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 

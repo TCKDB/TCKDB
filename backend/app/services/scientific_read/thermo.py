@@ -82,6 +82,9 @@ from app.services.scientific_read.common import (
     validate_temperature_range,
     visible_statuses,
 )
+from app.services.scientific_read.declared_levels import (
+    load_declared_energy_summaries,
+)
 from app.services.scientific_read.handles import (
     NO_MATCH,
     reconcile_level_of_theory_pair,
@@ -382,6 +385,22 @@ def get_species_thermo(
         session, thermo_workflow_tool_release_ids
     )
 
+    # The declared energy level (#619): the thermo's own stored declaration,
+    # else the statmech basis's, the same inheritance the derived levels
+    # above use. Bulk-loaded for the whole page.
+    statmech_declared_lot_ids = dict(
+        session.execute(
+            select(Statmech.id, Statmech.energy_level_of_theory_id).where(
+                Statmech.id.in_(statmech_ids_by_entry)
+            )
+        ).all()
+    )
+    declared_energy_summaries = load_declared_energy_summaries(
+        session,
+        [t.energy_level_of_theory_id for t, _ in classified]
+        + list(statmech_declared_lot_ids.values()),
+    )
+
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
         sources = sources_by_thermo.get(t.id, [])
@@ -467,6 +486,17 @@ def get_species_thermo(
             calc_meta_by_lot_id=calc_meta_by_lot_id,
             freq_calc_ids=freq_calc_ids,
         )
+        declared_lot_id = (
+            t.energy_level_of_theory_id
+            if t.energy_level_of_theory_id is not None
+            else statmech_declared_lot_ids.get(record_statmech_id)
+        )
+        if declared_lot_id is not None:
+            levels = levels.model_copy(
+                update={
+                    "declared_energy": declared_energy_summaries.get(declared_lot_id)
+                }
+            )
 
         record = ThermoRecord(
             thermo_id=t.id,

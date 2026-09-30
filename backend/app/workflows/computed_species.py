@@ -1014,7 +1014,13 @@ def _persist_thermo_block(
         literature_field_prefix="thermo.literature.",
     )
     thermo_create = thermo_create.model_copy(
-        update={"source_calculations": resolved_sources}
+        update={
+            "source_calculations": resolved_sources,
+            # Stored as declared, after ``assert_role_consistency`` above.
+            "energy_level_of_theory_id": (
+                declared_energy_lot.id if declared_energy_lot is not None else None
+            ),
+        }
     )
     thermo_row = persist_thermo(session, thermo_create, created_by=created_by)
 
@@ -1282,6 +1288,10 @@ def _persist_statmech_block(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         scientific_origin=s.scientific_origin,
+        # Stored as declared, after ``assert_role_consistency`` above.
+        energy_level_of_theory_id=(
+            declared_energy_lot.id if declared_energy_lot is not None else None
+        ),
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
             software_release.id if software_release is not None else None

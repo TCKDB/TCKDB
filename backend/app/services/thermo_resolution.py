@@ -158,6 +158,7 @@ def persist_thermo(
         workflow_tool_release_id=thermo_create.workflow_tool_release_id,
         software_release_id=thermo_create.software_release_id,
         statmech_id=thermo_create.statmech_id,
+        energy_level_of_theory_id=thermo_create.energy_level_of_theory_id,
         h298_kj_mol=thermo_create.h298_kj_mol,
         s298_j_mol_k=thermo_create.s298_j_mol_k,
         h298_uncertainty_kj_mol=thermo_create.h298_uncertainty_kj_mol,

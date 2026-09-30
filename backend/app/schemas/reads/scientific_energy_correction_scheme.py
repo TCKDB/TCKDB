@@ -20,6 +20,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
+    AtomParamApplication,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
@@ -60,6 +61,17 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
     #: identity axis (a7d4e2b9c351); a consumer converts with it rather
     #: than treating two units as two libraries.
     units: EnergyUnit | None = None
+    #: Revision of the data holding the parameter tables (for Arkane, the
+    #: RMG-database commit), or ``null`` when the depositor did not state
+    #: one. When set it is part of the scheme's identity and the tool build
+    #: (``workflow_tool_release``) is provenance only; when ``null`` the
+    #: tool build is part of identity instead.
+    data_revision: str | None = None
+    #: How the ``atom`` terms enter the corrected energy: ``subtracted`` or
+    #: ``added``. ``null`` means the depositor did not say; it is never
+    #: inferred from ``scheme_kind``. Each ``atom`` term's value is in
+    #: ``units``.
+    atom_params_applied_as: AtomParamApplication | None = None
     note: str | None = None
     created_at: datetime
 

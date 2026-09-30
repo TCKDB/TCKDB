@@ -1174,6 +1174,7 @@ participates in identity.
 - `literature_id`
 - `workflow_tool_release_id`
 - `software_release_id`
+- `energy_level_of_theory_id` (the level the depositor declared for the energy; NULL when none was declared, never back-filled)
 - `external_symmetry`
 - `point_group`
 - `is_linear`
@@ -1229,6 +1230,7 @@ Notes:
 - `literature_id`
 - `workflow_tool_release_id`
 - `software_release_id`
+- `energy_level_of_theory_id` (the level the depositor declared for the energy; NULL when none was declared, never back-filled)
 - `h298_kj_mol`
 - `s298_j_mol_k`
 - `h298_uncertainty_kj_mol`
@@ -1532,7 +1534,10 @@ Notes:
 - `name`
 - `level_of_theory_id`
 - `source_literature_id`
-- `version`
+- `software_release_id`
+- `workflow_tool_release_id`
+- `data_revision` (revision of the data holding the tables, e.g. the RMG-database commit; NULL when not stated)
+- `atom_params_applied_as` (`subtracted` | `added`; how `atom_params` enter the energy; NULL when not stated)
 - `units`
 - `note`
 - `created_at`
@@ -1546,7 +1551,8 @@ Related parameter tables:
 
 Notes:
 
-- scheme dedupe is enforced on `(kind, name, level_of_theory_id, version)`
+- scheme identity has two forms, each a partial unique index. With `data_revision` NULL it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)`. With a `data_revision` it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision)`: the workflow-tool build is then provenance, recorded from the first deposit, and two builds of one revision are one scheme. A revised scheme never matches an unrevised one
+- `atom_param.value` is in the scheme's `units`; for `kind=atom_energy` it is the level's atomic energy of the element, applied as `atom_params_applied_as` says (Arkane subtracts it; `atom_hf - atom_thermal` is added per atom by the two separate schemes)
 - the parameter tables normalize element-, bond-, and component-level correction coefficients
 
 ### 10.3 Applied Energy Correction

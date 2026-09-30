@@ -468,3 +468,36 @@ def test_two_spellings_of_the_method_are_one_group(merge, db_session):
     assert _merged_into(db_session, duplicate.id) == holder.id
     # The merged row keeps its own spelling and ref.
     assert db_session.get(LevelOfTheory, duplicate.id).method == "CCSD(T)-F12-LOTM"
+
+
+@pytest.mark.parametrize("product", ["thermo", "statmech"])
+def test_a_declared_energy_level_on_a_duplicate_blocks_the_group(
+    merge, db_session, product
+):
+    """#619: ``thermo`` and ``statmech`` now cite a level of theory of their own.
+
+    The script finds foreign keys into ``level_of_theory`` at run time, so the
+    new columns need no change to it; this pins that they block, because the
+    script repoints neither and accepted science may not be rewritten.
+    """
+    from app.db.models.statmech import Statmech
+    from app.db.models.thermo import Thermo
+
+    holder = _lot(db_session, "mp2-lotm619", "def2-svp", holder=True)
+    duplicate = _lot(db_session, "mp2-lotm619", "Def2SVP", holder=False)
+    entry = make_species_entry(
+        db_session,
+        make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("LOTM")),
+    )
+    model = Thermo if product == "thermo" else Statmech
+    db_session.add(
+        model(
+            species_entry_id=entry.id,
+            scientific_origin="computed",
+            energy_level_of_theory_id=duplicate.id,
+        )
+    )
+    db_session.flush()
+
+    group = _group(merge.build_plan(db_session), holder)
+    assert any(f"{product}.energy_level_of_theory_id" in b for b in group.blockers())

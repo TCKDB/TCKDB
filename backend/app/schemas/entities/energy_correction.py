@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.db.models.common import (
     AppliedCorrectionComponentKind,
+    AtomParamApplication,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
@@ -150,6 +151,8 @@ class EnergyCorrectionSchemeRead(
 ):
     software_id: int | None = None
     workflow_tool_release_id: int | None = None
+    data_revision: str | None = None
+    atom_params_applied_as: AtomParamApplication | None = None
     atom_params: list[EnergyCorrectionSchemeAtomParamRead] = Field(default_factory=list)
     bond_params: list[EnergyCorrectionSchemeBondParamRead] = Field(default_factory=list)
     component_params: list[EnergyCorrectionSchemeComponentParamRead] = Field(

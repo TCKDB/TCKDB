@@ -405,6 +405,26 @@ class EnergyCorrectionSchemeKind(str, Enum):
     other = "other"
 
 
+class AtomParamApplication(str, Enum):
+    """How a scheme's ``atom_params`` values enter the corrected energy.
+
+    Declared per scheme, because every atom parameter of one scheme is
+    applied the same way. ``NULL`` on a scheme means the producer did not
+    say; it is never inferred from ``kind``.
+
+    * ``subtracted`` -- the per-element value is multiplied by the atom
+      count and subtracted from the energy. Arkane's ``atom_energy`` tables
+      are applied like this: the level's own atomic energies are removed so
+      energies are referenced to a level-independent basis.
+    * ``added`` -- the per-element value is multiplied by the atom count
+      and added. Arkane's ``atom_hf`` and ``atom_thermal`` tables enter
+      together as ``+ count * (atom_hf - atom_thermal)``.
+    """
+
+    subtracted = "subtracted"
+    added = "added"
+
+
 class MeliusBacComponentKind(str, Enum):
     atom_corr = "atom_corr"
     bond_corr_length = "bond_corr_length"
@@ -521,6 +541,7 @@ __all__ = (
     "ArrheniusAUnits",
     "ArtifactKind",
     "AtomMapSource",
+    "AtomParamApplication",
     "CalculationDependencyRole",
     "CalculationGeometryRole",
     "CalculationQuality",
