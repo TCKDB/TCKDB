@@ -45,6 +45,7 @@ from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionStateEntry
 from app.db.models.transport import Transport
+from app.services.monatomic import natoms_are_all_one
 from app.services.trust.models import (
     EvidenceCheckKind,
     EvidenceCheckSpec,
@@ -311,7 +312,7 @@ def _calculation_is_single_atom(calc: Calculation) -> bool:
         link.geometry
         for link in (*calc.input_geometries, *calc.output_geometries)
     ]
-    return bool(geometries) and all(geom.natoms == 1 for geom in geometries)
+    return natoms_are_all_one(geom.natoms for geom in geometries)
 
 
 def _check_calculation_dependencies_present(calc: Calculation) -> EvidenceOutcome:

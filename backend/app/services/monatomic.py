@@ -41,6 +41,7 @@ from app.chemistry.species import element_counts_from_smiles
 from app.db.models.common import RigidRotorKind
 
 __all__ = [
+    "natoms_are_all_one",
     "single_atom_element",
     "statmech_subject_is_polyatomic",
     "subject_atom_count",
@@ -78,6 +79,18 @@ def subject_atom_count(
     if counts is not None:
         return sum(counts.values())
     return None
+
+
+def natoms_are_all_one(natoms: Iterable[int]) -> bool:
+    """True when at least one atom count is given and every one is exactly 1.
+
+    The shared decision for stored geometries (``geometry.natoms``), used by
+    the trust rubrics; the payload side counts atoms with
+    :func:`subject_atom_count`. Absence is not evidence: no geometry is
+    ``False``, never "an atom".
+    """
+    counts = list(natoms)
+    return bool(counts) and all(n == 1 for n in counts)
 
 
 def single_atom_element(
