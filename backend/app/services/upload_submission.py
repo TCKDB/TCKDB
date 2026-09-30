@@ -65,20 +65,22 @@ from __future__ import annotations
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 from tckdb_schemas.rights import DepositRights
 
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     RecordReviewStatus,
+    SubmissionAuditEventKind,
     SubmissionKind,
     SubmissionSourceKind,
     SubmissionStatus,
     UploadJobKind,
 )
-from app.db.models.submission import Submission
+from app.db.models.submission import Submission, SubmissionAuditEvent
 from app.services.record_review import ReviewPolicy
 from app.services.rights import attest_from_deposit
 from app.services.submission import (
@@ -290,12 +292,65 @@ def mark_upload_ingested(
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class FailedUploadKey:
+    """What identifies a retry of one keyed upload: route and idempotency key.
+
+    The credential is the third leg, and is the ``created_by`` user passed to
+    :func:`record_failed_upload` -- the same scope the idempotency table
+    itself uses (``user_id``, method, endpoint, key).
+    """
+
+    route: str
+    idempotency_key: str
+    payload_hash: Optional[str] = None
+
+    @classmethod
+    def from_context(cls, idem: Any) -> Optional["FailedUploadKey"]:
+        """Build from an ``IdempotencyContext``; ``None`` when no key was sent."""
+        if idem is None or not getattr(idem, "enabled", False):
+            return None
+        if not idem.key or not idem.endpoint or not idem.method:
+            return None
+        return cls(
+            route=f"{idem.method} {idem.endpoint}",
+            idempotency_key=idem.key,
+            payload_hash=idem.payload_hash,
+        )
+
+
+def _find_failed_submission(
+    session: Session,
+    *,
+    created_by: int,
+    kind: SubmissionKind,
+    key: FailedUploadKey,
+) -> Optional[Submission]:
+    """The earliest failed submission recorded for this (user, route, key)."""
+    return session.scalars(
+        select(Submission)
+        .join(SubmissionAuditEvent, SubmissionAuditEvent.submission_id == Submission.id)
+        .where(
+            Submission.created_by == created_by,
+            Submission.submission_kind == kind,
+            Submission.status == SubmissionStatus.failed,
+            SubmissionAuditEvent.event_kind == SubmissionAuditEventKind.ingestion_failed,
+            SubmissionAuditEvent.details_json.contains(
+                {"route": key.route, "idempotency_key": key.idempotency_key}
+            ),
+        )
+        .order_by(Submission.id)
+        .limit(1)
+    ).first()
+
+
 def record_failed_upload(
     *,
     created_by: int,
     kind: SubmissionKind,
     error_summary: str,
     session_factory: Optional[Callable[[], Session]] = None,
+    retry_key: Optional[FailedUploadKey] = None,
 ) -> Optional[int]:
     """Durably record a failed synchronous upload in its own transaction.
 
@@ -315,7 +370,28 @@ def record_failed_upload(
     authentication and request parsing reach this path; invalid payloads are
     rejected by FastAPI before the route body and never create a submission.
 
-    Returns the failed submission id, or ``None`` if recording itself failed.
+    **Retries.** When the request carried an ``Idempotency-Key`` (``retry_key``),
+    a refused retry is the same contribution event again, so it does not open a
+    second submission. The first failure opens the submission as above and
+    stamps its ``ingestion_failed`` event with ``route``, ``idempotency_key``,
+    ``payload_hash`` and ``attempt = 1``. A later failure for the same
+    (``created_by``, route, key) finds that submission and *appends* one more
+    ``ingestion_failed`` event to it (``attempt = n``, with its own error text
+    and payload hash). Nothing is updated: events are append-only, and
+    ``submission`` has no counter column to bump, so the event list *is* the
+    counter and every attempt's error is kept. The key is part of the lookup,
+    not the payload, so a corrected payload retried under the same key lands on
+    the same submission and is told apart by its ``payload_hash``.
+
+    **Without a key nothing is deduplicated.** A payload hash would be safe to
+    compute but not safe to act on: the server only hashes a body when a key
+    was sent (so the failure path has no hash to use), and an unkeyed client
+    has not declared that two requests are one attempt -- the same body can
+    legitimately fail on Monday for a full artifact store and on Tuesday for a
+    schema rule. Each unkeyed failure keeps its own row, as before.
+
+    Returns the failed submission id (the existing one for a deduplicated
+    retry), or ``None`` if recording itself failed.
     """
     if session_factory is None:
         # Lazy import keeps this service free of an app-layer import at module
@@ -325,17 +401,60 @@ def record_failed_upload(
     try:
         with session_factory() as session:
             with session.begin():
-                submission = create_submission(
-                    session,
-                    created_by=created_by,
-                    submission_kind=kind,
-                    source_kind=SubmissionSourceKind.api,
-                    title=f"Failed {kind.value} upload",
-                )
+                existing: Optional[Submission] = None
+                if retry_key is not None:
+                    # Serialise concurrent failures of the same retry so two
+                    # racing attempts cannot both open a submission. The lock
+                    # is transaction-scoped and released at commit.
+                    session.execute(
+                        text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+                        {
+                            "k": f"failed-upload:{created_by}:{retry_key.route}:"
+                            f"{retry_key.idempotency_key}"
+                        },
+                    )
+                    existing = _find_failed_submission(
+                        session, created_by=created_by, kind=kind, key=retry_key
+                    )
+
+                details: Optional[dict[str, Any]] = None
+                if retry_key is not None:
+                    attempt = 1
+                    if existing is not None:
+                        attempt = (
+                            session.scalar(
+                                select(func.count())
+                                .select_from(SubmissionAuditEvent)
+                                .where(
+                                    SubmissionAuditEvent.submission_id == existing.id,
+                                    SubmissionAuditEvent.event_kind
+                                    == SubmissionAuditEventKind.ingestion_failed,
+                                )
+                            )
+                            or 0
+                        ) + 1
+                    details = {
+                        "route": retry_key.route,
+                        "idempotency_key": retry_key.idempotency_key,
+                        "payload_hash": retry_key.payload_hash,
+                        "attempt": attempt,
+                    }
+
+                if existing is not None:
+                    submission = existing
+                else:
+                    submission = create_submission(
+                        session,
+                        created_by=created_by,
+                        submission_kind=kind,
+                        source_kind=SubmissionSourceKind.api,
+                        title=f"Failed {kind.value} upload",
+                    )
                 mark_ingestion_failed(
                     session,
                     submission=submission,
                     reason=error_summary,
+                    details_json=details,
                 )
                 submission.status = SubmissionStatus.failed
                 submission_id = submission.id
@@ -382,11 +501,13 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
         def wrapper(*args, **kwargs):
             user = kwargs.get("current_user")
             session = kwargs.get("session")
+            retry_key = FailedUploadKey.from_context(kwargs.get("idem"))
             state: Optional[dict] = None
             if user is not None and isinstance(session, Session):
                 state = {
                     "created_by": user.id,
                     "kind": kind,
+                    "retry_key": retry_key,
                     "audited": False,
                 }
                 session.info[SYNC_UPLOAD_AUDIT_KEY] = state
@@ -400,6 +521,7 @@ def audit_sync_upload_failure(kind: SubmissionKind) -> Callable:
                         created_by=user.id,
                         kind=kind,
                         error_summary=f"{type(exc).__name__}: {exc}",
+                        retry_key=retry_key,
                     )
                 raise
 
@@ -435,11 +557,13 @@ def audit_upload_failure_at_commit(session: Session, exc: BaseException) -> None
         created_by=state["created_by"],
         kind=state["kind"],
         error_summary=f"{type(exc).__name__}: {exc}",
+        retry_key=state.get("retry_key"),
     )
 
 
 __all__ = [
     "SYNC_UPLOAD_AUDIT_KEY",
+    "FailedUploadKey",
     "UploadSubmissionContext",
     "audit_sync_upload_failure",
     "audit_upload_failure_at_commit",

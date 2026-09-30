@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.app import create_app
@@ -1169,3 +1169,170 @@ class TestConformerUploadResultShape:
             json={"artifacts": [_ancillary_artifact()]},
         )
         assert art_resp.status_code == 201
+
+
+# ---------------------------------------------------------------------------
+# Submission trail: artifacts deposited after their calculation
+# ---------------------------------------------------------------------------
+#
+# ``POST /calculations/{id}/artifacts`` used to write no
+# ``submission_record_link`` (the link was only made by ``apply_review_policy``
+# at the end of an upload workflow), so evidence added afterwards belonged to no
+# submission. The ingestion spec ("Artifact links") says artifacts are linked to
+# the submission as evidence with ``role="artifact"``.
+#
+# They join the calculation's *existing* submission and never open a new one: a
+# submission is the review unit, ``SubmissionKind`` has no artifact value, and a
+# submission holding only artifacts would carry no calculation link.
+
+
+def _artifact_links(db_session, calc_id: int) -> list[SubmissionRecordLink]:
+    ids = select(CalculationArtifact.id).where(
+        CalculationArtifact.calculation_id == calc_id
+    )
+    return list(
+        db_session.scalars(
+            select(SubmissionRecordLink)
+            .where(
+                SubmissionRecordLink.record_type == SubmissionRecordType.artifact,
+                SubmissionRecordLink.record_id.in_(ids),
+            )
+            .order_by(SubmissionRecordLink.id)
+        ).all()
+    )
+
+
+def _calc_submission_id(db_session, calc_id: int) -> int:
+    return db_session.scalars(
+        select(SubmissionRecordLink.submission_id).where(
+            SubmissionRecordLink.record_type == SubmissionRecordType.calculation,
+            SubmissionRecordLink.record_id == calc_id,
+        )
+    ).first()
+
+
+def _submission_count(db_session) -> int:
+    return db_session.scalar(select(func.count()).select_from(Submission)) or 0
+
+
+def test_artifacts_are_linked_to_the_calculations_submission(
+    client, db_session, stub_store_artifact
+) -> None:
+    calc_id = _create_calc_via_conformer_upload(client)
+    owning_submission = _calc_submission_id(db_session, calc_id)
+    assert owning_submission is not None
+    assert _artifact_links(db_session, calc_id) == []
+    submissions_before = _submission_count(db_session)
+
+    resp = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={
+            "artifacts": [
+                _ancillary_artifact(b"first"),
+                _ancillary_artifact(b"second"),
+            ]
+        },
+    )
+    assert resp.status_code == 201, resp.text
+
+    links = _artifact_links(db_session, calc_id)
+    artifact_ids = set(
+        db_session.scalars(
+            select(CalculationArtifact.id).where(
+                CalculationArtifact.calculation_id == calc_id
+            )
+        ).all()
+    )
+    assert len(artifact_ids) == 2
+    assert {link.record_id for link in links} == artifact_ids
+    assert {link.submission_id for link in links} == {owning_submission}
+    assert {link.role for link in links} == {"artifact"}
+    # Joined the existing submission; did not open another.
+    assert _submission_count(db_session) == submissions_before
+
+
+def test_a_second_batch_adds_links_and_keeps_the_first(
+    client, db_session, stub_store_artifact
+) -> None:
+    calc_id = _create_calc_via_conformer_upload(client)
+    for content in (b"batch-one", b"batch-two"):
+        resp = client.post(
+            f"/api/v1/calculations/{calc_id}/artifacts",
+            json={"artifacts": [_ancillary_artifact(content)]},
+        )
+        assert resp.status_code == 201, resp.text
+    assert len(_artifact_links(db_session, calc_id)) == 2
+
+
+def test_curator_attachment_lands_on_the_originating_submission(
+    client, db_session, stub_store_artifact, make_user_client
+) -> None:
+    """A curator is not the depositor and owns no submission of their own here;
+    the evidence still belongs with the deposit it was added to."""
+    calc_id = _create_calc_via_conformer_upload(client)
+    owning_submission = _calc_submission_id(db_session, calc_id)
+    curator_client, _curator = make_user_client(
+        username="art-trail-curator", role=AppUserRole.curator
+    )
+    before = _submission_count(db_session)
+
+    resp = curator_client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"curator-added")]},
+    )
+    assert resp.status_code == 201, resp.text
+
+    links = _artifact_links(db_session, calc_id)
+    assert [link.submission_id for link in links] == [owning_submission]
+    assert _submission_count(db_session) == before
+
+
+def test_callers_own_live_submission_is_preferred(
+    client, db_session, stub_store_artifact, make_user_client, submission_factory
+) -> None:
+    """A calculation can be linked from several submissions (it is deduplicated
+    identity); the evidence goes to the caller's, not to every one of them."""
+    calc_id = _create_calc_via_conformer_upload(client)
+    original = _calc_submission_id(db_session, calc_id)
+    other_client, other_user = make_user_client(username="art-trail-second-owner")
+    theirs = submission_factory(owner=other_user, status=SubmissionStatus.pending)
+    db_session.add(
+        SubmissionRecordLink(
+            submission_id=theirs.id,
+            record_type=SubmissionRecordType.calculation,
+            record_id=calc_id,
+        )
+    )
+    db_session.flush()
+
+    resp = other_client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"second-owner")]},
+    )
+    assert resp.status_code == 201, resp.text
+
+    links = _artifact_links(db_session, calc_id)
+    assert [link.submission_id for link in links] == [theirs.id]
+    assert theirs.id != original
+
+
+def test_a_calculation_with_no_submission_gets_no_invented_one(
+    client, db_session, stub_store_artifact
+) -> None:
+    calc_id = _create_calc_via_conformer_upload(client)
+    db_session.execute(
+        delete(SubmissionRecordLink).where(
+            SubmissionRecordLink.record_type == SubmissionRecordType.calculation,
+            SubmissionRecordLink.record_id == calc_id,
+        )
+    )
+    db_session.flush()
+    before = _submission_count(db_session)
+
+    resp = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"orphan-calc")]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert _artifact_links(db_session, calc_id) == []
+    assert _submission_count(db_session) == before

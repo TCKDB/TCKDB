@@ -40,10 +40,15 @@ import binascii
 import logging
 from dataclasses import dataclass
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationArtifact
-from app.db.models.common import ArtifactIntegrityDetectionContext
+from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
+    SubmissionRecordType,
+)
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.schemas.fragments.artifact import ArtifactIn
 from app.services.artifact_integrity import record_from_error
 from app.services.artifact_storage import (
@@ -55,8 +60,14 @@ from app.services.artifact_storage import (
     validate_encoded_lengths,
     validate_total_upload_size,
 )
+from app.services.deposit_ownership import ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES
+from app.services.submission import link_record
 
 logger = logging.getLogger(__name__)
+
+#: Role on the ``submission_record_link`` rows for artifact evidence; the same
+#: token ``apply_review_policy`` writes for artifacts linked at upload time.
+_ARTIFACT_LINK_ROLE = "artifact"
 
 
 @dataclass(frozen=True)
@@ -307,3 +318,81 @@ def _undo_partial_batch(
         except Exception:
             pass
     _compensate_stored_objects(stored_shas)
+
+
+def link_artifacts_to_deposit_submission(
+    session: Session,
+    *,
+    calculation_id: int,
+    artifacts: list[CalculationArtifact],
+    user_id: int,
+) -> Submission | None:
+    """Link artifacts attached after the fact to the submission that owns the calculation.
+
+    ``POST /calculations/{id}/artifacts`` is a second-phase deposit onto a
+    calculation an earlier upload created. The ingestion spec ("Artifact
+    links") says uploaded artifacts are linked to the submission as evidence
+    (``submission_record_link``, ``record_type=artifact``, ``role="artifact"``),
+    but that link was only ever written by ``apply_review_policy`` at the end
+    of an upload workflow, so an artifact added later had no submission trail.
+
+    The artifacts join the calculation's **existing** submission rather than
+    opening one of their own:
+
+    * An artifact is evidence for a calculation, and the submission is the
+      unit a curator reviews and approves. A separate submission would hold
+      evidence with no calculation link and no review rows, and would split
+      one deposit across two review units.
+    * ``SubmissionKind`` has no artifact value, so a submission of their own
+      would be ``other``, which describes nothing; adding a value needs a
+      migration, which this does not warrant.
+
+    Which submission: among the live submissions (the same statuses that
+    authorize the upload) that link this calculation, the caller's own, latest
+    first, since that is the deposit they are adding to. Failing that (a
+    curator attaching to someone else's deposit, or the calculation's creator
+    with no live submission of their own) the calculation's originating
+    submission, the earliest. Attaching to every submission that links the
+    calculation would claim that all of them produced the artifact; the
+    calculation row is deduplicated identity and can be linked from several.
+
+    Returns the submission linked to, or ``None`` when the calculation has no
+    live submission (created outside any). Nothing is invented for those. The
+    links are idempotent, so a retry cannot duplicate them.
+    """
+    if not artifacts:
+        return None
+
+    live = (
+        select(Submission)
+        .join(
+            SubmissionRecordLink,
+            SubmissionRecordLink.submission_id == Submission.id,
+        )
+        .where(
+            SubmissionRecordLink.record_type == SubmissionRecordType.calculation,
+            SubmissionRecordLink.record_id == calculation_id,
+            Submission.status.in_(ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES),
+        )
+    )
+    submission = session.scalars(
+        live.where(Submission.created_by == user_id)
+        .order_by(Submission.id.desc())
+        .limit(1)
+    ).first()
+    if submission is None:
+        submission = session.scalars(
+            live.order_by(Submission.id.asc()).limit(1)
+        ).first()
+    if submission is None:
+        return None
+
+    for artifact in artifacts:
+        link_record(
+            session,
+            submission=submission,
+            record_type=SubmissionRecordType.artifact,
+            record_id=artifact.id,
+            role=_ARTIFACT_LINK_ROLE,
+        )
+    return submission

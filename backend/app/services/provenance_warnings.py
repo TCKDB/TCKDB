@@ -229,6 +229,7 @@ def collect_provenance_warnings(
     freq_scale_factor: object | None = NOT_APPLICABLE,
     energy_level_of_theory: object | None = NOT_APPLICABLE,
     field_prefix: str = "",
+    software_release_field: str = "software_release",
 ) -> list[UploadWarning]:
     """Warn about provenance anchors a record could carry and does not.
 
@@ -251,6 +252,11 @@ def collect_provenance_warnings(
         names none of them; ``UploadWarning.field`` is already
         documented as a dot-path and already carries indexed paths from
         the standalone kinetics route, so this needs no new machinery.
+    :param software_release_field: Name of the field the software-release
+        warning points at, after ``field_prefix``. The reaction bundle's
+        kinetics take their software provenance from the bundle-root
+        ``analysis_software_release``; ``software_release`` is not a field
+        of that bundle, so a depositor told to fill it could not.
     :param freq_scale_factor: Statmech's extra anchor, or
         :data:`NOT_APPLICABLE` for record types that have none.
     :param energy_level_of_theory: Kinetics' extra anchor, or
@@ -260,7 +266,7 @@ def collect_provenance_warnings(
     if scientific_origin in _COMPUTATIONAL_ORIGINS:
         if software_release is None:
             warnings.append(
-                _software_release_warning(f"{field_prefix}software_release")
+                _software_release_warning(f"{field_prefix}{software_release_field}")
             )
         if workflow_tool_release is None:
             warnings.append(
