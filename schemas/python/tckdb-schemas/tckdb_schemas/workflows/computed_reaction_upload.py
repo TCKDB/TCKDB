@@ -96,6 +96,7 @@ from tckdb_schemas.workflows.computed_species_upload import (
     CalculationDependencyInBundle,
     StatmechSourceCalcInBundle,
     ThermoSourceCalcInBundle,
+    require_opt_primary_unless_monatomic,
 )
 
 
@@ -278,11 +279,32 @@ class ConformerIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_calc_is_opt(self) -> Self:
-        if self.calculation.type != CalculationType.opt:
-            raise ValueError(
-                f"Conformer '{self.key}' primary calculation must be type 'opt', "
-                f"got '{self.calculation.type.value}'."
-            )
+        """Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
+
+        A species of two or more atoms sends the optimisation that produced
+        each conformer's geometry as that conformer's ``calculation`` with
+        ``type: "opt"``. Any other type is refused. A monatomic species has
+        no geometry to optimise (its geometry is a point), and the program
+        run on it is a single point: send that single point, once, as the
+        conformer's ``calculation`` with ``type: "sp"`` and
+        ``sp_electronic_energy_hartree``, and the atom's one-atom XYZ as the
+        conformer ``geometry``. Do not relabel it as an ``opt``: no
+        ``opt_converged``, and no second copy of the same log and energy
+        under another level of theory or program. Link the atom's statmech
+        source calculations to that ``sp`` with role ``sp``, and point any
+        applied energy correction's ``source_calculation_key`` at it; an
+        atom has no ``opt`` or ``freq`` to link. A further ``sp`` at another
+        level of theory goes in the species's ``calculations`` with a
+        ``conformer_key``, as for any species. A ``sp`` primary on a
+        geometry of two or more atoms, a geometry that cannot be counted, or
+        a primary of any type other than ``opt`` or ``sp`` is refused. A
+        relabelled ``opt`` on an atom is still accepted.
+        """
+        require_opt_primary_unless_monatomic(
+            self.calculation.type,
+            self.geometry.xyz_text,
+            subject=f"Conformer '{self.key}' primary calculation type",
+        )
         return self
 
 

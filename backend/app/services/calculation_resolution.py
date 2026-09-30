@@ -1847,6 +1847,7 @@ def attach_calculation_output_geometries(
     explicit_output_geometries: list[OutputGeometryEntry],
     fallback_geometry_id: int | None,
     context: str,
+    is_single_atom_primary: bool = False,
 ) -> None:
     """Attach ``calculation_output_geometry`` rows for one calc.
 
@@ -1866,6 +1867,16 @@ def attach_calculation_output_geometries(
     one row is added at ``output_order = 1`` with role ``final``. Only
     ``opt`` qualifies — the conformer geometry IS opt's converged output
     by construction; any other type's output role would be a guess.
+
+    One exception, for a bundle's conformer primary when the conformer's
+    geometry is a single atom (``is_single_atom_primary``, #610): an atom
+    has no geometry to optimise, so its honest primary is an ``sp``, and
+    that ``sp`` is the only calculation that could carry the conformer's
+    geometry. Without the link the conformer reads back with no geometry at
+    all (``geometry_count`` 0, ``has_geometries`` false), which a
+    relabelled ``opt`` used to avoid by accident. Only an ``sp`` qualifies,
+    and only the primary of a one-atom conformer: any other calculation
+    still gets no invented output.
 
     The two paths are mutually exclusive — declaring even one explicit
     output geometry suppresses the fallback for that calc.
@@ -1902,7 +1913,10 @@ def attach_calculation_output_geometries(
             )
         return
 
-    if fallback_geometry_id is not None and calc.type in _OUTPUT_GEOMETRY_TYPES:
+    fallback_applies = calc.type in _OUTPUT_GEOMETRY_TYPES or (
+        is_single_atom_primary and calc.type is CalculationType.sp
+    )
+    if fallback_geometry_id is not None and fallback_applies:
         if fallback_geometry_id not in _pending_output_geometry_ids(
             session, calc.id
         ):
