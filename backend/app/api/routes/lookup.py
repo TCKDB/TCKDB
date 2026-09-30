@@ -485,6 +485,7 @@ def _kinetics_summary(kin: Kinetics) -> dict[str, Any]:
         summary["a_units"] = kin.a_units.value if hasattr(kin.a_units, "value") else str(kin.a_units)
     if kin.n is not None:
         summary["n"] = kin.n
+    summary["t0_k"] = kin.t0_k
     if kin.ea_kj_mol is not None:
         summary["ea_kj_mol"] = kin.ea_kj_mol
     if kin.tmin_k is not None:

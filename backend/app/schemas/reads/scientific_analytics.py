@@ -194,6 +194,8 @@ class KineticsAnalyticsRecord(BaseModel):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
+    # Reference temperature: k = A (T/T0)^n exp(-Ea/RT); 1 K is the plain form.
+    t0_k: float = 1.0
     ea_kj_mol: float | None = None
 
     a_uncertainty: float | None = None

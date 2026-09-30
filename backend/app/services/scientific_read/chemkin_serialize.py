@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 from tckdb_schemas.thermo import ThermoNASACreate
 
+from app.chemistry.arrhenius import a_at_unit_t0
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.export import (
     ExportGap,
@@ -448,7 +449,15 @@ def _kinetics_lines(
         # rate constant.
         lines = [f"{eq}   1.0000E+00 0.000 0.0000"]
     else:
-        a = _a_to_mol_cm_s(k.a, k.a_units)
+        # CHEMKIN's line is A * T**n * exp(-Ea/RT) with no reference
+        # temperature. A row stored at T0 != 1 K (k = A (T/T0)**n ...) is
+        # written as the identical rate A / T0**n at 1 K; for a falloff
+        # record this line is the high-pressure limit, which is the part T0
+        # applies to.
+        a = _a_to_mol_cm_s(
+            a_at_unit_t0(k.a, k.n, k.t0_k) if k.a is not None else None,
+            k.a_units,
+        )
         n = k.n if k.n is not None else 0.0
         ea = _convert_ea(k.ea_kj_mol, options.energy_units)
         a_str = f"{a:.4E}" if a is not None else "0.0"

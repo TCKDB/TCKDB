@@ -51,6 +51,14 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.kinetics_evidence import (
+    T0_K_DESCRIPTION,
+    KineticsInterpretationAssignmentUpload,
+    KineticsTunnelingApplicationUpload,
+    check_interpretation_set,
+    check_tunneling_declaration_agrees,
+    default_tunneling_model_from_application,
+)
 from tckdb_schemas.fragments.reaction_atom_map import (
     AtomMapParticipantGeometry,
     ReactionAtomMapIn,
@@ -1129,46 +1137,24 @@ class BundleKineticsIn(SchemaBase):
         the reported rate. Defaults to ``unknown`` for legacy producers.
     :param note: Optional note.
 
-    **Three fields the standalone route has and this model does not.**
-    Recorded here because the gap was invisible: nothing in the tree
-    compared this model against ``KineticsUploadRequest``, and
-    ``test_bundle_root_model_symmetry`` explicitly excludes kinetics on the
-    grounds that it has no second spelling — true of the *species bundle*,
-    false of the standalone route.
+    :param t0_k: Reference temperature T0 in K, so that
+        ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.
+    :param interpretation_assignments: Which statmech records the rate's
+        partition functions came from. The same model, validation and
+        persistence as ``KineticsUploadRequest``; every reference is a public
+        ref of a record deposited earlier (see
+        :mod:`tckdb_schemas.fragments.kinetics_evidence`).
+    :param tunneling_application: The typed, replayable tunneling evidence,
+        cross-checked against ``tunneling_model`` exactly as the standalone
+        route does.
+    :param network_kinetics_ref: Public ref of the master-equation solve a
+        fitted rate delegates its pressure dependence to.
 
-    * ``interpretation_assignments`` — which statmech records the rate's
-      partition functions came from.
-    * ``tunneling_application`` — the typed, replayable tunneling evidence.
-    * ``network_kinetics_ref`` — the master-equation solve a fitted rate
-      delegates its pressure dependence to.
-
-    The first two are **drift, not design**. Both were added to
-    ``KineticsUploadRequest`` by ``ee7377f5`` (#66), a commit that edited
-    *this file* in the same diff to close the analogous transition-state
-    evidence gap on parity grounds — and left kinetics one-sided with no
-    recorded reason. No commit message, comment or doc anywhere claims a
-    deliberately reduced kinetics shape. The consequence is concrete: this
-    model carries ``tunneling_model``, the *label*, so a bundle depositor
-    can claim Eckart tunneling was applied and has no way to attach the
-    evidence for it. The standalone route cross-checks the two
-    (``validate_tunneling_declaration_agrees``); here there is nothing to
-    check against.
-
-    ``network_kinetics_ref`` is **unaddressed rather than decided**.
-    ``2fb5c25b`` (#29) established that this model "carries only scalar
-    Arrhenius fields … and its workflow writes no kinetics child tables",
-    directing the pressure-dependent forms to the single-reaction endpoint.
-    That covers PLOG and Chebyshev child rows; ``network_kinetics_ref``
-    resolves to a nullable scalar column on ``kinetics`` itself, and this
-    model accepts ``pressure_context='pressure_dependent'`` — precisely the
-    state that handle exists to name — with no way to name it.
-
-    Closing any of the three means new bundle-local-key schemas plus
-    persistence in ``app.workflows.computed_reaction``, which is a feature
-    rather than a contract change and is deliberately not attempted here.
-    Until then ``collect_kinetics_content_warnings_for`` is passed
-    ``NOT_APPLICABLE`` for all three, so no depositor is advised to fill a
-    field this model does not have.
+    This model and ``KineticsUploadRequest`` share their kinetics-evidence
+    models and their cross-field checks (``kinetics_evidence``), so the two
+    routes refuse the same interpretation and tunneling mistakes. The
+    pressure-dependent child-row forms (PLOG, Chebyshev, falloff,
+    sum-of-Arrhenius) stay standalone-only.
     """
 
     reactant_keys: list[str] = Field(min_length=1)
@@ -1181,6 +1167,9 @@ class BundleKineticsIn(SchemaBase):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
+    t0_k: float = Field(
+        default=1.0, gt=0, allow_inf_nan=False, description=T0_K_DESCRIPTION
+    )
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None
 
@@ -1197,6 +1186,13 @@ class BundleKineticsIn(SchemaBase):
         KineticsDegeneracyConvention.unknown
     )
     tunneling_model: TunnelingModel | None = None
+    interpretation_assignments: list[KineticsInterpretationAssignmentUpload] = Field(
+        default_factory=list
+    )
+    tunneling_application: KineticsTunnelingApplicationUpload | None = None
+    # Public, opaque handle for a pressure-dependent network counterpart
+    # (DR-0036); the workflow resolves it to its internal FK.
+    network_kinetics_ref: str | None = Field(default=None, min_length=1)
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
     note: str | None = None
@@ -1218,6 +1214,28 @@ class BundleKineticsIn(SchemaBase):
     @classmethod
     def _normalize_tunneling(cls, v):
         return normalize_tunneling_model(v)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_tunneling_model_from_application(cls, data):
+        return default_tunneling_model_from_application(data)
+
+    @model_validator(mode="after")
+    def validate_tunneling_declaration_agrees(self) -> Self:
+        check_tunneling_declaration_agrees(
+            self.tunneling_model, self.tunneling_application
+        )
+        return self
+
+    @model_validator(mode="after")
+    def validate_interpretation_content(self) -> Self:
+        check_interpretation_set(
+            self.interpretation_assignments,
+            n_reactants=len(self.reactant_keys),
+            n_products=len(self.product_keys),
+            has_tunneling_application=self.tunneling_application is not None,
+        )
+        return self
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:

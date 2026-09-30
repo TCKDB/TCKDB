@@ -190,7 +190,6 @@
       "type": "object"
     },
     "EnergyCorrectionConvention": {
-      "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "electronic_only",
         "electronic_plus_zpe",
@@ -202,7 +201,6 @@
       "type": "string"
     },
     "EnergyZeroConvention": {
-      "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "lowest_state",
         "entrance_channel",
@@ -394,7 +392,6 @@
       "type": "string"
     },
     "KineticsDegeneracyInterpretation": {
-      "description": "How reaction-path degeneracy/symmetry was handled for this subject.\n\nDistinct from :class:`KineticsDegeneracyConvention`, which records whether\nthe *stored scalar* already includes degeneracy. This records how the\nsubject's own partition function treated symmetry.",
       "enum": [
         "external_symmetry_number",
         "reaction_path_degeneracy",
@@ -416,7 +413,6 @@
       "type": "string"
     },
     "KineticsEnsemblePolicy": {
-      "description": "How multiple structures of one subject were combined into a partition\nfunction used for a rate coefficient.",
       "enum": [
         "single_structure",
         "lowest_energy_conformer",
@@ -608,7 +604,6 @@
       "type": "object"
     },
     "KineticsStandardStateConvention": {
-      "description": "The standard state the rate's partition functions are referenced to.",
       "enum": [
         "ideal_gas_1_bar",
         "ideal_gas_1_atm",
@@ -687,7 +682,7 @@
           "title": "Imaginary Frequency Cm1"
         },
         "model": {
-          "$ref": "#/$defs/TunnelingModel"
+          "$ref": "#/$defs/tckdb_schemas__enums__TunnelingModel"
         },
         "model_identifier": {
           "anyOf": [
@@ -1506,18 +1501,6 @@
       "title": "ThirdBodyEfficiencyUpload",
       "type": "object"
     },
-    "TunnelingModel": {
-      "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
-      "enum": [
-        "none",
-        "wigner",
-        "eckart",
-        "sct",
-        "other"
-      ],
-      "title": "TunnelingModel",
-      "type": "string"
-    },
     "WorkflowToolReleaseRef": {
       "additionalProperties": false,
       "description": "Upload-facing reference to a workflow tool code state.",
@@ -1584,11 +1567,35 @@
       ],
       "title": "WorkflowToolReleaseRef",
       "type": "object"
+    },
+    "app__db__models__common__TunnelingModel": {
+      "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
+      "enum": [
+        "none",
+        "wigner",
+        "eckart",
+        "sct",
+        "other"
+      ],
+      "title": "TunnelingModel",
+      "type": "string"
+    },
+    "tckdb_schemas__enums__TunnelingModel": {
+      "description": "Tunneling correction applied to a rate coefficient (DR-0032).",
+      "enum": [
+        "none",
+        "wigner",
+        "eckart",
+        "sct",
+        "other"
+      ],
+      "title": "TunnelingModel",
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+  "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
   "examples": [
     {
       "a": 1230000000000.0,
@@ -1911,6 +1918,13 @@
       ],
       "default": null
     },
+    "t0_k": {
+      "default": 1.0,
+      "description": "Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It applies to the scalar a, n and reported_ea of this record (for a falloff rate, to the high-pressure-limit Arrhenius; the low-pressure limit, PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces are always at 1 K).",
+      "exclusiveMinimum": 0,
+      "title": "T0 K",
+      "type": "number"
+    },
     "third_body_efficiencies": {
       "items": {
         "$ref": "#/$defs/ThirdBodyEfficiencyUpload"
@@ -1958,7 +1972,7 @@
     "tunneling_model": {
       "anyOf": [
         {
-          "$ref": "#/$defs/TunnelingModel"
+          "$ref": "#/$defs/app__db__models__common__TunnelingModel"
         },
         {
           "type": "null"

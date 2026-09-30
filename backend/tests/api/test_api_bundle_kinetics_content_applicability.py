@@ -25,11 +25,11 @@ Two levels of test, because they are different claims:
   simply never called on this route), so it would prove nothing about
   this change.
 
-Whether the three fields *should* exist on ``BundleKineticsIn`` is a
-separate question with a separate answer: two of them are recorded drift.
-See ``BundleKineticsIn``'s docstring and
-``tests/schemas/test_bundle_root_model_symmetry.KNOWN_BUNDLE_KINETICS_GAPS``.
-This file is about not giving un-actionable advice in the meantime.
+#620 added the three fields to ``BundleKineticsIn``. The reaction route still
+does not call the collector, so a bundle is not told about a missing
+interpretation set: the advice would ask for a ref to a record the same
+request cannot have created yet. The sentinel remains the way a payload
+without the field opts out of the advice.
 """
 
 from __future__ import annotations
@@ -142,12 +142,16 @@ def test_a_bundle_declaring_tunneling_is_not_told_to_fill_a_missing_field(
     )
 
 
-def test_the_advice_would_in_fact_be_a_422(client: TestClient):
-    """Proves the premise the sentinel exists to defend.
+def test_the_bundle_route_now_validates_a_tunneling_application_block(
+    client: TestClient,
+):
+    """``tunneling_application`` is a real bundle field since #620.
 
-    Without this, "do not advise ``tunneling_application``" is an
-    assertion about a hypothetical. Here the field really is rejected, so
-    the warning really would be advice a depositor cannot follow.
+    Until then it was rejected as an unknown key (``SchemaBase`` is
+    ``extra="forbid"``), which is why the collector was told the field did not
+    exist. Now the block is parsed and held to the standalone route's rules:
+    an Eckart block with no barriers is refused for *that* reason, not as an
+    unknown field.
     """
     bundle = _bundle_with_tunnelling_label()
     bundle["kinetics"][0]["tunneling_application"] = {
@@ -157,7 +161,8 @@ def test_the_advice_would_in_fact_be_a_422(client: TestClient):
 
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
     assert resp.status_code == 422, resp.text[:600]
-    assert "tunneling_application" in resp.text
+    assert "Extra inputs are not permitted" not in resp.text
+    assert "Wigner/Eckart tunneling requires imaginary_frequency_cm1" in resp.text
 
 
 # ---------------------------------------------------------------------------

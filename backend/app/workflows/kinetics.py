@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.kinetics_evidence import (
+    KineticsInterpretationAssignmentUpload,
+    KineticsTunnelingApplicationUpload,
+)
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.chemistry.units import convert_ea_to_kj_mol
@@ -32,14 +38,16 @@ from app.db.models.reaction import (
     ReactionEntryStructureParticipant,
     ReactionFamily,
 )
-from app.db.models.species import ConformerAssignmentScheme, ConformerGroup, ConformerSelection
+from app.db.models.species import (
+    ConformerAssignmentScheme,
+    ConformerGroup,
+    ConformerSelection,
+    SpeciesEntry,
+)
 from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
-from app.schemas.workflows.kinetics_upload import (
-    KineticsInterpretationAssignmentUpload,
-    KineticsUploadRequest,
-)
+from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.services.calculation_ownership import (
     W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
@@ -184,6 +192,37 @@ def _resolve_ts_anchored_reaction_entry(
     return reaction_entry
 
 
+#: How a rate's transition state must relate to the reaction entry the rate is
+#: stored under. ``"entry"``: it is one of that entry's own transition states
+#: (the standalone route, where the entry is derived from the TS). ``"reaction"``:
+#: it belongs to *some* entry of the same graph reaction (the reaction bundle,
+#: which always mints a new reaction entry, so it can never be the entry of a
+#: transition state deposited earlier).
+TransitionStateScope = Literal["entry", "reaction"]
+
+
+def _transition_state_belongs_to_rate(
+    session: Session,
+    ts_entry_id: int,
+    reaction_entry: ReactionEntry,
+    scope: TransitionStateScope,
+) -> bool:
+    ts_reaction_entry = session.scalar(
+        select(ReactionEntry)
+        .join(TransitionState, TransitionState.reaction_entry_id == ReactionEntry.id)
+        .join(
+            TransitionStateEntry,
+            TransitionStateEntry.transition_state_id == TransitionState.id,
+        )
+        .where(TransitionStateEntry.id == ts_entry_id)
+    )
+    if ts_reaction_entry is None:
+        return False
+    if scope == "entry":
+        return ts_reaction_entry.id == reaction_entry.id
+    return ts_reaction_entry.reaction_id == reaction_entry.reaction_id
+
+
 @dataclass(frozen=True)
 class _ResolvedInterpretation:
     """One validated interpretation assignment, ready to persist."""
@@ -195,22 +234,41 @@ class _ResolvedInterpretation:
     conformer_selection_id: int | None
 
 
-def _resolve_interpretation_assignments(
+def resolve_interpretation_assignments(
     session: Session,
-    request: KineticsUploadRequest,
+    assignments: Sequence[KineticsInterpretationAssignmentUpload],
     *,
+    reactant_entries: Sequence[SpeciesEntry],
+    product_entries: Sequence[SpeciesEntry],
     created_by: int | None,
+    reaction_entry: ReactionEntry | None = None,
+    ts_scope: TransitionStateScope = "entry",
+    field_prefix: str = "",
 ) -> list[_ResolvedInterpretation]:
     """Validate and resolve every interpretation subject in one pass.
 
     Single source of truth for interpretation ownership: it runs before any
     kinetics row is written, and the persistence loop consumes its output
-    rather than repeating the same checks.
+    rather than repeating the same checks. The standalone kinetics route and
+    the reaction bundle both call it, so they refuse the same mistakes.
+
+    :param reactant_entries: The rate's reactant species entries, in
+        ``participant_index`` order.
+    :param product_entries: The rate's product species entries, likewise.
+    :param reaction_entry: The reaction entry the rate is stored under. When
+        given, a transition-state subject must belong to it (see
+        :data:`TransitionStateScope`). The standalone route derives the
+        reaction entry from the TS, so there the check cannot fail; the bundle
+        fixes the reaction entry first, so there it is what stops a rate
+        citing another reaction's TS.
+    :param ts_scope: How strictly the TS must belong to ``reaction_entry``.
+    :param field_prefix: Prepended to every payload path in a refusal
+        (``"kinetics[0]."`` on the bundle, empty on the standalone route).
     """
 
     resolved: list[_ResolvedInterpretation] = []
-    for index, assignment in enumerate(request.interpretation_assignments):
-        field = f"interpretation_assignments[{index}]"
+    for index, assignment in enumerate(assignments):
+        field = f"{field_prefix}interpretation_assignments[{index}]"
         statmech = session.scalar(
             select(Statmech).where(Statmech.public_ref == assignment.statmech_ref)
         )
@@ -248,10 +306,11 @@ def _resolve_interpretation_assignments(
                     TransitionStateEntry.public_ref == assignment.transition_state_entry_ref
                 )
             )
-            # Unreachable through a route: the schema confines this ref to
-            # role='transition_state', and every such ref is resolved by the
-            # TS-anchored reaction lookup above, which refuses first with the
-            # same code. Kept as a tripwire against a reordering.
+            # Unreachable on the standalone route: the schema confines this
+            # ref to role='transition_state', and every such ref is resolved
+            # by the TS-anchored reaction lookup, which refuses first with the
+            # same code. On the reaction bundle nothing anchors the reaction,
+            # so this is where an unknown ref is refused.
             if ts_entry_id is None:
                 raise unknown_reference(
                     code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
@@ -260,22 +319,23 @@ def _resolve_interpretation_assignments(
                     ref=assignment.transition_state_entry_ref,
                     remedy="Deposit the transition state first, or correct the ref.",
                 )
+            if reaction_entry is not None and not _transition_state_belongs_to_rate(
+                session, ts_entry_id, reaction_entry, ts_scope
+            ):
+                raise ValueError(
+                    "interpretation transition_state_entry_ref does not belong to "
+                    "this reaction entry."
+                )
 
         species_entry_id: int | None = None
         if assignment.role in {"reactant", "product"}:
             participants = (
-                request.reaction.reactants
-                if assignment.role == "reactant"
-                else request.reaction.products
+                reactant_entries if assignment.role == "reactant" else product_entries
             )
             assert assignment.participant_index is not None  # enforced by schema
             if assignment.participant_index > len(participants):
                 raise ValueError("interpretation participant_index is outside the reaction participant list.")
-            participant_entry = resolve_species_entry(
-                session,
-                participants[assignment.participant_index - 1].species_entry,
-                created_by=created_by,
-            )
+            participant_entry = participants[assignment.participant_index - 1]
             species_entry_id = participant_entry.id
             assert_statmech_owned_by(
                 statmech,
@@ -473,6 +533,153 @@ def _resolve_interpretation_assignments(
     return resolved
 
 
+def persist_interpretation_assignments(
+    session: Session,
+    kinetics: Kinetics,
+    resolved_interpretations: Sequence[_ResolvedInterpretation],
+) -> None:
+    """Write the interpretations :func:`resolve_interpretation_assignments` validated.
+
+    Ownership was already checked in one pass; this only writes.
+    """
+    for resolved in resolved_interpretations:
+        assignment = resolved.assignment
+        session.add(KineticsInterpretationAssignment(
+            kinetics_id=kinetics.id, subject_key=resolved.subject_key, role=assignment.role,
+            statmech_id=resolved.statmech.id,
+            conformer_selection_id=resolved.conformer_selection_id,
+            transition_state_entry_id=resolved.transition_state_entry_id,
+            ensemble_policy=assignment.ensemble_policy,
+            standard_state_convention=assignment.standard_state_convention,
+            degeneracy_interpretation=assignment.degeneracy_interpretation,
+            convention_note=assignment.convention_note,
+        ))
+
+
+def persist_tunneling_application(
+    session: Session,
+    kinetics: Kinetics,
+    tunneling: KineticsTunnelingApplicationUpload,
+    *,
+    reaction_entry: ReactionEntry,
+    ts_scope: TransitionStateScope = "entry",
+    field_prefix: str = "",
+) -> None:
+    """Validate and write one rate's typed tunneling evidence.
+
+    Shared by the standalone kinetics route and the reaction bundle. The
+    transition state must belong to ``reaction_entry`` (see
+    :data:`TransitionStateScope`); every calculation and artifact reference
+    must resolve to a stored row.
+
+    :param field_prefix: Prepended to the payload path in a refusal
+        (``"kinetics[0]."`` on the bundle, empty on the standalone route).
+    """
+    ts_entry_id = session.scalar(
+        select(TransitionStateEntry.id).where(
+            TransitionStateEntry.public_ref == tunneling.transition_state_entry_ref
+        )
+    )
+    # Unreachable on the standalone route, for the same reason as its sibling
+    # in resolve_interpretation_assignments: the TS-anchored reaction lookup
+    # resolves the tunneling ref first and refuses with the same code. On the
+    # reaction bundle nothing anchors the reaction to the ref, so this is the
+    # first place it is resolved and the refusal is live.
+    if ts_entry_id is None:
+        raise unknown_reference(
+            code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
+            field=f"{field_prefix}tunneling_application.transition_state_entry_ref",
+            kind="transition_state_entry",
+            ref=tunneling.transition_state_entry_ref,
+            remedy="Deposit the transition state first, or correct the ref.",
+        )
+
+    def resolve_artifact(
+        calculation_ref: str | None,
+        sha256: str | None,
+        label: str,
+        field_name: str,
+    ) -> int | None:
+        if calculation_ref is None:
+            return None
+        artifact_id = session.scalar(
+            select(CalculationArtifact.id)
+            .join(Calculation, Calculation.id == CalculationArtifact.calculation_id)
+            .where(
+                Calculation.public_ref == calculation_ref,
+                CalculationArtifact.sha256 == sha256,
+            )
+        )
+        if artifact_id is None:
+            raise unknown_reference(
+                code=W_UNKNOWN_CALCULATION_ARTIFACT_REF,
+                field=f"{field_prefix}tunneling_application.{field_name}",
+                kind="calculation_artifact",
+                ref=calculation_ref,
+                remedy=(
+                    f"The {label} artifact locator is a (calculation ref, "
+                    "SHA-256) pair and no stored artifact matches it. "
+                    "Upload the artifact, or correct either half."
+                ),
+                sha256=sha256,
+            )
+        return artifact_id
+    result_artifact_id = resolve_artifact(
+        tunneling.result_artifact_calculation_ref,
+        tunneling.result_artifact_sha256,
+        "result",
+        "result_artifact_calculation_ref",
+    )
+    sct_path_artifact_id = resolve_artifact(
+        tunneling.sct_path_integral_artifact_calculation_ref,
+        tunneling.sct_path_integral_artifact_sha256,
+        "SCT path-integral",
+        "sct_path_integral_artifact_calculation_ref",
+    )
+    # A rate's tunneling TS must be one of this reaction's TS concepts.
+    if not _transition_state_belongs_to_rate(
+        session, ts_entry_id, reaction_entry, ts_scope
+    ):
+        raise ValueError(
+            "tunneling transition_state_entry_ref does not belong to this reaction entry."
+        )
+    tunneling_source_calculation_id: int | None = None
+    if tunneling.source_calculation_ref is not None:
+        tunneling_source_calculation_id = session.scalar(
+            select(Calculation.id).where(
+                Calculation.public_ref == tunneling.source_calculation_ref
+            )
+        )
+        if tunneling_source_calculation_id is None:
+            raise unknown_reference(
+                code=W_UNKNOWN_CALCULATION_REF,
+                field=f"{field_prefix}tunneling_application.source_calculation_ref",
+                kind="calculation",
+                ref=tunneling.source_calculation_ref,
+                remedy=(
+                    "Deposit the calculation the tunneling energies were "
+                    "read from first, or correct the ref."
+                ),
+            )
+    session.add(KineticsTunnelingApplication(
+        kinetics_id=kinetics.id, model=tunneling.model,
+        model_identifier=tunneling.model_identifier,
+        transition_state_entry_id=ts_entry_id,
+        source_calculation_id=tunneling_source_calculation_id,
+        imaginary_frequency_cm1=tunneling.imaginary_frequency_cm1,
+        frequency_sign_convention=tunneling.frequency_sign_convention,
+        reactant_energy_kj_mol=tunneling.reactant_energy_kj_mol,
+        product_energy_kj_mol=tunneling.product_energy_kj_mol,
+        forward_barrier_kj_mol=tunneling.forward_barrier_kj_mol,
+        reverse_barrier_kj_mol=tunneling.reverse_barrier_kj_mol,
+        energy_zero_convention=tunneling.energy_zero_convention,
+        energy_correction_convention=tunneling.energy_correction_convention,
+        convention_note=tunneling.convention_note,
+        result_artifact_id=result_artifact_id,
+        sct_path_integral_artifact_id=sct_path_artifact_id,
+    ))
+
+
 def persist_kinetics_upload(
     session: Session,
     request: KineticsUploadRequest,
@@ -553,8 +760,23 @@ def persist_kinetics_upload(
             review_policy=review_policy,
         )
 
-    resolved_interpretations = _resolve_interpretation_assignments(
-        session, request, created_by=created_by
+    resolved_interpretations = resolve_interpretation_assignments(
+        session,
+        request.interpretation_assignments,
+        reactant_entries=[
+            resolve_species_entry(session, p.species_entry, created_by=created_by)
+            for p in request.reaction.reactants
+        ]
+        if request.interpretation_assignments
+        else [],
+        product_entries=[
+            resolve_species_entry(session, p.species_entry, created_by=created_by)
+            for p in request.reaction.products
+        ]
+        if request.interpretation_assignments
+        else [],
+        created_by=created_by,
+        reaction_entry=reaction_entry,
     )
 
     # 2. Create kinetics record
@@ -651,123 +873,16 @@ def persist_kinetics_upload(
 
     # 2e. Preserve the exact interpretations used to build a rate rather
     # than merely relying on species-level provenance inferred later.
-    # Ownership was already validated in one pass above; this loop only writes.
-    for resolved in resolved_interpretations:
-        assignment = resolved.assignment
-        session.add(KineticsInterpretationAssignment(
-            kinetics_id=kinetics.id, subject_key=resolved.subject_key, role=assignment.role,
-            statmech_id=resolved.statmech.id,
-            conformer_selection_id=resolved.conformer_selection_id,
-            transition_state_entry_id=resolved.transition_state_entry_id,
-            ensemble_policy=assignment.ensemble_policy,
-            standard_state_convention=assignment.standard_state_convention,
-            degeneracy_interpretation=assignment.degeneracy_interpretation,
-            convention_note=assignment.convention_note,
-        ))
+    # Ownership was already validated in one pass above; this only writes.
+    persist_interpretation_assignments(session, kinetics, resolved_interpretations)
 
     if request.tunneling_application is not None:
-        tunneling = request.tunneling_application
-        ts_entry_id = session.scalar(
-            select(TransitionStateEntry.id).where(
-                TransitionStateEntry.public_ref == tunneling.transition_state_entry_ref
-            )
+        persist_tunneling_application(
+            session,
+            kinetics,
+            request.tunneling_application,
+            reaction_entry=reaction_entry,
         )
-        # Unreachable through a route for the same reason as its sibling in
-        # _resolve_interpretation_assignments: the anchor lookup resolves the
-        # tunneling ref too, and refuses first with the same code.
-        if ts_entry_id is None:
-            raise unknown_reference(
-                code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
-                field="tunneling_application.transition_state_entry_ref",
-                kind="transition_state_entry",
-                ref=tunneling.transition_state_entry_ref,
-                remedy="Deposit the transition state first, or correct the ref.",
-            )
-        def resolve_artifact(
-            calculation_ref: str | None,
-            sha256: str | None,
-            label: str,
-            field_name: str,
-        ) -> int | None:
-            if calculation_ref is None:
-                return None
-            artifact_id = session.scalar(
-                select(CalculationArtifact.id)
-                .join(Calculation, Calculation.id == CalculationArtifact.calculation_id)
-                .where(
-                    Calculation.public_ref == calculation_ref,
-                    CalculationArtifact.sha256 == sha256,
-                )
-            )
-            if artifact_id is None:
-                raise unknown_reference(
-                    code=W_UNKNOWN_CALCULATION_ARTIFACT_REF,
-                    field=f"tunneling_application.{field_name}",
-                    kind="calculation_artifact",
-                    ref=calculation_ref,
-                    remedy=(
-                        f"The {label} artifact locator is a (calculation ref, "
-                        "SHA-256) pair and no stored artifact matches it. "
-                        "Upload the artifact, or correct either half."
-                    ),
-                    sha256=sha256,
-                )
-            return artifact_id
-        result_artifact_id = resolve_artifact(
-            tunneling.result_artifact_calculation_ref,
-            tunneling.result_artifact_sha256,
-            "result",
-            "result_artifact_calculation_ref",
-        )
-        sct_path_artifact_id = resolve_artifact(
-            tunneling.sct_path_integral_artifact_calculation_ref,
-            tunneling.sct_path_integral_artifact_sha256,
-            "SCT path-integral",
-            "sct_path_integral_artifact_calculation_ref",
-        )
-        # A rate's tunneling TS must be one of this reaction's TS concepts.
-        ts_reaction_id = session.scalar(
-            select(TransitionState.reaction_entry_id)
-            .join(TransitionStateEntry, TransitionStateEntry.transition_state_id == TransitionState.id)
-            .where(TransitionStateEntry.id == ts_entry_id)
-        )
-        if ts_reaction_id != reaction_entry.id:
-            raise ValueError("tunneling transition_state_entry_ref does not belong to this reaction entry.")
-        tunneling_source_calculation_id: int | None = None
-        if tunneling.source_calculation_ref is not None:
-            tunneling_source_calculation_id = session.scalar(
-                select(Calculation.id).where(
-                    Calculation.public_ref == tunneling.source_calculation_ref
-                )
-            )
-            if tunneling_source_calculation_id is None:
-                raise unknown_reference(
-                    code=W_UNKNOWN_CALCULATION_REF,
-                    field="tunneling_application.source_calculation_ref",
-                    kind="calculation",
-                    ref=tunneling.source_calculation_ref,
-                    remedy=(
-                        "Deposit the calculation the tunneling energies were "
-                        "read from first, or correct the ref."
-                    ),
-                )
-        session.add(KineticsTunnelingApplication(
-            kinetics_id=kinetics.id, model=tunneling.model,
-            model_identifier=tunneling.model_identifier,
-            transition_state_entry_id=ts_entry_id,
-            source_calculation_id=tunneling_source_calculation_id,
-            imaginary_frequency_cm1=tunneling.imaginary_frequency_cm1,
-            frequency_sign_convention=tunneling.frequency_sign_convention,
-            reactant_energy_kj_mol=tunneling.reactant_energy_kj_mol,
-            product_energy_kj_mol=tunneling.product_energy_kj_mol,
-            forward_barrier_kj_mol=tunneling.forward_barrier_kj_mol,
-            reverse_barrier_kj_mol=tunneling.reverse_barrier_kj_mol,
-            energy_zero_convention=tunneling.energy_zero_convention,
-            energy_correction_convention=tunneling.energy_correction_convention,
-            convention_note=tunneling.convention_note,
-            result_artifact_id=result_artifact_id,
-            sct_path_integral_artifact_id=sct_path_artifact_id,
-        ))
     session.flush()
 
     # 3. Auto-resolve source calculations from energy_level_of_theory

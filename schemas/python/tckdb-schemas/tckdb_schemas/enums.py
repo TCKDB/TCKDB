@@ -486,12 +486,26 @@ class PressureUnit(str, Enum):
 
 
 class EnergyZeroConvention(str, Enum):
-    """Where the zero of an energy scale sits.
-
-    A PDep network reports well and barrier energies on *some* scale; without
-    the convention the numbers are unusable, so uploads must state it rather
-    than let the reader guess.
-    """
+    # Where the zero of an energy scale sits.
+    #
+    # A PDep network reports well and barrier energies on *some* scale; without
+    # the convention the numbers are unusable, so uploads must state it rather
+    # than let the reader guess.
+    #
+    # - ``lowest_state``: zero at the lowest-energy state of the network.
+    # - ``entrance_channel``: zero at the declared entrance (reactant) channel.
+    # - ``separated_reactants``: zero at the infinitely separated reactants of
+    #   the elementary step in question (not necessarily a network state).
+    # - ``absolute``: values are absolute (unshifted) electronic energies.
+    # - ``other``: anything else; requires ``convention_note``.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored
+    # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
+    # two JSON schemas merge into one published component only while they are
+    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # evidence lives in the wire package, so this enum is reachable from both
+    # sides of the OpenAPI document. Kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
 
     lowest_state = "lowest_state"
     entrance_channel = "entrance_channel"
@@ -501,12 +515,25 @@ class EnergyZeroConvention(str, Enum):
 
 
 class EnergyCorrectionConvention(str, Enum):
-    """Which corrections are already folded into a reported energy.
-
-    Distinct from :class:`EnergyZeroConvention`: the zero says where the scale
-    starts, this says what has already been added on top of the bare
-    electronic energy.
-    """
+    # Which corrections are already folded into a reported energy.
+    #
+    # Distinct from ``EnergyZeroConvention``: the zero says where the scale
+    # starts, this says what has already been added on top of the bare
+    # electronic energy.
+    #
+    # - ``electronic_only``: bare electronic energy, no ZPE, no thermal term.
+    # - ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).
+    # - ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.
+    # - ``thermal_enthalpy_298k``: enthalpy at 298.15 K.
+    # - ``other``: anything else; requires ``convention_note``.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored
+    # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
+    # two JSON schemas merge into one published component only while they are
+    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # evidence lives in the wire package, so this enum is reachable from both
+    # sides of the OpenAPI document. Kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
 
     electronic_only = "electronic_only"
     electronic_plus_zpe = "electronic_plus_zpe"
@@ -537,6 +564,49 @@ class AtomMapSource(str, Enum):
     inferred = "inferred"
 
 
+class KineticsEnsemblePolicy(str, Enum):
+    # How multiple structures of one subject were combined into a partition
+    # function used for a rate coefficient.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored by
+    # the backend's ``app.db.models.common.KineticsEnsemblePolicy``, and the
+    # two JSON schemas merge into one component only while they are
+    # byte-identical (see ``MoleculeKind``).
+
+    single_structure = "single_structure"
+    lowest_energy_conformer = "lowest_energy_conformer"
+    boltzmann_weighted_conformers = "boltzmann_weighted_conformers"
+    multi_structural_torsional = "multi_structural_torsional"
+    other = "other"
+
+
+class KineticsStandardStateConvention(str, Enum):
+    # The standard state the rate's partition functions are referenced to.
+    # A comment, not a docstring, for the reason given on
+    # ``KineticsEnsemblePolicy``.
+
+    ideal_gas_1_bar = "ideal_gas_1_bar"
+    ideal_gas_1_atm = "ideal_gas_1_atm"
+    concentration_1_mol_cm3 = "concentration_1_mol_cm3"
+    concentration_1_mol_l = "concentration_1_mol_l"
+    other = "other"
+
+
+class KineticsDegeneracyInterpretation(str, Enum):
+    # How reaction-path degeneracy/symmetry was handled for this subject.
+    #
+    # Distinct from ``KineticsDegeneracyConvention``, which records whether
+    # the *stored scalar* already includes degeneracy. This records how the
+    # subject's own partition function treated symmetry. A comment, not a
+    # docstring, for the reason given on ``KineticsEnsemblePolicy``.
+
+    external_symmetry_number = "external_symmetry_number"
+    reaction_path_degeneracy = "reaction_path_degeneracy"
+    symmetry_number_and_path_degeneracy = "symmetry_number_and_path_degeneracy"
+    no_symmetry_treatment = "no_symmetry_treatment"
+    other = "other"
+
+
 __all__ = (
     "ActivationEnergyUnits",
     "AppliedCorrectionComponentKind",
@@ -561,8 +631,11 @@ __all__ = (
     "ImaginaryModeDisposition",
     "KineticsCalculationRole",
     "KineticsDegeneracyConvention",
+    "KineticsDegeneracyInterpretation",
     "KineticsDirection",
+    "KineticsEnsemblePolicy",
     "KineticsModelKind",
+    "KineticsStandardStateConvention",
     "KineticsUncertaintyKind",
     "LiteratureKind",
     "MeliusBacComponentKind",

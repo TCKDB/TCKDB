@@ -122,6 +122,11 @@ class ArrheniusParameters(BaseModel):
     A_units: ArrheniusAUnits | None = None
     n: float | None = None
     Ea_kj_mol: float | None = None
+    # Reference temperature of this block: k = A (T/T0)^n exp(-Ea/RT). 1 K is
+    # the plain A T^n form. A consumer that evaluates k(T) from A, n and Ea
+    # MUST use it; ignoring it is wrong by a factor of T0^n. It applies to
+    # this block only (for a falloff record, the high-pressure limit).
+    T0_k: float = 1.0
 
 
 class MultiArrheniusTerm(BaseModel):

@@ -784,6 +784,7 @@ def _kinetics_to_upload(kinetics: Kinetics) -> dict[str, Any]:
         "a": kinetics.a,
         "a_units": kinetics.a_units.value if kinetics.a_units is not None else None,
         "n": kinetics.n,
+        "t0_k": kinetics.t0_k,
         "a_uncertainty": kinetics.a_uncertainty,
         "a_uncertainty_kind": (
             kinetics.a_uncertainty_kind.value

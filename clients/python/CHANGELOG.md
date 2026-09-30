@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.102.0 - 2026-09-30
+
+`Kinetics.modified_arrhenius(..., T0=...)` carries the Arrhenius reference
+temperature (#620), matching `tckdb-schemas` 0.63.0, which now requires
+`>=0.63.0`. `T0` is the temperature `A` was fitted at, in K, so the rate is
+`A (T/T0)^n exp(-Ea/RT)`; leave it out for the plain `A T^n` form. It is sent
+as `t0_k` and only when it is not 1 K, so a payload built without it is
+byte-identical to one built before. Pass the fit's own T0 instead of folding
+`A / T0**n` into `A`: the server then stores what was fitted. The bundle
+kinetics block also accepts `interpretation_assignments`,
+`tunneling_application` and `network_kinetics_ref` now, but these builders do
+not emit them yet: they cite records that must already exist by public ref.
+
 ## 0.101.0 - 2026-09-30
 
 `RejectionCode` gains three members, regenerated from the server's catalogue:

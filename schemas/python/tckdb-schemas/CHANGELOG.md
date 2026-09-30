@@ -1,5 +1,50 @@
 # Changelog
 
+## 0.63.0 - 2026-09-30
+
+The Arrhenius reference temperature, and the reaction bundle's kinetics block
+now takes the same evidence as the standalone route (#620). Both are additions:
+a payload valid under 0.62.0 is valid under this release, byte for byte.
+
+**`t0_k`** on `BundleKineticsIn` (`POST /uploads/computed-reaction`) and on
+`KineticsUploadRequest` (`POST /uploads/kinetics`): the reference temperature
+T0 of the scalar rate, in K, meaning `k = A (T/T0)^n exp(-Ea/RT)`. It defaults
+to 1 K, which is the plain `A T^n` form and what every record deposited
+before this release meant. Before, a producer that fitted with T0 = 298 K had
+to send `A / 298^n` and the T0 it fitted with was lost. It must be finite and
+greater than 0. It applies to the record's own `a`, `n` and `reported_ea`
+(for a falloff rate, to its high-pressure limit); PLOG entries, sum-of-Arrhenius
+terms, the falloff low-pressure limit and Chebyshev surfaces are always at
+1 K, and the standalone route refuses a `t0_k` other than 1 on a `plog`,
+`chebyshev` or `multi_arrhenius` record rather than store a number with nothing
+to apply to. The server stores `a` as sent (it is A at T0, not A rescaled) and
+serves `t0_k` back; a consumer that evaluates k(T) from a stored `a`, `n` and
+`ea_kj_mol` must use it.
+
+**`interpretation_assignments`, `tunneling_application`, `network_kinetics_ref`**
+on `BundleKineticsIn`. They are the standalone route's own models and cross-field
+checks, now defined once in `tckdb_schemas.fragments.kinetics_evidence`
+(`KineticsInterpretationAssignmentUpload`, `KineticsTunnelingApplicationUpload`,
+`ConformerSelectionContentRef`), and the server writes them with the same
+persistence code, so the two routes refuse the same interpretation and tunneling
+mistakes with the same codes (a coded 404 for an unknown statmech, transition
+state, calculation, artifact or network ref, the same 422 for an incomplete
+interpretation set or a tunneling block that disagrees with `tunneling_model`).
+Two things follow from how a bundle is built and are part of the contract:
+every reference is the public ref of a record deposited *earlier* (a bundle
+cannot cite a statmech, transition state or calculation it is itself creating,
+because the depositor cannot know its ref in advance), and a cited transition
+state must belong to the same reaction as the bundle's rate (the bundle mints
+its own reaction entry, so the transition state is judged on the reaction and
+not the entry). The bundle's `tunneling_model` is filled from
+`tunneling_application.model` when only the evidence is sent, as on the
+standalone route.
+
+Three wire enums are now mirrored here, so the evidence models can live in this
+package: `KineticsEnsemblePolicy`, `KineticsStandardStateConvention` and
+`KineticsDegeneracyInterpretation`, with the same members and order as the
+backend's.
+
 ## 0.62.0 - 2026-09-30
 
 Four changes for correction-scheme provenance (#619), all optional and

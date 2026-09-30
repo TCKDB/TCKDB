@@ -97,6 +97,7 @@ def _kinetics(**kw) -> SimpleNamespace:
         "a": None,
         "a_units": None,
         "n": None,
+        "t0_k": 1.0,  # a stored row always has one (NOT NULL, default 1 K)
         "ea_kj_mol": None,
         "falloff": None,
         "plog_entries": [],

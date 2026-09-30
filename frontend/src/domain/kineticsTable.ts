@@ -3,11 +3,17 @@ import type { ReactionKineticsRecord } from "../api/reactionEntryApi"
 /** R in kJ mol⁻¹ K⁻¹ -- the same constant plan §4's future `domain/arrhenius.ts` names. */
 export const GAS_CONSTANT_KJ_MOL_K = 8.314462618e-3
 
-/** k(T) = A·T^n·exp(−Ea/(R·T)) for one (modified-)Arrhenius term. */
-export function arrheniusTermK(A: number, n: number | null | undefined, Ea_kj_mol: number | null | undefined, temperatureK: number): number {
+/**
+ * k(T) = A·(T/T0)^n·exp(−Ea/(R·T)) for one (modified-)Arrhenius term.
+ *
+ * `T0_k` is the record's reference temperature and defaults to 1 K, the plain
+ * A·T^n form (and what a record served before the field existed meant).
+ * Leaving it out for a record that has one is wrong by a factor of T0^n.
+ */
+export function arrheniusTermK(A: number, n: number | null | undefined, Ea_kj_mol: number | null | undefined, temperatureK: number, T0_k: number | null | undefined = 1): number {
     const exponent = n ?? 0
     const ea = Ea_kj_mol ?? 0
-    return A * Math.pow(temperatureK, exponent) * Math.exp(-ea / (GAS_CONSTANT_KJ_MOL_K * temperatureK))
+    return A * Math.pow(temperatureK / (T0_k ?? 1), exponent) * Math.exp(-ea / (GAS_CONSTANT_KJ_MOL_K * temperatureK))
 }
 
 export const TABLE_POINT_COUNT = 12
@@ -47,17 +53,19 @@ export function computeKineticsTable(record: Pick<ReactionKineticsRecord, "plog_
     const max = record.temperature_coverage?.record_max_k
     if (min == null || max == null || !(max > min)) return null
 
-    const terms = record.multi_arrhenius && record.multi_arrhenius.length > 0
+    // A sum-of-Arrhenius term carries no T0 of its own (always 1 K); the scalar
+    // record's T0_k applies to its own A, n and Ea.
+    const terms: { A: number; n?: number | null; Ea_kj_mol?: number | null; T0_k?: number }[] | null = record.multi_arrhenius && record.multi_arrhenius.length > 0
         ? record.multi_arrhenius
         : record.parameters.A != null
-            ? [{ A: record.parameters.A, n: record.parameters.n, Ea_kj_mol: record.parameters.Ea_kj_mol }]
+            ? [{ A: record.parameters.A, n: record.parameters.n, Ea_kj_mol: record.parameters.Ea_kj_mol, T0_k: record.parameters.T0_k }]
             : null
     if (!terms) return null
 
     const rows: KineticsTableRow[] = []
     for (let i = 0; i < TABLE_POINT_COUNT; i++) {
         const temperatureK = min + (i * (max - min)) / (TABLE_POINT_COUNT - 1)
-        const k = terms.reduce((sum, term) => sum + arrheniusTermK(term.A, term.n, term.Ea_kj_mol, temperatureK), 0)
+        const k = terms.reduce((sum, term) => sum + arrheniusTermK(term.A, term.n, term.Ea_kj_mol, temperatureK, term.T0_k), 0)
         rows.push({ temperatureK, k })
     }
     return rows

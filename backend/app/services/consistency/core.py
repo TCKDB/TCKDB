@@ -21,6 +21,7 @@ from app.services.machine_review.query import (
 from app.services.machine_review.read_model import RecordMachineReview
 from app.services.machine_review.recipe import ACTIVE_MACHINE_REVIEW_RUBRIC_VERSIONS, public_rubric_name
 from app.services.machine_review.schemas import MachineReviewCategory, MachineReviewFinding, MachineReviewSeverity
+from app.services.snapshot_defaults import is_unchanged_default
 
 
 def canonical(value):
@@ -48,11 +49,17 @@ def snapshot(row, relationships=(), *, exclude=frozenset()):
     if row is None:
         return None
     result = {}
-    for column in inspect(type(row)).columns:
+    mapper = inspect(type(row))
+    table = mapper.local_table.name
+    for column in mapper.columns:
         value = getattr(row, column.key)
         if column.key in {"created_at", "updated_at", "retrieved_at", "created_by", "created_by_id"}:
             continue
         if column.key in exclude:
+            continue
+        # A column added after reviews were stored stays out of the hash while
+        # it holds its pre-existing value, so adding it restales nothing.
+        if is_unchanged_default(table, column.key, value):
             continue
         if isinstance(value, (date, datetime)):
             continue

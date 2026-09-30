@@ -1086,6 +1086,7 @@ def _kinetics_blocks(
                 "a": k.a,
                 "a_units": k.a_units.value if k.a_units is not None else None,
                 "n": k.n,
+                "t0_k": k.t0_k,
                 "ea_kj_mol": k.ea_kj_mol,
                 "tmin_k": k.tmin_k,
                 "tmax_k": k.tmax_k,

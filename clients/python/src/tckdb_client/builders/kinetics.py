@@ -240,6 +240,9 @@ class Kinetics:
     tunneling_model: str | None = None
     note: str | None = None
     label: str | None = None
+    #: Reference temperature of ``a``, K: ``k = A (T/T0)^n exp(-Ea/RT)``.
+    #: 1 K is the plain ``A T^n`` form and is not sent.
+    t0_k: float = 1.0
     # role → Calculation builder. Order-preserving from the user's
     # source_calculations dict; payload emission walks this list to
     # produce ``(calculation_key, role)`` entries.
@@ -273,8 +276,14 @@ class Kinetics:
         ) = None,
         label: str | None = None,
         note: str | None = None,
+        T0: float | None = None,
     ) -> "Kinetics":
         """Build a modified-Arrhenius kinetics record.
+
+        ``T0`` is the reference temperature ``A`` was fitted at, in K, so the
+        rate is ``A (T/T0)^n exp(-Ea/RT)``. Leave it out for the plain
+        ``A T^n`` form (T0 = 1 K). Pass the fit's own T0 rather than folding
+        ``A / T0**n`` into ``A``: the server then keeps what was fitted.
 
         ``A`` must be strictly positive and numeric. ``A_units`` is
         normalised via the SDK's unit alias map (see module docstring).
@@ -339,6 +348,16 @@ class Kinetics:
                 f"Kinetics: Tmin ({Tmin}) must be <= Tmax ({Tmax})."
             )
 
+        if T0 is not None:
+            if isinstance(T0, bool) or not isinstance(T0, (int, float)):
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.T0 must be numeric, got {type(T0).__name__}."
+                )
+            if not math.isfinite(T0) or T0 <= 0:
+                raise TCKDBBuilderValidationError(
+                    f"Kinetics.T0 must be finite and > 0, got {T0!r}."
+                )
+
         if degeneracy is not None:
             if isinstance(degeneracy, bool) or not isinstance(degeneracy, (int, float)):
                 raise TCKDBBuilderValidationError(
@@ -379,6 +398,7 @@ class Kinetics:
             tunneling_model=tunneling_model_clean,
             note=note_clean,
             label=label_clean,
+            t0_k=float(T0) if T0 is not None else 1.0,
             source_calculations=resolved_sources,
         )
 
@@ -412,6 +432,8 @@ class Kinetics:
             "reported_ea": self.reported_ea,
             "reported_ea_units": self.reported_ea_units,
         }
+        if self.t0_k != 1.0:
+            out["t0_k"] = self.t0_k
         if self.tmin_k is not None:
             out["tmin_k"] = self.tmin_k
         if self.tmax_k is not None:

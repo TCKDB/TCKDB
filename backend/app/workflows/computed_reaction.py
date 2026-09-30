@@ -106,6 +106,7 @@ from app.services.input_geometry_extraction import (
 )
 from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
+    resolve_network_kinetics_ref,
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -149,6 +150,11 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.services.upload_reconciliation import term_symbol_warnings
+from app.workflows.kinetics import (
+    persist_interpretation_assignments,
+    persist_tunneling_application,
+    resolve_interpretation_assignments,
+)
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 from app.workflows.transport import persist_bundle_transport
 
@@ -1656,6 +1662,41 @@ def persist_computed_reaction_upload(
             session, request.workflow_tool_release
         )
 
+        # Kinetics evidence the standalone route also takes. Resolved before
+        # the row is written, by the same helpers, so a bundle refuses
+        # exactly what ``POST /uploads/kinetics`` refuses: an unknown or
+        # mis-owned statmech, transition state, calculation or network ref.
+        kin_field_prefix = f"kinetics[{kin_index}]."
+        kin_network_kinetics_id = resolve_network_kinetics_ref(
+            session,
+            kin.network_kinetics_ref,
+            field=f"{kin_field_prefix}network_kinetics_ref",
+        )
+        resolved_interpretations = resolve_interpretation_assignments(
+            session,
+            kin.interpretation_assignments,
+            reactant_entries=[
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
+                )
+                for i, k in enumerate(kin.reactant_keys)
+            ],
+            product_entries=[
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].product_keys[{i}]",
+                )
+                for i, k in enumerate(kin.product_keys)
+            ],
+            created_by=created_by,
+            reaction_entry=kin_entry,
+            ts_scope="reaction",
+            field_prefix=kin_field_prefix,
+        )
+
         kinetics = Kinetics(
             reaction_entry_id=kin_entry.id,
             scientific_origin=kin.scientific_origin,
@@ -1670,9 +1711,11 @@ def persist_computed_reaction_upload(
             workflow_tool_release_id=(
                 workflow_tool_release.id if workflow_tool_release else None
             ),
+            network_kinetics_id=kin_network_kinetics_id,
             a=kin.a,
             a_units=kin.a_units,
             n=kin.n,
+            t0_k=kin.t0_k,
             ea_kj_mol=ea_kj_mol,
             a_uncertainty=kin.a_uncertainty,
             a_uncertainty_kind=kin.a_uncertainty_kind,
@@ -1693,6 +1736,17 @@ def persist_computed_reaction_upload(
         session.add(kinetics)
         session.flush()
         kinetics_ids.append(kinetics.id)
+
+        persist_interpretation_assignments(session, kinetics, resolved_interpretations)
+        if kin.tunneling_application is not None:
+            persist_tunneling_application(
+                session,
+                kinetics,
+                kin.tunneling_application,
+                reaction_entry=kin_entry,
+                ts_scope="reaction",
+                field_prefix=kin_field_prefix,
+            )
 
         # Producer-controlled provenance takes precedence over the
         # legacy fallback. When ``kin.source_calculations`` is non-empty
