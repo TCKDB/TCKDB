@@ -35,6 +35,10 @@ SAME_LEVEL = [
     ("DLPNO-CCSD(T)-F12", "cc-pVDZ-F12", "dlpno-ccsd(t)-f12", "cc-pvdz-f12", "ORCA vs ARC"),
     ("B3LYP", "Def2SVP", "b3lyp", "def2-svp", "Gaussian basis spelling vs Psi4"),
     ("CCSD(T)-F12a", "cc-pVTZ", "ccsd(t)-f12A", "ccpvtz", "Molpro vs PySCF key"),
+    ("wb97xd", "def2tzvp", "wB97X-D", "def2-tzvp", "#618: stored ARC, Q-Chem-style request"),
+    ("wb97x-d", "def2tzvp", "WB97XD", "def2-tzvp", "#618: second ARC corpus, Gaussian request"),
+    ("M062X", "6-311+G(d,p)", "m06-2x", "6-311+g(d,p)", "#618: Gaussian stored, ARC request"),
+    ("B3LYP-D3(BJ)", "def2-tzvp", "b3lyp-gd3bj", "def2-tzvp", "#618: folded dispersion"),
 ]
 
 
@@ -142,7 +146,8 @@ def test_method_alone_is_case_blind_but_still_exact_otherwise(client, seeded):
 @pytest.mark.parametrize(
     ("stored_method", "stored_basis", "ask_method", "ask_basis", "why"),
     [
-        ("wb97xd", "def2tzvp", "wB97X-D", "def2tzvp", "punctuation is an alias, not a case rule"),
+        ("wb97xd", "def2tzvp", "wB97X-D3", "def2tzvp", "Gaussian wB97XD is not ORCA wB97X-D3"),
+        ("b3lyp", "def2tzvp", "b3lyp-d3(bj)", "def2tzvp", "folded dispersion is not the bare functional"),
         ("CCSD(T)-F12a", "cc-pVTZ", "CCSD(T)-F12b", "cc-pVTZ", "F12a is not F12b"),
         ("b3lyp", "6-31G*", "b3lyp", "6-31G**", "6-31G* is not 6-31G**"),
         ("b3lyp", "cc-pVTZ", "b3lyp", "aug-cc-pVTZ", "aug- prefix"),
@@ -167,7 +172,66 @@ def test_a_different_method_or_basis_does_not_match(
 
 def test_the_seeded_fixture_is_not_empty(db_session):
     # Guards the parametrised fixture above against yielding nothing.
-    assert len(SAME_LEVEL) >= 5
+    assert len(SAME_LEVEL) >= 9
+
+
+# ---------------------------------------------------------------------------
+# dispersion= / solvent= compare identity keys too (#602)
+# ---------------------------------------------------------------------------
+
+#: (field, stored, requested): the same component under two spellings.
+SAME_COMPONENT = [
+    ("dispersion", "GD3BJ", "gd3bj"),
+    ("dispersion", "d3bj", "D3BJ"),
+    ("solvent", "Water", "water"),
+    ("solvent", "acetonitrile", "ACETONITRILE"),
+]
+
+
+@pytest.fixture(params=SAME_COMPONENT, ids=lambda c: f"{c[0]}-{c[1]}-{c[2]}")
+def component(request, db_session):
+    field, stored, ask = request.param
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp", **{field: stored})
+    decoy = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    return {"field": field, "stored": stored, "ask": ask, "lot": lot, "decoy": decoy}
+
+
+def test_legacy_list_filters_dispersion_and_solvent_by_key(client, component):
+    resp = client.get(f"/api/v1/levels-of-theory?{component['field']}={component['ask']}")
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["items"]
+    assert [i["id"] for i in items] == [component["lot"].id]
+    # Display keeps the stored spelling.
+    assert items[0][component["field"]] == component["stored"]
+
+
+def test_lot_search_filters_dispersion_and_solvent_by_key(client, db_session, component):
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("IDC"))
+    entry = make_species_entry(db_session, species)
+    for lot in (component["lot"], component["decoy"]):
+        make_calculation(
+            db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
+        )
+    resp = client.get(
+        f"/api/v1/scientific/level-of-theories/search?{component['field']}={component['ask']}"
+    )
+    assert resp.status_code == 200, resp.text
+    lots = [r["level_of_theory"] for r in resp.json()["records"]]
+    assert [lot["level_of_theory_ref"] for lot in lots] == [component["lot"].public_ref]
+    assert lots[0][component["field"]] == component["stored"]
+
+
+def test_a_solvent_synonym_does_not_match(client, db_session):
+    """``h2o`` is not ``water`` to a case rule; that needs a curated table."""
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp", solvent="water")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("IDH"))
+    entry = make_species_entry(db_session, species)
+    make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
+    )
+    resp = client.get("/api/v1/scientific/level-of-theories/search?solvent=h2o")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["records"] == []
 
 
 # ---------------------------------------------------------------------------

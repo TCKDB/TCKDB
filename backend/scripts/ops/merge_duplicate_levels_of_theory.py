@@ -1,5 +1,11 @@
 #!/usr/bin/env python
-"""Plan, and optionally merge, levels of theory split by basis spelling (#574).
+"""Plan, and optionally merge, levels of theory split by spelling (#574, #585, #618, #602).
+
+The same script joins every split the identity keys close: basis spelling
+(#574), method case (#585), curated method aliases such as ``wb97x-d`` /
+``wb97xd``, and dispersion / solvent / solvent-model case (#618, #602).
+Groups are found with the application's own hash formula, so it follows
+whichever keys the running code has.
 
 Before #574, ``level_of_theory.lot_hash`` hashed basis names byte for byte,
 so ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian, ARC) were
