@@ -20,7 +20,11 @@ from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import (
+    Calculation,
+    CalculationInputGeometry,
+    CalculationOutputGeometry,
+)
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
@@ -185,6 +189,16 @@ _TRUST_EAGER_LOADS = (
     selectinload(Statmech.source_calculations)
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
+    # The opt-source check asks whether a calculation is a single atom's
+    # (#610): its geometries' atom counts, loaded per page, not per record.
+    selectinload(Statmech.source_calculations)
+    .selectinload(StatmechSourceCalculation.calculation)
+    .selectinload(Calculation.input_geometries)
+    .selectinload(CalculationInputGeometry.geometry),
+    selectinload(Statmech.source_calculations)
+    .selectinload(StatmechSourceCalculation.calculation)
+    .selectinload(Calculation.output_geometries)
+    .selectinload(CalculationOutputGeometry.geometry),
 )
 
 # Public seam for consumers that must load the same evidence graph before

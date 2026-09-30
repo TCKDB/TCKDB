@@ -13,6 +13,8 @@ from app.db.models.calculation import (
     Calculation,
     CalculationFreqResult,
     CalculationGeometryValidation,
+    CalculationInputGeometry,
+    CalculationOutputGeometry,
     CalculationSCFStability,
 )
 from app.db.models.common import (
@@ -150,10 +152,12 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.scf_stability),
     selectinload(Thermo.source_calculations)
     .selectinload(ThermoSourceCalculation.calculation)
-    .selectinload(Calculation.input_geometries),
+    .selectinload(Calculation.input_geometries)
+    .selectinload(CalculationInputGeometry.geometry),
     selectinload(Thermo.source_calculations)
     .selectinload(ThermoSourceCalculation.calculation)
-    .selectinload(Calculation.output_geometries),
+    .selectinload(Calculation.output_geometries)
+    .selectinload(CalculationOutputGeometry.geometry),
     selectinload(Thermo.source_calculations)
     .selectinload(ThermoSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
