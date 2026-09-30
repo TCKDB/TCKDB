@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterator
+from typing import Any, Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -29,7 +29,65 @@ from app.services.deposit_ownership import (
     user_owns_calculation_deposit,
 )
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+
+def statement_timeout_connect_args(timeout_ms: int | None) -> dict[str, str]:
+    """``connect_args`` that give every connection a ``statement_timeout``.
+
+    The timeout travels as a libpq *startup option* (``-c statement_timeout=N``),
+    so the server applies it while the session is being created, before any
+    transaction exists. That is what makes it last: a ``SET`` issued on a
+    fresh connection runs inside psycopg's implicit transaction, and the
+    pool's rollback-on-return undoes it, so only the connection's *first*
+    checkout kept the timeout and every later one ran with none (#604,
+    measured on a deployed instance as ``['30s', '0', '0']``). A startup
+    option is not part of any transaction and a rollback cannot reach it.
+
+    ``None``, ``0`` or a negative value means "no app-level timeout" and
+    returns ``{}``: the role or server default then applies, as it always
+    did. Nothing else in this module sets ``statement_timeout``.
+
+    Not pgbouncer-safe: a pooler in transaction mode rejects unknown startup
+    parameters unless ``ignore_startup_parameters = options`` is set, and
+    even then the timeout would not follow a client across server
+    connections. Set it at the role instead
+    (``scripts/configure_database_roles.py``) if a pooler is ever put in
+    front of this API.
+    """
+    if not timeout_ms or timeout_ms <= 0:
+        return {}
+    return {"options": f"-c statement_timeout={int(timeout_ms)}"}
+
+
+#: "Use ``settings.db_statement_timeout_ms``" -- distinct from ``None``/``0``,
+#: which mean "no timeout" when passed explicitly.
+_FROM_SETTINGS: Any = object()
+
+
+def create_app_engine(url: str, *, statement_timeout_ms: Any = _FROM_SETTINGS, **kwargs: Any) -> Engine:
+    """The one way this application builds an engine that serves requests.
+
+    Applies ``settings.db_statement_timeout_ms`` (or *statement_timeout_ms*
+    when given, ``0``/``None`` meaning none) through
+    :func:`statement_timeout_connect_args`. The API's own engine, the test
+    harness's engine and anything derived from either therefore share one
+    mechanism (see :func:`_derive_stamp_engine`).
+
+    Deliberately *not* used by ``alembic/env.py``, which builds its own
+    engine and gets no timeout: a migration can legitimately run one
+    statement (an index build, a backfill ``UPDATE``) for far longer than a
+    request should.
+    """
+    if statement_timeout_ms is _FROM_SETTINGS:
+        statement_timeout_ms = settings.db_statement_timeout_ms
+    connect_args = dict(kwargs.pop("connect_args", None) or {})
+    for key, value in statement_timeout_connect_args(statement_timeout_ms).items():
+        # An ``options`` string the caller already passed is extended, not lost.
+        connect_args[key] = f"{connect_args[key]} {value}" if key in connect_args else value
+    kwargs.setdefault("pool_pre_ping", True)
+    return create_engine(url, connect_args=connect_args, **kwargs)
+
+
+engine = create_app_engine(settings.database_url)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
@@ -61,49 +119,6 @@ def authenticate_api_key(session: Session, raw_key: str) -> AppUser | None:
     )
 
 
-def _install_statement_timeout_listener(target_engine, *, persist: bool = False) -> None:
-    """Apply ``settings.db_statement_timeout_ms`` on every new DBAPI connection.
-
-    Registered as a ``connect`` event so the timeout follows pooled
-    connections without needing to wrap each session in a context
-    manager. When the setting is ``None``/``0`` no listener is
-    attached and the role-level value (or PostgreSQL default) wins.
-
-    Production deployments should also pin the timeout at the role
-    level (``ALTER ROLE tckdb SET statement_timeout = '30s'``) so it
-    survives even when the API process forgets to set it. The app-
-    level listener is a belt-and-braces safety net, not the
-    authoritative configuration. See F13 in
-    ``docs/specs/public_read_abuse_controls.md``.
-
-    ``persist=True`` commits the ``SET`` so it survives the pool's
-    rollback-on-return. Without it the ``SET`` sits in the implicit
-    transaction psycopg opens, and the first rollback undoes it: measured,
-    only a connection's first checkout carries the timeout, later ones report
-    ``0``. That is the long-standing behaviour of the main engine and is left
-    as it is here (enforcing 30 s on it would change what deployed uploads
-    can do); the stamp engine is new and opts in.
-    """
-    timeout_ms = settings.db_statement_timeout_ms
-    if not timeout_ms or timeout_ms <= 0:
-        return
-
-    @event.listens_for(target_engine, "connect")
-    def _set_statement_timeout(dbapi_connection, _connection_record):
-        cursor = dbapi_connection.cursor()
-        try:
-            # Parameterized SET is not accepted by PostgreSQL, so we
-            # inline the integer literal. ``timeout_ms`` is bound
-            # from settings (operator-controlled), not user input.
-            cursor.execute(f"SET statement_timeout = {int(timeout_ms)}")
-        finally:
-            cursor.close()
-        if persist:
-            dbapi_connection.commit()
-
-
-_install_statement_timeout_listener(engine)
-
 #: Pool shape of the engine that records ``api_key.last_used_at``. Two
 #: connections, no overflow, and a quarter-second wait: the stamp is a
 #: best-effort audit write made while the request still holds its own
@@ -123,8 +138,13 @@ def _derive_stamp_engine(source: Engine) -> Engine:
 
     Reuses the source pool's connection factory rather than the URL, so an
     engine that refuses to connect (see ``tests/conftest.py``) still refuses.
+    The same factory carries the source's startup options, so the stamp engine
+    has the source's ``statement_timeout`` by the same mechanism and no
+    separate one: a source built by :func:`create_app_engine` gives it the
+    configured timeout on every checkout, and a source built any other way
+    gives it whatever that source has.
     """
-    derived = create_engine(
+    return create_engine(
         source.url,
         creator=source.pool._creator,  # type: ignore[attr-defined]
         pool_size=STAMP_POOL_SIZE,
@@ -132,8 +152,6 @@ def _derive_stamp_engine(source: Engine) -> Engine:
         pool_timeout=STAMP_POOL_TIMEOUT_S,
         pool_pre_ping=True,
     )
-    _install_statement_timeout_listener(derived, persist=True)
-    return derived
 
 
 stamp_engine = _derive_stamp_engine(engine)
@@ -179,10 +197,12 @@ def bind_ambient_session_factory(new_engine) -> Engine:
 
     Returns the previous engine so a caller can restore it. The caller
     owns *new_engine* entirely, including its pooling and any statement
-    timeout: no listener is installed on it here, because a rebinder that
+    timeout: nothing is applied to it here, because a rebinder that
     silently imposed ``settings.db_statement_timeout_ms`` on someone
-    else's engine would be changing behaviour behind their back. The
-    derived stamp engine is this module's own, so it does get the listener.
+    else's engine would be changing behaviour behind their back. (Build it
+    with :func:`create_app_engine` to get the configured timeout.) The
+    derived stamp engine reuses *new_engine*'s connection factory, so it has
+    exactly the timeout *new_engine* has.
 
     Called by ``backend/tests/conftest.py``; not used in deployment.
     """

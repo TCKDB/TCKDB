@@ -1289,7 +1289,11 @@ def db_engine():
             capture_output=True,
             text=True,
         )
-        engine = create_engine(_database_url(db_name), future=True)
+        # Built the way the application builds its own engine, so the suite
+        # runs with the statement timeout really on (#604): before, this
+        # engine had none at all, and a statement the API would cancel could
+        # run for as long as it liked here.
+        engine = api_deps.create_app_engine(_database_url(db_name), future=True, pool_pre_ping=False)
         # Everything that cannot be handed a request-scoped session -- the
         # commit-time upload audit, the artifact-integrity event writer, the
         # upload worker, the idempotency decorator, the health probes -- now
