@@ -255,8 +255,10 @@ def collect_provenance_warnings(
     :param software_release_field: Name of the field the software-release
         warning points at, after ``field_prefix``. The reaction bundle's
         kinetics take their software provenance from the bundle-root
-        ``analysis_software_release``; ``software_release`` is not a field
-        of that bundle, so a depositor told to fill it could not.
+        ``analysis_software_release``. ``software_release`` is also a field
+        of ``ComputedReactionUploadRequest`` (the ESS software), so a
+        depositor told to fill it filled the wrong one and the warning
+        never cleared.
     :param freq_scale_factor: Statmech's extra anchor, or
         :data:`NOT_APPLICABLE` for record types that have none.
     :param energy_level_of_theory: Kinetics' extra anchor, or

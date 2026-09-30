@@ -157,3 +157,67 @@ def test_another_credential_under_the_same_key_is_not_merged(
     assert first is not None and second is not None
     assert first != second
     assert again == first
+
+
+def test_the_same_key_on_another_route_is_a_different_submission(
+    db_engine, _api_test_user
+) -> None:
+    """The route is part of the scope: one key string used against two
+    endpoints is two contribution events, not one."""
+
+    def factory():
+        return api_deps.SessionLocal()
+
+    def _record(route: str, error: str):
+        return record_failed_upload(
+            created_by=_api_test_user,
+            kind=SubmissionKind.thermo,
+            error_summary=error,
+            session_factory=factory,
+            retry_key=FailedUploadKey(route=route, idempotency_key="r" * 20),
+        )
+
+    a = _record("POST /api/v1/uploads/thermo", "one")
+    b = _record("POST /api/v1/uploads/statmech", "two")
+    a_again = _record("POST /api/v1/uploads/thermo", "three")
+    assert a is not None and b is not None
+    assert a != b
+    assert a_again == a
+
+
+def test_commit_time_failures_dedupe_like_route_failures(
+    db_engine, _api_test_user
+) -> None:
+    """``get_write_db`` records failures that surface at commit through
+    ``audit_upload_failure_at_commit``; it must carry the retry key too."""
+    from sqlalchemy.orm import Session
+
+    from app.services.upload_submission import (
+        SYNC_UPLOAD_AUDIT_KEY,
+        audit_upload_failure_at_commit,
+    )
+
+    key = FailedUploadKey(
+        route="POST /api/v1/uploads/thermo", idempotency_key="c" * 20
+    )
+    before = len(_failed_thermo_submissions())
+
+    for _ in range(2):  # two requests, so two sessions with their own state
+        request_session = Session()
+        request_session.info[SYNC_UPLOAD_AUDIT_KEY] = {
+            "created_by": _api_test_user,
+            "kind": SubmissionKind.thermo,
+            "retry_key": key,
+            "audited": False,
+        }
+        audit_upload_failure_at_commit(request_session, RuntimeError("commit died"))
+
+    rows = _failed_thermo_submissions()
+    assert len(rows) == before + 1
+    events = [
+        e
+        for r in rows
+        for e in _failed_events(r.id)
+        if (e.details_json or {}).get("idempotency_key") == key.idempotency_key
+    ]
+    assert [e.details_json["attempt"] for e in events] == [1, 2]

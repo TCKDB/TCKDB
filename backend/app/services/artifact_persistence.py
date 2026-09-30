@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.db.models.app_user import AppUser, AppUserRole
 from app.db.models.calculation import CalculationArtifact
 from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
@@ -68,6 +69,8 @@ logger = logging.getLogger(__name__)
 #: Role on the ``submission_record_link`` rows for artifact evidence; the same
 #: token ``apply_review_policy`` writes for artifacts linked at upload time.
 _ARTIFACT_LINK_ROLE = "artifact"
+
+_CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
 
 @dataclass(frozen=True)
@@ -325,7 +328,7 @@ def link_artifacts_to_deposit_submission(
     *,
     calculation_id: int,
     artifacts: list[CalculationArtifact],
-    user_id: int,
+    user: AppUser,
 ) -> Submission | None:
     """Link artifacts attached after the fact to the submission that owns the calculation.
 
@@ -349,16 +352,20 @@ def link_artifacts_to_deposit_submission(
 
     Which submission: among the live submissions (the same statuses that
     authorize the upload) that link this calculation, the caller's own, latest
-    first, since that is the deposit they are adding to. Failing that (a
-    curator attaching to someone else's deposit, or the calculation's creator
-    with no live submission of their own) the calculation's originating
-    submission, the earliest. Attaching to every submission that links the
-    calculation would claim that all of them produced the artifact; the
-    calculation row is deduplicated identity and can be linked from several.
+    first, since that is the deposit they are adding to. Failing that, and only
+    for a curator or admin attaching to someone else's deposit, the
+    calculation's originating submission, the earliest. An ordinary caller
+    (for example the calculation's creator whose own submission failed) with
+    no live submission of their own gets no link: falling back for them would
+    put their bytes into a third user's review unit and rights. Attaching to
+    every submission that links the calculation would claim that all of them
+    produced the artifact; a calculation is append-only and never merged with
+    another, but a later upload that cites it can link it from another
+    submission.
 
-    Returns the submission linked to, or ``None`` when the calculation has no
-    live submission (created outside any). Nothing is invented for those. The
-    links are idempotent, so a retry cannot duplicate them.
+    Returns the submission linked to, or ``None`` when there is none to link
+    to. Nothing is invented. The links are idempotent, so a retry cannot
+    duplicate them.
     """
     if not artifacts:
         return None
@@ -376,11 +383,11 @@ def link_artifacts_to_deposit_submission(
         )
     )
     submission = session.scalars(
-        live.where(Submission.created_by == user_id)
+        live.where(Submission.created_by == user.id)
         .order_by(Submission.id.desc())
         .limit(1)
     ).first()
-    if submission is None:
+    if submission is None and user.role in _CURATION_ROLES:
         submission = session.scalars(
             live.order_by(Submission.id.asc()).limit(1)
         ).first()

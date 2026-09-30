@@ -1290,8 +1290,8 @@ def test_curator_attachment_lands_on_the_originating_submission(
 def test_callers_own_live_submission_is_preferred(
     client, db_session, stub_store_artifact, make_user_client, submission_factory
 ) -> None:
-    """A calculation can be linked from several submissions (it is deduplicated
-    identity); the evidence goes to the caller's, not to every one of them."""
+    """A calculation can be linked from several submissions (a later upload
+    citing it); the evidence goes to the caller's, not to every one of them."""
     calc_id = _create_calc_via_conformer_upload(client)
     original = _calc_submission_id(db_session, calc_id)
     other_client, other_user = make_user_client(username="art-trail-second-owner")
@@ -1336,3 +1336,100 @@ def test_a_calculation_with_no_submission_gets_no_invented_one(
     assert resp.status_code == 201, resp.text
     assert _artifact_links(db_session, calc_id) == []
     assert _submission_count(db_session) == before
+
+
+def _link_calc(db_session, submission: Submission, calc_id: int) -> None:
+    db_session.add(
+        SubmissionRecordLink(
+            submission_id=submission.id,
+            record_type=SubmissionRecordType.calculation,
+            record_id=calc_id,
+        )
+    )
+    db_session.flush()
+
+
+def test_a_creator_whose_submission_failed_does_not_land_in_a_third_partys(
+    client, db_session, stub_store_artifact, make_user_client, submission_factory
+) -> None:
+    """A created the calculation and A's own submission failed; C has a live
+    submission that also links it. A is authorized (creator) but the
+    originating-submission fallback is for curators. Landing A's bytes in C's
+    submission would move them into C's review unit and rights."""
+    calc_id = _create_calc_via_conformer_upload(client)
+    original = db_session.get(Submission, _calc_submission_id(db_session, calc_id))
+    original.status = SubmissionStatus.failed
+    db_session.flush()
+    _c_client, c_user = make_user_client(username="art-trail-third-party")
+    c_sub = submission_factory(owner=c_user, status=SubmissionStatus.pending)
+    _link_calc(db_session, c_sub, calc_id)
+
+    resp = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"creator-failed-sub")]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert _artifact_links(db_session, calc_id) == []
+
+
+@pytest.mark.parametrize(
+    "dead_status",
+    [
+        SubmissionStatus.rejected,
+        SubmissionStatus.failed,
+        SubmissionStatus.superseded,
+    ],
+)
+def test_dead_submissions_are_not_linked_to(
+    client,
+    db_session,
+    stub_store_artifact,
+    make_user_client,
+    submission_factory,
+    dead_status,
+) -> None:
+    """Only live submissions (the statuses that authorize an upload) can take
+    evidence. The earliest submission here is dead, so the curator's artifacts
+    must go to the live one instead."""
+    calc_id = _create_calc_via_conformer_upload(client)
+    dead = db_session.get(Submission, _calc_submission_id(db_session, calc_id))
+    curator_client, curator = make_user_client(
+        username=f"art-trail-curator-{dead_status.value}", role=AppUserRole.curator
+    )
+    dead.status = dead_status
+    if dead_status is SubmissionStatus.rejected:
+        dead.rejection_reason = "test rejection"
+        dead.rejected_by = curator.id
+    db_session.flush()
+    _c_client, c_user = make_user_client(username=f"art-trail-live-{dead_status.value}")
+    live = submission_factory(owner=c_user, status=SubmissionStatus.pending)
+    _link_calc(db_session, live, calc_id)
+
+    resp = curator_client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"dead-skipped")]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert [link.submission_id for link in _artifact_links(db_session, calc_id)] == [
+        live.id
+    ]
+
+
+def test_the_latest_of_the_callers_own_submissions_wins(
+    client, db_session, stub_store_artifact, submission_factory
+) -> None:
+    calc_id = _create_calc_via_conformer_upload(client)
+    first = db_session.get(Submission, _calc_submission_id(db_session, calc_id))
+    owner = db_session.get(AppUser, first.created_by)
+    second = submission_factory(owner=owner, status=SubmissionStatus.pending)
+    _link_calc(db_session, second, calc_id)
+    assert second.id > first.id
+
+    resp = client.post(
+        f"/api/v1/calculations/{calc_id}/artifacts",
+        json={"artifacts": [_ancillary_artifact(b"latest-wins")]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert [link.submission_id for link in _artifact_links(db_session, calc_id)] == [
+        second.id
+    ]

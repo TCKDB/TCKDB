@@ -383,6 +383,11 @@ def record_failed_upload(
     not the payload, so a corrected payload retried under the same key lands on
     the same submission and is told apart by its ``payload_hash``.
 
+    **The dedupe window is unbounded**, although idempotency keys expire (30
+    days). That is intentional: the same user failing on the same route under
+    the same key is the same contribution event however late it comes, and the
+    cost is one event row per attempt, not a submission.
+
     **Without a key nothing is deduplicated.** A payload hash would be safe to
     compute but not safe to act on: the server only hashes a body when a key
     was sent (so the failure path has no hash to use), and an unkeyed client

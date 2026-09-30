@@ -973,7 +973,8 @@ artifact_count, response, calculation_ref, status_code, request_id,
 replayed, warnings)` per group: `response` is the server's body, `status_code`
 and `request_id` (`X-Request-ID`) are the HTTP answer's, `replayed` is `True`
 when the server replayed a stored `Idempotency-Key` receipt, and `warnings` is
-the body's warning list. Idempotency keys in batch mode
+the body's warning list. Only `batch_by_calculation=True` returns these; the
+default sequential mode still returns the bare response bodies. Idempotency keys in batch mode
 are `f"{prefix}:{first_calculation_key}:artifact-batch"` (one per
 batch, deterministic across runs).
 

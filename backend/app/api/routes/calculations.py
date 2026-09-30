@@ -789,7 +789,7 @@ def upload_calculation_artifacts(
         session,
         calculation_id=calc_pk,
         artifacts=rows,
-        user_id=current_user.id,
+        user=current_user,
     )
 
     # Opportunistic per-artifact extraction, both best-effort (never abort

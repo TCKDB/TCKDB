@@ -164,9 +164,11 @@ submission would hold artifacts with no calculation link and no review rows, and
 `SubmissionKind` has no artifact value (adding one is a migration). Among the live
 submissions (`pending`, `precheck_passed`, `auto_flagged`, `approved`) linking the
 calculation, the caller's own (latest first) is used; otherwise the calculation's
-originating (earliest) one, which covers a curator attaching to someone else's
-deposit. A calculation with no live submission gets no link and no invented
-submission. No audit event is appended: no `SubmissionAuditEventKind` describes an
+originating (earliest) one, for a curator or admin attaching to someone else's
+deposit only. Anyone else without a live submission of their own (for example the
+creator whose own submission failed) gets no link, so their bytes never enter a
+third user's review unit. A calculation with no linkable submission gets no link
+and no invented submission. No audit event is appended: no `SubmissionAuditEventKind` describes an
 artifact being added, and the artifact row's own `created_by` and timestamps carry
 that history.
 
@@ -231,7 +233,11 @@ its `ingestion_failed` event with `route`, `idempotency_key`, `payload_hash` and
 (events are append-only and `submission` has no counter column, so the event list is
 the counter, and each attempt keeps its own error and payload hash). Without a key
 nothing is deduplicated: the server only hashes a body when a key is sent, and an
-unkeyed client has not said two requests are one attempt.
+unkeyed client has not said two requests are one attempt. The dedupe window is
+unbounded although idempotency keys expire after 30 days: a later failure under
+the same key from the same user on the same route is still the same contribution
+event, and a submission row costs nothing to keep.
+
 Most routes' stored response echoes the original `submission_id`; the one
 exception is `POST /uploads/thermoml` (below), whose response is refs-only
 and echoes `submission_ref` instead — there is no `submission_id` field on
