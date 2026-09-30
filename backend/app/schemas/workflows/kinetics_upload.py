@@ -5,6 +5,9 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
+    # Re-exported: the class moved to the wire package in #620, and importers
+    # (``tests/services/test_conformer_selection_locator.py``) name it here.
+    ConformerSelectionContentRef,  # noqa: F401
     KineticsInterpretationAssignmentUpload,
     KineticsTunnelingApplicationUpload,
     check_interpretation_set,
