@@ -542,7 +542,7 @@ CHECK_TS_IRC_EVIDENCE = ScientificCheck(
 
 CHECK_TS_ENERGY_ORDERING_LEVELS = ScientificCheck(
     group="Stationary points",
-    sort_key=7,
+    sort_key=10,
     code=W_TS_ENERGY_ORDERING_MIXED_LEVELS,
     asserts=(
         "The energies an energy-ordering record compares should be taken at "

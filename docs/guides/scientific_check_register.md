@@ -505,25 +505,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit `modes`. A record that deposits only the scalar is incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for the complete signed frequency list, and asking is as far as this tier goes. What has no door is depositing both and letting them contradict each other.
 
-### 20. The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
-
-| Field | Value |
-| --- | --- |
-| **Tier** | `warn` |
-| **Code** | `transition_state_energy_ordering_mixed_levels` |
-| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload |
-| **Governing ADR** | 0008 |
-
-**Why this tier.** An expectation, not a definition. An ordering across levels is usually a mistake, but a deliberate one (a literature well against a computed saddle point) is a legitimate record, so refusing it would lose correct science; the warning names the gap instead (ADR 0008).
-
-**Enforced at.**
-
-- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
-  *Runs in the shared evidence seam, where each energy's source calculation has already been resolved, so all three deposit paths report it alike.*
-
-**Escape hatch.** None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
-
-### 21. A frequency list carries no more modes than the geometry it is attached to has degrees of freedom: at most `3N` for `N` atoms, the six rigid-body modes included.
+### 20. A frequency list carries no more modes than the geometry it is attached to has degrees of freedom: at most `3N` for `N` atoms, the six rigid-body modes included.
 
 | Field | Value |
 | --- | --- |
@@ -543,7 +525,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** **None, and that absence is the argument for blocking rather than a gap in it.** Every other entry in this group needs a door because a correct record can trip it: a genuine higher-order saddle is deposited by designating its reaction coordinate, a van der Waals complex by declaring `molecule_kind`, a contradictory `n_imag` by omitting `modes`. There is no counterpart here because there is nothing to let through — no calculation, honest or otherwise, produces more modes than the geometry has degrees of freedom, so a hatch would exist only to admit a record whose own two halves disagree. What looks like a hatch and is not: omitting `modes` still avoids the refusal, but it is not a door onto legitimate chemistry the check would have refused — it deposits a different, weaker record, and the thing it drops is a frequency list this check has already determined does not belong to the geometry beside it. The repair is to attach the calculation to the geometry it ran on, or to deposit that geometry.
 
-### 22. A frequency list's mode count should match the shape of the geometry it is attached to: `3N - 5` vibrations for a collinear molecule and `3N - 6` for a non-linear one, so a list carrying one count on a geometry of the other shape is one mode wrong in whichever direction it leans.
+### 21. A frequency list's mode count should match the shape of the geometry it is attached to: `3N - 5` vibrations for a collinear molecule and `3N - 6` for a non-linear one, so a list carrying one count on a geometry of the other shape is one mode wrong in whichever direction it leans.
 
 | Field | Value |
 | --- | --- |
@@ -569,6 +551,24 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   At or above this the geometry is treated as bent and the warning may fire. Roughly 6 degrees of bend for a symmetric triatomic; water sits fifteen times over it. Between the two thresholds the check answers 'undetermined' and says nothing, which is what keeps a quasi-linear molecule from receiving a confident claim two degrees cannot support.
 
 **Escape hatch.** None needed — the warning is the accommodation, and the record is stored either way. A depositor whose molecule is genuinely quasi-linear will usually not see the warning at all, because the band between the two thresholds is deliberately silent.
+
+### 22. The energies an energy-ordering record compares should be taken at one level of theory per energy kind.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | `transition_state_energy_ordering_mixed_levels` |
+| **Code reaches a client via** | the `code` field of an `UploadWarning` returned alongside the accepted upload |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** An expectation, not a definition. An ordering across levels is usually a mistake, but a deliberate one (a literature well against a computed saddle point) is a legitimate record, so refusing it would lose correct science; the warning names the gap instead (ADR 0008).
+
+**Enforced at.**
+
+- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
+  *Runs in the shared evidence seam, where each energy's source calculation has already been resolved, so all three deposit paths report it alike.*
+
+**Escape hatch.** None needed: the warning is the accommodation. Take every energy of a kind at one level, or accept the warning.
 
 ## Atom mapping across a reaction
 
