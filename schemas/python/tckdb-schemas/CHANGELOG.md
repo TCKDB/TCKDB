@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.60.0 - 2026-09-30
+
+`electronic_levels` is now accepted on the bundle statmech blocks,
+`StatmechInBundle` (`/uploads/computed-species`) and `BundleStatmechIn`
+(`/uploads/computed-reaction`), with the same element shape
+(`ElectronicLevelIn`: `level_index`, `energy_cm1`, `degeneracy`) and the same
+rule as `/uploads/statmech` (`level_index` unique within a statmech). Additive
+and optional: it defaults to no levels, and both bundle roots keep the same
+field set (#609). The network PDep upload's species and transition-state statmech blocks share the backend persist path, so they now accept and store `electronic_levels` too. Before this, either block refused it with 422
+`extra_forbidden`, so a single-atom bundle (ARC's O and Cl atoms) had no way to
+carry its electronic partition function. The backend also gains upload
+warnings for a one-atom species whose ground term is not S:
+`missing_atomic_electronic_levels`, `missing_atomic_spin_orbit_correction`,
+`atomic_electronic_degeneracy_contradicts_term`, and `term_symbol_contradicts_multiplicity`
+for a term symbol whose leading 2S+1 disagrees with the declared multiplicity.
+`missing_statmech_frequency_source` now decides "single atom" from the
+geometry, `rigid_rotor_kind` or the species identity rather than from the
+absence of rotational constants (#608).
+
 ## 0.59.0 - 2026-09-30
 
 A single atom may be deposited with an `sp` primary (#610), on both
@@ -24,6 +43,7 @@ on one geometry (thermo or statmech) are refused `thermo_role_duplicate` /
 link. What an atom should send is in the
 producer contract, under the two conformer primary-calculation rules. The
 wire shape gains nothing: no field is added, removed or renamed.
+
 
 ## 0.58.0 - 2026-09-30
 

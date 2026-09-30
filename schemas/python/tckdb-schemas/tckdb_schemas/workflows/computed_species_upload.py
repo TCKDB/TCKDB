@@ -70,6 +70,7 @@ from tckdb_schemas.stationary_point import (
 )
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.upload_warning import UploadWarning
+from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
 
 
 # Field names that are forbidden anywhere in the bundle payload tree.
@@ -616,6 +617,10 @@ class StatmechInBundle(SchemaBase):
     :param uses_projected_frequencies: Whether projected frequencies were used.
     :param source_calculations: Statmech → calc links by bundle-local
         calculation key.
+    :param electronic_levels: Ordered (energy, degeneracy) pairs for the
+        electronic partition function, same shape and validation as
+        ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and
+        radicals whose ground term is not S (O, Cl, ...).
     :param torsions: Torsional mode metadata.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. Checked
@@ -646,6 +651,7 @@ class StatmechInBundle(SchemaBase):
 
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[StatmechTorsionInBundle] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
 
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
@@ -661,6 +667,13 @@ class StatmechInBundle(SchemaBase):
             raise ValueError(
                 "Statmech torsion_index values must be unique within the bundle."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_electronic_level_indices(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError("electronic_levels level_index values must be unique.")
         return self
 
     @model_validator(mode="after")

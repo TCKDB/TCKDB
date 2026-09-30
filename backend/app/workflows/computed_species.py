@@ -8,6 +8,7 @@ inside the bundle — there are no DB FK ids in the request payload.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -23,6 +24,7 @@ from app.db.models.common import (
 from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
@@ -48,6 +50,7 @@ from app.services.artifact_persistence import (
     persist_artifact_batch,
     validate_and_decode_all_artifacts,
 )
+from app.services.atomic_electronic_warnings import collect_bundle_atomic_warnings
 from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -107,10 +110,10 @@ from app.services.input_geometry_extraction import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
+from app.services.monatomic import statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     collect_provenance_warnings,
     collect_statmech_content_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.record_review import (
     RecordRef,
@@ -734,6 +737,8 @@ def persist_computed_species_upload(
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings=upload_warnings,
+            subject_xyz_texts=[c.geometry.xyz_text for c in request.conformers],
+            subject_smiles=request.species_entry.smiles,
         )
 
         # Link a bundle-created COMPUTED thermo to the statmech it was
@@ -758,6 +763,27 @@ def persist_computed_species_upload(
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             created_by=created_by,
             warnings=upload_warnings,
+        )
+
+        # One-atom species: is the electronic partition function and the
+        # spin-orbit energy actually there? (#609)
+        upload_warnings.extend(
+            collect_bundle_atomic_warnings(
+                species_entry=request.species_entry,
+                xyz_texts=[c.geometry.xyz_text for c in request.conformers],
+                statmech=request.statmech,
+                thermo=request.thermo,
+                corrections=[
+                    *request.applied_energy_corrections,
+                    *(
+                        request.thermo.applied_energy_corrections
+                        if request.thermo is not None
+                        else []
+                    ),
+                ],
+                statmech_field="statmech",
+                energy_field="applied_energy_corrections",
+            )
         )
 
         session.flush()
@@ -1079,6 +1105,8 @@ def _persist_statmech_block(
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
     literature_field_prefix: str = "statmech.literature.",
+    subject_xyz_texts: Sequence[str] = (),
+    subject_smiles: str | None = None,
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1219,12 +1247,28 @@ def _persist_statmech_block(
     session.add(statmech)
     session.flush()
 
+    for level in s.electronic_levels:
+        session.add(
+            StatmechElectronicLevel(
+                statmech_id=statmech.id,
+                level_index=level.level_index,
+                energy_cm1=level.energy_cm1,
+                degeneracy=level.degeneracy,
+            )
+        )
+
     if warnings is not None:
         warnings.extend(
             collect_statmech_content_warnings(
                 scientific_origin=s.scientific_origin,
                 source_calculation_roles={item.role.value for item in s.source_calculations},
-                has_rotational_structure=statmech_has_rotational_structure(s),
+                is_polyatomic=(
+                    # A transition state is never a single atom.
+                    transition_state_entry_id is not None
+                    or statmech_subject_is_polyatomic(
+                        s, xyz_texts=subject_xyz_texts, smiles=subject_smiles
+                    )
+                ),
             )
         )
 
