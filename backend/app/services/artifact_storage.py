@@ -33,6 +33,7 @@ import hashlib
 import hmac
 import logging
 import os
+import time
 from typing import NoReturn
 
 import boto3
@@ -161,10 +162,11 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #: * the disk itself full (128 MiB volume, slots raised above what the
 #:   disk holds; refused at 127 MiB, the server log reading "no space left
 #:   on device");
-#: * a bucket over quota. ``s3.bucket.quota -sizeMB=20`` alone refused
-#:   nothing: 60 × 1 MiB writes were all accepted. Only after
-#:   ``s3.bucket.quota.enforce -apply`` marked the bucket read-only were
-#:   writes refused, again as ``InternalError``/500.
+#: * a bucket over quota. Writes past a quota are accepted until 4.47's own
+#:   60 s sweep (or ``s3.bucket.quota.enforce -apply``) marks the bucket
+#:   read-only; from then on every write, of any size, is refused, again as
+#:   ``InternalError``/500. Unlike the other two, this one is readable over
+#:   signed S3 (:func:`_store_reports_quota_exceeded`).
 #:
 #: ``InternalError`` is also SeaweedFS's answer to any internal failure,
 #: so it does not mean "full", and admitting it would turn every transient
@@ -201,10 +203,31 @@ _STORAGE_FULL_CODES = frozenset(
 #: when it is full, so the store is asked for its room before the refusal is
 #: classified. Only SeaweedFS's ``InternalError`` (measured: disk full,
 #: volume slots exhausted and an enforced bucket quota all answer it), and
-#: only when ``S3_SEAWEEDFS_MASTER_URL`` is set. A bucket quota is not
-#: detected this way: free disk and free slots cannot see it, so an enforced
-#: quota refusal stays unclassified.
+#: only when ``S3_SEAWEEDFS_MASTER_URL`` is set. Free disk and free slots
+#: cannot see a bucket quota, so that is a separate question, asked after
+#: this one finds no shortage of room: :data:`_QUOTA_SECOND_OPINION_CODES`.
 _SECOND_OPINION_CODES = frozenset({"InternalError"})
+
+#: Codes after which a SeaweedFS store is asked about an enforced bucket
+#: quota (:func:`_store_reports_quota_exceeded`), read over signed S3.
+#: ``InternalError`` only: it is what 4.47 answers for an enforced quota
+#: (measured, HTTP 500, for a 1-MiB, 1-byte and 0-byte write alike).
+#:
+#: **``AccessDenied`` is deliberately not here.** On SeaweedFS it is never a
+#: bad-credentials answer (a wrong secret is ``SignatureDoesNotMatch``, an
+#: unknown key ``InvalidAccessKeyId``); a write ``AccessDenied`` comes from a
+#: bucket policy, with credentials that read the quota fine. Measured: a
+#: ``Deny s3:PutObject`` policy on ``deny/*`` in a bucket with room under its
+#: quota was recorded full as a quota, which is 507, a degraded ``/status`` and
+#: a refusal free space can never clear. 4.47 never answers a quota with 403.
+#: Upstream maps a read-only bucket to 403, so **revisit this if a pinned image
+#: starts answering 403 for an enforced quota**, and then distinguish a policy
+#: denial from a quota before classifying.
+_QUOTA_SECOND_OPINION_CODES = frozenset({"InternalError"})
+
+#: The code a refusal explained by an enforced SeaweedFS quota is recorded
+#: under. See :data:`app.services.artifact_storage_seaweedfs.QUOTA_EXCEEDED_CODE`.
+_SEAWEEDFS_QUOTA_CODE = "SeaweedFSBucketQuotaExceeded"
 
 # ---------------------------------------------------------------------------
 # Kinds that must be valid UTF-8 text (no binary allowed).
@@ -357,7 +380,20 @@ def _error_code(exc: ClientError) -> str:
 # trips this, so at most one upload is spent finding out.
 
 
-def _store_reports_no_room(attempted_bytes: int | None) -> str | None:
+#: The whole extra latency a refusal may pay for the SeaweedFS second
+#: opinions, room and quota together. They run one after the other under this
+#: one budget (each is handed what is left), so a refusal waits at most this
+#: long, not the sum of two separate ones.
+_PROBE_BUDGET_SECONDS = 4.0
+
+
+def _probe_budget_left(ends_at: float) -> float:
+    return ends_at - time.monotonic()
+
+
+def _store_reports_no_room(
+    attempted_bytes: int | None, bucket: str, ends_at: float
+) -> str | None:
     """Ask a SeaweedFS store whether it is out of room; a sentence if so.
 
     ``None`` means the refusal stays unclassified: the variable is unset,
@@ -370,8 +406,11 @@ def _store_reports_no_room(attempted_bytes: int | None) -> str | None:
     try:
         from app.services import artifact_storage_seaweedfs as seaweedfs
 
+        left = _probe_budget_left(ends_at)
+        if left <= 0:
+            return None
         capacity = seaweedfs.report_capacity(
-            master_url=S3_SEAWEEDFS_MASTER_URL, bucket=S3_BUCKET
+            master_url=S3_SEAWEEDFS_MASTER_URL, bucket=bucket, deadline=left
         )
         if not seaweedfs.refusal_is_full(capacity, attempted_bytes):
             return None
@@ -394,12 +433,72 @@ def _store_reports_no_room(attempted_bytes: int | None) -> str | None:
         return None
 
 
+def _store_reports_quota_exceeded(
+    attempted_bytes: int | None, bucket: str, ends_at: float
+) -> str | None:
+    """Ask a SeaweedFS store whether an enforced bucket quota explains a refusal.
+
+    A sentence if so, ``None`` otherwise (unset variable, no quota, room left
+    under it, no answer, or a shape not measured). Two signed ``GET``s with
+    the credentials TCKDB writes with, so nothing is mutated and no new
+    access is opened. Never raises, for the same reason
+    :func:`_store_reports_no_room` does not.
+
+    **This is an approximation, and the sentence says so.** ``Available`` is
+    the quota less the *gross* volume size, while the enforcer compares the
+    *logical* size. Deleted objects keep their bytes until the volume is
+    vacuumed, and ``weed mini`` never vacuums a volume under 30 % garbage, so a
+    bucket near its quota can read ``Available 0`` for as long as that lasts
+    (measured over five minutes, with 1 MiB writes succeeding throughout), and
+    an unrelated ``InternalError`` in that band is then recorded as a quota.
+    Nothing cheap over S3 separates the two numbers (see
+    :mod:`app.services.artifact_storage_seaweedfs`), so the row carries the
+    numbers and the caveat instead.
+    """
+    if not S3_SEAWEEDFS_MASTER_URL:
+        return None
+    try:
+        from app.services import artifact_storage_seaweedfs as seaweedfs
+
+        left = _probe_budget_left(ends_at)
+        if left <= 0:
+            return None
+        quota = seaweedfs.report_quota(
+            endpoint_url=S3_ENDPOINT_URL,
+            access_key=S3_ACCESS_KEY,
+            secret_key=S3_SECRET_KEY,
+            region=S3_REGION,
+            bucket=bucket,
+            deadline=left,
+        )
+        if not seaweedfs.refusal_is_over_quota(quota, attempted_bytes):
+            return None
+        assert quota is not None  # refusal_is_over_quota is False on None
+        return (
+            f"SeaweedFS reports a {quota.quota_bytes}-byte bucket quota with "
+            f"{quota.available_bytes} bytes available ({quota.used_bytes} used, "
+            f"by gross volume size). Approximation: the store enforces on "
+            f"logical size, so deletions that have not been vacuumed can make "
+            f"a bucket near its quota read as full; if writes of this size "
+            f"succeed elsewhere, vacuum the volume or compare "
+            f"`s3.bucket.list` before raising the quota"
+        )
+    except Exception as exc:
+        logger.warning(
+            "SeaweedFS quota check after a refused write failed (%r); "
+            "the refusal stays unclassified",
+            exc,
+        )
+        return None
+
+
 def _raise_write_refusal(
     exc: ClientError,
     *,
     what: str,
     sha256: str,
     attempted_bytes: int | None = None,
+    bucket: str | None = None,
     session_factory=None,
 ) -> NoReturn:
     """Turn a refused *write* into the one typed exception, classified.
@@ -416,11 +515,26 @@ def _raise_write_refusal(
     code = _error_code(exc)
     full = code in _STORAGE_FULL_CODES
     detail = f"{what} for sha={sha256}: {exc}"
+    # The bucket that refused, which is the one whose room and quota matter;
+    # the configured one only when the caller did not say.
+    bucket = bucket or S3_BUCKET
+    ends_at = time.monotonic() + _PROBE_BUDGET_SECONDS
     if not full and code in _SECOND_OPINION_CODES:
-        room = _store_reports_no_room(attempted_bytes)
+        room = _store_reports_no_room(attempted_bytes, bucket, ends_at)
         if room is not None:
             full = True
             detail = f"{detail}; {room}"
+    if not full and code in _QUOTA_SECOND_OPINION_CODES:
+        quota = _store_reports_quota_exceeded(attempted_bytes, bucket, ends_at)
+        if quota is not None:
+            full = True
+            detail = f"{detail}; {quota}"
+            # Recorded under TCKDB's own quota code, not the store's vague
+            # one: a quota refusal is answerable only by a write or an
+            # operator, never by a free-space report (see
+            # ``artifact_storage_capacity._QUOTA_CODES``). The store's code
+            # stays in ``detail``.
+            code = _SEAWEEDFS_QUOTA_CODE
     if full:
         # Lazy import: the capacity log reaches for the app's session
         # factory, and this module must stay importable without it.
@@ -685,6 +799,7 @@ def store_artifact(
             exc,
             what="Artifact storage bucket check failed",
             sha256=sha256,
+            bucket=bucket,
             attempted_bytes=len(content),
             session_factory=session_factory,
         )
@@ -732,6 +847,7 @@ def store_artifact(
             exc,
             what="Artifact storage write failed",
             sha256=sha256,
+            bucket=bucket,
             attempted_bytes=len(content),
             session_factory=session_factory,
         )
@@ -959,6 +1075,7 @@ def hold_artifact_object(
             exc,
             what="Artifact storage copy failed",
             sha256=sha256,
+            bucket=bucket,
             attempted_bytes=_object_bytes(client, bucket, source),
         )
     except BotoCoreError as exc:
@@ -1008,6 +1125,7 @@ def restore_held_object(
             exc,
             what="Artifact storage restore failed",
             sha256=sha256,
+            bucket=bucket,
             attempted_bytes=_object_bytes(client, bucket, reclaim_hold_key(sha256)),
         )
     except BotoCoreError as exc:

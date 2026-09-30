@@ -85,6 +85,36 @@ In hosted modes Alembic refuses to run without `DB_OWNER_USER` and
 `DB_OWNER_PASSWORD`. The API configuration continues to read only `DB_USER`
 and `DB_PASSWORD`.
 
+### Containerised deploys
+
+`backend/scripts/ops/tckdb_deploy.sh` passes `TCKDB_ENV_FILE` to both the
+migration run and the API container. Put the owner credentials in a separate
+file and name it in `TCKDB_MIGRATION_ENV_FILE`; the script hands that file to
+`alembic upgrade head` only, after `TCKDB_ENV_FILE`, so the API container never
+receives it:
+
+```bash
+# owner-only file, mode 600, never an API env file
+DB_OWNER_USER=tckdb_owner
+DB_OWNER_PASSWORD=...
+```
+
+Three things differ from the shell-sourced `.env.db-admin`:
+
+- Docker reads env files literally. Write plain `KEY=value` lines: no
+  `export`, and no quotes (they become part of the password).
+- Do not point `TCKDB_MIGRATION_ENV_FILE` at `.env.db-admin`. That file holds
+  the administrator (superuser) password too, and the migration needs only
+  the owner.
+- Use URL-safe passwords, e.g. `openssl rand -hex 32`. Alembic and the API
+  build a database URL from them without escaping, so `%` or `@` breaks the
+  connection.
+
+The script warns if `DB_OWNER_PASSWORD` or `DB_ADMIN_PASSWORD` is still in
+`TCKDB_ENV_FILE`, including a bare name with no `=`, which Docker fills from
+the deploying shell. The pre-deploy `pg_dump` runs inside the database container
+as the bootstrap login and is unaffected by the split.
+
 ## Verification
 
 The `check` subcommand is read-only and exits nonzero if the owner/runtime
@@ -94,3 +124,21 @@ After restarting the API, verify `/api/v1/readyz`, one anonymous scientific
 read, and one authenticated write. Keep `.env.db-admin` readable only by the
 operator account and use it solely for migrations, role maintenance, and
 recovery.
+
+## Statement timeout and which programs get it
+
+The API applies `DB_STATEMENT_TIMEOUT_MS` (default 30 s) to every pooled
+connection for its whole life, as a libpq startup option. It covers time spent
+waiting for a lock as well as running, but not `COMMIT`. A startup option
+overrides `ALTER ROLE ... SET statement_timeout` in both directions, so the
+role value only applies when the app value is `0`.
+
+Programs that use `app.api.deps.SessionLocal` or `engine` (the API, the upload
+worker, `tckdb_archive.py`, most of `scripts/ops/`) get it. Programs that build
+their own engine do not, and run with the role/cluster default only:
+`bootstrap_admin`, `bulk_load_arc`, `bulk_load_reactions`,
+`seed_scientific_demo_data`, `thermoml_cp_import`,
+`cccbdb_import_molecular_property_payloads`, `export_contribution_bundle`,
+`extract_calculation_parameters`, `inventory_thermo_contract`,
+`ops/backfill_observation_submission_links`, `bench/run_benchmark`. Migrations
+(`alembic`) never get it. `restore_archive` raises its own ceiling to one hour.

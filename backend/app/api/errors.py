@@ -658,8 +658,10 @@ def _operational_error_handler(
     if sqlstate == "57014":
         code = "query_timeout"
         message = (
-            "The request exceeded the database query timeout. Narrow "
-            "the query or contact a curator for bulk access."
+            "The database cancelled a statement that ran or waited longer "
+            "than its time limit (waiting for a lock counts). Retry the "
+            "request; if it keeps failing, narrow the query or contact a "
+            "curator for bulk access."
         )
     logger.warning(
         "OperationalError on %s %s: code=%s sqlstate=%s orig=%r",
