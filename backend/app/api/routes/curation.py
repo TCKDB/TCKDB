@@ -30,7 +30,7 @@ router = APIRouter()
 def evaluate_reproducibility(
     record_type: SubmissionRecordType,
     record_id: int,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     _actor: AppUser = Depends(require_curator_or_admin),
 ) -> ReproducibilityAssessmentRead:
     """Derive and append the current system-owned assessment."""
@@ -71,7 +71,7 @@ def read_latest_reproducibility_assessment(
 )
 def create_scientific_record_supersession(
     body: ScientificRecordSupersessionRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(require_curator_or_admin),
 ) -> ScientificRecordSupersessionRead:
     """Append a same-subject replacement edge and deprecate the older record."""

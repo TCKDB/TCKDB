@@ -128,7 +128,7 @@ def list_conformer_group_selections(
 def create_conformer_group_selection(
     conformer_group_id: int,
     body: ConformerSelectionCreateBody,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(require_curator_or_admin),
 ):
     """Create a curation-layer selection row under a conformer group.

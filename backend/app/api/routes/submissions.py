@@ -243,7 +243,7 @@ def read_record_links(
 def approve(
     submission_id: int,
     body: SubmissionApproveRequest | None = None,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(require_curator_or_admin),
 ) -> SubmissionRead:
     """Approve a submission. Curator/admin only; uploader cannot self-approve."""
@@ -262,7 +262,7 @@ def approve(
 def reject(
     submission_id: int,
     body: SubmissionRejectRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(require_curator_or_admin),
 ) -> SubmissionRead:
     """Reject a submission with a required reason. Curator/admin only."""
@@ -289,7 +289,7 @@ def supersede(
         max_length=40,
         description="Public ref (``sub_...``) of the submission being superseded.",
     ),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(get_current_user),
 ) -> SubmissionRead:
     """Mark a submission as superseded by another.
@@ -408,7 +408,7 @@ def create_rights_attestation(
         ),
     ],
     body: RightsAttestationCreate,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
 ) -> RightsAttestationRead:
     """Record who agrees to license this submission, and on what basis.
