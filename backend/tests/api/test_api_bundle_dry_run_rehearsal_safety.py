@@ -36,7 +36,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select, text
+from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -56,7 +56,7 @@ from app.workflows.contribution_bundle_submit import (
     rehearse_contribution_bundle_submit,
     submit_contribution_bundle,
 )
-from app.workflows.rehearsal import RehearsalCommitRefused, RehearsalContended
+from app.workflows.rehearsal import RehearsalCommitRefused, RehearsalContended, rehearsal
 from tests.api.test_api_bundle_dry_run_submit_parity import _example
 
 DRY_RUN = "/api/v1/bundles/dry-run"
@@ -387,9 +387,36 @@ def _session_commit(session: Session) -> None:
     session.commit()
 
 
+def _sql_commit_behind_a_dashed_literal(session: Session) -> None:
+    """``'--'`` is a string, not a comment: the COMMIT after it is real."""
+    session.execute(text("SELECT '--'; COMMIT"))
+
+
+def _driver_sql_commit_behind_a_dashed_literal(session: Session) -> None:
+    session.connection().exec_driver_sql("SELECT '--'; COMMIT")
+
+
+def _sql_commit_behind_a_dollar_quote(session: Session) -> None:
+    session.execute(text("SELECT $tag$ -- /* $tag$; COMMIT"))
+
+
+def _raw_dbapi_commit(session: Session) -> None:
+    """The driver's own connection, under SQLAlchemy (#592 item 2)."""
+    session.connection().connection.dbapi_connection.commit()
+
+
 @pytest.mark.parametrize(
     "publish",
-    [_connection_commit, _sql_commit, _sql_end, _session_commit],
+    [
+        _connection_commit,
+        _sql_commit,
+        _sql_end,
+        _session_commit,
+        _raw_dbapi_commit,
+        _sql_commit_behind_a_dashed_literal,
+        _driver_sql_commit_behind_a_dashed_literal,
+        _sql_commit_behind_a_dollar_quote,
+    ],
     ids=lambda f: f.__name__.lstrip("_"),
 )
 def test_a_rehearsal_cannot_publish_its_writes(
@@ -490,3 +517,276 @@ def test_the_metadata_cache_is_bounded_and_ages_out(monkeypatch) -> None:
     literature_metadata.fetch_doi_metadata("10.1/none")
     assert calls[-1] == "10.1/none"
     literature_metadata.clear_metadata_cache()
+
+
+# ---------------------------------------------------------------------------
+# #592 item 1 -- a savepoint name is not an identity
+# ---------------------------------------------------------------------------
+
+
+def _listener_count(connection) -> int:
+    return len(connection.dispatch.before_cursor_execute) + len(connection.dispatch.commit)
+
+
+def test_reusing_the_rehearsals_savepoint_name_cannot_release_it(sessions) -> None:
+    """``SAVEPOINT <ours>`` then ``RELEASE <ours>`` twice used to count the
+    name as inner, so the second RELEASE dropped the rehearsal's own
+    savepoint. PostgreSQL releases the *most recent* savepoint of a name, so
+    the guard must too."""
+    session = sessions()
+    connection = session.connection()
+    seen: list[str] = []
+
+    def _record(_conn, _cursor, statement, *_rest):
+        if statement.startswith("SAVEPOINT"):
+            seen.append(statement.split()[1])
+
+    event.listen(connection, "before_cursor_execute", _record)
+    listeners_before = _listener_count(connection) - 1  # not counting _record
+    steps: list[str] = []
+    try:
+        with pytest.raises(RehearsalCommitRefused, match="release a savepoint it did not open"):
+            with rehearsal(session):
+                ours = seen[0]
+                session.execute(text(f"SAVEPOINT {ours}"))
+                session.execute(text(f"RELEASE {ours}"))  # the duplicate: fine
+                steps.append("the duplicate was released")
+                session.execute(text(f"RELEASE {ours}"))  # the rehearsal's own
+    finally:
+        event.remove(connection, "before_cursor_execute", _record)
+    # The refusal came from the second RELEASE, not the first: releasing the
+    # newest savepoint of a name is legitimate, and refusing it too would
+    # pass this test having proved nothing about which one was tracked.
+    assert steps == ["the duplicate was released"]
+    assert _listener_count(connection) == listeners_before, "guards were left attached"
+
+
+def test_releasing_a_savepoint_opened_inside_the_rehearsal_is_allowed(sessions) -> None:
+    """The guard refuses only what is not the rehearsal's to release: an
+    inner savepoint, opened and released by the code under rehearsal, is
+    ordinary (submit does exactly this), including after a rollback to it."""
+    session = sessions()
+    with rehearsal(session):
+        session.execute(text("SAVEPOINT inner_one"))
+        session.execute(text("SAVEPOINT inner_two"))
+        session.execute(text("ROLLBACK TO SAVEPOINT inner_one"))
+        session.execute(text("RELEASE SAVEPOINT inner_one"))
+        session.execute(text('SAVEPOINT "Mixed Case"'))
+        session.execute(text('RELEASE "Mixed Case"'))
+
+
+def test_a_release_below_the_rehearsal_is_refused_after_a_rollback_to(sessions) -> None:
+    """``ROLLBACK TO`` discards the savepoints made after its target, so a
+    name that only existed there must not still count as inner."""
+    session = sessions()
+    connection = session.connection()
+    seen: list[str] = []
+
+    def _record(_conn, _cursor, statement, *_rest):
+        if statement.startswith("SAVEPOINT"):
+            seen.append(statement.split()[1])
+
+    event.listen(connection, "before_cursor_execute", _record)
+    try:
+        with pytest.raises(RehearsalCommitRefused):
+            with rehearsal(session):
+                ours = seen[0]
+                session.execute(text("SAVEPOINT a"))
+                session.execute(text(f"SAVEPOINT {ours}"))  # duplicate of ours, after a
+                session.execute(text("ROLLBACK TO SAVEPOINT a"))  # discards the duplicate
+                session.execute(text(f"RELEASE {ours}"))  # now names the rehearsal's own
+    finally:
+        event.remove(connection, "before_cursor_execute", _record)
+
+
+# ---------------------------------------------------------------------------
+# #592 item 4 -- a failed lookup is not repeated under the rehearsal's locks,
+# and is remembered by nobody else
+# ---------------------------------------------------------------------------
+
+
+def _failing_fetch_recording(fetches: list, rehearsing: threading.Event):
+    def _fetch(doi: str) -> None:
+        fetches.append((doi, rehearsing.is_set()))
+        return None
+
+    return _fetch
+
+
+def _marking_rehearsal(rehearsing: threading.Event):
+    real_rehearsal = submit_module.rehearsal
+
+    def _marked(session):
+        rehearsing.set()
+        try:
+            with real_rehearsal(session):
+                yield
+        finally:
+            rehearsing.clear()
+
+    return __import__("contextlib").contextmanager(_marked)
+
+
+def test_a_failed_prefetch_is_not_repeated_by_the_rehearsal_but_is_by_a_later_lookup(
+    prod_client, monkeypatch
+) -> None:
+    literature_metadata.clear_metadata_cache()
+    fetches: list[tuple[str, bool]] = []
+    rehearsing = threading.Event()
+    monkeypatch.setattr(
+        literature_metadata, "_fetch_doi_metadata_uncached", _failing_fetch_recording(fetches, rehearsing)
+    )
+    monkeypatch.setattr(submit_module, "rehearsal", _marking_rehearsal(rehearsing))
+
+    doi = f"10.5555/tckdb-592-{random.randint(0, 10**9)}"
+    resp = prod_client.post(
+        DRY_RUN,
+        json=_thermo_bundle(_fresh_smiles(), literature={"doi": doi, "title": "Depositor title"}),
+        headers=API_KEY,
+    )
+    assert resp.status_code == 200, resp.text
+    assert fetches == [(doi, False)], f"the rehearsal repeated a failed fetch under its locks: {fetches}"
+
+    # The dry run's request is over: its memory of the failure went with it.
+    assert literature_metadata.fetch_doi_metadata(doi) is None
+    assert fetches == [(doi, False), (doi, False)]
+    literature_metadata.clear_metadata_cache()
+
+
+def test_one_users_failed_dry_run_cannot_make_another_users_submit_skip_the_fetch(
+    monkeypatch,
+) -> None:
+    """The harm a general negative cache does: A's failed lookup, then B's real
+    submit of the same DOI makes no fetch and stores a row without metadata."""
+    literature_metadata.clear_metadata_cache()
+    fetches: list[str] = []
+    monkeypatch.setattr(
+        literature_metadata, "_fetch_doi_metadata_uncached", lambda d: fetches.append(d)
+    )
+    with literature_metadata.failure_scope():  # user A's dry run
+        assert literature_metadata.fetch_doi_metadata("10.1/shared") is None  # prefetch
+        assert literature_metadata.fetch_doi_metadata("10.1/shared") is None  # rehearsal
+    assert fetches == ["10.1/shared"]  # inside the scope: once
+    # A's request has ended without reaching anything else (say, abandoned as
+    # contended). User B's submit -- outside any scope -- must fetch.
+    assert literature_metadata.fetch_doi_metadata("10.1/shared") is None
+    assert fetches == ["10.1/shared", "10.1/shared"]
+    literature_metadata.clear_metadata_cache()
+
+
+def test_the_scope_is_not_shared_with_a_concurrent_request(monkeypatch) -> None:
+    literature_metadata.clear_metadata_cache()
+    fetches: list[str] = []
+    monkeypatch.setattr(
+        literature_metadata, "_fetch_doi_metadata_uncached", lambda d: fetches.append(d)
+    )
+    inside, proceed = threading.Event(), threading.Event()
+
+    def _dry_run() -> None:
+        with literature_metadata.failure_scope():
+            literature_metadata.fetch_doi_metadata("10.1/conc")
+            inside.set()
+            assert proceed.wait(30)
+
+    worker = _Worker(_dry_run)
+    worker.start()
+    assert inside.wait(30)
+    literature_metadata.fetch_doi_metadata("10.1/conc")  # another request, no scope
+    proceed.set()
+    worker.join(30)
+    assert worker.error is None
+    assert fetches == ["10.1/conc", "10.1/conc"]
+    literature_metadata.clear_metadata_cache()
+
+
+def test_a_slow_failure_is_still_not_repeated_within_the_scope(monkeypatch) -> None:
+    """A Crossref timeout takes 10 s. Nothing here is timed, so a failure
+    that took longer than any window still holds for the whole request."""
+    literature_metadata.clear_metadata_cache()
+    fetches: list[str] = []
+    clock = [1000.0]
+    monkeypatch.setattr(
+        literature_metadata, "time", __import__("types").SimpleNamespace(monotonic=lambda: clock[0])
+    )
+
+    def _slow_failure(doi: str) -> None:
+        fetches.append(doi)
+        clock[0] += 600.0  # the request "took" ten minutes, then failed
+        return None
+
+    monkeypatch.setattr(literature_metadata, "_fetch_doi_metadata_uncached", _slow_failure)
+    with literature_metadata.failure_scope():
+        literature_metadata.fetch_doi_metadata("10.1/slow")
+        clock[0] += 600.0
+        literature_metadata.fetch_doi_metadata("10.1/slow")
+    assert fetches == ["10.1/slow"]
+    literature_metadata.clear_metadata_cache()
+
+
+def test_guards_are_removed_even_when_the_final_rollback_raises(sessions, monkeypatch) -> None:
+    """A raise from the rehearsal's own rollback used to skip every
+    ``event.remove`` after it (#592 item 1). Force one, and count."""
+    from sqlalchemy.orm import SessionTransaction
+
+    session = sessions()
+    connection = session.connection()
+    raw = connection.connection.dbapi_connection
+    before = (_listener_count(connection), len(session.dispatch.before_commit))
+
+    def _boom(self, *args, **kwargs):
+        raise RuntimeError("boom")
+
+    with monkeypatch.context() as patched:
+        with pytest.raises(RuntimeError, match="boom"):
+            with rehearsal(session):
+                patched.setattr(SessionTransaction, "rollback", _boom)
+    assert (_listener_count(connection), len(session.dispatch.before_commit)) == before
+    assert "commit" not in raw.__dict__, "the raw connection's commit was left shadowed"
+
+
+# ---------------------------------------------------------------------------
+# Savepoint statements PostgreSQL accepts without a space before a quote
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def own_savepoint(sessions):
+    """A session, and the name the rehearsal will give its savepoint (``seen[0]``)."""
+    session = sessions()
+    connection = session.connection()
+    seen: list[str] = []
+
+    def _record(_conn, _cursor, statement, *_rest):
+        if statement.startswith("SAVEPOINT"):
+            seen.append(statement[len("SAVEPOINT"):].strip())
+
+    event.listen(connection, "before_cursor_execute", _record)
+    yield session, seen
+    event.remove(connection, "before_cursor_execute", _record)
+
+
+def test_a_quoted_release_with_no_space_cannot_release_the_rehearsal(own_savepoint) -> None:
+    session, seen = own_savepoint
+    with pytest.raises(RehearsalCommitRefused, match="release a savepoint it did not open"):
+        with rehearsal(session):
+            session.execute(text(f'RELEASE"{seen[0]}"'))
+
+
+def test_a_quoted_savepoint_with_no_space_is_tracked_and_releasable(sessions) -> None:
+    """Untracked, ``RELEASE"a"`` would look like a release of something the
+    rehearsal never opened, and be refused."""
+    session = sessions()
+    with rehearsal(session):
+        session.execute(text('SAVEPOINT"a"'))
+        session.execute(text('RELEASE "a"'))  # spaced: only matches if the SAVEPOINT was tracked
+
+
+def test_a_quoted_rollback_to_with_no_space_discards_later_savepoints(own_savepoint) -> None:
+    session, seen = own_savepoint
+    with pytest.raises(RehearsalCommitRefused):
+        with rehearsal(session):
+            ours = seen[0]
+            session.execute(text('SAVEPOINT"a"'))
+            session.execute(text(f"SAVEPOINT {ours}"))  # duplicate of ours, after a
+            session.execute(text('ROLLBACK TO"a"'))  # discards the duplicate
+            session.execute(text(f"RELEASE {ours}"))  # now the rehearsal's own

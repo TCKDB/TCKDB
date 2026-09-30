@@ -316,7 +316,9 @@ def prefetch_literature_metadata(
     held -- ahead of time, so a caller about to take row locks (the bundle
     dry run's rehearsal, #577) does not make them while holding those locks.
     The lookups are cached in :mod:`app.services.literature_metadata`, so
-    the later call answers from the cache. Never raises for an identifier it
+    the later call answers from the cache -- or, for a lookup that failed inside the caller's
+    ``literature_metadata.failure_scope``, from that scope's memory of the
+    failure, so the failed request is not repeated under those locks. Never raises for an identifier it
     cannot use; the real resolution reports that.
     """
     for request in requests:
