@@ -281,7 +281,7 @@ def _endpoint_key(request: Request) -> str:
 async def idempotency_dependency(
     request: Request,
     response: Response,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idempotency_key: str | None = Header(None, alias=IDEMPOTENCY_HEADER),
 ) -> IdempotencyContext:

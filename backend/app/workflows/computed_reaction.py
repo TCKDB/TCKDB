@@ -170,8 +170,13 @@ def _persist_calculation(
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
     sp_energy_warnings: list[UploadWarning] | None = None,
+    is_single_atom_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
+
+    ``is_single_atom_primary`` marks the primary calculation of a conformer
+    whose geometry is one atom (#610); see
+    :func:`~app.services.calculation_resolution.attach_calculation_output_geometries`.
 
     Routes provenance resolution, typed-result persistence, and parameter
     persistence through ``resolve_and_persist_calculation_with_results``.
@@ -269,6 +274,7 @@ def _persist_calculation(
         explicit_output_geometries=calc_in.output_geometries,
         fallback_geometry_id=resolved_geom_id,
         context=context,
+        is_single_atom_primary=is_single_atom_primary,
     )
 
     # Fill-when-absent Hessian extraction runs *after* input geometries are
@@ -447,6 +453,7 @@ def _collect_bundle_provenance_warnings(
             workflow_tool_release=request.workflow_tool_release,
             literature=request.literature,
             energy_level_of_theory=NOT_APPLICABLE,
+            software_release_field="analysis_software_release",
         ):
             if (warning.field, warning.code) not in seen:
                 seen.add((warning.field, warning.code))
@@ -523,6 +530,7 @@ def persist_computed_reaction_upload(
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
                 sp_energy_warnings=sp_energy_warnings,
+                is_single_atom_primary=geometry.natoms == 1,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             review_targets.append(

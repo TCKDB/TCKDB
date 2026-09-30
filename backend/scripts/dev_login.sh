@@ -87,8 +87,10 @@ try:
 except Exception:
     data = None
 if isinstance(data, dict) and isinstance(data.get("username"), str):
+    name = data["username"]
     role = data.get("role")
-    print(f"{data[\"username\"]} (role={role})" if role else data["username"])
+    # No backslash inside an f-string expression: a SyntaxError before 3.12.
+    print(f"{name} (role={role})" if role else name)
 else:
     print("(identity not reported by the server)")
 ' "$LOGIN_RESPONSE")"

@@ -396,6 +396,30 @@ def assert_role_consistency(
                 message_prefix=False,
             )
 
+    # R2' distinctness with no optimisation linked (#610). Every check above
+    # is anchored on a linked opt, so a record that links only sps (a single
+    # atom's honest shape: its sp is its primary and it has no opt) would
+    # escape it. The same fact is still a duplicate: two sps run on one
+    # geometry. An sp that declares no geometry is not compared (absence of
+    # evidence is not a match), as everywhere in this module.
+    if not opts:
+        sps_by_geometry: dict[int, list[Calculation]] = {}
+        for sp in sps:
+            for geometry_id in {row.geometry_id for row in sp.input_geometries}:
+                sps_by_geometry.setdefault(geometry_id, []).append(sp)
+        for claimants in sps_by_geometry.values():
+            if len(claimants) > 1:
+                refs = [sp.public_ref for sp in claimants]
+                raise CodedValueError(
+                    duplicate_code,
+                    f"{subject}: {len(claimants)} 'sp' links ({', '.join(refs)}) "
+                    "ran on the same geometry and no optimisation is linked, "
+                    f"but a {subject} record may have at most one 'sp' per "
+                    "geometry. Remove the extra link.",
+                    context={"sp_calculation_refs": refs},
+                    message_prefix=False,
+                )
+
     # R2' level-of-theory uniformity across every linked sp. An sp with no
     # resolved level of theory is excluded from the disagreement count --
     # see the identical exclusion in :func:`derive_levels`.

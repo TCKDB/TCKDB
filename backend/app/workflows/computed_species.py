@@ -366,13 +366,17 @@ def persist_computed_species_upload(
         # whose converged output IS the conformer geometry); freq, sp,
         # and all other types now produce zero output_geometry rows
         # unless the producer declares them explicitly. Bundle's primary
-        # calc is required to be type=opt so this fallback always fires
-        # for the primary slot.
+        # calc is type=opt, so this fallback fires for the primary slot,
+        # except for a one-atom conformer (#610), whose primary may be an
+        # sp; ``is_single_atom_primary`` gives that sp the same final
+        # output link, so the atom's geometry is still reachable from the
+        # conformer.
         attach_calculation_output_geometries(
             session,
             calc=primary_calc,
             explicit_output_geometries=conf_in.primary_calculation.output_geometries,
             fallback_geometry_id=geometry.id,
+            is_single_atom_primary=geometry.natoms == 1,
             context=(
                 f"calculation '{conf_in.primary_calculation.key}' "
                 f"(type='{primary_calc.type.value}')"
@@ -458,8 +462,14 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
-            # Guard cannot fire today: ``ConformerInBundle.validate_primary_is_opt``
-            # requires an opt primary. Kept as defence in depth.
+            # The guard fires for a one-atom conformer with an ``sp`` primary
+            # (#610): ``ConformerInBundle.validate_primary_is_opt`` admits
+            # that shape, and the atom has no ``opt`` for a ``single_point_on``
+            # edge to name. The additional calculation is stored and anchored
+            # to the observation; only the inferred edge is skipped, and no
+            # ``dependency_edge_not_inferred`` warning is raised, because the
+            # edge does not exist to be missed. Any edge the producer names
+            # itself goes through ``depends_on`` below.
             if dep_role is not None and dependency_role_type_compatible(
                 primary_calc, dep_role
             ):

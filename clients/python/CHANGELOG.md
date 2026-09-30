@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.100.0 - 2026-09-30
+
+`upload_artifacts(batch_by_calculation=True)` no longer keeps only the response
+body. Each `ArtifactUploadBatchResult` now also carries `status_code`,
+`request_id` (the server's `X-Request-ID`), `replayed` (the server answered from
+a stored `Idempotency-Key` receipt) and `warnings` (the body's `warnings`, as a
+tuple). `response` is unchanged, so existing callers keep working; the four new
+fields have defaults, so code that builds the dataclass itself keeps working
+too. `TCKDBResponse` gains a `request_id` property. An adapter that called
+`request_json` itself to get these can go back to `upload_artifacts`.
+
+## 0.99.0 - 2026-09-30
+
+A single atom may anchor its conformer on an `sp` (#610), matching
+`tckdb-schemas` 0.59.0, which now requires `>=0.59.0`. `ComputedSpeciesUpload`
+and `ComputedReactionUpload` no longer refuse a non-`opt` primary
+calculation outright: they apply the schema's own rule to the conformer
+geometry they will send, so an `sp` primary is accepted when that geometry is
+one atom, and refused (with the atom count) otherwise. With no explicit
+`primary_calculation=` and no `opt`, the first `sp` is the candidate. Anything
+with two or more atoms is unchanged. Producers should stop relabelling an
+atom's single point as an `opt`.
+
 ## 0.98.0 - 2026-09-30
 
 Adds `RejectionCode.BUNDLE_TOO_LARGE` (HTTP 413) and

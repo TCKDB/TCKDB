@@ -432,10 +432,10 @@ def test_multi_opt_per_species_rejected(ts_geom, ch4, ch3):
 
 
 def test_species_with_non_opt_only_rejected(ts_geom, ch4, ch3):
-    """Without an opt, a species can't anchor a conformer."""
+    """Without an opt, a molecule can't anchor a conformer (only a single atom may use its sp, #610)."""
     sr = _gaussian()
     lot = _b3lyp()
-    g = Geometry.from_xyz("1\nx\nH 0 0 0")
+    g = Geometry.from_xyz("5\nch4\nC 0 0 0\nH 0 0 1\nH 0 0 -1\nH 0 1 0\nH 0 -1 0")
     sp_only = Calculation.sp(sr, lot, input_geometry=g, electronic_energy_hartree=-1.0)
     rxn = ChemReaction(
         reactants=[ch3], products=[ch4],
@@ -446,7 +446,7 @@ def test_species_with_non_opt_only_rejected(ts_geom, ch4, ch3):
         calculations=[Calculation.opt(sr, lot, output_geometry=ts_geom, converged=True)],
         species_calculations={ch4: [sp_only]},
     )
-    with pytest.raises(TCKDBBuilderValidationError):
+    with pytest.raises(TCKDBBuilderValidationError, match="this geometry has 5 atoms"):
         upload.to_payload()
 
 

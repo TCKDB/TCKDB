@@ -233,17 +233,39 @@ def get_db() -> Iterator[Session]:
 def get_write_db() -> Iterator[Session]:
     """Yield a database session that commits on success, rolls back on error.
 
-    Use this for endpoints that mutate data (uploads, creates).
+    Use this for endpoints that mutate data (uploads, creates), and **always
+    declare it as** ``Depends(get_write_db, scope="function")``.
 
-    The ``commit`` here runs in dependency *teardown* — after the route
+    The scope is what makes a ``201`` mean *committed*. A yield dependency's
+    teardown normally runs in the request scope, which FastAPI exits only
+    after the response has been sent. Committing there let a client receive
+    its ``201`` and read straight back before the rows existed, let a failed
+    commit surface after the ``201`` had gone out, and let ``/auth/login`` be
+    followed by a ``401`` on ``/auth/api-keys`` because the session row was
+    not yet committed (#616). With ``scope="function"`` the teardown runs as
+    soon as the route function has returned, before the response is sent, so
+    a commit-time failure is an ordinary exception that reaches the
+    application's exception handlers and becomes a coded error response.
+    ``tests/api/test_write_commit_before_response.py`` fails if any route
+    declares it without the scope.
+
+    Every declaration must agree: FastAPI caches a dependency per scope, so
+    one ``Depends(get_write_db)`` without it would hand that request a second
+    write session next to the idempotency dependency's.
+
+    The ``commit`` here runs in dependency *teardown* -- after the route
     function has returned and after any decorator wrapping it has finished.
     That makes this the only place in the request that can observe a
-    commit-time failure, which is the failure class where the response has
-    already been determined and the work is nonetheless gone. So the error
-    path gives ``app.services.upload_submission`` the chance to write the
-    durable failed-upload audit its route decorator structurally cannot
-    reach; the call no-ops for every session that is not a decorated
-    synchronous upload, and never raises.
+    commit-time failure, which is the failure class where the work is
+    nonetheless gone. So the error path gives
+    ``app.services.upload_submission`` the chance to write the durable
+    failed-upload audit its route decorator structurally cannot reach; the
+    call no-ops for every session that is not a decorated synchronous
+    upload, and never raises.
+
+    A streaming route must not use this dependency: the session would be
+    committed and closed before its body is produced. None does; export
+    streams read through ``get_db``.
     """
     session = SessionLocal()
     try:
