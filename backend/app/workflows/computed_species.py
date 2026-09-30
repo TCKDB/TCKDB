@@ -30,6 +30,7 @@ from app.db.models.statmech import (
     StatmechTorsionDefinition,
 )
 from app.db.models.thermo import Thermo
+from app.db.models.transport import Transport
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
@@ -132,7 +133,9 @@ from app.services.statmech_resolution import (
     collect_frequency_scale_factor_software_mismatch_warnings,
 )
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
+from app.services.scf_stability_sources import link_scf_stability_sources
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
+from app.workflows.transport import persist_bundle_transport
 
 #: How a computed-species bundle declares a name in the conformer
 #: namespace, phrased as the object of the remedy sentence in
@@ -173,6 +176,7 @@ class ComputedSpeciesUploadOutcome:
     conformers: list[ConformerUploadOutcomeInBundle]
     thermo: Thermo | None
     statmech: Statmech | None = None
+    transport: Transport | None = None
     #: Non-blocking warnings raised while persisting inline artifacts —
     #: currently single-point energy reconciliation (fill/mismatch). The
     #: route merges these into the upload response.
@@ -214,7 +218,11 @@ def _to_calc_with_results_payload(
         scf_stability=(
             None
             if calc_in.scf_stability is None
-            else SCFStabilityPayload(**calc_in.scf_stability.model_dump())
+            else SCFStabilityPayload(
+                **calc_in.scf_stability.model_dump(
+                    exclude={"source_calculation_key"}
+                )
+            )
         ),
         hessian=calc_in.hessian,
         input_geometries=calc_in.input_geometries,
@@ -558,6 +566,22 @@ def persist_computed_species_upload(
         ):
             calc_keys_to_id[additional_in.key] = calc_row
 
+    # An ``scf_stability`` block may name the job that measured it. Every
+    # calculation exists now, so a key pointing at one declared later in the
+    # payload resolves too.
+    link_scf_stability_sources(
+        session,
+        (
+            (calc_in.key, calc_in.scf_stability)
+            for outcome in conformer_outcomes
+            for calc_in in (
+                outcome.conformer_in_bundle.primary_calculation,
+                *outcome.conformer_in_bundle.additional_calculations,
+            )
+        ),
+        calc_keys_to_id,
+    )
+
     # Step 5: explicit dependency edges. The idempotent helper handles
     # both same-transaction and already-persisted duplicates, and rejects
     # role mismatches with a clear 422.
@@ -652,6 +676,19 @@ def persist_computed_species_upload(
                 field_prefix="statmech.",
             )
         )
+    if request.transport is not None:
+        upload_warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=request.transport.scientific_origin,
+                software_release=request.transport.software_release,
+                workflow_tool_release=(
+                    request.transport.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
+                literature=request.transport.literature,
+                field_prefix="transport.",
+            )
+        )
     try:
         for outcome in conformer_outcomes:
             for calc_in, calc_row in (
@@ -741,6 +778,21 @@ def persist_computed_species_upload(
             subject_smiles=request.species_entry.smiles,
         )
 
+        transport_row = (
+            persist_bundle_transport(
+                session,
+                request.transport,
+                species_entry_id=species_entry.id,
+                calculations_by_key=calc_keys_to_id,
+                default_workflow_tool_release=request.workflow_tool_release,
+                created_by=created_by,
+                warnings_out=upload_warnings,
+                field_prefix="transport",
+            )
+            if request.transport is not None
+            else None
+        )
+
         # Link a bundle-created COMPUTED thermo to the statmech it was
         # derived from (same species entry). Without this, the read layer
         # falls back to min(statmech_id) when a species entry has multiple
@@ -825,6 +877,10 @@ def persist_computed_species_upload(
         review_targets.append(
             RecordRef(SubmissionRecordType.statmech, statmech_row.id)
         )
+    if transport_row is not None:
+        review_targets.append(
+            RecordRef(SubmissionRecordType.transport, transport_row.id)
+        )
     review_targets.extend(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec_id)
         for aec_id in (*thermo_aec_ids, *top_level_aec_ids)
@@ -853,6 +909,7 @@ def persist_computed_species_upload(
         conformers=conformer_outcomes,
         thermo=thermo_row,
         statmech=statmech_row,
+        transport=transport_row,
         warnings=upload_warnings,
     )
 
@@ -1314,6 +1371,7 @@ def _persist_statmech_block(
             treatment_kind=torsion_in.treatment_kind,
             dimension=torsion_in.dimension,
             top_description=torsion_in.top_description,
+            invalidated_reason=torsion_in.invalidated_reason,
             source_scan_calculation_id=scan_calc_id,
         )
         session.add(torsion)

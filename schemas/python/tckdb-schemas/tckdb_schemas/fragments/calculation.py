@@ -415,13 +415,24 @@ class SCFStabilityContent(SchemaBase):
         (e.g. ``"RHF→UHF"``, ``"internal"``).
     :param reoptimized_wavefunction: Whether a stable wavefunction was
         obtained by stability optimisation / reoptimisation.
+    :param source_calculation_key: Optional local key of the calculation
+        (job) that measured this verdict, when that is a different job from
+        the one this block hangs off. Meaningful only inside a bundle, where
+        it must name a calculation the same bundle declares (on the
+        computed-species bundle any conformer's, on the computed-reaction
+        bundle any species or transition-state calculation). The job that
+        measured it keeps its own type; there is no separate stability
+        calculation type. The key is resolved after every calculation in the
+        bundle exists, so it may point at a calculation declared later in
+        the payload. Omit it when the calculation carrying the block is the
+        one that measured the stability.
 
     Holds the stability finding and nothing that names another database
     row, which is what lets a bundle carry it. A bundle upload identifies
-    everything by local key; the two FK fields on
-    :class:`SCFStabilityPayload` below would put raw primary keys back on
-    a surface a depositor is meant to be able to write without ever
-    having queried TCKDB.
+    everything by local key, so the one cross-reference here is a local
+    key; the two FK fields on :class:`SCFStabilityPayload` below would put
+    raw primary keys back on a surface a depositor is meant to be able to
+    write without ever having queried TCKDB.
     """
 
     status: SCFStabilityStatus
@@ -429,6 +440,7 @@ class SCFStabilityContent(SchemaBase):
     instability_count: int | None = Field(default=None, ge=0)
     instability_type: str | None = None
     reoptimized_wavefunction: bool | None = None
+    source_calculation_key: str | None = Field(default=None, min_length=1)
     note: str | None = None
 
     @model_validator(mode="after")
@@ -505,6 +517,23 @@ class SCFStabilityPayload(SCFStabilityContent):
 
     source_calculation_id: int | None = None
     source_artifact_id: int | None = None
+
+    @model_validator(mode="after")
+    def refuse_local_key(self) -> Self:
+        """``source_calculation_key`` only means something inside a bundle.
+
+        The primitive routes name other rows by id, and a local key has no
+        namespace to resolve against there. Accepting it would store the
+        stability block with no source and answer 201, so it is refused and
+        the repair is named.
+        """
+        if self.source_calculation_key is not None:
+            raise ValueError(
+                "scf_stability.source_calculation_key is only valid inside a "
+                "computed-species or computed-reaction bundle; on this route "
+                "name the measuring calculation with source_calculation_id."
+            )
+        return self
 
 
 class HessianPayload(SchemaBase):
@@ -743,7 +772,12 @@ class PathSearchPointPayload(SchemaBase):
     :param rms_gradient: RMS gradient at this point.
     :param is_ts_guess: Whether this point is the algorithm's TS guess.
     :param is_climbing_image: Whether this image was the climbing image
-        (NEB-CI specific; ignored by string-method outputs).
+        (NEB-CI specific; ignored by string-method outputs). ``false``
+        is the default and is stored exactly as sent, so ``false`` reads as
+        "not a climbing image" and as "not stated" alike: a producer that
+        does not know should name the climbing image through the result's
+        ``climbing_image_index`` or leave every point at the default. A
+        tri-state value would need a nullable column and is not offered yet.
     :param geometry: Optional inline geometry payload for this point.
     :param note: Optional free-text note.
     """
@@ -773,7 +807,24 @@ class PathSearchResultPayload(SchemaBase):
     :param method: The path-search algorithm used.
     :param is_double_ended: Whether the algorithm uses two endpoints
         (NEB, GSM) versus single-ended (growing string, freezing string).
-    :param converged: Whether the path search converged.
+    :param converged: Whether the path search met its own stopping
+        criteria. What that means depends on ``method``, and the producer
+        states the algorithm's verdict, not a proxy for it:
+
+        * ``neb``: the band's force (and, where used, step) thresholds were
+          satisfied, climbing image included for a climbing-image run, and
+          the run did not stop on its iteration limit.
+        * ``gsm``, ``growing_string``, ``freezing_string``: the string
+          finished growing (or freezing) and the program's own convergence
+          test on the path, or on the TS node it reports, passed.
+        * ``other``: the method's own convergence verdict; describe the
+          criterion in ``note``.
+
+        ``true`` means that verdict was observed. ``false`` means it was
+        observed to fail. Leave it absent when it was not observed: the
+        existence of an output file, a nonzero exit code or a parsed TS
+        guess is not a convergence verdict, so none of them justifies
+        ``true``.
     :param n_points: Total sampled-point count (consistency check).
     :param selected_ts_point_index: Index of the point selected as the
         TS guess (0-based). Must match a ``points[].point_index``.

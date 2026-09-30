@@ -1,7 +1,8 @@
 """Bundle upload schemas for ``POST /api/v1/uploads/computed-species``.
 
 The bundle is a single self-contained payload that carries identity +
-conformers + per-conformer calculations + artifacts + optional thermo.
+conformers + per-conformer calculations + artifacts + optional thermo,
+statmech and transport.
 All cross-references inside the bundle are local string keys; **no
 database FK ids are accepted anywhere** (DR-0029 Requirement 1).
 """
@@ -24,6 +25,7 @@ from tckdb_schemas.enums import (
     StatmechTreatmentKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
+    TransportCalculationRole,
 )
 from tckdb_schemas.fragments.artifact import ArtifactIn
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
@@ -71,6 +73,7 @@ from tckdb_schemas.stationary_point import (
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.upload_warning import UploadWarning
 from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
+from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
 
 
 # Field names that are forbidden anywhere in the bundle payload tree.
@@ -513,6 +516,62 @@ class ThermoInBundle(ThermoStateFields):
 
 
 # ---------------------------------------------------------------------------
+# Transport block
+# ---------------------------------------------------------------------------
+
+
+class TransportSourceCalcInBundle(SchemaBase):
+    """Transport -> calc link by local key.
+
+    Same shape and rule as :class:`ThermoSourceCalcInBundle`: only
+    ``calculation_key`` is accepted inside a bundle, resolving against the
+    bundle's global calculation-key namespace (DR-0029 Requirement 1).
+    """
+
+    calculation_key: str = Field(min_length=1)
+    role: TransportCalculationRole
+
+
+class TransportInBundle(TransportUploadPayload):
+    """Transport block within a bundle.
+
+    One transport record for the bundle's species entry, carrying exactly
+    the content of the standalone ``POST /api/v1/uploads/transport``
+    payload (:class:`~tckdb_schemas.workflows.transport_upload.TransportUploadPayload`:
+    Lennard-Jones ``sigma_angstrom`` / ``epsilon_over_k_k``, dipole,
+    polarizability, rotational relaxation, provenance, and the same
+    "at least one property, LJ as a pair" validation), plus links to the
+    calculations that produced it by local key.
+
+    It attaches to the same species entry as the bundle's thermo and
+    statmech. Provenance follows the thermo rule: ``software_release`` and
+    ``workflow_tool_release`` are this block's own, and where the block
+    names no workflow tool the bundle's ``workflow_tool_release`` fills in.
+
+    Transport is append-only, as on the standalone route: a bundle adds one
+    new record each time it is deposited.
+
+    :param source_calculations: Transport -> calculation links by
+        bundle-local key and role. Each key must name a calculation this
+        bundle declares for the same species entry.
+    """
+
+    source_calculations: list[TransportSourceCalcInBundle] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "transport.source_calculations must be unique by "
+                "(calculation_key, role)."
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
 # Statmech block (inline, one per species_entry)
 # ---------------------------------------------------------------------------
 
@@ -543,6 +602,11 @@ class StatmechTorsionInBundle(SchemaBase):
     :param treatment_kind: Optional torsion treatment.
     :param dimension: Number of coupled torsional coordinates.
     :param top_description: Optional description of the rotating top.
+    :param invalidated_reason: Optional reason the producer rejected this
+        rotor, for example that the scan was not a smooth periodic
+        potential. Same field, same meaning and same storage as
+        ``StatmechTorsionIn.invalidated_reason`` on the conformer route.
+        Absent means the rotor was not rejected; present records that it was.
     :param source_scan_calculation_key: Optional bundle-local calc key
         that produced the rotor scan. Must resolve to a calc of type
         ``scan`` declared elsewhere in the bundle.
@@ -558,6 +622,7 @@ class StatmechTorsionInBundle(SchemaBase):
 
     dimension: int = Field(default=1, ge=1)
     top_description: str | None = None
+    invalidated_reason: str | None = None
     source_scan_calculation_key: str | None = None
 
     coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
@@ -730,9 +795,9 @@ class StatmechInBundle(SchemaBase):
 class ComputedSpeciesUploadRequest(SchemaBase):
     """Bundle upload payload for one computed species result.
 
-    ``workflow_tool_release`` is the bundle-level default: the thermo and
-    statmech blocks fall back to it when they name no workflow tool of
-    their own, and a block that names one overrides it. That is the same
+    ``workflow_tool_release`` is the bundle-level default: the thermo,
+    statmech and transport blocks fall back to it when they name no
+    workflow tool of their own, and a block that names one overrides it. That is the same
     precedence ``ComputedReactionUploadRequest`` has always applied to
     its ``literature`` / ``analysis_software_release`` /
     ``workflow_tool_release`` trio.
@@ -785,6 +850,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
     conformers: list[ConformerInBundle] = Field(min_length=1)
     thermo: ThermoInBundle | None = None
     statmech: StatmechInBundle | None = None
+    transport: TransportInBundle | None = None
 
     # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
     # so existing clients keep working -- absence bites at release time.
@@ -808,8 +874,8 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         default=None,
         description=(
             "Bundle-level workflow-tool provenance. Used as the default "
-            "for the thermo and statmech blocks; a value on either of "
-            "those overrides it."
+            "for the thermo, statmech and transport blocks; a value on "
+            "any of those overrides it."
         ),
     )
     note: str | None = Field(
@@ -968,6 +1034,58 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_transport_source_keys_resolve(self) -> Self:
+        if self.transport is None:
+            return self
+        defined = self._all_calc_keys()
+        for index, sc in enumerate(self.transport.source_calculations):
+            if sc.calculation_key not in defined:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"transport.source_calculations references undefined "
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"transport.source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scf_stability_source_keys_resolve(self) -> Self:
+        """``scf_stability.source_calculation_key`` must name a bundle calculation.
+
+        Every calculation in this bundle belongs to the one species entry,
+        so there is no owner to check beyond existence.
+        """
+        defined = self._all_calc_keys()
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                stability = calc.scf_stability
+                if stability is None or stability.source_calculation_key is None:
+                    continue
+                if stability.source_calculation_key == calc.key:
+                    raise ValueError(
+                        f"calculation '{calc.key}' scf_stability."
+                        f"source_calculation_key names the calculation "
+                        f"itself; omit it when this calculation measured "
+                        f"the stability."
+                    )
+                if stability.source_calculation_key not in defined:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"calculation '{calc.key}' scf_stability."
+                        f"source_calculation_key references undefined "
+                        f"calculation_key '{stability.source_calculation_key}'.",
+                        field=(
+                            f"calculations['{calc.key}'].scf_stability."
+                            f"source_calculation_key"
+                        ),
+                        key=stability.source_calculation_key,
+                        declared=defined,
+                    )
+        return self
+
+    @model_validator(mode="after")
     def validate_statmech_torsion_scan_keys_resolve(self) -> Self:
         if self.statmech is None:
             return self
@@ -1081,6 +1199,10 @@ class StatmechUploadRefInBundle(SchemaBase):
     statmech_id: int
 
 
+class TransportUploadRefInBundle(SchemaBase):
+    transport_id: int
+
+
 class ComputedSpeciesUploadResult(BaseModel):
     species_entry_id: int
     type: str = "computed_species"
@@ -1090,4 +1212,5 @@ class ComputedSpeciesUploadResult(BaseModel):
     conformers: list[ConformerUploadRefInBundle]
     thermo: ThermoUploadRefInBundle | None = None
     statmech: StatmechUploadRefInBundle | None = None
+    transport: TransportUploadRefInBundle | None = None
     warnings: list[UploadWarning] = []

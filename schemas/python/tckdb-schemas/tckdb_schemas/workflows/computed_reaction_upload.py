@@ -97,6 +97,7 @@ from tckdb_schemas.workflows.computed_species_upload import (
     CalculationDependencyInBundle,
     StatmechSourceCalcInBundle,
     ThermoSourceCalcInBundle,
+    TransportInBundle,
     require_opt_primary_unless_monatomic,
 )
 
@@ -443,6 +444,11 @@ class BundleStatmechTorsionIn(SchemaBase):
     :param treatment_kind: Optional torsion treatment.
     :param dimension: Number of coupled torsional coordinates.
     :param top_description: Optional description of the rotating top.
+    :param invalidated_reason: Optional reason the producer rejected this
+        rotor, for example that the scan was not a smooth periodic
+        potential. Same field, same meaning and same storage as
+        ``StatmechTorsionIn.invalidated_reason`` on the conformer route.
+        Absent means the rotor was not rejected; present records that it was.
     :param source_scan_calculation_key: Optional bundle-local calc key
         that produced the rotor scan. Must resolve to a calc of type
         ``scan`` declared elsewhere in the bundle.
@@ -458,6 +464,7 @@ class BundleStatmechTorsionIn(SchemaBase):
 
     dimension: int = Field(default=1, ge=1)
     top_description: str | None = None
+    invalidated_reason: str | None = None
     source_scan_calculation_key: str | None = None
 
     coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
@@ -681,6 +688,13 @@ class BundleSpeciesIn(SchemaBase):
         ``conformer_key`` is absent, so payloads predating this field are
         unaffected.
     :param thermo: Optional thermochemistry data.
+    :param statmech: Optional statistical-mechanics data.
+    :param transport: Optional transport properties (Lennard-Jones
+        parameters, dipole, polarizability, rotational relaxation) for this
+        species's entry: the standalone transport upload's content plus
+        links to this bundle's calculations by local key. Provenance falls
+        back to the bundle's ``analysis_software_release`` and
+        ``workflow_tool_release`` exactly as thermo's does.
     """
 
     key: str = Field(min_length=1)
@@ -689,6 +703,7 @@ class BundleSpeciesIn(SchemaBase):
     calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
     thermo: BundleThermoIn | None = None
     statmech: BundleStatmechIn | None = None
+    transport: TransportInBundle | None = None
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,
         description=(
@@ -1785,6 +1800,92 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_scan_calculation_key '{key}' must reference "
                         f"a scan-type calculation."
                     )
+
+        # Per-species transport source_calculation keys. Same contract as
+        # thermo's above, plus the owner rule the workflow also enforces:
+        # this bundle carries many species, so a key that exists is not
+        # yet a key that belongs to *this* species.
+        owner_of_calc: dict[str, str] = {}
+        for sp in self.species:
+            for conf in sp.conformers:
+                owner_of_calc[conf.calculation.key] = f"species[{sp.key!r}]"
+            for calc in sp.calculations:
+                owner_of_calc[calc.key] = f"species[{sp.key!r}]"
+        if self.transition_state is not None:
+            owner_of_calc[self.transition_state.calculation.key] = (
+                "transition_state"
+            )
+            for calc in self.transition_state.calculations:
+                owner_of_calc[calc.key] = "transition_state"
+
+        for sp in self.species:
+            if sp.transport is None:
+                continue
+            for i, tsc in enumerate(sp.transport.source_calculations):
+                if tsc.calculation_key not in all_calc_keys:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"species[{sp.key!r}].transport.source_calculations[{i}]."
+                        f"calculation_key references undefined "
+                        f"calculation_key '{tsc.calculation_key}'.",
+                        field=(
+                            f"species['{sp.key}'].transport.source_calculations"
+                            f"[{i}].calculation_key"
+                        ),
+                        key=tsc.calculation_key,
+                        declared=all_calc_keys,
+                    )
+                if owner_of_calc[tsc.calculation_key] != f"species[{sp.key!r}]":
+                    raise ValueError(
+                        f"species[{sp.key!r}].transport.source_calculations[{i}]."
+                        f"calculation_key '{tsc.calculation_key}' belongs to "
+                        f"{owner_of_calc[tsc.calculation_key]}; a supporting "
+                        f"calculation must be one of this species' own."
+                    )
+
+        # scf_stability.source_calculation_key: the job that measured a
+        # stability verdict must exist and must belong to the same subject
+        # as the calculation the verdict is attached to.
+        stability_carriers: list[tuple[str, ComputedReactionCalculationIn]] = []
+        for sp in self.species:
+            for conf in sp.conformers:
+                stability_carriers.append((f"species[{sp.key!r}]", conf.calculation))
+            for calc in sp.calculations:
+                stability_carriers.append((f"species[{sp.key!r}]", calc))
+        if self.transition_state is not None:
+            stability_carriers.append(
+                ("transition_state", self.transition_state.calculation)
+            )
+            for calc in self.transition_state.calculations:
+                stability_carriers.append(("transition_state", calc))
+        for owner, calc in stability_carriers:
+            stability = calc.scf_stability
+            if stability is None or stability.source_calculation_key is None:
+                continue
+            src_key = stability.source_calculation_key
+            field_path = f"calculations['{calc.key}'].scf_stability.source_calculation_key"
+            if src_key == calc.key:
+                raise ValueError(
+                    f"{field_path} names the calculation itself; omit it "
+                    f"when this calculation measured the stability."
+                )
+            if src_key not in all_calc_keys:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"calculation '{calc.key}' scf_stability."
+                    f"source_calculation_key references undefined "
+                    f"calculation_key '{src_key}'.",
+                    field=field_path,
+                    key=src_key,
+                    declared=all_calc_keys,
+                )
+            if owner_of_calc[src_key] != owner:
+                raise ValueError(
+                    f"{field_path} '{src_key}' belongs to "
+                    f"{owner_of_calc[src_key]}, not to {owner}; the job that "
+                    f"measured a stability verdict must be one of the same "
+                    f"subject's own calculations."
+                )
 
         # Applied-correction source_calculation_key references must
         # resolve into the bundle's calc namespace. The workflow layer

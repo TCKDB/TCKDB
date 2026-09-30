@@ -252,6 +252,13 @@ class ThermoCalculationRole(str, Enum):
     imported = "imported"
 
 
+class TransportCalculationRole(str, Enum):
+    full_transport = "full_transport"
+    dipole = "dipole"
+    polarizability = "polarizability"
+    supporting_geometry = "supporting_geometry"
+
+
 class ActivationEnergyUnits(str, Enum):
     j_mol = "j_mol"
     kj_mol = "kj_mol"
@@ -555,4 +562,5 @@ __all__ = (
     "TemperatureUnit",
     "ThermoCalculationRole",
     "TorsionTreatmentKind",
+    "TransportCalculationRole",
 )

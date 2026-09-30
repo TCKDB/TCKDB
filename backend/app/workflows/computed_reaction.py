@@ -147,8 +147,10 @@ from app.services.statmech_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.upload_reconciliation import term_symbol_warnings
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
+from app.workflows.transport import persist_bundle_transport
 
 #: How a computed-reaction bundle declares a name in the calculation
 #: namespace, phrased as the object of the remedy sentence in
@@ -407,6 +409,22 @@ def _collect_bundle_provenance_warnings(
                 energy_field=f"species[{sp.key!r}].applied_energy_corrections",
             )
         )
+        if sp.transport is not None:
+            warnings.extend(
+                collect_provenance_warnings(
+                    scientific_origin=sp.transport.scientific_origin,
+                    software_release=(
+                        sp.transport.software_release
+                        or request.analysis_software_release
+                    ),
+                    workflow_tool_release=(
+                        sp.transport.workflow_tool_release
+                        or request.workflow_tool_release
+                    ),
+                    literature=sp.transport.literature,
+                    field_prefix=f"species[{sp.key!r}].transport.",
+                )
+            )
         if sp.statmech is not None:
             warnings.extend(
                 collect_provenance_warnings(
@@ -863,6 +881,30 @@ def persist_computed_reaction_upload(
             _wire_depends_on(calc_in)
 
     session.flush()
+
+    # The bundle's calculation-key namespace as rows, for the two passes that
+    # need an owner check (scf_stability sources, transport sources). The
+    # ``calculation_key_to_id`` map above is ids only.
+    calculation_key_to_row: dict[str, Calculation] = {
+        key: session.get(Calculation, calc_id)
+        for key, calc_id in calculation_key_to_id.items()
+    }
+
+    # An ``scf_stability`` block may name the job that measured it. Every
+    # calculation is persisted now, so a key pointing at one declared later
+    # in the payload resolves too.
+    _stability_carriers: list[ComputedReactionCalculationIn] = []
+    for sp in request.species:
+        _stability_carriers.extend(conf.calculation for conf in sp.conformers)
+        _stability_carriers.extend(sp.calculations)
+    if request.transition_state:
+        _stability_carriers.append(request.transition_state.calculation)
+        _stability_carriers.extend(request.transition_state.calculations)
+    link_scf_stability_sources(
+        session,
+        ((calc_in.key, calc_in.scf_stability) for calc_in in _stability_carriers),
+        calculation_key_to_row,
+    )
 
     # ------------------------------------------------------------------
     # 3b-bis. Atom map (ADR 0011)
@@ -1433,6 +1475,7 @@ def persist_computed_reaction_upload(
                     treatment_kind=torsion_in.treatment_kind,
                     dimension=torsion_in.dimension,
                     top_description=torsion_in.top_description,
+                    invalidated_reason=torsion_in.invalidated_reason,
                     source_scan_calculation_id=scan_calc_id,
                 )
                 session.add(torsion)
@@ -1451,6 +1494,33 @@ def persist_computed_reaction_upload(
                         )
 
     session.flush()
+
+    # ------------------------------------------------------------------
+    # 4c. Transport (per species, if provided)
+    #
+    # Same entry as the species' thermo and statmech, same provenance
+    # defaults as thermo's; the row itself is made by the one shared
+    # transport service.
+    # ------------------------------------------------------------------
+    transport_ids: list[int] = []
+    for sp_index, sp in enumerate(request.species):
+        if sp.transport is None:
+            continue
+        species_entry = resolve_species_key(
+            sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+        )
+        transport_row = persist_bundle_transport(
+            session,
+            sp.transport,
+            species_entry_id=species_entry.id,
+            calculations_by_key=calculation_key_to_row,
+            default_software_release=request.analysis_software_release,
+            default_workflow_tool_release=request.workflow_tool_release,
+            created_by=created_by,
+            warnings_out=sp_energy_warnings,
+            field_prefix=f"species['{sp.key}'].transport",
+        )
+        transport_ids.append(transport_row.id)
 
     # ------------------------------------------------------------------
     # 5. Kinetics fits
@@ -1679,6 +1749,9 @@ def persist_computed_reaction_upload(
         RecordRef(SubmissionRecordType.statmech, sid) for sid in statmech_ids
     )
     review_targets.extend(
+        RecordRef(SubmissionRecordType.transport, tid) for tid in transport_ids
+    )
+    review_targets.extend(
         RecordRef(SubmissionRecordType.applied_energy_correction, aid)
         for aid in applied_correction_ids
     )
@@ -1713,6 +1786,7 @@ def persist_computed_reaction_upload(
         "kinetics_ids": kinetics_ids,
         "thermo_ids": thermo_ids,
         "statmech_ids": statmech_ids,
+        "transport_ids": transport_ids,
         "species_entry_ids": [e.id for e in species_key_to_entry.values()],
         "species_count": len(request.species),
         # Expose the bundle-local calc-key → assigned-id map so the

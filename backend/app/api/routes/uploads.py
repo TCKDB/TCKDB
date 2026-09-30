@@ -36,6 +36,7 @@ from app.schemas.workflows.computed_species_upload import (
     ConformerUploadRefInBundle,
     StatmechUploadRefInBundle,
     ThermoUploadRefInBundle,
+    TransportUploadRefInBundle,
 )
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -240,6 +241,8 @@ class ComputedReactionUploadResult(BaseModel):
     #: named; before, statmech had to be found by querying back through
     #: ``species_entry_ids``.
     statmech_ids: list[int] = Field(default_factory=list)
+    #: One id per ``transport`` row written for a species in this bundle.
+    transport_ids: list[int] = Field(default_factory=list)
     species_entry_ids: list[int]
     species_count: int
     # Bundle-local calc key → assigned ``calculation.id`` for every
@@ -829,6 +832,11 @@ def upload_computed_species(
         if outcome.statmech is not None
         else None
     )
+    transport_ref = (
+        TransportUploadRefInBundle(transport_id=outcome.transport.id)
+        if outcome.transport is not None
+        else None
+    )
     result = ComputedSpeciesUploadResult(
         species_entry_id=outcome.species_entry_id,
         submission_id=sub.submission_id,
@@ -836,6 +844,7 @@ def upload_computed_species(
         conformers=conformer_refs,
         thermo=thermo_ref,
         statmech=statmech_ref,
+        transport=transport_ref,
         warnings=warnings,
     )
     mark_upload_ingested(session, sub)

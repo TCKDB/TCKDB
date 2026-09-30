@@ -1465,6 +1465,22 @@ class NetworkPDepUploadRequest(SchemaBase):
                     declared=geometry_keys,
                 )
 
+        # ``scf_stability.source_calculation_key`` is a bundle feature of the
+        # computed-species and computed-reaction routes. This route persists
+        # the block but has no pass that links the measuring job, so the key
+        # would be accepted and dropped. Refuse it instead of answering 201.
+        for context, calc in all_calcs:
+            if (
+                calc.scf_stability is not None
+                and calc.scf_stability.source_calculation_key is not None
+            ):
+                raise ValueError(
+                    f"Calculation '{calc.key}' in {context}: "
+                    f"scf_stability.source_calculation_key is not supported "
+                    f"on the pressure-dependent network route; send it on "
+                    f"computed-species or computed-reaction, or omit it."
+                )
+
         # Species statmech references must resolve against that species's OWN
         # calculations only. A species statmech can only be sourced from that
         # species's calculations (the persistence seam enforces species-entry
