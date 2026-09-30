@@ -117,6 +117,9 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 | `RATE_LIMIT_ANON_READ_PER_MINUTE` | 60 (default) | Tune up only after observing legitimate traffic. |
 | `RATE_LIMIT_AUTH_READ_PER_MINUTE` | 300 (default) | |
 | `RATE_LIMIT_AUTH_WRITE_PER_MINUTE` | 30 (default) | Tight on purpose: one misbehaving uploader should not exhaust a deployment. |
+| `RATE_LIMIT_BUNDLE_DRY_RUN_PER_MINUTE` | 10 (default) | `POST /bundles/dry-run` rehearses a full submit, so it has its own, tighter bucket; it neither spends nor is limited by `AUTH_WRITE`. |
+| `BUNDLE_MAX_BODY_BYTES` | 5242880 (default, 5 MiB) | Request-body cap for `/bundles/dry-run` and `/bundles/submit`, refused `413 bundle_too_large` before parsing. About ten times the largest ARC run file measured. `0` disables the cap; negative is refused at startup. (`RATE_LIMIT_*=0`, by contrast, refuses everything.) |
+| `BUNDLE_MAX_RECORDS` | 500 (default) | Thermo plus kinetics records per bundle, refused `422 bundle_too_many_records`. Measured bundles carry one to a handful. |
 | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` | 20 (default) | Smaller than `ANON_READ` so anonymous writes do not inherit the read budget. |
 | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` | 10 (default) | Credential-stuffing cap; IP-keyed. |
 | `RATE_LIMIT_REGISTER_PER_HOUR` | 10 (default) | Account-spam cap; IP-keyed. Mitigation against botnet registration is upstream (Cloudflare / WAF). |

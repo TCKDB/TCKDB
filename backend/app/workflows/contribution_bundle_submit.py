@@ -61,6 +61,7 @@ from app.schemas.workflows.contribution_bundle import (
 )
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.services.contribution_bundle_dry_run import dry_run_contribution_bundle
+from app.services.literature_metadata import failure_scope
 from app.services.literature_resolution import prefetch_literature_metadata
 from app.services.record_review import ReviewPolicy
 from app.services.rights import attest_from_deposit
@@ -482,21 +483,24 @@ def rehearse_contribution_bundle_submit(
     Crossref/ISBN lookup a new reference needs is not made while the
     rehearsal holds row locks: the fetch is cached in-process
     (``app.services.literature_metadata``), and the rehearsal's own lookup
-    then answers from the cache. A fetch that failed is not cached, so for
-    that reference the rehearsal tries again -- and holds its locks across
-    that attempt, as submit does.
+    then answers from the cache. A fetch that failed is not cached: another
+    caller, or a later request, retries it. It is remembered only inside this
+    function, through ``literature_metadata.failure_scope``, so the
+    rehearsal's own lookup does not repeat the failed request while holding its
+    locks; nothing outside this call can see it.
 
     :returns: ``None`` when submit would succeed, otherwise the exception it
         raised -- rendered by the caller through the app's own handlers --
         or the rehearsal's own contention or commit-refusal error.
     """
     discard_unflushed_writes(session)
-    prefetch_literature_metadata(session, _literature_requests(bundle.records))
-    try:
-        with rehearsal(session):
-            submit_contribution_bundle(session, bundle, actor=actor)
-    except Exception as exc:  # every failure is the verdict, whatever its type
-        return exc
+    with failure_scope():
+        prefetch_literature_metadata(session, _literature_requests(bundle.records))
+        try:
+            with rehearsal(session):
+                submit_contribution_bundle(session, bundle, actor=actor)
+        except Exception as exc:  # every failure is the verdict, whatever its type
+            return exc
     return None
 
 

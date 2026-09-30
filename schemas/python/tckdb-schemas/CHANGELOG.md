@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.58.0 - 2026-09-30
+
+Producer contract only; no model in this package changes. `POST /api/v1/bundles/dry-run`
+and `POST /api/v1/bundles/submit` now cap one bundle (#586): a request body
+over 5 MiB is refused `bundle_too_large` (413, `context.max_bytes`, and
+`context.given_bytes` when the request declared its length) before it is
+parsed, and a bundle with more than 500 thermo plus kinetics records is
+refused `bundle_too_many_records` (422, `context.max_records`,
+`context.records`). Both caps are operator settings; the defaults are far
+above any bundle measured. The dry run also has its own, tighter rate bucket
+(10 per minute per credential by default), still answered `429
+rate_limit_exceeded`.
+
 ## 0.57.0 - 2026-09-30
 
 Every upload, job and bundle response now names its submission by public ref

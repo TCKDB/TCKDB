@@ -36,6 +36,7 @@ Assertions are on exact codes, never on substrings of the message.
 
 from __future__ import annotations
 
+import ast
 import copy
 import json
 import re
@@ -742,3 +743,79 @@ def test_no_code_under_rehearsal_can_tell_it_is_rehearsed() -> None:
         "rehearsed code must not be able to tell it is inside a dry run:\n"
         + "\n".join(offenders)
     )
+
+
+#: The ways to reach a raw DBAPI connection or cursor, from which ``COMMIT``
+#: can be sent past every guard the rehearsal has (#592). The goal is to catch
+#: an accidental one in TCKDB's own code, not to defeat a determined author.
+_RAW_DRIVER_ATTRIBUTES = {"dbapi_connection", "driver_connection", "raw_connection", "pgconn"}
+#: ``<x>.connection.cursor`` / ``<x>.connection.execute``: on a SQLAlchemy
+#: pooled-connection proxy these go straight to the driver.
+_RAW_VIA_CONNECTION = {"cursor", "execute"}
+#: A ``getattr`` whose first argument mentions one of these, with a computed
+#: name, is treated as a possible way round the attribute scan.
+_CONNECTION_WORDS = ("conn", "session", "engine", "cursor", "raw", "driver", "bind")
+
+
+def _raw_driver_uses(source: str) -> list[int]:
+    lines = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Attribute):
+            if node.attr in _RAW_DRIVER_ATTRIBUTES:
+                lines.append(node.lineno)
+            elif (
+                node.attr in _RAW_VIA_CONNECTION
+                and isinstance(node.value, ast.Attribute)
+                and node.value.attr == "connection"
+            ):
+                lines.append(node.lineno)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "getattr"
+            and len(node.args) >= 2
+            and not (isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str))
+            and any(word in ast.unparse(node.args[0]).lower() for word in _CONNECTION_WORDS)
+        ):
+            # getattr(conn, "dbapi_" + "connection"): the name is built, so no
+            # attribute scan can see it. Only getattr *on something that
+            # looks like a connection* counts: the codebase reads ORM columns
+            # and request fields by variable name in dozens of places, and
+            # that is not a route to a cursor.
+            lines.append(node.lineno)
+    return lines
+
+
+def test_nothing_under_app_reaches_the_raw_driver_connection() -> None:
+    backend = Path(__file__).resolve().parents[2]
+    scanned = 0
+    offenders: list[str] = []
+    for path in sorted((backend / "app").rglob("*.py")):
+        rel = path.relative_to(backend).as_posix()
+        lines = _raw_driver_uses(path.read_text())
+        if rel in _MAY_KNOW:
+            # Live: the rehearsal guards the raw commit, so it must use it.
+            assert lines, f"{rel} no longer reaches the raw connection; update this test"
+            continue
+        scanned += 1
+        offenders += [f"{rel}:{n}" for n in lines]
+    assert scanned > 200, f"only {scanned} files scanned; the scan is not looking"
+    assert offenders == [], (
+        "a raw DBAPI connection or cursor is outside the rehearsal's guards (it "
+        "can COMMIT past them); use the SQLAlchemy Connection:\n" + "\n".join(offenders)
+    )
+
+
+def test_the_raw_driver_scan_sees_a_use() -> None:
+    assert _raw_driver_uses("x = conn.connection.dbapi_connection\n") == [1]
+    assert _raw_driver_uses("x = 1  # dbapi_connection\n") == []
+    assert _raw_driver_uses("session.connection().connection.cursor().execute('COMMIT')\n") == [1]
+    assert _raw_driver_uses("session.connection().connection.execute('COMMIT')\n") == [1]
+    assert _raw_driver_uses("raw.pgconn.exec_(b'COMMIT')\n") == [1]
+    assert _raw_driver_uses("getattr(conn, 'dbapi_' + 'connection')\n") == [1]
+    # Not raw: a literal getattr name, and SQLAlchemy's own Connection.execute.
+    assert _raw_driver_uses("getattr(session, 'x' + 'y')\n") == [1]
+    # Not raw: a literal name, a variable name on an ORM row, and SQLAlchemy's
+    # own Connection.execute.
+    assert _raw_driver_uses("getattr(obj, 'name', None)\nsession.connection().execute(q)\n") == []
+    assert _raw_driver_uses("getattr(row, column.key)\ngetattr(request, name)\n") == []
