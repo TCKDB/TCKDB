@@ -559,13 +559,13 @@ def test_the_bundle_refuses_a_ts_of_a_different_reaction(client, db_session, cor
     assert accepted.status_code == 201, accepted.text[:800]
 
 
-def _sibling_entry_ts(db_session, corpus, *, reactants, product):
+def _sibling_entry_ts(db_session, corpus, *, reactants, products):
     """A TS of a *different reaction entry of the same reaction*."""
     entry = make_reaction_entry(
         db_session,
         reaction=corpus.entry.reaction,
         reactant_entries=reactants,
-        product_entries=[product],
+        product_entries=products,
     )
     return make_transition_state_entry(
         db_session,
@@ -593,12 +593,15 @@ def test_the_bundle_refuses_a_ts_of_a_sibling_entry_of_the_same_reaction(
             electronic_state_label="B1Su",
         )
         sibling_ts = _sibling_entry_ts(
-            db_session, corpus, reactants=[corpus.h, corpus.h], product=excited
+            db_session, corpus, reactants=[corpus.h, corpus.h], products=[excited]
         )
     else:
+        # H + D -> HD: the deuterium atom and the HD product are isotopologue
+        # entries of the H and H2 species.
         deuterium = make_species_entry(db_session, corpus.h.species, isotope_key="D")
+        hd = make_species_entry(db_session, corpus.h2.species, isotope_key="HD")
         sibling_ts = _sibling_entry_ts(
-            db_session, corpus, reactants=[deuterium, corpus.h], product=corpus.h2
+            db_session, corpus, reactants=[corpus.h, deuterium], products=[hd]
         )
     assert sibling_ts.id != corpus.ts_entry.id
 
@@ -629,6 +632,47 @@ def test_the_bundle_refuses_a_ts_of_a_sibling_entry_of_the_same_reaction(
         "tunneling_application": {**_WIGNER, "transition_state_entry_ref": corpus.ts_entry.public_ref}
     }
     assert _bundle(client, own).status_code == 201
+
+
+def _tunneling_via(client, ts) -> "object":
+    return _bundle(
+        client,
+        {"tunneling_application": {**_WIGNER, "transition_state_entry_ref": ts.public_ref}},
+    )
+
+
+def test_a_ts_on_the_same_species_as_sets_but_not_as_multisets_is_refused(
+    client, db_session, corpus
+):
+    """R{H,H} P{H2,H2} has the same set of (role, species) pairs as this rate's
+    R{H,H} P{H2} but a different multiset: it is another rate."""
+    ts = _sibling_entry_ts(
+        db_session, corpus, reactants=[corpus.h, corpus.h], products=[corpus.h2, corpus.h2]
+    )
+    response = _tunneling_via(client, ts)
+    assert response.status_code == 422, response.text[:800]
+    assert "is not a transition state of this rate's reaction" in response.text
+
+
+def test_a_ts_with_the_right_species_on_the_wrong_sides_is_refused(client, db_session, corpus):
+    """R{H,H2} P{H} uses the same species ids as R{H,H} P{H2} with the roles
+    scrambled, which is neither the rate nor its reverse."""
+    ts = _sibling_entry_ts(
+        db_session, corpus, reactants=[corpus.h, corpus.h2], products=[corpus.h]
+    )
+    response = _tunneling_via(client, ts)
+    assert response.status_code == 422, response.text[:800]
+    assert "is not a transition state of this rate's reaction" in response.text
+
+
+def test_a_ts_on_the_reverse_entry_is_accepted(client, db_session, corpus):
+    """A reverse-direction fit shares its transition state with the forward
+    one: R{H2} P{H,H} is this rate's reactions sides swapped, and is accepted."""
+    ts = _sibling_entry_ts(
+        db_session, corpus, reactants=[corpus.h2], products=[corpus.h, corpus.h]
+    )
+    response = _tunneling_via(client, ts)
+    assert response.status_code == 201, response.text[:800]
 
 
 def test_a_refused_bundle_leaves_no_kinetics_behind(client, db_session, corpus):
