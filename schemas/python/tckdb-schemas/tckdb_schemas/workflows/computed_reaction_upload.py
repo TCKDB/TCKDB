@@ -91,6 +91,7 @@ from tckdb_schemas.stationary_point import (
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.utils import normalize_optional_text, normalize_tunneling_model
+from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
 from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
@@ -540,6 +541,10 @@ class BundleStatmechIn(SchemaBase):
         calculation key. Each referenced key must resolve into the
         bundle's global calc-key namespace and must be owned by this
         species entry (workflow-layer ownership check).
+    :param electronic_levels: Ordered (energy, degeneracy) pairs for the
+        electronic partition function, same shape and validation as
+        ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and
+        radicals whose ground term is not S (O, Cl, ...).
     :param torsions: Torsional modes.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. See
@@ -569,6 +574,7 @@ class BundleStatmechIn(SchemaBase):
     uses_projected_frequencies: bool | None = None
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[BundleStatmechTorsionIn] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
     # for the exact rule; never persisted.
@@ -578,6 +584,13 @@ class BundleStatmechIn(SchemaBase):
     @model_validator(mode="after")
     def normalize_point_group(self) -> Self:
         self.point_group = normalize_optional_text(self.point_group)
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_electronic_level_indices(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError("electronic_levels level_index values must be unique.")
         return self
 
     @model_validator(mode="after")

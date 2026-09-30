@@ -20,7 +20,7 @@ from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
-from app.db.models.common import SubmissionKind
+from app.db.models.common import ScientificOriginKind, SubmissionKind
 from app.db.models.species import SpeciesEntry
 from app.importers.thermoml.archive import build_standalone_article
 from app.schemas.entities.calculation import CalculationUploadRef
@@ -53,6 +53,7 @@ from app.services.artifact_storage import (
     MAX_ARTIFACT_BYTES,
     MAX_ENCODED_ARTIFACT_LEN,
 )
+from app.services.atomic_electronic_warnings import collect_atomic_electronic_warnings
 from app.services.frequency_geometry_linearity import (
     computed_reaction_linearity_warnings,
     computed_species_linearity_warnings,
@@ -61,6 +62,7 @@ from app.services.frequency_geometry_linearity import (
     transition_state_upload_linearity_warnings,
 )
 from app.services.idempotency import IDEMPOTENCY_HEADER
+from app.services.monatomic import single_atom_element, statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
@@ -68,7 +70,6 @@ from app.services.provenance_warnings import (
     collect_statmech_provenance_warnings,
     collect_thermo_provenance_warnings,
     collect_transport_provenance_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.public_refs import public_refs_by_id
 from app.services.statmech_resolution import (
@@ -560,7 +561,22 @@ def upload_statmech(
             source_calculation_roles={
                 item.role.value for item in request.source_calculations
             },
-            has_rotational_structure=statmech_has_rotational_structure(request),
+            is_polyatomic=statmech_subject_is_polyatomic(
+                request, smiles=request.species_entry.smiles
+            ),
+        )
+    )
+    warnings.extend(
+        collect_atomic_electronic_warnings(
+            element=single_atom_element(smiles=request.species_entry.smiles),
+            charge=request.species_entry.charge,
+            multiplicity=request.species_entry.multiplicity,
+            electronic_state_kind=request.species_entry.electronic_state_kind,
+            term_symbol=request.species_entry.term_symbol,
+            electronic_levels=request.electronic_levels,
+            statmech_computed=request.scientific_origin == ScientificOriginKind.computed,
+            energy_is_computed=None,
+            has_soc_total=False,
         )
     )
     sub = open_upload_submission(
