@@ -166,9 +166,11 @@ class Settings(BaseSettings):
 
     # F13: PostgreSQL ``statement_timeout`` for application sessions.
     # Set as a positive integer (milliseconds) to apply the timeout
-    # on every new DBAPI connection — a safety net so one expensive
-    # query cannot consume a pool slot indefinitely. ``0`` or
-    # ``None`` disables the app-level setting (production deployments
+    # to every statement on every pooled connection, for the life of the
+    # connection (a libpq startup option; see
+    # ``app.api.deps.statement_timeout_connect_args``) — a safety net so
+    # one expensive query cannot consume a pool slot indefinitely.
+    # ``0`` or ``None`` disables the app-level setting (production deployments
     # are encouraged to set ``ALTER ROLE tckdb SET
     # statement_timeout = '30s'`` at the role level instead — see
     # ``docs/specs/public_read_abuse_controls.md``).

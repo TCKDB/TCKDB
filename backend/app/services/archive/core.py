@@ -821,6 +821,34 @@ def verify_archive(source: PathOrBinaryIO) -> ArchiveVerificationReport:
     )
 
 
+#: Ceiling for one statement of a restore, in milliseconds (one hour).
+#:
+#: A restore is an operator-run, once-per-database load into an empty target,
+#: not a request, so the API's per-statement limit (``DB_STATEMENT_TIMEOUT_MS``,
+#: 30 s) does not describe it. Measured on a catalog-scale corpus (3.47 million
+#: rows, 50,000 species) on a 20-core workstation, every INSERT was under
+#: 250 ms, but the final ``COMMIT`` -- which runs every deferred foreign-key
+#: check for the whole load -- took 16.2 s, over half the limit on a machine
+#: that is far faster than the arm64 host the archive would be restored to.
+#: The bound is a backstop against a genuinely stuck statement, not a budget.
+ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS = 3_600_000
+
+
+def _allow_long_restore_statements(session: Session) -> None:
+    """``SET LOCAL statement_timeout`` for this transaction, raising it only.
+
+    Never lowers a limit and never adds one: an operator who disabled the
+    timeout (``0``) keeps it disabled, and one who chose a longer ceiling
+    keeps that. ``SET LOCAL`` ends with the transaction, which includes the
+    ``COMMIT`` that carries the deferred constraint checks.
+    """
+    current_ms = session.execute(
+        text("SELECT setting::bigint FROM pg_settings WHERE name = 'statement_timeout'")
+    ).scalar_one()
+    if 0 < current_ms < ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS:
+        session.execute(text(f"SET LOCAL statement_timeout = {int(ARCHIVE_RESTORE_STATEMENT_TIMEOUT_MS)}"))
+
+
 def restore_archive(
     session: Session,
     source: PathOrBinaryIO,
@@ -887,6 +915,7 @@ def restore_archive(
 
     transaction = session.begin_nested() if session.in_transaction() else session.begin()
     with transaction:
+        _allow_long_restore_statements(session)
         _lock_snapshot_tables(session, target_tables)
         _ensure_restore_target(session, target_tables)
         session.execute(text("SET CONSTRAINTS ALL DEFERRED"))
