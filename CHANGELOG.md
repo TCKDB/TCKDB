@@ -22,6 +22,18 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Writes are committed before the response is sent (2026-09-30)
+
+- tckdb-backend: every write route now commits its session before the
+  response goes out (`Depends(get_write_db, scope="function")`). Before, the
+  commit ran after the `201` had been sent, so a read straight after an
+  upload could return `404`, a commit-time failure was reported as a success,
+  and `/auth/login` followed by `/auth/api-keys` could return `401`. A
+  commit-time failure is now a coded error response and is still audited as a
+  failed upload. The `fastapi` floor is raised to `>=0.121.0`, the first
+  release with dependency scopes. No schema change; no client change: a
+  client that polled to see its own write can stop.
+
 ## QCSchema torsion drives in and out (2026-09-29)
 
 - tckdb-qcschema 0.6.0: `import` reads a QCSchema `TorsionDriveResult`

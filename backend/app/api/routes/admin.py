@@ -203,7 +203,7 @@ def change_user_role(
     user_id: int,
     request: RoleChangeRequest,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> UserRoleResponse:
     """Change one account's role (admin only).
 
@@ -448,7 +448,7 @@ def run_fake_machine_review_for_record(
     record_type: str,
     record_id: int,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminRunFakeMachineReviewResponse:
     """Explicitly run fake machine review for one record (admin only).
 
@@ -786,7 +786,7 @@ def get_curator_task(
 def build_curator_tasks_for_submission_endpoint(
     submission_id: int,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminCuratorTaskBuildResponse:
     """Explicitly build/upsert curator tasks for one submission (admin only).
 
@@ -878,7 +878,7 @@ class AdminMachineReviewRunResponse(BaseModel):
 def run_machine_review_for_submission_endpoint(
     submission_id: int,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminMachineReviewRunResponse:
     """Explicitly run machine review for one submission (admin only).
 
@@ -922,7 +922,7 @@ def assign_curator_task_endpoint(
     task_id: int,
     request: AdminCuratorTaskAssignRequest,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminCuratorTaskResponse:
     """Set or clear a task's assignee (admin only). ``assignee_id=null``
     unassigns. Does not change workflow state or any review/submission state."""
@@ -940,7 +940,7 @@ def start_curator_task_review_endpoint(
     task_id: int,
     request: AdminCuratorTaskStartReviewRequest | None = None,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminCuratorTaskResponse:
     """Move an open task into ``in_curator_review`` (admin only).
 
@@ -966,7 +966,7 @@ def resolve_curator_task_endpoint(
     task_id: int,
     request: AdminCuratorTaskResolveRequest,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminCuratorTaskResponse:
     """Resolve a task into a terminal state (admin only).
 
@@ -994,7 +994,7 @@ def reopen_curator_task_endpoint(
     task_id: int,
     request: AdminCuratorTaskReopenRequest | None = None,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminCuratorTaskResponse:
     """Reopen a terminal task into an open state (admin only).
 
@@ -1073,7 +1073,7 @@ def get_artifact_storage_capacity(
 def clear_artifact_storage_capacity(
     request: StorageCapacityClearRequest,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> StorageCapacityStateResponse:
     """Declare a storage-full condition resolved (admin only).
 
@@ -1215,7 +1215,7 @@ def attach_energy_correction_scheme_provenance(
     ref: str,
     request: AdminEnergyCorrectionSchemeProvenanceRequest,
     _admin: AppUser = Depends(require_admin),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> AdminEnergyCorrectionSchemeProvenanceResponse:
     """Fill missing citation/software provenance on a scheme (admin only).
 
@@ -1355,7 +1355,7 @@ class AdminObservationIdentityAttachResponse(BaseModel):
 def attach_observation_identity_endpoint(
     observation_ref: str,
     request: AdminObservationIdentityAttachRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(require_curator_or_admin),
 ) -> AdminObservationIdentityAttachResponse:
     """Attach a species-entry identity to an unresolved observation.

@@ -103,7 +103,7 @@ def _enqueue_idempotent(
 @router.post("/computed-reaction", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_computed_reaction(
     request: ComputedReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -113,7 +113,7 @@ def enqueue_computed_reaction(
 @router.post("/conformer", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_conformer(
     request: ConformerUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -123,7 +123,7 @@ def enqueue_conformer(
 @router.post("/reaction", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_reaction(
     request: ReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -133,7 +133,7 @@ def enqueue_reaction(
 @router.post("/kinetics", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_kinetics(
     request: KineticsUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -143,7 +143,7 @@ def enqueue_kinetics(
 @router.post("/network", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_network(
     request: NetworkUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -153,7 +153,7 @@ def enqueue_network(
 @router.post("/network/pdep", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_network_pdep(
     request: NetworkPDepUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -163,7 +163,7 @@ def enqueue_network_pdep(
 @router.post("/thermo", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_thermo(
     request: ThermoUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -173,7 +173,7 @@ def enqueue_thermo(
 @router.post("/transition-state", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_transition_state(
     request: TransitionStateUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -183,7 +183,7 @@ def enqueue_transition_state(
 @router.post("/transport", response_model=JobEnqueueResponse, status_code=202, dependencies=_enqueue_deps)
 def enqueue_transport(
     request: TransportUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):

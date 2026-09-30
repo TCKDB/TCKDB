@@ -275,7 +275,7 @@ def _calculation_refs_by_key(
 @audit_sync_upload_failure(SubmissionKind.conformer)
 def upload_conformer(
     request: ConformerUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -353,7 +353,7 @@ def upload_conformer(
 @audit_sync_upload_failure(SubmissionKind.reaction)
 def upload_reaction(
     request: ReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -400,7 +400,7 @@ def upload_reaction(
 @audit_sync_upload_failure(SubmissionKind.kinetics)
 def upload_kinetics(
     request: KineticsUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -451,7 +451,7 @@ def upload_kinetics(
 @audit_sync_upload_failure(SubmissionKind.network)
 def upload_network(
     request: NetworkUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -490,7 +490,7 @@ def upload_network(
 @audit_sync_upload_failure(SubmissionKind.network_pdep)
 def upload_network_pdep(
     request: NetworkPDepUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -535,7 +535,7 @@ def upload_network_pdep(
 @audit_sync_upload_failure(SubmissionKind.statmech)
 def upload_statmech(
     request: StatmechUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -601,7 +601,7 @@ def upload_statmech(
 @audit_sync_upload_failure(SubmissionKind.thermo)
 def upload_thermo(
     request: ThermoUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -645,7 +645,7 @@ def upload_thermo(
 @audit_sync_upload_failure(SubmissionKind.transition_state)
 def upload_transition_state(
     request: TransitionStateUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -697,7 +697,7 @@ def upload_transition_state(
 @audit_sync_upload_failure(SubmissionKind.transport)
 def upload_transport(
     request: TransportUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -748,7 +748,7 @@ def upload_transport(
 @audit_sync_upload_failure(SubmissionKind.computed_species)
 def upload_computed_species(
     request: ComputedSpeciesUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -835,7 +835,7 @@ def upload_computed_species(
 @audit_sync_upload_failure(SubmissionKind.computed_reaction)
 def upload_computed_reaction(
     request: ComputedReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -950,7 +950,7 @@ def _thermoml_species_entry_ref(
 @audit_sync_upload_failure(SubmissionKind.other)
 def upload_thermoml(
     request: ThermoMLUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
     # Required, unlike every sibling route's optional Idempotency-Key
