@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import itertools
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 
 import pytest
@@ -971,6 +972,25 @@ def _analyze(session, *tables: str) -> None:
         session.execute(text(f"ANALYZE {table}"))
 
 
+@contextmanager
+def _no_statement_timeout(session):
+    """Exempt this test's bulk seeding, and only the seeding, from the timeout.
+
+    The harness engine carries the deployment's ``statement_timeout`` (#611).
+    One seeding ``INSERT`` here writes 65,599 species whose ``mol_formula``
+    index entries RDKit computes row by row: 17.9 s on a workstation and over
+    30 s on a CI runner, which cancelled the fixture rather than the code
+    under test. The limit is lifted for the seeding statements and put back
+    afterwards (``SET LOCAL ... TO DEFAULT`` restores the connection's own
+    value), so the search being tested still runs under it.
+    """
+    session.execute(text("SET LOCAL statement_timeout = 0"))
+    try:
+        yield
+    finally:
+        session.execute(text("SET LOCAL statement_timeout TO DEFAULT"))
+
+
 def _bulk_insert_calculations(session, *, species_entry_id: int, count: int):
     """Insert ``count`` ``sp`` calculations in one server-side statement.
 
@@ -978,14 +998,15 @@ def _bulk_insert_calculations(session, *, species_entry_id: int, count: int):
     the test is the candidate *count*, and it must not cost more than a
     second to reach it.
     """
-    session.execute(
-        text(
-            "INSERT INTO calculation (type, species_entry_id) "
-            "SELECT 'sp', :species_entry_id FROM generate_series(1, :count)"
-        ),
-        {"species_entry_id": species_entry_id, "count": count},
-    )
-    _analyze(session, "calculation", "record_review")
+    with _no_statement_timeout(session):
+        session.execute(
+            text(
+                "INSERT INTO calculation (type, species_entry_id) "
+                "SELECT 'sp', :species_entry_id FROM generate_series(1, :count)"
+            ),
+            {"species_entry_id": species_entry_id, "count": count},
+        )
+        _analyze(session, "calculation", "record_review")
 
 
 def _bulk_insert_species_with_entries(session, *, inchi_key: str, count: int):
@@ -995,22 +1016,23 @@ def _bulk_insert_species_with_entries(session, *, inchi_key: str, count: int):
     holds), and RDKit-parseable, so the ``mol_formula`` expression index on
     ``species`` builds without emitting one warning per row.
     """
-    session.execute(
-        text(
-            "INSERT INTO species "
-            "(kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
-            "SELECT 'molecule', '[CH4:' || (g + 1000000) || ']', :inchi_key, "
-            "0, 1, 'achiral' FROM generate_series(1, :count) g"
-        ),
-        {"inchi_key": inchi_key, "count": count},
-    )
-    session.execute(
-        text(
-            "INSERT INTO species_entry "
-            "(species_id, kind, electronic_state_kind) "
-            "SELECT id, 'minimum', 'ground' FROM species "
-            "WHERE inchi_key = :inchi_key"
-        ),
-        {"inchi_key": inchi_key},
-    )
-    _analyze(session, "species", "species_entry", "record_review")
+    with _no_statement_timeout(session):
+        session.execute(
+            text(
+                "INSERT INTO species "
+                "(kind, smiles, inchi_key, charge, multiplicity, stereo_kind) "
+                "SELECT 'molecule', '[CH4:' || (g + 1000000) || ']', :inchi_key, "
+                "0, 1, 'achiral' FROM generate_series(1, :count) g"
+            ),
+            {"inchi_key": inchi_key, "count": count},
+        )
+        session.execute(
+            text(
+                "INSERT INTO species_entry "
+                "(species_id, kind, electronic_state_kind) "
+                "SELECT id, 'minimum', 'ground' FROM species "
+                "WHERE inchi_key = :inchi_key"
+            ),
+            {"inchi_key": inchi_key},
+        )
+        _analyze(session, "species", "species_entry", "record_review")
