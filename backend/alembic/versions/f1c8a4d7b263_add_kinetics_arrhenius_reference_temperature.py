@@ -8,7 +8,7 @@ and the T0 it fitted with was gone. ``t0_k`` carries it.
 What this revision writes
 -------------------------
 * ``kinetics.t0_k`` (DOUBLE PRECISION, NOT NULL, ``server_default '1'``) and the
-  CHECK ``ck_kinetics_t0_k_finite_positive`` (``t0_k > 0`` and finite).
+  CHECK ``ck_kinetics_t0_k_finite_positive`` (``0 < t0_k <= 10000``, which also excludes NaN and infinity).
 * No data step is needed. Every row stored so far was deposited without a T0,
   and what it meant was ``A * T**n``, which is T0 = 1 K: the server default is
   the backfill. ``ADD COLUMN ... NOT NULL DEFAULT <constant>`` is a
@@ -45,7 +45,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         op.f("ck_kinetics_t0_k_finite_positive"),
         "kinetics",
-        "t0_k > 0 AND t0_k < 'Infinity'::double precision",
+        "t0_k > 0 AND t0_k <= 10000",
     )
 
 

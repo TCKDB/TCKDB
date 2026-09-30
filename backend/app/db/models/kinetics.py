@@ -129,8 +129,8 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     # ``k = A * (T / T0)**n * exp(-Ea / (R * T))``. 1 K is the plain
     # ``A * T**n`` form, which is what every row stored before this column
     # existed meant. Applies to this row's own ``a``/``n``/``ea_kj_mol`` only
-    # (for a falloff rate, the high-pressure limit); PLOG entries,
-    # sum-of-Arrhenius terms and the falloff low-pressure limit are at 1 K.
+    # of a modified-Arrhenius rate; falloff, PLOG, sum-of-Arrhenius
+    # and Chebyshev records are at 1 K (upload refuses another value).
     t0_k: Mapped[float] = mapped_column(
         Double,
         nullable=False,
@@ -221,7 +221,7 @@ class Kinetics(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
 
     __table_args__ = (
         CheckConstraint(
-            "t0_k > 0 AND t0_k < 'Infinity'::double precision",
+            "t0_k > 0 AND t0_k <= 10000",
             name="t0_k_finite_positive",
         ),
         CheckConstraint("tmin_k IS NULL OR tmin_k > 0", name="tmin_k_gt_0"),

@@ -54,6 +54,10 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
 from tckdb_schemas.enums import CalculationType as PayloadCalculationType
+from tckdb_schemas.fragments.kinetics_evidence import (
+    ENERGY_CORRECTION_CONVENTION_DESCRIPTION,
+    ENERGY_ZERO_CONVENTION_DESCRIPTION,
+)
 from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
     validate_ts_evidence_set,
@@ -669,8 +673,12 @@ class ConventionBlock(SchemaBase):
     ``other`` is the single escape hatch and always requires ``convention_note``.
     """
 
-    energy_zero_convention: EnergyZeroConvention
-    correction_convention: EnergyCorrectionConvention
+    energy_zero_convention: EnergyZeroConvention = Field(
+        description=ENERGY_ZERO_CONVENTION_DESCRIPTION
+    )
+    correction_convention: EnergyCorrectionConvention = Field(
+        description=ENERGY_CORRECTION_CONVENTION_DESCRIPTION
+    )
     convention_note: str | None = None
 
     @model_validator(mode="after")

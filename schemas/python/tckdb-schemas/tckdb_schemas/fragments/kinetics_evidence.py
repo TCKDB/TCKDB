@@ -38,13 +38,55 @@ from tckdb_schemas.utils import normalize_optional_text
 
 #: Description of ``t0_k`` on every route that carries it, so the two routes
 #: cannot word the convention differently.
+T0_K_MAX = 10000.0
+
+# What each token of these enums means. The enums carry comments rather than
+# docstrings (so the wire and backend JSON schemas merge into one published
+# component), which would leave producers without the meanings; they are
+# stated on the fields that reference the enums instead.
+ENERGY_ZERO_CONVENTION_DESCRIPTION = (
+    "Where the zero of the energy scale sits. lowest_state: the lowest-energy "
+    "state of the network. entrance_channel: the declared entrance (reactant) "
+    "channel. separated_reactants: the infinitely separated reactants of the "
+    "elementary step in question (not necessarily a network state). absolute: "
+    "absolute (unshifted) electronic energies. other: anything else; requires "
+    "convention_note."
+)
+ENERGY_CORRECTION_CONVENTION_DESCRIPTION = (
+    "Which corrections are already folded into the reported energies. "
+    "electronic_only: bare electronic energy, no ZPE or thermal term. "
+    "electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus "
+    "atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at "
+    "298.15 K. other: anything else; requires convention_note."
+)
+ENSEMBLE_POLICY_DESCRIPTION = (
+    "How multiple structures of this subject were combined into the partition "
+    "function the rate used: single_structure, lowest_energy_conformer, "
+    "boltzmann_weighted_conformers, multi_structural_torsional, or other "
+    "(requires convention_note)."
+)
+STANDARD_STATE_DESCRIPTION = (
+    "The standard state the partition functions are referenced to: "
+    "ideal_gas_1_bar, ideal_gas_1_atm, concentration_1_mol_cm3, "
+    "concentration_1_mol_l, or other (requires convention_note)."
+)
+DEGENERACY_INTERPRETATION_DESCRIPTION = (
+    "How reaction-path degeneracy/symmetry was handled for this subject's own "
+    "partition function (distinct from degeneracy_convention, which says whether "
+    "the stored scalar already includes degeneracy): external_symmetry_number, "
+    "reaction_path_degeneracy, symmetry_number_and_path_degeneracy, "
+    "no_symmetry_treatment, or other (requires convention_note)."
+)
+
 T0_K_DESCRIPTION = (
     "Reference temperature T0 of the Arrhenius expression, in K, meaning "
     "k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is "
-    "the plain k = A * T**n * exp(-Ea / (R * T)) form. It applies to the "
-    "scalar a, n and reported_ea of this record (for a falloff rate, to the "
-    "high-pressure-limit Arrhenius; the low-pressure limit, PLOG entries, "
-    "sum-of-Arrhenius terms and Chebyshev surfaces are always at 1 K)."
+    "the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy "
+    "0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a "
+    "modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, "
+    "sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse "
+    "any other value, because their low-pressure limit or child rows carry "
+    "no T0 of their own."
 )
 
 
@@ -97,9 +139,13 @@ class KineticsInterpretationAssignmentUpload(SchemaBase):
     statmech_ref: str = Field(min_length=1)
     conformer_selection: ConformerSelectionContentRef | None = None
     transition_state_entry_ref: str | None = Field(default=None, min_length=1)
-    ensemble_policy: KineticsEnsemblePolicy
-    standard_state_convention: KineticsStandardStateConvention
-    degeneracy_interpretation: KineticsDegeneracyInterpretation
+    ensemble_policy: KineticsEnsemblePolicy = Field(description=ENSEMBLE_POLICY_DESCRIPTION)
+    standard_state_convention: KineticsStandardStateConvention = Field(
+        description=STANDARD_STATE_DESCRIPTION
+    )
+    degeneracy_interpretation: KineticsDegeneracyInterpretation = Field(
+        description=DEGENERACY_INTERPRETATION_DESCRIPTION
+    )
     convention_note: str | None = None
 
     @model_validator(mode="after")
@@ -169,8 +215,12 @@ class KineticsTunnelingApplicationUpload(SchemaBase):
     # barrier is legitimately negative.
     forward_barrier_kj_mol: float | None = None
     reverse_barrier_kj_mol: float | None = None
-    energy_zero_convention: EnergyZeroConvention | None = None
-    energy_correction_convention: EnergyCorrectionConvention | None = None
+    energy_zero_convention: EnergyZeroConvention | None = Field(
+        default=None, description=ENERGY_ZERO_CONVENTION_DESCRIPTION
+    )
+    energy_correction_convention: EnergyCorrectionConvention | None = Field(
+        default=None, description=ENERGY_CORRECTION_CONVENTION_DESCRIPTION
+    )
     convention_note: str | None = None
     sct_path_integral_artifact_calculation_ref: str | None = None
     sct_path_integral_artifact_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")

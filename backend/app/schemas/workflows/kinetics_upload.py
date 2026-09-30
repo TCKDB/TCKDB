@@ -5,6 +5,7 @@ from pydantic import ConfigDict, Field, field_validator, model_validator
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
+    T0_K_MAX,
     # Re-exported: the class moved to the wire package in #620, and importers
     # (``tests/services/test_conformer_selection_locator.py``) name it here.
     ConformerSelectionContentRef,  # noqa: F401
@@ -360,7 +361,7 @@ class KineticsUploadRequest(SchemaBase):
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
     t0_k: float = Field(
-        default=1.0, gt=0, allow_inf_nan=False, description=T0_K_DESCRIPTION
+        default=1.0, gt=0, le=T0_K_MAX, allow_inf_nan=False, description=T0_K_DESCRIPTION
     )
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None
@@ -656,20 +657,25 @@ class KineticsUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_t0_applies_to_a_scalar_rate(self) -> Self:
-        """``t0_k`` belongs to the row's own scalar ``a``/``n``/``reported_ea``.
+        """``t0_k`` is only for a plain (modified-)Arrhenius record.
 
-        PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces carry no
-        T0 of their own (they are at 1 K), so a record of those forms that
-        declared another T0 would be a number with nothing to apply to.
+        PLOG entries, sum-of-Arrhenius terms, Chebyshev surfaces and the
+        low-pressure limit of a falloff rate carry no T0 of their own (they are
+        at 1 K). Arkane and RMG give each falloff limit an independent T0, so
+        accepting one value for a lindemann/troe/sri record would silently
+        mis-store k0; those forms must send ``t0_k = 1``.
         """
         if self.t0_k != 1.0 and self.model_kind in {
             KineticsModelKind.plog,
             KineticsModelKind.chebyshev,
             KineticsModelKind.multi_arrhenius,
+            KineticsModelKind.lindemann,
+            KineticsModelKind.troe,
+            KineticsModelKind.sri,
         }:
             raise ValueError(
-                f"t0_k applies to the scalar Arrhenius parameters, which "
-                f"model_kind='{self.model_kind.value}' does not carry; its "
-                "child rows are always at T0 = 1 K."
+                f"t0_k must be 1 for model_kind='{self.model_kind.value}': its "
+                "child rows or low-pressure limit carry no T0 of their own, so "
+                "another value would mis-state part of the rate."
             )
         return self

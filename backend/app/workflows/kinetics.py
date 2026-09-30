@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
@@ -220,7 +221,38 @@ def _transition_state_belongs_to_rate(
         return False
     if scope == "entry":
         return ts_reaction_entry.id == reaction_entry.id
-    return ts_reaction_entry.reaction_id == reaction_entry.reaction_id
+    if ts_reaction_entry.reaction_id != reaction_entry.reaction_id:
+        return False
+    # Same graph reaction is not enough: an excited-state or isotopologue entry
+    # of the same reaction has a different TS. Require the same structure
+    # participants ((role, species_entry_id) multiset; species entries are
+    # content-deduplicated, so ids compare soundly), allowing the two sides to
+    # swap for a reverse-direction fit.
+    def structures(entry_id: int) -> Counter:
+        rows = session.execute(
+            select(
+                ReactionEntryStructureParticipant.role,
+                ReactionEntryStructureParticipant.species_entry_id,
+            ).where(ReactionEntryStructureParticipant.reaction_entry_id == entry_id)
+        ).all()
+        return Counter((role.value if hasattr(role, "value") else role, sid) for role, sid in rows)
+
+    theirs = structures(ts_reaction_entry.id)
+    ours = structures(reaction_entry.id)
+    swapped = Counter(
+        ({"reactant": "product", "product": "reactant"}[role], sid) for role, sid in ours.elements()
+    )
+    return theirs == ours or theirs == swapped
+
+
+def _ts_not_owned_message(what: str, scope: TransitionStateScope) -> str:
+    if scope == "entry":
+        return f"{what} does not belong to this reaction entry."
+    return (
+        f"{what} is not a transition state of this rate's reaction: its reaction "
+        "entry has different structures (another electronic state, stereoisomer "
+        "or isotopologue) or is another reaction."
+    )
 
 
 @dataclass(frozen=True)
@@ -323,8 +355,9 @@ def resolve_interpretation_assignments(
                 session, ts_entry_id, reaction_entry, ts_scope
             ):
                 raise ValueError(
-                    "interpretation transition_state_entry_ref does not belong to "
-                    "this reaction entry."
+                    _ts_not_owned_message(
+                        "interpretation transition_state_entry_ref", ts_scope
+                    )
                 )
 
         species_entry_id: int | None = None
@@ -641,7 +674,7 @@ def persist_tunneling_application(
         session, ts_entry_id, reaction_entry, ts_scope
     ):
         raise ValueError(
-            "tunneling transition_state_entry_ref does not belong to this reaction entry."
+            _ts_not_owned_message("tunneling transition_state_entry_ref", ts_scope)
         )
     tunneling_source_calculation_id: int | None = None
     if tunneling.source_calculation_ref is not None:

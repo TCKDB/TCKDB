@@ -60,6 +60,27 @@ def test_an_unset_t0_is_one_kelvin_so_old_rows_and_unflushed_rows_are_unchanged(
     assert a_at_unit_t0(A, None, T0) == A  # n = None is n = 0: T0 cancels
 
 
+@pytest.mark.parametrize(
+    ("a", "n", "t0"),
+    [(1e10, 2.0, 1e-300), (1e10, 2.0, 1e308), (1e10, -80.0, 1e-5), (1e300, 50.0, 1e-10)],
+)
+def test_an_extreme_but_schema_valid_t0_is_a_range_error_not_a_crash(a, n, t0):
+    from app.chemistry.arrhenius import ArrheniusRangeError
+
+    with pytest.raises(ArrheniusRangeError):
+        a_at_unit_t0(a, n, t0)
+
+
+def test_an_out_of_range_rate_is_a_d3_reason_not_a_500():
+    ct = pytest.importorskip("cantera")
+    from app.services.consistency.kinetics import _rate
+
+    row = _row(1e-5)
+    row.n = -80.0
+    rate, reason = _rate(row, 2, ct)
+    assert rate is None and reason == "rate_out_of_numeric_range"
+
+
 @pytest.mark.parametrize("bad", [0.0, -1.0, math.inf, math.nan])
 def test_a_non_temperature_t0_is_refused_not_propagated(bad):
     with pytest.raises(ValueError):

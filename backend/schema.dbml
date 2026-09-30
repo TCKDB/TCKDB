@@ -2014,7 +2014,7 @@ Table kinetics {
     `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL` [name: 'ck_kinetics_apparent_pressure_requires_pressure_bar']
     `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)` [name: 'ck_kinetics_degeneracy_finite_positive']
     `pressure_bar IS NULL OR pressure_bar > 0` [name: 'ck_kinetics_pressure_bar_gt_0']
-    `t0_k > 0 AND t0_k < 'Infinity'::double precision` [name: 'ck_kinetics_t0_k_finite_positive']
+    `t0_k > 0 AND t0_k <= 10000` [name: 'ck_kinetics_t0_k_finite_positive']
     `tmax_k IS NULL OR tmax_k > 0` [name: 'ck_kinetics_tmax_k_gt_0']
     `tmin_k IS NULL OR tmin_k > 0` [name: 'ck_kinetics_tmin_k_gt_0']
     `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k` [name: 'ck_kinetics_tmin_le_tmax']

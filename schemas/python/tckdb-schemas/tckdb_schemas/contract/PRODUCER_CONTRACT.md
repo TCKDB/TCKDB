@@ -155,13 +155,13 @@ a payload valid under 0.62.0 is valid under this release, byte for byte.
 T0 of the scalar rate, in K, meaning `k = A (T/T0)^n exp(-Ea/RT)`. It defaults
 to 1 K, which is the plain `A T^n` form and what every record deposited
 before this release meant. Before, a producer that fitted with T0 = 298 K had
-to send `A / 298^n` and the T0 it fitted with was lost. It must be finite and
-greater than 0. It applies to the record's own `a`, `n` and `reported_ea`
-(for a falloff rate, to its high-pressure limit); PLOG entries, sum-of-Arrhenius
-terms, the falloff low-pressure limit and Chebyshev surfaces are always at
-1 K, and the standalone route refuses a `t0_k` other than 1 on a `plog`,
-`chebyshev` or `multi_arrhenius` record rather than store a number with nothing
-to apply to. The server stores `a` as sent (it is A at T0, not A rescaled) and
+to send `A / 298^n` and the T0 it fitted with was lost. It must satisfy
+`0 < t0_k <= 10000`. It applies to the record's own `a`, `n` and `reported_ea`
+of a modified-Arrhenius rate. Falloff (`lindemann`, `troe`, `sri`), `plog`,
+`chebyshev` and `multi_arrhenius` records are always at 1 K and the standalone
+route refuses any other `t0_k` on them: their low-pressure limit or child rows
+carry no T0 of their own (Arkane and RMG give each falloff limit an independent
+T0), so one value would silently mis-state part of the rate. The server stores `a` as sent (it is A at T0, not A rescaled) and
 serves `t0_k` back; a consumer that evaluates k(T) from a stored `a`, `n` and
 `ea_kj_mol` must use it.
 
@@ -178,9 +178,11 @@ Two things follow from how a bundle is built and are part of the contract:
 every reference is the public ref of a record deposited *earlier* (a bundle
 cannot cite a statmech, transition state or calculation it is itself creating,
 because the depositor cannot know its ref in advance), and a cited transition
-state must belong to the same reaction as the bundle's rate (the bundle mints
-its own reaction entry, so the transition state is judged on the reaction and
-not the entry). The bundle's `tunneling_model` is filled from
+state must be a transition state of this rate's reaction: a reaction entry of
+the same reaction with the same structure participants (same species entries,
+either direction), so the excited-state or isotopologue entry's transition state
+is refused. A bundle mints its own reaction entry, so the entry itself can
+never match. The bundle's `tunneling_model` is filled from
 `tunneling_application.model` when only the evidence is sent, as on the
 standalone route.
 
@@ -1598,7 +1600,7 @@ Unknown keys are refused.
 | `a` | number \| null | no | `null` |  |  | Optional Arrhenius pre-exponential factor. |
 | `a_units` | `ArrheniusAUnits` \| null | no | `null` |  | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | Optional units for the pre-exponential factor. |
 | `n` | number \| null | no | `null` |  |  | Optional temperature exponent. |
-| `t0_k` | number | no | `1.0` | K | > 0 | Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It applies to the scalar a, n and reported_ea of this record (for a falloff rate, to the high-pressure-limit Arrhenius; the low-pressure limit, PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces are always at 1 K). |
+| `t0_k` | number | no | `1.0` | K | > 0; <= 10000.0 | Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy 0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse any other value, because their low-pressure limit or child rows carry no T0 of their own. |
 | `reported_ea` | number \| null | no | `null` |  |  | Optional activation energy in reported units. |
 | `reported_ea_units` | `ActivationEnergyUnits` \| null | no | `null` |  | `j_mol`, `kj_mol`, `cal_mol`, `kcal_mol` | Units for ``reported_ea`` (required when reported). |
 | `a_uncertainty` | number \| null | no | `null` |  |  |  |
@@ -1698,11 +1700,13 @@ Nested models (16; fields and rules in the [model reference](#model-reference)):
 - **KineticsUploadRequest.validate_interpretation_content** (model, after; can refuse via `check_interpretation_set`): An interpretation set, once offered, must be complete (shared).
 - **KineticsUploadRequest.validate_t0_applies_to_a_scalar_rate** (model, after; can refuse):
 
-  ``t0_k`` belongs to the row's own scalar ``a``/``n``/``reported_ea``.
+  ``t0_k`` is only for a plain (modified-)Arrhenius record.
 
-  PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces carry no
-  T0 of their own (they are at 1 K), so a record of those forms that
-  declared another T0 would be a number with nothing to apply to.
+  PLOG entries, sum-of-Arrhenius terms, Chebyshev surfaces and the
+  low-pressure limit of a falloff rate carry no T0 of their own (they are
+  at 1 K). Arkane and RMG give each falloff limit an independent T0, so
+  accepting one value for a lindemann/troe/sri record would silently
+  mis-store k0; those forms must send ``t0_k = 1``.
 
 - **KineticsUploadRequest._normalize_tunneling** (field, before on `tunneling_model`): applies `normalize_tunneling_model` to `tunneling_model`: Coerce a producer-supplied tunneling model to a canonical token.
 ### Rules the workflow applies
@@ -4192,7 +4196,7 @@ Unknown keys are refused.
 | `a` | number \| null | no | `null` |  |  | Arrhenius pre-exponential factor. |
 | `a_units` | `ArrheniusAUnits` \| null | no | `null` |  | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | Units for A. |
 | `n` | number \| null | no | `null` |  |  | Temperature exponent. |
-| `t0_k` | number | no | `1.0` | K | > 0 | Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It applies to the scalar a, n and reported_ea of this record (for a falloff rate, to the high-pressure-limit Arrhenius; the low-pressure limit, PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces are always at 1 K). |
+| `t0_k` | number | no | `1.0` | K | > 0; <= 10000.0 | Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy 0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse any other value, because their low-pressure limit or child rows carry no T0 of their own. |
 | `reported_ea` | number \| null | no | `null` |  |  | Activation energy in reported units. |
 | `reported_ea_units` | `ActivationEnergyUnits` \| null | no | `null` |  | `j_mol`, `kj_mol`, `cal_mol`, `kcal_mol` | Units for Ea. |
 | `a_uncertainty` | number \| null | no | `null` |  |  |  |
@@ -4905,8 +4909,8 @@ Unknown keys are refused.
 
 | Field | Type | Req | Default | Unit | Values / constraints | Description |
 |---|---|---|---|---|---|---|
-| `energy_zero_convention` | `EnergyZeroConvention` | yes |  |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` |  |
-| `correction_convention` | `EnergyCorrectionConvention` | yes |  |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` |  |
+| `energy_zero_convention` | `EnergyZeroConvention` | yes |  |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` | Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note. |
+| `correction_convention` | `EnergyCorrectionConvention` | yes |  |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` | Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note. |
 | `convention_note` | string \| null | no | `null` |  |  |  |
 | `channel_key` | string | yes |  |  | length >= 1 |  |
 | `micro_reaction_key` | string | yes |  |  | length >= 1 |  |
@@ -5850,9 +5854,9 @@ Unknown keys are refused.
 | `statmech_ref` | string | yes |  |  | length >= 1 |  |
 | `conformer_selection` | [`ConformerSelectionContentRef`](#m-conformerselectioncontentref) \| null | no | `null` |  |  |  |
 | `transition_state_entry_ref` | string \| null | no | `null` |  | length >= 1 |  |
-| `ensemble_policy` | `KineticsEnsemblePolicy` | yes |  |  | `single_structure`, `lowest_energy_conformer`, `boltzmann_weighted_conformers`, `multi_structural_torsional`, `other` |  |
-| `standard_state_convention` | `KineticsStandardStateConvention` | yes |  |  | `ideal_gas_1_bar`, `ideal_gas_1_atm`, `concentration_1_mol_cm3`, `concentration_1_mol_l`, `other` |  |
-| `degeneracy_interpretation` | `KineticsDegeneracyInterpretation` | yes |  |  | `external_symmetry_number`, `reaction_path_degeneracy`, `symmetry_number_and_path_degeneracy`, `no_symmetry_treatment`, `other` |  |
+| `ensemble_policy` | `KineticsEnsemblePolicy` | yes |  |  | `single_structure`, `lowest_energy_conformer`, `boltzmann_weighted_conformers`, `multi_structural_torsional`, `other` | How multiple structures of this subject were combined into the partition function the rate used: single_structure, lowest_energy_conformer, boltzmann_weighted_conformers, multi_structural_torsional, or other (requires convention_note). |
+| `standard_state_convention` | `KineticsStandardStateConvention` | yes |  |  | `ideal_gas_1_bar`, `ideal_gas_1_atm`, `concentration_1_mol_cm3`, `concentration_1_mol_l`, `other` | The standard state the partition functions are referenced to: ideal_gas_1_bar, ideal_gas_1_atm, concentration_1_mol_cm3, concentration_1_mol_l, or other (requires convention_note). |
+| `degeneracy_interpretation` | `KineticsDegeneracyInterpretation` | yes |  |  | `external_symmetry_number`, `reaction_path_degeneracy`, `symmetry_number_and_path_degeneracy`, `no_symmetry_treatment`, `other` | How reaction-path degeneracy/symmetry was handled for this subject's own partition function (distinct from degeneracy_convention, which says whether the stored scalar already includes degeneracy): external_symmetry_number, reaction_path_degeneracy, symmetry_number_and_path_degeneracy, no_symmetry_treatment, or other (requires convention_note). |
 | `convention_note` | string \| null | no | `null` |  |  |  |
 
 - **KineticsInterpretationAssignmentUpload.validate_role_shape** (model, after; can refuse):
@@ -5944,8 +5948,8 @@ Unknown keys are refused.
 | `product_energy_kj_mol` | number \| null | no | `null` | kJ/mol |  |  |
 | `forward_barrier_kj_mol` | number \| null | no | `null` | kJ/mol |  |  |
 | `reverse_barrier_kj_mol` | number \| null | no | `null` | kJ/mol |  |  |
-| `energy_zero_convention` | `EnergyZeroConvention` \| null | no | `null` |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` |  |
-| `energy_correction_convention` | `EnergyCorrectionConvention` \| null | no | `null` |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` |  |
+| `energy_zero_convention` | `EnergyZeroConvention` \| null | no | `null` |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` | Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note. |
+| `energy_correction_convention` | `EnergyCorrectionConvention` \| null | no | `null` |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` | Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note. |
 | `convention_note` | string \| null | no | `null` |  |  |  |
 | `sct_path_integral_artifact_calculation_ref` | string \| null | no | `null` |  |  |  |
 | `sct_path_integral_artifact_sha256` | string \| null | no | `null` |  | pattern `^[0-9a-f]{64}$` |  |
@@ -6854,8 +6858,8 @@ Unknown keys are refused.
 
 | Field | Type | Req | Default | Unit | Values / constraints | Description |
 |---|---|---|---|---|---|---|
-| `energy_zero_convention` | `EnergyZeroConvention` | yes |  |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` |  |
-| `correction_convention` | `EnergyCorrectionConvention` | yes |  |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` |  |
+| `energy_zero_convention` | `EnergyZeroConvention` | yes |  |  | `lowest_state`, `entrance_channel`, `separated_reactants`, `absolute`, `other` | Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note. |
+| `correction_convention` | `EnergyCorrectionConvention` | yes |  |  | `electronic_only`, `electronic_plus_zpe`, `atom_and_bond_corrected`, `thermal_enthalpy_298k`, `other` | Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note. |
 | `convention_note` | string \| null | no | `null` |  |  |  |
 | `state_key` | string | yes |  |  | length >= 1 |  |
 | `energy_kj_mol` | number | yes |  | kJ/mol |  |  |

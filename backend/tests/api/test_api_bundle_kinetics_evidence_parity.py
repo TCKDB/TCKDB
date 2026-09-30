@@ -551,12 +551,84 @@ def test_the_bundle_refuses_a_ts_of_a_different_reaction(client, db_session, cor
 
     response = _bundle(client, evidence)
     assert response.status_code == 422, response.text[:800]
-    assert "does not belong to this reaction entry" in response.text
+    assert "is not a transition state of this rate's reaction" in response.text
 
     # The neighbour: the same call citing this reaction's own TS is accepted.
     evidence["tunneling_application"]["transition_state_entry_ref"] = corpus.ts_entry.public_ref
     accepted = _bundle(client, evidence)
     assert accepted.status_code == 201, accepted.text[:800]
+
+
+def _sibling_entry_ts(db_session, corpus, *, reactants, product):
+    """A TS of a *different reaction entry of the same reaction*."""
+    entry = make_reaction_entry(
+        db_session,
+        reaction=corpus.entry.reaction,
+        reactant_entries=reactants,
+        product_entries=[product],
+    )
+    return make_transition_state_entry(
+        db_session,
+        transition_state=make_transition_state(db_session, reaction_entry=entry),
+        multiplicity=2,
+    )
+
+
+@pytest.mark.parametrize("variant", ["excited_state", "isotopologue"])
+def test_the_bundle_refuses_a_ts_of_a_sibling_entry_of_the_same_reaction(
+    client, db_session, corpus, variant
+):
+    """Same graph reaction is not the same rate.
+
+    An excited-state H2 entry, or a D-for-H isotopologue entry, is another
+    reaction entry of the same reaction with its own transition state. Citing
+    it from a ground-state H + H -> H2 rate would attach its tunneling evidence
+    to the wrong rate, through the tunneling block or a TS interpretation.
+    """
+    if variant == "excited_state":
+        excited = make_species_entry(
+            db_session,
+            corpus.h2.species,
+            electronic_state_kind="excited",
+            electronic_state_label="B1Su",
+        )
+        sibling_ts = _sibling_entry_ts(
+            db_session, corpus, reactants=[corpus.h, corpus.h], product=excited
+        )
+    else:
+        deuterium = make_species_entry(db_session, corpus.h.species, isotope_key="D")
+        sibling_ts = _sibling_entry_ts(
+            db_session, corpus, reactants=[deuterium, corpus.h], product=corpus.h2
+        )
+    assert sibling_ts.id != corpus.ts_entry.id
+
+    tunneling = {
+        "tunneling_application": {**_WIGNER, "transition_state_entry_ref": sibling_ts.public_ref}
+    }
+    response = _bundle(client, tunneling)
+    assert response.status_code == 422, response.text[:800]
+    assert "is not a transition state of this rate's reaction" in response.text
+
+    interpretation = {
+        "interpretation_assignments": [
+            *_interpretations(corpus),
+            {
+                "role": "transition_state",
+                "statmech_ref": corpus.statmechs["ts"].public_ref,
+                "transition_state_entry_ref": sibling_ts.public_ref,
+                **_CONVENTIONS,
+            },
+        ]
+    }
+    response = _bundle(client, interpretation)
+    assert response.status_code == 422, response.text[:800]
+    assert "is not a transition state of this rate's reaction" in response.text
+
+    # The neighbour: this rate's own TS is still accepted.
+    own = {
+        "tunneling_application": {**_WIGNER, "transition_state_entry_ref": corpus.ts_entry.public_ref}
+    }
+    assert _bundle(client, own).status_code == 201
 
 
 def test_a_refused_bundle_leaves_no_kinetics_behind(client, db_session, corpus):

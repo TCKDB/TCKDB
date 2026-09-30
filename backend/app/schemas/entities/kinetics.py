@@ -93,7 +93,7 @@ class KineticsBase(BaseModel):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
-    t0_k: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    t0_k: float = Field(default=1.0, gt=0, le=10000.0, allow_inf_nan=False)
     ea_kj_mol: float | None = None
 
     a_uncertainty: float | None = None
@@ -201,7 +201,7 @@ class KineticsUpdate(SchemaBase):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
-    t0_k: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    t0_k: float | None = Field(default=None, gt=0, le=10000.0, allow_inf_nan=False)
     ea_kj_mol: float | None = None
 
     a_uncertainty: float | None = None

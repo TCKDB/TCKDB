@@ -19,6 +19,14 @@ import math
 GAS_CONSTANT_J_MOL_K = 8.314462618
 
 
+class ArrheniusRangeError(ValueError):
+    """A schema-valid T0 and n whose rescaled A is not a finite number.
+
+    The schemas bound T0, but ``T0**n`` still overflows for a large enough |n|;
+    callers turn this into a gap or a coded reason rather than a 500.
+    """
+
+
 def a_at_unit_t0(a: float, n: float | None, t0_k: float | None) -> float:
     """Return the A of the equivalent ``A' * T**n`` expression (T0 = 1 K).
 
@@ -35,7 +43,15 @@ def a_at_unit_t0(a: float, n: float | None, t0_k: float | None) -> float:
         t0_k = 1.0
     if not (t0_k > 0) or math.isinf(t0_k):
         raise ValueError(f"t0_k must be a finite positive number, got {t0_k!r}")
-    return a / t0_k ** (n if n is not None else 0.0)
+    try:
+        rescaled = a / t0_k ** (n if n is not None else 0.0)
+    except (ZeroDivisionError, OverflowError) as exc:
+        raise ArrheniusRangeError(
+            f"A / T0**n is out of numeric range for T0={t0_k!r}, n={n!r}"
+        ) from exc
+    if not math.isfinite(rescaled):
+        raise ArrheniusRangeError(f"A / T0**n is not finite for T0={t0_k!r}, n={n!r}")
+    return rescaled
 
 
 def arrhenius_k(

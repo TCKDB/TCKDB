@@ -1686,7 +1686,7 @@ the gap.
 - `ck_kinetics_apparent_pressure_requires_pressure_bar`: `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL`
 - `ck_kinetics_degeneracy_finite_positive`: `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)`
 - `ck_kinetics_pressure_bar_gt_0`: `pressure_bar IS NULL OR pressure_bar > 0`
-- `ck_kinetics_t0_k_finite_positive`: `t0_k > 0 AND t0_k < 'Infinity'::double precision`
+- `ck_kinetics_t0_k_finite_positive`: `t0_k > 0 AND t0_k <= 10000`
 - `ck_kinetics_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_kinetics_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
 - `ck_kinetics_tmin_le_tmax`: `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k`

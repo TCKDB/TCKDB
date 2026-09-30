@@ -53,6 +53,7 @@ from tckdb_schemas.fragments.calculation import (
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.kinetics_evidence import (
     T0_K_DESCRIPTION,
+    T0_K_MAX,
     KineticsInterpretationAssignmentUpload,
     KineticsTunnelingApplicationUpload,
     check_interpretation_set,
@@ -1168,7 +1169,7 @@ class BundleKineticsIn(SchemaBase):
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
     t0_k: float = Field(
-        default=1.0, gt=0, allow_inf_nan=False, description=T0_K_DESCRIPTION
+        default=1.0, gt=0, le=T0_K_MAX, allow_inf_nan=False, description=T0_K_DESCRIPTION
     )
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None

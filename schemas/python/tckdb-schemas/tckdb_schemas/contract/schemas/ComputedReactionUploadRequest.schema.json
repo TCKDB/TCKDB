@@ -475,8 +475,9 @@
         },
         "t0_k": {
           "default": 1.0,
-          "description": "Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It applies to the scalar a, n and reported_ea of this record (for a falloff rate, to the high-pressure-limit Arrhenius; the low-pressure limit, PLOG entries, sum-of-Arrhenius terms and Chebyshev surfaces are always at 1 K).",
+          "description": "Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy 0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse any other value, because their low-pressure limit or child rows carry no T0 of their own.",
           "exclusiveMinimum": 0,
+          "maximum": 10000.0,
           "title": "T0 K",
           "type": "number"
         },
@@ -3342,10 +3343,12 @@
           "title": "Convention Note"
         },
         "degeneracy_interpretation": {
-          "$ref": "#/$defs/KineticsDegeneracyInterpretation"
+          "$ref": "#/$defs/KineticsDegeneracyInterpretation",
+          "description": "How reaction-path degeneracy/symmetry was handled for this subject's own partition function (distinct from degeneracy_convention, which says whether the stored scalar already includes degeneracy): external_symmetry_number, reaction_path_degeneracy, symmetry_number_and_path_degeneracy, no_symmetry_treatment, or other (requires convention_note)."
         },
         "ensemble_policy": {
-          "$ref": "#/$defs/KineticsEnsemblePolicy"
+          "$ref": "#/$defs/KineticsEnsemblePolicy",
+          "description": "How multiple structures of this subject were combined into the partition function the rate used: single_structure, lowest_energy_conformer, boltzmann_weighted_conformers, multi_structural_torsional, or other (requires convention_note)."
         },
         "participant_index": {
           "anyOf": [
@@ -3366,7 +3369,8 @@
           "type": "string"
         },
         "standard_state_convention": {
-          "$ref": "#/$defs/KineticsStandardStateConvention"
+          "$ref": "#/$defs/KineticsStandardStateConvention",
+          "description": "The standard state the partition functions are referenced to: ideal_gas_1_bar, ideal_gas_1_atm, concentration_1_mol_cm3, concentration_1_mol_l, or other (requires convention_note)."
         },
         "statmech_ref": {
           "minLength": 1,
@@ -3467,7 +3471,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note."
         },
         "energy_zero_convention": {
           "anyOf": [
@@ -3478,7 +3483,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
         },
         "forward_barrier_kj_mol": {
           "anyOf": [

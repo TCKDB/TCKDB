@@ -26,7 +26,7 @@ dataset must never require a code release.
 
 - tckdb-schemas 0.63.0, tckdb-backend, tckdb-client 0.102.0 (#620): a kinetics
   record carries `t0_k`, the reference temperature of `k = A (T/T0)^n exp(-Ea/RT)`
-  (default 1 K, the plain `A T^n` form), on `POST /uploads/kinetics`, on the
+  (default 1 K, the plain `A T^n` form; `0 < t0_k <= 10000`; falloff, PLOG, Chebyshev and multi-Arrhenius records must stay at 1 K), on `POST /uploads/kinetics`, on the
   reaction bundle, and on every read of the row
   (`parameters.T0_k`, `t0_k` in the export, ML, lookup and analytics views).
   The CHEMKIN export writes `A / T0^n` so the mechanism file is the same rate,

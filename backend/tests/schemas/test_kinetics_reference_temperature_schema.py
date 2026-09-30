@@ -150,21 +150,35 @@ def test_standalone_refuses_t0_on_forms_that_have_no_scalar_arrhenius(kind, extr
     KineticsUploadRequest.model_validate({**base, "t0_k": 1.0})
     with pytest.raises(ValidationError) as excinfo:
         KineticsUploadRequest.model_validate({**base, "t0_k": 298.0})
-    assert "t0_k applies to the scalar Arrhenius parameters" in str(excinfo.value)
+    assert f"t0_k must be 1 for model_kind='{kind}'" in str(excinfo.value)
 
 
-def test_standalone_accepts_t0_on_a_falloff_rate_high_pressure_limit():
-    """A falloff rate's scalar row is its k-infinity, which T0 applies to."""
-    body = _standalone(
-        model_kind="troe",
-        is_third_body=False,
-        falloff={
-            "low_a": 1.0e18,
-            "low_a_units": "cm6_mol2_s",
-            "troe_alpha": 0.5,
-            "troe_t3": 100.0,
-            "troe_t1": 1000.0,
-        },
-        t0_k=298.0,
-    )
-    assert KineticsUploadRequest.model_validate(body).t0_k == 298.0
+@pytest.mark.parametrize("kind", ["lindemann", "troe", "sri"])
+def test_standalone_refuses_t0_on_a_falloff_rate_but_accepts_it_at_one_kelvin(kind):
+    """Arkane and RMG give each falloff limit its own T0; one ``t0_k`` would
+    silently mis-store k0 by T0**n_low, and an approved row cannot be fixed."""
+    falloff = {
+        "low_a": 1.0e18,
+        "low_a_units": "cm6_mol2_s",
+        "low_n": -1.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "sri_a": 0.5,
+        "sri_b": 100.0,
+        "sri_c": 1000.0,
+    }
+    body = _standalone(model_kind=kind, falloff=falloff)
+    KineticsUploadRequest.model_validate({**body, "t0_k": 1.0})
+    with pytest.raises(ValidationError) as excinfo:
+        KineticsUploadRequest.model_validate({**body, "t0_k": 298.0})
+    assert f"t0_k must be 1 for model_kind='{kind}'" in str(excinfo.value)
+
+
+@_ROUTES
+def test_t0_has_a_physical_upper_bound(model, build):
+    """10000 K bounds T0 so ``A / T0**n`` cannot be pushed off the end of a float
+    by a valid-looking value; 1e5 is refused and 10000 accepted."""
+    assert model.model_validate(build(t0_k=10000.0)).t0_k == 10000.0
+    with pytest.raises(ValidationError, match="t0_k"):
+        model.model_validate(build(t0_k=10000.1))

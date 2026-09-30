@@ -1339,10 +1339,10 @@ Notes:
 - `a_units` uses the `ArrheniusAUnits` enum
 - `t0_k` is the reference temperature of the scalar rate,
   `k = A (T/T0)^n exp(-Ea/RT)`: NOT NULL, default 1 K (the plain `A T^n` form,
-  which is what every row stored before the column existed meant), finite and
-  greater than zero. It applies to this row's own `a`, `n` and `ea_kj_mol`
-  (for a falloff rate, the high-pressure limit); PLOG entries, sum-of-Arrhenius
-  terms, the falloff low-pressure limit and Chebyshev surfaces are at 1 K
+  which is what every row stored before the column existed meant), greater
+  than zero and at most 10000 K. It applies to this row's own `a`, `n` and
+  `ea_kj_mol` of a modified-Arrhenius rate; falloff, PLOG, sum-of-Arrhenius and
+  Chebyshev records are always at 1 K (upload refuses another value)
 - temperature bounds must be positive when present, with `tmin_k <= tmax_k`
 - `degeneracy` is either null or a finite value greater than zero
 - `degeneracy_convention` is enum-backed (`already_applied`, `not_applied`, or

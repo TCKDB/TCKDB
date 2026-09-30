@@ -11,13 +11,13 @@ a payload valid under 0.62.0 is valid under this release, byte for byte.
 T0 of the scalar rate, in K, meaning `k = A (T/T0)^n exp(-Ea/RT)`. It defaults
 to 1 K, which is the plain `A T^n` form and what every record deposited
 before this release meant. Before, a producer that fitted with T0 = 298 K had
-to send `A / 298^n` and the T0 it fitted with was lost. It must be finite and
-greater than 0. It applies to the record's own `a`, `n` and `reported_ea`
-(for a falloff rate, to its high-pressure limit); PLOG entries, sum-of-Arrhenius
-terms, the falloff low-pressure limit and Chebyshev surfaces are always at
-1 K, and the standalone route refuses a `t0_k` other than 1 on a `plog`,
-`chebyshev` or `multi_arrhenius` record rather than store a number with nothing
-to apply to. The server stores `a` as sent (it is A at T0, not A rescaled) and
+to send `A / 298^n` and the T0 it fitted with was lost. It must satisfy
+`0 < t0_k <= 10000`. It applies to the record's own `a`, `n` and `reported_ea`
+of a modified-Arrhenius rate. Falloff (`lindemann`, `troe`, `sri`), `plog`,
+`chebyshev` and `multi_arrhenius` records are always at 1 K and the standalone
+route refuses any other `t0_k` on them: their low-pressure limit or child rows
+carry no T0 of their own (Arkane and RMG give each falloff limit an independent
+T0), so one value would silently mis-state part of the rate. The server stores `a` as sent (it is A at T0, not A rescaled) and
 serves `t0_k` back; a consumer that evaluates k(T) from a stored `a`, `n` and
 `ea_kj_mol` must use it.
 
@@ -34,9 +34,11 @@ Two things follow from how a bundle is built and are part of the contract:
 every reference is the public ref of a record deposited *earlier* (a bundle
 cannot cite a statmech, transition state or calculation it is itself creating,
 because the depositor cannot know its ref in advance), and a cited transition
-state must belong to the same reaction as the bundle's rate (the bundle mints
-its own reaction entry, so the transition state is judged on the reaction and
-not the entry). The bundle's `tunneling_model` is filled from
+state must be a transition state of this rate's reaction: a reaction entry of
+the same reaction with the same structure participants (same species entries,
+either direction), so the excited-state or isotopologue entry's transition state
+is refused. A bundle mints its own reaction entry, so the entry itself can
+never match. The bundle's `tunneling_model` is filled from
 `tunneling_application.model` when only the evidence is sent, as on the
 standalone route.
 

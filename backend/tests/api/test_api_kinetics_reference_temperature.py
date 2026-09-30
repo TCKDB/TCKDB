@@ -190,7 +190,7 @@ def test_the_database_refuses_a_non_positive_t0_even_if_the_application_did_not(
         )
         db_session.flush()  # a positive value is accepted
 
-    for bad in (0.0, -1.0, float("inf")):
+    for bad in (0.0, -1.0, float("inf"), 10000.5):
         with pytest.raises(IntegrityError, match="t0_k_finite_positive"):
             with db_session.begin_nested():
                 db_session.add(
