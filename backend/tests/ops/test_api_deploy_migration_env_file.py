@@ -43,10 +43,17 @@ def test_unset_migrates_with_the_one_env_file(deploy, tmp_path: Path) -> None:
     assert migration.count("--env-file") == 1, migration
 
 
-def test_set_reaches_alembic_after_the_api_file_and_never_the_api(deploy, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"TCKDB_EXTRA_NETWORKS": "tckdbv2_storage"}],
+    ids=["run-d", "create-then-start"],
+)
+def test_set_reaches_alembic_after_the_api_file_and_never_the_api(
+    deploy, tmp_path: Path, extra
+) -> None:
     owner = tmp_path / "migration.env"
-    owner.write_text("DB_OWNER_USER=o\nDB_OWNER_PASSWORD=p\n")
-    result, calls = deploy(TCKDB_MIGRATION_ENV_FILE=str(owner))
+    owner.write_text("DB_OWNER_USER=o\nDB_OWNER_PASSWORD=p-SENTINEL\n")
+    result, calls = deploy(TCKDB_MIGRATION_ENV_FILE=str(owner), **extra)
     assert result.returncode == 0, result.stderr
     [migration] = _migration_runs(calls)
     api_file = f"--env-file {tmp_path / 'env'}"
@@ -56,6 +63,7 @@ def test_set_reaches_alembic_after_the_api_file_and_never_the_api(deploy, tmp_pa
     api_runs = _api_runs(calls)
     assert api_runs, calls
     assert all(str(owner) not in call for call in api_runs), api_runs
+    assert "p-SENTINEL" not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("kind", ["missing", "directory"])
@@ -70,12 +78,33 @@ def test_an_unreadable_path_is_refused_before_anything_changes(deploy, tmp_path:
     assert not _starting(calls, *_UNTOUCHED), calls
 
 
-@pytest.mark.parametrize("line", ["DB_OWNER_PASSWORD=p", "export DB_ADMIN_PASSWORD=p"])
+@pytest.mark.parametrize(
+    "line",
+    [
+        "DB_OWNER_PASSWORD=p-SENTINEL",
+        "  DB_OWNER_PASSWORD=p-SENTINEL",
+        "export DB_ADMIN_PASSWORD=p-SENTINEL",
+        # No `=`: Docker copies the value from the deploying shell.
+        "DB_OWNER_PASSWORD",
+    ],
+    ids=["plain", "indented", "export", "bare-name"],
+)
 def test_owner_or_admin_credentials_in_the_api_file_are_reported(deploy, tmp_path: Path, line) -> None:
     (tmp_path / "env").write_text(f"DB_PASSWORD=x\n{line}\n")
     result, _calls = deploy()
     assert result.returncode == 0, result.stderr
     assert "the API container reads that file" in result.stderr, result.stderr
+    assert "p-SENTINEL" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "line", ["# DB_OWNER_PASSWORD=p", "DB_OWNER_PASSWORD_FILE=/run/secret"], ids=["comment", "other-name"]
+)
+def test_lookalikes_are_not_reported(deploy, tmp_path: Path, line) -> None:
+    (tmp_path / "env").write_text(f"DB_PASSWORD=x\n{line}\n")
+    result, _calls = deploy()
+    assert result.returncode == 0, result.stderr
+    assert "the API container reads that file" not in result.stderr
 
 
 def test_runtime_credentials_alone_are_not_reported(deploy) -> None:

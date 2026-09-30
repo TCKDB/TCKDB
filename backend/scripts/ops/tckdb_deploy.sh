@@ -115,7 +115,9 @@ fi
 # The API container reads TCKDB_ENV_FILE, so a role that can alter the schema
 # or disable triggers must not be in it. Reported rather than refused: a
 # deployment without separated roles has nowhere else to put them yet.
-if grep -Eq '^[[:space:]]*(export[[:space:]]+)?DB_(OWNER|ADMIN)_PASSWORD=' "$ENV_FILE" 2>/dev/null; then
+# A bare `DB_OWNER_PASSWORD` line (no `=`) counts too: Docker then copies the
+# value from the deploying shell, which may have sourced the operator file.
+if grep -Eq '^[[:space:]]*(export[[:space:]]+)?DB_(OWNER|ADMIN)_PASSWORD([[:space:]]*=|[[:space:]]*$)' "$ENV_FILE" 2>/dev/null; then
     echo "warning: ${ENV_FILE} holds DB_OWNER_PASSWORD or DB_ADMIN_PASSWORD, and the API container reads that file; move them to TCKDB_MIGRATION_ENV_FILE (owner) or an operator-only file (admin)" >&2
 fi
 

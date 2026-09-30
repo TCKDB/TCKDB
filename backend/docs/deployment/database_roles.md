@@ -99,8 +99,20 @@ DB_OWNER_USER=tckdb_owner
 DB_OWNER_PASSWORD=...
 ```
 
+Three things differ from the shell-sourced `.env.db-admin`:
+
+- Docker reads env files literally. Write plain `KEY=value` lines: no
+  `export`, and no quotes (they become part of the password).
+- Do not point `TCKDB_MIGRATION_ENV_FILE` at `.env.db-admin`. That file holds
+  the administrator (superuser) password too, and the migration needs only
+  the owner.
+- Use URL-safe passwords, e.g. `openssl rand -hex 32`. Alembic and the API
+  build a database URL from them without escaping, so `%` or `@` breaks the
+  connection.
+
 The script warns if `DB_OWNER_PASSWORD` or `DB_ADMIN_PASSWORD` is still in
-`TCKDB_ENV_FILE`. The pre-deploy `pg_dump` runs inside the database container
+`TCKDB_ENV_FILE`, including a bare name with no `=`, which Docker fills from
+the deploying shell. The pre-deploy `pg_dump` runs inside the database container
 as the bootstrap login and is unaffected by the split.
 
 ## Verification
