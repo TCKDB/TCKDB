@@ -694,6 +694,7 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
 #: left this tuple, gained ``Reach.request``, and is now exported.
 _GUARD_CODES = (
     "idempotency_in_progress",
+    "scf_stability_source_calculation_owner_mismatch",
     "transport_source_calculation_owner_mismatch",
 )
 

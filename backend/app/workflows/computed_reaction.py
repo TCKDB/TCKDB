@@ -133,6 +133,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
@@ -147,7 +148,6 @@ from app.services.statmech_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
-from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.upload_reconciliation import term_symbol_warnings
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
 from app.workflows.transport import persist_bundle_transport

@@ -106,15 +106,36 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
 
+#: An SCF stability verdict names, as the job that measured it, a
+#: calculation owned by another subject than the calculation carrying the
+#: verdict (``scf_stability.source_calculation_key`` on a bundle).
+#:
+#: A guard today, and for the reason that makes it one rather than an
+#: oversight. The bundle routes resolve the key in a namespace that spans
+#: every species (and the transition state) in the payload, which by the
+#: width-of-namespace clause would make it reachable. It is not, because
+#: the request schemas refuse a cross-owner key first, with a generic
+#: message, before any workflow runs: the computed-reaction schema knows
+#: which subject each calculation key belongs to, and the computed-species
+#: schema has only one subject. The workflow check stays because the schema
+#: lives in another distributable package and has drifted from its
+#: workflows before. Provoked directly, with no schema in front of it, in
+#: ``tests/services/test_scf_stability_sources.py``.
+W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = (
+    "scf_stability_source_calculation_owner_mismatch"
+)
+
 #: A transport source link cites a calculation owned by another subject.
 #:
-#: The one code here that no write path can produce: transport's single
-#: guard reads a calculation the same loop persisted against the target's
-#: own species entry, its source-link payload carries no
-#: ``existing_calculation_id``, and the other two callers of
-#: ``resolve_and_create_transport`` pass no source calculations at all.
+#: The one code here that no request can produce: the standalone guard reads
+#: a calculation the same loop persisted against the target's own species
+#: entry, its source-link payload carries no ``existing_calculation_id``, and
+#: the conformer and PDep callers of ``resolve_and_create_transport`` pass no
+#: source calculations at all. The bundle seam (``persist_bundle_transport``)
+#: does resolve keys across a wider namespace, but the computed-reaction
+#: schema refuses a cross-species transport source before the workflow runs.
 #: Catalogued as ``Reach.guard`` and not exported to clients; kept as the
-#: tripwire for the path that changes any of those three facts.
+#: tripwire for the path that changes any of those facts.
 W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = (
     "transport_source_calculation_owner_mismatch"
 )

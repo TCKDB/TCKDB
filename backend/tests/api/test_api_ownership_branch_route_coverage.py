@@ -56,10 +56,11 @@ neither branch has quietly lost every route that exercises it.
 
 Not covered here, deliberately
 ------------------------------
-* ``transport_source_calculation_owner_mismatch`` is catalogued
-  ``Reach.guard`` — no write path can produce the condition, so no route
-  test can exist. It is excluded by reading the catalogue, not by name,
-  so promoting it to reachable makes this file demand a provocation.
+* ``transport_source_calculation_owner_mismatch`` and
+  ``scf_stability_source_calculation_owner_mismatch`` are catalogued
+  ``Reach.guard`` — no request can produce the condition, so no route
+  test can exist. They are excluded by reading the catalogue, not by name,
+  so promoting either to reachable makes this file demand a provocation.
 * The ``ValueError`` ``assert_owned_by`` raises when given neither owner
   is a programming-error guard with no code and no route; it is pinned in
   ``tests/invariants/test_structure_invariants.py``.
@@ -269,8 +270,8 @@ def test_the_scan_ignores_prose() -> None:
     assert "nested_owner_mismatch" not in literals
 
 
-def test_the_transport_guard_is_the_only_unreachable_ownership_code() -> None:
-    """The exemption is one named code, not an open category.
+def test_the_unreachable_ownership_codes_are_the_named_guards() -> None:
+    """The exemption is two named codes, not an open category.
 
     ``test_every_reachable_ownership_code_is_asserted_by_a_route_test``
     excuses whatever the catalogue marks ``Reach.guard``, which means a
@@ -278,10 +279,24 @@ def test_the_transport_guard_is_the_only_unreachable_ownership_code() -> None:
     catalogue alone. This pins the exemption list so that widening it is
     a deliberate, reviewable act rather than a way to make the check
     above go quiet.
+
+    Widened once, for #622: ``scf_stability_source_calculation_owner_mismatch``
+    joined ``transport_source_calculation_owner_mismatch``. Both are
+    workflow checks behind a request schema that refuses the same mistake
+    first, which is what makes each a guard rather than a refusal a
+    depositor can receive; each is provoked directly, with no schema in
+    front of it, in ``tests/services/test_scf_stability_sources.py`` and
+    ``tests/workflows/test_transport_upload.py``. Promoting either to a
+    client-facing code means deleting the schema-side owner check, as
+    thermo's owner rule is left to the workflow, and then it needs a route
+    test here like the others.
     """
     codes = _ownership_codes()
     assert _guard_only(codes) == frozenset(
-        {"transport_source_calculation_owner_mismatch"}
+        {
+            "scf_stability_source_calculation_owner_mismatch",
+            "transport_source_calculation_owner_mismatch",
+        }
     ), (
         "the set of ownership codes no request can produce has changed. If a "
         "code became unreachable, say why in its catalogue note; if one became "

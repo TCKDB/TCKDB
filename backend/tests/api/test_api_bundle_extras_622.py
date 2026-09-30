@@ -298,8 +298,10 @@ def test_transport_provenance_gaps_are_annotated_under_the_transport_prefix(clie
 def test_transport_source_key_must_be_declared(client):
     """A typo is a 422 that names the key, before anything is written.
 
-    Mutation: drop ``validate_transport_source_keys_resolve``; the workflow's
-    own lookup still refuses, but as a different layer with no schema path.
+    The schema and the workflow answer identically (ADR 0017), so this pins
+    the wire behaviour, not the layer. Mutation: resolve the key with a plain
+    subscript instead of ``resolve_calculation_key`` in both layers; a
+    ``KeyError`` surfaces as a 500.
     """
     resp = client.post(
         "/api/v1/uploads/computed-species",
@@ -607,9 +609,11 @@ def test_stability_without_a_key_keeps_no_source(client, db_session):
 def test_stability_source_key_must_be_declared(client):
     """An unknown key is a coded 422 naming the field.
 
-    Mutation: drop ``validate_scf_stability_source_keys_resolve``; the
-    workflow's own lookup still refuses, but the schema path in this
-    assertion disappears.
+    The schema and the workflow answer identically (ADR 0017), so dropping
+    the schema validator does not change this test; the workflow layer is
+    pinned on its own in ``tests/services/test_scf_stability_sources.py``.
+    Mutation: drop the lookup from both layers and the block is stored with
+    no source and this returns 201.
     """
     resp = client.post(
         "/api/v1/uploads/computed-species",

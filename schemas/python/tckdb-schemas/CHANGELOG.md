@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.61.0 - 2026-09-30
+
+Four things the two species-bearing bundles, `POST /api/v1/uploads/computed-species`
+and `POST /api/v1/uploads/computed-reaction`, could not say (#622), all additive.
+
+- **Transport.** `ComputedSpeciesUploadRequest.transport` and, per species,
+  `BundleSpeciesIn.transport` take a `TransportInBundle`: exactly the standalone
+  `POST /api/v1/uploads/transport` content (`sigma_angstrom` and
+  `epsilon_over_k_k` together, `dipole_debye`, `polarizability_angstrom3`,
+  `rotational_relaxation`, `scientific_origin`, `literature`, `software_release`,
+  `workflow_tool_release`, `note`, at least one property) plus
+  `source_calculations`, a list of `{calculation_key, role}` naming the bundle's
+  own calculations (`role` is `full_transport`, `dipole`, `polarizability` or
+  `supporting_geometry`). It lands on the same species entry as that species'
+  thermo and statmech, and is append-only. A source calculation must belong to
+  the same species. Provenance follows thermo: the block's own release wins,
+  and where it names none the bundle's fills in (`workflow_tool_release` on
+  both bundles, `analysis_software_release` as well on the reaction bundle).
+  The responses name what was written: `ComputedSpeciesUploadResult.transport`
+  (`{transport_id}`) and `transport_ids` on the reaction bundle's response.
+  Provenance gaps are annotated as warnings under `transport.` /
+  `species['<key>'].transport.`.
+- **Rejected rotors.** `invalidated_reason` on `StatmechTorsionInBundle` and on
+  the reaction bundle's `BundleStatmechTorsionIn`, the same field the conformer
+  route's `StatmechTorsionIn` has. It is stored and read back under the
+  statmech's torsions.
+- **Who measured the SCF stability.** `SCFStabilityContent.source_calculation_key`
+  names the calculation (job) in the same bundle that measured the verdict, when
+  it is not the calculation the block is attached to. It may point at a
+  calculation declared later in the payload. It must name a declared calculation
+  of the same species entry (or of the transition state, for a transition-state
+  calculation), and may not name the calculation itself. It is stored in the
+  existing `calc_scf_stability.source_calculation_id` and read back as
+  `source_calculation_ref`. No stability calculation type was added: the
+  measuring job keeps the type it has. The key is refused on the primitive
+  routes (`SCFStabilityPayload` names a calculation by id there) and on
+  `POST /api/v1/uploads/networks/pdep`, which has no pass to link it.
+- **Contract prose.** `SoftwareReleaseRef` now says what `version`, `revision`
+  and `build` hold and that all three are part of release identity (`revision`
+  is the vendor label such as Gaussian `C.02`, or the commit hash for analysis
+  software; `build` is a compile or packaging variant). There is still no
+  `git_commit` on `SoftwareReleaseRef`; adding one needs a column and a change
+  to release identity, and is deferred. `PathSearchResultPayload.converged` now
+  says what it means for each method and that an output file existing is not a
+  convergence verdict. `PathSearchPointPayload.is_climbing_image` stays a plain
+  `bool` defaulting to `false`: `false` still reads as both "not a climbing image"
+  and "not stated", because a tri-state value needs the stored column to accept
+  NULL, which is a migration and is deferred.
+
 ## 0.60.0 - 2026-09-30
 
 `electronic_levels` is now accepted on the bundle statmech blocks,

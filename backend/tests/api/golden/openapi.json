@@ -3201,7 +3201,7 @@
       },
       "BundleSpeciesIn": {
         "additionalProperties": false,
-        "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.",
+        "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.\n:param statmech: Optional statistical-mechanics data.\n:param transport: Optional transport properties (Lennard-Jones\n    parameters, dipole, polarizability, rotational relaxation) for this\n    species's entry: the standalone transport upload's content plus\n    links to this bundle's calculations by local key. Provenance falls\n    back to the bundle's ``analysis_software_release`` and\n    ``workflow_tool_release`` exactly as thermo's does.",
         "properties": {
           "applied_energy_corrections": {
             "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species. ``source_conformer_key`` resolves against this species's own ``conformers[*].key`` — a sibling species's conformer is not in scope and is refused.",
@@ -3247,6 +3247,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/BundleThermoIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransportInBundle"
               },
               {
                 "type": "null"
@@ -3470,7 +3480,7 @@
       },
       "BundleStatmechTorsionIn": {
         "additionalProperties": false,
-        "description": "One torsional mode in a statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+        "description": "One torsional mode in a statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
         "properties": {
           "coordinates": {
             "items": {
@@ -3484,6 +3494,17 @@
             "minimum": 1.0,
             "title": "Dimension",
             "type": "integer"
+          },
+          "invalidated_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidated Reason"
           },
           "source_scan_calculation_key": {
             "anyOf": [
@@ -11056,6 +11077,13 @@
             ],
             "title": "Transition State Entry Id"
           },
+          "transport_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Transport Ids",
+            "type": "array"
+          },
           "type": {
             "default": "computed_reaction",
             "title": "Type",
@@ -11083,7 +11111,7 @@
       },
       "ComputedSpeciesUploadRequest": {
         "additionalProperties": false,
-        "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo and\nstatmech blocks fall back to it when they name no workflow tool of\ntheir own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
+        "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo,\nstatmech and transport blocks fall back to it when they name no\nworkflow tool of their own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
         "examples": [
           {
             "conformers": [
@@ -11175,6 +11203,16 @@
               }
             ]
           },
+          "transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransportInBundle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "workflow_tool_release": {
             "anyOf": [
               {
@@ -11184,7 +11222,7 @@
                 "type": "null"
               }
             ],
-            "description": "Bundle-level workflow-tool provenance. Used as the default for the thermo and statmech blocks; a value on either of those overrides it."
+            "description": "Bundle-level workflow-tool provenance. Used as the default for the thermo, statmech and transport blocks; a value on any of those overrides it."
           }
         },
         "required": [
@@ -11243,6 +11281,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ThermoUploadRefInBundle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransportUploadRefInBundle"
               },
               {
                 "type": "null"
@@ -30771,7 +30819,7 @@
       },
       "PathSearchPointPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs).\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+        "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
         "properties": {
           "electronic_energy_hartree": {
             "anyOf": [
@@ -30948,7 +30996,7 @@
       },
       "PathSearchResultPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search converged.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
+        "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
         "properties": {
           "climbing_image_index": {
             "anyOf": [
@@ -34365,7 +34413,7 @@
       },
       "SCFStabilityContent": {
         "additionalProperties": false,
-        "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+        "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n:param source_calculation_key: Optional local key of the calculation\n    (job) that measured this verdict, when that is a different job from\n    the one this block hangs off. Meaningful only inside a bundle, where\n    it must name a calculation the same bundle declares (on the\n    computed-species bundle any conformer's, on the computed-reaction\n    bundle any species or transition-state calculation). The job that\n    measured it keeps its own type; there is no separate stability\n    calculation type. The key is resolved after every calculation in the\n    bundle exists, so it may point at a calculation declared later in\n    the payload. Omit it when the calculation carrying the block is the\n    one that measured the stability.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key, so the one cross-reference here is a local\nkey; the two FK fields on :class:`SCFStabilityPayload` below would put\nraw primary keys back on a surface a depositor is meant to be able to\nwrite without ever having queried TCKDB.",
         "properties": {
           "instability_count": {
             "anyOf": [
@@ -34422,6 +34470,18 @@
               }
             ],
             "title": "Reoptimized Wavefunction"
+          },
+          "source_calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Key"
           },
           "status": {
             "$ref": "#/components/schemas/SCFStabilityStatus-Input"
@@ -34514,6 +34574,18 @@
               }
             ],
             "title": "Source Calculation Id"
+          },
+          "source_calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Key"
           },
           "status": {
             "$ref": "#/components/schemas/SCFStabilityStatus-Input"
@@ -39464,7 +39536,7 @@
       },
       "SoftwareReleaseRef": {
         "additionalProperties": false,
-        "description": "Upload-facing reference to a software release.",
+        "description": "Upload-facing reference to a software release.\n\nA release is identified by ``(name, version, revision, build)``; two\nreferences that agree on all four (an absent value matches only another\nabsent value) are the same release row. ``release_date`` and ``notes``\nare descriptive and do not take part in identity.\n\nWhich field holds what:\n\n* ``version``: the release number the vendor or project publishes, such\n  as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.\n  Give the number alone. A parsed startup banner such as\n  ``\"Gaussian 16, Revision C.02\"`` is accepted, split into version\n  ``16`` and revision ``C.02``, and reported as a warning.\n* ``revision``: a finer label inside one version, written the way the\n  producer writes it. For a vendor program this is the vendor's own\n  revision label, such as Gaussian ``C.02``. For analysis software that\n  has no revision labels it is the source state the run used, such as\n  the commit hash of an Arkane or RMG checkout, because\n  ``software_release`` has no separate commit field (see below).\n* ``build``: a variant of the same version and revision that was\n  compiled or packaged differently and can give different numbers or\n  different capabilities, such as ``mpi``, ``cuda`` or a distributor's\n  build identifier. Leave it out when the program was not built in a\n  way that matters; two references that differ only here are kept as\n  two releases, so do not put a timestamp or host name in it.\n\nThere is no ``git_commit`` field on this reference. A commit hash goes in\n``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a\n``git_commit`` because workflow tools are identified by code state.",
         "properties": {
           "build": {
             "anyOf": [
@@ -39475,6 +39547,7 @@
                 "type": "null"
               }
             ],
+            "description": "Compile or packaging variant of the same version and revision, for example mpi or cuda. Part of release identity; omit unless the build changes results or capabilities.",
             "title": "Build"
           },
           "name": {
@@ -39514,6 +39587,7 @@
                 "type": "null"
               }
             ],
+            "description": "Finer label within one version: the vendor revision label (Gaussian C.02), or the commit hash for analysis software that has no revision labels. Part of release identity.",
             "title": "Revision"
           },
           "version": {
@@ -39525,6 +39599,7 @@
                 "type": "null"
               }
             ],
+            "description": "Published release number, for example 16, 6.0.1 or 2025.1. Number only; a full startup banner is split into version and revision with a warning.",
             "title": "Version"
           }
         },
@@ -42804,7 +42879,7 @@
       },
       "StatmechTorsionInBundle": {
         "additionalProperties": false,
-        "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+        "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
         "properties": {
           "coordinates": {
             "items": {
@@ -42818,6 +42893,17 @@
             "minimum": 1.0,
             "title": "Dimension",
             "type": "integer"
+          },
+          "invalidated_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invalidated Reason"
           },
           "source_scan_calculation_key": {
             "anyOf": [
@@ -49782,6 +49868,124 @@
         "title": "TransportEvidenceSummary",
         "type": "object"
       },
+      "TransportInBundle": {
+        "additionalProperties": false,
+        "description": "Transport block within a bundle.\n\nOne transport record for the bundle's species entry, carrying exactly\nthe content of the standalone ``POST /api/v1/uploads/transport``\npayload (:class:`~tckdb_schemas.workflows.transport_upload.TransportUploadPayload`:\nLennard-Jones ``sigma_angstrom`` / ``epsilon_over_k_k``, dipole,\npolarizability, rotational relaxation, provenance, and the same\n\"at least one property, LJ as a pair\" validation), plus links to the\ncalculations that produced it by local key.\n\nIt attaches to the same species entry as the bundle's thermo and\nstatmech. Provenance follows the thermo rule: ``software_release`` and\n``workflow_tool_release`` are this block's own, and where the block\nnames no workflow tool the bundle's ``workflow_tool_release`` fills in.\n\nTransport is append-only, as on the standalone route: a bundle adds one\nnew record each time it is deposited.\n\n:param source_calculations: Transport -> calculation links by\n    bundle-local key and role. Each key must name a calculation this\n    bundle declares for the same species entry.",
+        "properties": {
+          "dipole_debye": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dipole Debye"
+          },
+          "epsilon_over_k_k": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Epsilon Over K K"
+          },
+          "literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "polarizability_angstrom3": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polarizability Angstrom3"
+          },
+          "rotational_relaxation": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Relaxation"
+          },
+          "scientific_origin": {
+            "$ref": "#/components/schemas/ScientificOriginKind",
+            "default": "computed"
+          },
+          "sigma_angstrom": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sigma Angstrom"
+          },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/TransportSourceCalcInBundle"
+            },
+            "title": "Source Calculations",
+            "type": "array"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "TransportInBundle",
+        "type": "object"
+      },
       "TransportRead": {
         "description": "Read schema for a transport properties record.",
         "properties": {
@@ -50208,6 +50412,26 @@
         "title": "TransportSearchRequest",
         "type": "object"
       },
+      "TransportSourceCalcInBundle": {
+        "additionalProperties": false,
+        "description": "Transport -> calc link by local key.\n\nSame shape and rule as :class:`ThermoSourceCalcInBundle`: only\n``calculation_key`` is accepted inside a bundle, resolving against the\nbundle's global calculation-key namespace (DR-0029 Requirement 1).",
+        "properties": {
+          "calculation_key": {
+            "minLength": 1,
+            "title": "Calculation Key",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/TransportCalculationRole"
+          }
+        },
+        "required": [
+          "calculation_key",
+          "role"
+        ],
+        "title": "TransportSourceCalcInBundle",
+        "type": "object"
+      },
       "TransportSourceCalculationIn": {
         "additionalProperties": false,
         "description": "Link between a transport upload and a supporting calculation by key.\n\n:param calculation_key: Local key of a calculation declared in\n    ``TransportUploadRequest.calculations``.\n:param role: Scientific role the calculation plays for this transport.",
@@ -50537,6 +50761,20 @@
           }
         },
         "title": "TransportUploadPayload",
+        "type": "object"
+      },
+      "TransportUploadRefInBundle": {
+        "additionalProperties": false,
+        "properties": {
+          "transport_id": {
+            "title": "Transport Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "transport_id"
+        ],
+        "title": "TransportUploadRefInBundle",
         "type": "object"
       },
       "TransportUploadRequest": {

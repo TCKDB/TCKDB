@@ -1873,6 +1873,24 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("schema_not_initialized", 503, Surface.response_literal,
             "backend/app/api/routes/health.py"),
+    ApiCode("scf_stability_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
+            reach=Reach.guard,
+            note=(
+                "No request produces it today, although the bundle routes "
+                "resolve scf_stability.source_calculation_key in a namespace "
+                "wider than the carrying calculation's owner: the request "
+                "schemas refuse a cross-owner key first (the "
+                "computed-reaction schema knows which species or transition "
+                "state each calculation belongs to; the computed-species "
+                "schema has one subject), with a generic validation message. "
+                "The workflow check in services/scf_stability_sources.py "
+                "stays as the tripwire for schema drift and is provoked "
+                "directly in tests/services/test_scf_stability_sources.py. "
+                "Promote it to a client-facing code by removing the schema "
+                "check, as thermo's owner rule is left to the workflow."
+            )),
     ApiCode("selection_already_stands", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
@@ -2150,17 +2168,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship,
             reach=Reach.guard,
             note=(
-                "No request produces it, and unlike its four siblings no "
-                "write path anywhere can even produce the condition. "
-                "Transport has one guard, in workflows/transport.py, over a "
-                "calculation the same loop persisted two statements earlier "
-                "with the transport target's own species entry; "
-                "TransportSourceCalculationIn carries only calculation_key "
-                "and role, so no request can name a foreign row; and the two "
-                "other callers of resolve_and_create_transport (the conformer "
-                "upload, the PDep bundle) pass no source calculations at all. "
-                "The guard stays as the tripwire for the day one of them "
-                "does."
+                "No request produces it. The standalone guard, in "
+                "workflows/transport.py, reads a calculation the same loop "
+                "persisted two statements earlier with the transport "
+                "target's own species entry, and TransportSourceCalculationIn "
+                "carries only calculation_key and role, so no request can "
+                "name a foreign row. The bundle seam, persist_bundle_transport, "
+                "does resolve keys in a namespace wider than the species "
+                "(the computed-reaction bundle spans every species), but "
+                "ComputedReactionUploadRequest refuses a cross-species "
+                "transport source first, with a generic validation message, "
+                "so the workflow guard is reached by no request. The conformer "
+                "upload and the PDep bundle pass no source calculations at "
+                "all. The guard stays as the tripwire for schema drift."
             )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py",
