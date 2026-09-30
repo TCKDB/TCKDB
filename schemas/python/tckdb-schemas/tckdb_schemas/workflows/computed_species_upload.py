@@ -41,7 +41,10 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
-from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
+from tckdb_schemas.frequency_completeness import (
+    atom_count_of_xyz,
+    evaluate_deposited_frequency_list,
+)
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.local_key_codes import (
@@ -312,8 +315,62 @@ class CalculationInBundle(SchemaBase):
 # ---------------------------------------------------------------------------
 
 
+def require_opt_primary_unless_monatomic(
+    primary_type: CalculationType,
+    xyz_text: str,
+    *,
+    subject: str,
+) -> None:
+    """Refuse a conformer primary that is not an ``opt``, unless the geometry is one atom.
+
+    An atom has no geometry to optimise: its geometry is a point, and a
+    program run on it is a single point. Producers used to relabel that
+    single point as an ``opt`` to get past this check, which stored a
+    calculation that was not what ran (same log and energy as the ``sp``,
+    ``converged=false``, and a level of theory and program that were not the
+    ones used). An ``sp`` primary is the honest shape, so it is accepted for
+    a geometry of exactly one atom and for nothing else.
+
+    The count is taken from the XYZ the conformer itself carries, the one
+    geometry every conformer must have. A geometry that cannot be counted is
+    treated as not-an-atom here: the malformed XYZ is refused by the fragment
+    that owns that contract, and an unproven atom must not get the exemption.
+
+    Only ``sp`` is exempt. A ``freq``, ``scan`` or any other type is not a
+    conformer's defining calculation for an atom either, and accepting it
+    would widen the rule past what the issue decided.
+
+    :param primary_type: The declared type of the conformer's primary calculation.
+    :param xyz_text: The conformer's own geometry.
+    :param subject: The field, named as the refusal should read it (``... must be 'opt'``).
+    :raises ValueError: for a non-``opt`` primary on anything but a single atom.
+    """
+    if primary_type is CalculationType.opt:
+        return
+    n_atoms = atom_count_of_xyz(xyz_text)
+    if primary_type is CalculationType.sp and n_atoms == 1:
+        return
+    if primary_type is CalculationType.sp and n_atoms is not None:
+        detail = (
+            f" A single-point primary is accepted only for a one-atom geometry; "
+            f"this geometry has {n_atoms} atoms."
+        )
+    else:
+        detail = (
+            " A single-point primary is accepted only for a geometry of exactly one atom."
+        )
+    raise ValueError(
+        f"{subject} must be 'opt', got '{primary_type.value}'." + detail
+    )
+
+
 class ConformerInBundle(SchemaBase):
-    """One conformer with its primary opt + additional calcs."""
+    """One conformer with its primary calculation + additional calcs.
+
+    The primary is an ``opt``, with one exception: a conformer whose geometry
+    is a single atom may carry an ``sp`` primary instead (#610). See
+    :func:`require_opt_primary_unless_monatomic`.
+    """
 
     key: str = Field(min_length=1)
     label: str | None = Field(default=None, max_length=64)
@@ -324,10 +381,29 @@ class ConformerInBundle(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_is_opt(self) -> Self:
-        if self.primary_calculation.type is not CalculationType.opt:
-            raise ValueError(
-                "ConformerInBundle.primary_calculation.type must be 'opt'."
-            )
+        """Send an ``opt`` as ``primary_calculation``; a single atom sends its ``sp``.
+
+        A species of two or more atoms sends the optimisation that produced
+        the conformer's geometry as ``primary_calculation`` with
+        ``type: "opt"``. Any other type is refused. A monatomic species has
+        no geometry to optimise (its geometry is a point), and the program
+        run on it is a single point: send that single point, once, as
+        ``primary_calculation`` with ``type: "sp"``, its ``sp_result``, and
+        the atom's one-atom XYZ as the conformer ``geometry``. Do not
+        relabel it as an ``opt``: no ``opt_result``, no ``converged``, and
+        no second copy of the same log and energy under another level of
+        theory or program. Link the atom's thermo and statmech source
+        calculations to that ``sp`` with role ``sp``; an atom has no ``opt``
+        or ``freq`` to link. A ``sp`` primary on a geometry of two or more
+        atoms, a geometry that cannot be counted, or a primary of any type
+        other than ``opt`` or ``sp`` is refused. A relabelled ``opt`` on an
+        atom is still accepted.
+        """
+        require_opt_primary_unless_monatomic(
+            self.primary_calculation.type,
+            self.geometry.xyz_text,
+            subject="ConformerInBundle.primary_calculation.type",
+        )
         return self
 
 
