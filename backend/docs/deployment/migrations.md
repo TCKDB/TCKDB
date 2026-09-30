@@ -635,7 +635,11 @@ merged row already holds (expect none).
    then `--commit --i-know-this-is-deployed` (commands in the section above).
    A group with approved science is blocked, not forced.
 3. Anything holding an old `lot_hash` (a client-side replica of the hash, a
-   saved query) stops matching for re-keyed rows. **The ARC adapter's test
+   saved query) stops matching for re-keyed rows. That includes **ML dataset
+   exports keyed on `lot_hash`** (`ml_dataset.py`): the key of a re-keyed
+   holder shifts, so re-export rather than join old and new exports on it. The
+   lookup message for an alias match now says "method matched by identity key"
+   (the `lot_method_exact` code is unchanged). **The ARC adapter's test
    replica of the hash (`tests/_backend_level_rules.py`) must adopt the new
    keys** (method aliases and component case) in step with this deploy.
 4. Downgrade restores every hash exactly (with or without merges), and prints

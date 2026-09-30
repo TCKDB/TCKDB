@@ -41,10 +41,15 @@ level of theory is taken over ``method``, ``basis``, ``aux_basis``,
 and ``spin_treatment`` (``_level_of_theory_hash``). The software that ran a
 calculation is a different table (``software_release``, reached through the
 calculation), and ``LevelOfTheoryRef`` carries none. So the key has no program
-to consult, and an entry is admitted only if it is true for every program:
+to consult, and an entry is admitted only if it is true for every program
+checked (Gaussian, ORCA 5/6, Psi4, Q-Chem, PySCF; Molpro and TeraChem are not
+checked):
 
 * the alias is program-independent (``programs=None``), meaning every program
-  that accepts the spelling means the same functional by it, and
+  checked that accepts the spelling means the same functional by it. This
+  concerns alias *spellings*, not stems: B3LYP itself differs between codes
+  (VWN3 in Gaussian, VWN5 in ORCA), and stems already join across codes under
+  the case rule, which this table neither causes nor worsens. And
 * a spelling that means different things in different programs is left out.
   Gaussian ``wB97XD`` is the Chai and Head-Gordon 2008 functional with its
   own damped dispersion, and ORCA's ``wB97X-D3`` is a different
@@ -120,6 +125,14 @@ NAME_ALIASES: tuple[MethodAlias, ...] = (
             "ORCA 5.0.4 and 6.1 manuals, DFT keyword tables: no bare wB97X-D exists "
             "(only wB97X-D3, -D3BJ, -D4, -V), so the hyphenated spelling cannot "
             "mean anything else there. wB97X-D3 is a different key.",
+            "PySCF 2.13.1 (pyscf/scf/dispersion.py) lists wb97x-d as not supported, "
+            "so it accepts no competing meaning; older PySCF mapped WB97X-D to libxc "
+            "WB97X_D, which is exchange-correlation only (no dispersion): a "
+            "different calculation under the same name, but one that PySCF itself "
+            "has dropped. A record whose producer was such a PySCF is the known "
+            "risk of this entry.",
+            "Not checked: Molpro and TeraChem. The claim is 'every program "
+            "checked', not every program.",
         ),
     ),
     MethodAlias(

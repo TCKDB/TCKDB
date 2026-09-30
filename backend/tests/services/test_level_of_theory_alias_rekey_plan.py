@@ -150,10 +150,33 @@ def test_frozen_pre_revision_formula_is_the_parent_revisions(mig, parent):
         assert mig._lot_hash(row, aliased=False) == parent._lot_hash(row, keyed_method=True)
 
 
-def test_assign_hashes_is_the_parent_revisions(mig, parent):
+def test_rule_three_smallest_unmerged_id_takes_the_key_when_nobody_holds_it(mig):
+    """Neither row holds the target nor its previous formula's key: smallest id wins."""
+
+    def key(r):
+        return mig._lot_hash(r, aliased=True)
+
+    def prior(r):
+        return mig._lot_hash(r, aliased=False)
+
+    rows = [_row(9, "wb97x-d", None, None, _stale(9)), _row(4, "WB97XD", None, None, _stale(4))]
+    updates, groups, blocked = mig.assign_hashes(rows, key, prior, set())
+    assert updates == {4: key(rows[1])}
+    assert [(h._mapping["id"], [m._mapping["id"] for m in o]) for h, o in groups] == [(4, [9])]
+    assert blocked == []
+    # A merged smaller id is skipped: the next smallest unmerged row takes it.
+    rows = [_row(2, "wb97x-d", None, None, _stale(2)), *rows]
+    updates, _groups, _blocked = mig.assign_hashes(rows, key, prior, {2})
+    assert list(updates) == [4]
+
+
+@pytest.mark.parametrize("holder_probability", [1.0, 0.7])
+def test_assign_hashes_is_the_parent_revisions(mig, parent, holder_probability):
+    """At 0.7 some groups have no holder, so the smallest-id fallback is reached."""
     rng = random.Random(618)
+    fallbacks = 0
     for _ in range(300):
-        rows, merged = _parent_state(mig, rng, 1.0)
+        rows, merged = _parent_state(mig, rng, holder_probability)
 
         def key(row):
             return mig._lot_hash(row, aliased=True)
@@ -169,6 +192,13 @@ def test_assign_hashes_is_the_parent_revisions(mig, parent):
             [b._mapping["id"] for b in result[2]],
         )
         assert ids(ours) == ids(theirs)
+        for holder, others in ours[1]:
+            if not any(
+                m._mapping["lot_hash"] in (key(m), prior(m)) for m in [holder, *others]
+            ):
+                fallbacks += 1
+    if holder_probability < 1.0:
+        assert fallbacks > 5  # the fallback is exercised, not skipped
 
 
 # ---------------------------------------------------------------------------

@@ -269,7 +269,15 @@ def _lot_match(
 
     if method is not None:
         if method_identity_key(lot.method) == method_identity_key(method):
-            mb.add(LOT_METHOD_EXACT, "method matched exactly")
+            # The code stays ``lot_method_exact`` (clients key on it); the
+            # message says when the match was by identity key, not spelling.
+            if lot.method == method:
+                mb.add(LOT_METHOD_EXACT, "method matched exactly")
+            else:
+                mb.add(
+                    LOT_METHOD_EXACT,
+                    f"method matched by identity key (stored {lot.method!r}, requested {method!r})",
+                )
         else:
             mb.add(LOT_METHOD_MISMATCH, f"method mismatch: have {lot.method}, want {method}")
             lot_status = "partial"

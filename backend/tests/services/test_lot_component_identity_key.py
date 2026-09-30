@@ -55,7 +55,7 @@ SOLVENT_MODEL = [
 _ALL = [*DISPERSION, *SOLVENT, *SOLVENT_MODEL]
 
 
-@pytest.mark.parametrize(("program", "spelling", "key"), _ALL, ids=lambda v: str(v))
+@pytest.mark.parametrize(("program", "spelling", "key"), _ALL, ids=str)
 def test_every_real_spelling_has_the_exact_key(program, spelling, key):
     assert component_identity_key(spelling) == key
 
@@ -93,17 +93,17 @@ def _hash(**fields) -> str:
     return _level_of_theory_hash(LevelOfTheoryRef(method="b3lyp", basis="def2-tzvp", **fields))
 
 
-@pytest.mark.parametrize(("program", "spelling", "key"), DISPERSION, ids=lambda v: str(v))
+@pytest.mark.parametrize(("program", "spelling", "key"), DISPERSION, ids=str)
 def test_dispersion_spellings_hash_alike(program, spelling, key):
     assert _hash(dispersion=spelling) == _hash(dispersion=key)
 
 
-@pytest.mark.parametrize(("program", "spelling", "key"), SOLVENT, ids=lambda v: str(v))
+@pytest.mark.parametrize(("program", "spelling", "key"), SOLVENT, ids=str)
 def test_solvent_spellings_hash_alike(program, spelling, key):
     assert _hash(solvent=spelling, solvent_model="smd") == _hash(solvent=key, solvent_model="smd")
 
 
-@pytest.mark.parametrize(("program", "spelling", "key"), SOLVENT_MODEL, ids=lambda v: str(v))
+@pytest.mark.parametrize(("program", "spelling", "key"), SOLVENT_MODEL, ids=str)
 def test_solvent_model_spellings_hash_alike(program, spelling, key):
     assert _hash(solvent="water", solvent_model=spelling) == _hash(
         solvent="water", solvent_model=key
