@@ -65,9 +65,11 @@ def dry_run_bundle(
     ``503 dry_run_contended`` with a ``Retry-After`` header: nothing was
     decided about the bundle, and retrying is the right response.
     """
-    # Before the preview's first query can flush it: the request's own
-    # bookkeeping (``api_key.last_used_at``) would otherwise hold that row
-    # locked for the whole rehearsal. See ``discard_unflushed_writes``.
+    # A leftover safeguard: ``authenticate_api_key`` no longer leaves
+    # ``api_key.last_used_at`` unflushed in this session (the stamp is written
+    # on its own connection), but a dry run never commits, so anything pending
+    # would only be held locks for the whole rehearsal. See
+    # ``discard_unflushed_writes``.
     discard_unflushed_writes(session)
     result = dry_run_contribution_bundle(session, bundle)
     refusal = rehearse_contribution_bundle_submit(session, bundle, actor=current_user)

@@ -242,9 +242,10 @@ def test_a_canonical_spelling_hashes_as_it_always_did():
     assert _hash(basis="def2-tzvp") == pre_574
 
 
-def test_method_is_still_hashed_verbatim():
-    # #574 is about basis names only. Method case is a separate question.
-    assert _hash(basis="def2-tzvp") != _level_of_theory_hash(
+def test_method_case_is_keyed_too():
+    # #574 keyed basis names only; #585 keys the method's case as well
+    # (``tests/services/test_method_identity_key.py``).
+    assert _hash(basis="def2-tzvp") == _level_of_theory_hash(
         LevelOfTheoryRef(method="B3LYP", basis="def2-tzvp")
     )
 

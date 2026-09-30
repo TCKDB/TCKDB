@@ -48,9 +48,9 @@ import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Callable, Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models.api_key import ApiKey
@@ -408,8 +408,74 @@ def create_api_key(
     return record, raw
 
 
-def authenticate_api_key(session: Session, raw_key: str) -> Optional[AppUser]:
-    """Resolve a raw API key to its owning user, or ``None`` if invalid."""
+#: A key's ``last_used_at`` is rewritten at most this often. "Last used" is a
+#: coarse audit field; a per-request UPDATE would turn every read into a
+#: write (and a row-version churn on the hottest row of the table) for no
+#: extra information. One minute keeps the value accurate to what an
+#: operator can act on while cutting writes to at most one per key per minute.
+API_KEY_LAST_USED_THROTTLE = timedelta(seconds=60)
+
+
+def record_api_key_use(
+    session_factory: Callable[[], Session],
+    key_id: int,
+    *,
+    now: Optional[datetime] = None,
+) -> bool:
+    """Stamp ``api_key.last_used_at`` in its own short transaction.
+
+    Runs on a session of its own -- never the request's -- and commits at
+    once, so the stamp is kept whether or not the request's work commits, and
+    the row lock the UPDATE takes lasts one statement, not one request.
+
+    The UPDATE picks its row with ``FOR NO KEY UPDATE SKIP LOCKED``: if anything else
+    holds the key row (a revocation in flight, another stamp) it is skipped
+    rather than waited for, because a missed stamp costs nothing and a wait
+    would queue requests on one key behind each other. The stamp is also
+    throttled (:data:`API_KEY_LAST_USED_THROTTLE`).
+
+    Returns whether a row was updated. Raises on database errors; the caller
+    decides that a failed stamp must not fail the request.
+    """
+    now = now or datetime.now(timezone.utc).replace(tzinfo=None)
+    stale_before = now - API_KEY_LAST_USED_THROTTLE
+    with session_factory() as session:
+        result = session.execute(
+            update(ApiKey)
+            .where(
+                ApiKey.id.in_(
+                    select(ApiKey.id)
+                    .where(
+                        ApiKey.id == key_id,
+                        or_(
+                            ApiKey.last_used_at.is_(None),
+                            ApiKey.last_used_at < stale_before,
+                        ),
+                    )
+                    .with_for_update(skip_locked=True, key_share=True)
+                )
+            )
+            .values(last_used_at=now)
+        )
+        session.commit()
+        return bool(result.rowcount)  # type: ignore[attr-defined]
+
+
+def authenticate_api_key(
+    session: Session,
+    raw_key: str,
+    *,
+    on_authenticated: Optional[Callable[[int], None]],
+) -> Optional[AppUser]:
+    """Resolve a raw API key to its owning user, or ``None`` if invalid.
+
+    This function only reads. It used to set ``last_used_at`` on the
+    caller's session, which was lost on every route whose session never
+    commits and, on the routes that flush, held the key's row lock for the
+    whole request (#587). Recording use is now the caller's job, through
+    *on_authenticated*, called with the key id once the key has been accepted
+    (see :func:`record_api_key_use`).
+    """
     if not raw_key:
         return None
     row = session.scalar(
@@ -420,7 +486,14 @@ def authenticate_api_key(session: Session, raw_key: str) -> Optional[AppUser]:
     user = session.get(AppUser, row.user_id)
     if user is None or not user.is_active:
         return None
-    row.last_used_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    if on_authenticated is not None and (
+        row.last_used_at is None
+        or row.last_used_at
+        < datetime.now(timezone.utc).replace(tzinfo=None) - API_KEY_LAST_USED_THROTTLE
+    ):
+        # Checked here as well as in the UPDATE so a request inside the
+        # throttle window opens no second connection at all.
+        on_authenticated(row.id)
     return user
 
 

@@ -13,6 +13,7 @@ from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -45,7 +46,7 @@ from app.db.models.common import (
     SoftwareReconciliationStatus,
 )
 from app.db.models.execution_environment import ExecutionEnvironmentManifest
-from app.db.models.level_of_theory import LevelOfTheory
+from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.db.models.software import SoftwareRelease
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.entities.calculation import CalculationCreateResolved
@@ -125,15 +126,17 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
 
     Basis-set names enter the hash through
     :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
-    so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory. The row still
-    stores the name verbatim. Every other field is hashed as written.
+    so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory, and the method
+    through :func:`~app.chemistry.method_names.method_identity_key` (issue
+    #585), so ``CCSD(T)-F12`` and ``ccsd(t)-f12`` are too. The row still
+    stores both names verbatim. Every other field is hashed as written.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
     """
 
     payload = {
-        "method": ref.method,
+        "method": method_identity_key(ref.method),
         "basis": basis_identity_key(ref.basis),
         "aux_basis": basis_identity_key(ref.aux_basis),
         "cabs_basis": basis_identity_key(ref.cabs_basis),
@@ -249,6 +252,17 @@ def resolve_level_of_theory_ref(
             level_of_theory = session.scalar(
                 select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
             )
+
+    # A merged row keeps its old hash so its ref still resolves (#574). If a
+    # spelling ever hashes to one, the calculation belongs on the row it was
+    # merged into: the database refuses a calculation on a merged row (#591).
+    kept_id = session.scalar(
+        select(LevelOfTheoryMerge.into_lot_id).where(
+            LevelOfTheoryMerge.merged_lot_id == level_of_theory.id
+        )
+    )
+    if kept_id is not None:
+        level_of_theory = session.get(LevelOfTheory, kept_id)
 
     return level_of_theory
 
@@ -731,6 +745,14 @@ def banner_supplies_missing_version(
 #: and the optimisation itself is missing its own energy, its own
 #: artifact, or both.
 W_CONVERGED_OPT_NO_USABLE_ENERGY = "converged_opt_no_usable_energy"
+
+#: Emitted when an additional calculation is stored but the server did not
+#: link it to the primary calculation, because the role that link would
+#: carry needs a parent of a different type (e.g. ``single_point_on`` needs
+#: an ``opt`` parent and the primary is an ``sp``). An absence warning: the
+#: calculation and its observation anchor are kept, only the inferred edge
+#: is missing. Never a refusal -- the depositor did not declare the edge.
+W_DEPENDENCY_EDGE_NOT_INFERRED = "dependency_edge_not_inferred"
 
 
 def _load_sp_owner_ids(
@@ -1561,6 +1583,30 @@ _OPTIMIZED_FROM_PARENT_TYPES: frozenset[CalculationType] = frozenset(
 )
 
 
+def dependency_role_type_compatible(
+    parent_calc: Calculation,
+    role: CalculationDependencyRole,
+) -> bool:
+    """Say whether ``parent_calc``'s type is allowed as the parent of ``role``.
+
+    The predicate behind :func:`assert_dependency_role_type_compatible`, for
+    writers whose edge is inferred by the server rather than declared by the
+    depositor. Those skip a forbidden edge instead of refusing the upload.
+    """
+    # Use ``==`` rather than ``is`` so wire-enum role values from
+    # ``tckdb_schemas.enums`` (passed in via bundle workflows) compare
+    # equal to the backend DB enum member. Two mirrored enum classes
+    # share ``.value`` and ``__hash__`` but are distinct Python objects,
+    # so ``is`` silently returned False here and skipped the
+    # opt/path_search parent-type check for ``optimized_from`` edges.
+    if role == CalculationDependencyRole.optimized_from:
+        return parent_calc.type in _OPTIMIZED_FROM_PARENT_TYPES
+    expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
+    if expected is None:
+        return True
+    return parent_calc.type == expected
+
+
 def assert_dependency_role_type_compatible(
     parent_calc: Calculation,
     role: CalculationDependencyRole,
@@ -1576,28 +1622,18 @@ def assert_dependency_role_type_compatible(
     or ``path_search`` (TS-guess generator). Bundle workflows surface
     incompatibilities as 422 to mirror DR-0028 error semantics.
     """
-    # Use ``==`` rather than ``is`` so wire-enum role values from
-    # ``tckdb_schemas.enums`` (passed in via bundle workflows) compare
-    # equal to the backend DB enum member. Two mirrored enum classes
-    # share ``.value`` and ``__hash__`` but are distinct Python objects,
-    # so ``is`` silently returned False here and skipped the
-    # opt/path_search parent-type check for ``optimized_from`` edges.
+    if dependency_role_type_compatible(parent_calc, role):
+        return
     if role == CalculationDependencyRole.optimized_from:
-        if parent_calc.type not in _OPTIMIZED_FROM_PARENT_TYPES:
-            raise ValueError(
-                f"{context}: role='optimized_from' requires a parent of "
-                f"type 'opt' or 'path_search', got "
-                f"'{parent_calc.type.value}'."
-            )
-        return
-    expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE.get(role)
-    if expected is None:
-        return
-    if parent_calc.type != expected:
         raise ValueError(
-            f"{context}: role='{role.value}' is incompatible with the "
-            f"resolved parent calculation type."
+            f"{context}: role='optimized_from' requires a parent of "
+            f"type 'opt' or 'path_search', got "
+            f"'{parent_calc.type.value}'."
         )
+    raise ValueError(
+        f"{context}: role='{role.value}' is incompatible with the "
+        f"resolved parent calculation type."
+    )
 
 
 def add_dependency_edge_idempotent(
@@ -1961,6 +1997,7 @@ def persist_additional_calculations(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     created_by: int | None = None,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[Calculation]:
     """Persist additional calculations with dependency edges to a primary.
 
@@ -1975,6 +2012,10 @@ def persist_additional_calculations(
     :param species_entry_id: Owner species-entry id (mutually exclusive with TS).
     :param transition_state_entry_id: Owner TS-entry id.
     :param created_by: Optional application user id.
+    :param warnings: Optional out-list; an :class:`UploadWarning` with code
+        ``W_DEPENDENCY_EDGE_NOT_INFERRED`` is appended for each inferred
+        edge that was skipped because the primary's type does not fit the
+        edge's role.
     :returns: List of newly created ``Calculation`` rows.
     """
 
@@ -2017,21 +2058,49 @@ def persist_additional_calculations(
             context=upload_label,
         )
 
+        # These edges are inferred by the server, not declared by the
+        # depositor, so one the dependency-role table
+        # (``_DEPENDENCY_ROLE_TO_PARENT_TYPE``) forbids (e.g.
+        # ``single_point_on`` under a primary that is not an ``opt``) is
+        # skipped, not refused: DAG edges are opportunistic enrichment, and
+        # the calculation stays stored and anchored to the observation. The
+        # skip is disclosed as a warning so it is not silent.
         dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
         if dep_role is not None:
-            session.add(
-                CalculationDependency(
-                    parent_calculation_id=primary_calc.id,
-                    child_calculation_id=child_calc.id,
-                    dependency_role=dep_role,
+            if dependency_role_type_compatible(primary_calc, dep_role):
+                session.add(
+                    CalculationDependency(
+                        parent_calculation_id=primary_calc.id,
+                        child_calculation_id=child_calc.id,
+                        dependency_role=dep_role,
+                    )
                 )
-            )
+            elif warnings is not None:
+                expected = _DEPENDENCY_ROLE_TO_PARENT_TYPE[dep_role]
+                warnings.append(
+                    UploadWarning(
+                        field=f"additional_calculations[{position}]",
+                        code=W_DEPENDENCY_EDGE_NOT_INFERRED,
+                        message=(
+                            f"{upload_label} was stored but not linked to the "
+                            f"primary calculation: role '{dep_role.value}' "
+                            f"needs a parent of type '{expected.value}' and "
+                            f"the primary calculation is type "
+                            f"'{primary_calc.type.value}'."
+                        ),
+                    )
+                )
 
         # Inverted-edge case: path_search is a TS-guess generator, so the
         # primary opt is ``optimized_from`` the path search rather than the
         # other way around.
         inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(calc_upload.type)
-        if inverted_role is not None:
+        # Guard cannot fire today: the child is always ``path_search``,
+        # which ``optimized_from`` always accepts. Kept so a new inverted
+        # mapping is checked too.
+        if inverted_role is not None and dependency_role_type_compatible(
+            child_calc, inverted_role
+        ):
             session.add(
                 CalculationDependency(
                     parent_calculation_id=child_calc.id,

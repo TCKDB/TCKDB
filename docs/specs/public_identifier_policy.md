@@ -157,7 +157,8 @@ never recomputed. When the hash formula changes, existing rows are re-keyed
 in place and keep the ref they were minted with: `e1a5c3f7b9d4` (spin
 treatment joined the identity) did this for every row, and `38b06819f099`
 (basis names hashed by identity key, #574) did it for every row whose basis
-spelling differs from its key. For those rows the stored ref is no longer
+spelling differs from its key, and `c8424fe82997` (method names, #585) for
+every row whose method has an upper-case letter. For those rows the stored ref is no longer
 what their content would mint on a fresh instance. So "same content → same
 ref" below holds for rows minted under the current formula, not for every
 row that exists. A LoT ref identifies a row; it is not re-derivable from its
@@ -263,7 +264,7 @@ TCKDB scale.
 
 **LoT exception.** The content-identity row holds for a LoT minted under
 the current hash formula. A LoT row re-keyed in place by a later formula
-change (`e1a5c3f7b9d4`, `38b06819f099`) keeps the ref it was minted with,
+change (`e1a5c3f7b9d4`, `38b06819f099`, `c8424fe82997`) keeps the ref it was minted with,
 so on replay into a fresh instance the same content mints a *different*
 ref. See "LoT refs are minted once" above.
 
@@ -312,6 +313,28 @@ double the OpenAPI surface, double the route tests, and force clients
 to make a routing decision every call. A single dispatching path
 parameter keeps the URL contract small while supporting both forms
 during the transition window.
+
+### Producer write routes (#578)
+
+The two producer write routes that named a record by row id in the path,
+`POST /submissions/{submission_id}/rights-attestations` and
+`POST /calculations/{calculation_id}/artifacts`, accept a handle: the integer
+or the `sub_` / `calc_` ref. Ownership, approval-freeze and role checks run on
+the resolved row, so both forms meet the same checks. Every upload, job and
+bundle response, and the polled job result, returns `submission_ref` beside
+`submission_id`, and `calculation_ref` (or `calculation_key_refs` on a
+computed reaction) beside each calculation id. The integer form is deprecated;
+it is removed, and the guard's `DEFERRED_PARAM_LEAKS` entries with it, once no
+supported `tckdb-client`, in-repo `tckdb-qcschema` adapter, or out-of-repo ARC
+adapter release still sends it. An unknown handle of either form, on either
+route, is a 404 with code `handle_not_found`.
+
+Retry caveat: idempotency keys are scoped by the concrete URL path. A request
+committed by an older client through the integer path whose response was lost,
+then retried by a newer client with the same key through the `calc_` path, is
+not recognised as a replay, so the route runs again and attaches duplicate
+artifacts. Finish or abandon in-flight artifact uploads before upgrading a
+client, or keep sending the form you started with.
 
 ### Query-param refs
 

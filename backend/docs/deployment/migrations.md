@@ -183,6 +183,24 @@ The expected recovery path for a failed deploy is:
 3. Re-deploy the previous application version.
 4. Investigate.
 
+**Rolling back the level-of-theory re-key (`c8424fe82997`) after a merge.**
+While the old code runs after the downgrade, an upload of a merged spelling
+hashes to the merged row and lands on it. Re-upgrading then reports stranded
+calculations (the guard revision's printed count), and the merge script does
+not move them. After re-upgrading and **before** the dry run, repoint them:
+
+```sql
+UPDATE calculation c
+   SET lot_id = m.into_lot_id
+  FROM level_of_theory_merge m
+ WHERE c.lot_id = m.merged_lot_id
+   AND NOT tckdb_record_is_accepted(CAST('calculation' AS submission_record_type), c.id);
+```
+
+Approved calculations are skipped by that statement (the accepted-science guard
+forbids changing them); any that remain on a merged row have to be handled by
+hand, with a declared accepted-science repair.
+
 Use `alembic downgrade` only for narrow, well-understood schema-only changes and only when you accept the data-loss surface.
 
 ---
@@ -532,6 +550,61 @@ Read the dry run before committing. The script:
   (published releases freeze it) and gets a `level_of_theory_merge` row;
   reads resolve its ref to the kept row;
 - is idempotent: merged rows are out of scope on the next run.
+
+---
+
+## Method-name identity re-key and merge guards (revisions `c8424fe82997`, `e88231299733`)
+
+`c8424fe82997` (#585) makes `lot_hash` hash the method name by an identity
+key (stripped, lower-cased), the way `38b06819f099` did for basis names:
+ARC's `ccsd(t)-f12` and a stored `CCSD(T)-F12` are one level of theory. It
+re-keys existing rows in place, writes no DDL, and prints the duplicate groups
+it could not collapse, by `public_ref`. Punctuation aliases (`wb97xd` /
+`wB97X-D`) stay separate: they need an alias table, not a spelling rule.
+
+**Same consequences as the basis re-key** for anything holding an old
+`lot_hash` (see the section above): every row whose method has an upper-case
+letter gets a new hash; `public_ref` is untouched. A merged row (one with a
+`level_of_theory_merge` row) is never re-hashed and never chosen as the
+holder of a key.
+
+**After the deploy, run the merge script's dry run again**, for the same
+reason as after `38b06819f099` (an upload served by the old API during the
+migration hashes the old way) and because the re-key itself leaves duplicate
+groups (two cases of one method) for the script to join:
+
+```bash
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py            # dry run (default)
+python backend/scripts/ops/merge_duplicate_levels_of_theory.py --commit --i-know-this-is-deployed
+```
+
+The script also now blocks a group when an **approved
+`molecular_property_observation`** cites a calculation it would move. The
+database does not freeze observations (no guard trigger), so the script's
+check is the only thing standing between an approved observation and a
+change of the level of theory it rests on.
+
+`e88231299733` (#591) adds two triggers, no data change:
+
+- `trg_lot_merge_guard` on `level_of_theory_merge` refuses a chain or loop
+  (`into_lot_id` already merged, or `merged_lot_id` already a target) and
+  refuses to merge a row that calculations still use;
+- `trg_calculation_lot_not_merged` on `calculation` refuses a `lot_id` that
+  names a merged row (on insert, or when `lot_id` changes).
+
+**Do not downgrade below `e88231299733` after a merge `--commit` unless the
+`c8424fe82997` holder-choice fix is in your tree** (the version of that revision
+that prints "Who holds a key" in its docstring). Older text of that revision
+could crash on such a downgrade.
+
+**Isolation level.** The triggers' race safety assumes READ COMMITTED (the
+default and the only level the application uses); see the `e88231299733`
+docstring.
+
+The upgrade prints how many chain links and stranded calculations already
+exist. Both should be 0; existing rows are reported, not rejected. The
+downgrade prints how many merges the table holds: downgrading further, past
+`38b06819f099`, drops `level_of_theory_merge` and forgets them.
 
 ---
 

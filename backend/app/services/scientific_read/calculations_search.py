@@ -103,6 +103,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
@@ -650,9 +651,9 @@ def _apply_lot_filters(stmt, request: CalculationsSearchRequest):
         return stmt
     stmt = stmt.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
     if request.method is not None:
-        stmt = stmt.where(LevelOfTheory.method == request.method)
+        stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
-        stmt = stmt.where(LevelOfTheory.basis == request.basis)
+        stmt = stmt.where(basis_matches(request.basis))
     if request.lot_ref is not None:
         stmt = stmt.where(level_of_theory_ref_clause(request.lot_ref))
     if request.lot_hash is not None:

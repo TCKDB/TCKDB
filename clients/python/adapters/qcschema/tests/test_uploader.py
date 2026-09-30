@@ -231,6 +231,10 @@ def test_upload_record_full_success(energy_record_and_payload):
         artifact_filename="energy_v1.qcschema.json",
     )
     assert outcome.calculation_id == 42
+    # A server that returns no calculation_ref: the integer is the fallback.
+    assert [p for (m, p, *_r) in client.calls if m == "POST" and p.endswith("/artifacts")] == [
+        "/calculations/42/artifacts"
+    ]
     assert outcome.conformer_replayed is False
     assert outcome.artifact_replayed is False
 
@@ -414,3 +418,20 @@ def test_dry_run_sends_nothing(energy_record_and_payload):
     assert client.calls == []
     assert plan["conformers_idempotency_key"] == conformers_idempotency_key(record.canonical_sha256)
     assert plan["artifact_idempotency_key"] == artifact_idempotency_key(record.canonical_sha256)
+
+
+def test_artifact_post_is_addressed_by_calc_ref_when_the_server_returns_one(
+    energy_record_and_payload,
+):
+    raw, sha, record, payload = energy_record_and_payload
+    ref = "calc_" + "a" * 26
+    client = _StubClient(
+        conformer_data={"primary_calculation": {"calculation_id": 42, "calculation_ref": ref}}
+    )
+    outcome = upload_record(
+        client, record, payload, raw_bytes=raw, raw_sha256=sha,
+        artifact_filename="energy_v1.qcschema.json",
+    )
+    posts = [p for (m, p, *_r) in client.calls if m == "POST" and p.endswith("/artifacts")]
+    assert posts == [f"/calculations/{ref}/artifacts"]
+    assert outcome.calculation_id == 42

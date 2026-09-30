@@ -67,6 +67,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "calculation",
@@ -498,9 +499,9 @@ def _apply_lot_filters(stmt, request: ScientificArtifactSearchRequest):
         return stmt
     stmt = stmt.join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id)
     if request.method is not None:
-        stmt = stmt.where(LevelOfTheory.method == request.method)
+        stmt = stmt.where(method_matches(request.method))
     if request.basis is not None:
-        stmt = stmt.where(LevelOfTheory.basis == request.basis)
+        stmt = stmt.where(basis_matches(request.basis))
     return stmt
 
 

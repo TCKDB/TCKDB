@@ -61,6 +61,8 @@ class CalculationUploadRef(BaseModel):
 
     request_index: int | None = None
     calculation_id: int
+    #: The ``calc_`` ref of the same calculation; name it in later requests.
+    calculation_ref: str | None = None
     type: CalculationType
     role: Literal["primary", "additional"]
 

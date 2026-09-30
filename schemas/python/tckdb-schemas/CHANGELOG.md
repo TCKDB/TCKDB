@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.57.0 - 2026-09-30
+
+Every upload, job and bundle response now names its submission by public ref
+as well as row id: `submission_ref` (`sub_...`) beside `submission_id`. In this
+package that is `ComputedSpeciesUploadResult.submission_ref`, and
+`CalculationUploadRefInBundle.calculation_ref` (`calc_...`) beside
+`calculation_id`. Both are optional and additive. The two routes that took a
+row id in the path, `POST /api/v1/submissions/{submission_id}/rights-attestations`
+and `POST /api/v1/calculations/{calculation_id}/artifacts`, now accept either
+the integer or the ref there (a `handle_type_mismatch` 422 for a ref of the
+wrong kind, 404 `handle_not_found` for an unknown one, in either form); the integer is deprecated, not removed.
+
+## 0.56.0 - 2026-09-29
+
+`reversible` on the reaction of `POST /api/v1/uploads/transition-states`
+(`TSReactionUpload`) is now optional and defaults to `true`, matching
+`POST /api/v1/uploads/computed-reaction`. Omitted means `true` on both
+routes: a transition state belongs to an elementary step, and an elementary
+step is reversible by microscopic reversibility. Send `false` only to state
+that the step is irreversible. A payload that already sends the field is
+unaffected. Both routes now carry the same description of the field in the
+contract. (#583)
+
 ## 0.55.0 - 2026-09-29
 
 Producer contract only; no model in this package changes. New refusal code

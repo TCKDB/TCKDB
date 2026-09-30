@@ -401,3 +401,70 @@ def _merged_into(db_session, lot_id: int) -> int | None:
     return db_session.scalar(
         select(LevelOfTheoryMerge.into_lot_id).where(LevelOfTheoryMerge.merged_lot_id == lot_id)
     )
+
+
+# ---------------------------------------------------------------------------
+# #591: observations, and method case (#585)
+# ---------------------------------------------------------------------------
+
+
+def _observation_on(db_session, calc):
+    from tests.services.scientific_read._factories import make_observation
+
+    obs = make_observation(db_session, species_entry=_entry_of(db_session, calc))
+    obs.source_calculation_id = calc.id
+    db_session.flush()
+    return obs
+
+
+def test_an_approved_observation_citing_a_moved_calculation_blocks_the_group(
+    merge, db_session, seeded
+):
+    """The database does not freeze an observation, so the script is the only check."""
+    calc = seeded["gaussian_calcs"][0]
+    obs = _observation_on(db_session, calc)
+    _approve(db_session, obs, SubmissionRecordType.molecular_property_observation)
+
+    plan = merge.build_plan(db_session)
+    blockers = _group(plan, seeded["psi4"]).blockers()
+    assert any(
+        obs.public_ref in b and calc.public_ref in b and "molecular_property_observation" in b
+        for b in blockers
+    ), blockers
+
+    result = merge.commit_plan(db_session, plan)
+    db_session.expire_all()
+    assert seeded["psi4"].id not in {g.holder.row_id for g, _ in result.merged}
+    assert db_session.get(Calculation, calc.id).lot_id == seeded["gaussian"].id
+
+
+def test_an_unapproved_observation_does_not_block_the_group(merge, db_session, seeded):
+    calc = seeded["gaussian_calcs"][0]
+    _observation_on(db_session, calc)  # no review row: not accepted
+
+    assert _group(merge.build_plan(db_session), seeded["psi4"]).blockers() == []
+
+
+def test_two_spellings_of_the_method_are_one_group(merge, db_session):
+    """#585: ``CCSD(T)-F12`` (older, stored hash) and ``ccsd(t)-f12`` (holds the key)."""
+    holder = _lot(db_session, "ccsd(t)-f12-lotm", "cc-pvtz-f12", holder=True)
+    duplicate = LevelOfTheory(
+        method="CCSD(T)-F12-LOTM",
+        basis="cc-pVTZ-F12",
+        lot_hash=_pre_574_hash("CCSD(T)-F12-LOTM", "cc-pVTZ-F12"),
+    )
+    db_session.add(duplicate)
+    db_session.flush()
+    calc = _calc(db_session, duplicate)
+
+    plan = merge.build_plan(db_session)
+    group = _group(plan, holder)
+    assert [d.row.row_id for d in group.duplicates] == [duplicate.id]
+    assert group.blockers() == []
+
+    merge.commit_plan(db_session, plan)
+    db_session.expire_all()
+    assert db_session.get(Calculation, calc.id).lot_id == holder.id
+    assert _merged_into(db_session, duplicate.id) == holder.id
+    # The merged row keeps its own spelling and ref.
+    assert db_session.get(LevelOfTheory, duplicate.id).method == "CCSD(T)-F12-LOTM"

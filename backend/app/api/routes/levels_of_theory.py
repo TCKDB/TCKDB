@@ -11,6 +11,8 @@ from app.api.errors import NotFoundError
 from app.api.routes._pagination import PaginatedResponse
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
+from app.services.scientific_read.handles import canonical_level_of_theory_id
+from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
 
 router = APIRouter()
 
@@ -31,9 +33,9 @@ def list_levels_of_theory(
         LevelOfTheory.id.not_in(select(LevelOfTheoryMerge.merged_lot_id))
     )
     if method is not None:
-        base = base.where(LevelOfTheory.method == method)
+        base = base.where(method_matches(method))
     if basis is not None:
-        base = base.where(LevelOfTheory.basis == basis)
+        base = base.where(basis_matches(basis))
     if dispersion is not None:
         base = base.where(LevelOfTheory.dispersion == dispersion)
     if solvent is not None:
@@ -61,7 +63,9 @@ def list_levels_of_theory(
 
 @router.get("/{lot_id}", response_model=LevelOfTheoryRead)
 def get_level_of_theory(lot_id: int, session: Session = Depends(get_db)):
-    row = session.get(LevelOfTheory, lot_id)
+    # A merged row's id names the row it was merged into (#591), as its
+    # ``lot_...`` ref does on the scientific routes.
+    row = session.get(LevelOfTheory, canonical_level_of_theory_id(session, lot_id))
     if row is None:
         raise NotFoundError("LevelOfTheory not found")
     return LevelOfTheoryRead.model_validate(row)

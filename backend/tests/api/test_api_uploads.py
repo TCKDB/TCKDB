@@ -221,7 +221,10 @@ class TestMinimumImaginaryModeBlocks:
         payload["additional_calculations"] = [_freq_calc(n_imag=0)]
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 201, resp.text
-        assert resp.json()["warnings"] == []
+        # The base payload's primary is an ``sp``, so the freq's automatic
+        # link is skipped and disclosed; that is the only warning expected.
+        codes = [w["code"] for w in resp.json()["warnings"]]
+        assert codes == ["dependency_edge_not_inferred"]
 
     def test_no_frequency_evidence_is_unaffected(self, client):
         """Absence is not contradiction — the base payload has no freq data."""
@@ -920,3 +923,92 @@ class TestReadAfterWrite:
             "scan_point", "scan_point", "scan_point"
         ]
         assert len({r["geometry"]["id"] for r in rows}) == 3
+
+
+def _chem_reaction_id(db_session, resp) -> int:
+    from app.db.models.reaction import ReactionEntry
+
+    entry = db_session.get(ReactionEntry, resp.json()["reaction_entry_id"])
+    return entry.reaction_id
+
+
+class TestTransitionStateReversibleDefault:
+    """``reversible`` on the TS route agrees with the computed-reaction route.
+
+    A transition state is a saddle point on an elementary step, and an
+    elementary step is reversible by microscopic reversibility, so a
+    producer that says nothing gets ``true`` -- the same as on
+    ``POST /uploads/computed-reaction``. ``chem_reaction.reversible`` is NOT
+    NULL and is part of the reaction's identity hash, so "not stated" has no
+    storable value; the default is the only honest answer.
+    """
+
+    def test_omitted_reversible_uploads_and_means_true(self, client, db_session):
+        from app.db.models.reaction import ChemReaction, ReactionEntry
+
+        payload = _transition_state_payload(label="ts-omitted")
+        del payload["reaction"]["reversible"]
+        resp = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert resp.status_code == 201, resp.text
+        entry = db_session.get(ReactionEntry, resp.json()["reaction_entry_id"])
+        assert entry is not None
+        assert db_session.get(ChemReaction, entry.reaction_id).reversible is True
+
+    def test_omitted_lands_on_the_same_reaction_as_explicit_true(
+        self, client, db_session
+    ):
+        explicit = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(label="ts-explicit"),
+        )
+        payload = _transition_state_payload(label="ts-omitted-2")
+        del payload["reaction"]["reversible"]
+        omitted = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert explicit.status_code == 201, explicit.text
+        assert omitted.status_code == 201, omitted.text
+        assert _chem_reaction_id(db_session, omitted) == _chem_reaction_id(
+            db_session, explicit
+        )
+
+    def test_explicit_false_is_still_honoured(self, client, db_session):
+        from app.db.models.reaction import ChemReaction, ReactionEntry
+
+        payload = _transition_state_payload(label="ts-irreversible")
+        payload["reaction"]["reversible"] = False
+        resp = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert resp.status_code == 201, resp.text
+        entry = db_session.get(ReactionEntry, resp.json()["reaction_entry_id"])
+        assert db_session.get(ChemReaction, entry.reaction_id).reversible is False
+
+    def test_omitted_does_not_join_a_stored_irreversible_twin(
+        self, client, db_session
+    ):
+        """Pins existing identity behaviour; it is not a fix.
+
+        ``reversible`` is part of the reaction identity hash, so a stored
+        ``reversible=false`` reaction and a TS upload that omits the field
+        (meaning ``true``) are different ``chem_reaction`` rows over the
+        same participants, and nothing warns about the twin. An explicit
+        ``true`` behaved the same before the default existed.
+        """
+        from app.db.models.reaction import ChemReaction, ReactionEntry
+
+        payload = _transition_state_payload(label="ts-twin")
+        irreversible = {
+            "reversible": False,
+            "reactants": payload["reaction"]["reactants"],
+            "products": payload["reaction"]["products"],
+        }
+        stored = client.post("/api/v1/uploads/reactions", json=irreversible)
+        assert stored.status_code == 201, stored.text
+        del payload["reaction"]["reversible"]
+        ts = client.post("/api/v1/uploads/transition-states", json=payload)
+        assert ts.status_code == 201, ts.text
+        # /uploads/reactions names the reaction_entry ``id``; the TS route
+        # names it ``reaction_entry_id``.
+        stored_entry = db_session.get(ReactionEntry, stored.json()["id"])
+        stored_rxn = stored_entry.reaction_id
+        ts_rxn = _chem_reaction_id(db_session, ts)
+        assert stored_rxn != ts_rxn
+        assert db_session.get(ChemReaction, stored_rxn).reversible is False
+        assert db_session.get(ChemReaction, ts_rxn).reversible is True

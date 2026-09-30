@@ -115,3 +115,104 @@ def test_the_legacy_listing_omits_merged_rows(client, db_session, merged):
     assert db_session.scalar(
         select(LevelOfTheory.id).where(LevelOfTheory.id == merged["duplicate"].id)
     )
+
+
+# ---------------------------------------------------------------------------
+# Integer ids agree with refs on every route (#591)
+# ---------------------------------------------------------------------------
+
+
+def test_the_legacy_detail_route_resolves_a_merged_id_to_the_kept_row(client, merged):
+    resp = client.get(f"/api/v1/levels-of-theory/{merged['duplicate'].id}")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == merged["holder"].id
+
+
+def test_the_scientific_detail_route_resolves_a_merged_id_to_the_kept_row(client, merged):
+    resp = client.get(
+        f"/api/v1/scientific/level-of-theories/{merged['duplicate'].id}"
+    )
+    assert resp.status_code == 200, resp.text
+    lot = resp.json()["record"]["level_of_theory"]
+    assert lot["level_of_theory_ref"] == merged["holder"].public_ref
+
+
+def test_the_legacy_calculation_list_resolves_a_merged_lot_id(client, merged):
+    resp = client.get(f"/api/v1/calculations?lot_id={merged['duplicate'].id}")
+    assert resp.status_code == 200, resp.text
+    assert {c["id"] for c in resp.json()["items"]} == {c.id for c in merged["calcs"]}
+
+
+def test_the_three_routes_answer_a_merged_id_alike(client, merged):
+    """Detail (legacy), detail (scientific) and the calculation filter agree."""
+    dup = merged["duplicate"].id
+    legacy = client.get(f"/api/v1/levels-of-theory/{dup}").json()["id"]
+    scientific = client.get(f"/api/v1/scientific/level-of-theories/{dup}").json()[
+        "record"
+    ]["level_of_theory"]["level_of_theory_ref"]
+    filtered = client.get(f"/api/v1/calculations?lot_id={dup}").json()["items"]
+    holder = merged["holder"]
+    assert (legacy, scientific) == (holder.id, holder.public_ref)
+    assert len(filtered) == len(merged["calcs"]) > 0
+
+
+def test_the_frequency_scale_factor_list_resolves_a_merged_lot_id(
+    client, db_session, merged
+):
+    from tests.services.scientific_read._factories import make_frequency_scale_factor
+
+    fsf = make_frequency_scale_factor(db_session, lot=merged["holder"])
+    resp = client.get(
+        f"/api/v1/frequency-scale-factors?level_of_theory_id={merged['duplicate'].id}"
+    )
+    assert resp.status_code == 200, resp.text
+    assert [i["id"] for i in resp.json()["items"]] == [fsf.id]
+
+
+def test_the_energy_correction_scheme_list_resolves_a_merged_lot_id(
+    client, db_session, merged
+):
+    from tests.services.scientific_read._factories import make_energy_correction_scheme
+
+    scheme = make_energy_correction_scheme(db_session, lot=merged["holder"])
+    resp = client.get(
+        f"/api/v1/energy-correction-schemes?level_of_theory_id={merged['duplicate'].id}"
+    )
+    assert resp.status_code == 200, resp.text
+    assert [i["id"] for i in resp.json()["items"]] == [scheme.id]
+
+
+def test_lowest_sp_resolves_a_merged_lot_id(client, db_session, merged):
+    """The comparison context is the kept row: that is where the SPs moved."""
+    from tests.services.scientific_read._factories import make_species, make_species_entry
+
+    entry = make_species_entry(
+        db_session,
+        make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("MREF")),
+    )
+    resp = client.get(
+        f"/api/v1/species-entries/{entry.id}/conformer-observations/lowest-sp",
+        params={"lot_id": merged["duplicate"].id},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["lot_id"] == merged["holder"].id
+
+
+def test_an_upload_that_hashes_to_a_merged_row_lands_on_the_kept_row(db_session, merged):
+    """The database refuses a calculation on a merged row, so the upload path must not try."""
+    from tckdb_schemas.fragments.refs import LevelOfTheoryRef
+
+    from app.services.calculation_resolution import (
+        _level_of_theory_hash,
+        resolve_level_of_theory_ref,
+    )
+
+    # The retired row carries the hash this spelling produces (as a row
+    # re-keyed and then merged would); the kept row holds another.
+    ref = LevelOfTheoryRef(method="b3lyp-merged-ref", basis="def2tzvp")
+    merged["holder"].lot_hash = "1" * 64
+    merged["duplicate"].lot_hash = _level_of_theory_hash(ref)
+    db_session.flush()
+
+    resolved = resolve_level_of_theory_ref(db_session, ref)
+    assert resolved.id == merged["holder"].id

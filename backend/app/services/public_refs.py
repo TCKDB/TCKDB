@@ -493,6 +493,27 @@ def ensure_public_ref(obj: Any) -> str:
     return ref
 
 
+def public_refs_by_id(session: Any, model_cls: type, ids: Any) -> dict[int, str]:
+    """Return ``{row id: public ref}`` for the given rows of *model_cls*.
+
+    The producer-facing responses that still carry an integer id use this to
+    name the same row by its ref beside it (the sibling-ref rule in
+    ``docs/specs/public_identifier_policy.md``). One query, whatever the
+    number of ids; an id with no row, or a row with no ref yet, is left out
+    rather than mapped to ``None`` so a caller cannot mistake "absent" for a
+    ref.
+    """
+    from sqlalchemy import select
+
+    wanted = {int(i) for i in ids}
+    if not wanted:
+        return {}
+    rows = session.execute(
+        select(model_cls.id, model_cls.public_ref).where(model_cls.id.in_(wanted))
+    ).all()
+    return {row_id: ref for row_id, ref in rows if ref}
+
+
 # ---------------------------------------------------------------------------
 # SQLAlchemy event listener — wired in app.db.base when Base is imported
 # ---------------------------------------------------------------------------

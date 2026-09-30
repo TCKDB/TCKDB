@@ -80,6 +80,7 @@ from app.services.calculation_resolution import (
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
     collect_converged_opt_energy_warnings,
+    dependency_role_type_compatible,
     resolve_and_persist_calculation_with_results,
     resolve_level_of_theory_ref,
     resolve_software_release_ref,
@@ -457,7 +458,11 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
-            if dep_role is not None:
+            # Guard cannot fire today: ``ConformerInBundle.validate_primary_is_opt``
+            # requires an opt primary. Kept as defence in depth.
+            if dep_role is not None and dependency_role_type_compatible(
+                primary_calc, dep_role
+            ):
                 add_dependency_edge_idempotent(
                     session,
                     parent_calculation_id=primary_calc.id,
@@ -474,7 +479,11 @@ def persist_computed_species_upload(
             inverted_role = _INVERTED_DEPENDENCY_ROLE_FOR_TYPE.get(
                 additional_in.type
             )
-            if inverted_role is not None:
+            # Guard cannot fire today: the child is always ``path_search``,
+            # which ``optimized_from`` always accepts. Kept as defence in depth.
+            if inverted_role is not None and dependency_role_type_compatible(
+                child_calc, inverted_role
+            ):
                 add_dependency_edge_idempotent(
                     session,
                     parent_calculation_id=child_calc.id,

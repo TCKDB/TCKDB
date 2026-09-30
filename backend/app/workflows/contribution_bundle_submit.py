@@ -426,6 +426,7 @@ def submit_contribution_bundle(
 
     return ContributionBundleSubmitResult(
         submission_id=submission.id,
+        submission_ref=submission.public_ref,
         status=submission.status,
         review_status=SubmitReviewStatus.unreviewed,
         bundle_kind=bundle.bundle_kind,

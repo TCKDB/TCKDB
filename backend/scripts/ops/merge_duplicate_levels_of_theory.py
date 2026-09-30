@@ -38,7 +38,11 @@ is reported as blocked otherwise:
   ``tckdb_record_is_accepted``. An approved thermo citing a statmech citing
   the calculation blocks the group. Repointing that science would need a
   declared accepted-science repair (ADR 0015); this script never declares
-  one;
+  one. The walk also reaches reviewable record types the database does not
+  freeze (``molecular_property_observation``): an observation approved on
+  the strength of a calculation blocks its group too, even though nothing
+  but this script stops the calculation's level of theory changing under it
+  (#591);
 * **Nothing else references the duplicate.** ``frequency_scale_factor`` and
   ``energy_correction_scheme`` carry ``level_of_theory_id`` inside their own
   unique identity keys, so repointing them can collide with a row the
@@ -158,8 +162,10 @@ class Group:
     def blockers(self) -> list[str]:
         if self.holder is None:
             return [
-                "no row holds the identity-keyed hash; apply Alembic revision "
-                "38b06819f099 first"
+                "no unmerged row holds the identity-keyed hash: revisions "
+                "38b06819f099 / c8424fe82997 may not be applied, or the holder "
+                "is a merged row or was left un-re-hashed (see the upgrade's "
+                "'NOT re-hashed' lines); resolve by hand"
             ]
         return [
             f"{d.row.public_ref}: {reason}"
@@ -176,6 +182,11 @@ class Schema:
     lot_references: list[tuple[str, str]]
     #: Tables that are accepted-science roots (``tckdb_is_accepted_science_type``).
     roots: frozenset[str]
+    #: Reviewable record types that are *not* roots, such as
+    #: ``molecular_property_observation``. The database does not freeze them
+    #: (there is no guard trigger), but they carry a ``record_review`` row, so
+    #: ``tckdb_record_is_accepted`` can say whether reviewers approved one.
+    reviewable: frozenset[str]
     #: target table -> ``(source table, column)`` for every foreign key into it.
     incoming: dict[str, list[tuple[str, str]]]
     #: child table -> ``(root type, ownership column, via table, via owner column)``;
@@ -243,6 +254,20 @@ def read_schema(session: Session) -> Schema:
             )
         ).all()
     )
+    reviewable = frozenset(
+        session.scalars(
+            text(
+                """
+                SELECT e.enumlabel
+                  FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+                 WHERE t.typname = 'submission_record_type'
+                   AND NOT tckdb_is_accepted_science_type(
+                           CAST(e.enumlabel AS submission_record_type))
+                   AND to_regclass('public.' || e.enumlabel) IS NOT NULL
+                """
+            )
+        ).all()
+    )
     triggers = session.execute(
         text(
             """
@@ -273,6 +298,7 @@ def read_schema(session: Session) -> Schema:
     return Schema(
         lot_references=[(s, c) for s, c, t in fks if t == "level_of_theory"],
         roots=roots,
+        reviewable=reviewable,
         incoming=dict(incoming),
         owners=dict(owners),
     )
@@ -308,7 +334,7 @@ def _citers(
         else:
             others = own
         q_src, q_col = _quote(session, src), _quote(session, column)
-        if src in schema.roots:
+        if src in schema.roots or src in schema.reviewable:
             rows = session.execute(
                 text(f"SELECT {q_col}, id FROM public.{q_src} WHERE {q_col} = ANY(:ids)"),
                 {"ids": sorted(ids)},
