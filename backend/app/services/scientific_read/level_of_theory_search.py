@@ -66,7 +66,12 @@ from app.services.scientific_read.level_of_theory import (
     _LEGAL_INCLUDE_TOKENS,
     build_level_of_theory_record,
 )
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.lot_identity_filters import (
+    basis_matches,
+    dispersion_matches,
+    method_matches,
+    solvent_matches,
+)
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "level_of_theory_ref",
@@ -199,9 +204,9 @@ def _run_lot_query(
     if request.basis is not None:
         stmt = stmt.where(basis_matches(request.basis))
     if request.dispersion is not None:
-        stmt = stmt.where(LevelOfTheory.dispersion == request.dispersion)
+        stmt = stmt.where(dispersion_matches(request.dispersion))
     if request.solvent is not None:
-        stmt = stmt.where(LevelOfTheory.solvent == request.solvent)
+        stmt = stmt.where(solvent_matches(request.solvent))
     if request.spin_treatment is not None:
         stmt = stmt.where(LevelOfTheory.spin_treatment == request.spin_treatment)
     if request.has_correction_schemes is not None:

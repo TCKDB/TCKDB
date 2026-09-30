@@ -1,4 +1,4 @@
-"""Method-name case and level-of-theory identity (#585).
+"""Method-name case, curated aliases and level-of-theory identity (#585, #618).
 
 The spellings are what each producer writes. ARC lower-cases every method
 (``arc/level.py``, ``Level.lower``) and every fixture under
@@ -6,8 +6,11 @@ The spellings are what each producer writes. ARC lower-cases every method
 Molpro inputs are written in mixed or upper case.
 
 Every same-method case asserts the exact key, not only that two spellings
-agree, and the negative table pins what must stay two levels of theory:
-punctuation aliases are an alias table's job, not a spelling rule's.
+agree, and the negative table pins what must stay two levels of theory.
+Punctuation is equated only through the curated alias table
+(``method_names.NAME_ALIASES`` / ``SUFFIX_ALIASES``, #618); the tests below
+also hold that table to its rules (every entry cited, none program-scoped
+while the hash cannot see a program, each canonical key stable).
 """
 
 from __future__ import annotations
@@ -23,7 +26,11 @@ from sqlalchemy import Text, literal, select
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
-from app.chemistry.method_names import method_identity_key
+from app.chemistry.method_names import (
+    NAME_ALIASES,
+    SUFFIX_ALIASES,
+    method_identity_key,
+)
 from app.services.calculation_resolution import (
     _level_of_theory_hash,
     resolve_level_of_theory_ref,
@@ -57,25 +64,68 @@ SAME_METHOD: list[tuple[str, list[tuple[str, str]], str]] = [
         "ccsd(t)-f12a",
     ),
     ("B3LYP", [("ARC", "b3lyp"), ("Gaussian", "B3LYP"), ("ORCA", "B3LYP")], "b3lyp"),
-    ("wB97XD", [("ARC", "wb97xd"), ("Gaussian", "wB97XD"), ("Gaussian upper", "WB97XD")], "wb97xd"),
+    (
+        "wB97XD",
+        [
+            ("ARC", "wb97xd"),
+            ("Gaussian", "wB97XD"),
+            ("Gaussian upper", "WB97XD"),
+            ("Q-Chem", "wB97X-D"),
+            ("Psi4", "wb97x-d"),
+            ("second ARC corpus", "wb97x-d"),
+        ],
+        "wb97xd",
+    ),
     ("wB97X-D3", [("ARC", "wb97x-d3"), ("ORCA", "wB97X-D3")], "wb97x-d3"),
     ("HF", [("ARC", "hf"), ("Gaussian", "HF"), ("ORCA", "HF")], "hf"),
-    ("M06-2X", [("ARC", "m06-2x"), ("Gaussian", "M06-2X")], "m06-2x"),
+    (
+        "M06-2X",
+        [
+            ("ARC", "m06-2x"),
+            ("Q-Chem", "M06-2X"),
+            ("Gaussian", "M062X"),
+            ("ORCA", "M062X"),
+            ("ARC unhyphenated", "m062x"),
+        ],
+        "m062x",
+    ),
+    (
+        "B3LYP-D3(BJ)",
+        [
+            ("Psi4", "b3lyp-d3bj"),
+            ("Psi4 alias", "B3LYP-D3(BJ)"),
+            ("Gaussian-style", "b3lyp-gd3bj"),
+            ("Gaussian-style upper", "B3LYP-GD3BJ"),
+            ("ORCA-style", "B3LYP-D3BJ"),
+        ],
+        "b3lyp-d3bj",
+    ),
+    ("wB97X-D3BJ", [("ORCA", "wB97X-D3BJ"), ("ARC", "wb97x-d3bj")], "wb97x-d3bj"),
+    ("wB97X-D3(BJ)", [("Psi4 alias", "wB97X-D3(BJ)")], "wb97x-d3bj"),
 ]
 
 #: Different methods. Each pair differs by a character the key must keep, or
 #: is the same functional under two program-specific spellings that only an
 #: alias table can equate.
 DIFFERENT_METHOD: list[tuple[str, str, str]] = [
-    ("wb97xd", "wB97X-D", "punctuation alias, not a case rule"),
-    ("wB97XD", "wB97X-D3", "D vs D3 dispersion"),
+    ("wB97XD", "wB97X-D3", "Gaussian wB97XD is not ORCA wB97X-D3 (different dispersion)"),
+    ("wB97X-D", "wB97X-D3", "Chai 2008 vs the D3 zero-damping refit"),
+    ("wB97X-D3", "wB97X-D3BJ", "zero damping vs Becke-Johnson damping"),
+    ("wB97X-D3", "wB97X-D4", "D3 vs D4"),
+    ("wB97XD3", "wB97XD", "unhyphenated D3 is not an entry; only wb97x-d is"),
+    ("wb97xd", "wb97x-v", "different functional"),
+    ("B3LYP-D3", "B3LYP-D3(BJ)", "D3 alone is zero damping in Psi4 and BJ in ORCA"),
+    ("B3LYP", "B3LYP-D3(BJ)", "dispersion folded into the method is not the bare functional"),
+    ("M06", "M062X", "different functionals"),
+    ("M06-2X", "M06-2X-D3", "with dispersion is another level"),
+    ("M06-2X", "M06-HF", "different functionals"),
+    ("-D3(BJ)", "-D3BJ", "a suffix alias needs a stem"),
     ("CCSD(T)-F12a", "CCSD(T)-F12b", "F12a is not F12b"),
     ("CCSD(T)", "CCSD(T)-F12", "F12 suffix"),
     ("CCSD", "CCSD(T)", "triples"),
     ("HF", "RHF", "spin treatment lives in its own column; alias table"),
     ("B3LYP", "UB3LYP", "unrestricted"),
     ("DLPNO-CCSD(T)", "CCSD(T)", "local approximation"),
-    ("M06", "M06-2X", "different functionals"),
     ("PBE", "PBE0", "different functionals"),
 ]
 
@@ -169,9 +219,14 @@ def test_a_lower_case_method_hashes_as_it_always_did():
     assert _hash("B3LYP", basis="def2-tzvp") == pre_585
 
 
-def test_other_fields_are_still_hashed_as_written():
-    # Dispersion and solvent case are a separate question (#585 is method only).
-    assert _hash("b3lyp", dispersion="d3bj") != _hash("b3lyp", dispersion="D3BJ")
+def test_keywords_are_still_hashed_as_written():
+    # Free-form route text can hold case-sensitive quoted strings (#602).
+    assert _hash("b3lyp", keywords="Opt") != _hash("b3lyp", keywords="opt")
+
+
+def test_dispersion_and_solvent_case_is_no_longer_identity():
+    # Reproduces #602 on main: these were two levels of theory.
+    assert _hash("b3lyp", dispersion="d3bj") == _hash("b3lyp", dispersion="D3BJ")
 
 
 def test_the_upload_path_resolves_both_spellings_to_one_row(db_session):
@@ -186,10 +241,83 @@ def test_the_upload_path_resolves_both_spellings_to_one_row(db_session):
     assert (stored.method, stored.basis) == ("CCSD(T)-F12", "cc-pVTZ-F12")
 
 
-def test_the_upload_path_keeps_punctuation_variants_apart(db_session):
+def test_the_upload_path_joins_the_two_arc_corpus_spellings_of_wb97xd(db_session):
+    """The #618 pair: one Gaussian functional, spelled two ways by two ARC corpora."""
     a = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wb97xd", basis="def2-tzvp"))
-    b = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wB97X-D", basis="def2-tzvp"))
+    b = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wb97x-d", basis="def2-tzvp"))
+    assert a.id == b.id
+    assert a.method == "wb97xd"  # the first uploader's spelling is kept
+
+
+def test_the_upload_path_keeps_gaussian_wb97xd_apart_from_orca_wb97x_d3(db_session):
+    a = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wB97XD", basis="def2-tzvp"))
+    b = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="wB97X-D3", basis="def2-tzvp"))
     assert a.id != b.id
+
+
+def test_the_upload_path_keeps_a_folded_dispersion_apart_from_the_dispersion_column(db_session):
+    folded = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="b3lyp-d3(bj)"))
+    column = resolve_level_of_theory_ref(
+        db_session, LevelOfTheoryRef(method="b3lyp", dispersion="d3bj")
+    )
+    assert folded.id != column.id
+    assert resolve_level_of_theory_ref(
+        db_session, LevelOfTheoryRef(method="B3LYP-GD3BJ")
+    ).id == folded.id
+
+
+# ---------------------------------------------------------------------------
+# The alias table's own rules (#618)
+# ---------------------------------------------------------------------------
+
+
+def _entries():
+    return [*NAME_ALIASES, *SUFFIX_ALIASES]
+
+
+@pytest.mark.parametrize("entry", _entries(), ids=lambda e: e.alias)
+def test_every_alias_is_cited(entry):
+    assert len(entry.citations) >= 2
+    assert all(len(c) > 30 for c in entry.citations)
+
+
+def test_the_alias_table_is_not_empty():
+    assert len(NAME_ALIASES) >= 2 and len(SUFFIX_ALIASES) >= 2
+
+
+@pytest.mark.parametrize("entry", _entries(), ids=lambda e: e.alias)
+def test_no_alias_is_program_scoped_while_the_hash_cannot_see_a_program(entry):
+    """A scoped entry cannot be honoured: nothing in the hash names a program.
+
+    ``_level_of_theory_hash`` reads only fields of ``LevelOfTheoryRef``, and
+    that carries no software. If it ever does, this test is the place to lift.
+    """
+    assert "software" not in LevelOfTheoryRef.model_fields
+    assert "program" not in LevelOfTheoryRef.model_fields
+    assert entry.programs is None
+
+
+@pytest.mark.parametrize("entry", _entries(), ids=lambda e: e.alias)
+def test_an_alias_is_lower_case_and_is_not_its_own_canonical(entry):
+    assert entry.alias == entry.alias.lower()
+    assert entry.canonical == entry.canonical.lower()
+    assert entry.alias != entry.canonical
+
+
+def test_no_canonical_key_is_itself_an_alias():
+    """Keeps the key idempotent and the rules order-independent."""
+    aliases = {a.alias for a in NAME_ALIASES}
+    suffixes = {a.alias for a in SUFFIX_ALIASES}
+    for entry in NAME_ALIASES:
+        assert entry.canonical not in aliases
+    for entry in SUFFIX_ALIASES:
+        assert entry.canonical not in suffixes
+
+
+def test_the_two_wb97x_families_the_owner_named_are_not_equated():
+    """Gaussian wB97XD is Chai 2008; ORCA wB97X-D3 is a different functional."""
+    assert method_identity_key("wB97XD") != method_identity_key("wB97X-D3")
+    assert method_identity_key("wB97X-D") != method_identity_key("wB97X-D3")
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +341,14 @@ def migration():
     return module
 
 
+def _case_only(spelling: str) -> str:
+    return spelling.strip().lower()
+
+
 @pytest.mark.parametrize("spelling", _all_methods())
-def test_migration_method_rule_matches_the_application(migration, spelling):
-    assert migration._method_identity_key(spelling) == method_identity_key(spelling)
+def test_migration_method_rule_is_the_case_only_rule(migration, spelling):
+    """``c8424fe82997`` ran the case rule; aliases arrived in ``d0a7c3b91e4f``."""
+    assert migration._method_identity_key(spelling) == _case_only(spelling)
 
 
 @pytest.mark.parametrize("spelling", _all_spellings())
@@ -224,7 +357,7 @@ def test_migration_basis_rule_matches_the_application(migration, spelling):
 
 
 @pytest.mark.parametrize("method", _all_methods())
-def test_migration_hash_matches_the_application(migration, method):
+def test_migration_hash_matches_the_case_only_formula(migration, method):
     fields = {
         "method": method,
         "basis": "Def2TZVP",
@@ -237,9 +370,13 @@ def test_migration_hash_matches_the_application(migration, method):
         "spin_treatment": "unrestricted",
     }
     row = SimpleNamespace(_mapping=fields)
-    assert migration._lot_hash(row, keyed_method=True) == _level_of_theory_hash(
-        LevelOfTheoryRef(**fields)
-    )
+    app_hash = _level_of_theory_hash(LevelOfTheoryRef(**fields))
+    if method_identity_key(method) == _case_only(method):
+        assert migration._lot_hash(row, keyed_method=True) == app_hash
+    else:
+        # An alias spelling: the application now keys it further than the
+        # case rule ``c8424fe82997`` ran (``d0a7c3b91e4f`` re-keys those rows).
+        assert migration._lot_hash(row, keyed_method=True) != app_hash
 
 
 def test_migration_pre_revision_hash_keeps_the_method_verbatim(migration):
@@ -269,7 +406,25 @@ def test_migration_pre_revision_hash_keeps_the_method_verbatim(migration):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("spelling", [*_all_methods(), "  padded\t"])
+#: Edge cases of the alias rules that no real name exercises but a divergence
+#: between the Python and SQL keys would show on.
+_ALIAS_EDGES = [
+    " WB97X-D ",
+    "wb97x-d-d3bj",
+    "-d3(bj)",
+    "-gd3bj",
+    "x-d3(bj)",
+    "x-gd3bj",
+    "b3lyp-d3(bj)-x",
+    "b3lyp-d3(bj)",
+    "B3LYP-GD3BJ",
+    "b3lyp d3(bj)",
+    "m06-2x-d3",
+    "M062X",
+]
+
+
+@pytest.mark.parametrize("spelling", [*_all_methods(), *_ALIAS_EDGES, "  padded\t"])
 def test_the_sql_method_key_agrees_with_python(db_session, spelling):
     assert db_session.scalar(select(method_key_sql(literal(spelling)))) == method_identity_key(
         spelling

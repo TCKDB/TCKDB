@@ -13,6 +13,7 @@ from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.lot_component_names import component_identity_key
 from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import (
     Calculation,
@@ -128,8 +129,12 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
     so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory, and the method
     through :func:`~app.chemistry.method_names.method_identity_key` (issue
-    #585), so ``CCSD(T)-F12`` and ``ccsd(t)-f12`` are too. The row still
-    stores both names verbatim. Every other field is hashed as written.
+    #585, with the curated aliases of #618), so ``CCSD(T)-F12`` and
+    ``ccsd(t)-f12`` are too, and so are ``wb97x-d`` and ``wb97xd``. Dispersion,
+    solvent and solvent-model names go through
+    :func:`~app.chemistry.lot_component_names.component_identity_key` (issue
+    #602), so ``D3BJ`` and ``d3bj`` are one. The row still stores every name
+    verbatim. ``keywords`` is free-form text and is hashed as written.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
@@ -140,9 +145,9 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
         "basis": basis_identity_key(ref.basis),
         "aux_basis": basis_identity_key(ref.aux_basis),
         "cabs_basis": basis_identity_key(ref.cabs_basis),
-        "dispersion": ref.dispersion,
-        "solvent": ref.solvent,
-        "solvent_model": ref.solvent_model,
+        "dispersion": component_identity_key(ref.dispersion),
+        "solvent": component_identity_key(ref.solvent),
+        "solvent_model": component_identity_key(ref.solvent_model),
         "keywords": ref.keywords,
         # DR-0034: spin treatment is part of LOT identity. NULL folds to
         # "unknown" in the hash so a row that omits it and a row that says

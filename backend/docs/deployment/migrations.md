@@ -608,6 +608,41 @@ downgrade prints how many merges the table holds: downgrading further, past
 
 ---
 
+## Curated method aliases and component case re-key (revision `d0a7c3b91e4f`)
+
+`d0a7c3b91e4f` (#618, #602) moves two more things into the `lot_hash`
+identity key. Data only, no DDL; same in-place re-hash, same holder choice,
+same `public_ref`-untouched rules as `c8424fe82997`.
+
+- **Curated method aliases** (`app/chemistry/method_names.py`, every entry
+  cited, none program-scoped because the hash cannot see a program):
+  `wb97x-d` is keyed as `wb97xd`, `m06-2x` as `m062x`, a trailing `-d3(bj)` or
+  `-gd3bj` as `-d3bj`. Gaussian `wB97XD` and ORCA `wB97X-D3` stay two levels.
+- **Dispersion, solvent and solvent-model case**: keyed by strip and
+  lower-case. `keywords` stays verbatim.
+
+**What the upgrade prints.** One summary line
+(`level_of_theory alias/component re-key: N row(s) re-hashed, M duplicate
+group(s) left for scripts/ops/merge_duplicate_levels_of_theory.py.`), then one
+line per duplicate group naming the holder and the other spellings by
+`public_ref`, and a `NOT re-hashed` line for any holder whose target hash a
+merged row already holds (expect none).
+
+**Deploy steps.**
+
+1. `pg_dump`, then `alembic upgrade head`. Note the printed groups.
+2. Run the merge script dry run, read every group and every `BLOCKED` reason,
+   then `--commit --i-know-this-is-deployed` (commands in the section above).
+   A group with approved science is blocked, not forced.
+3. Anything holding an old `lot_hash` (a client-side replica of the hash, a
+   saved query) stops matching for re-keyed rows. **The ARC adapter's test
+   replica of the hash (`tests/_backend_level_rules.py`) must adopt the new
+   keys** (method aliases and component case) in step with this deploy.
+4. Downgrade restores every hash exactly (with or without merges), and prints
+   any group that shares a pre-revision hash.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
