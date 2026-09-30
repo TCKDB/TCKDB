@@ -79,7 +79,9 @@ classifiers = [
 # settings/typing model the codebase already uses, psycopg 3.x for the
 # modern driver. RDKit is NOT here — see the [rdkit] extra below.
 dependencies = [
-    "fastapi>=0.110",
+    # 0.121.0 is the first release with ``Depends(..., scope="function")``,
+    # which ``get_write_db`` relies on to commit before the response is sent.
+    "fastapi>=0.121.0",
     "uvicorn[standard]>=0.27",
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.1",

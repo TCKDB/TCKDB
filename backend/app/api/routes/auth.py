@@ -229,7 +229,7 @@ def _registration_conflict_detail(exc: IntegrityError) -> str:
 def register(
     request: RegisterRequest,
     response: Response,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> MeResponse:
     """Create a ``user``-role account and start a session for it.
 
@@ -275,7 +275,7 @@ def register(
 def login(
     request: LoginRequest,
     response: Response,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> MeResponse:
     user = session.scalar(
         select(AppUser).where(AppUser.username == request.username.strip())
@@ -316,7 +316,7 @@ def login(
 def logout(
     response: Response,
     tckdb_session: Optional[str] = Cookie(None, alias=SESSION_COOKIE_NAME),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> Response:
     if tckdb_session:
         revoke_session(session, tckdb_session)
@@ -345,7 +345,7 @@ def me(current_user: AppUser = Depends(get_current_user)) -> MeResponse:
 def create_key(
     request: ApiKeyCreateRequest,
     current_user: AppUser = Depends(require_session_user),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> ApiKeyCreateResponse:
     row, plain_key = create_api_key(session, current_user, label=request.label)
     return ApiKeyCreateResponse(
@@ -373,7 +373,7 @@ def list_keys(
 def revoke_key(
     key_id: int,
     current_user: AppUser = Depends(require_session_user),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
 ) -> Response:
     row = session.get(ApiKey, key_id)
     if row is None or row.user_id != current_user.id:

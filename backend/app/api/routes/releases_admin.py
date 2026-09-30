@@ -177,7 +177,7 @@ class CurationPolicyResponse(BaseModel):
 @router.post("/policies", response_model=CurationPolicyResponse, status_code=201)
 def create_curation_policy(
     body: CurationPolicyRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> CurationPolicyResponse:
     """Register a curation policy version, or return the identical existing one.
@@ -204,7 +204,7 @@ def create_curation_policy(
 @router.post("", response_model=DatasetReleaseSummary, status_code=201)
 def create_dataset_release(
     body: CreateReleaseRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> DatasetReleaseSummary:
     """Open a draft dataset release bound to a curation policy version.
@@ -255,7 +255,7 @@ def create_dataset_release(
 def append_selection(
     body: SelectionRequest,
     release_handle: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> ReleaseSelectionRecord:
     """Append an attributed selection to a draft release.
@@ -293,7 +293,7 @@ def supersede(
     body: SupersedeRequest,
     release_handle: str = Path(..., min_length=1, max_length=64),
     selection_ref: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> ReleaseSelectionRecord:
     """Append a replacement selection. The superseded row is left untouched.
@@ -330,7 +330,7 @@ def withdraw_a_selection(
     body: ReasonRequest,
     release_handle: str = Path(..., min_length=1, max_length=64),
     selection_ref: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> ReleaseSelectionRecord:
     """Append a withdrawal: the release now recommends nothing for this subject.
@@ -356,7 +356,7 @@ def withdraw_a_selection(
 @router.post("/{release_handle}/publish", response_model=DatasetReleaseSummary)
 def publish(
     release_handle: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     user: AppUser = Depends(require_curator_or_admin),
 ) -> DatasetReleaseSummary:
     """Publish a draft release and freeze its immutable, checksummed manifest.
@@ -381,7 +381,7 @@ def publish(
 def withdraw(
     body: ReasonRequest,
     release_handle: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     _user: AppUser = Depends(require_curator_or_admin),
 ) -> DatasetReleaseSummary:
     """Retract a published release, keeping its row and manifest readable.
@@ -401,7 +401,7 @@ def withdraw(
 def attach_doi(
     body: DoiRequest,
     release_handle: str = Path(..., min_length=1, max_length=64),
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     _user: AppUser = Depends(require_curator_or_admin),
 ) -> DatasetReleaseSummary:
     """Record a DOI that was minted out-of-band for a published release.

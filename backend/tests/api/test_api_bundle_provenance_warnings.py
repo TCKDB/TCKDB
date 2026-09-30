@@ -444,8 +444,13 @@ def test_reaction_bundle_kinetics_without_provenance_is_annotated(client: TestCl
     assert resp.status_code == 201, resp.text[:800]
 
     pairs = _pairs(resp)
-    assert ("software_release", "missing_software_release_provenance") in pairs
+    assert (
+        "analysis_software_release",
+        "missing_software_release_provenance",
+    ) in pairs
     assert ("workflow_tool_release", "missing_workflow_tool_provenance") in pairs
+    # ``software_release`` is not a field of the reaction bundle root.
+    assert "software_release" not in {field for field, _ in pairs}
 
 
 def test_kinetics_is_never_warned_about_a_level_of_theory_it_cannot_carry(
@@ -494,7 +499,7 @@ def test_bundle_kinetics_provenance_is_reported_once_not_once_per_fit(
         w
         for w in resp.json()["warnings"]
         if w["code"] == "missing_software_release_provenance"
-        and w["field"] == "software_release"
+        and w["field"] == "analysis_software_release"
     ]
     assert len(software) == 1, software
 
