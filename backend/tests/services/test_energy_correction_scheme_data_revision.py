@@ -378,10 +378,14 @@ def test_atom_thermal_is_subtracted_and_the_first_deposit_fixes_the_sign(
 ) -> None:
     """Arkane applies ``+ count * (atom_hf - atom_thermal)``: atom_hf is added and
     atom_thermal subtracted. A second deposit disagreeing on the sign is refused."""
-    doc = AtomParamApplication.__doc__
-    assert "``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``" in " ".join(
-        doc.split()
-    )
+    from tckdb_schemas import enums as wire_enums
+
+    # Both copies, and the wire one is what producers read.
+    for enum_cls in (AtomParamApplication, wire_enums.AtomParamApplication):
+        doc = " ".join(enum_cls.__doc__.split())
+        assert "``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``" in doc, (
+            enum_cls.__module__
+        )
     thermal = {
         "kind": "atom_thermal",
         "name": "Arkane atom thermal",
