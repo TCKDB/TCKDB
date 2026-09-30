@@ -25,6 +25,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.ArrheniusAUnits, wire_enums.ArrheniusAUnits),
     (db_enums.ArtifactKind, wire_enums.ArtifactKind),
     (db_enums.AtomMapSource, wire_enums.AtomMapSource),
+    (db_enums.AtomParamApplication, wire_enums.AtomParamApplication),
     (db_enums.CalculationDependencyRole, wire_enums.CalculationDependencyRole),
     (db_enums.CalculationGeometryRole, wire_enums.CalculationGeometryRole),
     (db_enums.CalculationQuality, wire_enums.CalculationQuality),

@@ -180,7 +180,8 @@ class ThermoUploadRequest(SchemaBase):
     # record instead derives from a statmech basis (``existing_statmech_id``
     # set), it inherits that record's levels and this field is not
     # re-validated against it (see ``validate_energy_level_requires_no_
-    # statmech_link`` below). Never persisted.
+    # statmech_link`` below). Stored as declared once it passes, and read
+    # back as ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     # A minimal valid payload. Published as the JSON Schema's ``examples``, in

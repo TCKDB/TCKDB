@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     PrimaryKeyConstraint,
     Text,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
     AppliedCorrectionComponentKind,
+    AtomParamApplication,
     EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     EnergyUnit,
@@ -100,6 +102,29 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
         nullable=True,
     )
 
+    #: Revision of the *data* that holds the parameter tables, e.g. the
+    #: RMG-database commit holding Arkane's atom-energy and BAC tables. The
+    #: tool build (``workflow_tool_release_id``) does not say which tables
+    #: it read, because they live in a separate repository.
+    #:
+    #: Identity has two forms, selected by this column (migration
+    #: ``f2c8a5d1e9b7``): when NULL the original six-column identity applies
+    #: and ``workflow_tool_release_id`` is part of it; when set, identity is
+    #: ``(kind, name, level_of_theory_id, source_literature_id,
+    #: software_release_id, data_revision)`` and the tool build is
+    #: provenance only (the first depositor's build is what this row
+    #: keeps). NULL is "not stated", never "the same as any revision", so
+    #: every row that predates the column keeps its identity and ref.
+    data_revision: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    #: How ``atom_params`` enter the corrected energy, one answer for the
+    #: whole scheme (every atom parameter of a scheme is applied the same
+    #: way). NULL is "not stated"; it is never inferred from ``kind``.
+    atom_params_applied_as: Mapped[Optional[AtomParamApplication]] = mapped_column(
+        SAEnum(AtomParamApplication, name="atom_param_application"),
+        nullable=True,
+    )
+
     #: The unit the parameter values below were **deposited** in, not a
     #: canonical one. Values are stored verbatim (the scheme page renders
     #: the table "exactly as deposited"), so a reader must convert using
@@ -137,6 +162,8 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     )
 
     __table_args__ = (
+        # Identity when no data revision is stated: the original six
+        # columns, same name and same key, now scoped to those rows.
         Index(
             "uq_energy_correction_scheme_identity",
             "kind",
@@ -147,6 +174,22 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "workflow_tool_release_id",
             unique=True,
             postgresql_nulls_not_distinct=True,
+            postgresql_where=text("data_revision IS NULL"),
+        ),
+        # Identity when a data revision is stated: the tool build is not
+        # part of the key, so two builds that read the same revision's
+        # tables are one scheme.
+        Index(
+            "uq_energy_correction_scheme_identity_revised",
+            "kind",
+            "name",
+            "level_of_theory_id",
+            "source_literature_id",
+            "software_release_id",
+            "data_revision",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+            postgresql_where=text("data_revision IS NOT NULL"),
         ),
     )
 

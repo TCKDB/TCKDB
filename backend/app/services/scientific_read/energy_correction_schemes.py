@@ -157,6 +157,8 @@ def build_energy_correction_scheme_record(
         name=ecs.name,
         scheme_kind=ecs.kind,
         units=ecs.units,
+        data_revision=ecs.data_revision,
+        atom_params_applied_as=ecs.atom_params_applied_as,
         note=ecs.note,
         created_at=ecs.created_at,
     )

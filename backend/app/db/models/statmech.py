@@ -92,6 +92,19 @@ class Statmech(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
     )
 
+    # The level of theory the depositor declared for this record's energy
+    # (``energy_level_of_theory`` on the upload), stored as declared after
+    # the upload's role-consistency check. Separate from the level the read
+    # layer derives from the linked calculations. NULL means nothing was
+    # declared (every earlier row, and any upload that omitted it); it is
+    # never back-filled. Follows ``level_of_theory_merge`` at read time.
+    energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+
     external_symmetry: Mapped[Optional[int]] = mapped_column(
         SmallInteger, nullable=True
     )

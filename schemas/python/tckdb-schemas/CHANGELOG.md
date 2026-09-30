@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.62.0 - 2026-09-30
+
+Four changes for correction-scheme provenance (#619), all optional and
+backward compatible: a payload written against 0.61.0 is still valid and means
+what it meant.
+
+- **`EnergyCorrectionSchemeRef.data_revision`** (`str | null`, at most 200
+  characters). The revision of the data that holds the parameter tables, for
+  example the RMG-database commit holding Arkane's atom-energy and BAC tables.
+  When present it joins the scheme's identity and the workflow-tool build stops
+  being part of it: identity is `(kind, name, level_of_theory,
+  source_literature, software, data_revision)`. Two builds that read the same
+  revision's tables are one scheme (the first depositor's build is kept as
+  provenance), and a new revision is a new scheme, so a one-parameter change in
+  a new database revision is no longer refused as a value conflict. When absent
+  the identity is exactly what it was, including the tool build, so every scheme
+  already deposited keeps its identity and its public ref. A deposit with a
+  revision never matches one without, even when the tables are identical. A value
+  of 7 to 64 hex digits is lower-cased as a git commit; any other value is kept
+  as written. Adapters: send the RMG-database commit here, keep stamping the tool
+  release, and expect the tool release to stop splitting schemes.
+- **`EnergyCorrectionSchemeRef.atom_params_applied_as`** (`subtracted` |
+  `added`, new enum `AtomParamApplication`). How the scheme's `atom_params`
+  enter the corrected energy. It covers every entry of `atom_params` and nothing
+  else, requires `atom_params` to be present, and is not inferred when omitted.
+  A value that differs from the one stored on the matched scheme is refused like
+  a differing parameter value; a value sent for a row that has none is stored.
+  Arkane's `atom_energy` tables are `subtracted` (`count * value` is removed
+  from the energy), its `atom_hf` tables are `added`, and its `atom_thermal`
+  tables are `subtracted`, because Arkane applies
+  `+ count * (atom_hf - atom_thermal)` per atom. The first deposit of a scheme
+  fixes its sign: a later differing value is refused.
+- **`SchemeAtomParamPayload` now documents its meaning and unit.** `value` is in
+  the scheme's `units`. For `kind=atom_energy` it is the level's atomic energy of
+  `element`; `atom_hf` is the atom's experimental enthalpy of formation;
+  `atom_thermal` its thermal enthalpy increment; `soc` its spin-orbit correction.
+  No field changed; the contract text did.
+- **`energy_level_of_theory` is now stored.** On thermo and statmech blocks
+  (every bundle root, `/uploads/thermo`, `/uploads/statmech`, and the statmech
+  nested in `/uploads/conformers`) the declared level was checked against the
+  linked calculations and discarded. It is now stored as declared and read back as
+  `levels.declared_energy` on the scientific thermo and statmech reads. It is
+  separate from `levels.energy`, which is still derived from the linked
+  calculations on every read. It stays `null` when nothing was declared, and is
+  never back-filled. No request field changed.
+
+Scientific reads gain `levels.declared_energy`,
+`energy_correction_scheme.data_revision` and
+`energy_correction_scheme.atom_params_applied_as` (all `null` when not stated).
+
 ## 0.61.0 - 2026-09-30
 
 Four things the two species-bearing bundles, `POST /api/v1/uploads/computed-species`

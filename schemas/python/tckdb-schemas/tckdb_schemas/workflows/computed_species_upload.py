@@ -474,7 +474,8 @@ class ThermoInBundle(ThermoStateFields):
 
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     @model_validator(mode="after")
@@ -693,7 +694,8 @@ class StatmechInBundle(SchemaBase):
     :param torsions: Torsional mode metadata.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. Checked
-        against the resolved role links; never persisted.
+        against the resolved role links, then stored as declared and
+        read back as ``levels.declared_energy``.
     :param note: Optional free-text note.
     """
 
@@ -724,7 +726,8 @@ class StatmechInBundle(SchemaBase):
 
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     note: str | None = None

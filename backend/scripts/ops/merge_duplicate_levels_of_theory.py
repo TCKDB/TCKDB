@@ -55,7 +55,10 @@ is reported as blocked otherwise:
   holder already has. Every foreign key into ``level_of_theory`` is read at
   run time; only ``calculation.lot_id`` (repointed) and
   ``level_of_theory_merge`` (earlier merges, re-aimed at the holder) are
-  handled;
+  handled. That includes ``thermo.energy_level_of_theory_id`` and
+  ``statmech.energy_level_of_theory_id`` (#619): a declared energy level on a
+  duplicate blocks the group, because this script never rewrites accepted
+  science. New uploads resolve to the holder, and reads follow a merge;
 * **A holder exists**: a row whose ``lot_hash`` already equals the group's
   identity-keyed hash. If none does, ``38b06819f099`` has not run.
 

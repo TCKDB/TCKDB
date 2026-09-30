@@ -1172,7 +1172,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "fills a null source_literature_id/software_release_id/"
                 "workflow_tool_release_id on an existing scheme row. If the "
                 "resulting tuple collides with another scheme's full "
-                "identity under uq_energy_correction_scheme_identity, the "
+                "identity under uq_energy_correction_scheme_identity (or its "
+                "_revised sibling, for a scheme with a data_revision), the "
                 "write is refused rather than silently merging two rows."
             )),
     ApiCode("energy_correction_scheme_literature_already_set", 409, Surface.message_prefix,

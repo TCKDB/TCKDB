@@ -80,6 +80,9 @@ from app.services.scientific_read.common import (
     review_summary,
     validate_includes,
 )
+from app.services.scientific_read.declared_levels import (
+    load_declared_energy_summaries,
+)
 from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
@@ -340,7 +343,7 @@ def build_statmech_record(
         has_conformer_context=has_conformer_context,
         sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
     )
-    levels = _build_levels(session, source_rows)
+    levels = _build_levels(session, source_rows, sm.energy_level_of_theory_id)
     available = AvailableStatmechSections(
         has_source_calculations=bool(source_rows),
         has_torsions=bool(torsion_rows),
@@ -484,7 +487,9 @@ _LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
 
 
 def _build_levels(
-    session: Session, source_rows: list[StatmechSourceCalculation]
+    session: Session,
+    source_rows: list[StatmechSourceCalculation],
+    declared_energy_lot_id: int | None = None,
 ) -> ScientificLevelsSummary:
     """R1: derive geometry/frequency/energy levels from this record's links.
 
@@ -501,8 +506,11 @@ def _build_levels(
         role = row.role.value
         if role in _LEVELS_ROLES:
             role_calc_ids.setdefault(role, []).append(row.calculation_id)
+    declared = load_declared_energy_summaries(session, [declared_energy_lot_id]).get(
+        declared_energy_lot_id
+    )
     if not role_calc_ids:
-        return ScientificLevelsSummary()
+        return ScientificLevelsSummary(declared_energy=declared)
 
     all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
     calcs = {
@@ -535,6 +543,7 @@ def _build_levels(
         frequency=_build_lot_summary(session, derived.frequency_lot_id),
         energy=_build_lot_summary(session, derived.energy_lot_id),
         energy_source=derived.energy_source,
+        declared_energy=declared,
     )
 
 

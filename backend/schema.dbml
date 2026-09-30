@@ -62,6 +62,11 @@ enum AtomMapSource {
   inferred
 }
 
+enum AtomParamApplication {
+  subtracted
+  added
+}
+
 enum CalculationDependencyRole {
   optimized_from
   freq_on
@@ -1727,6 +1732,8 @@ Table energy_correction_scheme {
   source_literature_id bigint [ref: > literature.id]
   software_release_id bigint [ref: > software_release.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
+  data_revision text
+  atom_params_applied_as AtomParamApplication
   units EnergyUnit
   note text
   created_at timestamp [not null, default: 'now']
@@ -1736,6 +1743,7 @@ Table energy_correction_scheme {
   indexes {
     public_ref [unique, name: 'ix_energy_correction_scheme_public_ref']
     (kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id) [unique, name: 'uq_energy_correction_scheme_identity']
+    (kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision) [unique, name: 'uq_energy_correction_scheme_identity_revised']
   }
 
   Note: 'Reusable energy-correction parameter set.'
@@ -3196,6 +3204,7 @@ Table statmech {
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
+  energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   external_symmetry int
   point_group text
   is_linear boolean
@@ -3213,6 +3222,7 @@ Table statmech {
   public_ref string [not null]
 
   indexes {
+    energy_level_of_theory_id [name: 'ix_statmech_energy_level_of_theory_id']
     literature_id [name: 'ix_statmech_literature_id']
     public_ref [unique, name: 'ix_statmech_public_ref']
     transition_state_entry_id [name: 'ix_statmech_transition_state_entry_id']
@@ -3425,6 +3435,7 @@ Table thermo {
   literature_id bigint [ref: > literature.id]
   workflow_tool_release_id bigint [ref: > workflow_tool_release.id]
   software_release_id bigint [ref: > software_release.id]
+  energy_level_of_theory_id bigint [ref: > level_of_theory.id]
   enthalpy_reference_kind EnthalpyReferenceKind
   h298_kj_mol double
   s298_j_mol_k double
@@ -3443,6 +3454,7 @@ Table thermo {
   public_ref string [not null]
 
   indexes {
+    energy_level_of_theory_id [name: 'ix_thermo_energy_level_of_theory_id']
     literature_id [name: 'ix_thermo_literature_id']
     public_ref [unique, name: 'ix_thermo_public_ref']
     statmech_id [name: 'ix_thermo_statmech_id']

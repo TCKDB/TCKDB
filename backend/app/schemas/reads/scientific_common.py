@@ -286,7 +286,8 @@ class LevelOfTheorySummary(BaseModel):
 class ScientificLevelsSummary(BaseModel):
     """Geometry / frequency / energy levels of theory, derived at read time.
 
-    Never stored, and never behind an ``include=`` token: recomputed on
+    ``geometry``, ``frequency``, ``energy`` and ``energy_source`` are never
+    stored, and never behind an ``include=`` token: recomputed on
     every read from whichever ``opt``/``freq``/``sp``/``composite``/
     ``imported`` source calculations the record links right now, per
     ``app.services.calculation_levels.derive_levels`` (R1):
@@ -312,6 +313,9 @@ class ScientificLevelsSummary(BaseModel):
     Any field may be ``null`` independently of the others: a record with
     only a ``freq`` link, for instance, reports a ``frequency`` level and
     ``geometry``/``energy`` both ``null``.
+
+    ``declared_energy`` is the one exception to "derived at read time": see
+    its field comment.
     """
 
     geometry: LevelOfTheorySummary | None = None
@@ -320,6 +324,15 @@ class ScientificLevelsSummary(BaseModel):
     energy_source: (
         Literal["sp", "opt", "composite", "imported", "ambiguous"] | None
     ) = None
+    #: The level of theory the depositor *declared* for this record's
+    #: energy (``energy_level_of_theory`` on the upload). Unlike the four
+    #: fields above this one is **stored**, not derived: it is a claim made
+    #: at upload time and checked then against the calculations linked at
+    #: that time. ``null`` when nothing was declared -- including every
+    #: record written before it was stored -- and never back-filled from
+    #: ``energy``. A thermo record derived from a statmech record reports
+    #: its own declaration when it has one, else that statmech record's.
+    declared_energy: LevelOfTheorySummary | None = None
 
 
 class SoftwareReleaseSummary(BaseModel):

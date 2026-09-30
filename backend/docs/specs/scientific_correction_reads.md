@@ -46,7 +46,7 @@ prefixes registered in [`app/services/public_refs.py`](../../app/services/public
 | Class | Prefix | Identity |
 |------|--------|----------|
 | `FrequencyScaleFactor` | `fsf_` | `(level_of_theory_id, software_id, scale_kind, value, source_literature_id, workflow_tool_release_id)` |
-| `EnergyCorrectionScheme` | `ecs_` | `(kind, name, level_of_theory_id, source_literature_id, version, units)` |
+| `EnergyCorrectionScheme` | `ecs_` | `(kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)` when `data_revision` is NULL; `(kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision)` when it is set |
 
 **No schema migration is required.** Public refs are auto-populated by
 the `before_insert` listener installed in `app/services/public_refs.py`.
@@ -129,8 +129,9 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
     energy_correction_scheme_ref: str
     name: str
     scheme_kind: EnergyCorrectionSchemeKind   # atom_energy | atom_hf | atom_thermal | soc | bac_petersson | bac_melius | isodesmic | other
-    version: str | None
     units: EnergyUnit | None
+    data_revision: str | None                 # data revision (e.g. RMG-database commit); null when not stated
+    atom_params_applied_as: AtomParamApplication | None   # subtracted | added; null when not stated
     note: str | None
     created_at: datetime
 ```

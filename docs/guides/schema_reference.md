@@ -1449,6 +1449,8 @@ the gap.
 | `source_literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
+| `data_revision` | TEXT | yes | — | — | — | not documented |
+| `atom_params_applied_as` | AtomParamApplication (enum) | yes | — | — | `subtracted`, `added` | not documented |
 | `units` | EnergyUnit (enum) | yes | — | — | `hartree`, `kj_mol`, `kcal_mol` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
@@ -2541,6 +2543,7 @@ the gap.
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
+| `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `external_symmetry` | SMALLINT | yes | — | — | — | not documented |
 | `point_group` | TEXT | yes | — | — | — | not documented |
 | `is_linear` | BOOLEAN | yes | — | — | — | not documented |
@@ -2760,6 +2763,7 @@ the gap.
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
+| `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `s298_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |

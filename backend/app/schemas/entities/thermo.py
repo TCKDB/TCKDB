@@ -163,6 +163,8 @@ class ThermoBase(BaseModel):
         unspecified.
     :param statmech_id: Statmech record this computed thermo was derived
         from; None for experimental/literature/group-additivity thermo.
+    :param energy_level_of_theory_id: Level of theory the depositor declared
+        for this record's energy; None when none was declared.
     :param tmin_k: Optional minimum valid temperature in K.
     :param tmax_k: Optional maximum valid temperature in K.
     :param note: Optional free-text note.
@@ -176,6 +178,7 @@ class ThermoBase(BaseModel):
     workflow_tool_release_id: int | None = None
     software_release_id: int | None = None
     statmech_id: int | None = None
+    energy_level_of_theory_id: int | None = None
 
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
