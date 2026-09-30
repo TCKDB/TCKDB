@@ -453,6 +453,7 @@ def _collect_bundle_provenance_warnings(
             workflow_tool_release=request.workflow_tool_release,
             literature=request.literature,
             energy_level_of_theory=NOT_APPLICABLE,
+            software_release_field="analysis_software_release",
         ):
             if (warning.field, warning.code) not in seen:
                 seen.add((warning.field, warning.code))

@@ -81,7 +81,10 @@ from app.schemas.entities.calculation import (
 )
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.upload_warning import UploadWarning
-from app.services.artifact_persistence import persist_artifact_batch
+from app.services.artifact_persistence import (
+    link_artifacts_to_deposit_submission,
+    persist_artifact_batch,
+)
 from app.services.calculation_parameter_extraction import (
     try_extract_parameters_from_input_upload,
 )
@@ -777,6 +780,16 @@ def upload_calculation_artifacts(
         calculation_id=calc_pk,
         artifacts=request.artifacts,
         created_by=current_user.id,
+    )
+
+    # Evidence added after the fact still joins the deposit's submission, so
+    # it has the same submission trail as artifacts uploaded with the
+    # calculation (ingestion_submission_model.md, "Artifact links").
+    link_artifacts_to_deposit_submission(
+        session,
+        calculation_id=calc_pk,
+        artifacts=rows,
+        user=current_user,
     )
 
     # Opportunistic per-artifact extraction, both best-effort (never abort
