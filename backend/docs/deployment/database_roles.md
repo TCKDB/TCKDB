@@ -85,6 +85,36 @@ In hosted modes Alembic refuses to run without `DB_OWNER_USER` and
 `DB_OWNER_PASSWORD`. The API configuration continues to read only `DB_USER`
 and `DB_PASSWORD`.
 
+### Containerised deploys
+
+`backend/scripts/ops/tckdb_deploy.sh` passes `TCKDB_ENV_FILE` to both the
+migration run and the API container. Put the owner credentials in a separate
+file and name it in `TCKDB_MIGRATION_ENV_FILE`; the script hands that file to
+`alembic upgrade head` only, after `TCKDB_ENV_FILE`, so the API container never
+receives it:
+
+```bash
+# owner-only file, mode 600, never an API env file
+DB_OWNER_USER=tckdb_owner
+DB_OWNER_PASSWORD=...
+```
+
+Three things differ from the shell-sourced `.env.db-admin`:
+
+- Docker reads env files literally. Write plain `KEY=value` lines: no
+  `export`, and no quotes (they become part of the password).
+- Do not point `TCKDB_MIGRATION_ENV_FILE` at `.env.db-admin`. That file holds
+  the administrator (superuser) password too, and the migration needs only
+  the owner.
+- Use URL-safe passwords, e.g. `openssl rand -hex 32`. Alembic and the API
+  build a database URL from them without escaping, so `%` or `@` breaks the
+  connection.
+
+The script warns if `DB_OWNER_PASSWORD` or `DB_ADMIN_PASSWORD` is still in
+`TCKDB_ENV_FILE`, including a bare name with no `=`, which Docker fills from
+the deploying shell. The pre-deploy `pg_dump` runs inside the database container
+as the bootstrap login and is unaffected by the split.
+
 ## Verification
 
 The `check` subcommand is read-only and exits nonzero if the owner/runtime

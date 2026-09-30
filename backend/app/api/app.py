@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.bundle_limits import BundleBodyLimitMiddleware
 from app.api.config import Settings, settings
 from app.api.errors import register_exception_handlers
 from app.api.logging_config import configure_logging
@@ -127,11 +128,15 @@ def create_app() -> FastAPI:
     )
     # Middleware ordering. Starlette runs middleware in
     # most-recently-added-first order, so the final inbound chain
-    # below is ``RequestID -> RateLimit -> CORS -> router``. The
+    # below is ``RequestID -> RateLimit -> CORS -> BundleBodyLimit -> router``. The
     # request id has to be set first so every downstream layer
     # (rate-limit log lines, error envelopes, route handlers) can
     # read it from ``request.state.request_id`` or the logging
     # context.
+    # ``BundleBodyLimitMiddleware`` is added first so it is innermost: a
+    # rate-limited caller is refused before any of its body is counted, and
+    # its 413 still passes back out through CORS (#586).
+    app.add_middleware(BundleBodyLimitMiddleware)
     if settings.cors_allow_origins:
         app.add_middleware(
             CORSMiddleware,

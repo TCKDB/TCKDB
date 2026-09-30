@@ -60,6 +60,7 @@ Every row below must be set to the indicated value before the API is reachable f
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | strong random values | Same: never leave at the local-dev defaults in a hosted setup. |
 | `SEAWEEDFS_JWT_KEY` | `openssl rand -hex 32` | Read by the `seaweedfs` compose service only. It signs the tokens its filer and volume server require, which keeps other containers out of the store's internal HTTP ports. The seaweedfs container exits 78 without one (16+ characters). |
 | `TCKDB_EXTRA_NETWORKS` | `tckdbv2_storage` (your `<project>_storage`) when the API is a container using the bundled SeaweedFS | Read by `tckdb_deploy.sh`. The object store is on its own `storage` network, which only the API and worker join; anything on that network can reach SeaweedFS's unauthenticated gRPC ports, so never attach anything else. |
+| `TCKDB_MIGRATION_ENV_FILE` | path to an owner-only env file (`DB_OWNER_USER` / `DB_OWNER_PASSWORD`), mode 600, once owner and runtime roles are separated | Read by `tckdb_deploy.sh` and passed to the `alembic upgrade` run only, never to the API container. Plain `KEY=value` lines; never point it at `.env.db-admin`. See `backend/docs/deployment/database_roles.md`. |
 | `S3_SEAWEEDFS_MASTER_URL` | `http://seaweedfs:9333` on the default store; unset otherwise | Optional. Lets the API tell a full SeaweedFS from a fault (507 and a degraded `/status` instead of a 503) and warn before it fills. |
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` | production DB coordinates | Point at the production PostgreSQL+RDKit instance. Verify the DB exists and the user has appropriate privileges before starting the API. |
 | `TCKDB_API_HOST` | `127.0.0.1` | The API should listen on loopback only; the ingress (Cloudflare Tunnel, nginx, Caddy, Traefik, Tailscale, …) is the only thing that talks to it directly. |
@@ -117,6 +118,9 @@ Not strictly required, but strongly recommended for any internet-exposed deploym
 | `RATE_LIMIT_ANON_READ_PER_MINUTE` | 60 (default) | Tune up only after observing legitimate traffic. |
 | `RATE_LIMIT_AUTH_READ_PER_MINUTE` | 300 (default) | |
 | `RATE_LIMIT_AUTH_WRITE_PER_MINUTE` | 30 (default) | Tight on purpose: one misbehaving uploader should not exhaust a deployment. |
+| `RATE_LIMIT_BUNDLE_DRY_RUN_PER_MINUTE` | 10 (default) | `POST /bundles/dry-run` rehearses a full submit, so it has its own, tighter bucket; it neither spends nor is limited by `AUTH_WRITE`. |
+| `BUNDLE_MAX_BODY_BYTES` | 5242880 (default, 5 MiB) | Request-body cap for `/bundles/dry-run` and `/bundles/submit`, refused `413 bundle_too_large` before parsing. About ten times the largest ARC run file measured. `0` disables the cap; negative is refused at startup. (`RATE_LIMIT_*=0`, by contrast, refuses everything.) |
+| `BUNDLE_MAX_RECORDS` | 500 (default) | Thermo plus kinetics records per bundle, refused `422 bundle_too_many_records`. Measured bundles carry one to a handful. |
 | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` | 20 (default) | Smaller than `ANON_READ` so anonymous writes do not inherit the read budget. |
 | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` | 10 (default) | Credential-stuffing cap; IP-keyed. |
 | `RATE_LIMIT_REGISTER_PER_HOUR` | 10 (default) | Account-spam cap; IP-keyed. Mitigation against botnet registration is upstream (Cloudflare / WAF). |

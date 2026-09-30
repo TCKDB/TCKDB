@@ -97,6 +97,8 @@ class RejectionCode(str, Enum):
     ATOM_MAP_PARTICIPANT_NOT_DECLARED = "atom_map_participant_not_declared"
     ATOM_MAP_WITHOUT_TRANSITION_STATE = "atom_map_without_transition_state"
     BAC_TOTAL_REQUIRES_COMPONENTS = "bac_total_requires_components"
+    BUNDLE_TOO_LARGE = "bundle_too_large"
+    BUNDLE_TOO_MANY_RECORDS = "bundle_too_many_records"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
@@ -308,6 +310,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_PARTICIPANT_NOT_DECLARED,
         RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE,
         RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS,
+        RejectionCode.BUNDLE_TOO_MANY_RECORDS,
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
@@ -513,6 +516,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ATOM_MAP_PARTICIPANT_NOT_DECLARED: frozenset({422}),
     RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE: frozenset({422}),
     RejectionCode.BAC_TOTAL_REQUIRES_COMPONENTS: frozenset({422}),
+    RejectionCode.BUNDLE_TOO_LARGE: frozenset({413}),
+    RejectionCode.BUNDLE_TOO_MANY_RECORDS: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),

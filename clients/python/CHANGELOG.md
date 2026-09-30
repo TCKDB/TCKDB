@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.98.0 - 2026-09-30
+
+Adds `RejectionCode.BUNDLE_TOO_LARGE` (HTTP 413) and
+`RejectionCode.BUNDLE_TOO_MANY_RECORDS` (HTTP 422). `POST /api/v1/bundles/dry-run`
+and `/submit` now refuse a bundle whose request body exceeds the server's
+`BUNDLE_MAX_BODY_BYTES` (default 5 MiB) or that carries more than
+`BUNDLE_MAX_RECORDS` (default 500) thermo plus kinetics records; split the
+bundle. The dry run also has a tighter rate limit than uploads.
+
 ## 0.97.0 - 2026-09-29
 
 Artifact uploads address a calculation by its `calc_` ref. Upload results now

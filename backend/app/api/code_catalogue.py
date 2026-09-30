@@ -942,6 +942,30 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "for a bonded species, so a componentless Melius total "
                 "is left alone on either kind of target."
             )),
+    ApiCode("bundle_too_large", 413, Surface.response_literal,
+            "backend/app/api/bundle_limits.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /bundles/dry-run and /bundles/submit (#586). Cap "
+                "family. Written by BundleBodyLimitMiddleware, an ASGI "
+                "middleware, because the cap has to hold before the body is "
+                "parsed. context carries max_bytes "
+                "(settings.bundle_max_body_bytes) and, when the request "
+                "declared a Content-Length, given_bytes -- the caller's own "
+                "figure; a chunked body declares none and is refused as soon "
+                "as it passes the cap, so no count is known."
+            )),
+    ApiCode("bundle_too_many_records", 422, Surface.coded_exception,
+            "backend/app/api/bundle_limits.py",
+            shape=Shape.relationship,
+            note=(
+                "POST /bundles/dry-run and /bundles/submit (#586). Cap "
+                "family. context carries max_records "
+                "(settings.bundle_max_records) and records, the bundle's own "
+                "thermo plus kinetics upload count. Enforced after parsing: "
+                "the count is a property of the parsed model, and "
+                "bundle_too_large is what bounds the cost of parsing."
+            )),
     ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_geometry_composition.py",
             shape=Shape.relationship,

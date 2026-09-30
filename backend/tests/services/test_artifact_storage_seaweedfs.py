@@ -381,3 +381,299 @@ def test_a_dripping_server_cannot_hold_the_probe_past_its_deadline() -> None:
     assert answer is None
     assert elapsed < 2.5, elapsed
     assert seaweedfs._DEADLINE_SECONDS <= 2 * seaweedfs._TIMEOUT_SECONDS
+
+
+# ---------------------------------------------------------------------------
+# The bucket quota, read over signed S3 (#545)
+# ---------------------------------------------------------------------------
+#
+# ``quota_enforced``: a 20 MiB quota with 30 MiB in the bucket and every write
+# refused; ``quota_none``: the same store with the quota removed. Verbatim
+# bodies of ``GET /{bucket}?seaweedfs-quota`` and of the SOSAPI capacity
+# object, from the pinned 4.47 image.
+
+ENDPOINT = "http://seaweedfs:9000"
+CREDENTIALS = {"access_key": "AKIAEXAMPLE", "secret_key": "secret-never-sent", "region": "us-east-1"}
+CAPACITY_PATH = ".system-d26a9498-cb7c-4a87-a44a-8ae204f5ba6c/capacity.xml"
+
+
+def _quota_recorded(name: str) -> tuple[bytes, bytes]:
+    return (
+        (FIXTURES / f"{name}.quota.json").read_bytes(),
+        (FIXTURES / f"{name}.capacity.xml").read_bytes(),
+    )
+
+
+def test_an_enforced_quota_reads_as_no_room_left() -> None:
+    quota = seaweedfs.parse_quota_answers(*_quota_recorded("quota_enforced"))
+    assert quota == seaweedfs.SeaweedQuota(
+        quota_bytes=20_971_520, available_bytes=0, used_bytes=31_457_840
+    )
+    assert seaweedfs.refusal_is_over_quota(quota, MIB)
+    assert seaweedfs.refusal_is_over_quota(quota, None)
+
+
+def test_no_quota_set_is_no_opinion_even_though_capacity_is_reported() -> None:
+    """With no quota the capacity object reports the *cluster*; it must not
+    be mistaken for a quota that has room."""
+    assert seaweedfs.parse_quota_answers(*_quota_recorded("quota_none")) is None
+
+
+def test_the_two_answers_must_agree() -> None:
+    quota_json, _ = _quota_recorded("quota_enforced")
+    _, cluster_capacity = _quota_recorded("quota_none")
+    assert seaweedfs.parse_quota_answers(quota_json, cluster_capacity) is None
+
+
+@pytest.mark.parametrize(
+    "quota_json",
+    [
+        b'{"quota_size":20971520,"quota_unit":"MB","quota_enabled":true}',
+        b'{"quota_size":20971520,"quota_unit":"B","quota_enabled":"yes"}',
+        b'{"quota_size":true,"quota_unit":"B","quota_enabled":true}',
+        b'{"quota_size":0,"quota_unit":"B","quota_enabled":true}',
+        b'{"quota_unit":"B","quota_enabled":true}',
+        b"[]",
+        b"<html>not json</html>",
+        b"\xff\xfe",
+    ],
+)
+def test_a_quota_answer_it_does_not_recognise_is_no_opinion(quota_json) -> None:
+    _, capacity = _quota_recorded("quota_enforced")
+    assert seaweedfs.parse_quota_answers(quota_json, capacity) is None
+
+
+@pytest.mark.parametrize(
+    "capacity_xml",
+    [
+        b"",
+        b"<CapacityInfo><Capacity>20971520</Capacity></CapacityInfo>",
+        b"<CapacityInfo><Capacity>x</Capacity><Available>0</Available><Used>1</Used></CapacityInfo>",
+        # Available above capacity is not a quota's arithmetic.
+        b"<CapacityInfo><Capacity>20971520</Capacity><Available>99999999</Available><Used>0</Used></CapacityInfo>",
+        b"<Other><Capacity>20971520</Capacity><Available>0</Available><Used>1</Used></Other>",
+    ],
+)
+def test_a_capacity_object_it_does_not_recognise_is_no_opinion(capacity_xml) -> None:
+    quota_json, _ = _quota_recorded("quota_enforced")
+    assert seaweedfs.parse_quota_answers(quota_json, capacity_xml) is None
+
+
+def test_room_under_the_quota_explains_only_the_writes_that_do_not_fit() -> None:
+    quota = seaweedfs.SeaweedQuota(quota_bytes=20 * MIB, available_bytes=2 * MIB, used_bytes=18 * MIB)
+    assert seaweedfs.refusal_is_over_quota(quota, 3 * MIB)
+    assert not seaweedfs.refusal_is_over_quota(quota, 2 * MIB)
+    assert not seaweedfs.refusal_is_over_quota(quota, 1)
+    # Size unknown: only "nothing left at all" explains it.
+    assert not seaweedfs.refusal_is_over_quota(quota, None)
+    assert not seaweedfs.refusal_is_over_quota(None, MIB)
+    assert not seaweedfs.refusal_is_over_quota(None, None)
+
+
+def test_the_quota_code_is_one_name_everywhere() -> None:
+    from app.services import artifact_storage_capacity
+
+    assert seaweedfs.QUOTA_EXCEEDED_CODE == artifact_storage._SEAWEEDFS_QUOTA_CODE
+    assert seaweedfs.QUOTA_EXCEEDED_CODE in artifact_storage_capacity._QUOTA_CODES
+
+
+def _serve_quota(monkeypatch, answers: dict):
+    """Script ``_get_signed``: URL -> bytes, or an exception to raise."""
+    calls: list[tuple[str, float, dict]] = []
+
+    def _get_signed(url, timeout, **credentials):
+        calls.append((url, timeout, credentials))
+        answer = answers[url]
+        if isinstance(answer, BaseException):
+            raise answer
+        return answer
+
+    monkeypatch.setattr(seaweedfs, "_get_signed", _get_signed)
+    return calls
+
+
+def _quota_answers(name: str) -> dict:
+    quota_json, capacity_xml = _quota_recorded(name)
+    base = f"{ENDPOINT}/{BUCKET}"
+    return {
+        f"{base}?seaweedfs-quota": quota_json,
+        f"{base}/{CAPACITY_PATH}": capacity_xml,
+    }
+
+
+def _report(**overrides):
+    return seaweedfs.report_quota(endpoint_url=ENDPOINT, bucket=BUCKET, **{**CREDENTIALS, **overrides})
+
+
+def test_the_quota_client_reads_two_signed_urls_with_a_short_timeout(monkeypatch) -> None:
+    calls = _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    quota = _report()
+    assert quota is not None and quota.available_bytes == 0
+    assert [url for url, _, _ in calls] == list(_quota_answers("quota_enforced"))
+    assert all(timeout <= 2.0 for _, timeout, _ in calls)
+    assert all(credentials == CREDENTIALS for _, _, credentials in calls)
+
+
+@pytest.mark.parametrize("missing", ["endpoint_url", "access_key", "secret_key", "region", "bucket"])
+def test_an_unset_quota_setting_means_no_request_at_all(monkeypatch, missing) -> None:
+    calls = _serve_quota(monkeypatch, {})
+    arguments = {"endpoint_url": ENDPOINT, "bucket": BUCKET, **CREDENTIALS, missing: ""}
+    assert seaweedfs.report_quota(**arguments) is None
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        # Bad credentials: the refusal is theirs, never a quota's.
+        urllib.error.HTTPError(ENDPOINT, 403, "Forbidden", {}, None),
+        urllib.error.URLError("connection refused"),
+        TimeoutError("timed out"),
+        ValueError("answer larger than any SeaweedFS quota answer"),
+        RuntimeError("something nobody anticipated"),
+    ],
+    ids=["http-403", "refused", "timeout", "oversized", "unanticipated"],
+)
+def test_every_quota_failure_is_no_opinion_and_nothing_raises(monkeypatch, failure) -> None:
+    answers = _quota_answers("quota_enforced")
+    answers[f"{ENDPOINT}/{BUCKET}/{CAPACITY_PATH}"] = failure
+    _serve_quota(monkeypatch, answers)
+    assert _report() is None
+
+
+class _Recorder(BaseHTTPRequestHandler):
+    seen: list[dict] = []
+
+    def do_GET(self):
+        type(self).seen.append({"path": self.path, "headers": dict(self.headers)})
+        body = b"{}"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):
+        pass
+
+
+def test_the_quota_reads_are_sigv4_signed_and_never_send_the_secret() -> None:
+    """The endpoints refuse an unsigned request (403, measured), so an
+    unsigned read would silently be no opinion forever."""
+    _Recorder.seen = []
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Recorder)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        seaweedfs.report_quota(
+            endpoint_url=f"http://127.0.0.1:{server.server_address[1]}", bucket=BUCKET, **CREDENTIALS
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert [seen["path"] for seen in _Recorder.seen[:1]] == [f"/{BUCKET}?seaweedfs-quota"]
+    for seen in _Recorder.seen:
+        authorization = {k.lower(): v for k, v in seen["headers"].items()}["authorization"]
+        assert authorization.startswith("AWS4-HMAC-SHA256 Credential=AKIAEXAMPLE/"), authorization
+        assert "/us-east-1/s3/aws4_request" in authorization
+        assert "secret-never-sent" not in str(seen["headers"])
+
+
+def test_a_dripping_server_cannot_hold_the_quota_probe_past_its_deadline() -> None:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _Drip)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        started = time.monotonic()
+        answer = seaweedfs.report_quota(
+            endpoint_url=f"http://127.0.0.1:{server.server_address[1]}",
+            bucket=BUCKET,
+            timeout=1.0,
+            deadline=1.5,
+            **CREDENTIALS,
+        )
+        elapsed = time.monotonic() - started
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert answer is None
+    assert elapsed < 2.5, elapsed
+
+
+# ---------------------------------------------------------------------------
+# Bounded bodies, bounded threads (re-review of #594)
+# ---------------------------------------------------------------------------
+
+
+class _Big(BaseHTTPRequestHandler):
+    """A 100 KiB body, more than any quota answer, sent promptly."""
+
+    def do_GET(self):
+        body = b"x" * (100 * 1024)
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):
+        pass
+
+
+def _serve_forever(handler):
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def test_an_answer_over_64_kib_is_refused_not_read() -> None:
+    """Without the cap a store could make TCKDB buffer whatever it likes."""
+    server, base = _serve_forever(_Big)
+    try:
+        with pytest.raises(ValueError, match="larger"):
+            seaweedfs._get_signed(f"{base}/{BUCKET}?seaweedfs-quota", 2.0, **CREDENTIALS)
+        assert seaweedfs.report_quota(endpoint_url=base, bucket=BUCKET, **CREDENTIALS) is None
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_body_that_drips_ends_its_probe_thread_at_the_read_budget(monkeypatch) -> None:
+    """The caller stops waiting at the deadline, but an abandoned thread used
+    to live as long as the body did (64 KiB at a byte per 1.9 s is ~34 h)."""
+    monkeypatch.setattr(seaweedfs, "_READ_BUDGET_SECONDS", 1.0)
+    server, base = _serve_forever(_Drip)
+    try:
+        assert (
+            seaweedfs.report_quota(
+                endpoint_url=base, bucket=BUCKET, timeout=1.0, deadline=1.5, **CREDENTIALS
+            )
+            is None
+        )
+        gone_by = time.monotonic() + 6.0
+        while time.monotonic() < gone_by and any(
+            t.name == "seaweedfs-quota-probe" for t in threading.enumerate()
+        ):
+            time.sleep(0.1)
+        assert not any(t.name == "seaweedfs-quota-probe" for t in threading.enumerate())
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_probe_threads_are_capped_and_a_full_cap_is_no_opinion(monkeypatch) -> None:
+    calls = _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    monkeypatch.setattr(seaweedfs, "_PROBE_SLOTS", threading.BoundedSemaphore(0))
+    assert _report() is None
+    assert seaweedfs.report_capacity(master_url="http://seaweedfs:9333", bucket=BUCKET) is None
+    assert calls == [], "a request was made with no probe slot free"
+
+
+def test_every_probe_gives_its_slot_back(monkeypatch) -> None:
+    """More probes than slots, each finishing: none may leak a slot."""
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    for _ in range(3 * seaweedfs._MAX_PROBE_THREADS):
+        assert _report() is not None
+    failing = _quota_answers("quota_enforced")
+    failing[f"{ENDPOINT}/{BUCKET}?seaweedfs-quota"] = RuntimeError("boom")
+    _serve_quota(monkeypatch, failing)
+    for _ in range(3 * seaweedfs._MAX_PROBE_THREADS):
+        assert _report() is None
+    _serve_quota(monkeypatch, _quota_answers("quota_enforced"))
+    assert _report() is not None

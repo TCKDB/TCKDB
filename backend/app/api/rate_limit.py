@@ -18,6 +18,10 @@ bucket and chooses an identity:
   credential is present:
   - With credential → ``auth_read`` (per-minute, credential-keyed).
   - Without credential → ``anon_read`` (per-minute, IP-keyed).
+- ``POST /api/v1/bundles/dry-run`` with a credential → ``bundle_dry_run``
+  (per-minute, credential-keyed). Tighter than ``auth_write`` because
+  the dry run rehearses a full submit (#586); it neither spends nor is
+  limited by the ``auth_write`` allowance.
 - Any other request with a credential → ``auth_write`` for mutating
   methods (POST/PUT/PATCH/DELETE) or ``auth_read`` for read methods
   on non-public-read paths. Both credential-keyed.
@@ -238,6 +242,11 @@ def _is_register_path(method: str, path: str) -> bool:
     return method == "POST" and path in _AUTH_REGISTER_PATHS
 
 
+def _is_bundle_dry_run_path(method: str, path: str) -> bool:
+    """True for the bundle dry run, which rehearses a full submit."""
+    return method == "POST" and path == "/api/v1/bundles/dry-run"
+
+
 def _is_health_path(path: str) -> bool:
     """True for the operator health-check route(s)."""
     return path in _HEALTH_PATHS
@@ -274,6 +283,7 @@ def _classify(request: Request) -> tuple[str, int, int, str]:
 
     Policy invariant:
 
+    - ``bundle_dry_run`` is route-sensitive (an authenticated dry run).
     - ``auth_write`` is method-sensitive (any authenticated mutation).
     - ``anon_read``  is route-sensitive (anonymous public read).
     - ``auth_read``  is the authenticated fallback for everything not
@@ -315,6 +325,13 @@ def _classify(request: Request) -> tuple[str, int, int, str]:
         )
 
     if credential is not None:
+        if _is_bundle_dry_run_path(method, path):
+            return (
+                "bundle_dry_run",
+                settings.rate_limit_bundle_dry_run_per_minute,
+                60,
+                credential,
+            )
         if _is_mutating_method(method):
             return (
                 "auth_write",

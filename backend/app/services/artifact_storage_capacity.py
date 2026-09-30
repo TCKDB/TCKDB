@@ -82,7 +82,15 @@ logger = logging.getLogger(__name__)
 #: Ceph RGW spelling of the same condition and is carried for the reason
 #: the write-path code set carries it — an unrecognised spelling
 #: reproduces the defect exactly.
-_QUOTA_CODES = frozenset({"XMinioAdminBucketQuotaExceeded", "QuotaExceeded"})
+#: ``SeaweedFSBucketQuotaExceeded`` is not a code any store sends: it is what
+#: the write path records when SeaweedFS refused with a vague
+#: ``InternalError``/``AccessDenied`` and a signed read of the bucket's quota
+#: then showed it exhausted (:mod:`app.services.artifact_storage_seaweedfs`).
+#: Measured on 4.47 the same way MinIO's was: free disk and free slots read
+#: healthy while every write was refused.
+_QUOTA_CODES = frozenset(
+    {"XMinioAdminBucketQuotaExceeded", "QuotaExceeded", "SeaweedFSBucketQuotaExceeded"}
+)
 
 
 @dataclass(frozen=True)

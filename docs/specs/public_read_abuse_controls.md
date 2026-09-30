@@ -31,6 +31,7 @@ generous read budget for writes:
 | `anon_read`   | client IP                       | 60 s   | `RATE_LIMIT_ANON_READ_PER_MINUTE` = 60 |
 | `auth_read`   | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_READ_PER_MINUTE` = 300 |
 | `auth_write`  | hash of `X-API-Key` or session  | 60 s   | `RATE_LIMIT_AUTH_WRITE_PER_MINUTE` = 30 |
+| `bundle_dry_run` | hash of `X-API-Key` or session | 60 s   | `RATE_LIMIT_BUNDLE_DRY_RUN_PER_MINUTE` = 10 |
 | `anon_other`  | client IP                       | 60 s   | `RATE_LIMIT_ANON_OTHER_PER_MINUTE` = 20 |
 | `login`       | client IP                       | 60 s   | `RATE_LIMIT_AUTH_LOGIN_PER_MINUTE` = 10 |
 | `register`    | client IP                       | 3600 s | `RATE_LIMIT_REGISTER_PER_HOUR` = 10 |
@@ -41,6 +42,9 @@ Classification rules:
   `/api/v1/scientific/...`, POST `/api/v1/scientific/.../search`, GET
   `/api/v1/workflow-tools`, GET `/api/v1/workflow-tool-releases`).
   Split by whether a credential is present.
+- **`bundle_dry_run`** — an authenticated `POST /api/v1/bundles/dry-run`,
+  which rehearses a full submit. Separate from `auth_write` in both
+  directions (#586).
 - **`auth_write`** — authenticated mutating requests (POST/PUT/PATCH/
   DELETE) on any non-login/register, non-public-read path.
 - **`auth_read`** also serves as the authenticated fallback for
