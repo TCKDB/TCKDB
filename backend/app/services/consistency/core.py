@@ -39,7 +39,7 @@ def encoded(value):
     return json.dumps(canonical(value), sort_keys=True, separators=(",", ":"), allow_nan=False)
 
 
-def snapshot(row, relationships=()):
+def snapshot(row, relationships=(), *, exclude=frozenset()):
     """Capture stored inputs, excluding clocks and actor metadata; lists are sets of rows.
 
     Relationships are explicitly bounded by the caller, never recursively discovered.
@@ -52,6 +52,8 @@ def snapshot(row, relationships=()):
         value = getattr(row, column.key)
         if column.key in {"created_at", "updated_at", "retrieved_at", "created_by", "created_by_id"}:
             continue
+        if column.key in exclude:
+            continue
         if isinstance(value, (date, datetime)):
             continue
         result[column.key] = canonical(value)
@@ -61,9 +63,16 @@ def snapshot(row, relationships=()):
     return result
 
 
+#: Thermo columns no consistency check reads, kept out of the context hash so a
+#: stored review stays current when one is added (#619). ``energy_level_of_theory_id``
+#: is a depositor's declaration; D1-D6 and the external Cp comparison never use it.
+THERMO_HASH_EXCLUDED_COLUMNS = frozenset({"energy_level_of_theory_id"})
+
+
 def thermo_inputs(thermo):
     return snapshot(thermo, ("nasa", "nasa9_intervals", "points", "wilhoit", "source_calculations",
-                            "literature", "software_release", "workflow_tool_release"))
+                            "literature", "software_release", "workflow_tool_release"),
+                    exclude=THERMO_HASH_EXCLUDED_COLUMNS)
 
 
 def temperatures(values):

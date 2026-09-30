@@ -1552,7 +1552,7 @@ Related parameter tables:
 Notes:
 
 - scheme identity has two forms, each a partial unique index. With `data_revision` NULL it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)`. With a `data_revision` it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision)`: the workflow-tool build is then provenance, recorded from the first deposit, and two builds of one revision are one scheme. A revised scheme never matches an unrevised one
-- `atom_param.value` is in the scheme's `units`; for `kind=atom_energy` it is the level's atomic energy of the element, applied as `atom_params_applied_as` says (Arkane subtracts it; `atom_hf - atom_thermal` is added per atom by the two separate schemes)
+- `atom_param.value` is in the scheme's `units`; for `kind=atom_energy` it is the level's atomic energy of the element, applied as `atom_params_applied_as` says (Arkane subtracts `atom_energy`, adds `atom_hf` and subtracts `atom_thermal`, the net per-atom term being `atom_hf - atom_thermal`)
 - the parameter tables normalize element-, bond-, and component-level correction coefficients
 
 ### 10.3 Applied Energy Correction

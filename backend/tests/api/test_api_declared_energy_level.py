@@ -301,3 +301,28 @@ def test_a_declared_level_later_merged_is_reported_as_the_row_it_merged_into(
     assert levels["declared_energy"]["level_of_theory_ref"] == holder.public_ref
     levels = _thermo_levels(client, entry.id)
     assert levels["declared_energy"]["level_of_theory_ref"] == holder.public_ref
+
+
+def test_an_unlinked_thermo_borrows_no_declaration_from_a_sibling_statmech(
+    client, db_session
+):
+    """A declared statmech and an experimental thermo with no statmech link sit on
+    one entry. The entry-wide statmech pick must not lend its declaration."""
+    from app.db.models.common import ScientificOriginKind
+
+    species = make_species(db_session, smiles="[CH3]", charge=0, multiplicity=2)
+    entry = make_species_entry(db_session, species)
+    lot = make_lot(db_session, method="b3lyp", basis="def2svp")
+    statmech = make_statmech(db_session, species_entry=entry)
+    statmech.energy_level_of_theory_id = lot.id
+    experimental = make_thermo_scalar(
+        db_session, species_entry=entry, scientific_origin=ScientificOriginKind.experimental
+    )
+    linked = make_thermo_scalar(db_session, species_entry=entry, statmech_id=statmech.id)
+    db_session.flush()
+
+    read = client.get(f"/api/v1/scientific/species-entries/{entry.id}/thermo")
+    assert read.status_code == 200, read.text
+    by_ref = {r["thermo_ref"]: r["levels"] for r in read.json()["records"]}
+    assert by_ref[experimental.public_ref]["declared_energy"] is None
+    assert by_ref[linked.public_ref]["declared_energy"]["level_of_theory_ref"] == lot.public_ref

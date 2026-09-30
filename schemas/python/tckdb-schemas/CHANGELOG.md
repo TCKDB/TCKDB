@@ -28,8 +28,10 @@ what it meant.
   A value that differs from the one stored on the matched scheme is refused like
   a differing parameter value; a value sent for a row that has none is stored.
   Arkane's `atom_energy` tables are `subtracted` (`count * value` is removed
-  from the energy) and its `atom_hf` and `atom_thermal` tables are `added`
-  together as `count * (atom_hf - atom_thermal)`.
+  from the energy), its `atom_hf` tables are `added`, and its `atom_thermal`
+  tables are `subtracted`, because Arkane applies
+  `+ count * (atom_hf - atom_thermal)` per atom. The first deposit of a scheme
+  fixes its sign: a later differing value is refused.
 - **`SchemeAtomParamPayload` now documents its meaning and unit.** `value` is in
   the scheme's `units`. For `kind=atom_energy` it is the level's atomic energy of
   `element`; `atom_hf` is the atom's experimental enthalpy of formation;

@@ -1193,11 +1193,13 @@ class AtomParamApplication(str, Enum):
 
     * ``subtracted`` -- the per-element value is multiplied by the atom
       count and subtracted from the energy. Arkane's ``atom_energy`` tables
-      are applied like this: the level's own atomic energies are removed so
-      energies are referenced to a level-independent basis.
+      are applied like this (the level's own atomic energies are removed so
+      energies are referenced to a level-independent basis), and so are its
+      ``atom_thermal`` tables.
     * ``added`` -- the per-element value is multiplied by the atom count
-      and added. Arkane's ``atom_hf`` and ``atom_thermal`` tables enter
-      together as ``+ count * (atom_hf - atom_thermal)``.
+      and added. Arkane's ``atom_hf`` tables are applied like this. Arkane
+      applies ``+ count * (atom_hf - atom_thermal)`` per atom, so
+      ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.
     """
 
     subtracted = "subtracted"

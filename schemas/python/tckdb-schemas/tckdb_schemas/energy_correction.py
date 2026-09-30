@@ -108,7 +108,20 @@ class EnergyCorrectionSchemeRef(SchemaBase):
         scheme and not a conflict. Free text, at most 200 characters. A
         value that is 7 to 64 hex digits is treated as a git commit and
         lower-cased; any other value (a tag, say) is kept exactly as
-        written. Optional: omit it when the data revision is not known.
+        written. Send the full 40-hex commit: a short and a full SHA of
+        the same commit are two revisions and make two schemes. Send it only
+        when the tables really came from that repository revision, not when
+        the values were overridden by the user (Arkane ``atomEnergies`` or
+        BAC overrides in an input file). Optional: omit it when the data
+        revision is not known or the tables were modified.
+
+        On a scheme with a ``data_revision``, the stored
+        ``workflow_tool_release`` is the first depositor's build, not a
+        list of every build that later sent the same revision.
+
+        Send the program name in ``software`` (``{"name": "Gaussian"}``)
+        rather than the ESS version: a version is part of identity, so each
+        one makes another scheme.
     :param atom_params_applied_as: How ``atom_params`` enter the corrected
         energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).
         Applies to every entry of ``atom_params`` and to nothing else.
@@ -207,11 +220,16 @@ class SchemeAtomParamPayload(SchemaBase):
 
     * ``atom_energy``: the level's atomic energy of ``element`` (the
       energy of the isolated atom at the scheme's level of theory).
-      Arkane subtracts ``count * value`` from the molecule's energy. Arkane
-      also adds ``count * (atom_hf - atom_thermal)`` for each atom, which
-      is carried by the separate ``atom_hf`` and ``atom_thermal`` schemes.
-    * ``atom_hf``: the experimental enthalpy of formation of the atom.
-    * ``atom_thermal``: the atom's thermal enthalpy increment.
+      Arkane subtracts ``count * value`` from the molecule's energy
+      (``atom_params_applied_as = subtracted``). Arkane also applies
+      ``+ count * (atom_hf - atom_thermal)`` per atom, carried by the
+      separate ``atom_hf`` and ``atom_thermal`` schemes.
+    * ``atom_hf``: the experimental enthalpy of formation of the atom, in
+      ``scheme.units`` (Arkane: kcal/mol). Arkane adds ``count * value``
+      (``added``).
+    * ``atom_thermal``: the atom's thermal enthalpy increment, in
+      ``scheme.units`` (Arkane: kcal/mol). Arkane's net term is
+      ``atom_hf - atom_thermal``, so it is ``subtracted``.
     * ``soc``: the atom's spin-orbit correction.
     """
 

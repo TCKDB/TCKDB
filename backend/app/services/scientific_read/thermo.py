@@ -489,7 +489,11 @@ def get_species_thermo(
         declared_lot_id = (
             t.energy_level_of_theory_id
             if t.energy_level_of_theory_id is not None
-            else statmech_declared_lot_ids.get(record_statmech_id)
+            # Only through the record's OWN statmech link. The entry-wide
+            # fallback (``picked_statmech_id``) is a display convenience for
+            # source calculations; using it here would lend an unlinked
+            # (say experimental) thermo an unrelated statmech's declaration.
+            else statmech_declared_lot_ids.get(t.statmech_id)
         )
         if declared_lot_id is not None:
             levels = levels.model_copy(

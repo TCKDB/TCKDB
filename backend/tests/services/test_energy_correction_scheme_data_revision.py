@@ -338,3 +338,64 @@ def test_the_ref_of_an_unrevised_scheme_still_depends_on_the_tool_build() -> Non
     a = _transient(workflow_tool_release_id=10)
     b = _transient(workflow_tool_release_id=11)
     assert _canonical_energy_correction_scheme(a) != _canonical_energy_correction_scheme(b)
+
+
+# ---------------------------------------------------------------------------
+# Review follow-ups: identity legs the first round did not pin
+# ---------------------------------------------------------------------------
+
+
+def test_the_revised_lookup_still_matches_on_software_release(db_conn) -> None:
+    """One revision under two programs is two schemes (software stays in identity)."""
+    with Session(db_conn) as session, session.begin():
+        gaussian = resolve_or_create_scheme(
+            session, _ref(data_revision=_RMG_DB_A, software={"name": "Gaussian"})
+        )
+        orca = resolve_or_create_scheme(
+            session, _ref(data_revision=_RMG_DB_A, software={"name": "ORCA"})
+        )
+        again = resolve_or_create_scheme(
+            session, _ref(data_revision=_RMG_DB_A, software={"name": "ORCA"})
+        )
+        assert gaussian.id != orca.id
+        assert again.id == orca.id
+
+
+def test_an_unrevised_deposit_does_not_land_on_a_revised_row(db_conn) -> None:
+    """The reverse order of the absent-vs-present test: revised first."""
+    with Session(db_conn) as session, session.begin():
+        revised = resolve_or_create_scheme(session, _ref(data_revision=_RMG_DB_A))
+        unrevised = resolve_or_create_scheme(session, _ref())
+        assert unrevised.id != revised.id
+        assert unrevised.data_revision is None
+        assert revised.data_revision == _RMG_DB_A
+        # And the unrevised row is found again by an unrevised deposit.
+        assert resolve_or_create_scheme(session, _ref()).id == unrevised.id
+
+
+def test_atom_thermal_is_subtracted_and_the_first_deposit_fixes_the_sign(
+    db_conn,
+) -> None:
+    """Arkane applies ``+ count * (atom_hf - atom_thermal)``: atom_hf is added and
+    atom_thermal subtracted. A second deposit disagreeing on the sign is refused."""
+    doc = AtomParamApplication.__doc__
+    assert "``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``" in " ".join(
+        doc.split()
+    )
+    thermal = {
+        "kind": "atom_thermal",
+        "name": "Arkane atom thermal",
+        "units": "kcal_mol",
+        "software": None,
+        "data_revision": _RMG_DB_A,
+        "atom_params": [{"element": "H", "value": 1.01}],
+    }
+    with Session(db_conn) as session, session.begin():
+        scheme = resolve_or_create_scheme(
+            session, _ref(**thermal, atom_params_applied_as="subtracted")
+        )
+        assert scheme.atom_params_applied_as is AtomParamApplication.subtracted
+        with pytest.raises(ValueError, match="atom_params_applied_as"):
+            resolve_or_create_scheme(
+                session, _ref(**thermal, atom_params_applied_as="added")
+            )
