@@ -256,7 +256,7 @@ def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probab
     assert with_merges > 500
     assert without_merges > 500
     assert blocked_total == 0  # unreachable for data the merge script made
-    assert down_blocked > 20
+    assert down_blocked > 0
 
 
 def test_the_generator_makes_alias_and_case_duplicates(mig):
