@@ -57,8 +57,11 @@ _TYPES_WITH_OUTPUT_GEOMETRY: frozenset[CalculationType] = frozenset(
 )
 """Calculation types that the spec (§9.5) expects to produce an output geometry.
 
-``conf`` and ``sp`` calcs do not produce a separate output geometry; ``freq``
-reads back the input geometry; ``scan`` produces a sample, not a single output.
+``conf`` and ``sp`` calcs do not produce a separate output geometry (except the
+``sp`` primary of a one-atom conformer, which carries the atom as its final
+geometry -- see ``attach_calculation_output_geometries``; not expected of it
+here, so the check stays not_applicable); ``freq`` reads back the input
+geometry; ``scan`` produces a sample, not a single output.
 """
 
 _TYPES_REQUIRING_GEOMETRY_VALIDATION: frozenset[CalculationType] = frozenset(
@@ -297,14 +300,35 @@ def _check_parameters_parsed(calc: Calculation) -> EvidenceOutcome:
     return EvidenceOutcome.missing
 
 
+def _calculation_is_single_atom(calc: Calculation) -> bool:
+    """Whether every geometry this calculation ran on or reported is one atom.
+
+    An atom has no geometry to optimise, so its single point has no ``opt``
+    to depend on and no ``opt`` to be linked from a record (#610). False when
+    the calculation declares no geometry: absence is not evidence of an atom.
+    """
+    geometries = [
+        link.geometry
+        for link in (*calc.input_geometries, *calc.output_geometries)
+    ]
+    return bool(geometries) and all(geom.natoms == 1 for geom in geometries)
+
+
 def _check_calculation_dependencies_present(calc: Calculation) -> EvidenceOutcome:
     """Return passed when an expected upstream parent dependency exists.
 
     Applies only to types where a parent is expected (freq depends on
     opt, sp depends on opt, …). ``opt`` and ``conf`` are not_applicable
-    because they typically have no parent in this schema.
+    because they typically have no parent in this schema. So is the
+    ``sp`` of a single atom: there is no optimisation for it to depend on.
     """
     if calc.type not in _TYPES_EXPECTED_TO_HAVE_PARENTS:
+        return EvidenceOutcome.not_applicable
+    if (
+        calc.type is CalculationType.sp
+        and not calc.child_dependencies
+        and _calculation_is_single_atom(calc)
+    ):
         return EvidenceOutcome.not_applicable
     # child_dependencies = rows where THIS calc is the child (i.e. has parents).
     return _bool_outcome(len(calc.child_dependencies) >= 1)
@@ -848,10 +872,17 @@ def _check_thermo_source_calculations_present(thermo: Thermo) -> EvidenceOutcome
 
 
 def _check_opt_source_present(thermo: Thermo) -> EvidenceOutcome:
-    """Return passed when an opt source calculation is linked."""
-    return _bool_outcome(
-        len(_thermo_sources_by_role(thermo, ThermoCalculationRole.opt)) >= 1
-    )
+    """Return passed when an opt source calculation is linked.
+
+    Not applicable when every linked source calculation is a single atom's:
+    an atom has no optimisation to link (#610).
+    """
+    if _thermo_sources_by_role(thermo, ThermoCalculationRole.opt):
+        return EvidenceOutcome.passed
+    sources = _thermo_source_calculations(thermo)
+    if sources and all(_calculation_is_single_atom(calc) for calc in sources):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.missing
 
 
 def _check_freq_source_present(thermo: Thermo) -> EvidenceOutcome:
@@ -1232,10 +1263,17 @@ def _check_statmech_source_calculations_present(
 
 
 def _check_statmech_opt_source_present(statmech: Statmech) -> EvidenceOutcome:
-    """Return passed when an opt source calculation is linked."""
-    return _bool_outcome(
-        len(_statmech_sources_by_role(statmech, StatmechCalculationRole.opt)) >= 1
-    )
+    """Return passed when an opt source calculation is linked.
+
+    Not applicable when every linked source calculation is a single atom's:
+    an atom has no optimisation to link (#610).
+    """
+    if _statmech_sources_by_role(statmech, StatmechCalculationRole.opt):
+        return EvidenceOutcome.passed
+    sources = _statmech_source_calculations(statmech)
+    if sources and all(_calculation_is_single_atom(calc) for calc in sources):
+        return EvidenceOutcome.not_applicable
+    return EvidenceOutcome.missing
 
 
 def _check_statmech_freq_source_present(statmech: Statmech) -> EvidenceOutcome:
@@ -1751,6 +1789,11 @@ def _check_transport_not_rejected_or_deprecated_if_applicable(
     return EvidenceOutcome.not_applicable
 
 
+# Rubric versions are not bumped for a change that only moves a check between
+# passed/missing/not_applicable (#610 made three checks not_applicable for a
+# one-atom calculation): trust is computed on read, and the machine-review
+# context_hash already folds in the per-check sets (context_adapter.py); same
+# ruling as #393, #463, #78.
 COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
     name="computed_calculation",
     version=1,

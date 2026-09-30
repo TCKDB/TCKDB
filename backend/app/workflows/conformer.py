@@ -127,6 +127,9 @@ def persist_conformer_upload(
         # handle they cannot act on, and this label is copied verbatim
         # into a 422 body.
         context=f"primary calculation (type='{calculation.type.value}')",
+        # A one-atom conformer's sp primary carries the atom as its final
+        # geometry, as on the bundle routes (#610).
+        is_single_atom_primary=geometry.natoms == 1,
     )
     # Producer-explicit input_geometries take precedence; otherwise the
     # freq/sp fallback links the conformer geometry. opt skips the

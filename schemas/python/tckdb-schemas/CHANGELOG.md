@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.59.0 - 2026-09-30
+
+A single atom may be deposited with an `sp` primary (#610), on both
+`POST /api/v1/uploads/computed-species` and
+`POST /api/v1/uploads/computed-reaction`. Both routes required the conformer's
+primary calculation to be an `opt`, and an atom has no geometry to optimise, so
+ARC's adapter relabelled the atom's single point as an "optimisation" (same log
+and energy, `converged=false`, and a level of theory and program that were not
+the ones used). The rule is now: a conformer whose own XYZ has exactly one atom
+may send `type: "sp"` as its primary; a conformer of two or more atoms still
+needs `opt`, and a one-atom primary of any type other than `opt` or `sp` is
+still refused. The refusal for an `sp` on two or more atoms now says how many
+atoms the geometry has. A relabelled `opt` on an atom is still accepted, so no
+existing producer breaks. The server stores the atom's `sp` with the conformer
+geometry as both its input and its final output, so the conformer reads back
+with a geometry; a further `sp` on the atom gets no inferred
+`single_point_on` edge and no `dependency_edge_not_inferred` warning, since the
+atom has no `opt` for the edge to name. With no `opt` linked, two `sp` links
+on one geometry (thermo or statmech) are refused `thermo_role_duplicate` /
+`statmech_role_duplicate`, as two on one optimisation always were; the
+`/uploads/conformers` route gives a one-atom `sp` primary the same geometry
+link. What an atom should send is in the
+producer contract, under the two conformer primary-calculation rules. The
+wire shape gains nothing: no field is added, removed or renamed.
+
 ## 0.58.0 - 2026-09-30
 
 Producer contract only; no model in this package changes. `POST /api/v1/bundles/dry-run`

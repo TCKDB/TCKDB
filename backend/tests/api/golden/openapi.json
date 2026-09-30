@@ -12257,7 +12257,7 @@
       },
       "ConformerInBundle": {
         "additionalProperties": false,
-        "description": "One conformer with its primary opt + additional calcs.",
+        "description": "One conformer with its primary calculation + additional calcs.\n\nThe primary is an ``opt``, with one exception: a conformer whose geometry\nis a single atom may carry an ``sp`` primary instead (#610). See\n:func:`require_opt_primary_unless_monatomic`.",
         "properties": {
           "additional_calculations": {
             "items": {
