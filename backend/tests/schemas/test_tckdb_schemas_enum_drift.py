@@ -69,6 +69,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.TemperatureUnit, wire_enums.TemperatureUnit),
     (db_enums.ThermoCalculationRole, wire_enums.ThermoCalculationRole),
     (db_enums.TorsionTreatmentKind, wire_enums.TorsionTreatmentKind),
+    (db_enums.TransportCalculationRole, wire_enums.TransportCalculationRole),
     (db_enums.TunnelingModel, wire_enums.TunnelingModel),
 ]
 

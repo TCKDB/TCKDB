@@ -395,8 +395,8 @@ class SPResultPayload(SchemaBase):
     electronic_energy_hartree: float | None = None
 
 
-class SCFStabilityContent(SchemaBase):
-    """Optional inline SCF wavefunction stability evidence.
+class SCFStabilityBase(SchemaBase):
+    """The SCF wavefunction stability finding, with nothing that cites another row.
 
     Attaches to any calculation type — there is no calc_type restriction.
     Producers must only emit ``status = stable`` when an actual
@@ -416,12 +416,10 @@ class SCFStabilityContent(SchemaBase):
     :param reoptimized_wavefunction: Whether a stable wavefunction was
         obtained by stability optimisation / reoptimisation.
 
-    Holds the stability finding and nothing that names another database
-    row, which is what lets a bundle carry it. A bundle upload identifies
-    everything by local key; the two FK fields on
-    :class:`SCFStabilityPayload` below would put raw primary keys back on
-    a surface a depositor is meant to be able to write without ever
-    having queried TCKDB.
+    Holds the stability finding and nothing that names another row. The
+    two routes that cite the measuring job do it differently, each in its own
+    subclass: a bundle by local key (:class:`SCFStabilityContent`), the
+    primitive routes by id (:class:`SCFStabilityPayload`).
     """
 
     status: SCFStabilityStatus
@@ -477,7 +475,31 @@ class SCFStabilityContent(SchemaBase):
         return self
 
 
-class SCFStabilityPayload(SCFStabilityContent):
+class SCFStabilityContent(SCFStabilityBase):
+    """SCF stability evidence as a bundle carries it.
+
+    The finding of :class:`SCFStabilityBase` plus, optionally, the local key of
+    the job that measured it.
+
+    :param source_calculation_key: Optional local key of the calculation
+        (job) that measured this verdict, when that is a different job from
+        the one this block hangs off. Meaningful only inside a bundle, where
+        it must name a calculation the same bundle declares for the same
+        species entry (or transition state) and on the same conformer as the
+        calculation carrying the block. It may not name the carrier itself
+        or form a cycle with another block's key, and a level of theory that
+        differs from the carrier's is accepted with an upload warning. The
+        job that measured it keeps its own type; there is no separate stability
+        calculation type. The key is resolved after every calculation in the
+        bundle exists, so it may point at a calculation declared later in
+        the payload. Omit it when the calculation carrying the block is the
+        one that measured the stability.
+    """
+
+    source_calculation_key: str | None = Field(default=None, min_length=1)
+
+
+class SCFStabilityPayload(SCFStabilityBase):
     """SCF stability evidence that may cite rows outside its own record.
 
     The primitive upload routes take this shape. They already accept
@@ -485,15 +507,10 @@ class SCFStabilityPayload(SCFStabilityContent):
     naming the calculation or artifact that carries the stability log is
     the same kind of claim they already support.
 
-    Bundle roots take :class:`SCFStabilityContent` instead. Not because
-    the citation is unwanted there, but because a bundle has no way to
-    make it: a bundle names things by local key, and the calculation this
-    block hangs off is persisted before its siblings exist, so a key
-    pointing sideways could not be resolved at the moment it is read. A
-    depositor who needs the citation has the primitive routes; a
-    depositor who has only what a parser found — a status, an eigenvalue,
-    a count — can now say it from a bundle, which is what they could not
-    do at all before.
+    Bundle roots take :class:`SCFStabilityContent` instead, which names the
+    measuring job by local key rather than by id. Both share
+    :class:`SCFStabilityBase`, so neither route publishes the other's
+    citation field.
 
     :param source_calculation_id: Optional FK to the calculation whose
         log carries the stability evidence (when separate from the
@@ -743,7 +760,12 @@ class PathSearchPointPayload(SchemaBase):
     :param rms_gradient: RMS gradient at this point.
     :param is_ts_guess: Whether this point is the algorithm's TS guess.
     :param is_climbing_image: Whether this image was the climbing image
-        (NEB-CI specific; ignored by string-method outputs).
+        (NEB-CI specific; ignored by string-method outputs). ``false``
+        is the default and is stored exactly as sent, so ``false`` reads as
+        "not a climbing image" and as "not stated" alike: a producer that
+        does not know should name the climbing image through the result's
+        ``climbing_image_index`` or leave every point at the default. A
+        tri-state value would need a nullable column and is not offered yet.
     :param geometry: Optional inline geometry payload for this point.
     :param note: Optional free-text note.
     """
@@ -773,7 +795,24 @@ class PathSearchResultPayload(SchemaBase):
     :param method: The path-search algorithm used.
     :param is_double_ended: Whether the algorithm uses two endpoints
         (NEB, GSM) versus single-ended (growing string, freezing string).
-    :param converged: Whether the path search converged.
+    :param converged: Whether the path search met its own stopping
+        criteria. What that means depends on ``method``, and the producer
+        states the algorithm's verdict, not a proxy for it:
+
+        * ``neb``: the band's force (and, where used, step) thresholds were
+          satisfied, climbing image included for a climbing-image run, and
+          the run did not stop on its iteration limit.
+        * ``gsm``, ``growing_string``, ``freezing_string``: the string
+          finished growing (or freezing) and the program's own convergence
+          test on the path, or on the TS node it reports, passed.
+        * ``other``: the method's own convergence verdict; describe the
+          criterion in ``note``.
+
+        ``true`` means that verdict was observed. ``false`` means it was
+        observed to fail. Leave it absent when it was not observed: the
+        existence of an output file, a nonzero exit code or a parsed TS
+        guess is not a convergence verdict, so none of them justifies
+        ``true``.
     :param n_points: Total sampled-point count (consistency check).
     :param selected_ts_point_index: Index of the point selected as the
         TS guess (0-based). Must match a ``points[].point_index``.

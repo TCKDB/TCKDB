@@ -215,6 +215,8 @@ class RejectionCode(str, Enum):
     RIGHTS_LICENSE_BLANK = "rights_license_blank"
     RIGHTS_SOURCE_TERMS_REQUIRED = "rights_source_terms_required"
     SCAN_RESULT_NOT_FOUND = "scan_result_not_found"
+    SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH = "scf_stability_source_calculation_owner_mismatch"
+    SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH = "scf_stability_source_geometry_mismatch"
     SELECTION_ALREADY_STANDS = "selection_already_stands"
     SELECTION_ALREADY_SUPERSEDED = "selection_already_superseded"
     SELECTION_NO_LONGER_APPROVED = "selection_no_longer_approved"
@@ -265,6 +267,7 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_NO_IMAGINARY_MODE = "transition_state_no_imaginary_mode"
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
+    TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = "transport_source_calculation_owner_mismatch"
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
     UNKNOWN_CALCULATION_REF = "unknown_calculation_ref"
@@ -399,6 +402,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RIGHTS_BASIS_MISSING,
         RejectionCode.RIGHTS_LICENSE_BLANK,
         RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED,
+        RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+        RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
         RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT,
@@ -441,6 +446,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
+        RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
         RejectionCode.UNKNOWN_RECORD_TYPE,
@@ -634,6 +640,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RIGHTS_LICENSE_BLANK: frozenset({422}),
     RejectionCode.RIGHTS_SOURCE_TERMS_REQUIRED: frozenset({422}),
     RejectionCode.SCAN_RESULT_NOT_FOUND: frozenset({404}),
+    RejectionCode.SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.SCF_STABILITY_SOURCE_GEOMETRY_MISMATCH: frozenset({422}),
     RejectionCode.SELECTION_ALREADY_STANDS: frozenset({409}),
     RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
     RejectionCode.SELECTION_NO_LONGER_APPROVED: frozenset({422}),
@@ -684,6 +692,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
+    RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CALCULATION_REF: frozenset({404}),

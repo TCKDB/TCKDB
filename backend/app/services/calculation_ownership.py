@@ -52,6 +52,13 @@ from __future__ import annotations
 
 import logging
 
+from tckdb_schemas.bundle_source_rules import (
+    W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    owner_mismatch_context,
+    owner_mismatch_detail,
+)
+
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
 from app.db.models.statmech import Statmech
@@ -106,18 +113,17 @@ W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
 
-#: A transport source link cites a calculation owned by another subject.
+#: Transport (``W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH``) and SCF
+#: stability (``W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH``) source
+#: links that cite a calculation owned by another subject. Both are defined in
+#: ``tckdb_schemas.bundle_source_rules`` and imported above, so the request
+#: schema and this module raise the same code (ADR 0017).
 #:
-#: The one code here that no write path can produce: transport's single
-#: guard reads a calculation the same loop persisted against the target's
-#: own species entry, its source-link payload carries no
-#: ``existing_calculation_id``, and the other two callers of
-#: ``resolve_and_create_transport`` pass no source calculations at all.
-#: Catalogued as ``Reach.guard`` and not exported to clients; kept as the
-#: tripwire for the path that changes any of those three facts.
-W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = (
-    "transport_source_calculation_owner_mismatch"
-)
+#: Reachable on ``/uploads/computed-reaction``, which resolves the keys in a
+#: namespace spanning every species and the transition state; the schema
+#: refuses first with the same code and context, and the workflow repeats the
+#: check where it knows which entry each key resolved to. The computed-species
+#: bundle has one subject, so nothing there can trip them.
 
 #: An applied energy correction names a source calculation owned by
 #: another subject.
@@ -265,14 +271,15 @@ def assert_owned_by(
     )
     raise CodedValueError(
         code,
-        f"{context}: this {subject_noun} belongs to another {owner_noun}, "
-        f"not to the {target} target. A supporting {subject_noun} must be "
-        f"one of the target {owner_noun}'s own.",
-        context={
-            "field": context,
-            "target": target,
-            "owner_kind": owner_noun.replace(" ", "_"),
-        },
+        owner_mismatch_detail(
+            context=context,
+            subject_noun=subject_noun,
+            owner_noun=owner_noun,
+            target=target,
+        ),
+        context=owner_mismatch_context(
+            field=context, target=target, owner_noun=owner_noun
+        ),
         message_prefix=False,
     )
 
@@ -337,6 +344,7 @@ __all__ = [
     "W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH",
+    "W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH",
     "W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH",

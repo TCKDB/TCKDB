@@ -1873,6 +1873,29 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("schema_not_initialized", 503, Surface.response_literal,
             "backend/app/api/routes/health.py"),
+    ApiCode("scf_stability_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "scf_stability.source_calculation_key names a calculation "
+                "owned by another species entry or transition state than the "
+                "calculation carrying the verdict. Reachable on "
+                "/uploads/computed-reaction, whose key namespace spans every "
+                "species and the transition state; the request schema and "
+                "services/scf_stability_sources.py raise the same code and "
+                "context (ADR 0017)."
+            )),
+    ApiCode("scf_stability_source_geometry_mismatch", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
+            shape=Shape.relationship,
+            note=(
+                "The job named by scf_stability.source_calculation_key ran on "
+                "another conformer than the calculation carrying the verdict. "
+                "The sibling of thermo_sp_geometry_mismatch: one stability "
+                "analysis describes one wavefunction at one geometry. Raised "
+                "by the request schemas and by "
+                "services/scf_stability_sources.py with the same context."
+            )),
     ApiCode("selection_already_stands", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             shape=Shape.relationship,
@@ -2146,21 +2169,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("transition_state_reaction_coordinate_not_designated", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transport_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py",
+            "schemas/python/tckdb-schemas/tckdb_schemas/bundle_source_rules.py",
             shape=Shape.relationship,
-            reach=Reach.guard,
             note=(
-                "No request produces it, and unlike its four siblings no "
-                "write path anywhere can even produce the condition. "
-                "Transport has one guard, in workflows/transport.py, over a "
-                "calculation the same loop persisted two statements earlier "
-                "with the transport target's own species entry; "
-                "TransportSourceCalculationIn carries only calculation_key "
-                "and role, so no request can name a foreign row; and the two "
-                "other callers of resolve_and_create_transport (the conformer "
-                "upload, the PDep bundle) pass no source calculations at all. "
-                "The guard stays as the tripwire for the day one of them "
-                "does."
+                "A transport source_calculations link names a calculation of "
+                "another species entry. Reachable only on "
+                "/uploads/computed-reaction, whose key namespace spans every "
+                "species: the standalone route scopes its inline calculations "
+                "to the target, and the computed-species bundle has one "
+                "subject. The request schema and persist_bundle_transport "
+                "raise the same code and context (ADR 0017)."
             )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py",

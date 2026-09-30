@@ -2497,7 +2497,7 @@
     },
     "SCFStabilityContent": {
       "additionalProperties": false,
-      "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+      "description": "SCF stability evidence as a bundle carries it.\n\nThe finding of :class:`SCFStabilityBase` plus, optionally, the local key of\nthe job that measured it.\n\n:param source_calculation_key: Optional local key of the calculation\n    (job) that measured this verdict, when that is a different job from\n    the one this block hangs off. Meaningful only inside a bundle, where\n    it must name a calculation the same bundle declares for the same\n    species entry (or transition state) and on the same conformer as the\n    calculation carrying the block. It may not name the carrier itself\n    or form a cycle with another block's key, and a level of theory that\n    differs from the carrier's is accepted with an upload warning. The\n    job that measured it keeps its own type; there is no separate stability\n    calculation type. The key is resolved after every calculation in the\n    bundle exists, so it may point at a calculation declared later in\n    the payload. Omit it when the calculation carrying the block is the\n    one that measured the stability.",
       "properties": {
         "instability_count": {
           "anyOf": [
@@ -2559,6 +2559,19 @@
           ],
           "default": null,
           "title": "Reoptimized Wavefunction"
+        },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
         },
         "status": {
           "$ref": "#/$defs/SCFStabilityStatus"
@@ -2643,7 +2656,7 @@
     },
     "SoftwareReleaseRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a software release.",
+      "description": "Upload-facing reference to a software release.\n\nA release is identified by ``(name, version, revision, build)``; two\nreferences that agree on all four (an absent value matches only another\nabsent value) are the same release row. ``release_date`` and ``notes``\nare descriptive and do not take part in identity.\n\nWhich field holds what:\n\n* ``version``: the release number the vendor or project publishes, such\n  as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.\n  Give the number alone. A parsed startup banner such as\n  ``\"Gaussian 16, Revision C.02\"`` is accepted, split into version\n  ``16`` and revision ``C.02``, and reported as a warning.\n* ``revision``: a finer label inside one version, written the way the\n  producer writes it. For a vendor program this is the vendor's own\n  revision label, such as Gaussian ``C.02``. For analysis software that\n  has no revision labels it is the source state the run used, such as\n  the commit hash of an Arkane or RMG checkout, because\n  ``software_release`` has no separate commit field (see below).\n* ``build``: a variant of the same version and revision that was\n  compiled or packaged differently and can give different numbers or\n  different capabilities, such as ``mpi``, ``cuda`` or a distributor's\n  build identifier. Leave it out when the program was not built in a\n  way that matters; two references that differ only here are kept as\n  two releases, so do not put a timestamp or host name in it.\n\nThere is no ``git_commit`` field on this reference. A commit hash goes in\n``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a\n``git_commit`` because workflow tools are identified by code state.",
       "properties": {
         "build": {
           "anyOf": [
@@ -2655,6 +2668,7 @@
             }
           ],
           "default": null,
+          "description": "Compile or packaging variant of the same version and revision, for example mpi or cuda. Part of release identity; omit unless the build changes results or capabilities.",
           "title": "Build"
         },
         "name": {
@@ -2697,6 +2711,7 @@
             }
           ],
           "default": null,
+          "description": "Finer label within one version: the vendor revision label (Gaussian C.02), or the commit hash for analysis software that has no revision labels. Part of release identity.",
           "title": "Revision"
         },
         "version": {
@@ -2709,6 +2724,7 @@
             }
           ],
           "default": null,
+          "description": "Published release number, for example 16, 6.0.1 or 2025.1. Number only; a full startup banner is split into version and revision with a warning.",
           "title": "Version"
         }
       },
@@ -3276,7 +3292,7 @@
     },
     "StatmechTorsionInBundle": {
       "additionalProperties": false,
-      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
       "properties": {
         "coordinates": {
           "items": {
@@ -3290,6 +3306,18 @@
           "minimum": 1,
           "title": "Dimension",
           "type": "integer"
+        },
+        "invalidated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Reason"
         },
         "source_scan_calculation_key": {
           "anyOf": [

@@ -379,3 +379,72 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
         # #158: transport's refusal carries its own code, distinct from
         # thermo's and statmech's -- same rule, different subject.
         assert excinfo.value.code == "transport_source_calculation_owner_mismatch"
+
+
+def test_bundle_transport_refuses_a_calculation_of_another_entry(db_conn) -> None:
+    """The bundle seam enforces the same owner rule, with transport's own code.
+
+    The bundle request schemas refuse this first, with a generic message, so
+    the coded guard is provoked here with no schema in front of it.
+    """
+    from app.schemas.workflows.computed_species_upload import TransportInBundle
+    from app.workflows.transport import persist_bundle_transport
+
+    with Session(db_conn) as session, session.begin():
+        mine = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**_SPECIES_ENTRY)
+        )
+        other = resolve_species_entry(
+            session,
+            SpeciesEntryIdentityPayload(smiles="C", charge=0, multiplicity=1),
+        )
+        foreign = Calculation(type=CalculationType.sp, species_entry_id=other.id)
+        session.add(foreign)
+        session.flush()
+
+        block = TransportInBundle(
+            sigma_angstrom=2.6,
+            epsilon_over_k_k=80.0,
+            source_calculations=[
+                {"calculation_key": "foreign", "role": "full_transport"}
+            ],
+        )
+        with pytest.raises(ValueError, match="not to the transport target") as err:
+            persist_bundle_transport(
+                session,
+                block,
+                species_entry_id=mine.id,
+                calculations_by_key={"foreign": foreign},
+            )
+        assert err.value.code == "transport_source_calculation_owner_mismatch"
+        assert (
+            session.scalar(
+                select(Transport).where(Transport.species_entry_id == mine.id)
+            )
+            is None
+        ), "a refused block must not leave a row behind"
+
+
+def test_bundle_transport_refuses_an_undeclared_key(db_conn) -> None:
+    from app.schemas.workflows.computed_species_upload import TransportInBundle
+    from app.workflows.transport import persist_bundle_transport
+
+    with Session(db_conn) as session, session.begin():
+        mine = resolve_species_entry(
+            session, SpeciesEntryIdentityPayload(**_SPECIES_ENTRY)
+        )
+        block = TransportInBundle(
+            sigma_angstrom=2.6,
+            epsilon_over_k_k=80.0,
+            source_calculations=[
+                {"calculation_key": "ghost", "role": "full_transport"}
+            ],
+        )
+        with pytest.raises(ValueError, match="ghost") as err:
+            persist_bundle_transport(
+                session,
+                block,
+                species_entry_id=mine.id,
+                calculations_by_key={},
+            )
+        assert err.value.code == "calculation_key_undeclared"
