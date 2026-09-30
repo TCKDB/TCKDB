@@ -111,6 +111,7 @@ from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
 from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
+    StatmechInBundle,
     StatmechSourceCalcInBundle,
     ThermoSourceCalcInBundle,
     TransportInBundle,
@@ -957,7 +958,15 @@ class BundleTransitionStateIn(SchemaBase):
     :param unmapped_smiles: Optional SMILES for the TS.
     :param geometry: Saddle-point geometry.
     :param calculation: Primary opt calculation.
-    :param calculations: Additional calculations (freq, sp, irc).
+    :param calculations: Additional calculations (freq, sp, irc, scan).
+    :param statmech: Optional statistical-mechanics interpretation of the
+        saddle point: the partition-function inputs a rate constant is
+        computed from. The same block a species carries on the computed-species
+        route, written through the same persistence, so every rule that governs
+        a species' statmech governs this one. ``source_calculations`` and
+        ``torsions[*].source_scan_calculation_key`` name calculations this
+        transition state owns. A saddle point is a polyatomic, so this block
+        never describes a single atom.
     :param label: Optional label.
     :param note: Optional note.
     """
@@ -968,6 +977,7 @@ class BundleTransitionStateIn(SchemaBase):
     geometry: GeometryIn
     calculation: ComputedReactionCalculationIn
     calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
+    statmech: StatmechInBundle | None = None
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,
         description=(
@@ -986,12 +996,19 @@ class BundleTransitionStateIn(SchemaBase):
     validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
         default_factory=list,
         description=(
-            "Structured IRC evidence that this saddle point connects the "
-            "bundle's declared reactants and products. Optional but strongly "
-            "recommended: a deposit without it succeeds and returns a "
-            "'transition_state_missing_irc_evidence' upload warning. "
-            "``source_calculation_key`` names an irc calculation owned by this "
-            "transition state."
+            "Structured validation evidence for this saddle point, at most one "
+            "record per kind. kind='irc': the path connects the bundle's "
+            "declared reactants and products; ``source_calculation_key`` names "
+            "an irc calculation owned by this transition state. "
+            "kind='imaginary_mode': the frequency calculation found the "
+            "expected imaginary mode; ``source_calculation_key`` names a freq "
+            "calculation owned by this transition state. "
+            "kind='energy_ordering': the saddle point lies above both wells; "
+            "each compared energy names its own source calculation, owned by "
+            "the saddle point or by that participant's species. Optional but "
+            "strongly recommended: a deposit without a passing IRC record "
+            "succeeds and returns a 'transition_state_missing_irc_evidence' "
+            "upload warning; the other kinds do not silence it."
         ),
     )
     label: str | None = None
@@ -1047,11 +1064,17 @@ class BundleTransitionStateIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
-    def validate_evidence_source_is_a_ts_irc_calculation(self) -> Self:
-        """Evidence must name an ``irc`` calculation owned by this TS.
+    def validate_evidence_sources_are_this_ts_calculations(self) -> Self:
+        """Evidence must name calculations of the right kind owned by this TS.
 
+        ``irc`` needs an ``irc`` calculation and ``imaginary_mode`` a ``freq``
+        one: the record is a claim about what that job found. An
+        ``energy_ordering`` record names one calculation per energy, and the
+        saddle point's own energy must come from this saddle point; the
+        reactant and product energies come from the species, which this nested
+        model cannot see, so the enclosing request checks those.
         Participant/atom completeness needs the bundle's reaction, which this
-        nested model cannot see; the enclosing request validates that.
+        nested model cannot see either; the enclosing request validates that.
         """
         if not self.validation_evidence:
             return self
@@ -1059,14 +1082,40 @@ class BundleTransitionStateIn(SchemaBase):
             self.calculation.key: self.calculation.type,
             **{calc.key: calc.type for calc in self.calculations},
         }
+        needed_type = {
+            "irc": CalculationType.irc,
+            "imaginary_mode": CalculationType.freq,
+        }
         for index, record in enumerate(self.validation_evidence):
+            base_field = f"transition_state.validation_evidence[{index}]"
+            if record.kind == "energy_ordering":
+                for energy_index, energy in enumerate(record.energies or []):
+                    if energy.participant != "ts":
+                        continue
+                    if energy.source_calculation_key not in own_types:
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
+                            f"{base_field}.energies[{energy_index}] references "
+                            f"calculation_key '{energy.source_calculation_key}', "
+                            "which is not one of this transition state's own "
+                            "calculations.",
+                            field=(
+                                f"{base_field}.energies[{energy_index}]."
+                                "source_calculation_key"
+                            ),
+                            key=energy.source_calculation_key,
+                            declared=own_types,
+                        )
+                continue
+
             # No key written at all: nothing to list alternatives against,
             # and a different repair. Keeps the generic code (ADR 0017
             # corollary 3).
             if record.source_calculation_key is None:
                 raise ValueError(
                     "transition_state.validation_evidence requires "
-                    "source_calculation_key naming its irc calculation."
+                    f"source_calculation_key naming its {needed_type[record.kind].value} "
+                    "calculation."
                 )
             calculation_type = own_types.get(record.source_calculation_key)
             if calculation_type is None:
@@ -1075,18 +1124,73 @@ class BundleTransitionStateIn(SchemaBase):
                     "transition_state.validation_evidence references "
                     f"calculation_key '{record.source_calculation_key}', which is "
                     "not one of this transition state's own calculations.",
-                    field=(
-                        f"transition_state.validation_evidence[{index}]."
-                        f"source_calculation_key"
-                    ),
+                    field=f"{base_field}.source_calculation_key",
                     key=record.source_calculation_key,
                     declared=own_types,
                 )
-            if calculation_type != CalculationType.irc:
+            if calculation_type != needed_type[record.kind]:
                 raise ValueError(
-                    "transition_state.validation_evidence requires an irc "
-                    f"calculation; '{record.source_calculation_key}' is "
+                    "transition_state.validation_evidence requires "
+                    f"{'an' if record.kind == 'irc' else 'a'} "
+                    f"{needed_type[record.kind].value} calculation for "
+                    f"kind='{record.kind}'; '{record.source_calculation_key}' is "
                     f"'{calculation_type.value}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_statmech_sources_are_this_ts_calculations(self) -> Self:
+        """The statmech block may cite only calculations this saddle point owns.
+
+        A saddle point's partition function is built from the saddle point's
+        own frequencies and energy. Resolving against the whole bundle's
+        namespace would let it cite a reactant's calculation, which the
+        persistence seam refuses at write time with an ownership error; saying
+        so here turns that into a refusal that lists the keys that would have
+        worked.
+        """
+        if self.statmech is None:
+            return self
+        own_types = {
+            self.calculation.key: self.calculation.type,
+            **{calc.key: calc.type for calc in self.calculations},
+        }
+        for index, source in enumerate(self.statmech.source_calculations):
+            if source.calculation_key not in own_types:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    "transition_state.statmech.source_calculations references "
+                    f"calculation_key '{source.calculation_key}', which is not "
+                    "one of this transition state's own calculations.",
+                    field=(
+                        f"transition_state.statmech.source_calculations[{index}]."
+                        "calculation_key"
+                    ),
+                    key=source.calculation_key,
+                    declared=own_types,
+                )
+        for index, torsion in enumerate(self.statmech.torsions):
+            scan_key = torsion.source_scan_calculation_key
+            if scan_key is None:
+                continue
+            if scan_key not in own_types:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"transition_state.statmech.torsions[{index}]."
+                    f"source_scan_calculation_key '{scan_key}' is not one of "
+                    "this transition state's own calculations.",
+                    field=(
+                        f"transition_state.statmech.torsions[{index}]."
+                        "source_scan_calculation_key"
+                    ),
+                    key=scan_key,
+                    declared=own_types,
+                )
+            if own_types[scan_key] != CalculationType.scan:
+                raise ValueError(
+                    f"transition_state.statmech.torsions[{index}]."
+                    f"source_scan_calculation_key '{scan_key}' must reference "
+                    "a scan-type calculation."
                 )
         return self
 
@@ -1567,6 +1671,53 @@ class ComputedReactionUploadRequest(SchemaBase):
             reactant_kinds=self.participant_molecule_kinds(self.reactant_keys),
             product_kinds=self.participant_molecule_kinds(self.product_keys),
         )
+        return self
+
+    @model_validator(mode="after")
+    def validate_energy_ordering_sources_belong_to_their_participant(self) -> Self:
+        """A participant's compared energy must come from that participant.
+
+        ``reactant:2`` is the second entry of ``reactant_keys``; the energy
+        attributed to it has to be taken from that species' own calculations,
+        or the ordering compares the saddle point with some other molecule.
+        The persistence seam checks ownership against the stored rows as well;
+        this is the refusal that can name the keys that would have worked.
+        """
+        if self.transition_state is None:
+            return self
+        species_by_key = {species.key: species for species in self.species}
+        for index, record in enumerate(self.transition_state.validation_evidence):
+            for energy_index, energy in enumerate(record.energies or []):
+                if energy.participant == "ts":
+                    continue
+                side, _, position = energy.participant.partition(":")
+                keys = self.reactant_keys if side == "reactant" else self.product_keys
+                if not 1 <= int(position) <= len(keys):
+                    # An undeclared participant is validate_ts_evidence_set's to
+                    # report; do not pre-empt it with an IndexError.
+                    continue
+                species = species_by_key.get(keys[int(position) - 1])
+                if species is None:
+                    continue
+                own_keys = {
+                    **{conf.calculation.key: conf.calculation.type for conf in species.conformers},
+                    **{calc.key: calc.type for calc in species.calculations},
+                }
+                if energy.source_calculation_key not in own_keys:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        "transition_state.validation_evidence"
+                        f"[{index}].energies[{energy_index}] takes the energy of "
+                        f"'{energy.participant}' from calculation_key "
+                        f"'{energy.source_calculation_key}', which is not one of "
+                        f"species '{species.key}' own calculations.",
+                        field=(
+                            f"transition_state.validation_evidence[{index}]"
+                            f".energies[{energy_index}].source_calculation_key"
+                        ),
+                        key=energy.source_calculation_key,
+                        declared=own_keys,
+                    )
         return self
 
     @field_validator("reaction_family", "reaction_family_source_note")

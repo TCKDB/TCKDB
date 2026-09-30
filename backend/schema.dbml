@@ -1120,9 +1120,9 @@ Table calc_irc_point {
 
 Table calc_irc_result {
   calculation_id bigint [pk, not null, ref: > calculation.id]
-  direction IRCDirection [not null]
-  has_forward boolean [not null]
-  has_reverse boolean [not null]
+  direction IRCDirection
+  has_forward boolean
+  has_reverse boolean
   ts_point_index int
   point_count int
   zero_energy_reference_hartree double
@@ -3648,13 +3648,38 @@ Table transition_state_selection {
   Note: 'Store explicit workflow, curation, or UI selections for transition states.'
 }
 
+Table transition_state_validation_energy {
+  id bigint [pk, not null]
+  evidence_id bigint [not null, ref: > transition_state_validation_evidence.id]
+  participant text [not null]
+  energy_kind text [not null]
+  energy_hartree double [not null]
+  source_calculation_id bigint [not null, ref: > calculation.id]
+
+  indexes {
+    source_calculation_id [name: 'ix_ts_validation_energy_source_calc']
+    (evidence_id, participant, energy_kind) [unique, name: 'uq_ts_validation_energy_slot']
+  }
+
+  checks {
+    `energy_hartree < 0 AND energy_hartree > '-Infinity'::float8` [name: 'ck_transition_state_validation_energy_energy_finite_negative']
+    `energy_kind IN ('electronic', 'e0')` [name: 'ck_transition_state_validation_energy_energy_kind']
+    `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'` [name: 'ck_transition_state_validation_energy_participant_shape']
+  }
+
+  Note: 'One energy an ``energy_ordering`` evidence row compared.'
+}
+
 Table transition_state_validation_evidence {
   id bigint [pk, not null]
   transition_state_entry_id bigint [not null, ref: > transition_state_entry.id]
   kind text [not null]
   passed boolean [not null]
   rationale text [not null]
-  reconstruction_calculation_id bigint [not null, ref: > calculation.id]
+  reconstruction_calculation_id bigint [ref: > calculation.id]
+  imaginary_frequency_count int
+  imaginary_frequency_cm1 double
+  mode_displacement_agrees boolean
   reactant_participant_mapping jsonb
   product_participant_mapping jsonb
   transition_state_geometry_id bigint [ref: > geometry.id]
@@ -3666,11 +3691,16 @@ Table transition_state_validation_evidence {
   }
 
   checks {
+    `imaginary_frequency_count IS NULL OR imaginary_frequency_count >= 0` [name: 'ck_transition_state_validation_evidence_imag_count_ge_0']
+    `imaginary_frequency_cm1 IS NULL OR (imaginary_frequency_cm1 < 0 AND imaginary_frequency_cm1 > '-Infinity'::float8)` [name: 'ck_transition_state_validation_evidence_imag_freq_negative']
+    `kind = 'irc' OR (coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null')` [name: 'ck_transition_state_validation_evidence_mapping_irc_only']
     `(coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null') OR transition_state_geometry_id IS NOT NULL` [name: 'ck_transition_state_validation_evidence_mapping_names_geometry']
-    `kind IN ('irc')` [name: 'ck_transition_state_validation_evidence_ts_validation_kind']
+    `kind = 'imaginary_mode' OR (imaginary_frequency_count IS NULL AND imaginary_frequency_cm1 IS NULL AND mode_displacement_agrees IS NULL)` [name: 'ck_transition_state_validation_evidence_mode_cols_imag_only']
+    `(kind = 'energy_ordering') = (reconstruction_calculation_id IS NULL)` [name: 'ck_transition_state_validation_evidence_source_calc_shape']
+    `kind IN ('irc', 'energy_ordering', 'imaginary_mode')` [name: 'ck_transition_state_validation_evidence_ts_validation_kind']
   }
 
-  Note: 'Structured IRC validation result for one TS candidate.'
+  Note: 'Structured validation result for one TS candidate.'
 }
 
 Table transport {

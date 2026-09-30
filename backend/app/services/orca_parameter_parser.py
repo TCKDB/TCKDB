@@ -860,8 +860,10 @@ def parse_irc_path_summary(text: str) -> dict | None:
     Returns a dict with:
     - ``points``: list of point dicts for ``calc_irc_point``
     - ``ts_point_index``: the step index of the TS point
-    - ``has_forward``, ``has_reverse``: whether each direction is present
-    - ``direction``: ``"both"``, ``"forward"``, or ``"reverse"``
+    - ``has_forward``, ``has_reverse``: whether each direction is present;
+      ``None`` (unstated) when there is no TS marker to tell them apart
+    - ``direction``: ``"both"``, ``"forward"``, or ``"reverse"``; ``None`` when
+      it cannot be determined
 
     Returns ``None`` if no IRC PATH SUMMARY block is found.
     """
@@ -932,9 +934,15 @@ def parse_irc_path_summary(text: str) -> dict | None:
     # Points before the TS go one direction, points after go the other.
     # ORCA convention: steps before TS are "backward" (toward reactant),
     # steps after TS are "forward" (toward product).
-    has_forward = False
-    has_reverse = False
+    # Without a TS marker the two branches cannot be told apart, so the
+    # direction and both flags are *unstated* (None), never False: False is
+    # the claim that no such branch exists, and nothing here establishes it.
+    has_forward: bool | None = None
+    has_reverse: bool | None = None
+    direction_mode: str | None = None
     if ts_point_index is not None:
+        has_forward = False
+        has_reverse = False
         for pt in points:
             if pt["is_ts"]:
                 pt["direction"] = None  # TS itself has no direction
@@ -944,13 +952,14 @@ def parse_irc_path_summary(text: str) -> dict | None:
             else:
                 pt["direction"] = "forward"
                 has_forward = True
-    else:
-        # No TS marker — cannot determine directions
-        pass
-
-    direction_mode = "both" if (has_forward and has_reverse) else (
-        "forward" if has_forward else "reverse" if has_reverse else "both"
-    )
+        if has_forward and has_reverse:
+            direction_mode = "both"
+        elif has_forward:
+            direction_mode = "forward"
+        elif has_reverse:
+            direction_mode = "reverse"
+        # A TS marker with no point on either side states nothing about the
+        # run mode; leave it unstated rather than invent "both".
 
     return {
         "points": points,

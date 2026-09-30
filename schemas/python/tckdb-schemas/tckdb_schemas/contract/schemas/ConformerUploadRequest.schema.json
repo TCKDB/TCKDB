@@ -348,6 +348,334 @@
       "title": "CalculationQuality",
       "type": "string"
     },
+    "CalculationScanCoordinateCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "atom1_index": {
+          "minimum": 1,
+          "title": "Atom1 Index",
+          "type": "integer"
+        },
+        "atom2_index": {
+          "minimum": 1,
+          "title": "Atom2 Index",
+          "type": "integer"
+        },
+        "atom3_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom3 Index"
+        },
+        "atom4_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom4 Index"
+        },
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_kind": {
+          "pattern": "^(bond|angle|dihedral|improper)$",
+          "title": "Coordinate Kind",
+          "type": "string"
+        },
+        "end_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Value"
+        },
+        "resolution_degrees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Degrees"
+        },
+        "start_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Value"
+        },
+        "step_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Count"
+        },
+        "step_size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Size"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_kind",
+        "atom1_index",
+        "atom2_index"
+      ],
+      "title": "CalculationScanCoordinateCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCoordinateValueCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_value": {
+          "title": "Coordinate Value",
+          "type": "number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_value"
+      ],
+      "title": "CalculationScanPointCoordinateValueCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_values": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCoordinateValueCreate"
+          },
+          "title": "Coordinate Values",
+          "type": "array"
+        },
+        "electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Energy Hartree"
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeometryPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "geometry_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Id"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "point_index": {
+          "minimum": 1,
+          "title": "Point Index",
+          "type": "integer"
+        },
+        "relative_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Energy Kj Mol"
+        }
+      },
+      "required": [
+        "point_index"
+      ],
+      "title": "CalculationScanPointCreate",
+      "type": "object"
+    },
+    "CalculationScanResultCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/CalculationConstraintCreate"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanCoordinateCreate"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "is_relaxed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Relaxed"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCreate"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "zero_energy_reference_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zero Energy Reference Hartree"
+        }
+      },
+      "required": [
+        "dimension"
+      ],
+      "title": "CalculationScanResultCreate",
+      "type": "object"
+    },
     "CalculationType": {
       "enum": [
         "opt",
@@ -557,6 +885,17 @@
         "quality": {
           "$ref": "#/$defs/CalculationQuality",
           "default": "raw"
+        },
+        "scan_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CalculationScanResultCreate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "scf_stability": {
           "anyOf": [
@@ -877,6 +1216,14 @@
       ],
       "title": "ContentAddressedReference",
       "type": "object"
+    },
+    "CoordinateUnit": {
+      "enum": [
+        "angstrom",
+        "degree"
+      ],
+      "title": "CoordinateUnit",
+      "type": "string"
     },
     "DepositRights": {
       "additionalProperties": false,
@@ -1794,18 +2141,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -1865,11 +2236,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },

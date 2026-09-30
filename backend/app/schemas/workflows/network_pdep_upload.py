@@ -319,11 +319,16 @@ class TransitionStateIn(SchemaBase):
     validation_evidence: list["TransitionStateValidationEvidenceIn"] = Field(
         default_factory=list,
         description=(
-            "Structured IRC evidence. Optional but strongly recommended: a "
-            "deposit without it succeeds and returns a "
+            "Structured validation evidence, at most one record per kind. "
+            "kind='irc' is evidence the saddle point connects the declared "
+            "endpoints: optional but strongly recommended, since a deposit "
+            "without a passing one succeeds and returns a "
             "'transition_state_missing_irc_evidence' upload warning. "
             "source_calculation_key resolves within this transition state's "
-            "calculation namespace and must name an irc-type calculation."
+            "calculation namespace and must name an irc-type calculation "
+            "(a freq-type one for kind='imaginary_mode'). kind='energy_ordering' "
+            "names a source calculation per compared energy: the saddle "
+            "point's own, or the participant species' own."
         ),
     )
     label: str | None = None
@@ -1399,16 +1404,58 @@ class NetworkPDepUploadRequest(SchemaBase):
                 ts.calculation.key: ts.calculation.type,
                 **{calculation.key: calculation.type for calculation in ts.calculations},
             }
+            micro_reaction = next(item for item in self.micro_reactions if item.key == ts.micro_reaction_key)
+            species_by_key = {species.key: species for species in self.species}
+            needed_type = {
+                "irc": CalculationType.irc,
+                "imaginary_mode": CalculationType.freq,
+            }
             for ev_index, evidence in enumerate(ts.validation_evidence):
+                base_field = f"transition_states['{ts.key}'].validation_evidence[{ev_index}]"
+                if evidence.kind == "energy_ordering":
+                    # Each energy names its own source, and it must be a
+                    # calculation of the thing the energy is of: the saddle
+                    # point's own for ``ts``, the named participant species'
+                    # own otherwise.
+                    for energy_index, energy in enumerate(evidence.energies or []):
+                        if energy.participant == "ts":
+                            owner_label = f"transition state '{ts.key}'"
+                            owned_keys: dict[str, PayloadCalculationType] = dict(ts_calculation_types)
+                        else:
+                            side, _, position = energy.participant.partition(":")
+                            members = micro_reaction.reactants if side == "reactant" else micro_reaction.products
+                            if not 1 <= int(position) <= len(members):
+                                # An undeclared participant is validate_ts_evidence_set's to report.
+                                continue
+                            species = species_by_key.get(members[int(position) - 1].species_key)
+                            if species is None:
+                                continue
+                            owner_label = f"species '{species.key}'"
+                            owned_keys = {
+                                **{conf.calculation.key: conf.calculation.type for conf in species.conformers},
+                                **{calc.key: calc.type for calc in species.calculations},
+                            }
+                        if energy.source_calculation_key not in owned_keys:
+                            raise undeclared_key_error(
+                                W_CALCULATION_KEY_UNDECLARED,
+                                f"Transition state '{ts.key}' energy_ordering takes the "
+                                f"energy of '{energy.participant}' from calculation_key "
+                                f"'{energy.source_calculation_key}', which is not one of "
+                                f"{owner_label} own calculations.",
+                                field=f"{base_field}.energies[{energy_index}].source_calculation_key",
+                                key=energy.source_calculation_key,
+                                declared=owned_keys,
+                            )
+                    continue
                 # This payload HAS a calculation-key namespace, so evidence
-                # must name the irc calculation it came from. A *missing*
+                # must name the calculation it came from. A *missing*
                 # key is a different refusal from a *wrong* one -- there is
                 # nothing to list alternatives against -- so it keeps the
                 # generic code.
                 if evidence.source_calculation_key is None:
                     raise ValueError(
                         f"Transition state '{ts.key}' validation evidence requires "
-                        f"source_calculation_key naming its irc calculation."
+                        f"source_calculation_key naming its {needed_type[evidence.kind].value} calculation."
                     )
                 calculation_type = ts_calculation_types.get(evidence.source_calculation_key)
                 if calculation_type is None:
@@ -1416,26 +1463,21 @@ class NetworkPDepUploadRequest(SchemaBase):
                         W_CALCULATION_KEY_UNDECLARED,
                         f"Transition state '{ts.key}' validation evidence references "
                         f"undefined calculation_key '{evidence.source_calculation_key}'.",
-                        field=(
-                            f"transition_states['{ts.key}']."
-                            f"validation_evidence[{ev_index}]."
-                            f"source_calculation_key"
-                        ),
+                        field=f"{base_field}.source_calculation_key",
                         key=evidence.source_calculation_key,
                         declared=ts_calculation_types,
                     )
-                if calculation_type != CalculationType.irc:
+                if calculation_type != needed_type[evidence.kind]:
                     raise ValueError(
-                        f"Transition state '{ts.key}' irc validation evidence "
-                        f"requires an irc calculation."
+                        f"Transition state '{ts.key}' {evidence.kind} validation evidence "
+                        f"requires {'an' if evidence.kind == 'irc' else 'a'} "
+                        f"{needed_type[evidence.kind].value} calculation."
                     )
-            micro_reaction = next(item for item in self.micro_reactions if item.key == ts.micro_reaction_key)
             # Kinds rather than counts: a participant that legitimately has no
             # atoms maps to an empty list, and only the declared kind says
             # which participant that is. Here the participants are species
             # keys, so the kind is read off the species they name; an undefined
             # key was already reported above.
-            species_by_key = {species.key: species for species in self.species}
             validate_ts_evidence_set(
                 ts.validation_evidence,
                 subject_label=ts.key,

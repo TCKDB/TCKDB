@@ -641,7 +641,7 @@ the gap.
 
 **Role:** result
 
-**Purpose:** Structured IRC validation result for one TS candidate.
+**Purpose:** Structured validation result for one TS candidate.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -650,7 +650,10 @@ the gap.
 | `kind` | TEXT | no | — | — | — | not documented |
 | `passed` | BOOLEAN | no | — | — | — | not documented |
 | `rationale` | TEXT | no | — | — | — | not documented |
-| `reconstruction_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `reconstruction_calculation_id` | BIGINT | yes | — | calculation.id | — | not documented |
+| `imaginary_frequency_count` | INTEGER | yes | — | — | — | not documented |
+| `imaginary_frequency_cm1` | FLOAT | yes | — | — | — | not documented |
+| `mode_displacement_agrees` | BOOLEAN | yes | — | — | — | not documented |
 | `reactant_participant_mapping` | JSONB | yes | — | — | — | not documented |
 | `product_participant_mapping` | JSONB | yes | — | — | — | not documented |
 | `transition_state_geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
@@ -659,8 +662,13 @@ the gap.
 
 **Check constraints:**
 
+- `ck_transition_state_validation_evidence_imag_count_ge_0`: `imaginary_frequency_count IS NULL OR imaginary_frequency_count >= 0`
+- `ck_transition_state_validation_evidence_imag_freq_negative`: `imaginary_frequency_cm1 IS NULL OR (imaginary_frequency_cm1 < 0 AND imaginary_frequency_cm1 > '-Infinity'::float8)`
+- `ck_transition_state_validation_evidence_mapping_irc_only`: `kind = 'irc' OR (coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null')`
 - `ck_transition_state_validation_evidence_mapping_names_geometry`: `(coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null') OR transition_state_geometry_id IS NOT NULL`
-- `ck_transition_state_validation_evidence_ts_validation_kind`: `kind IN ('irc')`
+- `ck_transition_state_validation_evidence_mode_cols_imag_only`: `kind = 'imaginary_mode' OR (imaginary_frequency_count IS NULL AND imaginary_frequency_cm1 IS NULL AND mode_displacement_agrees IS NULL)`
+- `ck_transition_state_validation_evidence_source_calc_shape`: `(kind = 'energy_ordering') = (reconstruction_calculation_id IS NULL)`
+- `ck_transition_state_validation_evidence_ts_validation_kind`: `kind IN ('irc', 'energy_ordering', 'imaginary_mode')`
 
 ## Role not stated on the model
 
@@ -1017,9 +1025,9 @@ the gap.
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
-| `direction` | IRCDirection (enum) | no | — | — | `forward`, `reverse`, `both` | not documented |
-| `has_forward` | BOOLEAN | no | False | — | — | not documented |
-| `has_reverse` | BOOLEAN | no | False | — | — | not documented |
+| `direction` | IRCDirection (enum) | yes | — | — | `forward`, `reverse`, `both` | not documented |
+| `has_forward` | BOOLEAN | yes | — | — | — | not documented |
+| `has_reverse` | BOOLEAN | yes | — | — | — | not documented |
 | `ts_point_index` | INTEGER | yes | — | — | — | not documented |
 | `point_count` | INTEGER | yes | — | — | — | not documented |
 | `zero_energy_reference_hartree` | FLOAT | yes | — | — | — | not documented |
@@ -2957,6 +2965,27 @@ the gap.
 **Check constraints:**
 
 - `ck_transition_state_entry_multiplicity_ge_1`: `multiplicity >= 1`
+
+### `transition_state_validation_energy`
+
+**Role:** role not stated on the model
+
+**Purpose:** One energy an ``energy_ordering`` evidence row compared.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `evidence_id` | BIGINT | no | — | transition_state_validation_evidence.id | — | not documented |
+| `participant` | TEXT | no | — | — | — | not documented |
+| `energy_kind` | TEXT | no | — | — | — | not documented |
+| `energy_hartree` | FLOAT | no | — | — | — | not documented |
+| `source_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_transition_state_validation_energy_energy_finite_negative`: `energy_hartree < 0 AND energy_hartree > '-Infinity'::float8`
+- `ck_transition_state_validation_energy_energy_kind`: `energy_kind IN ('electronic', 'e0')`
+- `ck_transition_state_validation_energy_participant_shape`: `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'`
 
 ### `transport`
 

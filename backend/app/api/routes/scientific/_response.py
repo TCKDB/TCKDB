@@ -312,6 +312,7 @@ TRANSITION_STATE_RECORD_SECTIONS = IncludeGatedSections(
         "geometries": ("geometries",),
         "review": ("review_history",),
         "validation_evidence": ("validation_evidence",),
+        "statmech": ("statmech",),
     },
 )
 

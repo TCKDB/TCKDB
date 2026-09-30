@@ -107,8 +107,11 @@ W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: one species' rotor could be parameterised by another's scan and the
 #: deposit succeeded. That call site now routes through this function;
 #: ``tests/api/test_api_bundle_torsion_scan_ownership.py`` provokes it.
-#: A transition state cannot reach the rule on that route at all —
-#: ``BundleTransitionStateIn`` carries no statmech, hence no torsions.
+#: A transition state now carries a statmech block on that route (#621), and
+#: its torsion scan keys are narrowed to the saddle point's own calculations
+#: at the schema layer, so a TS torsion citing another subject's scan is
+#: refused earlier, with ``calculation_key_undeclared``, and does not reach
+#: this guard.
 W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
@@ -187,6 +190,20 @@ W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = (
 #: neither is scoped by the enclosing block.
 W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = (
     "kinetics_interpretation_conformer_selection_owner_mismatch"
+)
+
+
+#: A transition-state validation record cites a calculation owned by
+#: another subject: an ``imaginary_mode`` record's frequency calculation that
+#: is not this saddle point's, or an ``energy_ordering`` energy taken from a
+#: calculation of something other than the participant it is the energy of.
+#:
+#: Reachable only by a caller that bypasses the request schemas, which refuse
+#: the same mistake earlier with ``calculation_key_undeclared`` and the keys
+#: that would have worked. Catalogued as a guard for that reason; it is the
+#: seam's own refusal, so the rule does not depend on which path reached it.
+W_TS_VALIDATION_SOURCE_CALCULATION_OWNER_MISMATCH = (
+    "ts_validation_source_calculation_owner_mismatch"
 )
 
 
@@ -350,6 +367,7 @@ __all__ = [
     "W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH",
     "W_THERMO_STATMECH_OWNER_MISMATCH",
     "W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH",
+    "W_TS_VALIDATION_SOURCE_CALCULATION_OWNER_MISMATCH",
     "assert_calculation_owned_by",
     "assert_owned_by",
     "assert_statmech_owned_by",

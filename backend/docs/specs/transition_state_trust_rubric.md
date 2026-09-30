@@ -818,3 +818,32 @@ request `include=trust`.
 | LLM relationship | §11: AI Review Assistant is advisory, submission-scoped, and never influences this rubric |
 | Open questions | §13: traversal depth, freq tie-break, TS aggregation, cross-rubric kinetics linkage, curator escalation, status-aware support-calc hard fail |
 | Recommended next slice | §14: rubric class + loaded evaluator + tests + standalone TS-entry detail wiring + `/full` propagation + trust_read_api_current.md update |
+| Validation evidence kinds | §16: `energy_ordering` and `imaginary_mode` records add no check and no version bump; only a passing `irc` record silences the missing-IRC upload warning |
+
+---
+
+## 16. Validation evidence kinds and this rubric (2026-09-30, #621)
+
+`transition_state_validation_evidence` now holds three kinds of record,
+`irc`, `energy_ordering` and `imaginary_mode`. This rubric reads calculation
+results (the representative frequency result, the geometry validations, the
+supporting calculations) and has never read an evidence row, so the new kinds
+change no check and `computed_transition_state` stays at version 2.
+
+Ruling, stated so it is not re-derived:
+
+- **The upload warning.** `transition_state_missing_irc_evidence` is about the
+  IRC, and only a passing `irc` record silences it. An `energy_ordering` or an
+  `imaginary_mode` record is true of a saddle point that connects some other
+  pair of minima, so neither stands in for it.
+- **No new check.** A producer's `imaginary_mode` verdict does not override the
+  frequency result the existing frequency checks cite: the count and value on
+  the record are the producer's statement of what the frequency calculation
+  found, and the calculation's own persisted result remains the evidence.
+  Adding a check that trusted the record over the result would invert that.
+- **No version bump.** The ruling recorded beside `COMPUTED_CALCULATION_V1`
+  applies: a change that moves no check between outcomes, and adds none, does
+  not bump the version, and the machine-review `context_hash` is unchanged.
+- **If a check is added later** (an `energy_ordering` that failed, as a
+  warning, say), it is an advisory check and does bump the version, because a
+  machine review performed before it existed is genuinely stale.

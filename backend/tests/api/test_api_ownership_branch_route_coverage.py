@@ -268,8 +268,12 @@ def test_the_scan_ignores_prose() -> None:
     assert "nested_owner_mismatch" not in literals
 
 
+#: The ownership codes deliberately unreachable by a request; see the test.
+_DELIBERATE_GUARDS = frozenset({"ts_validation_source_calculation_owner_mismatch"})
+
+
 def test_no_ownership_code_is_left_as_a_guard() -> None:
-    """The exemption list is empty, and putting a code back on it is deliberate.
+    """The exemption list is short, and putting a code on it is deliberate.
 
     ``test_every_reachable_ownership_code_is_asserted_by_a_route_test``
     excuses whatever the catalogue marks ``Reach.guard``, which means a
@@ -283,9 +287,20 @@ def test_no_ownership_code_is_left_as_a_guard() -> None:
     computed-reaction bundle; that code and the new stability-source code are
     now reachable, and ``tests/api/test_api_bundle_extras_622.py`` provokes
     both on the wire.
+
+    It holds one again, on purpose (#621):
+    ``ts_validation_source_calculation_owner_mismatch`` is the persistence
+    seam's backstop for a transition-state validation record citing a
+    calculation of something else. Every deposit path narrows the key to the
+    right owner in its request schema first, so a request is refused with
+    ``calculation_key_undeclared`` and never reaches the seam; the seam's
+    own refusal is tested directly in
+    ``tests/services/test_ts_validation_energy_ownership.py``. Keeping the
+    schema narrowing (which names the keys that would have worked) is worth
+    more than making the backstop reachable, and the catalogue note says so.
     """
     codes = _ownership_codes()
-    assert _guard_only(codes) == frozenset(), (
+    assert _guard_only(codes) == _DELIBERATE_GUARDS, (
         "an ownership code became unreachable by a request. Say why in its "
         "catalogue note and list it here in the same change; if instead one "
         "is reachable it needs a route test that provokes it."

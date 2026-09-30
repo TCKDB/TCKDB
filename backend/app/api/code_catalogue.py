@@ -2181,6 +2181,23 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "subject. The request schema and persist_bundle_transport "
                 "raise the same code and context (ADR 0017)."
             )),
+    ApiCode("ts_validation_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
+            reach=Reach.guard,
+            note=(
+                "A transition-state validation record cites a calculation of "
+                "something other than what it is about. Every deposit path "
+                "narrows the key first, in its request schema, to the saddle "
+                "point's own calculations or the participant species' own, so "
+                "a request receives calculation_key_undeclared (with the keys "
+                "that would have worked) and never reaches this guard. It is "
+                "the persistence seam's own refusal for a caller that "
+                "bypasses the schemas, tested directly in "
+                "tests/services/test_ts_validation_energy_ownership.py; "
+                "reclassify if a path ever resolves these keys in a wider "
+                "namespace than the schema checks."
+            )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py",
             shape=Shape.relationship),

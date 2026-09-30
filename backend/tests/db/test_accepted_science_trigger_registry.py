@@ -33,10 +33,16 @@ _ATOM_MAP_REVISION = _VERSIONS / "b6c1f4a8e703_freeze_declared_atom_maps.py"
 #: same terms.
 _EVIDENCE_REVISION = _VERSIONS / "a1f6c3e9b527_freeze_evidence_under_accepted_roots.py"
 
+#: ``a7d3f1c95e28`` widens the TS evidence table to three kinds and adds the
+#: child table holding an ``energy_ordering`` record's compared energies. That
+#: table reaches its accepted root through its evidence row, so it is guarded
+#: with ``tckdb_guard_accepted_via_child`` and takes the TRUNCATE refusal.
+_EVIDENCE_KINDS_REVISION = _VERSIONS / "a7d3f1c95e28_ts_evidence_kinds_and_unstated_irc_direction.py"
+
 #: The revisions that extend ``c6f2a9d4e7b1``'s regime by adding guards under
 #: their own ``_trigger_name``. Both halves of this test iterate this list, so
 #: a fourth such revision is wired in by adding it here once.
-_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION)
+_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION, _EVIDENCE_KINDS_REVISION)
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one
 #: registered column from ``c6f2a9d4e7b1``'s ``calc_scf_stability`` guard. It
