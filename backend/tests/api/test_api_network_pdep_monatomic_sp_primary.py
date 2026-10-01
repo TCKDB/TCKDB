@@ -14,7 +14,9 @@ alone (no optimisation, no second copy of the same energy) and pin:
 * a primary that is an ``sp`` on two or more atoms, or a one-atom
   ``freq``/``scan``, is still refused;
 * the fabricated-opt shape producers send today keeps working;
-* the duplicate-single-point rule of #610 holds on this route.
+* the duplicate-single-point rule of #610 holds on this route, for an atom and
+  for a species with no linked opt: the route links a geometry as a
+  calculation's final output only, and the rule reads that link too.
 """
 
 from __future__ import annotations
@@ -316,31 +318,6 @@ def test_fabricated_opt_atom_keeps_working(client, db_session):
     assert sorted(c.type.value for c in rows["calcs"]) == ["opt", "sp"]
 
 
-def test_second_sp_at_another_level_linked_to_the_atoms_statmech_is_refused(client):
-    """The shared role rules still judge an sp-only atom on this route.
-
-    A further sp at another level of theory belongs in the species'
-    ``calculations`` without a statmech link; linking both as role ``sp`` gives
-    the record no single energy level, which the shared
-    ``assert_role_consistency`` refuses. (The #610 duplicate-on-one-geometry
-    rule is inert on this route: it compares *input* geometries, and this route
-    links a geometry as a calculation's final *output* only, for opt and sp
-    alike. That is how the route has always stored geometries, not something
-    the atom changes.)
-    """
-    payload = _payload()
-    species = _h_species(payload)
-    second = _h_sp("H_sp2", energy=-0.4999, lot=_LOT_DFT)
-    second["geometry_key"] = "H_geom"
-    species["calculations"] = [second]
-    species["statmech"]["source_calculations"].append(
-        {"calculation_key": "H_sp2", "role": "sp"}
-    )
-    resp = client.post(_PDEP_URL, json=payload)
-    assert resp.status_code == 422, resp.text[:1000]
-    assert resp.json()["code"] == "statmech_energy_level_ambiguous", resp.text[:600]
-
-
 def test_second_sp_at_another_level_unlinked_is_accepted(client, db_session):
     payload = _payload()
     species = _h_species(payload)
@@ -367,3 +344,53 @@ def test_network_read_back_names_the_atoms_single_point(client, db_session):
         ("well_energy", "sp"),
     ]
     assert record["evidence_summary"]["source_calculation_count"] == 2
+
+
+def test_two_same_level_sps_linked_on_an_atom_are_refused(client):
+    """The #610 duplicate rule, on this route: one geometry, two sps, no opt."""
+    payload = _payload()
+    species = _h_species(payload)
+    second = _h_sp("H_sp2", energy=-0.4999)
+    second["geometry_key"] = "H_geom"
+    species["calculations"] = [second]
+    species["statmech"]["source_calculations"].append(
+        {"calculation_key": "H_sp2", "role": "sp"}
+    )
+    resp = client.post(_PDEP_URL, json=payload)
+    assert resp.status_code == 422, resp.text[:1000]
+    assert resp.json()["code"] == "statmech_role_duplicate", resp.text[:600]
+
+
+def test_one_sp_linked_beside_an_unlinked_second_on_an_atom_stands(client):
+    payload = _payload()
+    species = _h_species(payload)
+    second = _h_sp("H_sp2", energy=-0.4999)
+    second["geometry_key"] = "H_geom"
+    species["calculations"] = [second]
+    resp = client.post(_PDEP_URL, json=payload)
+    assert resp.status_code == 201, resp.text[:1000]
+
+
+def test_two_same_level_sps_linked_on_a_polyatomic_species_with_no_opt_role_are_refused(client):
+    """Not an atom-only rule: a polyatomic species linking only sps is judged the same."""
+    payload = _payload()
+    (ethyl,) = [s for s in payload["species"] if s["key"] == "ethyl"]
+    extra = {
+        "key": "ethyl_sp2",
+        "type": "sp",
+        "geometry_key": "ethyl_geom",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT_CC,
+        "sp_electronic_energy_hartree": -79.81,
+    }
+    ethyl["calculations"].append(extra)
+    ethyl["statmech"] = {
+        "statmech_treatment": "rrho",
+        "source_calculations": [
+            {"calculation_key": "ethyl_sp", "role": "sp"},
+            {"calculation_key": "ethyl_sp2", "role": "sp"},
+        ],
+    }
+    resp = client.post(_PDEP_URL, json=payload)
+    assert resp.status_code == 422, resp.text[:1000]
+    assert resp.json()["code"] == "statmech_role_duplicate", resp.text[:600]

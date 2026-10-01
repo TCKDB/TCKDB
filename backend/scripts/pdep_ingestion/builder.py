@@ -434,6 +434,21 @@ def build_network_pdep_payload(
             gap.species_skipped.append((label, reason))
             continue
 
+        if (
+            atom_count_of_xyz(info.xyz_text) == 1
+            and info.electronic_energy_j_mol is None
+        ):
+            # An atom has no optimisation, and without an energy there is no
+            # single point to send: fabricating an opt would be dishonest.
+            gap.species_skipped.append(
+                (
+                    label,
+                    "one-atom species with no single-point energy: "
+                    "no honest primary calculation",
+                )
+            )
+            continue
+
         mult = (
             (data.spin_multiplicity if data else None)
             or (conf.spin_multiplicity if conf else None)
@@ -507,8 +522,7 @@ def build_network_pdep_payload(
                 # An atom has no geometry to optimise; Arkane ran a single
                 # point on it. That single point is its honest conformer
                 # primary (#615): send it once, as the primary, and fabricate
-                # no optimisation. (An atom whose run carries no energy has no
-                # single point to send and keeps the legacy opt anchor above.)
+                # no optimisation. (An atom with no energy is skipped above.)
                 # The primary needs no geometry_key: the conformer's own
                 # geometry is the atom.
                 sp_calc.pop("geometry_key")

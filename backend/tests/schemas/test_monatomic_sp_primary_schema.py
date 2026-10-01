@@ -124,3 +124,27 @@ def test_no_other_type_is_ever_exempt(build, calc_type, xyz):
     with pytest.raises(ValidationError) as exc:
         build(calc_type, xyz)
     assert f"got '{calc_type}'" in str(exc.value)
+
+
+@pytest.mark.parametrize("calc_type", ["sp", "freq", "scan", "irc"])
+@pytest.mark.parametrize("xyz", [_ATOM, _H2], ids=["one-atom", "two-atoms"])
+def test_pdep_transition_state_primary_still_requires_opt(calc_type, xyz):
+    """A saddle point is never an atom: the exemption does not reach it."""
+    from app.schemas.workflows.network_pdep_upload import TransitionStateIn
+
+    with pytest.raises(ValidationError, match="must be type 'opt'"):
+        TransitionStateIn.model_validate(
+            {
+                "key": "ts0",
+                "micro_reaction_key": "r0",
+                "charge": 0,
+                "multiplicity": 2,
+                "geometry": {"key": "g0", "xyz_text": xyz},
+                "calculation": {
+                    "key": "p0",
+                    "type": calc_type,
+                    "level_of_theory": _LOT,
+                    "software_release": _SOFTWARE,
+                },
+            }
+        )

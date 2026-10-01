@@ -922,12 +922,40 @@ def test_hydrogen_atom_is_sent_as_its_single_point_not_a_fabricated_opt(tmp_path
     NetworkSpeciesIn.model_validate(atom)
 
 
-def test_atom_without_an_energy_keeps_the_legacy_opt_anchor(tmp_path) -> None:
-    """No single point to send means no honest primary: the old shape stays."""
+def test_atom_without_an_energy_is_skipped_not_given_a_fabricated_opt(tmp_path) -> None:
+    """No single point to send means no honest primary: the species is named and dropped."""
     run = _run_with_hydrogen_atom(tmp_path, energy_j_mol="")
+    payload, gap = build_network_pdep_payload(run)
+    assert "H" not in {s["key"] for s in payload["species"]}
+    assert (
+        "H",
+        "one-atom species with no single-point energy: no honest primary calculation",
+    ) in gap.species_skipped
+
+
+def test_molecule_without_frequencies_keeps_its_opt_primary(tmp_path) -> None:
+    """The atom test is the geometry's atom count, not 'no frequencies'."""
+    run = _run_with_hydrogen_atom(tmp_path)
+    csv_path = run / "supporting_information.csv"
+    with csv_path.open("a") as fh:
+        fh.write(
+            'HF,1,1,,,,-1313000.0,-1313000.0,,"H    0.0    0.0    0.0, F    0.0    0.0    0.92",,\n'
+        )
+    (run / "Data" / "HF.py").write_text(
+        "bonds = {}\n\nexternalSymmetry = 1\n\nspinMultiplicity = 1\n\nopticalIsomers = 1\n"
+    )
+    (run / "input.py").write_text(
+        (run / "input.py").read_text().replace(
+            "transitionState('TS1'",
+            "species('HF', 'Data/HF.py',\n        structure = SMILES('F'),\n)\n"
+            "transitionState('TS1'",
+            1,
+        )
+    )
     payload, _gap = build_network_pdep_payload(run)
-    atom = next(s for s in payload["species"] if s["key"] == "H")
-    assert atom["conformers"][0]["calculation"]["type"] == "opt"
+    molecule = next(s for s in payload["species"] if s["key"] == "HF")
+    assert molecule["conformers"][0]["calculation"]["type"] == "opt"
+    assert [c["type"] for c in molecule["calculations"]] == ["sp"]
 
 
 def test_atom_in_the_network_still_supplies_the_solve_its_energy_and_source(tmp_path) -> None:
