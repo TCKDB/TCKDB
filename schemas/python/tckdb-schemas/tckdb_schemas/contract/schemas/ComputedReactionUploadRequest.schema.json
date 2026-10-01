@@ -2163,6 +2163,13 @@
           "default": null,
           "title": "Sp Electronic Energy Hartree"
         },
+        "sp_energy_components": {
+          "items": {
+            "$ref": "#/$defs/SPEnergyComponentPayload"
+          },
+          "title": "Sp Energy Components",
+          "type": "array"
+        },
         "spin_diagnostic": {
           "anyOf": [
             {
@@ -2389,6 +2396,15 @@
       "title": "CoordinateUnit",
       "type": "string"
     },
+    "CoreTreatment": {
+      "description": "Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).\n\n``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:\nevery electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron\nare different levels (their difference is the core-valence term of a\nfocal-point scheme). Part of the level identity only when stated: a level\nthat does not say stays ``NULL`` and keeps the hash it always had.\n\nTwo members on purpose. A partial treatment (Gaussian ``FC=1`` /\n``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit\norbital range) is real but has no agreed name across codes; it is left\n``NULL`` and described in ``keywords`` until a producer needs it named.",
+      "enum": [
+        "frozen_core",
+        "all_electron"
+      ],
+      "title": "CoreTreatment",
+      "type": "string"
+    },
     "DepositRights": {
       "additionalProperties": false,
       "description": "Deposit-time agreement that the records may be licensed as stated.",
@@ -2482,6 +2498,19 @@
       ],
       "title": "ElectronicLevelIn",
       "type": "object"
+    },
+    "EnergyComponentKind": {
+      "description": "Which part of an electronic energy a value is (ADR 0021).\n\nNamed generically because it is shared: a scheme term says which\ncomponent of an input energy it consumes, and a single-point energy\ncomponent says which component it stores. ``total`` is the whole\nelectronic energy; ``reference`` the reference-determinant (SCF / HF)\npart; ``correlation`` the correlation part; ``triples`` the perturbative\ntriples part; ``dboc`` the diagonal Born-Oppenheimer correction;\n``scalar_relativistic`` the scalar-relativistic correction. The wire enum\nin ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema\nfor the two is one schema, not two.",
+      "enum": [
+        "total",
+        "reference",
+        "correlation",
+        "triples",
+        "dboc",
+        "scalar_relativistic"
+      ],
+      "title": "EnergyComponentKind",
+      "type": "string"
     },
     "EnergyCorrectionApplicationRole": {
       "enum": [
@@ -3733,6 +3762,17 @@
           "default": null,
           "title": "Cabs Basis"
         },
+        "core_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoreTreatment"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "dispersion": {
           "anyOf": [
             {
@@ -4539,6 +4579,25 @@
       ],
       "title": "SCFStabilityStatus",
       "type": "string"
+    },
+    "SPEnergyComponentPayload": {
+      "additionalProperties": false,
+      "description": "One deposited part of a single point's electronic energy (ADR 0021).\n\n:param component: Which part: ``reference`` (the SCF / HF energy),\n    ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or\n    ``total`` (the whole electronic energy).\n:param value_hartree: The part's value in hartree, as the program printed\n    it. TCKDB checks it against the single point's energy but never\n    derives or fills one.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/EnergyComponentKind"
+        },
+        "value_hartree": {
+          "title": "Value Hartree",
+          "type": "number"
+        }
+      },
+      "required": [
+        "component",
+        "value_hartree"
+      ],
+      "title": "SPEnergyComponentPayload",
+      "type": "object"
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,

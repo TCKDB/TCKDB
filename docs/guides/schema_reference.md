@@ -453,6 +453,7 @@ the gap.
 | `solvent_model` | TEXT | yes | — | — | — | not documented |
 | `keywords` | TEXT | yes | — | — | — | not documented |
 | `spin_treatment` | SpinTreatment (enum) | yes | — | — | `restricted`, `unrestricted`, `restricted_open`, `unknown` | not documented |
+| `core_treatment` | CoreTreatment (enum) | yes | — | — | `frozen_core`, `all_electron` | not documented |
 | `lot_hash` | CHAR(64) | no | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
 | `public_ref` | VARCHAR(40) | no | — | — | — | not documented |
@@ -1248,6 +1249,22 @@ the gap.
 **Check constraints:**
 
 - `ck_calc_scan_result_dimension_ge_1`: `dimension >= 1`
+
+### `calc_sp_energy_component`
+
+**Role:** role not stated on the model
+
+**Purpose:** One deposited part of a single point's electronic energy (ADR 0021).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `component` | EnergyComponentKind (enum) | no | — | — | `total`, `reference`, `correlation`, `triples`, `dboc`, `scalar_relativistic` | not documented |
+| `value_hartree` | FLOAT | no | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_calc_sp_energy_component_value_hartree_finite`: `value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8`
 
 ### `calc_sp_result`
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.108.0 - 2026-10-01
+
+`RejectionCode` gains `sp_energy_component_not_on_sp`,
+`sp_energy_component_duplicate`, `sp_energy_component_total_mismatch` and
+`sp_energy_components_do_not_sum`, regenerated from the server's catalogue
+(ADR 0021, `tckdb-schemas` 0.69.0). They are the refusals for the new
+`sp_energy_components[]` field on single points. Reads of a level of theory now carry
+`core_treatment` (`frozen_core`, `all_electron` or `null`) and a single point's
+result carries `energy_components`; both arrive in the existing JSON shapes. The
+client's request builders are unchanged.
+
 ## 0.107.0 - 2026-10-01
 
 `Client.get_composite_scheme(ref)` reads `GET /scientific/composite-schemes/{ref}`

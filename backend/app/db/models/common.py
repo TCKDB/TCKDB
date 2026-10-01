@@ -889,6 +889,25 @@ class SpinTreatment(str, Enum):
     unknown = "unknown"
 
 
+class CoreTreatment(str, Enum):
+    """Which electrons a post-SCF method correlates (ADR 0021, plan decision 8).
+
+    ``frozen_core``: the chemical core is held uncorrelated. ``all_electron``:
+    every electron is correlated. CCSD(T)/cc-pCVTZ frozen-core and all-electron
+    are different levels (their difference is the core-valence term of a
+    focal-point scheme). Part of the level identity only when stated: a level
+    that does not say stays ``NULL`` and keeps the hash it always had.
+
+    Two members on purpose. A partial treatment (Gaussian ``FC=1`` /
+    ``FreezeInnerNobleGasCore``, an ORCA ``FC_EWIN`` energy window, an explicit
+    orbital range) is real but has no agreed name across codes; it is left
+    ``NULL`` and described in ``keywords`` until a producer needs it named.
+    """
+
+    frozen_core = "frozen_core"
+    all_electron = "all_electron"
+
+
 class CompositeSchemeKind(str, Enum):
     """What sort of recipe a ``composite_scheme`` is (ADR 0021).
 
@@ -928,11 +947,13 @@ class EnergyComponentKind(str, Enum):
 
     Named generically because it is shared: a scheme term says which
     component of an input energy it consumes, and a single-point energy
-    component (a later phase) says which component it stores. ``total`` is
-    the whole electronic energy; ``reference`` the reference-determinant
-    (SCF / HF) part; ``correlation`` the correlation part; ``triples`` the
-    perturbative triples part; ``dboc`` the diagonal Born-Oppenheimer
-    correction; ``scalar_relativistic`` the scalar-relativistic correction.
+    component says which component it stores. ``total`` is the whole
+    electronic energy; ``reference`` the reference-determinant (SCF / HF)
+    part; ``correlation`` the correlation part; ``triples`` the perturbative
+    triples part; ``dboc`` the diagonal Born-Oppenheimer correction;
+    ``scalar_relativistic`` the scalar-relativistic correction. The wire enum
+    in ``tckdb_schemas.enums`` carries this exact text, so the OpenAPI schema
+    for the two is one schema, not two.
     """
 
     total = "total"

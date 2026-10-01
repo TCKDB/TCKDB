@@ -10,6 +10,7 @@ from tckdb_schemas.enums import (
     CalculationQuality,
     CalculationType,
     ConstraintKind,
+    EnergyComponentKind,
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
@@ -26,6 +27,7 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.sp_energy_components import check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
@@ -396,6 +398,21 @@ class SPResultPayload(SchemaBase):
     """
 
     electronic_energy_hartree: float | None = None
+
+
+class SPEnergyComponentPayload(SchemaBase):
+    """One deposited part of a single point's electronic energy (ADR 0021).
+
+    :param component: Which part: ``reference`` (the SCF / HF energy),
+        ``correlation``, ``triples``, ``dboc``, ``scalar_relativistic``, or
+        ``total`` (the whole electronic energy).
+    :param value_hartree: The part's value in hartree, as the program printed
+        it. TCKDB checks it against the single point's energy but never
+        derives or fills one.
+    """
+
+    component: EnergyComponentKind
+    value_hartree: float = Field(allow_inf_nan=False)
 
 
 class SCFStabilityBase(SchemaBase):
@@ -949,6 +966,8 @@ class CalculationWithResultsPayload(CalculationPayload):
     :param opt_result: Inline optimisation result (type must be ``opt``).
     :param freq_result: Inline frequency result (type must be ``freq``).
     :param sp_result: Inline single-point result (type must be ``sp``).
+    :param sp_energy_components: Inline parts of the single point's
+        electronic energy (type must be ``sp``).
     :param irc_result: Inline IRC result bundle (type must be ``irc``).
     :param path_search_result: Inline path-search result bundle (type
         must be ``path_search``). Carries NEB, GSM, and other path-based
@@ -969,6 +988,15 @@ class CalculationWithResultsPayload(CalculationPayload):
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list,
+        description=(
+            "The parts of this single point's electronic energy (reference, "
+            "correlation, ...), as deposited. Single points only. One value per "
+            "component; reference + correlation must equal sp_result."
+            "electronic_energy_hartree within 1e-6 Eh when all three are given."
+        ),
+    )
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
     # Resolved at the foot of this module: ``fragments.scan`` imports
@@ -1126,6 +1154,18 @@ class CalculationWithResultsPayload(CalculationPayload):
                     f"calculation type '{self.type.value}'. "
                     f"Expected '{allowed_field}' or no result."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_sp_energy_components(self) -> Self:
+        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in self.sp_energy_components],
+            calculation_type=self.type,
+            electronic_energy_hartree=(
+                self.sp_result.electronic_energy_hartree if self.sp_result is not None else None
+            ),
+        )
         return self
 
     @model_validator(mode="after")

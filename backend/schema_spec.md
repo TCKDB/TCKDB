@@ -231,6 +231,8 @@ Notes:
 - `solvent`
 - `solvent_model`
 - `keywords`
+- `spin_treatment` (nullable)
+- `core_treatment` (nullable: `frozen_core | all_electron`)
 - `lot_hash`
 - `created_at`
 
@@ -241,6 +243,7 @@ Notes:
 - workflow-tool release dedupe is enforced on `(workflow_tool_id, version, git_commit)`
 - `lot_hash` is unique
 - `lot_hash` hashes each basis name (`basis`, `aux_basis`, `cabs_basis`) by its identity key, not verbatim: lower case, with the family hyphen in `def2-` and `cc-p` restored (`app/chemistry/basis_set_names.py`, #574). `def2tzvp` and `def2-TZVP` are one level of theory; `6-31G*` and `6-31G**` stay two. The row stores the first spelling it was uploaded with.
+- `core_treatment` (ADR 0021) joins the `lot_hash` payload **only when it is set**. A NULL adds no key, so every level that did not state it keeps the hash it had before the column existed; no row was re-keyed. `frozen_core` and `all_electron` are two levels, and "not stated" is a third that is neither. A partial core treatment (an energy window, Gaussian `FC=1`) has no value; it stays NULL and is described in `keywords`. The column is in `snapshot_defaults.UNCHANGED_DEFAULTS` so a whole-row digest of a level does not go stale for a NULL. `scripts/ops/merge_duplicate_levels_of_theory.py` regroups by the recomputed hash and lists the column, so it never folds one treatment into the other.
 - A level of theory's `public_ref` is minted from `lot_hash` **once, at insert**, and never recomputed. Revision `38b06819f099` re-keyed every row whose basis spelling differs from its identity key and left `public_ref` alone, so for those rows `public_ref` is no longer what their content would mint on a fresh instance. A LOT ref identifies a row; it is not re-derivable from content after a re-key.
 - `lot_hash` values of re-keyed rows changed in `38b06819f099`. Anything holding an old value (a `lot_hash=` query, an ML export row, a stored consistency-check snapshot) no longer matches.
 
@@ -889,6 +892,14 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 - `calculation_id`
 - `electronic_energy_hartree`
 - `electronic_energy_uncertainty_hartree`
+
+`calc_sp_energy_component` fields (ADR 0021; a child of a single-point calculation):
+
+- `calculation_id`
+- `component` (`EnergyComponentKind`: `total | reference | correlation | triples | dboc | scalar_relativistic`)
+- `value_hartree` (finite)
+
+Primary key `(calculation_id, component)`: one value per component. Single-point calculations only (refused on any other type by the wire models and again at the write). The value is what the depositor sent. At deposit, `reference + correlation` must equal `calc_sp_result.electronic_energy_hartree` within 1e-6 Eh when all three are present (not applied when a `triples` component is also sent, or when the energy is absent), and a `total` must equal it. TCKDB compares and never stores a sum it formed. Guarded as an ownership child of `calculation` like `calc_sp_result` (accepted-science freeze, TRUNCATE refused).
 
 `calc_opt_result` fields:
 

@@ -38,6 +38,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    EnergyComponentKind,
     HessianSource,
     ImaginaryModeDisposition,
     IRCDirection,
@@ -227,6 +228,11 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         back_populates="calculation",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    sp_energy_components: Mapped[list["CalculationSPEnergyComponent"]] = relationship(
+        back_populates="calculation",
+        cascade="all, delete-orphan",
+        order_by="CalculationSPEnergyComponent.component",
     )
     opt_result: Mapped[Optional["CalculationOptResult"]] = relationship(
         back_populates="calculation",
@@ -524,6 +530,45 @@ class CalculationSPResult(Base):
     )
 
     calculation: Mapped["Calculation"] = relationship(back_populates="sp_result")
+
+
+class CalculationSPEnergyComponent(Base):
+    """One deposited part of a single point's electronic energy (ADR 0021).
+
+    A child of a single-point calculation: the reference (SCF) energy, the
+    correlation energy, a triples part, or a correction, as the program
+    printed it. These are the inputs a composite scheme's terms consume (a
+    CCSD(T)/CBS extrapolation extrapolates the correlation part and takes the
+    reference part from the larger basis).
+
+    Append-only and never computed by TCKDB: the value is what the depositor
+    sent. The write path checks that ``reference + correlation`` agrees with
+    the single point's ``electronic_energy_hartree`` (and that a ``total``
+    equals it) but never stores a sum it formed itself. One row per
+    ``(calculation, component)``.
+    """
+
+    __tablename__ = "calc_sp_energy_component"
+
+    calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("calculation.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=False,
+    )
+    component: Mapped[EnergyComponentKind] = mapped_column(
+        SAEnum(EnergyComponentKind, name="energy_component_kind"), nullable=False
+    )
+    value_hartree: Mapped[float] = mapped_column(nullable=False)
+
+    calculation: Mapped["Calculation"] = relationship(back_populates="sp_energy_components")
+
+    __table_args__ = (
+        PrimaryKeyConstraint("calculation_id", "component"),
+        CheckConstraint(
+            "value_hartree > '-Infinity'::float8 AND value_hartree < 'Infinity'::float8",
+            name="value_hartree_finite",
+        ),
+    )
 
 
 class CalculationOptResult(Base):

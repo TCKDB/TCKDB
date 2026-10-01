@@ -700,6 +700,7 @@ def _build_lot_summary(
         dispersion=lot.dispersion,
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
+        core_treatment=lot.core_treatment,
         label=None,
         composite_scheme=composite_scheme_summary(session, lot.id),
     )
@@ -859,6 +860,7 @@ def _bulk_lot_summaries(
             dispersion=lot.dispersion,
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
+            core_treatment=lot.core_treatment,
             label=None,
             composite_scheme=schemes.get(lot.id),
         )

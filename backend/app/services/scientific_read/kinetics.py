@@ -27,6 +27,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationDependencyRole,
     CalculationType,
+    CoreTreatment,
     KineticsCalculationRole,
     KineticsDegeneracyConvention,
     KineticsModelKind,
@@ -1048,6 +1049,7 @@ class _CalcMeta:
         "composite_scheme",
         "id",
         "lot_basis",
+        "lot_core_treatment",
         "lot_dispersion",
         "lot_id",
         "lot_method",
@@ -1080,6 +1082,7 @@ class _CalcMeta:
         software_version: str | None,
         parameters_json: dict | None,
         composite_scheme: CompositeSchemeSummary | None = None,
+        lot_core_treatment: CoreTreatment | None = None,
     ):
         self.composite_scheme = composite_scheme
         self.id = id
@@ -1091,6 +1094,7 @@ class _CalcMeta:
         self.lot_basis = lot_basis
         self.lot_dispersion = lot_dispersion
         self.lot_solvent = lot_solvent
+        self.lot_core_treatment = lot_core_treatment
         self.software_release_id = software_release_id
         self.software_release_ref = software_release_ref
         self.software_name = software_name
@@ -1135,6 +1139,7 @@ def _calc_metadata(
             SoftwareRelease.public_ref,
             Software.name,
             SoftwareRelease.version,
+            LevelOfTheory.core_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -1163,6 +1168,7 @@ def _calc_metadata(
             software_name=row[12],
             software_version=row[13],
             composite_scheme=schemes.get(row[3]),
+            lot_core_treatment=row[14],
         )
         for row in rows
     }
@@ -1612,6 +1618,7 @@ def _lot_summary_for_calc(meta: _CalcMeta | None) -> LevelOfTheorySummary | None
         basis=meta.lot_basis,
         dispersion=meta.lot_dispersion,
         solvent=meta.lot_solvent,
+        core_treatment=meta.lot_core_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=meta.composite_scheme,
     )
