@@ -317,7 +317,7 @@ def test_polyatomic_statmech_with_only_sp_warns_on_missing_frequencies() -> None
     warnings = collect_statmech_content_warnings(
         scientific_origin=ScientificOriginKind.computed,
         source_calculation_roles={"sp"},
-        has_rotational_structure=True,
+        is_polyatomic=True,
     )
     assert [w.code for w in warnings] == [W_MISSING_STATMECH_FREQUENCY_SOURCE]
 
@@ -330,17 +330,41 @@ def test_monatomic_statmech_with_only_sp_stays_quiet() -> None:
         collect_statmech_content_warnings(
             scientific_origin=ScientificOriginKind.computed,
             source_calculation_roles={"sp"},
-            has_rotational_structure=False,
+            is_polyatomic=False,
         )
         == []
     )
 
 
-def test_rotational_structure_is_read_off_the_record() -> None:
-    from app.services.provenance_warnings import statmech_has_rotational_structure
+def test_subject_is_polyatomic_uses_evidence_before_the_heuristic() -> None:
+    """#608: geometry, then rigid_rotor_kind, then identity, then the heuristic."""
+    from app.db.models.common import RigidRotorKind
+    from app.services.monatomic import statmech_subject_is_polyatomic
 
-    assert statmech_has_rotational_structure(
-        _statmech(rotational_constant_a_cm1=27.88)
+    water = "3\nw\nO 0 0 0\nH 0 0 1\nH 0 1 0"
+    one = "1\nO\nO 0 0 0"
+
+    # No constants, no torsions: the old test called this an atom.
+    assert statmech_subject_is_polyatomic(_statmech(), xyz_texts=[water])
+    assert not statmech_subject_is_polyatomic(_statmech(), xyz_texts=[one])
+    # A geometry outranks a contradicting declaration.
+    assert statmech_subject_is_polyatomic(
+        _statmech(rigid_rotor_kind=RigidRotorKind.atom), xyz_texts=[water]
     )
-    # A bare H-atom-shaped record reports neither rotation nor torsions.
-    assert not statmech_has_rotational_structure(_statmech())
+    # Identity outranks a declaration: water claimed as an atom is still water.
+    assert statmech_subject_is_polyatomic(
+        _statmech(rigid_rotor_kind=RigidRotorKind.atom), smiles="O"
+    )
+    assert not statmech_subject_is_polyatomic(
+        _statmech(rigid_rotor_kind=RigidRotorKind.linear), smiles="[O]"
+    )
+    # rigid_rotor_kind alone, with no geometry and no identity, is used.
+    assert not statmech_subject_is_polyatomic(_statmech(rigid_rotor_kind=RigidRotorKind.atom))
+    assert statmech_subject_is_polyatomic(_statmech(rigid_rotor_kind=RigidRotorKind.linear))
+    # Identity alone.
+    assert statmech_subject_is_polyatomic(_statmech(), smiles="C[C](S)O")
+    assert statmech_subject_is_polyatomic(_statmech(), smiles="[OH]")
+    assert not statmech_subject_is_polyatomic(_statmech(), smiles="[Cl]")
+    # Only with no evidence at all: the old heuristic, and its silence is "unknown".
+    assert statmech_subject_is_polyatomic(_statmech(rotational_constant_a_cm1=27.88))
+    assert not statmech_subject_is_polyatomic(_statmech())

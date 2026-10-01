@@ -212,7 +212,7 @@ Classification scheme:
 **Present**:
 - `/health` endpoint pings DB ([health.py:14-18](backend/app/api/routes/health.py#L14)).
 - Comprehensive exception handlers ([errors.py:229-241](backend/app/api/errors.py#L229-L241)) cover `IntegrityError → 409` with SQLSTATE, `OperationalError → 503`, custom `query_timeout → 503`, `ValueError → 422`, `NotFoundError → 404`, `IdempotencyConflict → 409`.
-- DB statement timeout enforced at app level: `db_statement_timeout_ms = 30000` ([deps.py:31-62](backend/app/api/deps.py#L31-L62)).
+- DB statement timeout enforced at app level: `db_statement_timeout_ms = 30000` (`create_app_engine` / `statement_timeout_connect_args` in [deps.py](backend/app/api/deps.py); a libpq startup option, whole connection life since #604).
 - Docker Compose rotates container logs (10MB × 5 files).
 - Deployment docs comprehensive: `docs/deployment/{local-v0,shared-private-deployment,self_hosted_single_node,native-advanced,client-access-from-hpc,deployment_modes,troubleshooting,api_containerization_notes,admin_auth_quickstart}.md` plus a `README.md` scenario matrix.
 - Backup / restore steps documented (manual `pg_dump`, restore order) in `shared-private-deployment.md`.

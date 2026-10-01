@@ -1091,15 +1091,26 @@ class NetworkSolveCalculationRole(str, Enum):
 
 
 class EnergyZeroConvention(str, Enum):
-    """Where the zero of an energy scale sits.
-
-    - ``lowest_state``: zero at the lowest-energy state of the network.
-    - ``entrance_channel``: zero at the declared entrance (reactant) channel.
-    - ``separated_reactants``: zero at the infinitely separated reactants of
-      the elementary step in question (not necessarily a network state).
-    - ``absolute``: values are absolute (unshifted) electronic energies.
-    - ``other``: anything else; requires ``convention_note``.
-    """
+    # Where the zero of an energy scale sits.
+    #
+    # A PDep network reports well and barrier energies on *some* scale; without
+    # the convention the numbers are unusable, so uploads must state it rather
+    # than let the reader guess.
+    #
+    # - ``lowest_state``: zero at the lowest-energy state of the network.
+    # - ``entrance_channel``: zero at the declared entrance (reactant) channel.
+    # - ``separated_reactants``: zero at the infinitely separated reactants of
+    #   the elementary step in question (not necessarily a network state).
+    # - ``absolute``: values are absolute (unshifted) electronic energies.
+    # - ``other``: anything else; requires ``convention_note``.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored
+    # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
+    # two JSON schemas merge into one published component only while they are
+    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # evidence lives in the wire package, so this enum is reachable from both
+    # sides of the OpenAPI document. Kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
 
     lowest_state = "lowest_state"
     entrance_channel = "entrance_channel"
@@ -1109,14 +1120,25 @@ class EnergyZeroConvention(str, Enum):
 
 
 class EnergyCorrectionConvention(str, Enum):
-    """Which corrections are already folded into a reported energy.
-
-    - ``electronic_only``: bare electronic energy, no ZPE, no thermal term.
-    - ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).
-    - ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.
-    - ``thermal_enthalpy_298k``: enthalpy at 298.15 K.
-    - ``other``: anything else; requires ``convention_note``.
-    """
+    # Which corrections are already folded into a reported energy.
+    #
+    # Distinct from ``EnergyZeroConvention``: the zero says where the scale
+    # starts, this says what has already been added on top of the bare
+    # electronic energy.
+    #
+    # - ``electronic_only``: bare electronic energy, no ZPE, no thermal term.
+    # - ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).
+    # - ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.
+    # - ``thermal_enthalpy_298k``: enthalpy at 298.15 K.
+    # - ``other``: anything else; requires ``convention_note``.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored
+    # between ``app.db.models.common`` and ``tckdb_schemas.enums``, and the
+    # two JSON schemas merge into one published component only while they are
+    # byte-identical (see ``MoleculeKind``). Since #620 the typed tunneling
+    # evidence lives in the wire package, so this enum is reachable from both
+    # sides of the OpenAPI document. Kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
 
     electronic_only = "electronic_only"
     electronic_plus_zpe = "electronic_plus_zpe"
@@ -1126,8 +1148,14 @@ class EnergyCorrectionConvention(str, Enum):
 
 
 class KineticsEnsemblePolicy(str, Enum):
-    """How multiple structures of one subject were combined into a partition
-    function used for a rate coefficient."""
+    # How multiple structures of one subject were combined into a partition
+    # function used for a rate coefficient.
+    #
+    # Deliberately a comment rather than a docstring: this enum is mirrored as
+    # ``tckdb_schemas.enums.KineticsEnsemblePolicy``, and the two JSON schemas
+    # merge into one component only while they are byte-identical (see
+    # ``MoleculeKind``). Kept in lockstep by
+    # ``tests/schemas/test_tckdb_schemas_enum_drift.py``.
 
     single_structure = "single_structure"
     lowest_energy_conformer = "lowest_energy_conformer"
@@ -1137,7 +1165,9 @@ class KineticsEnsemblePolicy(str, Enum):
 
 
 class KineticsStandardStateConvention(str, Enum):
-    """The standard state the rate's partition functions are referenced to."""
+    # The standard state the rate's partition functions are referenced to.
+    # A comment, not a docstring, for the reason given on
+    # ``KineticsEnsemblePolicy``.
 
     ideal_gas_1_bar = "ideal_gas_1_bar"
     ideal_gas_1_atm = "ideal_gas_1_atm"
@@ -1147,12 +1177,12 @@ class KineticsStandardStateConvention(str, Enum):
 
 
 class KineticsDegeneracyInterpretation(str, Enum):
-    """How reaction-path degeneracy/symmetry was handled for this subject.
-
-    Distinct from :class:`KineticsDegeneracyConvention`, which records whether
-    the *stored scalar* already includes degeneracy. This records how the
-    subject's own partition function treated symmetry.
-    """
+    # How reaction-path degeneracy/symmetry was handled for this subject.
+    #
+    # Distinct from ``KineticsDegeneracyConvention``, which records whether
+    # the *stored scalar* already includes degeneracy. This records how the
+    # subject's own partition function treated symmetry. A comment, not a
+    # docstring, for the reason given on ``KineticsEnsemblePolicy``.
 
     external_symmetry_number = "external_symmetry_number"
     reaction_path_degeneracy = "reaction_path_degeneracy"
@@ -1182,6 +1212,28 @@ class EnergyCorrectionSchemeKind(str, Enum):
     bac_melius = "bac_melius"
     isodesmic = "isodesmic"
     other = "other"
+
+
+class AtomParamApplication(str, Enum):
+    """How a scheme's ``atom_params`` values enter the corrected energy.
+
+    Declared per scheme, because every atom parameter of one scheme is
+    applied the same way. ``NULL`` on a scheme means the producer did not
+    say; it is never inferred from ``kind``.
+
+    * ``subtracted`` -- the per-element value is multiplied by the atom
+      count and subtracted from the energy. Arkane's ``atom_energy`` tables
+      are applied like this (the level's own atomic energies are removed so
+      energies are referenced to a level-independent basis), and so are its
+      ``atom_thermal`` tables.
+    * ``added`` -- the per-element value is multiplied by the atom count
+      and added. Arkane's ``atom_hf`` tables are applied like this. Arkane
+      applies ``+ count * (atom_hf - atom_thermal)`` per atom, so
+      ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.
+    """
+
+    subtracted = "subtracted"
+    added = "added"
 
 
 class MeliusBacComponentKind(str, Enum):

@@ -1174,6 +1174,7 @@ participates in identity.
 - `literature_id`
 - `workflow_tool_release_id`
 - `software_release_id`
+- `energy_level_of_theory_id` (the level the depositor declared for the energy; NULL when none was declared, never back-filled)
 - `external_symmetry`
 - `point_group`
 - `is_linear`
@@ -1229,6 +1230,7 @@ Notes:
 - `literature_id`
 - `workflow_tool_release_id`
 - `software_release_id`
+- `energy_level_of_theory_id` (the level the depositor declared for the energy; NULL when none was declared, never back-filled)
 - `h298_kj_mol`
 - `s298_j_mol_k`
 - `h298_uncertainty_kj_mol`
@@ -1313,6 +1315,7 @@ Fields:
 - `a`
 - `a_units`
 - `n`
+- `t0_k`
 - `ea_kj_mol`
 - `a_uncertainty`
 - `n_uncertainty`
@@ -1334,6 +1337,12 @@ Notes:
 
 - `model_kind` is enum-backed (`arrhenius` or `modified_arrhenius`)
 - `a_units` uses the `ArrheniusAUnits` enum
+- `t0_k` is the reference temperature of the scalar rate,
+  `k = A (T/T0)^n exp(-Ea/RT)`: NOT NULL, default 1 K (the plain `A T^n` form,
+  which is what every row stored before the column existed meant), greater
+  than zero and at most 10000 K. It applies to this row's own `a`, `n` and
+  `ea_kj_mol` of a modified-Arrhenius rate; falloff, PLOG, sum-of-Arrhenius and
+  Chebyshev records are always at 1 K (upload refuses another value)
 - temperature bounds must be positive when present, with `tmin_k <= tmax_k`
 - `degeneracy` is either null or a finite value greater than zero
 - `degeneracy_convention` is enum-backed (`already_applied`, `not_applied`, or
@@ -1532,7 +1541,10 @@ Notes:
 - `name`
 - `level_of_theory_id`
 - `source_literature_id`
-- `version`
+- `software_release_id`
+- `workflow_tool_release_id`
+- `data_revision` (revision of the data holding the tables, e.g. the RMG-database commit; NULL when not stated)
+- `atom_params_applied_as` (`subtracted` | `added`; how `atom_params` enter the energy; NULL when not stated)
 - `units`
 - `note`
 - `created_at`
@@ -1546,7 +1558,8 @@ Related parameter tables:
 
 Notes:
 
-- scheme dedupe is enforced on `(kind, name, level_of_theory_id, version)`
+- scheme identity has two forms, each a partial unique index. With `data_revision` NULL it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)`. With a `data_revision` it is `(kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision)`: the workflow-tool build is then provenance, recorded from the first deposit, and two builds of one revision are one scheme. A revised scheme never matches an unrevised one
+- `atom_param.value` is in the scheme's `units`; for `kind=atom_energy` it is the level's atomic energy of the element, applied as `atom_params_applied_as` says (Arkane subtracts `atom_energy`, adds `atom_hf` and subtracts `atom_thermal`, the net per-atom term being `atom_hf - atom_thermal`)
 - the parameter tables normalize element-, bond-, and component-level correction coefficients
 
 ### 10.3 Applied Energy Correction

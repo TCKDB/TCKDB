@@ -27,6 +27,7 @@ from app.db.models.reaction import ReactionEntry, ReactionEntryStructureParticip
 from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
@@ -45,6 +46,7 @@ from app.schemas.workflows.computed_reaction_upload import (
     calculation_in_to_with_results_payload,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.atomic_electronic_warnings import collect_bundle_atomic_warnings
 from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -104,6 +106,7 @@ from app.services.input_geometry_extraction import (
 )
 from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
+    resolve_network_kinetics_ref,
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
@@ -111,11 +114,11 @@ from app.services.local_key_resolution import (
     resolve_geometry_key,
     resolve_species_key,
 )
+from app.services.monatomic import statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     NOT_APPLICABLE,
     collect_provenance_warnings,
     collect_statmech_content_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.reaction_atom_map import (
     ResolvedAtomMapParticipant,
@@ -131,6 +134,7 @@ from app.services.record_review import (
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
@@ -145,7 +149,15 @@ from app.services.statmech_resolution import (
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.services.upload_reconciliation import term_symbol_warnings
+from app.workflows.computed_species import _persist_statmech_block
+from app.workflows.kinetics import (
+    persist_interpretation_assignments,
+    persist_tunneling_application,
+    resolve_interpretation_assignments,
+)
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
+from app.workflows.transport import persist_bundle_transport
 
 #: How a computed-reaction bundle declares a name in the calculation
 #: namespace, phrased as the object of the remedy sentence in
@@ -170,8 +182,13 @@ def _persist_calculation(
     geometry_key_map: dict[str, int],
     created_by: int | None = None,
     sp_energy_warnings: list[UploadWarning] | None = None,
+    is_single_atom_primary: bool = False,
 ) -> Calculation:
     """Persist one bundle-local calculation through the shared calculation seam.
+
+    ``is_single_atom_primary`` marks the primary calculation of a conformer
+    whose geometry is one atom (#610); see
+    :func:`~app.services.calculation_resolution.attach_calculation_output_geometries`.
 
     Routes provenance resolution, typed-result persistence, and parameter
     persistence through ``resolve_and_persist_calculation_with_results``.
@@ -269,6 +286,7 @@ def _persist_calculation(
         explicit_output_geometries=calc_in.output_geometries,
         fallback_geometry_id=resolved_geom_id,
         context=context,
+        is_single_atom_primary=is_single_atom_primary,
     )
 
     # Fill-when-absent Hessian extraction runs *after* input geometries are
@@ -383,6 +401,37 @@ def _collect_bundle_provenance_warnings(
                     field_prefix=f"species[{sp.key!r}].thermo.",
                 )
             )
+        warnings.extend(
+            f.model_copy(update={"field": f"species[{sp.key!r}].{f.field}"})
+            for f in term_symbol_warnings(sp.species_entry)
+        )
+        warnings.extend(
+            collect_bundle_atomic_warnings(
+                species_entry=sp.species_entry,
+                xyz_texts=[c.geometry.xyz_text for c in sp.conformers],
+                statmech=sp.statmech,
+                thermo=sp.thermo,
+                corrections=sp.applied_energy_corrections,
+                statmech_field=f"species[{sp.key!r}].statmech",
+                energy_field=f"species[{sp.key!r}].applied_energy_corrections",
+            )
+        )
+        if sp.transport is not None:
+            warnings.extend(
+                collect_provenance_warnings(
+                    scientific_origin=sp.transport.scientific_origin,
+                    software_release=(
+                        sp.transport.software_release
+                        or request.analysis_software_release
+                    ),
+                    workflow_tool_release=(
+                        sp.transport.workflow_tool_release
+                        or request.workflow_tool_release
+                    ),
+                    literature=sp.transport.literature,
+                    field_prefix=f"species[{sp.key!r}].transport.",
+                )
+            )
         if sp.statmech is not None:
             warnings.extend(
                 collect_provenance_warnings(
@@ -400,29 +449,51 @@ def _collect_bundle_provenance_warnings(
                     field_prefix=f"species[{sp.key!r}].statmech.",
                 )
             )
+            # (The subject-is-an-atom decision is #608: a geometry, then
+            # ``rigid_rotor_kind``, then the identity -- not the absence of
+            # rotational constants, which 26 of 45 real ARC polyatomics lack.)
+            #
             # The species route has reported this since statmech landed
             # there; the reaction route reported nothing, so the same
             # untraceable partition function was named on one route and
             # silent on the other.
             #
-            # ``statmech_has_rotational_structure`` only became answerable
-            # on this route with #142: it reads the rotational constants,
-            # which ``BundleStatmechIn`` could not carry until now. Before
-            # that it could only ever see torsions, so a polyatomic
-            # deposited with constants and no torsions — the ordinary ARC
-            # shape — looked monatomic to it.
             warnings.extend(
                 collect_statmech_content_warnings(
                     scientific_origin=sp.statmech.scientific_origin,
                     source_calculation_roles={
                         item.role.value for item in sp.statmech.source_calculations
                     },
-                    has_rotational_structure=statmech_has_rotational_structure(
-                        sp.statmech
+                    is_polyatomic=statmech_subject_is_polyatomic(
+                        sp.statmech,
+                        xyz_texts=[c.geometry.xyz_text for c in sp.conformers],
+                        smiles=sp.species_entry.smiles,
                     ),
                     field=f"species[{sp.key!r}].statmech",
                 )
             )
+
+    # The saddle point's statmech is the same kind of row as a species', and
+    # is reported on the same terms. Its software falls back to the bundle's
+    # analysis software, as the workflow persists it (see the statmech step).
+    ts_in = request.transition_state
+    if ts_in is not None and ts_in.statmech is not None:
+        warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=ts_in.statmech.scientific_origin,
+                software_release=(
+                    ts_in.statmech.software_release
+                    or request.analysis_software_release
+                ),
+                workflow_tool_release=(
+                    ts_in.statmech.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
+                literature=ts_in.statmech.literature,
+                freq_scale_factor=ts_in.statmech.freq_scale_factor,
+                field_prefix="transition_state.statmech.",
+            )
+        )
 
     # Kinetics provenance is bundle-scoped, and the field paths say so.
     # ``BundleKineticsIn`` carries no provenance fields at all; the workflow
@@ -447,6 +518,7 @@ def _collect_bundle_provenance_warnings(
             workflow_tool_release=request.workflow_tool_release,
             literature=request.literature,
             energy_level_of_theory=NOT_APPLICABLE,
+            software_release_field="analysis_software_release",
         ):
             if (warning.field, warning.code) not in seen:
                 seen.add((warning.field, warning.code))
@@ -523,6 +595,7 @@ def persist_computed_reaction_upload(
                 geometry_key_map=geometry_key_to_id,
                 created_by=created_by,
                 sp_energy_warnings=sp_energy_warnings,
+                is_single_atom_primary=geometry.natoms == 1,
             )
             calculation_key_to_id[conf.calculation.key] = calculation.id
             review_targets.append(
@@ -681,6 +754,8 @@ def persist_computed_reaction_upload(
     # 3. Transition state (optional)
     # ------------------------------------------------------------------
     ts_entry = None
+    ts_statmech_id: int | None = None
+    ts_statmech_ref: str | None = None
     if request.transition_state:
         ts_in = request.transition_state
         ts = TransitionState(
@@ -754,8 +829,44 @@ def persist_computed_reaction_upload(
                 RecordRef(SubmissionRecordType.calculation, calc.id)
             )
 
-        # Structured IRC evidence for this saddle point. Optional on every
-        # path; its absence is reported, never rejected.
+        # Statistical-mechanics interpretation of the saddle point, through
+        # the same seam the computed-species and PDep routes write theirs
+        # with, so every rule that governs a species' statmech (role/type
+        # compatibility, the three energy levels, ownership, scale-factor
+        # resolution) governs this one. The bundle-level analysis software
+        # fills in only where the block names none, as it does for a species.
+        if ts_in.statmech is not None:
+            ts_statmech_in = ts_in.statmech
+            if (
+                ts_statmech_in.software_release is None
+                and request.analysis_software_release is not None
+            ):
+                ts_statmech_in = ts_statmech_in.model_copy(
+                    update={"software_release": request.analysis_software_release}
+                )
+            ts_statmech_row = _persist_statmech_block(
+                session,
+                ts_statmech_in,
+                transition_state_entry_id=ts_entry.id,
+                calc_keys_to_id={
+                    key: session.get(Calculation, calc_id)
+                    for key, calc_id in calculation_key_to_id.items()
+                },
+                default_workflow_tool_release=request.workflow_tool_release,
+                created_by=created_by,
+                warnings=sp_energy_warnings,
+                literature_field_prefix="transition_state.statmech.literature.",
+                content_warning_field="transition_state.statmech",
+            )
+            if ts_statmech_row is not None:
+                ts_statmech_id = ts_statmech_row.id
+                ts_statmech_ref = ts_statmech_row.public_ref
+                review_targets.append(
+                    RecordRef(SubmissionRecordType.statmech, ts_statmech_row.id)
+                )
+
+        # Structured evidence for this saddle point. Optional on every
+        # path; the absence of IRC evidence is reported, never rejected.
         persist_transition_state_validation_evidence(
             session,
             ts_in.validation_evidence,
@@ -769,8 +880,13 @@ def persist_computed_reaction_upload(
                         f"source_calculation_key"
                     ),
                 )
+                # An energy_ordering record names its source calculations one
+                # per energy, and the seam resolves those itself.
+                if record.source_calculation_key is not None
+                else None
                 for index, record in enumerate(ts_in.validation_evidence)
             ],
+            calculation_ids_by_key=calculation_key_to_id,
             subject_label=ts_in.label or "transition state",
             field_path="transition_state.validation_evidence",
             reaction_entry_id=canonical_reaction_entry.id,
@@ -837,6 +953,31 @@ def persist_computed_reaction_upload(
             _wire_depends_on(calc_in)
 
     session.flush()
+
+    # The bundle's calculation-key namespace as rows, for the two passes that
+    # need an owner check (scf_stability sources, transport sources). The
+    # ``calculation_key_to_id`` map above is ids only.
+    calculation_key_to_row: dict[str, Calculation] = {
+        key: session.get(Calculation, calc_id)
+        for key, calc_id in calculation_key_to_id.items()
+    }
+
+    # An ``scf_stability`` block may name the job that measured it. Every
+    # calculation is persisted now, so a key pointing at one declared later
+    # in the payload resolves too.
+    _stability_carriers: list[ComputedReactionCalculationIn] = []
+    for sp in request.species:
+        _stability_carriers.extend(conf.calculation for conf in sp.conformers)
+        _stability_carriers.extend(sp.calculations)
+    if request.transition_state:
+        _stability_carriers.append(request.transition_state.calculation)
+        _stability_carriers.extend(request.transition_state.calculations)
+    link_scf_stability_sources(
+        session,
+        ((calc_in.key, calc_in.scf_stability) for calc_in in _stability_carriers),
+        calculation_key_to_row,
+        warnings=sp_energy_warnings,
+    )
 
     # ------------------------------------------------------------------
     # 3b-bis. Atom map (ADR 0011)
@@ -1141,6 +1282,12 @@ def persist_computed_reaction_upload(
             thermo = Thermo(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
+                # Stored as declared, after ``assert_role_consistency`` above.
+                energy_level_of_theory_id=(
+                    thermo_declared_energy_lot.id
+                    if thermo_declared_energy_lot is not None
+                    else None
+                ),
                 literature_id=(
                     thermo_literature.id if thermo_literature is not None else None
                 ),
@@ -1304,6 +1451,12 @@ def persist_computed_reaction_upload(
             statmech = Statmech(
                 species_entry_id=species_entry.id,
                 scientific_origin=s.scientific_origin,
+                # Stored as declared, after ``assert_role_consistency`` above.
+                energy_level_of_theory_id=(
+                    statmech_declared_energy_lot.id
+                    if statmech_declared_energy_lot is not None
+                    else None
+                ),
                 literature_id=(
                     statmech_literature.id if statmech_literature is not None else None
                 ),
@@ -1332,6 +1485,16 @@ def persist_computed_reaction_upload(
             session.add(statmech)
             session.flush()
             statmech_ids.append(statmech.id)
+
+            for level in s.electronic_levels:
+                session.add(
+                    StatmechElectronicLevel(
+                        statmech_id=statmech.id,
+                        level_index=level.level_index,
+                        energy_cm1=level.energy_cm1,
+                        degeneracy=level.degeneracy,
+                    )
+                )
 
             # Link this species' COMPUTED thermo (persisted above) to the
             # statmech it was derived from. Correlated by species key so
@@ -1397,6 +1560,7 @@ def persist_computed_reaction_upload(
                     treatment_kind=torsion_in.treatment_kind,
                     dimension=torsion_in.dimension,
                     top_description=torsion_in.top_description,
+                    invalidated_reason=torsion_in.invalidated_reason,
                     source_scan_calculation_id=scan_calc_id,
                 )
                 session.add(torsion)
@@ -1415,6 +1579,35 @@ def persist_computed_reaction_upload(
                         )
 
     session.flush()
+
+    # ------------------------------------------------------------------
+    # 4c. Transport (per species, if provided)
+    #
+    # Same entry as the species' thermo and statmech, same provenance
+    # defaults as thermo's; the row itself is made by the one shared
+    # transport service.
+    # ------------------------------------------------------------------
+    transport_ids: list[int] = []
+    transport_refs: list[str] = []
+    for sp_index, sp in enumerate(request.species):
+        if sp.transport is None:
+            continue
+        species_entry = resolve_species_key(
+            sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+        )
+        transport_row = persist_bundle_transport(
+            session,
+            sp.transport,
+            species_entry_id=species_entry.id,
+            calculations_by_key=calculation_key_to_row,
+            default_software_release=request.analysis_software_release,
+            default_workflow_tool_release=request.workflow_tool_release,
+            created_by=created_by,
+            warnings_out=sp_energy_warnings,
+            field_prefix=f"species['{sp.key}'].transport",
+        )
+        transport_ids.append(transport_row.id)
+        transport_refs.append(transport_row.public_ref)
 
     # ------------------------------------------------------------------
     # 5. Kinetics fits
@@ -1535,6 +1728,41 @@ def persist_computed_reaction_upload(
             session, request.workflow_tool_release
         )
 
+        # Kinetics evidence the standalone route also takes. Resolved before
+        # the row is written, by the same helpers, so a bundle refuses
+        # exactly what ``POST /uploads/kinetics`` refuses: an unknown or
+        # mis-owned statmech, transition state, calculation or network ref.
+        kin_field_prefix = f"kinetics[{kin_index}]."
+        kin_network_kinetics_id = resolve_network_kinetics_ref(
+            session,
+            kin.network_kinetics_ref,
+            field=f"{kin_field_prefix}network_kinetics_ref",
+        )
+        resolved_interpretations = resolve_interpretation_assignments(
+            session,
+            kin.interpretation_assignments,
+            reactant_entries=[
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
+                )
+                for i, k in enumerate(kin.reactant_keys)
+            ],
+            product_entries=[
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].product_keys[{i}]",
+                )
+                for i, k in enumerate(kin.product_keys)
+            ],
+            created_by=created_by,
+            reaction_entry=kin_entry,
+            ts_scope="reaction",
+            field_prefix=kin_field_prefix,
+        )
+
         kinetics = Kinetics(
             reaction_entry_id=kin_entry.id,
             scientific_origin=kin.scientific_origin,
@@ -1549,9 +1777,11 @@ def persist_computed_reaction_upload(
             workflow_tool_release_id=(
                 workflow_tool_release.id if workflow_tool_release else None
             ),
+            network_kinetics_id=kin_network_kinetics_id,
             a=kin.a,
             a_units=kin.a_units,
             n=kin.n,
+            t0_k=kin.t0_k,
             ea_kj_mol=ea_kj_mol,
             a_uncertainty=kin.a_uncertainty,
             a_uncertainty_kind=kin.a_uncertainty_kind,
@@ -1572,6 +1802,17 @@ def persist_computed_reaction_upload(
         session.add(kinetics)
         session.flush()
         kinetics_ids.append(kinetics.id)
+
+        persist_interpretation_assignments(session, kinetics, resolved_interpretations)
+        if kin.tunneling_application is not None:
+            persist_tunneling_application(
+                session,
+                kinetics,
+                kin.tunneling_application,
+                reaction_entry=kin_entry,
+                ts_scope="reaction",
+                field_prefix=kin_field_prefix,
+            )
 
         # Producer-controlled provenance takes precedence over the
         # legacy fallback. When ``kin.source_calculations`` is non-empty
@@ -1643,6 +1884,9 @@ def persist_computed_reaction_upload(
         RecordRef(SubmissionRecordType.statmech, sid) for sid in statmech_ids
     )
     review_targets.extend(
+        RecordRef(SubmissionRecordType.transport, tid) for tid in transport_ids
+    )
+    review_targets.extend(
         RecordRef(SubmissionRecordType.applied_energy_correction, aid)
         for aid in applied_correction_ids
     )
@@ -1677,6 +1921,10 @@ def persist_computed_reaction_upload(
         "kinetics_ids": kinetics_ids,
         "thermo_ids": thermo_ids,
         "statmech_ids": statmech_ids,
+        "transport_ids": transport_ids,
+        "transport_refs": transport_refs,
+        "transition_state_statmech_id": ts_statmech_id,
+        "transition_state_statmech_ref": ts_statmech_ref,
         "species_entry_ids": [e.id for e in species_key_to_entry.values()],
         "species_count": len(request.species),
         # Expose the bundle-local calc-key → assigned-id map so the

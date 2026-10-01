@@ -358,7 +358,11 @@ def calculation_in_to_with_results_payload(
         scf_stability=(
             None
             if calc_in.scf_stability is None
-            else SCFStabilityPayload(**calc_in.scf_stability.model_dump())
+            else SCFStabilityPayload(
+                **calc_in.scf_stability.model_dump(
+                    exclude={"source_calculation_key"}
+                )
+            )
         ),
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,

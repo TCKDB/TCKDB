@@ -1,7 +1,8 @@
 """Bundle upload schemas for ``POST /api/v1/uploads/computed-species``.
 
 The bundle is a single self-contained payload that carries identity +
-conformers + per-conformer calculations + artifacts + optional thermo.
+conformers + per-conformer calculations + artifacts + optional thermo,
+statmech and transport.
 All cross-references inside the bundle are local string keys; **no
 database FK ids are accepted anywhere** (DR-0029 Requirement 1).
 """
@@ -13,6 +14,10 @@ from typing import Any, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from tckdb_schemas.bundle_source_rules import (
+    find_scf_source_cycle,
+    scf_source_geometry_error,
+)
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
 from tckdb_schemas.enums import (
@@ -24,6 +29,7 @@ from tckdb_schemas.enums import (
     StatmechTreatmentKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
+    TransportCalculationRole,
 )
 from tckdb_schemas.fragments.artifact import ArtifactIn
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
@@ -41,6 +47,7 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
+from tckdb_schemas import frequency_completeness as _frequency_completeness
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
@@ -69,6 +76,8 @@ from tckdb_schemas.stationary_point import (
 )
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.upload_warning import UploadWarning
+from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
+from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
 
 
 # Field names that are forbidden anywhere in the bundle payload tree.
@@ -312,8 +321,66 @@ class CalculationInBundle(SchemaBase):
 # ---------------------------------------------------------------------------
 
 
+def require_opt_primary_unless_monatomic(
+    primary_type: CalculationType,
+    xyz_text: str,
+    *,
+    subject: str,
+) -> None:
+    """Refuse a conformer primary that is not an ``opt``, unless the geometry is one atom.
+
+    An atom has no geometry to optimise: its geometry is a point, and a
+    program run on it is a single point. Producers used to relabel that
+    single point as an ``opt`` to get past this check, which stored a
+    calculation that was not what ran (same log and energy as the ``sp``,
+    ``converged=false``, and a level of theory and program that were not the
+    ones used). An ``sp`` primary is the honest shape, so it is accepted for
+    a geometry of exactly one atom and for nothing else.
+
+    The count is taken from the XYZ the conformer itself carries, the one
+    geometry every conformer must have. A geometry that cannot be counted is
+    treated as not-an-atom here: the malformed XYZ is refused by the fragment
+    that owns that contract, and an unproven atom must not get the exemption.
+
+    Only ``sp`` is exempt. A ``freq``, ``scan`` or any other type is not a
+    conformer's defining calculation for an atom either, and accepting it
+    would widen the rule past what the issue decided.
+
+    :param primary_type: The declared type of the conformer's primary calculation.
+    :param xyz_text: The conformer's own geometry.
+    :param subject: The field, named as the refusal should read it (``... must be 'opt'``).
+    :raises ValueError: for a non-``opt`` primary on anything but a single atom.
+    """
+    if primary_type is CalculationType.opt:
+        return
+    # Looked up by name on purpose. The counter raises
+    # ``atom_map_geometry_unparseable`` internally and swallows it (returning
+    # None), so the code is never this rule's refusal; a direct reference
+    # would make the producer-contract tracer list it as one.
+    n_atoms = getattr(_frequency_completeness, "atom_count_of_xyz")(xyz_text)
+    if primary_type is CalculationType.sp and n_atoms == 1:
+        return
+    if primary_type is CalculationType.sp and n_atoms is not None:
+        detail = (
+            f" A single-point primary is accepted only for a one-atom geometry; "
+            f"this geometry has {n_atoms} atoms."
+        )
+    else:
+        detail = (
+            " A single-point primary is accepted only for a geometry of exactly one atom."
+        )
+    raise ValueError(
+        f"{subject} must be 'opt', got '{primary_type.value}'." + detail
+    )
+
+
 class ConformerInBundle(SchemaBase):
-    """One conformer with its primary opt + additional calcs."""
+    """One conformer with its primary calculation + additional calcs.
+
+    The primary is an ``opt``, with one exception: a conformer whose geometry
+    is a single atom may carry an ``sp`` primary instead (#610). See
+    :func:`require_opt_primary_unless_monatomic`.
+    """
 
     key: str = Field(min_length=1)
     label: str | None = Field(default=None, max_length=64)
@@ -324,10 +391,29 @@ class ConformerInBundle(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_is_opt(self) -> Self:
-        if self.primary_calculation.type is not CalculationType.opt:
-            raise ValueError(
-                "ConformerInBundle.primary_calculation.type must be 'opt'."
-            )
+        """Send an ``opt`` as ``primary_calculation``; a single atom sends its ``sp``.
+
+        A species of two or more atoms sends the optimisation that produced
+        the conformer's geometry as ``primary_calculation`` with
+        ``type: "opt"``. Any other type is refused. A monatomic species has
+        no geometry to optimise (its geometry is a point), and the program
+        run on it is a single point: send that single point, once, as
+        ``primary_calculation`` with ``type: "sp"``, its ``sp_result``, and
+        the atom's one-atom XYZ as the conformer ``geometry``. Do not
+        relabel it as an ``opt``: no ``opt_result``, no ``converged``, and
+        no second copy of the same log and energy under another level of
+        theory or program. Link the atom's thermo and statmech source
+        calculations to that ``sp`` with role ``sp``; an atom has no ``opt``
+        or ``freq`` to link. A ``sp`` primary on a geometry of two or more
+        atoms, a geometry that cannot be counted, or a primary of any type
+        other than ``opt`` or ``sp`` is refused. A relabelled ``opt`` on an
+        atom is still accepted.
+        """
+        require_opt_primary_unless_monatomic(
+            self.primary_calculation.type,
+            self.geometry.xyz_text,
+            subject="ConformerInBundle.primary_calculation.type",
+        )
         return self
 
 
@@ -388,7 +474,8 @@ class ThermoInBundle(ThermoStateFields):
 
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     @model_validator(mode="after")
@@ -434,6 +521,62 @@ class ThermoInBundle(ThermoStateFields):
 
 
 # ---------------------------------------------------------------------------
+# Transport block
+# ---------------------------------------------------------------------------
+
+
+class TransportSourceCalcInBundle(SchemaBase):
+    """Transport -> calc link by local key.
+
+    Same shape and rule as :class:`ThermoSourceCalcInBundle`: only
+    ``calculation_key`` is accepted inside a bundle, resolving against the
+    bundle's global calculation-key namespace (DR-0029 Requirement 1).
+    """
+
+    calculation_key: str = Field(min_length=1)
+    role: TransportCalculationRole
+
+
+class TransportInBundle(TransportUploadPayload):
+    """Transport block within a bundle.
+
+    One transport record for the bundle's species entry, carrying exactly
+    the content of the standalone ``POST /api/v1/uploads/transport``
+    payload (:class:`~tckdb_schemas.workflows.transport_upload.TransportUploadPayload`:
+    Lennard-Jones ``sigma_angstrom`` / ``epsilon_over_k_k``, dipole,
+    polarizability, rotational relaxation, provenance, and the same
+    "at least one property, LJ as a pair" validation), plus links to the
+    calculations that produced it by local key.
+
+    It attaches to the same species entry as the bundle's thermo and
+    statmech. Provenance follows the thermo rule: ``software_release`` and
+    ``workflow_tool_release`` are this block's own, and where the block
+    names no workflow tool the bundle's ``workflow_tool_release`` fills in.
+
+    Transport is append-only, as on the standalone route: a bundle adds one
+    new record each time it is deposited.
+
+    :param source_calculations: Transport -> calculation links by
+        bundle-local key and role. Each key must name a calculation this
+        bundle declares for the same species entry.
+    """
+
+    source_calculations: list[TransportSourceCalcInBundle] = Field(
+        default_factory=list
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "transport.source_calculations must be unique by "
+                "(calculation_key, role)."
+            )
+        return self
+
+
+# ---------------------------------------------------------------------------
 # Statmech block (inline, one per species_entry)
 # ---------------------------------------------------------------------------
 
@@ -464,6 +607,11 @@ class StatmechTorsionInBundle(SchemaBase):
     :param treatment_kind: Optional torsion treatment.
     :param dimension: Number of coupled torsional coordinates.
     :param top_description: Optional description of the rotating top.
+    :param invalidated_reason: Optional reason the producer rejected this
+        rotor, for example that the scan was not a smooth periodic
+        potential. Same field, same meaning and same storage as
+        ``StatmechTorsionIn.invalidated_reason`` on the conformer route.
+        Absent means the rotor was not rejected; present records that it was.
     :param source_scan_calculation_key: Optional bundle-local calc key
         that produced the rotor scan. Must resolve to a calc of type
         ``scan`` declared elsewhere in the bundle.
@@ -479,6 +627,7 @@ class StatmechTorsionInBundle(SchemaBase):
 
     dimension: int = Field(default=1, ge=1)
     top_description: str | None = None
+    invalidated_reason: str | None = None
     source_scan_calculation_key: str | None = None
 
     coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
@@ -538,10 +687,15 @@ class StatmechInBundle(SchemaBase):
     :param uses_projected_frequencies: Whether projected frequencies were used.
     :param source_calculations: Statmech → calc links by bundle-local
         calculation key.
+    :param electronic_levels: Ordered (energy, degeneracy) pairs for the
+        electronic partition function, same shape and validation as
+        ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and
+        radicals whose ground term is not S (O, Cl, ...).
     :param torsions: Torsional mode metadata.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. Checked
-        against the resolved role links; never persisted.
+        against the resolved role links, then stored as declared and
+        read back as ``levels.declared_energy``.
     :param note: Optional free-text note.
     """
 
@@ -568,10 +722,12 @@ class StatmechInBundle(SchemaBase):
 
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[StatmechTorsionInBundle] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
 
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
 
     note: str | None = None
@@ -583,6 +739,13 @@ class StatmechInBundle(SchemaBase):
             raise ValueError(
                 "Statmech torsion_index values must be unique within the bundle."
             )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_electronic_level_indices(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError("electronic_levels level_index values must be unique.")
         return self
 
     @model_validator(mode="after")
@@ -639,9 +802,9 @@ class StatmechInBundle(SchemaBase):
 class ComputedSpeciesUploadRequest(SchemaBase):
     """Bundle upload payload for one computed species result.
 
-    ``workflow_tool_release`` is the bundle-level default: the thermo and
-    statmech blocks fall back to it when they name no workflow tool of
-    their own, and a block that names one overrides it. That is the same
+    ``workflow_tool_release`` is the bundle-level default: the thermo,
+    statmech and transport blocks fall back to it when they name no
+    workflow tool of their own, and a block that names one overrides it. That is the same
     precedence ``ComputedReactionUploadRequest`` has always applied to
     its ``literature`` / ``analysis_software_release`` /
     ``workflow_tool_release`` trio.
@@ -694,6 +857,7 @@ class ComputedSpeciesUploadRequest(SchemaBase):
     conformers: list[ConformerInBundle] = Field(min_length=1)
     thermo: ThermoInBundle | None = None
     statmech: StatmechInBundle | None = None
+    transport: TransportInBundle | None = None
 
     # Deposit-time license agreement; see ``tckdb_schemas.rights``. Optional
     # so existing clients keep working -- absence bites at release time.
@@ -717,8 +881,8 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         default=None,
         description=(
             "Bundle-level workflow-tool provenance. Used as the default "
-            "for the thermo and statmech blocks; a value on either of "
-            "those overrides it."
+            "for the thermo, statmech and transport blocks; a value on "
+            "any of those overrides it."
         ),
     )
     note: str | None = Field(
@@ -877,6 +1041,80 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_transport_source_keys_resolve(self) -> Self:
+        if self.transport is None:
+            return self
+        defined = self._all_calc_keys()
+        for index, sc in enumerate(self.transport.source_calculations):
+            if sc.calculation_key not in defined:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"transport.source_calculations references undefined "
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"transport.source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_scf_stability_source_keys_resolve(self) -> Self:
+        """``scf_stability.source_calculation_key`` must name a usable job.
+
+        Every calculation in this bundle belongs to the one species entry, so
+        the owner rule is vacuous here. What is checked: the key is declared,
+        it is not the carrier itself, the job is on the same conformer as the
+        carrier, and no chain of keys closes into a cycle.
+        """
+        defined = self._all_calc_keys()
+        conformer_of: dict[str, str] = {}
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                conformer_of[calc.key] = conf.key
+        links: dict[str, str] = {}
+        for conf in self.conformers:
+            for calc in (conf.primary_calculation, *conf.additional_calculations):
+                stability = calc.scf_stability
+                if stability is None or stability.source_calculation_key is None:
+                    continue
+                key = stability.source_calculation_key
+                field = (
+                    f"calculations['{calc.key}'].scf_stability."
+                    f"source_calculation_key"
+                )
+                if key == calc.key:
+                    raise ValueError(
+                        f"calculation '{calc.key}' scf_stability."
+                        f"source_calculation_key names the calculation "
+                        f"itself; omit it when this calculation measured "
+                        f"the stability."
+                    )
+                if key not in defined:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"calculation '{calc.key}' scf_stability."
+                        f"source_calculation_key references undefined "
+                        f"calculation_key '{key}'.",
+                        field=field,
+                        key=key,
+                        declared=defined,
+                    )
+                if conformer_of[key] != conf.key:
+                    raise scf_source_geometry_error(
+                        field=field, key=key, carrier_key=calc.key
+                    )
+                links[calc.key] = key
+        cycle = find_scf_source_cycle(links)
+        if cycle is not None:
+            raise ValueError(
+                "scf_stability.source_calculation_key forms a cycle: "
+                + " -> ".join([*cycle, cycle[0]])
+                + ". A stability verdict cannot be measured by a job whose "
+                "own verdict it measures."
+            )
+        return self
+
+    @model_validator(mode="after")
     def validate_statmech_torsion_scan_keys_resolve(self) -> Self:
         if self.statmech is None:
             return self
@@ -990,6 +1228,12 @@ class StatmechUploadRefInBundle(SchemaBase):
     statmech_id: int
 
 
+class TransportUploadRefInBundle(SchemaBase):
+    transport_id: int
+    #: The ``trn_`` ref of the same record; name it in later requests.
+    transport_ref: str | None = None
+
+
 class ComputedSpeciesUploadResult(BaseModel):
     species_entry_id: int
     type: str = "computed_species"
@@ -999,4 +1243,5 @@ class ComputedSpeciesUploadResult(BaseModel):
     conformers: list[ConformerUploadRefInBundle]
     thermo: ThermoUploadRefInBundle | None = None
     statmech: StatmechUploadRefInBundle | None = None
+    transport: TransportUploadRefInBundle | None = None
     warnings: list[UploadWarning] = []

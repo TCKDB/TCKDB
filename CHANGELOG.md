@@ -22,6 +22,55 @@ Conflating the two is the mistake this split exists to prevent: upgrading the
 backend must never change what a published dataset says, and re-curating a
 dataset must never require a code release.
 
+## Transition-state contract additions (2026-09-30)
+
+- tckdb-schemas 0.64.0 and tckdb-backend: a transition state carries more of
+  what a producer knows (#621). Validation evidence gains the kinds
+  `energy_ordering` (the saddle point above both wells, with the compared
+  energies, each from its own calculation) and `imaginary_mode` (count,
+  frequency, displacement verdict); the computed-reaction bundle accepts a
+  `statmech` block on its transition state; the standalone transition-state
+  upload accepts scans, applied energy corrections and an atom map; and an IRC
+  result may leave its direction and branch flags unstated, which read back as
+  null and never as `false`. A TS entry read gains `include=statmech`, and its
+  `validation` descriptor reports each evidence kind separately. Schema
+  impact: revision `a7d3f1c95e28` adds `transition_state_validation_energy`,
+  three nullable columns and relaxed constraints on
+  `transition_state_validation_evidence`, and makes the IRC direction and flag
+  columns nullable; it adds nothing to fill and refuses to downgrade over rows
+  the old shape cannot hold. Only a passing `irc` record silences
+  `transition_state_missing_irc_evidence`. No new environment variable. No client change.
+
+## Kinetics: an Arrhenius reference temperature, and parity on the bundle (2026-09-30)
+
+- tckdb-schemas 0.63.0, tckdb-backend, tckdb-client 0.102.0 (#620): a kinetics
+  record carries `t0_k`, the reference temperature of `k = A (T/T0)^n exp(-Ea/RT)`
+  (default 1 K, the plain `A T^n` form; `0 < t0_k <= 10000`; falloff, PLOG, Chebyshev and multi-Arrhenius records must stay at 1 K), on `POST /uploads/kinetics`, on the
+  reaction bundle, and on every read of the row
+  (`parameters.T0_k`, `t0_k` in the export, ML, lookup and analytics views).
+  The CHEMKIN export writes `A / T0^n` so the mechanism file is the same rate,
+  the thermo-kinetics consistency check does the same for Cantera, and the
+  web Arrhenius chart and k(T) table evaluate with T0. The reaction bundle's
+  kinetics block also takes `interpretation_assignments`, `tunneling_application`
+  and `network_kinetics_ref`, validated and stored exactly as the standalone
+  route does; every reference is to a record deposited earlier.
+- Migration `f1c8a4d7b263` adds `kinetics.t0_k` (NOT NULL, default 1): existing
+  rows read as 1 K, which is what they meant. It is metadata-only and touches no
+  row, so approved records are unaffected. Stored consistency and reproducibility
+  reviews stay current: a row at T0 = 1 K hashes as it did before the column.
+
+## Writes are committed before the response is sent (2026-09-30)
+
+- tckdb-backend: every write route now commits its session before the
+  response goes out (`Depends(get_write_db, scope="function")`). Before, the
+  commit ran after the `201` had been sent, so a read straight after an
+  upload could return `404`, a commit-time failure was reported as a success,
+  and `/auth/login` followed by `/auth/api-keys` could return `401`. A
+  commit-time failure is now a coded error response and is still audited as a
+  failed upload. The `fastapi` floor is raised to `>=0.121.0`, the first
+  release with dependency scopes. No schema change; no client change: a
+  client that polled to see its own write can stop.
+
 ## QCSchema torsion drives in and out (2026-09-29)
 
 - tckdb-qcschema 0.6.0: `import` reads a QCSchema `TorsionDriveResult`

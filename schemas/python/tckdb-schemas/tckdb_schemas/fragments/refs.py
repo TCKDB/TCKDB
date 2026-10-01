@@ -73,12 +73,63 @@ def _split_leading_token(text: str) -> tuple[str, str]:
 
 
 class SoftwareReleaseRef(SchemaBase):
-    """Upload-facing reference to a software release."""
+    """Upload-facing reference to a software release.
+
+    A release is identified by ``(name, version, revision, build)``; two
+    references that agree on all four (an absent value matches only another
+    absent value) are the same release row. ``release_date`` and ``notes``
+    are descriptive and do not take part in identity.
+
+    Which field holds what:
+
+    * ``version``: the release number the vendor or project publishes, such
+      as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.
+      Give the number alone. A parsed startup banner such as
+      ``"Gaussian 16, Revision C.02"`` is accepted, split into version
+      ``16`` and revision ``C.02``, and reported as a warning.
+    * ``revision``: a finer label inside one version, written the way the
+      producer writes it. For a vendor program this is the vendor's own
+      revision label, such as Gaussian ``C.02``. For analysis software that
+      has no revision labels it is the source state the run used, such as
+      the commit hash of an Arkane or RMG checkout, because
+      ``software_release`` has no separate commit field (see below).
+    * ``build``: a variant of the same version and revision that was
+      compiled or packaged differently and can give different numbers or
+      different capabilities, such as ``mpi``, ``cuda`` or a distributor's
+      build identifier. Leave it out when the program was not built in a
+      way that matters; two references that differ only here are kept as
+      two releases, so do not put a timestamp or host name in it.
+
+    There is no ``git_commit`` field on this reference. A commit hash goes in
+    ``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a
+    ``git_commit`` because workflow tools are identified by code state.
+    """
 
     name: str = Field(min_length=1)
-    version: str | None = None
-    revision: str | None = None
-    build: str | None = None
+    version: str | None = Field(
+        default=None,
+        description=(
+            "Published release number, for example 16, 6.0.1 or 2025.1. "
+            "Number only; a full startup banner is split into version and "
+            "revision with a warning."
+        ),
+    )
+    revision: str | None = Field(
+        default=None,
+        description=(
+            "Finer label within one version: the vendor revision label "
+            "(Gaussian C.02), or the commit hash for analysis software "
+            "that has no revision labels. Part of release identity."
+        ),
+    )
+    build: str | None = Field(
+        default=None,
+        description=(
+            "Compile or packaging variant of the same version and revision, "
+            "for example mpi or cuda. Part of release identity; omit "
+            "unless the build changes results or capabilities."
+        ),
+    )
     release_date: date | None = None
     notes: str | None = None
 

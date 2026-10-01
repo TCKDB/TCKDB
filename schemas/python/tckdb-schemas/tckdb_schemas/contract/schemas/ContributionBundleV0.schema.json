@@ -204,6 +204,15 @@
       "title": "ArrheniusAUnits",
       "type": "string"
     },
+    "AtomParamApplication": {
+      "description": "How a scheme's ``atom_params`` values enter the corrected energy.\n\nDeclared per scheme, because every atom parameter of one scheme is\napplied the same way. ``NULL`` on a scheme means the producer did not\nsay; it is never inferred from ``kind``.\n\n* ``subtracted`` -- the per-element value is multiplied by the atom\n  count and subtracted from the energy. Arkane's ``atom_energy`` tables\n  are applied like this (the level's own atomic energies are removed so\n  energies are referenced to a level-independent basis), and so are its\n  ``atom_thermal`` tables.\n* ``added`` -- the per-element value is multiplied by the atom count\n  and added. Arkane's ``atom_hf`` tables are applied like this. Arkane\n  applies ``+ count * (atom_hf - atom_thermal)`` per atom, so\n  ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.",
+      "enum": [
+        "subtracted",
+        "added"
+      ],
+      "title": "AtomParamApplication",
+      "type": "string"
+    },
     "BundleExporter": {
       "additionalProperties": false,
       "description": "Provenance-only metadata about who exported the bundle.\n\nThis is **not** the hosted actor identity; the hosted importer uses\nits own authenticated user, established at import time.",
@@ -768,6 +777,334 @@
       "title": "CalculationQuality",
       "type": "string"
     },
+    "CalculationScanCoordinateCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "atom1_index": {
+          "minimum": 1,
+          "title": "Atom1 Index",
+          "type": "integer"
+        },
+        "atom2_index": {
+          "minimum": 1,
+          "title": "Atom2 Index",
+          "type": "integer"
+        },
+        "atom3_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom3 Index"
+        },
+        "atom4_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Atom4 Index"
+        },
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_kind": {
+          "pattern": "^(bond|angle|dihedral|improper)$",
+          "title": "Coordinate Kind",
+          "type": "string"
+        },
+        "end_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Value"
+        },
+        "resolution_degrees": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolution Degrees"
+        },
+        "start_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Value"
+        },
+        "step_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Count"
+        },
+        "step_size": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step Size"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_kind",
+        "atom1_index",
+        "atom2_index"
+      ],
+      "title": "CalculationScanCoordinateCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCoordinateValueCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_index": {
+          "minimum": 1,
+          "title": "Coordinate Index",
+          "type": "integer"
+        },
+        "coordinate_value": {
+          "title": "Coordinate Value",
+          "type": "number"
+        },
+        "value_unit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateUnit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "coordinate_index",
+        "coordinate_value"
+      ],
+      "title": "CalculationScanPointCoordinateValueCreate",
+      "type": "object"
+    },
+    "CalculationScanPointCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "coordinate_values": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCoordinateValueCreate"
+          },
+          "title": "Coordinate Values",
+          "type": "array"
+        },
+        "electronic_energy_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Electronic Energy Hartree"
+        },
+        "geometry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GeometryPayload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "geometry_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Geometry Id"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "point_index": {
+          "minimum": 1,
+          "title": "Point Index",
+          "type": "integer"
+        },
+        "relative_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relative Energy Kj Mol"
+        }
+      },
+      "required": [
+        "point_index"
+      ],
+      "title": "CalculationScanPointCreate",
+      "type": "object"
+    },
+    "CalculationScanResultCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/CalculationConstraintCreate"
+          },
+          "title": "Constraints",
+          "type": "array"
+        },
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanCoordinateCreate"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "is_relaxed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Relaxed"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/CalculationScanPointCreate"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "zero_energy_reference_hartree": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zero Energy Reference Hartree"
+        }
+      },
+      "required": [
+        "dimension"
+      ],
+      "title": "CalculationScanResultCreate",
+      "type": "object"
+    },
     "CalculationType": {
       "enum": [
         "opt",
@@ -783,7 +1120,7 @@
     },
     "CalculationWithResultsPayload": {
       "additionalProperties": false,
-      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search result\nfields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
+      "description": "A calculation with optional typed result blocks.\n\nExtends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan\nresult fields. Validation enforces that only the result type matching the\ncalculation type may be provided.\n\n:param opt_result: Inline optimisation result (type must be ``opt``).\n:param freq_result: Inline frequency result (type must be ``freq``).\n:param sp_result: Inline single-point result (type must be ``sp``).\n:param irc_result: Inline IRC result bundle (type must be ``irc``).\n:param path_search_result: Inline path-search result bundle (type\n    must be ``path_search``). Carries NEB, GSM, and other path-based\n    TS-search algorithms via ``path_search_result.method``.\n:param scan_result: Inline scan result (type must be ``scan``): the\n    stepped coordinates and the points along them. Whether a route accepts\n    a ``scan`` calculation at all is that route's own allow-list; this\n    field is only where the points go when it does.\n:param parameters: Optional parsed execution-control parameter\n    observations. Each becomes one ``calculation_parameter`` row.\n:param parameters_json: Optional JSON snapshot of the parser output\n    (debug/traceability only — relational rows are the queryable layer).\n:param parameters_parser_version: Optional version tag of the parser\n    that produced the observations.\n:param parameters_extracted_at: Optional timestamp of extraction.",
       "properties": {
         "constraints": {
           "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan, and any other constrained run — these are input/provenance metadata and do not require a result block. For scan calculations, frozen coordinates may be declared here while the stepped coordinate is declared on the scan_result.coordinates list.",
@@ -945,6 +1282,17 @@
         "quality": {
           "$ref": "#/$defs/CalculationQuality",
           "default": "raw"
+        },
+        "scan_result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CalculationScanResultCreate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "scf_stability": {
           "anyOf": [
@@ -1221,6 +1569,14 @@
       "title": "ContentAddressedReference",
       "type": "object"
     },
+    "CoordinateUnit": {
+      "enum": [
+        "angstrom",
+        "degree"
+      ],
+      "title": "CoordinateUnit",
+      "type": "string"
+    },
     "DepositRights": {
       "additionalProperties": false,
       "description": "Deposit-time agreement that the records may be licensed as stated.",
@@ -1305,7 +1661,6 @@
       "type": "string"
     },
     "EnergyCorrectionConvention": {
-      "description": "Which corrections are already folded into a reported energy.\n\n- ``electronic_only``: bare electronic energy, no ZPE, no thermal term.\n- ``electronic_plus_zpe``: E_elec + ZPE (i.e. an E0).\n- ``atom_and_bond_corrected``: E0 plus atom/bond additivity corrections.\n- ``thermal_enthalpy_298k``: enthalpy at 298.15 K.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "electronic_only",
         "electronic_plus_zpe",
@@ -1332,7 +1687,7 @@
     },
     "EnergyCorrectionSchemeRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, source_literature, software_release,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
+      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  source_literature, software_release, workflow_tool_release)``. This is\n  the original identity, unchanged, so every scheme deposited before\n  ``data_revision`` existed keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  source_literature, software_release, data_revision)``. The workflow\n  tool build is *not* part of this identity; see below.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
       "properties": {
         "atom_params": {
           "items": {
@@ -1340,6 +1695,17 @@
           },
           "title": "Atom Params",
           "type": "array"
+        },
+        "atom_params_applied_as": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtomParamApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "bond_params": {
           "items": {
@@ -1354,6 +1720,19 @@
           },
           "title": "Component Params",
           "type": "array"
+        },
+        "data_revision": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Revision"
         },
         "kind": {
           "$ref": "#/$defs/EnergyCorrectionSchemeKind"
@@ -1448,7 +1827,6 @@
       "type": "string"
     },
     "EnergyZeroConvention": {
-      "description": "Where the zero of an energy scale sits.\n\n- ``lowest_state``: zero at the lowest-energy state of the network.\n- ``entrance_channel``: zero at the declared entrance (reactant) channel.\n- ``separated_reactants``: zero at the infinitely separated reactants of\n  the elementary step in question (not necessarily a network state).\n- ``absolute``: values are absolute (unshifted) electronic energies.\n- ``other``: anything else; requires ``convention_note``.",
       "enum": [
         "lowest_state",
         "entrance_channel",
@@ -2437,18 +2815,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -2508,11 +2910,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },
@@ -2539,7 +2936,6 @@
       "type": "string"
     },
     "KineticsDegeneracyInterpretation": {
-      "description": "How reaction-path degeneracy/symmetry was handled for this subject.\n\nDistinct from :class:`KineticsDegeneracyConvention`, which records whether\nthe *stored scalar* already includes degeneracy. This records how the\nsubject's own partition function treated symmetry.",
       "enum": [
         "external_symmetry_number",
         "reaction_path_degeneracy",
@@ -2561,7 +2957,6 @@
       "type": "string"
     },
     "KineticsEnsemblePolicy": {
-      "description": "How multiple structures of one subject were combined into a partition\nfunction used for a rate coefficient.",
       "enum": [
         "single_structure",
         "lowest_energy_conformer",
@@ -2600,10 +2995,12 @@
           "title": "Convention Note"
         },
         "degeneracy_interpretation": {
-          "$ref": "#/$defs/KineticsDegeneracyInterpretation"
+          "$ref": "#/$defs/KineticsDegeneracyInterpretation",
+          "description": "How reaction-path degeneracy/symmetry was handled for this subject's own partition function (distinct from degeneracy_convention, which says whether the stored scalar already includes degeneracy): external_symmetry_number, reaction_path_degeneracy, symmetry_number_and_path_degeneracy, no_symmetry_treatment, or other (requires convention_note)."
         },
         "ensemble_policy": {
-          "$ref": "#/$defs/KineticsEnsemblePolicy"
+          "$ref": "#/$defs/KineticsEnsemblePolicy",
+          "description": "How multiple structures of this subject were combined into the partition function the rate used: single_structure, lowest_energy_conformer, boltzmann_weighted_conformers, multi_structural_torsional, or other (requires convention_note)."
         },
         "participant_index": {
           "anyOf": [
@@ -2624,7 +3021,8 @@
           "type": "string"
         },
         "standard_state_convention": {
-          "$ref": "#/$defs/KineticsStandardStateConvention"
+          "$ref": "#/$defs/KineticsStandardStateConvention",
+          "description": "The standard state the partition functions are referenced to: ideal_gas_1_bar, ideal_gas_1_atm, concentration_1_mol_cm3, concentration_1_mol_l, or other (requires convention_note)."
         },
         "statmech_ref": {
           "minLength": 1,
@@ -2753,7 +3151,6 @@
       "type": "object"
     },
     "KineticsStandardStateConvention": {
-      "description": "The standard state the rate's partition functions are referenced to.",
       "enum": [
         "ideal_gas_1_bar",
         "ideal_gas_1_atm",
@@ -2789,7 +3186,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note."
         },
         "energy_zero_convention": {
           "anyOf": [
@@ -2800,7 +3198,8 @@
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
         },
         "forward_barrier_kj_mol": {
           "anyOf": [
@@ -2832,7 +3231,7 @@
           "title": "Imaginary Frequency Cm1"
         },
         "model": {
-          "$ref": "#/$defs/TunnelingModel"
+          "$ref": "#/$defs/tckdb_schemas__enums__TunnelingModel"
         },
         "model_identifier": {
           "anyOf": [
@@ -2971,7 +3370,7 @@
     },
     "KineticsUploadRequest": {
       "additionalProperties": false,
-      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
+      "description": "Workflow-facing kinetics upload payload.\n\nThe backend resolves reaction identity/entry, optional literature, and\noptional software/workflow provenance, then creates the kinetics row.\n\nFor computed kinetics, ``energy_level_of_theory`` declares the SP level\nof theory used for the electronic energies.  The backend automatically\nfinds the matching SP calculations on each reaction participant's\nconformer and links them as source calculations.  If the lookup is\nambiguous (e.g., multiple conformers), the upload fails with a clear\nerror.\n\n:param reaction: Reaction described by scientific content.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no\n    falloff), which raises the effective main-line Arrhenius A-units\n    order by one.\n:param energy_level_of_theory: SP level of theory for source-calc auto-resolution.\n:param literature: Optional literature submission payload.\n:param software_release: Optional software provenance reference (fitting tool).\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param a: Optional Arrhenius pre-exponential factor.\n:param a_units: Optional units for the pre-exponential factor.\n:param n: Optional temperature exponent.\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param reported_ea: Optional activation energy in reported units.\n:param reported_ea_units: Units for ``reported_ea`` (required when reported).\n:param tmin_k: Optional minimum valid temperature in K.\n:param tmax_k: Optional maximum valid temperature in K.\n:param degeneracy: Optional finite, strictly positive reaction-path degeneracy.\n:param degeneracy_convention: Whether degeneracy is already included in the rate.\n:param tunneling_model: Optional tunneling model label.\n:param note: Optional free-text note.",
       "examples": [
         {
           "a": 1230000000000.0,
@@ -3294,6 +3693,14 @@
           ],
           "default": null
         },
+        "t0_k": {
+          "default": 1.0,
+          "description": "Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy 0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse any other value, because their low-pressure limit or child rows carry no T0 of their own.",
+          "exclusiveMinimum": 0,
+          "maximum": 10000.0,
+          "title": "T0 K",
+          "type": "number"
+        },
         "third_body_efficiencies": {
           "items": {
             "$ref": "#/$defs/ThirdBodyEfficiencyUpload"
@@ -3341,7 +3748,7 @@
         "tunneling_model": {
           "anyOf": [
             {
-              "$ref": "#/$defs/TunnelingModel"
+              "$ref": "#/$defs/app__db__models__common__TunnelingModel"
             },
             {
               "type": "null"
@@ -3834,7 +4241,7 @@
     },
     "PathSearchPointPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs).\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
       "properties": {
         "electronic_energy_hartree": {
           "anyOf": [
@@ -3967,7 +4374,7 @@
     },
     "PathSearchResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search converged.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
+      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
       "properties": {
         "climbing_image_index": {
           "anyOf": [
@@ -4173,7 +4580,7 @@
     },
     "SCFStabilityPayload": {
       "additionalProperties": false,
-      "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead. Not because\nthe citation is unwanted there, but because a bundle has no way to\nmake it: a bundle names things by local key, and the calculation this\nblock hangs off is persisted before its siblings exist, so a key\npointing sideways could not be resolved at the moment it is read. A\ndepositor who needs the citation has the primitive routes; a\ndepositor who has only what a parser found — a status, an eigenvalue,\na count — can now say it from a bundle, which is what they could not\ndo at all before.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
+      "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead, which names the\nmeasuring job by local key rather than by id. Both share\n:class:`SCFStabilityBase`, so neither route publishes the other's\ncitation field.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
       "properties": {
         "instability_count": {
           "anyOf": [
@@ -4302,6 +4709,7 @@
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,
+      "description": "One element-keyed scalar of a scheme.\n\n``value`` is in the enclosing scheme's ``units``. What it means\ndepends on the scheme ``kind``, and how it is applied is stated by the\nscheme's ``atom_params_applied_as``:\n\n* ``atom_energy``: the level's atomic energy of ``element`` (the\n  energy of the isolated atom at the scheme's level of theory).\n  Arkane subtracts ``count * value`` from the molecule's energy\n  (``atom_params_applied_as = subtracted``). Arkane also applies\n  ``+ count * (atom_hf - atom_thermal)`` per atom, carried by the\n  separate ``atom_hf`` and ``atom_thermal`` schemes.\n* ``atom_hf``: the experimental enthalpy of formation of the atom, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane adds ``count * value``\n  (``added``).\n* ``atom_thermal``: the atom's thermal enthalpy increment, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane's net term is\n  ``atom_hf - atom_thermal``, so it is ``subtracted``.\n* ``soc``: the atom's spin-orbit correction.",
       "properties": {
         "element": {
           "maxLength": 3,
@@ -4428,7 +4836,7 @@
     },
     "SoftwareReleaseRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a software release.",
+      "description": "Upload-facing reference to a software release.\n\nA release is identified by ``(name, version, revision, build)``; two\nreferences that agree on all four (an absent value matches only another\nabsent value) are the same release row. ``release_date`` and ``notes``\nare descriptive and do not take part in identity.\n\nWhich field holds what:\n\n* ``version``: the release number the vendor or project publishes, such\n  as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.\n  Give the number alone. A parsed startup banner such as\n  ``\"Gaussian 16, Revision C.02\"`` is accepted, split into version\n  ``16`` and revision ``C.02``, and reported as a warning.\n* ``revision``: a finer label inside one version, written the way the\n  producer writes it. For a vendor program this is the vendor's own\n  revision label, such as Gaussian ``C.02``. For analysis software that\n  has no revision labels it is the source state the run used, such as\n  the commit hash of an Arkane or RMG checkout, because\n  ``software_release`` has no separate commit field (see below).\n* ``build``: a variant of the same version and revision that was\n  compiled or packaged differently and can give different numbers or\n  different capabilities, such as ``mpi``, ``cuda`` or a distributor's\n  build identifier. Leave it out when the program was not built in a\n  way that matters; two references that differ only here are kept as\n  two releases, so do not put a timestamp or host name in it.\n\nThere is no ``git_commit`` field on this reference. A commit hash goes in\n``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a\n``git_commit`` because workflow tools are identified by code state.",
       "properties": {
         "build": {
           "anyOf": [
@@ -4440,6 +4848,7 @@
             }
           ],
           "default": null,
+          "description": "Compile or packaging variant of the same version and revision, for example mpi or cuda. Part of release identity; omit unless the build changes results or capabilities.",
           "title": "Build"
         },
         "name": {
@@ -4482,6 +4891,7 @@
             }
           ],
           "default": null,
+          "description": "Finer label within one version: the vendor revision label (Gaussian C.02), or the commit hash for analysis software that has no revision labels. Part of release identity.",
           "title": "Revision"
         },
         "version": {
@@ -4494,6 +4904,7 @@
             }
           ],
           "default": null,
+          "description": "Published release number, for example 16, 6.0.1 or 2025.1. Number only; a full startup banner is split into version and revision with a warning.",
           "title": "Version"
         }
       },
@@ -5447,18 +5858,6 @@
       "title": "ThirdBodyEfficiencyUpload",
       "type": "object"
     },
-    "TunnelingModel": {
-      "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
-      "enum": [
-        "none",
-        "wigner",
-        "eckart",
-        "sct",
-        "other"
-      ],
-      "title": "TunnelingModel",
-      "type": "string"
-    },
     "WavefunctionDiagnosticPayload": {
       "additionalProperties": false,
       "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: Janowski D1 diagnostic.\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
@@ -5639,6 +6038,30 @@
       ],
       "title": "WorkflowToolReleaseRef",
       "type": "object"
+    },
+    "app__db__models__common__TunnelingModel": {
+      "description": "Tunneling correction applied to a rate coefficient (DR-0032).\n\nMachine tokens, per the project enum policy (replaces the former\nfree-text ``kinetics.tunneling_model`` column). ``other`` is the\nescape hatch for anything not yet in this set.",
+      "enum": [
+        "none",
+        "wigner",
+        "eckart",
+        "sct",
+        "other"
+      ],
+      "title": "TunnelingModel",
+      "type": "string"
+    },
+    "tckdb_schemas__enums__TunnelingModel": {
+      "description": "Tunneling correction applied to a rate coefficient (DR-0032).",
+      "enum": [
+        "none",
+        "wigner",
+        "eckart",
+        "sct",
+        "other"
+      ],
+      "title": "TunnelingModel",
+      "type": "string"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

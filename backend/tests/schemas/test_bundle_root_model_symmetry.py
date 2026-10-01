@@ -347,15 +347,15 @@ def test_the_statmech_pair_needs_no_exemptions():
 def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     """Recorded because "cover those too" needs an answer either way.
 
-    Kinetics exists only on the reaction root — a species bundle has no
-    reaction to have a rate for — and transport has no bundle model on
-    either root; it is a standalone route only.
+    Kinetics exists only on the reaction root -- a species bundle has no
+    reaction to have a rate for. Transport (#622) is on both roots, but as
+    ONE class, ``TransportInBundle``, that both roots import, so there is no
+    second spelling to drift. A second transport class on either root would
+    be a pair and belongs in MODEL_PAIRS.
 
-    This used to conclude "neither is a pair, so neither can drift". The
-    first half is right and the second half was wrong, and the error was
-    load-bearing: kinetics has no second spelling *across the two bundle
-    roots*, but it does have one across the **bundle and the standalone
-    route**, and that is where it drifted. See
+    Kinetics has no second spelling *across the two bundle roots*, but it
+    does have one across the **bundle and the standalone route**, and that
+    is where it drifted. See
     :func:`test_bundle_kinetics_records_the_same_science_as_the_standalone_route`.
     """
     assert not hasattr(sp, "KineticsInBundle"), (
@@ -364,47 +364,45 @@ def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     )
     assert hasattr(rx, "BundleKineticsIn"), "reaction root lost its kinetics model"
 
+    species_field = sp.ComputedSpeciesUploadRequest.model_fields["transport"]
+    reaction_field = rx.BundleSpeciesIn.model_fields["transport"]
+    assert species_field.annotation == reaction_field.annotation, (
+        "the two roots type their transport block differently "
+        f"({species_field.annotation!r} vs {reaction_field.annotation!r}); "
+        "that is a second spelling, so add the pair to MODEL_PAIRS or go back "
+        "to one shared model."
+    )
+    assert species_field.annotation == (sp.TransportInBundle | None), (
+        "the species root's transport block is no longer TransportInBundle"
+    )
+    assert rx.TransportInBundle is sp.TransportInBundle
+
     for module, label in ((sp, "species"), (rx, "reaction")):
-        transport = [n for n in dir(module) if "Transport" in n]
-        assert not transport, (
-            f"the {label} bundle root gained transport model(s) {transport}; "
-            "if both roots now have one, add the pair to MODEL_PAIRS."
+        extra = [
+            n
+            for n in dir(module)
+            if "Transport" in n
+            and not (hasattr(sp, n) and getattr(module, n) is getattr(sp, n))
+        ]
+        assert not extra, (
+            f"the {label} bundle root gained transport model(s) {extra} that "
+            "the species root does not spell the same way; if both roots now "
+            "have one, add the pair to MODEL_PAIRS."
         )
 
 
 #: Scientific-content fields ``BundleKineticsIn`` lacks that
 #: ``KineticsUploadRequest`` has, each with the evidence for whether the
-#: asymmetry is deliberate. Unlike :data:`ALLOWED_ASYMMETRIES`, an entry
-#: here is **not** a claim that the gap is correct — two of the three are
-#: recorded drift. It is a claim that the gap is *known*, so that a fourth
-#: appearing is visible on the day it lands rather than months later.
-KNOWN_BUNDLE_KINETICS_GAPS: dict[str, str] = {
-    "interpretation_assignments": (
-        "DRIFT, not design. Added to KineticsUploadRequest by ee7377f5 (#66), "
-        "a commit that edited computed_reaction_upload.py in the same diff to "
-        "close the analogous transition-state evidence gap on parity grounds, "
-        "and left kinetics one-sided with no recorded reason. Closing it needs "
-        "a bundle-local-key assignment model plus persistence in "
-        "app.workflows.computed_reaction — a feature, not a contract change."
-    ),
-    "tunneling_application": (
-        "DRIFT, not design. Same commit, same omission, and the sharper half: "
-        "BundleKineticsIn carries tunneling_model, the label, so a bundle can "
-        "claim Eckart tunneling and never attach the evidence. The standalone "
-        "route cross-checks label against evidence "
-        "(validate_tunneling_declaration_agrees); the bundle has nothing to "
-        "check against."
-    ),
-    "network_kinetics_ref": (
-        "UNADDRESSED rather than decided. 2fb5c25b (#29) established that this "
-        "model carries only scalar Arrhenius fields and its workflow writes no "
-        "kinetics child tables, directing PLOG/Chebyshev to the single-reaction "
-        "endpoint. That reasoning covers child rows; network_kinetics_ref is a "
-        "nullable scalar column on kinetics itself, and BundleKineticsIn "
-        "accepts pressure_context='pressure_dependent' — the exact state the "
-        "handle names — with no way to name it."
-    ),
-}
+#: asymmetry is deliberate. An entry is **not** a claim that the gap is
+#: correct; it is a claim that the gap is *known*, so that a new one is visible
+#: on the day it lands rather than months later.
+#:
+#: Empty since #620: ``interpretation_assignments``, ``tunneling_application``
+#: and ``network_kinetics_ref`` were the three entries, the first two recorded
+#: drift, and all three now exist on the bundle with the same models,
+#: validators and persistence as the standalone route. Keep the dict: a new
+#: gap is added here with its evidence, not silently tolerated.
+KNOWN_BUNDLE_KINETICS_GAPS: dict[str, str] = {}
 
 #: Fields on ``KineticsUploadRequest`` the bundle deliberately spells
 #: elsewhere or deliberately refuses. Excluded from the comparison rather
@@ -517,14 +515,38 @@ def test_the_known_gap_list_describes_gaps_that_still_exist():
     )
 
 
-def test_the_bundle_can_claim_tunneling_it_cannot_evidence():
-    """Pins the concrete consequence, not just the field list.
+#: The kinetics-evidence fields #620 gave the bundle. Each must be the standalone
+#: route's own annotation, not a structurally similar copy: a copy is how the
+#: two routes drift apart a second time.
+_SHARED_EVIDENCE_FIELDS = (
+    "interpretation_assignments",
+    "tunneling_application",
+    "network_kinetics_ref",
+)
 
-    The field-set tests above would still pass if ``tunneling_model`` were
-    also dropped from the bundle — a *consistent* model that simply says
-    less. This one asserts the specific inconsistency that makes the gap
-    worth fixing rather than worth tolerating: the label is accepted and
-    the evidence has nowhere to go.
+
+def test_the_bundle_shares_the_standalone_evidence_models_not_copies():
+    """Parity by identity, not by field list.
+
+    ``test_bundle_kinetics_records_the_same_science_as_the_standalone_route``
+    only compares field *names*, so it would pass with a bundle-local
+    ``tunneling_application`` model that dropped half the validation. This
+    asserts the annotation is the very same type object.
     """
-    assert "tunneling_model" in rx.BundleKineticsIn.model_fields
-    assert "tunneling_application" not in rx.BundleKineticsIn.model_fields
+    standalone = _standalone_kinetics_model()
+    for name in _SHARED_EVIDENCE_FIELDS:
+        assert name in rx.BundleKineticsIn.model_fields, f"bundle lost {name}"
+        assert (
+            rx.BundleKineticsIn.model_fields[name].annotation
+            == standalone.model_fields[name].annotation
+        ), f"BundleKineticsIn.{name} is not the standalone route's own type"
+
+
+def test_both_routes_carry_the_same_reference_temperature_field():
+    """``t0_k`` is one contract: same type, same default, same description."""
+    standalone = _standalone_kinetics_model()
+    bundle_field = rx.BundleKineticsIn.model_fields["t0_k"]
+    standalone_field = standalone.model_fields["t0_k"]
+    assert bundle_field.default == standalone_field.default == 1.0
+    assert bundle_field.annotation == standalone_field.annotation
+    assert bundle_field.description == standalone_field.description

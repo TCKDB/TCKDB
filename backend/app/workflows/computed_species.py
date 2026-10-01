@@ -8,6 +8,7 @@ inside the bundle — there are no DB FK ids in the request payload.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session
@@ -23,11 +24,13 @@ from app.db.models.common import (
 from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
     Statmech,
+    StatmechElectronicLevel,
     StatmechSourceCalculation,
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
 from app.db.models.thermo import Thermo
+from app.db.models.transport import Transport
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
@@ -48,6 +51,7 @@ from app.services.artifact_persistence import (
     persist_artifact_batch,
     validate_and_decode_all_artifacts,
 )
+from app.services.atomic_electronic_warnings import collect_bundle_atomic_warnings
 from app.services.calculation_levels import (
     W_STATMECH_ENERGY_LEVEL_AMBIGUOUS,
     W_STATMECH_ENERGY_LEVEL_CONTRADICTION,
@@ -107,16 +111,17 @@ from app.services.input_geometry_extraction import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
+from app.services.monatomic import statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     collect_provenance_warnings,
     collect_statmech_content_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
     apply_review_policy,
 )
+from app.services.scf_stability_sources import link_scf_stability_sources
 from app.services.software_banner_extraction import (
     try_reconcile_software_from_output_uploads,
 )
@@ -130,6 +135,7 @@ from app.services.statmech_resolution import (
 )
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_enthalpy_reference, assert_thermo_role_matches_calculation_type
+from app.workflows.transport import persist_bundle_transport
 
 #: How a computed-species bundle declares a name in the conformer
 #: namespace, phrased as the object of the remedy sentence in
@@ -170,6 +176,7 @@ class ComputedSpeciesUploadOutcome:
     conformers: list[ConformerUploadOutcomeInBundle]
     thermo: Thermo | None
     statmech: Statmech | None = None
+    transport: Transport | None = None
     #: Non-blocking warnings raised while persisting inline artifacts —
     #: currently single-point energy reconciliation (fill/mismatch). The
     #: route merges these into the upload response.
@@ -211,7 +218,11 @@ def _to_calc_with_results_payload(
         scf_stability=(
             None
             if calc_in.scf_stability is None
-            else SCFStabilityPayload(**calc_in.scf_stability.model_dump())
+            else SCFStabilityPayload(
+                **calc_in.scf_stability.model_dump(
+                    exclude={"source_calculation_key"}
+                )
+            )
         ),
         hessian=calc_in.hessian,
         input_geometries=calc_in.input_geometries,
@@ -366,13 +377,17 @@ def persist_computed_species_upload(
         # whose converged output IS the conformer geometry); freq, sp,
         # and all other types now produce zero output_geometry rows
         # unless the producer declares them explicitly. Bundle's primary
-        # calc is required to be type=opt so this fallback always fires
-        # for the primary slot.
+        # calc is type=opt, so this fallback fires for the primary slot,
+        # except for a one-atom conformer (#610), whose primary may be an
+        # sp; ``is_single_atom_primary`` gives that sp the same final
+        # output link, so the atom's geometry is still reachable from the
+        # conformer.
         attach_calculation_output_geometries(
             session,
             calc=primary_calc,
             explicit_output_geometries=conf_in.primary_calculation.output_geometries,
             fallback_geometry_id=geometry.id,
+            is_single_atom_primary=geometry.natoms == 1,
             context=(
                 f"calculation '{conf_in.primary_calculation.key}' "
                 f"(type='{primary_calc.type.value}')"
@@ -458,8 +473,14 @@ def persist_computed_species_upload(
             # Auto-edge to primary opt when the additional type maps to
             # a known dependency role (mirrors persist_additional_calculations).
             dep_role = _DEPENDENCY_ROLE_FOR_TYPE.get(additional_in.type)
-            # Guard cannot fire today: ``ConformerInBundle.validate_primary_is_opt``
-            # requires an opt primary. Kept as defence in depth.
+            # The guard fires for a one-atom conformer with an ``sp`` primary
+            # (#610): ``ConformerInBundle.validate_primary_is_opt`` admits
+            # that shape, and the atom has no ``opt`` for a ``single_point_on``
+            # edge to name. The additional calculation is stored and anchored
+            # to the observation; only the inferred edge is skipped, and no
+            # ``dependency_edge_not_inferred`` warning is raised, because the
+            # edge does not exist to be missed. Any edge the producer names
+            # itself goes through ``depends_on`` below.
             if dep_role is not None and dependency_role_type_compatible(
                 primary_calc, dep_role
             ):
@@ -545,6 +566,28 @@ def persist_computed_species_upload(
         ):
             calc_keys_to_id[additional_in.key] = calc_row
 
+    # Non-blocking gaps surfaced on the upload response: single-point
+    # energy reconciliation, absent statmech evidence, and absent
+    # provenance on the scientific products this bundle carries.
+    upload_warnings: list[UploadWarning] = []
+
+    # An ``scf_stability`` block may name the job that measured it. Every
+    # calculation exists now, so a key pointing at one declared later in the
+    # payload resolves too.
+    link_scf_stability_sources(
+        session,
+        (
+            (calc_in.key, calc_in.scf_stability)
+            for outcome in conformer_outcomes
+            for calc_in in (
+                outcome.conformer_in_bundle.primary_calculation,
+                *outcome.conformer_in_bundle.additional_calculations,
+            )
+        ),
+        calc_keys_to_id,
+        warnings=upload_warnings,
+    )
+
     # Step 5: explicit dependency edges. The idempotent helper handles
     # both same-transaction and already-persisted duplicates, and rejects
     # role mismatches with a clear 422.
@@ -590,10 +633,6 @@ def persist_computed_species_upload(
     # shas across all calcs in the bundle so a post-step-6 failure can
     # delete them.
     bundle_stored_shas: list[str] = []
-    # Non-blocking gaps surfaced on the upload response: single-point
-    # energy reconciliation, absent statmech evidence, and absent
-    # provenance on the scientific products this bundle carries.
-    upload_warnings: list[UploadWarning] = []
 
     # Provenance-presence warnings, the same ones /uploads/thermo and
     # /uploads/statmech have always returned. They were never wired here,
@@ -637,6 +676,19 @@ def persist_computed_species_upload(
                 literature=request.statmech.literature,
                 freq_scale_factor=request.statmech.freq_scale_factor,
                 field_prefix="statmech.",
+            )
+        )
+    if request.transport is not None:
+        upload_warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=request.transport.scientific_origin,
+                software_release=request.transport.software_release,
+                workflow_tool_release=(
+                    request.transport.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
+                literature=request.transport.literature,
+                field_prefix="transport.",
             )
         )
     try:
@@ -724,6 +776,23 @@ def persist_computed_species_upload(
             default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings=upload_warnings,
+            subject_xyz_texts=[c.geometry.xyz_text for c in request.conformers],
+            subject_smiles=request.species_entry.smiles,
+        )
+
+        transport_row = (
+            persist_bundle_transport(
+                session,
+                request.transport,
+                species_entry_id=species_entry.id,
+                calculations_by_key=calc_keys_to_id,
+                default_workflow_tool_release=request.workflow_tool_release,
+                created_by=created_by,
+                warnings_out=upload_warnings,
+                field_prefix="transport",
+            )
+            if request.transport is not None
+            else None
         )
 
         # Link a bundle-created COMPUTED thermo to the statmech it was
@@ -748,6 +817,27 @@ def persist_computed_species_upload(
             conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             created_by=created_by,
             warnings=upload_warnings,
+        )
+
+        # One-atom species: is the electronic partition function and the
+        # spin-orbit energy actually there? (#609)
+        upload_warnings.extend(
+            collect_bundle_atomic_warnings(
+                species_entry=request.species_entry,
+                xyz_texts=[c.geometry.xyz_text for c in request.conformers],
+                statmech=request.statmech,
+                thermo=request.thermo,
+                corrections=[
+                    *request.applied_energy_corrections,
+                    *(
+                        request.thermo.applied_energy_corrections
+                        if request.thermo is not None
+                        else []
+                    ),
+                ],
+                statmech_field="statmech",
+                energy_field="applied_energy_corrections",
+            )
         )
 
         session.flush()
@@ -789,6 +879,10 @@ def persist_computed_species_upload(
         review_targets.append(
             RecordRef(SubmissionRecordType.statmech, statmech_row.id)
         )
+    if transport_row is not None:
+        review_targets.append(
+            RecordRef(SubmissionRecordType.transport, transport_row.id)
+        )
     review_targets.extend(
         RecordRef(SubmissionRecordType.applied_energy_correction, aec_id)
         for aec_id in (*thermo_aec_ids, *top_level_aec_ids)
@@ -817,6 +911,7 @@ def persist_computed_species_upload(
         conformers=conformer_outcomes,
         thermo=thermo_row,
         statmech=statmech_row,
+        transport=transport_row,
         warnings=upload_warnings,
     )
 
@@ -919,7 +1014,13 @@ def _persist_thermo_block(
         literature_field_prefix="thermo.literature.",
     )
     thermo_create = thermo_create.model_copy(
-        update={"source_calculations": resolved_sources}
+        update={
+            "source_calculations": resolved_sources,
+            # Stored as declared, after ``assert_role_consistency`` above.
+            "energy_level_of_theory_id": (
+                declared_energy_lot.id if declared_energy_lot is not None else None
+            ),
+        }
     )
     thermo_row = persist_thermo(session, thermo_create, created_by=created_by)
 
@@ -1069,6 +1170,9 @@ def _persist_statmech_block(
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
     literature_field_prefix: str = "statmech.literature.",
+    subject_xyz_texts: Sequence[str] = (),
+    subject_smiles: str | None = None,
+    content_warning_field: str = "statmech",
 ) -> Statmech | None:
     """Persist an optional statmech block for exactly one species or TS subject.
 
@@ -1185,6 +1289,10 @@ def _persist_statmech_block(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         scientific_origin=s.scientific_origin,
+        # Stored as declared, after ``assert_role_consistency`` above.
+        energy_level_of_theory_id=(
+            declared_energy_lot.id if declared_energy_lot is not None else None
+        ),
         literature_id=literature.id if literature is not None else None,
         software_release_id=(
             software_release.id if software_release is not None else None
@@ -1209,12 +1317,29 @@ def _persist_statmech_block(
     session.add(statmech)
     session.flush()
 
+    for level in s.electronic_levels:
+        session.add(
+            StatmechElectronicLevel(
+                statmech_id=statmech.id,
+                level_index=level.level_index,
+                energy_cm1=level.energy_cm1,
+                degeneracy=level.degeneracy,
+            )
+        )
+
     if warnings is not None:
         warnings.extend(
             collect_statmech_content_warnings(
                 scientific_origin=s.scientific_origin,
                 source_calculation_roles={item.role.value for item in s.source_calculations},
-                has_rotational_structure=statmech_has_rotational_structure(s),
+                is_polyatomic=(
+                    # A transition state is never a single atom.
+                    transition_state_entry_id is not None
+                    or statmech_subject_is_polyatomic(
+                        s, xyz_texts=subject_xyz_texts, smiles=subject_smiles
+                    )
+                ),
+                field=content_warning_field,
             )
         )
 
@@ -1260,6 +1385,7 @@ def _persist_statmech_block(
             treatment_kind=torsion_in.treatment_kind,
             dimension=torsion_in.dimension,
             top_description=torsion_in.top_description,
+            invalidated_reason=torsion_in.invalidated_reason,
             source_scan_calculation_id=scan_calc_id,
         )
         session.add(torsion)

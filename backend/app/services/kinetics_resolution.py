@@ -155,6 +155,39 @@ def assert_kinetics_source_role_compatible(
         )
 
 
+def resolve_network_kinetics_ref(
+    session: Session,
+    ref: str | None,
+    *,
+    field: str = "network_kinetics_ref",
+) -> int | None:
+    """Resolve a pressure-dependent network counterpart's public ref to its id.
+
+    Shared by the standalone kinetics route and the reaction bundle so both
+    refuse an unknown ref the same way (``unknown_network_kinetics_ref``).
+
+    :param ref: The public ref, or ``None`` (most rates have no counterpart).
+    :param field: The payload path named in the refusal.
+    """
+    if ref is None:
+        return None
+    network_kinetics = session.scalar(
+        select(NetworkKinetics).where(NetworkKinetics.public_ref == ref)
+    )
+    if network_kinetics is None:
+        raise unknown_reference(
+            code=W_UNKNOWN_NETWORK_KINETICS_REF,
+            field=field,
+            kind="network_kinetics",
+            ref=ref,
+            remedy=(
+                "Deposit the pressure-dependent network solve this rate "
+                "came out of first, or correct the ref."
+            ),
+        )
+    return network_kinetics.id
+
+
 def resolve_kinetics_upload(
     session: Session,
     request: KineticsUploadRequest,
@@ -190,25 +223,9 @@ def resolve_kinetics_upload(
         request.workflow_tool_release,
     )
 
-    network_kinetics_id: int | None = None
-    if request.network_kinetics_ref is not None:
-        network_kinetics = session.scalar(
-            select(NetworkKinetics).where(
-                NetworkKinetics.public_ref == request.network_kinetics_ref
-            )
-        )
-        if network_kinetics is None:
-            raise unknown_reference(
-                code=W_UNKNOWN_NETWORK_KINETICS_REF,
-                field="network_kinetics_ref",
-                kind="network_kinetics",
-                ref=request.network_kinetics_ref,
-                remedy=(
-                    "Deposit the pressure-dependent network solve this rate "
-                    "came out of first, or correct the ref."
-                ),
-            )
-        network_kinetics_id = network_kinetics.id
+    network_kinetics_id = resolve_network_kinetics_ref(
+        session, request.network_kinetics_ref
+    )
 
     return KineticsCreate(
         reaction_entry_id=reaction_entry_id,
@@ -227,6 +244,7 @@ def resolve_kinetics_upload(
         a=request.a,
         a_units=request.a_units,
         n=request.n,
+        t0_k=request.t0_k,
         ea_kj_mol=(
             convert_ea_to_kj_mol(request.reported_ea, request.reported_ea_units)
             if request.reported_ea is not None
@@ -279,6 +297,7 @@ def persist_kinetics(
         a=kinetics_create.a,
         a_units=kinetics_create.a_units,
         n=kinetics_create.n,
+        t0_k=kinetics_create.t0_k,
         ea_kj_mol=kinetics_create.ea_kj_mol,
         a_uncertainty=kinetics_create.a_uncertainty,
         a_uncertainty_kind=kinetics_create.a_uncertainty_kind,

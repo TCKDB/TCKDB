@@ -530,6 +530,10 @@ def resolve_or_create_statmech(
     statmech = Statmech(
         species_entry_id=species_entry_id,
         scientific_origin=payload.scientific_origin,
+        # Stored as declared, after ``assert_role_consistency`` above.
+        energy_level_of_theory_id=(
+            declared_energy_lot.id if declared_energy_lot is not None else None
+        ),
         literature_id=literature.id if literature is not None else None,
         workflow_tool_release_id=(
             workflow_tool_release.id if workflow_tool_release is not None else None

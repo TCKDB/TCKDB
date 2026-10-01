@@ -12,7 +12,12 @@ from app.api.routes._pagination import PaginatedResponse
 from app.db.models.level_of_theory import LevelOfTheory, LevelOfTheoryMerge
 from app.schemas.entities.level_of_theory import LevelOfTheoryRead
 from app.services.scientific_read.handles import canonical_level_of_theory_id
-from app.services.scientific_read.lot_identity_filters import basis_matches, method_matches
+from app.services.scientific_read.lot_identity_filters import (
+    basis_matches,
+    dispersion_matches,
+    method_matches,
+    solvent_matches,
+)
 
 router = APIRouter()
 
@@ -37,9 +42,9 @@ def list_levels_of_theory(
     if basis is not None:
         base = base.where(basis_matches(basis))
     if dispersion is not None:
-        base = base.where(LevelOfTheory.dispersion == dispersion)
+        base = base.where(dispersion_matches(dispersion))
     if solvent is not None:
-        base = base.where(LevelOfTheory.solvent == solvent)
+        base = base.where(solvent_matches(solvent))
     if lot_hash is not None:
         base = base.where(LevelOfTheory.lot_hash == lot_hash)
 

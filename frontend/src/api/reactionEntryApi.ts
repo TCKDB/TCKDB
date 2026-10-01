@@ -115,6 +115,9 @@ const arrheniusParametersSchema = z.object({
     A_units: z.string().nullable().optional(),
     n: z.number().nullable().optional(),
     Ea_kj_mol: z.number().nullable().optional(),
+    // Reference temperature: k = A (T/T0)^n exp(-Ea/RT). Absent on a server
+    // that predates the field, which means 1 K (the plain A T^n form).
+    T0_k: z.number().optional(),
 }).passthrough()
 
 const multiArrheniusTermSchema = z.object({

@@ -406,9 +406,11 @@ const scanSchema = z.object({
 }).passthrough()
 
 const ircSchema = z.object({
-    direction: z.string(),
-    has_forward: z.boolean(),
-    has_reverse: z.boolean(),
+    // Each of the three is nullable: null is "the depositor did not state it",
+    // which is not the same statement as false.
+    direction: z.string().nullable().optional(),
+    has_forward: z.boolean().nullable().optional(),
+    has_reverse: z.boolean().nullable().optional(),
     point_count: z.number().nullable().optional(),
     forward_point_count: z.number(),
     reverse_point_count: z.number(),

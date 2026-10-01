@@ -23,4 +23,7 @@ from tckdb_schemas.workflows.computed_species_upload import (
     ThermoInBundle,
     ThermoSourceCalcInBundle,
     ThermoUploadRefInBundle,
+    TransportInBundle,
+    TransportSourceCalcInBundle,
+    TransportUploadRefInBundle,
 )

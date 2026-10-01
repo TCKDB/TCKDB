@@ -641,7 +641,7 @@ the gap.
 
 **Role:** result
 
-**Purpose:** Structured IRC validation result for one TS candidate.
+**Purpose:** Structured validation result for one TS candidate.
 
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
@@ -650,7 +650,10 @@ the gap.
 | `kind` | TEXT | no | — | — | — | not documented |
 | `passed` | BOOLEAN | no | — | — | — | not documented |
 | `rationale` | TEXT | no | — | — | — | not documented |
-| `reconstruction_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `reconstruction_calculation_id` | BIGINT | yes | — | calculation.id | — | not documented |
+| `imaginary_frequency_count` | INTEGER | yes | — | — | — | not documented |
+| `imaginary_frequency_cm1` | FLOAT | yes | — | — | — | not documented |
+| `mode_displacement_agrees` | BOOLEAN | yes | — | — | — | not documented |
 | `reactant_participant_mapping` | JSONB | yes | — | — | — | not documented |
 | `product_participant_mapping` | JSONB | yes | — | — | — | not documented |
 | `transition_state_geometry_id` | BIGINT | yes | — | geometry.id | — | not documented |
@@ -659,8 +662,13 @@ the gap.
 
 **Check constraints:**
 
+- `ck_transition_state_validation_evidence_imag_count_ge_0`: `imaginary_frequency_count IS NULL OR imaginary_frequency_count >= 0`
+- `ck_transition_state_validation_evidence_imag_freq_negative`: `imaginary_frequency_cm1 IS NULL OR (imaginary_frequency_cm1 < 0 AND imaginary_frequency_cm1 > '-Infinity'::float8)`
+- `ck_transition_state_validation_evidence_mapping_irc_only`: `kind = 'irc' OR (coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null')`
 - `ck_transition_state_validation_evidence_mapping_names_geometry`: `(coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null') OR transition_state_geometry_id IS NOT NULL`
-- `ck_transition_state_validation_evidence_ts_validation_kind`: `kind IN ('irc')`
+- `ck_transition_state_validation_evidence_mode_cols_imag_only`: `kind = 'imaginary_mode' OR (imaginary_frequency_count IS NULL AND imaginary_frequency_cm1 IS NULL AND mode_displacement_agrees IS NULL)`
+- `ck_transition_state_validation_evidence_source_calc_shape`: `(kind = 'energy_ordering') = (reconstruction_calculation_id IS NULL)`
+- `ck_transition_state_validation_evidence_ts_validation_kind`: `kind IN ('irc', 'energy_ordering', 'imaginary_mode')`
 
 ## Role not stated on the model
 
@@ -1017,9 +1025,9 @@ the gap.
 | Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
 |---|---|---|---|---|---|---|
 | `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
-| `direction` | IRCDirection (enum) | no | — | — | `forward`, `reverse`, `both` | not documented |
-| `has_forward` | BOOLEAN | no | False | — | — | not documented |
-| `has_reverse` | BOOLEAN | no | False | — | — | not documented |
+| `direction` | IRCDirection (enum) | yes | — | — | `forward`, `reverse`, `both` | not documented |
+| `has_forward` | BOOLEAN | yes | — | — | — | not documented |
+| `has_reverse` | BOOLEAN | yes | — | — | — | not documented |
 | `ts_point_index` | INTEGER | yes | — | — | — | not documented |
 | `point_count` | INTEGER | yes | — | — | — | not documented |
 | `zero_energy_reference_hartree` | FLOAT | yes | — | — | — | not documented |
@@ -1449,6 +1457,8 @@ the gap.
 | `source_literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
+| `data_revision` | TEXT | yes | — | — | — | not documented |
+| `atom_params_applied_as` | AtomParamApplication (enum) | yes | — | — | `subtracted`, `added` | not documented |
 | `units` | EnergyUnit (enum) | yes | — | — | `hartree`, `kj_mol`, `kcal_mol` | not documented |
 | `note` | TEXT | yes | — | — | — | not documented |
 | `created_at` | TIMESTAMP WITHOUT TIME ZONE | no | now() | — | — | not documented |
@@ -1659,6 +1669,7 @@ the gap.
 | `a` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `a_units` | ArrheniusAUnits (enum) | yes | — | — | `per_s`, `cm3_mol_s`, `cm3_molecule_s`, `m3_mol_s`, `cm6_mol2_s`, `cm6_molecule2_s`, `m6_mol2_s` | not documented |
 | `n` | DOUBLE PRECISION | yes | — | — | — | not documented |
+| `t0_k` | DOUBLE PRECISION | no | 1 | — | — | not documented |
 | `ea_kj_mol` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `a_uncertainty` | DOUBLE PRECISION | yes | — | — | — | not documented |
 | `a_uncertainty_kind` | KineticsUncertaintyKind (enum) | yes | — | — | `additive`, `multiplicative` | not documented |
@@ -1683,6 +1694,7 @@ the gap.
 - `ck_kinetics_apparent_pressure_requires_pressure_bar`: `pressure_context <> 'apparent_at_pressure' OR pressure_bar IS NOT NULL`
 - `ck_kinetics_degeneracy_finite_positive`: `degeneracy IS NULL OR (degeneracy > 0 AND degeneracy < 'Infinity'::double precision)`
 - `ck_kinetics_pressure_bar_gt_0`: `pressure_bar IS NULL OR pressure_bar > 0`
+- `ck_kinetics_t0_k_finite_positive`: `t0_k > 0 AND t0_k <= 10000`
 - `ck_kinetics_tmax_k_gt_0`: `tmax_k IS NULL OR tmax_k > 0`
 - `ck_kinetics_tmin_k_gt_0`: `tmin_k IS NULL OR tmin_k > 0`
 - `ck_kinetics_tmin_le_tmax`: `tmin_k IS NULL OR tmax_k IS NULL OR tmin_k <= tmax_k`
@@ -2541,6 +2553,7 @@ the gap.
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
+| `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `external_symmetry` | SMALLINT | yes | — | — | — | not documented |
 | `point_group` | TEXT | yes | — | — | — | not documented |
 | `is_linear` | BOOLEAN | yes | — | — | — | not documented |
@@ -2760,6 +2773,7 @@ the gap.
 | `literature_id` | BIGINT | yes | — | literature.id | — | not documented |
 | `workflow_tool_release_id` | BIGINT | yes | — | workflow_tool_release.id | — | not documented |
 | `software_release_id` | BIGINT | yes | — | software_release.id | — | not documented |
+| `energy_level_of_theory_id` | BIGINT | yes | — | level_of_theory.id | — | not documented |
 | `enthalpy_reference_kind` | EnthalpyReferenceKind (enum) | yes | — | — | `formation_298k` | ``enthalpy_reference_kind`` declares which reference every enthalpy on this record uses. ``formation_298k`` is the standard enthalpy of formation at 298.15 K; an enthalpy at any other temperature is that value plus the species' own enthalpy increment from 298.15 K, with the elemental term not reevaluated. ``NULL`` means the reference was never recorded -- it is never inferred from a value, a producer or a neighbouring row, and never backfilled. |
 | `h298_kj_mol` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
 | `s298_j_mol_k` | DOUBLE PRECISION | yes | — | — | — | ``h298_kj_mol`` / ``s298_j_mol_k`` are the standard enthalpy of formation and standard entropy at 298.15 K. |
@@ -2951,6 +2965,27 @@ the gap.
 **Check constraints:**
 
 - `ck_transition_state_entry_multiplicity_ge_1`: `multiplicity >= 1`
+
+### `transition_state_validation_energy`
+
+**Role:** role not stated on the model
+
+**Purpose:** One energy an ``energy_ordering`` evidence row compared.
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `id` | BIGINT | no | — | — | — | not documented |
+| `evidence_id` | BIGINT | no | — | transition_state_validation_evidence.id | — | not documented |
+| `participant` | TEXT | no | — | — | — | not documented |
+| `energy_kind` | TEXT | no | — | — | — | not documented |
+| `energy_hartree` | FLOAT | no | — | — | — | not documented |
+| `source_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+
+**Check constraints:**
+
+- `ck_transition_state_validation_energy_energy_finite_le_zero`: `energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8`
+- `ck_transition_state_validation_energy_energy_kind`: `energy_kind IN ('electronic', 'e0')`
+- `ck_transition_state_validation_energy_participant_shape`: `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'`
 
 ### `transport`
 

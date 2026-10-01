@@ -25,6 +25,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.ArrheniusAUnits, wire_enums.ArrheniusAUnits),
     (db_enums.ArtifactKind, wire_enums.ArtifactKind),
     (db_enums.AtomMapSource, wire_enums.AtomMapSource),
+    (db_enums.AtomParamApplication, wire_enums.AtomParamApplication),
     (db_enums.CalculationDependencyRole, wire_enums.CalculationDependencyRole),
     (db_enums.CalculationGeometryRole, wire_enums.CalculationGeometryRole),
     (db_enums.CalculationQuality, wire_enums.CalculationQuality),
@@ -43,8 +44,11 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.ImaginaryModeDisposition, wire_enums.ImaginaryModeDisposition),
     (db_enums.KineticsCalculationRole, wire_enums.KineticsCalculationRole),
     (db_enums.KineticsDegeneracyConvention, wire_enums.KineticsDegeneracyConvention),
+    (db_enums.KineticsDegeneracyInterpretation, wire_enums.KineticsDegeneracyInterpretation),
     (db_enums.KineticsDirection, wire_enums.KineticsDirection),
+    (db_enums.KineticsEnsemblePolicy, wire_enums.KineticsEnsemblePolicy),
     (db_enums.KineticsModelKind, wire_enums.KineticsModelKind),
+    (db_enums.KineticsStandardStateConvention, wire_enums.KineticsStandardStateConvention),
     (db_enums.KineticsUncertaintyKind, wire_enums.KineticsUncertaintyKind),
     (db_enums.LiteratureKind, wire_enums.LiteratureKind),
     (db_enums.MeliusBacComponentKind, wire_enums.MeliusBacComponentKind),
@@ -69,6 +73,7 @@ ENUM_PAIRS: list[tuple[type[Enum], type[Enum]]] = [
     (db_enums.TemperatureUnit, wire_enums.TemperatureUnit),
     (db_enums.ThermoCalculationRole, wire_enums.ThermoCalculationRole),
     (db_enums.TorsionTreatmentKind, wire_enums.TorsionTreatmentKind),
+    (db_enums.TransportCalculationRole, wire_enums.TransportCalculationRole),
     (db_enums.TunnelingModel, wire_enums.TunnelingModel),
 ]
 

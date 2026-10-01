@@ -1583,7 +1583,7 @@ function IRCSection({ calculationRef, available, applicable }: { calculationRef:
         <LazySection id="section-irc-trajectory" heading="IRC trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
             {(irc) => (!irc ? <p className="empty-projection">The archive returned no IRC summary.</p> : (
                 <KVList pairs={[
-                    ["Direction", statusLabel(irc.direction)],
+                    ["Direction", irc.direction ? statusLabel(irc.direction) : "not recorded"],
                     ["Has forward leg", boolLabel(irc.has_forward)],
                     ["Has reverse leg", boolLabel(irc.has_reverse)],
                     ["Forward points", irc.forward_point_count],

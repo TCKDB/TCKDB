@@ -217,7 +217,7 @@ REFUSED: dict[str, tuple[Callable[[Session], dict], int, str]] = {
         422,
         "thermo_source_calculation_owner_mismatch",
     ),
-    # app/workflows/kinetics.py _resolve_interpretation_assignments: a
+    # app/workflows/kinetics.py resolve_interpretation_assignments: a
     # statmech_ref that names nothing.
     "kinetics_unknown_interpretation_statmech_ref": (
         lambda _s: _kinetics(
@@ -669,7 +669,7 @@ _RICH_REACHES: dict[str, tuple[str, ...]] = {
     ),
     "kinetics_rich": (
         "app.workflows.kinetics._resolve_ts_anchored_reaction_entry",
-        "app.workflows.kinetics._resolve_interpretation_assignments",
+        "app.workflows.kinetics.resolve_interpretation_assignments",
         "app.services.literature_resolution.resolve_or_create_literature",
     ),
 }

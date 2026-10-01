@@ -752,7 +752,9 @@ def test_the_parametrisation_asserts_its_own_size():
     # (correction_schemes, frequency_scale_factors, used_by).
     # 92 after ``include=software`` (methods-surface plan §5.3) added a
     # fourth field to that same table.
-    assert len(sections_under_test) == 92
+    # 93 after ``include=statmech`` joined TRANSITION_STATE_RECORD_SECTIONS
+    # (#621).
+    assert len(sections_under_test) == 93
 
 
 # ---------------------------------------------------------------------------

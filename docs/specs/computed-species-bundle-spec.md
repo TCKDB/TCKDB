@@ -128,7 +128,7 @@ class ConformerInBundle(SchemaBase):
 
     key: str = Field(min_length=1)
     geometry: GeometryPayload                       # xyz_text + provenance fields
-    primary_calculation: CalculationInBundle        # MUST be `type=opt` (validator)
+    primary_calculation: CalculationInBundle        # `type=opt`; `type=sp` only for a one-atom geometry (#610)
     additional_calculations: list[CalculationInBundle] = Field(default_factory=list)
     note: str | None = None
 
@@ -355,7 +355,7 @@ The response is structured per local key so consumers can map back. Order of `co
 | 1 | At least one conformer | Pydantic `min_length=1` on `conformers` |
 | 2 | Unique conformer keys | `validate_unique_conformer_keys` model_validator |
 | 3 | Unique calculation keys (global) | `validate_unique_calculation_keys_global` model_validator |
-| 4 | Primary calculation type must be `opt` | `ConformerInBundle.validate_primary_is_opt` |
+| 4 | Primary calculation type must be `opt` (an `sp` is accepted when the conformer geometry is one atom) | `ConformerInBundle.validate_primary_is_opt` |
 | 5 | Calculation result block matches `type` (one-of) | Per-calc `validate_result_matches_type` (mirrors `CalculationWithResultsPayload`) |
 | 6 | Exactly one result block per calc type | Same validator as #5 |
 | 7 | `depends_on.parent_calculation_key` exists | `validate_dependency_keys_resolve` model_validator |

@@ -40,6 +40,16 @@
 #   or a repeat), and the new container is created, connected and only then
 #   started, replacing the running one at the last moment. A connect that
 #   still fails leaves the running API as it was.
+#
+# MIGRATION CREDENTIALS
+#   TCKDB_MIGRATION_ENV_FILE (optional) is a second env file passed ONLY to the
+#   `alembic upgrade` run, after TCKDB_ENV_FILE, so its values win there. It is
+#   where DB_OWNER_USER / DB_OWNER_PASSWORD belong once the database has
+#   separate owner and runtime roles (backend/docs/deployment/database_roles.md):
+#   Alembic needs the owner, and the API must never hold it. Unset (the
+#   default) changes nothing. Set, it must be a readable file, checked before
+#   anything changes. Owner or admin credentials found in TCKDB_ENV_FILE are
+#   reported, because that file is also the API's.
 set -uo pipefail
 
 IMAGE_REPO="${TCKDB_IMAGE_REPO:-laxzal/tckdb-api}"
@@ -51,6 +61,7 @@ DB_NETWORK="${TCKDB_DB_NETWORK:-tckdbv2_default}"
 # path under one operator's home directory would mean every copy of it
 # defaults to that operator's environment file and backup location.
 ENV_FILE="${TCKDB_ENV_FILE:-}"
+MIGRATION_ENV_FILE="${TCKDB_MIGRATION_ENV_FILE:-}"
 BACKUP_DIR="${TCKDB_BACKUP_DIR:-}"
 STATUS_URL="${TCKDB_LOCAL_STATUS_URL:-http://127.0.0.1:${API_PORT}/api/v1/status}"
 # Word-split on spaces and commas; empty means none.
@@ -95,6 +106,21 @@ fi
 IMAGE="${IMAGE_REPO}:${TAG}"
 echo "==> deploying ${IMAGE}"
 
+MIGRATION_ENV_ARGS=()
+if [[ -n "$MIGRATION_ENV_FILE" ]]; then
+    [[ -f "$MIGRATION_ENV_FILE" && -r "$MIGRATION_ENV_FILE" ]] \
+        || die "TCKDB_MIGRATION_ENV_FILE '${MIGRATION_ENV_FILE}' is not a readable file; nothing has been changed"
+    MIGRATION_ENV_ARGS=(--env-file "$MIGRATION_ENV_FILE")
+fi
+# The API container reads TCKDB_ENV_FILE, so a role that can alter the schema
+# or disable triggers must not be in it. Reported rather than refused: a
+# deployment without separated roles has nowhere else to put them yet.
+# A bare `DB_OWNER_PASSWORD` line (no `=`) counts too: Docker then copies the
+# value from the deploying shell, which may have sourced the operator file.
+if grep -Eq '^[[:space:]]*(export[[:space:]]+)?DB_(OWNER|ADMIN)_PASSWORD([[:space:]]*=|[[:space:]]*$)' "$ENV_FILE" 2>/dev/null; then
+    echo "warning: ${ENV_FILE} holds DB_OWNER_PASSWORD or DB_ADMIN_PASSWORD, and the API container reads that file; move them to TCKDB_MIGRATION_ENV_FILE (owner) or an operator-only file (admin)" >&2
+fi
+
 # Before anything changes: every network the new container must join is one
 # it can join. Each value refused here would otherwise fail `docker network
 # connect` after the backup and the migration (Docker 29, measured on a
@@ -136,7 +162,7 @@ echo "    pulled: $DIGEST"
 #    at risk, and this deployment's migrations refuse rather than guess when
 #    they meet data they cannot classify.
 echo "==> migrating"
-docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" \
+docker run --rm --network "$DB_NETWORK" --env-file "$ENV_FILE" "${MIGRATION_ENV_ARGS[@]}" \
     -e DB_HOST=db -e DB_PORT=5432 \
     "$IMAGE" alembic upgrade head || die "migration failed; the old API is still running and the backup is at ${BACKUP}"
 

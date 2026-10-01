@@ -465,7 +465,7 @@ def list_transport_for_entry(
 def create_species_entry_review_endpoint(
     species_entry_id: int,
     body: SpeciesEntryReviewCreate,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(require_curator_or_admin),
 ):
     """Append a curation review to a species entry.

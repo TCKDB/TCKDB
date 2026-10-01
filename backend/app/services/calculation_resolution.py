@@ -13,6 +13,7 @@ from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.lot_component_names import component_identity_key
 from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import (
     Calculation,
@@ -69,6 +70,7 @@ from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
+from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.hessian_method_inference import infer_hessian_method
@@ -128,8 +130,12 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     :func:`~app.chemistry.basis_set_names.basis_identity_key` (issue #574),
     so ``def2-tzvp`` and ``Def2TZVP`` are one level of theory, and the method
     through :func:`~app.chemistry.method_names.method_identity_key` (issue
-    #585), so ``CCSD(T)-F12`` and ``ccsd(t)-f12`` are too. The row still
-    stores both names verbatim. Every other field is hashed as written.
+    #585, with the curated aliases of #618), so ``CCSD(T)-F12`` and
+    ``ccsd(t)-f12`` are too, and so are ``wb97x-d`` and ``wb97xd``. Dispersion,
+    solvent and solvent-model names go through
+    :func:`~app.chemistry.lot_component_names.component_identity_key` (issue
+    #602), so ``D3BJ`` and ``d3bj`` are one. The row still stores every name
+    verbatim. ``keywords`` is free-form text and is hashed as written.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
@@ -140,9 +146,9 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
         "basis": basis_identity_key(ref.basis),
         "aux_basis": basis_identity_key(ref.aux_basis),
         "cabs_basis": basis_identity_key(ref.cabs_basis),
-        "dispersion": ref.dispersion,
-        "solvent": ref.solvent,
-        "solvent_model": ref.solvent_model,
+        "dispersion": component_identity_key(ref.dispersion),
+        "solvent": component_identity_key(ref.solvent),
+        "solvent_model": component_identity_key(ref.solvent_model),
         "keywords": ref.keywords,
         # DR-0034: spin treatment is part of LOT identity. NULL folds to
         # "unknown" in the hash so a row that omits it and a row that says
@@ -1168,6 +1174,10 @@ def persist_calculation_result(
         schema-layer validator.
     """
 
+    if calc_upload.scan_result is not None:
+        # The wire validator already refused a scan result on any other type.
+        persist_calculation_scan(session, calculation.id, calc_upload.scan_result)
+
     if calc_upload.opt_result is not None:
         session.add(
             CalculationOptResult(
@@ -1847,6 +1857,7 @@ def attach_calculation_output_geometries(
     explicit_output_geometries: list[OutputGeometryEntry],
     fallback_geometry_id: int | None,
     context: str,
+    is_single_atom_primary: bool = False,
 ) -> None:
     """Attach ``calculation_output_geometry`` rows for one calc.
 
@@ -1866,6 +1877,16 @@ def attach_calculation_output_geometries(
     one row is added at ``output_order = 1`` with role ``final``. Only
     ``opt`` qualifies — the conformer geometry IS opt's converged output
     by construction; any other type's output role would be a guess.
+
+    One exception, for a bundle's conformer primary when the conformer's
+    geometry is a single atom (``is_single_atom_primary``, #610): an atom
+    has no geometry to optimise, so its honest primary is an ``sp``, and
+    that ``sp`` is the only calculation that could carry the conformer's
+    geometry. Without the link the conformer reads back with no geometry at
+    all (``geometry_count`` 0, ``has_geometries`` false), which a
+    relabelled ``opt`` used to avoid by accident. Only an ``sp`` qualifies,
+    and only the primary of a one-atom conformer: any other calculation
+    still gets no invented output.
 
     The two paths are mutually exclusive — declaring even one explicit
     output geometry suppresses the fallback for that calc.
@@ -1902,7 +1923,10 @@ def attach_calculation_output_geometries(
             )
         return
 
-    if fallback_geometry_id is not None and calc.type in _OUTPUT_GEOMETRY_TYPES:
+    fallback_applies = calc.type in _OUTPUT_GEOMETRY_TYPES or (
+        is_single_atom_primary and calc.type is CalculationType.sp
+    )
+    if fallback_geometry_id is not None and fallback_applies:
         if fallback_geometry_id not in _pending_output_geometry_ids(
             session, calc.id
         ):

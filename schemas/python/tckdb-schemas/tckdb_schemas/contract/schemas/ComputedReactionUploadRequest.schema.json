@@ -245,9 +245,18 @@
       "title": "AtomMapSource",
       "type": "string"
     },
+    "AtomParamApplication": {
+      "description": "How a scheme's ``atom_params`` values enter the corrected energy.\n\nDeclared per scheme, because every atom parameter of one scheme is\napplied the same way. ``NULL`` on a scheme means the producer did not\nsay; it is never inferred from ``kind``.\n\n* ``subtracted`` -- the per-element value is multiplied by the atom\n  count and subtracted from the energy. Arkane's ``atom_energy`` tables\n  are applied like this (the level's own atomic energies are removed so\n  energies are referenced to a level-independent basis), and so are its\n  ``atom_thermal`` tables.\n* ``added`` -- the per-element value is multiplied by the atom count\n  and added. Arkane's ``atom_hf`` tables are applied like this. Arkane\n  applies ``+ count * (atom_hf - atom_thermal)`` per atom, so\n  ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.",
+      "enum": [
+        "subtracted",
+        "added"
+      ],
+      "title": "AtomParamApplication",
+      "type": "string"
+    },
     "BundleKineticsIn": {
       "additionalProperties": false,
-      "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.\n\n**Three fields the standalone route has and this model does not.**\nRecorded here because the gap was invisible: nothing in the tree\ncompared this model against ``KineticsUploadRequest``, and\n``test_bundle_root_model_symmetry`` explicitly excludes kinetics on the\ngrounds that it has no second spelling — true of the *species bundle*,\nfalse of the standalone route.\n\n* ``interpretation_assignments`` — which statmech records the rate's\n  partition functions came from.\n* ``tunneling_application`` — the typed, replayable tunneling evidence.\n* ``network_kinetics_ref`` — the master-equation solve a fitted rate\n  delegates its pressure dependence to.\n\nThe first two are **drift, not design**. Both were added to\n``KineticsUploadRequest`` by ``ee7377f5`` (#66), a commit that edited\n*this file* in the same diff to close the analogous transition-state\nevidence gap on parity grounds — and left kinetics one-sided with no\nrecorded reason. No commit message, comment or doc anywhere claims a\ndeliberately reduced kinetics shape. The consequence is concrete: this\nmodel carries ``tunneling_model``, the *label*, so a bundle depositor\ncan claim Eckart tunneling was applied and has no way to attach the\nevidence for it. The standalone route cross-checks the two\n(``validate_tunneling_declaration_agrees``); here there is nothing to\ncheck against.\n\n``network_kinetics_ref`` is **unaddressed rather than decided**.\n``2fb5c25b`` (#29) established that this model \"carries only scalar\nArrhenius fields … and its workflow writes no kinetics child tables\",\ndirecting the pressure-dependent forms to the single-reaction endpoint.\nThat covers PLOG and Chebyshev child rows; ``network_kinetics_ref``\nresolves to a nullable scalar column on ``kinetics`` itself, and this\nmodel accepts ``pressure_context='pressure_dependent'`` — precisely the\nstate that handle exists to name — with no way to name it.\n\nClosing any of the three means new bundle-local-key schemas plus\npersistence in ``app.workflows.computed_reaction``, which is a feature\nrather than a contract change and is deliberately not attempted here.\nUntil then ``collect_kinetics_content_warnings_for`` is passed\n``NOT_APPLICABLE`` for all three, so no depositor is advised to fill a\nfield this model does not have.",
+      "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.\n\n:param t0_k: Reference temperature T0 in K, so that\n    ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.\n:param interpretation_assignments: Which statmech records the rate's\n    partition functions came from. The same model, validation and\n    persistence as ``KineticsUploadRequest``; every reference is a public\n    ref of a record deposited earlier (see\n    :mod:`tckdb_schemas.fragments.kinetics_evidence`).\n:param tunneling_application: The typed, replayable tunneling evidence,\n    cross-checked against ``tunneling_model`` exactly as the standalone\n    route does.\n:param network_kinetics_ref: Public ref of the master-equation solve a\n    fitted rate delegates its pressure dependence to.\n\nThis model and ``KineticsUploadRequest`` share their kinetics-evidence\nmodels and their cross-field checks (``kinetics_evidence``), so the two\nroutes refuse the same interpretation and tunneling mistakes. The\npressure-dependent child-row forms (PLOG, Chebyshev, falloff,\nsum-of-Arrhenius) stay standalone-only.",
       "properties": {
         "a": {
           "anyOf": [
@@ -324,6 +333,13 @@
           "$ref": "#/$defs/KineticsDegeneracyConvention",
           "default": "unknown"
         },
+        "interpretation_assignments": {
+          "items": {
+            "$ref": "#/$defs/KineticsInterpretationAssignmentUpload"
+          },
+          "title": "Interpretation Assignments",
+          "type": "array"
+        },
         "is_third_body": {
           "default": false,
           "title": "Is Third Body",
@@ -356,6 +372,19 @@
           ],
           "default": null,
           "title": "N Uncertainty"
+        },
+        "network_kinetics_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Network Kinetics Ref"
         },
         "note": {
           "anyOf": [
@@ -444,6 +473,14 @@
           "title": "Source Calculations",
           "type": "array"
         },
+        "t0_k": {
+          "default": 1.0,
+          "description": "Reference temperature T0 of the Arrhenius expression, in K, meaning k = A * (T / T0)**n * exp(-Ea / (R * T)). Defaults to 1 K, which is the plain k = A * T**n * exp(-Ea / (R * T)) form. It must satisfy 0 < t0_k <= 10000. It applies to the scalar a, n and reported_ea of a modified-Arrhenius record. Falloff (lindemann, troe, sri), PLOG, sum-of-Arrhenius and Chebyshev records are always at 1 K and refuse any other value, because their low-pressure limit or child rows carry no T0 of their own.",
+          "exclusiveMinimum": 0,
+          "maximum": 10000.0,
+          "title": "T0 K",
+          "type": "number"
+        },
         "tmax_k": {
           "anyOf": [
             {
@@ -470,6 +507,17 @@
           "default": null,
           "title": "Tmin K"
         },
+        "tunneling_application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KineticsTunnelingApplicationUpload"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "tunneling_model": {
           "anyOf": [
             {
@@ -491,7 +539,7 @@
     },
     "BundleSpeciesIn": {
       "additionalProperties": false,
-      "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.",
+      "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.\n:param statmech: Optional statistical-mechanics data.\n:param transport: Optional transport properties (Lennard-Jones\n    parameters, dipole, polarizability, rotational relaxation) for this\n    species's entry: the standalone transport upload's content plus\n    links to this bundle's calculations by local key. Provenance falls\n    back to the bundle's ``analysis_software_release`` and\n    ``workflow_tool_release`` exactly as thermo's does.",
       "properties": {
         "applied_energy_corrections": {
           "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species. ``source_conformer_key`` resolves against this species's own ``conformers[*].key`` — a sibling species's conformer is not in scope and is refused.",
@@ -544,6 +592,17 @@
             }
           ],
           "default": null
+        },
+        "transport": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransportInBundle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -555,8 +614,15 @@
     },
     "BundleStatmechIn": {
       "additionalProperties": false,
-      "description": "Statistical mechanics properties for a species in this bundle.\n\nThe reaction route's statmech carries the same fields the species\nroute's ``StatmechInBundle`` carries, for the reason\n:class:`BundleThermoIn` gives: it is the same claim about the same\nkind of row, written against the same table.\n\nThe gap this closes had two distinct causes, and only one of them is\nthe same as thermo's. This model was born narrow in ``17706cf7`` --\ncongenital, like ``BundleThermoIn``. But the three rotational\nconstants were added to ``StatmechInBundle`` **only**, by\n``264519f1``, two days after ``0ea9182f`` had correctly updated both\nmodels in one commit. The habit was right and then it lapsed, and\nnothing in the tree could notice: no test compared the two field\nsets, so a one-sided addition read exactly like a deliberate one.\n``tests/schemas/test_bundle_root_model_symmetry.py`` is now that\ntest, and an intentional divergence has to be written down in its\nallowlist with a reason rather than merely happening.\n\nNothing is deliberately withheld here. ``applied_energy_corrections``\n-- the one field :class:`BundleThermoIn` refuses, because\n:class:`BundleSpeciesIn` already declares it against the same species\nentry -- is not on ``StatmechInBundle`` either, so it is not part of\nthis divergence and needs no exception.\n\n``literature``, ``software_release`` and ``workflow_tool_release``\nare per-species overrides of the bundle-level\n``analysis_software_release`` / ``workflow_tool_release`` /\n``literature``, exactly as thermo's are. Before this, a reaction\nbundle's statmech took the bundle-level values with no way to say\nthat one species' partition function came from a different analysis\ncode -- which is the ordinary case when one participant is taken\nfrom a paper and the rest were computed here.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this statmech.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param torsions: Torsional modes.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. See\n    ``app.services.calculation_levels`` on the backend for the exact\n    rule; never persisted.\n:param note: Optional note.",
+      "description": "Statistical mechanics properties for a species in this bundle.\n\nThe reaction route's statmech carries the same fields the species\nroute's ``StatmechInBundle`` carries, for the reason\n:class:`BundleThermoIn` gives: it is the same claim about the same\nkind of row, written against the same table.\n\nThe gap this closes had two distinct causes, and only one of them is\nthe same as thermo's. This model was born narrow in ``17706cf7`` --\ncongenital, like ``BundleThermoIn``. But the three rotational\nconstants were added to ``StatmechInBundle`` **only**, by\n``264519f1``, two days after ``0ea9182f`` had correctly updated both\nmodels in one commit. The habit was right and then it lapsed, and\nnothing in the tree could notice: no test compared the two field\nsets, so a one-sided addition read exactly like a deliberate one.\n``tests/schemas/test_bundle_root_model_symmetry.py`` is now that\ntest, and an intentional divergence has to be written down in its\nallowlist with a reason rather than merely happening.\n\nNothing is deliberately withheld here. ``applied_energy_corrections``\n-- the one field :class:`BundleThermoIn` refuses, because\n:class:`BundleSpeciesIn` already declares it against the same species\nentry -- is not on ``StatmechInBundle`` either, so it is not part of\nthis divergence and needs no exception.\n\n``literature``, ``software_release`` and ``workflow_tool_release``\nare per-species overrides of the bundle-level\n``analysis_software_release`` / ``workflow_tool_release`` /\n``literature``, exactly as thermo's are. Before this, a reaction\nbundle's statmech took the bundle-level values with no way to say\nthat one species' partition function came from a different analysis\ncode -- which is the ordinary case when one participant is taken\nfrom a paper and the rest were computed here.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this statmech.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param electronic_levels: Ordered (energy, degeneracy) pairs for the\n    electronic partition function, same shape and validation as\n    ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and\n    radicals whose ground term is not S (O, Cl, ...).\n:param torsions: Torsional modes.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. See\n    ``app.services.calculation_levels`` on the backend for the exact\n    rule, then stored as declared and read back as\n    ``levels.declared_energy``.\n:param note: Optional note.",
       "properties": {
+        "electronic_levels": {
+          "items": {
+            "$ref": "#/$defs/ElectronicLevelIn"
+          },
+          "title": "Electronic Levels",
+          "type": "array"
+        },
         "energy_level_of_theory": {
           "anyOf": [
             {
@@ -771,7 +837,7 @@
     },
     "BundleStatmechTorsionIn": {
       "additionalProperties": false,
-      "description": "One torsional mode in a statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "description": "One torsional mode in a statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
       "properties": {
         "coordinates": {
           "items": {
@@ -785,6 +851,18 @@
           "minimum": 1,
           "title": "Dimension",
           "type": "integer"
+        },
+        "invalidated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Reason"
         },
         "source_scan_calculation_key": {
           "anyOf": [
@@ -848,7 +926,7 @@
     },
     "BundleThermoIn": {
       "additionalProperties": false,
-      "description": "Thermo data attached to a species in this bundle.\n\nThe reaction route's thermo carries the same provenance the species\nroute's ``ThermoInBundle`` carries, because it is the same claim about\nthe same kind of row. The two models were written three days apart in\nApril 2026 and diverged from the start — this one first, with eight\nfields, and never touched since; ``ThermoInBundle`` three days later\nwith fifteen. Nothing recorded a reason, and the gap was not visible\nfrom either model, so a depositor putting thermo on a reaction bundle\nsilently lost the record of which calculations produced it while the\nsame deposit on the species route kept it.\n\n``applied_energy_corrections`` is deliberately **not** here. The\nreaction bundle already declares applied corrections one level up, on\n:class:`BundleSpeciesIn`, against the same resolved species entry.\nAdding a second place to say it would let one deposit make the claim\ntwice, and the answer to \"which one counts\" would have to be invented.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this thermo.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.\n:param s298_uncertainty_j_mol_k: Optional uncertainty on\n    ``s298_j_mol_k``.\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param source_calculations: Thermo → calc links by bundle-local\n    calculation key. Each key must resolve in the bundle's global\n    calc-key namespace and must name a calculation owned by this\n    species entry; the workflow rejects both failures.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links; never persisted.\n:param note: Optional note.",
+      "description": "Thermo data attached to a species in this bundle.\n\nThe reaction route's thermo carries the same provenance the species\nroute's ``ThermoInBundle`` carries, because it is the same claim about\nthe same kind of row. The two models were written three days apart in\nApril 2026 and diverged from the start — this one first, with eight\nfields, and never touched since; ``ThermoInBundle`` three days later\nwith fifteen. Nothing recorded a reason, and the gap was not visible\nfrom either model, so a depositor putting thermo on a reaction bundle\nsilently lost the record of which calculations produced it while the\nsame deposit on the species route kept it.\n\n``applied_energy_corrections`` is deliberately **not** here. The\nreaction bundle already declares applied corrections one level up, on\n:class:`BundleSpeciesIn`, against the same resolved species entry.\nAdding a second place to say it would let one deposit make the claim\ntwice, and the answer to \"which one counts\" would have to be invented.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this thermo.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.\n:param s298_uncertainty_j_mol_k: Optional uncertainty on\n    ``s298_j_mol_k``.\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param source_calculations: Thermo → calc links by bundle-local\n    calculation key. Each key must resolve in the bundle's global\n    calc-key namespace and must name a calculation owned by this\n    species entry; the workflow rejects both failures.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links, then stored as declared and\n    read back as ``levels.declared_energy``.\n:param note: Optional note.",
       "properties": {
         "energy_level_of_theory": {
           "anyOf": [
@@ -1084,7 +1162,7 @@
     },
     "BundleTransitionStateIn": {
       "additionalProperties": false,
-      "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc).\n:param label: Optional label.\n:param note: Optional note.",
+      "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc, scan).\n:param statmech: Optional statistical-mechanics interpretation of the\n    saddle point: the partition-function inputs a rate constant is\n    computed from. The same block a species carries on the computed-species\n    route, written through the same persistence, so every rule that governs\n    a species' statmech governs this one. ``source_calculations`` and\n    ``torsions[*].source_scan_calculation_key`` name calculations this\n    transition state owns. A saddle point is a polyatomic, so this block\n    never describes a single atom.\n:param label: Optional label.\n:param note: Optional note.",
       "properties": {
         "applied_energy_corrections": {
           "description": "Applied energy corrections targeting the resolved transition_state_entry directly. TS-side corrections are never stored as reaction-entry corrections. ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this transition state. ``source_conformer_key`` has nothing to resolve against here — a transition state in this bundle declares no conformers — so setting it is refused rather than ignored.",
@@ -1140,6 +1218,17 @@
           "default": null,
           "title": "Note"
         },
+        "statmech": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechInBundle"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "unmapped_smiles": {
           "anyOf": [
             {
@@ -1153,7 +1242,7 @@
           "title": "Unmapped Smiles"
         },
         "validation_evidence": {
-          "description": "Structured IRC evidence that this saddle point connects the bundle's declared reactants and products. Optional but strongly recommended: a deposit without it succeeds and returns a 'transition_state_missing_irc_evidence' upload warning. ``source_calculation_key`` names an irc calculation owned by this transition state.",
+          "description": "Structured validation evidence for this saddle point, at most one record per kind. kind='irc': the path connects the bundle's declared reactants and products; ``source_calculation_key`` names an irc calculation owned by this transition state. kind='imaginary_mode': the frequency calculation found the expected imaginary mode; ``source_calculation_key`` names a freq calculation owned by this transition state. kind='energy_ordering': the saddle point lies above both wells; each compared energy names its own source calculation, owned by the saddle point or by that participant's species. Optional but strongly recommended: a deposit without a passing IRC record succeeds and returns a 'transition_state_missing_irc_evidence' upload warning; the other kinds do not silence it.",
           "items": {
             "$ref": "#/$defs/TransitionStateValidationEvidenceIn"
           },
@@ -2191,6 +2280,52 @@
       "title": "ConformerIn",
       "type": "object"
     },
+    "ConformerSelectionContentRef": {
+      "additionalProperties": false,
+      "description": "Content-first locator for a conformer-selection interpretation.\n\nSet the optional conformer_group_ref (a cg_ public ref, as returned by\nGET /scientific/conformer-groups) when one species entry owns more than\none conformer group. Without it the other three fields can describe\nseveral stored selections at once, and the upload is refused with\nambiguous_conformer_selection_locator listing the refs to choose from.",
+      "properties": {
+        "assignment_scheme_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assignment Scheme Ref"
+        },
+        "conformer_group_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conformer Group Ref"
+        },
+        "selection_kind": {
+          "minLength": 1,
+          "title": "Selection Kind",
+          "type": "string"
+        },
+        "species_entry": {
+          "$ref": "#/$defs/SpeciesEntryIdentityPayload"
+        }
+      },
+      "required": [
+        "species_entry",
+        "selection_kind"
+      ],
+      "title": "ConformerSelectionContentRef",
+      "type": "object"
+    },
     "ConstraintKind": {
       "enum": [
         "cartesian_atom",
@@ -2320,6 +2455,34 @@
       "title": "DescribedRuntime",
       "type": "object"
     },
+    "ElectronicLevelIn": {
+      "additionalProperties": false,
+      "description": "One electronic energy level for the electronic partition function.\n\nOrdered (energy, degeneracy) pairs relative to the ground state\n(DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,\ng=2). ``level_index`` is 1-based and unique within a statmech record.",
+      "properties": {
+        "degeneracy": {
+          "minimum": 1,
+          "title": "Degeneracy",
+          "type": "integer"
+        },
+        "energy_cm1": {
+          "minimum": 0,
+          "title": "Energy Cm1",
+          "type": "number"
+        },
+        "level_index": {
+          "minimum": 1,
+          "title": "Level Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "level_index",
+        "energy_cm1",
+        "degeneracy"
+      ],
+      "title": "ElectronicLevelIn",
+      "type": "object"
+    },
     "EnergyCorrectionApplicationRole": {
       "enum": [
         "zpe",
@@ -2335,6 +2498,17 @@
         "custom"
       ],
       "title": "EnergyCorrectionApplicationRole",
+      "type": "string"
+    },
+    "EnergyCorrectionConvention": {
+      "enum": [
+        "electronic_only",
+        "electronic_plus_zpe",
+        "atom_and_bond_corrected",
+        "thermal_enthalpy_298k",
+        "other"
+      ],
+      "title": "EnergyCorrectionConvention",
       "type": "string"
     },
     "EnergyCorrectionSchemeKind": {
@@ -2353,7 +2527,7 @@
     },
     "EnergyCorrectionSchemeRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, source_literature, software_release,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
+      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  source_literature, software_release, workflow_tool_release)``. This is\n  the original identity, unchanged, so every scheme deposited before\n  ``data_revision`` existed keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  source_literature, software_release, data_revision)``. The workflow\n  tool build is *not* part of this identity; see below.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
       "properties": {
         "atom_params": {
           "items": {
@@ -2361,6 +2535,17 @@
           },
           "title": "Atom Params",
           "type": "array"
+        },
+        "atom_params_applied_as": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtomParamApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "bond_params": {
           "items": {
@@ -2375,6 +2560,19 @@
           },
           "title": "Component Params",
           "type": "array"
+        },
+        "data_revision": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Revision"
         },
         "kind": {
           "$ref": "#/$defs/EnergyCorrectionSchemeKind"
@@ -2466,6 +2664,17 @@
         "kcal_mol"
       ],
       "title": "EnergyUnit",
+      "type": "string"
+    },
+    "EnergyZeroConvention": {
+      "enum": [
+        "lowest_state",
+        "entrance_channel",
+        "separated_reactants",
+        "absolute",
+        "other"
+      ],
+      "title": "EnergyZeroConvention",
       "type": "string"
     },
     "EnthalpyReferenceKind": {
@@ -2981,18 +3190,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -3052,11 +3285,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },
@@ -3095,6 +3323,114 @@
       "title": "KineticsDegeneracyConvention",
       "type": "string"
     },
+    "KineticsDegeneracyInterpretation": {
+      "enum": [
+        "external_symmetry_number",
+        "reaction_path_degeneracy",
+        "symmetry_number_and_path_degeneracy",
+        "no_symmetry_treatment",
+        "other"
+      ],
+      "title": "KineticsDegeneracyInterpretation",
+      "type": "string"
+    },
+    "KineticsEnsemblePolicy": {
+      "enum": [
+        "single_structure",
+        "lowest_energy_conformer",
+        "boltzmann_weighted_conformers",
+        "multi_structural_torsional",
+        "other"
+      ],
+      "title": "KineticsEnsemblePolicy",
+      "type": "string"
+    },
+    "KineticsInterpretationAssignmentUpload": {
+      "additionalProperties": false,
+      "description": "Exact statmech/conformer/TS interpretation for one rate role.\n\nThe three convention fields are machine tokens, not free text: a rate\ncoefficient is not reproducible without knowing how conformers were\ncombined, which standard state the partition functions use, and how\nsymmetry was counted. ``other`` on any of them requires\n``convention_note``.",
+      "properties": {
+        "conformer_selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConformerSelectionContentRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "degeneracy_interpretation": {
+          "$ref": "#/$defs/KineticsDegeneracyInterpretation",
+          "description": "How reaction-path degeneracy/symmetry was handled for this subject's own partition function (distinct from degeneracy_convention, which says whether the stored scalar already includes degeneracy): external_symmetry_number, reaction_path_degeneracy, symmetry_number_and_path_degeneracy, no_symmetry_treatment, or other (requires convention_note)."
+        },
+        "ensemble_policy": {
+          "$ref": "#/$defs/KineticsEnsemblePolicy",
+          "description": "How multiple structures of this subject were combined into the partition function the rate used: single_structure, lowest_energy_conformer, boltzmann_weighted_conformers, multi_structural_torsional, or other (requires convention_note)."
+        },
+        "participant_index": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Participant Index"
+        },
+        "role": {
+          "pattern": "^(reactant|product|transition_state)$",
+          "title": "Role",
+          "type": "string"
+        },
+        "standard_state_convention": {
+          "$ref": "#/$defs/KineticsStandardStateConvention",
+          "description": "The standard state the partition functions are referenced to: ideal_gas_1_bar, ideal_gas_1_atm, concentration_1_mol_cm3, concentration_1_mol_l, or other (requires convention_note)."
+        },
+        "statmech_ref": {
+          "minLength": 1,
+          "title": "Statmech Ref",
+          "type": "string"
+        },
+        "transition_state_entry_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transition State Entry Ref"
+        }
+      },
+      "required": [
+        "role",
+        "statmech_ref",
+        "ensemble_policy",
+        "standard_state_convention",
+        "degeneracy_interpretation"
+      ],
+      "title": "KineticsInterpretationAssignmentUpload",
+      "type": "object"
+    },
     "KineticsModelKind": {
       "enum": [
         "arrhenius",
@@ -3127,6 +3463,215 @@
         "role"
       ],
       "title": "KineticsSourceCalculationIn",
+      "type": "object"
+    },
+    "KineticsStandardStateConvention": {
+      "enum": [
+        "ideal_gas_1_bar",
+        "ideal_gas_1_atm",
+        "concentration_1_mol_cm3",
+        "concentration_1_mol_l",
+        "other"
+      ],
+      "title": "KineticsStandardStateConvention",
+      "type": "string"
+    },
+    "KineticsTunnelingApplicationUpload": {
+      "additionalProperties": false,
+      "description": "Typed tunneling inputs/results, linked by public TS handle.\n\n:param model: The correction family. ``other`` is accepted only when the\n    deposit is still replayable: it must carry a ``model_identifier``\n    machine token naming the actual correction plus a result-artifact\n    locator, so a reader who does not recognise the model can still see\n    what was computed and by what.\n:param source_calculation_ref: The calculation the energies/barriers below\n    were read from. Without it the numbers this block returns are\n    untraceable.",
+      "properties": {
+        "convention_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Convention Note"
+        },
+        "energy_correction_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyCorrectionConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which corrections are already folded into the reported energies. electronic_only: bare electronic energy, no ZPE or thermal term. electronic_plus_zpe: E_elec + ZPE (an E0). atom_and_bond_corrected: E0 plus atom/bond additivity corrections. thermal_enthalpy_298k: enthalpy at 298.15 K. other: anything else; requires convention_note."
+        },
+        "energy_zero_convention": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EnergyZeroConvention"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the zero of the energy scale sits. lowest_state: the lowest-energy state of the network. entrance_channel: the declared entrance (reactant) channel. separated_reactants: the infinitely separated reactants of the elementary step in question (not necessarily a network state). absolute: absolute (unshifted) electronic energies. other: anything else; requires convention_note."
+        },
+        "forward_barrier_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Forward Barrier Kj Mol"
+        },
+        "frequency_sign_convention": {
+          "default": "negative_imaginary_cm1",
+          "title": "Frequency Sign Convention",
+          "type": "string"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "model": {
+          "$ref": "#/$defs/TunnelingModel"
+        },
+        "model_identifier": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(_[a-z0-9]+)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Identifier"
+        },
+        "product_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Product Energy Kj Mol"
+        },
+        "reactant_energy_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reactant Energy Kj Mol"
+        },
+        "result_artifact_calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Artifact Calculation Ref"
+        },
+        "result_artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Result Artifact Sha256"
+        },
+        "reverse_barrier_kj_mol": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reverse Barrier Kj Mol"
+        },
+        "sct_path_integral_artifact_calculation_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sct Path Integral Artifact Calculation Ref"
+        },
+        "sct_path_integral_artifact_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sct Path Integral Artifact Sha256"
+        },
+        "source_calculation_ref": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Ref"
+        },
+        "transition_state_entry_ref": {
+          "minLength": 1,
+          "title": "Transition State Entry Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model",
+        "transition_state_entry_ref"
+      ],
+      "title": "KineticsTunnelingApplicationUpload",
       "type": "object"
     },
     "KineticsUncertaintyKind": {
@@ -3491,7 +4036,7 @@
     },
     "PathSearchPointPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs).\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
       "properties": {
         "electronic_energy_hartree": {
           "anyOf": [
@@ -3624,7 +4169,7 @@
     },
     "PathSearchResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search converged.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
+      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
       "properties": {
         "climbing_image_index": {
           "anyOf": [
@@ -3888,7 +4433,7 @@
     },
     "SCFStabilityContent": {
       "additionalProperties": false,
-      "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+      "description": "SCF stability evidence as a bundle carries it.\n\nThe finding of :class:`SCFStabilityBase` plus, optionally, the local key of\nthe job that measured it.\n\n:param source_calculation_key: Optional local key of the calculation\n    (job) that measured this verdict, when that is a different job from\n    the one this block hangs off. Meaningful only inside a bundle, where\n    it must name a calculation the same bundle declares for the same\n    species entry (or transition state) and on the same conformer as the\n    calculation carrying the block. It may not name the carrier itself\n    or form a cycle with another block's key, and a level of theory that\n    differs from the carrier's is accepted with an upload warning. The\n    job that measured it keeps its own type; there is no separate stability\n    calculation type. The key is resolved after every calculation in the\n    bundle exists, so it may point at a calculation declared later in\n    the payload. Omit it when the calculation carrying the block is the\n    one that measured the stability.",
       "properties": {
         "instability_count": {
           "anyOf": [
@@ -3951,6 +4496,19 @@
           "default": null,
           "title": "Reoptimized Wavefunction"
         },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        },
         "status": {
           "$ref": "#/$defs/SCFStabilityStatus"
         }
@@ -3973,6 +4531,7 @@
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,
+      "description": "One element-keyed scalar of a scheme.\n\n``value`` is in the enclosing scheme's ``units``. What it means\ndepends on the scheme ``kind``, and how it is applied is stated by the\nscheme's ``atom_params_applied_as``:\n\n* ``atom_energy``: the level's atomic energy of ``element`` (the\n  energy of the isolated atom at the scheme's level of theory).\n  Arkane subtracts ``count * value`` from the molecule's energy\n  (``atom_params_applied_as = subtracted``). Arkane also applies\n  ``+ count * (atom_hf - atom_thermal)`` per atom, carried by the\n  separate ``atom_hf`` and ``atom_thermal`` schemes.\n* ``atom_hf``: the experimental enthalpy of formation of the atom, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane adds ``count * value``\n  (``added``).\n* ``atom_thermal``: the atom's thermal enthalpy increment, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane's net term is\n  ``atom_hf - atom_thermal``, so it is ``subtracted``.\n* ``soc``: the atom's spin-orbit correction.",
       "properties": {
         "element": {
           "maxLength": 3,
@@ -4099,7 +4658,7 @@
     },
     "SoftwareReleaseRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a software release.",
+      "description": "Upload-facing reference to a software release.\n\nA release is identified by ``(name, version, revision, build)``; two\nreferences that agree on all four (an absent value matches only another\nabsent value) are the same release row. ``release_date`` and ``notes``\nare descriptive and do not take part in identity.\n\nWhich field holds what:\n\n* ``version``: the release number the vendor or project publishes, such\n  as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.\n  Give the number alone. A parsed startup banner such as\n  ``\"Gaussian 16, Revision C.02\"`` is accepted, split into version\n  ``16`` and revision ``C.02``, and reported as a warning.\n* ``revision``: a finer label inside one version, written the way the\n  producer writes it. For a vendor program this is the vendor's own\n  revision label, such as Gaussian ``C.02``. For analysis software that\n  has no revision labels it is the source state the run used, such as\n  the commit hash of an Arkane or RMG checkout, because\n  ``software_release`` has no separate commit field (see below).\n* ``build``: a variant of the same version and revision that was\n  compiled or packaged differently and can give different numbers or\n  different capabilities, such as ``mpi``, ``cuda`` or a distributor's\n  build identifier. Leave it out when the program was not built in a\n  way that matters; two references that differ only here are kept as\n  two releases, so do not put a timestamp or host name in it.\n\nThere is no ``git_commit`` field on this reference. A commit hash goes in\n``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a\n``git_commit`` because workflow tools are identified by code state.",
       "properties": {
         "build": {
           "anyOf": [
@@ -4111,6 +4670,7 @@
             }
           ],
           "default": null,
+          "description": "Compile or packaging variant of the same version and revision, for example mpi or cuda. Part of release identity; omit unless the build changes results or capabilities.",
           "title": "Build"
         },
         "name": {
@@ -4153,6 +4713,7 @@
             }
           ],
           "default": null,
+          "description": "Finer label within one version: the vendor revision label (Gaussian C.02), or the commit hash for analysis software that has no revision labels. Part of release identity.",
           "title": "Revision"
         },
         "version": {
@@ -4165,6 +4726,7 @@
             }
           ],
           "default": null,
+          "description": "Published release number, for example 16, 6.0.1 or 2025.1. Number only; a full startup banner is split into version and revision with a warning.",
           "title": "Version"
         }
       },
@@ -4374,6 +4936,229 @@
       "title": "StatmechCalculationRole",
       "type": "string"
     },
+    "StatmechInBundle": {
+      "additionalProperties": false,
+      "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param electronic_levels: Ordered (energy, degeneracy) pairs for the\n    electronic partition function, same shape and validation as\n    ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and\n    radicals whose ground term is not S (O, Cl, ...).\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links, then stored as declared and\n    read back as ``levels.declared_energy``.\n:param note: Optional free-text note.",
+      "properties": {
+        "electronic_levels": {
+          "items": {
+            "$ref": "#/$defs/ElectronicLevelIn"
+          },
+          "title": "Electronic Levels",
+          "type": "array"
+        },
+        "energy_level_of_theory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LevelOfTheoryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "external_symmetry": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "External Symmetry"
+        },
+        "freq_scale_factor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FreqScaleFactorRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "is_linear": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Linear"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "optical_isomers": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Optical Isomers"
+        },
+        "point_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Point Group"
+        },
+        "rigid_rotor_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RigidRotorKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rotational_constant_a_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant A Cm1"
+        },
+        "rotational_constant_b_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant B Cm1"
+        },
+        "rotational_constant_c_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Constant C Cm1"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/StatmechSourceCalcIn"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "statmech_treatment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StatmechTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "torsions": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionInBundle"
+          },
+          "title": "Torsions",
+          "type": "array"
+        },
+        "uses_projected_frequencies": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uses Projected Frequencies"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "StatmechInBundle",
+      "type": "object"
+    },
     "StatmechSourceCalcIn": {
       "additionalProperties": false,
       "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
@@ -4432,6 +5217,95 @@
         "atom4_index"
       ],
       "title": "StatmechTorsionCoordinateIn",
+      "type": "object"
+    },
+    "StatmechTorsionInBundle": {
+      "additionalProperties": false,
+      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "properties": {
+        "coordinates": {
+          "items": {
+            "$ref": "#/$defs/StatmechTorsionCoordinateIn"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        },
+        "dimension": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "invalidated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Reason"
+        },
+        "source_scan_calculation_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Scan Calculation Key"
+        },
+        "symmetry_number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symmetry Number"
+        },
+        "top_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Top Description"
+        },
+        "torsion_index": {
+          "minimum": 1,
+          "title": "Torsion Index",
+          "type": "integer"
+        },
+        "treatment_kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TorsionTreatmentKind"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "torsion_index"
+      ],
+      "title": "StatmechTorsionInBundle",
       "type": "object"
     },
     "StatmechTreatmentKind": {
@@ -4660,14 +5534,108 @@
       "title": "TorsionTreatmentKind",
       "type": "string"
     },
+    "TransitionStateComparedEnergy": {
+      "additionalProperties": false,
+      "description": "One energy an ``energy_ordering`` record compared.\n\n:param participant: Whose energy this is: ``\"ts\"`` for the saddle point, or\n    ``\"reactant:N\"`` / ``\"product:N\"`` for the N-th declared participant\n    of that side (1-based, in the order the reaction declares them).\n:param energy_kind: ``\"electronic\"`` for the electronic energy, or ``\"e0\"``\n    for the electronic energy plus the zero-point energy. They are\n    different quantities and are never compared with each other.\n:param energy_hartree: The absolute energy, in hartree: finite and not\n    positive. A bound system's total energy is below the zero of separated\n    nuclei and electrons, so a positive value is a relative energy (or a\n    unit slip) and is refused rather than stored where a reader would take\n    it for absolute. Zero is allowed because it is exact for the bare\n    proton (``[H+]``), a participant with atoms and no electrons. A side of the\n    reaction with several participants is compared by the sum of their\n    energies, so a participant is given its own and never a pre-summed\n    total: a total has no single calculation to name.\n:param source_calculation_key: Local key of the calculation this energy\n    was taken from, in the enclosing payload's calculation namespace. The\n    calculation must belong to the thing the energy is of: the saddle\n    point's own calculation for ``ts``, the participant species' own for a\n    reactant or product.",
+      "properties": {
+        "energy_hartree": {
+          "maximum": 0,
+          "title": "Energy Hartree",
+          "type": "number"
+        },
+        "energy_kind": {
+          "enum": [
+            "electronic",
+            "e0"
+          ],
+          "title": "Energy Kind",
+          "type": "string"
+        },
+        "participant": {
+          "pattern": "^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$",
+          "title": "Participant",
+          "type": "string"
+        },
+        "source_calculation_key": {
+          "minLength": 1,
+          "title": "Source Calculation Key",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant",
+        "energy_kind",
+        "energy_hartree",
+        "source_calculation_key"
+      ],
+      "title": "TransitionStateComparedEnergy",
+      "type": "object"
+    },
     "TransitionStateValidationEvidenceIn": {
       "additionalProperties": false,
-      "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
+      "description": "Producer-declared validation evidence for one TS candidate.\n\n:param kind: ``\"irc\"``, ``\"energy_ordering\"`` or ``\"imaginary_mode\"``; see\n    the module docstring. At most one record per kind.\n:param passed: The producer's verdict for this check.\n:param rationale: Why; free text, required.\n:param source_calculation_key: Local key of the calculation the evidence\n    comes from, in the enclosing payload's calculation namespace: the\n    ``irc`` calculation that reconstructed the path, or the ``freq``\n    calculation that found the imaginary mode. Omitted on the standalone\n    transition-state upload, which has no key namespace and binds to its\n    single calculation of the needed type. Not accepted on an\n    ``energy_ordering`` record, whose energies each name their own.\n:param energies: ``energy_ordering`` only. The energies compared.\n:param imaginary_frequency_count: ``imaginary_mode`` only. How many\n    imaginary modes the frequency calculation found.\n:param imaginary_frequency_cm1: ``imaginary_mode`` only. The value, in\n    cm^-1, of the imaginary mode taken as the reaction coordinate. Negative\n    by convention, as it is on a frequency result.\n:param mode_displacement_agrees: ``imaginary_mode`` only. The producer's\n    verdict on whether the mode's atom displacements agree with the bonds\n    the reaction breaks and forms. ``None`` means not assessed; it is not\n    ``False``.\n\nParticipant->atom mappings (``irc`` only) are optional, but when supplied\nalongside ``passed=true`` they must be *complete*: a partial map proves\nnothing about the atoms it omits, so it is never accepted as passing\nevidence. Supply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write --\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n-- and it is acceptable only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.\n\nA pass is refused when the record's own *stated* numbers contradict it: an\n``energy_ordering`` that passes with a saddle point that is not above a\nside (checked by :func:`validate_ts_evidence_set`, which knows the\nreaction's participants and so whether a side is complete), or an\n``imaginary_mode`` that passes having found no imaginary mode.\nThe reverse is not refused. A record that fails with numbers that look\nfine is a producer applying a criterion this model cannot see.",
       "properties": {
+        "energies": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/TransitionStateComparedEnergy"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Energies"
+        },
+        "imaginary_frequency_cm1": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Cm1"
+        },
+        "imaginary_frequency_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Imaginary Frequency Count"
+        },
         "kind": {
-          "const": "irc",
+          "enum": [
+            "irc",
+            "energy_ordering",
+            "imaginary_mode"
+          ],
           "title": "Kind",
           "type": "string"
+        },
+        "mode_displacement_agrees": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Displacement Agrees"
         },
         "passed": {
           "title": "Passed",
@@ -4734,6 +5702,163 @@
         "rationale"
       ],
       "title": "TransitionStateValidationEvidenceIn",
+      "type": "object"
+    },
+    "TransportCalculationRole": {
+      "enum": [
+        "full_transport",
+        "dipole",
+        "polarizability",
+        "supporting_geometry"
+      ],
+      "title": "TransportCalculationRole",
+      "type": "string"
+    },
+    "TransportInBundle": {
+      "additionalProperties": false,
+      "description": "Transport block within a bundle.\n\nOne transport record for the bundle's species entry, carrying exactly\nthe content of the standalone ``POST /api/v1/uploads/transport``\npayload (:class:`~tckdb_schemas.workflows.transport_upload.TransportUploadPayload`:\nLennard-Jones ``sigma_angstrom`` / ``epsilon_over_k_k``, dipole,\npolarizability, rotational relaxation, provenance, and the same\n\"at least one property, LJ as a pair\" validation), plus links to the\ncalculations that produced it by local key.\n\nIt attaches to the same species entry as the bundle's thermo and\nstatmech. Provenance follows the thermo rule: ``software_release`` and\n``workflow_tool_release`` are this block's own, and where the block\nnames no workflow tool the bundle's ``workflow_tool_release`` fills in.\n\nTransport is append-only, as on the standalone route: a bundle adds one\nnew record each time it is deposited.\n\n:param source_calculations: Transport -> calculation links by\n    bundle-local key and role. Each key must name a calculation this\n    bundle declares for the same species entry.",
+      "properties": {
+        "dipole_debye": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dipole Debye"
+        },
+        "epsilon_over_k_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Epsilon Over K K"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "polarizability_angstrom3": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Polarizability Angstrom3"
+        },
+        "rotational_relaxation": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Relaxation"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "sigma_angstrom": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sigma Angstrom"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/TransportSourceCalcInBundle"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TransportInBundle",
+      "type": "object"
+    },
+    "TransportSourceCalcInBundle": {
+      "additionalProperties": false,
+      "description": "Transport -> calc link by local key.\n\nSame shape and rule as :class:`ThermoSourceCalcInBundle`: only\n``calculation_key`` is accepted inside a bundle, resolving against the\nbundle's global calculation-key namespace (DR-0029 Requirement 1).",
+      "properties": {
+        "calculation_key": {
+          "minLength": 1,
+          "title": "Calculation Key",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/TransportCalculationRole"
+        }
+      },
+      "required": [
+        "calculation_key",
+        "role"
+      ],
+      "title": "TransportSourceCalcInBundle",
       "type": "object"
     },
     "TunnelingModel": {

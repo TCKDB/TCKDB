@@ -213,6 +213,15 @@
       "title": "ArtifactKind",
       "type": "string"
     },
+    "AtomParamApplication": {
+      "description": "How a scheme's ``atom_params`` values enter the corrected energy.\n\nDeclared per scheme, because every atom parameter of one scheme is\napplied the same way. ``NULL`` on a scheme means the producer did not\nsay; it is never inferred from ``kind``.\n\n* ``subtracted`` -- the per-element value is multiplied by the atom\n  count and subtracted from the energy. Arkane's ``atom_energy`` tables\n  are applied like this (the level's own atomic energies are removed so\n  energies are referenced to a level-independent basis), and so are its\n  ``atom_thermal`` tables.\n* ``added`` -- the per-element value is multiplied by the atom count\n  and added. Arkane's ``atom_hf`` tables are applied like this. Arkane\n  applies ``+ count * (atom_hf - atom_thermal)`` per atom, so\n  ``atom_hf`` is ``added`` and ``atom_thermal`` is ``subtracted``.",
+      "enum": [
+        "subtracted",
+        "added"
+      ],
+      "title": "AtomParamApplication",
+      "type": "string"
+    },
     "CalculationConstraintCreate": {
       "additionalProperties": false,
       "properties": {
@@ -1065,7 +1074,7 @@
     },
     "ConformerInBundle": {
       "additionalProperties": false,
-      "description": "One conformer with its primary opt + additional calcs.",
+      "description": "One conformer with its primary calculation + additional calcs.\n\nThe primary is an ``opt``, with one exception: a conformer whose geometry\nis a single atom may carry an ``sp`` primary instead (#610). See\n:func:`require_opt_primary_unless_monatomic`.",
       "properties": {
         "additional_calculations": {
           "items": {
@@ -1248,6 +1257,34 @@
       "title": "DescribedRuntime",
       "type": "object"
     },
+    "ElectronicLevelIn": {
+      "additionalProperties": false,
+      "description": "One electronic energy level for the electronic partition function.\n\nOrdered (energy, degeneracy) pairs relative to the ground state\n(DR-0033). E.g. OH X²Π: level 1 (0 cm⁻¹, g=2), level 2 (~139 cm⁻¹,\ng=2). ``level_index`` is 1-based and unique within a statmech record.",
+      "properties": {
+        "degeneracy": {
+          "minimum": 1,
+          "title": "Degeneracy",
+          "type": "integer"
+        },
+        "energy_cm1": {
+          "minimum": 0,
+          "title": "Energy Cm1",
+          "type": "number"
+        },
+        "level_index": {
+          "minimum": 1,
+          "title": "Level Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "level_index",
+        "energy_cm1",
+        "degeneracy"
+      ],
+      "title": "ElectronicLevelIn",
+      "type": "object"
+    },
     "EnergyCorrectionApplicationRole": {
       "enum": [
         "zpe",
@@ -1281,7 +1318,7 @@
     },
     "EnergyCorrectionSchemeRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists — by the full identity tuple\n``(kind, name, level_of_theory, source_literature, software_release,\nworkflow_tool_release)`` — it is reused. Otherwise a new scheme is\ncreated. A citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``.",
+      "description": "Upload-facing reference to a correction scheme.\n\nIf a matching scheme already exists it is reused. Otherwise a new\nscheme is created. Identity has two forms, chosen by ``data_revision``:\n\n* ``data_revision`` **absent**: ``(kind, name, level_of_theory,\n  source_literature, software_release, workflow_tool_release)``. This is\n  the original identity, unchanged, so every scheme deposited before\n  ``data_revision`` existed keeps its identity and its public ref.\n* ``data_revision`` **present**: ``(kind, name, level_of_theory,\n  source_literature, software_release, data_revision)``. The workflow\n  tool build is *not* part of this identity; see below.\n\nA scheme deposited without ``data_revision`` never matches one\ndeposited with it, even when the tables are identical: absence says\nnothing about which revision the numbers came from, so it is not\nguessed.\n\nA citation or software release that differs from an existing\nsame-``(kind, name, level_of_theory)`` scheme is never dropped: it\nmakes this a scientifically distinct scheme (a different citation, or\na different program build's numbers), so it resolves to a\ndifferent row rather than silently overwriting or discarding what was\nsupplied.\n\n:param software: The program *release* that computed this scheme's\n    parameters (e.g. Gaussian 16, Revision C.02). An atom-energy or\n    bond-additivity parameter set is the output of a program's own\n    build-level numerics (integration grid, SCF thresholds, a named\n    basis set's internal definition), which change between releases\n    of the same program -- so the correction is release-specific, not\n    merely program-specific. Only ``name`` is required; a depositor\n    who knows only the program (no version/revision/build) resolves\n    to the version-less release row for it, a complete and honest\n    deposit, not a degraded one. Load-bearing for ``atom_energy``,\n    ``bac_petersson`` and ``bac_melius`` (the three kinds whose\n    values a specific program build computes at a specific level of\n    theory); not applicable to ``atom_hf``/``atom_thermal``/``soc``,\n    which are physical/reference constants. Strongly advised for the\n    three software-scoped kinds, never required.\n:param workflow_tool_release: Workflow tool (e.g. ARC/Arkane) whose\n    data file was the proximate source, when the scheme was looked\n    up from a tool table rather than directly from a paper. Mirrors\n    ``FreqScaleFactorRef.workflow_tool_release``. When\n    ``data_revision`` is absent this is part of the scheme's identity\n    (each build is its own scheme). When ``data_revision`` is present\n    it is provenance only: it records the build that first deposited\n    the scheme, and a later deposit of the same revision by a different\n    build reuses the row and does not replace it.\n:param data_revision: The revision of the *data* that holds the\n    parameter tables, for example the RMG-database commit that holds\n    Arkane's atom-energy and BAC tables. A tool build (the RMG-Py\n    commit recorded on ``workflow_tool_release``) does not say which\n    tables it read, because the tables live in a separate repository.\n    The same ``data_revision`` with the same tables is the same scheme\n    whichever build read it; a new ``data_revision`` is a new scheme,\n    so a one-parameter change in a new database revision is a new\n    scheme and not a conflict. Free text, at most 200 characters. A\n    value that is 7 to 64 hex digits is treated as a git commit and\n    lower-cased; any other value (a tag, say) is kept exactly as\n    written. Send the full 40-hex commit: a short and a full SHA of\n    the same commit are two revisions and make two schemes. Send it only\n    when the tables really came from that repository revision, not when\n    the values were overridden by the user (Arkane ``atomEnergies`` or\n    BAC overrides in an input file). Optional: omit it when the data\n    revision is not known or the tables were modified.\n\n    On a scheme with a ``data_revision``, the stored\n    ``workflow_tool_release`` is the first depositor's build, not a\n    list of every build that later sent the same revision.\n\n    Send the program name in ``software`` (``{\"name\": \"Gaussian\"}``)\n    rather than the ESS version: a version is part of identity, so each\n    one makes another scheme.\n:param atom_params_applied_as: How ``atom_params`` enter the corrected\n    energy: ``subtracted`` or ``added`` (see ``AtomParamApplication``).\n    Applies to every entry of ``atom_params`` and to nothing else.\n    Optional: omit it when not known, and nothing is assumed. Giving\n    it without ``atom_params`` is refused. Sending a value that\n    differs from the one already stored on the matched scheme is a\n    conflict, as a differing parameter value is.",
       "properties": {
         "atom_params": {
           "items": {
@@ -1289,6 +1326,17 @@
           },
           "title": "Atom Params",
           "type": "array"
+        },
+        "atom_params_applied_as": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AtomParamApplication"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "bond_params": {
           "items": {
@@ -1303,6 +1351,19 @@
           },
           "title": "Component Params",
           "type": "array"
+        },
+        "data_revision": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Data Revision"
         },
         "kind": {
           "$ref": "#/$defs/EnergyCorrectionSchemeKind"
@@ -2054,18 +2115,42 @@
     },
     "IRCResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result for an IRC calculation.\n\n:param direction: Overall run mode (forward / reverse / both).\n:param has_forward: True when at least one forward-branch point is present.\n:param has_reverse: True when at least one reverse-branch point is present.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
+      "description": "Upload-facing inline result for an IRC calculation.\n\n``direction``, ``has_forward`` and ``has_reverse`` are each optional, and\nomitting one says \"the producer did not state it\". That is a real position\nfor a producer to be in: an IRC whose log does not record which way it ran\nis still a path with points on it, and requiring the three to be written\nmade such a producer drop the whole result. A value that is not stated is\nstored as NULL and read back as null, never as ``false``: ``has_forward``\nfalse is a claim that no forward-branch point exists, which is a different\nstatement from not knowing.\n\n:param direction: Overall run mode (forward / reverse / both). Omit when\n    the run mode is not stated.\n:param has_forward: True when at least one forward-branch point is present,\n    false when none is. Omit when not stated.\n:param has_reverse: True when at least one reverse-branch point is present,\n    false when none is. Omit when not stated.\n:param ts_point_index: Optional index of the point marked as TS.\n:param point_count: Optional total sampled-point count (consistency check).\n:param zero_energy_reference_hartree: Optional energy used as relative zero.\n:param note: Optional free-text note.\n:param points: Sampled IRC-path points attached to the result.",
       "properties": {
         "direction": {
-          "$ref": "#/$defs/IRCDirection"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IRCDirection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "has_forward": {
-          "title": "Has Forward",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Forward"
         },
         "has_reverse": {
-          "title": "Has Reverse",
-          "type": "boolean"
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Has Reverse"
         },
         "note": {
           "anyOf": [
@@ -2125,11 +2210,6 @@
           "title": "Zero Energy Reference Hartree"
         }
       },
-      "required": [
-        "direction",
-        "has_forward",
-        "has_reverse"
-      ],
       "title": "IRCResultPayload",
       "type": "object"
     },
@@ -2544,7 +2624,7 @@
     },
     "PathSearchPointPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs).\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
+      "description": "Upload-facing inline payload for one path-search point.\n\nGeneralizes NEB images, GSM nodes, and string-method path points.\n\n:param point_index: Zero-based point index along the path.\n:param electronic_energy_hartree: Electronic energy at this point.\n:param relative_energy_kj_mol: Energy relative to the zero-energy reference.\n:param path_coordinate: Optional path-coordinate value (e.g. cumulative\n    path distance for NEB, reaction-coordinate for GSM/string methods).\n:param max_force: Max force component at this point.\n:param rms_force: RMS force at this point.\n:param max_gradient: Max gradient component at this point.\n:param rms_gradient: RMS gradient at this point.\n:param is_ts_guess: Whether this point is the algorithm's TS guess.\n:param is_climbing_image: Whether this image was the climbing image\n    (NEB-CI specific; ignored by string-method outputs). ``false``\n    is the default and is stored exactly as sent, so ``false`` reads as\n    \"not a climbing image\" and as \"not stated\" alike: a producer that\n    does not know should name the climbing image through the result's\n    ``climbing_image_index`` or leave every point at the default. A\n    tri-state value would need a nullable column and is not offered yet.\n:param geometry: Optional inline geometry payload for this point.\n:param note: Optional free-text note.",
       "properties": {
         "electronic_energy_hartree": {
           "anyOf": [
@@ -2677,7 +2757,7 @@
     },
     "PathSearchResultPayload": {
       "additionalProperties": false,
-      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search converged.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
+      "description": "Upload-facing inline result bundle for a path-search calculation.\n\nA path-search calculation explores a reaction path between or from\nmolecular endpoints to produce a TS guess. The specific algorithm\n(NEB, GSM, growing/freezing string, ...) lives on ``method`` rather\nthan as a separate top-level calculation type.\n\n:param method: The path-search algorithm used.\n:param is_double_ended: Whether the algorithm uses two endpoints\n    (NEB, GSM) versus single-ended (growing string, freezing string).\n:param converged: Whether the path search met its own stopping\n    criteria. What that means depends on ``method``, and the producer\n    states the algorithm's verdict, not a proxy for it:\n\n    * ``neb``: the band's force (and, where used, step) thresholds were\n      satisfied, climbing image included for a climbing-image run, and\n      the run did not stop on its iteration limit.\n    * ``gsm``, ``growing_string``, ``freezing_string``: the string\n      finished growing (or freezing) and the program's own convergence\n      test on the path, or on the TS node it reports, passed.\n    * ``other``: the method's own convergence verdict; describe the\n      criterion in ``note``.\n\n    ``true`` means that verdict was observed. ``false`` means it was\n    observed to fail. Leave it absent when it was not observed: the\n    existence of an output file, a nonzero exit code or a parsed TS\n    guess is not a convergence verdict, so none of them justifies\n    ``true``.\n:param n_points: Total sampled-point count (consistency check).\n:param selected_ts_point_index: Index of the point selected as the\n    TS guess (0-based). Must match a ``points[].point_index``.\n:param climbing_image_index: Optional index of the climbing image in\n    NEB-CI runs.\n:param source_endpoint_count: Optional count of endpoint geometries\n    consumed by the algorithm (typically 2 for double-ended runs).\n:param zero_energy_reference_hartree: Energy used as relative zero\n    for ``relative_energy_kj_mol`` on each point.\n:param note: Optional free-text note.\n:param points: Path samples (images / nodes / path points), unique on\n    ``point_index``.",
       "properties": {
         "climbing_image_index": {
           "anyOf": [
@@ -2822,7 +2902,7 @@
     },
     "SCFStabilityContent": {
       "additionalProperties": false,
-      "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+      "description": "SCF stability evidence as a bundle carries it.\n\nThe finding of :class:`SCFStabilityBase` plus, optionally, the local key of\nthe job that measured it.\n\n:param source_calculation_key: Optional local key of the calculation\n    (job) that measured this verdict, when that is a different job from\n    the one this block hangs off. Meaningful only inside a bundle, where\n    it must name a calculation the same bundle declares for the same\n    species entry (or transition state) and on the same conformer as the\n    calculation carrying the block. It may not name the carrier itself\n    or form a cycle with another block's key, and a level of theory that\n    differs from the carrier's is accepted with an upload warning. The\n    job that measured it keeps its own type; there is no separate stability\n    calculation type. The key is resolved after every calculation in the\n    bundle exists, so it may point at a calculation declared later in\n    the payload. Omit it when the calculation carrying the block is the\n    one that measured the stability.",
       "properties": {
         "instability_count": {
           "anyOf": [
@@ -2885,6 +2965,19 @@
           "default": null,
           "title": "Reoptimized Wavefunction"
         },
+        "source_calculation_key": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Calculation Key"
+        },
         "status": {
           "$ref": "#/$defs/SCFStabilityStatus"
         }
@@ -2927,6 +3020,7 @@
     },
     "SchemeAtomParamPayload": {
       "additionalProperties": false,
+      "description": "One element-keyed scalar of a scheme.\n\n``value`` is in the enclosing scheme's ``units``. What it means\ndepends on the scheme ``kind``, and how it is applied is stated by the\nscheme's ``atom_params_applied_as``:\n\n* ``atom_energy``: the level's atomic energy of ``element`` (the\n  energy of the isolated atom at the scheme's level of theory).\n  Arkane subtracts ``count * value`` from the molecule's energy\n  (``atom_params_applied_as = subtracted``). Arkane also applies\n  ``+ count * (atom_hf - atom_thermal)`` per atom, carried by the\n  separate ``atom_hf`` and ``atom_thermal`` schemes.\n* ``atom_hf``: the experimental enthalpy of formation of the atom, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane adds ``count * value``\n  (``added``).\n* ``atom_thermal``: the atom's thermal enthalpy increment, in\n  ``scheme.units`` (Arkane: kcal/mol). Arkane's net term is\n  ``atom_hf - atom_thermal``, so it is ``subtracted``.\n* ``soc``: the atom's spin-orbit correction.",
       "properties": {
         "element": {
           "maxLength": 3,
@@ -3053,7 +3147,7 @@
     },
     "SoftwareReleaseRef": {
       "additionalProperties": false,
-      "description": "Upload-facing reference to a software release.",
+      "description": "Upload-facing reference to a software release.\n\nA release is identified by ``(name, version, revision, build)``; two\nreferences that agree on all four (an absent value matches only another\nabsent value) are the same release row. ``release_date`` and ``notes``\nare descriptive and do not take part in identity.\n\nWhich field holds what:\n\n* ``version``: the release number the vendor or project publishes, such\n  as ``16`` for Gaussian, ``6.0.1`` for ORCA or ``2025.1`` for Molpro.\n  Give the number alone. A parsed startup banner such as\n  ``\"Gaussian 16, Revision C.02\"`` is accepted, split into version\n  ``16`` and revision ``C.02``, and reported as a warning.\n* ``revision``: a finer label inside one version, written the way the\n  producer writes it. For a vendor program this is the vendor's own\n  revision label, such as Gaussian ``C.02``. For analysis software that\n  has no revision labels it is the source state the run used, such as\n  the commit hash of an Arkane or RMG checkout, because\n  ``software_release`` has no separate commit field (see below).\n* ``build``: a variant of the same version and revision that was\n  compiled or packaged differently and can give different numbers or\n  different capabilities, such as ``mpi``, ``cuda`` or a distributor's\n  build identifier. Leave it out when the program was not built in a\n  way that matters; two references that differ only here are kept as\n  two releases, so do not put a timestamp or host name in it.\n\nThere is no ``git_commit`` field on this reference. A commit hash goes in\n``revision`` until one is added; ``WorkflowToolReleaseRef`` does have a\n``git_commit`` because workflow tools are identified by code state.",
       "properties": {
         "build": {
           "anyOf": [
@@ -3065,6 +3159,7 @@
             }
           ],
           "default": null,
+          "description": "Compile or packaging variant of the same version and revision, for example mpi or cuda. Part of release identity; omit unless the build changes results or capabilities.",
           "title": "Build"
         },
         "name": {
@@ -3107,6 +3202,7 @@
             }
           ],
           "default": null,
+          "description": "Finer label within one version: the vendor revision label (Gaussian C.02), or the commit hash for analysis software that has no revision labels. Part of release identity.",
           "title": "Revision"
         },
         "version": {
@@ -3119,6 +3215,7 @@
             }
           ],
           "default": null,
+          "description": "Published release number, for example 16, 6.0.1 or 2025.1. Number only; a full startup banner is split into version and revision with a warning.",
           "title": "Version"
         }
       },
@@ -3330,8 +3427,15 @@
     },
     "StatmechInBundle": {
       "additionalProperties": false,
-      "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links; never persisted.\n:param note: Optional free-text note.",
+      "description": "Statistical-mechanics interpretation for the bundle's species.\n\nOne statmech row per ``ComputedSpeciesUploadRequest``. The block\nmirrors computed-reaction's ``BundleStatmechIn`` for shared\nmetadata, exposes the unified ``FreqScaleFactorRef`` for frequency\nscale factor linkage, and adds ``source_calculations`` referencing\nbundle-local calc keys (the same pattern thermo uses inside this\nbundle).\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance.\n:param software_release: Optional software (e.g. analysis code) used\n    to compute statmech.\n:param workflow_tool_release: Optional workflow-tool provenance.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Optional unified frequency scale factor\n    ref. Resolved via the shared energy-correction-resolution\n    service and linked through ``statmech.frequency_scale_factor_id``.\n    Using a scale factor here does not produce an\n    ``applied_energy_correction`` row.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key.\n:param electronic_levels: Ordered (energy, degeneracy) pairs for the\n    electronic partition function, same shape and validation as\n    ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and\n    radicals whose ground term is not S (O, Cl, ...).\n:param torsions: Torsional mode metadata.\n:param energy_level_of_theory: Optional depositor-declared level of\n    theory the record's energy is claimed to stand at. Checked\n    against the resolved role links, then stored as declared and\n    read back as ``levels.declared_energy``.\n:param note: Optional free-text note.",
       "properties": {
+        "electronic_levels": {
+          "items": {
+            "$ref": "#/$defs/ElectronicLevelIn"
+          },
+          "title": "Electronic Levels",
+          "type": "array"
+        },
         "energy_level_of_theory": {
           "anyOf": [
             {
@@ -3606,7 +3710,7 @@
     },
     "StatmechTorsionInBundle": {
       "additionalProperties": false,
-      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
+      "description": "One torsional mode in a bundle statmech record.\n\nCarries the slim metadata (index, symmetry, treatment kind) plus\noptional structured coordinate definitions so producers can persist\nrotor atom quartets through the bundle endpoint without falling back\nto ``/uploads/statmech``. ``coordinates`` is optional: omit it to\nkeep current behavior (no ``statmech_torsion_definition`` rows).\n\n:param torsion_index: One-based torsion index within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason the producer rejected this\n    rotor, for example that the scan was not a smooth periodic\n    potential. Same field, same meaning and same storage as\n    ``StatmechTorsionIn.invalidated_reason`` on the conformer route.\n    Absent means the rotor was not rejected; present records that it was.\n:param source_scan_calculation_key: Optional bundle-local calc key\n    that produced the rotor scan. Must resolve to a calc of type\n    ``scan`` declared elsewhere in the bundle.\n:param coordinates: Atom-quartet definitions for each coordinate.\n    When non-empty, ``len(coordinates)`` must equal ``dimension``\n    and ``coordinate_index`` values must run contiguously\n    ``1..dimension``.",
       "properties": {
         "coordinates": {
           "items": {
@@ -3620,6 +3724,18 @@
           "minimum": 1,
           "title": "Dimension",
           "type": "integer"
+        },
+        "invalidated_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invalidated Reason"
         },
         "source_scan_calculation_key": {
           "anyOf": [
@@ -4150,6 +4266,163 @@
       "title": "TorsionTreatmentKind",
       "type": "string"
     },
+    "TransportCalculationRole": {
+      "enum": [
+        "full_transport",
+        "dipole",
+        "polarizability",
+        "supporting_geometry"
+      ],
+      "title": "TransportCalculationRole",
+      "type": "string"
+    },
+    "TransportInBundle": {
+      "additionalProperties": false,
+      "description": "Transport block within a bundle.\n\nOne transport record for the bundle's species entry, carrying exactly\nthe content of the standalone ``POST /api/v1/uploads/transport``\npayload (:class:`~tckdb_schemas.workflows.transport_upload.TransportUploadPayload`:\nLennard-Jones ``sigma_angstrom`` / ``epsilon_over_k_k``, dipole,\npolarizability, rotational relaxation, provenance, and the same\n\"at least one property, LJ as a pair\" validation), plus links to the\ncalculations that produced it by local key.\n\nIt attaches to the same species entry as the bundle's thermo and\nstatmech. Provenance follows the thermo rule: ``software_release`` and\n``workflow_tool_release`` are this block's own, and where the block\nnames no workflow tool the bundle's ``workflow_tool_release`` fills in.\n\nTransport is append-only, as on the standalone route: a bundle adds one\nnew record each time it is deposited.\n\n:param source_calculations: Transport -> calculation links by\n    bundle-local key and role. Each key must name a calculation this\n    bundle declares for the same species entry.",
+      "properties": {
+        "dipole_debye": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dipole Debye"
+        },
+        "epsilon_over_k_k": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Epsilon Over K K"
+        },
+        "literature": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LiteratureUploadRequest"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "polarizability_angstrom3": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Polarizability Angstrom3"
+        },
+        "rotational_relaxation": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotational Relaxation"
+        },
+        "scientific_origin": {
+          "$ref": "#/$defs/ScientificOriginKind",
+          "default": "computed"
+        },
+        "sigma_angstrom": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sigma Angstrom"
+        },
+        "software_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SoftwareReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_calculations": {
+          "items": {
+            "$ref": "#/$defs/TransportSourceCalcInBundle"
+          },
+          "title": "Source Calculations",
+          "type": "array"
+        },
+        "workflow_tool_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkflowToolReleaseRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TransportInBundle",
+      "type": "object"
+    },
+    "TransportSourceCalcInBundle": {
+      "additionalProperties": false,
+      "description": "Transport -> calc link by local key.\n\nSame shape and rule as :class:`ThermoSourceCalcInBundle`: only\n``calculation_key`` is accepted inside a bundle, resolving against the\nbundle's global calculation-key namespace (DR-0029 Requirement 1).",
+      "properties": {
+        "calculation_key": {
+          "minLength": 1,
+          "title": "Calculation Key",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/TransportCalculationRole"
+        }
+      },
+      "required": [
+        "calculation_key",
+        "role"
+      ],
+      "title": "TransportSourceCalcInBundle",
+      "type": "object"
+    },
     "WavefunctionDiagnosticPayload": {
       "additionalProperties": false,
       "description": "Optional inline wavefunction diagnostics parsed from a calculation's output.\n\nCarries scalar coupled-cluster / multireference diagnostics — T1\n(Lee–Taylor), D1 (Janowski), the norm of the T1 amplitude vector,\nand the largest T2 amplitude. Spin-contamination ``<S^2>`` signals\nare intentionally NOT included in this first slice.\n\nGeneric across calculation types that produce electronic-structure\noutput (typically ``sp``). The producer contract is to emit a block\nonly when at least one diagnostic was actually parsed from the\ncalculation; this payload rejects an all-null block with no note.\n\n:param t1_diagnostic: Coupled-cluster T1 diagnostic (Lee–Taylor).\n:param d1_diagnostic: Janowski D1 diagnostic.\n:param t1_norm: Norm of the T1 amplitude vector, when reported.\n:param largest_t2_amplitude: Largest T2 amplitude magnitude, when\n    reported.\n:param note: Optional free-text annotation.",
@@ -4334,7 +4607,7 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo and\nstatmech blocks fall back to it when they name no workflow tool of\ntheir own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
+  "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo,\nstatmech and transport blocks fall back to it when they name no\nworkflow tool of their own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
   "examples": [
     {
       "conformers": [
@@ -4430,6 +4703,17 @@
       ],
       "default": null
     },
+    "transport": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TransportInBundle"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "workflow_tool_release": {
       "anyOf": [
         {
@@ -4440,7 +4724,7 @@
         }
       ],
       "default": null,
-      "description": "Bundle-level workflow-tool provenance. Used as the default for the thermo and statmech blocks; a value on either of those overrides it."
+      "description": "Bundle-level workflow-tool provenance. Used as the default for the thermo, statmech and transport blocks; a value on any of those overrides it."
     }
   },
   "required": [

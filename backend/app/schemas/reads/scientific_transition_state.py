@@ -323,8 +323,34 @@ class TransitionStateEntryEvidenceSummary(BaseModel):
     )
 
 
+class TransitionStateComparedEnergySummary(BaseModel):
+    """One energy an ``energy_ordering`` evidence record compared.
+
+    ``participant`` is ``ts``, ``reactant:N`` or ``product:N``; ``energy_kind``
+    is ``electronic`` or ``e0`` (electronic energy plus zero-point energy), and
+    the two are never compared with each other. ``energy_hartree`` is the
+    absolute energy as the producer reported it, and
+    ``source_calculation_ref`` is the calculation it was taken from.
+    """
+
+    participant: str
+    energy_kind: str
+    energy_hartree: float
+    source_calculation_ref: str | None = None
+
+
 class TransitionStateValidationEvidenceSummary(BaseModel):
-    """Structured IRC validation evidence with a replayable source link.
+    """Structured validation evidence with a replayable source link.
+
+    ``kind`` is ``irc``, ``energy_ordering`` or ``imaginary_mode``, and a
+    field is populated only on the kind it describes: the participant
+    mappings on ``irc``, ``compared_energies`` on ``energy_ordering``, and the
+    three imaginary-mode fields on ``imaginary_mode``. ``None`` on the
+    imaginary-mode fields means the producer did not state it, which is not
+    the same statement as zero or false. ``reconstruction_calculation_ref`` is
+    the irc calculation for ``irc`` and the freq calculation for
+    ``imaginary_mode``; it is ``None`` for ``energy_ordering``, whose
+    energies each name their own.
 
     The two participant mappings say which saddle-point atoms become which
     declared participant, by index, and those indices count into
@@ -343,6 +369,10 @@ class TransitionStateValidationEvidenceSummary(BaseModel):
     reactant_participant_mapping: dict[str, list[int]] | None = None
     product_participant_mapping: dict[str, list[int]] | None = None
     transition_state_geometry_ref: str | None = None
+    imaginary_frequency_count: int | None = None
+    imaginary_frequency_cm1: float | None = None
+    mode_displacement_agrees: bool | None = None
+    compared_energies: list[TransitionStateComparedEnergySummary] | None = None
 
 
 class TransitionStateEntryValidationEvidence(BaseModel):
@@ -401,12 +431,63 @@ class TransitionStateValidationDescriptor(BaseModel):
     consumer never has to infer "was this saddle point validated?" from the
     absence of an optional block. Values are machine tokens:
 
-    - ``present``: a passed IRC evidence record exists.
-    - ``failed``: an IRC evidence record exists but did not pass.
-    - ``absent``: no IRC evidence was deposited.
+    - ``present``: a passed evidence record of that kind exists.
+    - ``failed``: a record of that kind exists but did not pass.
+    - ``absent``: none of that kind was deposited.
+
+    One token per kind, and they are independent: a passing
+    ``imaginary_mode`` is not IRC evidence, and ``irc`` does not become
+    ``present`` because some other kind passed.
     """
 
     irc: Literal["present", "absent", "failed"]
+    energy_ordering: Literal["present", "absent", "failed"] = "absent"
+    imaginary_mode: Literal["present", "absent", "failed"] = "absent"
+
+
+class TransitionStateStatmechSourceCalculation(BaseModel):
+    """One calculation a transition state's statmech record was computed from."""
+
+    role: str
+    calculation_ref: str | None = None
+
+
+class TransitionStateStatmechSummary(BaseModel):
+    """Compact projection of a statmech record owned by a transition state.
+
+    What is needed to tell what partition-function inputs the saddle point
+    carries. The full record, with torsions, electronic levels and the
+    frequency scale factor, is ``/scientific/statmech/{statmech_ref}``.
+    """
+
+    statmech_ref: str
+    scientific_origin: str
+    statmech_treatment: str | None = None
+    rigid_rotor_kind: str | None = None
+    point_group: str | None = None
+    external_symmetry: int | None = None
+    optical_isomers: int | None = None
+    is_linear: bool | None = None
+    uses_projected_frequencies: bool | None = None
+    rotational_constant_a_cm1: float | None = None
+    rotational_constant_b_cm1: float | None = None
+    rotational_constant_c_cm1: float | None = None
+    source_calculations: list[TransitionStateStatmechSourceCalculation] = Field(
+        default_factory=list
+    )
+    torsion_count: int = 0
+
+
+class TransitionStateEntryStatmech(BaseModel):
+    """One entry's statmech records, on a TS-*concept* response.
+
+    Keyed by entry ref for the reason ``TransitionStateEntryValidationEvidence``
+    is: a concept pools candidates computed at different levels of theory, and
+    a union across them would not say which entry a record belongs to.
+    """
+
+    transition_state_entry_ref: str
+    statmech: list[TransitionStateStatmechSummary]
 
 
 # ---------------------------------------------------------------------------
@@ -483,6 +564,9 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     geometries: list[CalculationGeometryLinkSummary] | None = None
     review_history: list[TransitionStateReviewEntry] | None = None
     validation_evidence: list[TransitionStateValidationEvidenceSummary] | None = None
+    #: Statmech records this saddle point owns, populated under
+    #: ``include=statmech``. Empty for an entry that deposited none.
+    statmech: list[TransitionStateStatmechSummary] | None = None
 
     # Deterministic trust / evidence fragment, populated under
     # ``include=trust`` on the standalone TS-entry detail surface and on
@@ -533,6 +617,10 @@ class ScientificTransitionStateRecord(BaseModel):
     validation_evidence: (
         list[TransitionStateEntryValidationEvidence] | None
     ) = None
+
+    #: Statmech records owned by the concept's entries, one list per entry,
+    #: populated under ``include=statmech``.
+    statmech: list[TransitionStateEntryStatmech] | None = None
 
 
 # ---------------------------------------------------------------------------

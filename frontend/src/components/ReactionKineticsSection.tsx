@@ -206,6 +206,10 @@ function KineticsRecordCard({ record, calculationsByRef, dependencyEdgesByChildR
                 {record.parameters.n != null && (
                     <div><dt className="t-preserve-case">n</dt><dd><code className="data">{formatArrheniusValue(record.parameters.n)}</code></dd></div>
                 )}
+                {record.parameters.T0_k != null && record.parameters.T0_k !== 1 && (
+                    // k = A (T/T0)^n exp(-Ea/RT): A means nothing without the T0 it was fitted at.
+                    <div><dt className="t-preserve-case">T0</dt><dd><code className="data">{formatArrheniusValue(record.parameters.T0_k)} K</code></dd></div>
+                )}
                 {record.parameters.Ea_kj_mol != null && (
                     <div><dt className="t-preserve-case">Ea</dt><dd><code className="data">{formatArrheniusValue(record.parameters.Ea_kj_mol)} kJ/mol</code></dd></div>
                 )}

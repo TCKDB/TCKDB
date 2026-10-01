@@ -760,9 +760,11 @@ def test_standalone_ts_upload_reports_the_absent_atom_map(db_conn) -> None:
     annotated or silent depending only on which endpoint deposited it. That is
     exactly the split the ADR asks the warning to make visible.
 
-    This path cannot *carry* a map: it describes its reactants and products by
-    identity alone, and a map indexes into a geometry per participant. So the
-    remedy must not name an ``atom_map`` field this schema does not have.
+    This path now carries a map, so the remedy names the fields one needs:
+    ``atom_map`` with ``geometry_key`` and a ``key`` and ``geometry`` on each
+    participant it maps. (It used to send the depositor to the computed-reaction
+    upload, because this payload had nowhere to put one; the absence warning
+    must name fields that exist.)
     """
     with Session(db_conn) as session, session.begin():
         warnings: list = []
@@ -773,13 +775,8 @@ def test_standalone_ts_upload_reports_the_absent_atom_map(db_conn) -> None:
 
         absent = [w for w in warnings if w.code == "reaction_atom_map_absent"]
         assert len(absent) == 1
-        # A field a client can actually highlight, and the object the map
-        # belongs to.
-        assert absent[0].field == "reaction"
-        assert "atom_map" not in absent[0].field
-        # The remedy sends the depositor to the path that accepts a map,
-        # rather than to a field that does not exist here.
-        assert "computed-reaction upload" in absent[0].message
+        assert absent[0].field == "atom_map"
+        assert "geometry_key" in absent[0].message
         assert "ADR 0011" in absent[0].message
 
 

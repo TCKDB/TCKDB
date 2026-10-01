@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 from tckdb_schemas.thermo import ThermoNASACreate
 
+from app.chemistry.arrhenius import ArrheniusRangeError, a_at_unit_t0
 from app.db.models.common import ArrheniusAUnits, KineticsModelKind
 from app.services.scientific_read.export import (
     ExportGap,
@@ -448,7 +449,15 @@ def _kinetics_lines(
         # rate constant.
         lines = [f"{eq}   1.0000E+00 0.000 0.0000"]
     else:
-        a = _a_to_mol_cm_s(k.a, k.a_units)
+        # CHEMKIN's line is A * T**n * exp(-Ea/RT) with no reference
+        # temperature. A row stored at T0 != 1 K (k = A (T/T0)**n ...) is
+        # written as the identical rate A / T0**n at 1 K; for a falloff
+        # record this line is the high-pressure limit, which is the part T0
+        # applies to.
+        a = _a_to_mol_cm_s(
+            a_at_unit_t0(k.a, k.n, k.t0_k) if k.a is not None else None,
+            k.a_units,
+        )
         n = k.n if k.n is not None else 0.0
         ea = _convert_ea(k.ea_kj_mol, options.energy_units)
         a_str = f"{a:.4E}" if a is not None else "0.0"
@@ -604,7 +613,14 @@ def _build_chem_inp(
     dup_counts: Counter = Counter()
     for rr in emitted:
         sk = rr.kinetics[0]
-        blocks = _kinetics_lines(rr, sk, names_by_ref, collider_names, options)
+        try:
+            blocks = _kinetics_lines(rr, sk, names_by_ref, collider_names, options)
+        except ArrheniusRangeError as exc:
+            # A schema-valid T0 and n can still put A / T0**n out of range.
+            gaps.append(
+                ExportGap(kind="kinetics", ref=rr.reaction_entry.public_ref, detail=str(exc))
+            )
+            continue
         if not blocks:
             # The only record that yields no blocks is a ``multi_arrhenius`` with
             # an empty ``arrhenius_entries`` set (unreachable via the API — the

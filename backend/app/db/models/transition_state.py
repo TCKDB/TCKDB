@@ -6,6 +6,8 @@ from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     ForeignKey,
+    Index,
+    Integer,
     SmallInteger,
     Text,
     UniqueConstraint,
@@ -155,21 +157,43 @@ class TransitionStateSelection(Base, TimestampMixin, CreatedByMixin):
 
 
 class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
-    """Structured IRC validation result for one TS candidate.
+    """Structured validation result for one TS candidate.
 
-    Normal-mode-displacement ("nmd") evidence is deliberately absent: reading
-    an imaginary mode's displacement vectors is a producer-side heuristic, not
-    a database record, and TCKDB stores only the reconstructed-path evidence
-    an IRC calculation actually produces.
+    Three ``kind`` values, at most one row per kind per entry
+    (``uq_ts_validation_evidence_kind``):
 
-    That decision is unchanged, and it is narrower than it has been read to
-    be. ADR 0013 took it to mean the ADR 0012 eigenvector projections were
-    uncomputable; they are not, because ``calc_hessian`` stores the matrix
-    those vectors diagonalise. The projections now run at *read* time
-    (``include=imaginary_mode_projections``) and write nothing — which is
-    exactly what this docstring forbids storing. What stays out of the
-    database is a producer's *conclusion* about a mode, not the arithmetic
-    anyone can redo from the matrix.
+    ``irc``
+        The reconstructed path connects the declared endpoints. Carries the
+        optional participant mappings below.
+    ``energy_ordering``
+        The saddle point lies above both wells. The energies compared live in
+        ``transition_state_validation_energy`` rows, each naming its own source
+        calculation, so this row carries no source calculation of its own.
+    ``imaginary_mode``
+        The frequency calculation found the expected imaginary mode. Carries
+        the count, the reaction-coordinate mode's frequency and the producer's
+        displacement-agreement verdict; ``reconstruction_calculation_id`` is
+        the ``freq`` calculation.
+
+    ``reconstruction_calculation_id`` keeps the name it had when ``irc`` was
+    the only kind. For ``irc`` it is the calculation that reconstructed the
+    path; for ``imaginary_mode`` it is the calculation that found the mode.
+    Renaming a column of a deployed table to say so would touch every reader
+    for no change in what it holds, so the name stays and this says what it
+    means. It is NULL exactly for ``energy_ordering``
+    (``ck_transition_state_validation_evidence_source_calc_shape``).
+
+    What is and is not stored about a mode
+    --------------------------------------
+    A producer's *conclusion* about a mode (``mode_displacement_agrees``) and
+    the numbers it rests on (count, frequency) are stored, as a claim with its
+    evidence. The arithmetic anyone can redo from the stored Hessian is not:
+    ADR 0012's eigenvector projections still run at *read* time
+    (``include=imaginary_mode_projections``) and write nothing, because
+    ``calc_hessian`` stores the matrix those vectors diagonalise. The displacement
+    flag is recorded as the verdict it is and is never recomputed here.
+    ADR 0013's earlier position, that no mode evidence belongs in this table,
+    is superseded for the conclusion and unchanged for the projections.
 
     Indices relative to what
     ------------------------
@@ -213,7 +237,17 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
     kind: Mapped[str] = mapped_column(Text, nullable=False)
     passed: Mapped[bool] = mapped_column(nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
-    reconstruction_calculation_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("calculation.id", name="fk_ts_validation_evidence_reconstruction_calc", deferrable=True, initially="IMMEDIATE"), nullable=False)
+    reconstruction_calculation_id: Mapped[Optional[int]] = mapped_column(BigInteger, ForeignKey("calculation.id", name="fk_ts_validation_evidence_reconstruction_calc", deferrable=True, initially="IMMEDIATE"), nullable=True)
+    #: ``imaginary_mode`` only: how many imaginary modes the frequency
+    #: calculation found. NULL is "not stated", and is not zero.
+    imaginary_frequency_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: ``imaginary_mode`` only: the reaction-coordinate mode's frequency in
+    #: cm^-1, negative by the convention ``calc_freq_mode`` uses.
+    imaginary_frequency_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
+    #: ``imaginary_mode`` only: the producer's verdict on whether the mode's
+    #: atom displacements agree with the bonds the reaction breaks and forms.
+    #: NULL is "not assessed", and is not false.
+    mode_displacement_agrees: Mapped[Optional[bool]] = mapped_column(nullable=True)
     # Canonical participant -> atom-index mappings. JSON keeps the evidence
     # machine-readable; a free-text mapping cannot be validated or replayed.
     reactant_participant_mapping: Mapped[Optional[dict[str, list[int]]]] = mapped_column(JSONB, nullable=True)
@@ -233,8 +267,40 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
     transition_state_entry: Mapped["TransitionStateEntry"] = relationship(back_populates="validation_evidence")
     reconstruction_calculation: Mapped["Calculation"] = relationship()
     transition_state_geometry: Mapped[Optional["Geometry"]] = relationship()
+    compared_energies: Mapped[list["TransitionStateValidationEnergy"]] = relationship(
+        back_populates="evidence", order_by="TransitionStateValidationEnergy.id"
+    )
     __table_args__ = (
-        CheckConstraint("kind IN ('irc')", name="ts_validation_kind"),
+        CheckConstraint(
+            "kind IN ('irc', 'energy_ordering', 'imaginary_mode')",
+            name="ts_validation_kind",
+        ),
+        # The source calculation is the one column whose meaning differs by
+        # kind: an irc or imaginary_mode record is about one job, an
+        # energy_ordering record is about several and names them per energy.
+        CheckConstraint(
+            "(kind = 'energy_ordering') = (reconstruction_calculation_id IS NULL)",
+            name="source_calc_shape",
+        ),
+        CheckConstraint(
+            "kind = 'imaginary_mode' OR (imaginary_frequency_count IS NULL "
+            "AND imaginary_frequency_cm1 IS NULL AND mode_displacement_agrees IS NULL)",
+            name="mode_cols_imag_only",
+        ),
+        CheckConstraint(
+            "imaginary_frequency_count IS NULL OR imaginary_frequency_count >= 0",
+            name="imag_count_ge_0",
+        ),
+        CheckConstraint(
+            "imaginary_frequency_cm1 IS NULL OR (imaginary_frequency_cm1 < 0 "
+            "AND imaginary_frequency_cm1 > '-Infinity'::float8)",
+            name="imag_freq_negative",
+        ),
+        CheckConstraint(
+            "kind = 'irc' OR (coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' "
+            "AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null')",
+            name="mapping_irc_only",
+        ),
         UniqueConstraint(
             "transition_state_entry_id", "kind", name="uq_ts_validation_evidence_kind"
         ),
@@ -258,4 +324,79 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
             "OR transition_state_geometry_id IS NOT NULL",
             name="mapping_names_geometry",
         ),
+    )
+
+
+class TransitionStateValidationEnergy(Base):
+    """One energy an ``energy_ordering`` evidence row compared.
+
+    ``participant`` says whose energy it is: ``ts`` for the saddle point, or
+    ``reactant:N`` / ``product:N`` for the N-th declared participant of that
+    side, the spelling the IRC participant mappings use. A side of the reaction
+    with several participants is compared by the sum of theirs, which is why
+    each participant is stored with its own energy and its own calculation
+    rather than as a pre-summed total that no single calculation could source.
+
+    ``energy_kind`` is ``electronic`` (the electronic energy) or ``e0`` (that
+    plus the zero-point energy). They are different quantities and a
+    comparison is only ever made between like kinds, so the kind is a column of
+    the row and is part of its identity.
+
+    ``source_calculation_id`` is required, and is a provenance reference, not
+    ownership: the row is owned by its evidence row, and through it by the
+    transition-state entry. Whether the calculation belongs to the thing the
+    energy is of (the saddle point, or that participant's species) is checked
+    when the row is written, by the same ownership check every other source
+    calculation link uses.
+    """
+
+    __tablename__ = "transition_state_validation_energy"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    evidence_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "transition_state_validation_evidence.id",
+            name="fk_ts_validation_energy_evidence",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    participant: Mapped[str] = mapped_column(Text, nullable=False)
+    energy_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    energy_hartree: Mapped[float] = mapped_column(nullable=False)
+    source_calculation_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "calculation.id",
+            name="fk_ts_validation_energy_source_calc",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
+        nullable=False,
+    )
+    evidence: Mapped["TransitionStateValidationEvidence"] = relationship(back_populates="compared_energies")
+    source_calculation: Mapped["Calculation"] = relationship()
+    __table_args__ = (
+        CheckConstraint(
+            "participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'",
+            name="participant_shape",
+        ),
+        CheckConstraint("energy_kind IN ('electronic', 'e0')", name="energy_kind"),
+        # Finite and not positive (zero is exact for the bare proton):
+        # PostgreSQL orders NaN above every number, so ``<= 0`` refuses NaN
+        # as well as positive values, and the second arm
+        # refuses -Infinity. A stored NaN would make every read of the record
+        # fail JSON serialisation, permanently once the entry is approved.
+        CheckConstraint(
+            "energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8",
+            name="energy_finite_le_zero",
+        ),
+        UniqueConstraint(
+            "evidence_id",
+            "participant",
+            "energy_kind",
+            name="uq_ts_validation_energy_slot",
+        ),
+        Index("ix_ts_validation_energy_source_calc", "source_calculation_id"),
     )

@@ -1305,6 +1305,60 @@ incomparable with others. 1 atm is `1.01325` bar, not `1.0`; many
 statistical-mechanics codes (ARC and RMG among them) compute entropy at
 1 atm. Never write `1.0` because it looks standard.
 
+**Transition-state evidence and statmech.** A saddle point may carry up to
+three validation records, at most one per `kind`, every one optional:
+
+- `irc`: the reconstructed path connects the declared reactants and products
+  (optionally with participant-to-atom mappings).
+- `energy_ordering`: the saddle point lies above both wells. Each compared
+  energy is `{participant, energy_kind, energy_hartree, source_calculation_key}`
+  where `participant` is `ts`, `reactant:N` or `product:N`, and `energy_kind`
+  is `electronic` or `e0` (electronic energy plus zero-point energy). The two
+  kinds are different quantities and are never compared with each other, so a
+  record that gives both gives a complete set of each. Give every participant
+  its own energy, never a pre-summed side: a side is compared by the sum, and
+  a total has no single calculation to name. Each `source_calculation_key` must
+  name a calculation of the thing the energy is of, and of the right type: an
+  `electronic` energy comes from an `sp` or `opt`, an `e0` from a `freq`
+  (which carries the zero-point energy); `irc`, `scan` and `path_search`
+  report points along a path and are never a source. Energies are absolute,
+  finite and not positive, in hartree (zero is allowed: it is exact for the
+  bare proton); a positive value is refused as a slip. A
+  passing record whose *stated* numbers do not put the saddle point above each
+  side is refused. That is all TCKDB checks: the numbers are compared with each
+  other, not with the energies stored on the calculations they cite. Taking one
+  `energy_kind` from calculations at more than one level of theory is accepted
+  with a `transition_state_energy_ordering_mixed_levels` warning. It is
+  accepted on the computed-reaction and pressure-dependent bundles; the
+  standalone transition-state upload refuses it, because it carries no
+  calculations for the wells.
+- `imaginary_mode`: what the frequency calculation found. `imaginary_frequency_count`,
+  `imaginary_frequency_cm1` (negative) and `mode_displacement_agrees`, your
+  normal-mode-displacement verdict, all optional; a record that passes with a
+  count of zero is refused, and so is a count or frequency that disagrees with
+  the frequency result it cites (1 cm^-1 tolerance). More than one imaginary
+  mode is accepted on a pass only when that frequency result designates the
+  reaction coordinate. `source_calculation_key` names a `freq` calculation
+  of the saddle point, or is omitted on the standalone upload, which binds to
+  its single `freq` calculation.
+
+Only a passing `irc` record silences the
+`transition_state_missing_irc_evidence` warning: the other two kinds are true of
+a saddle point that connects some other pair of minima. On the computed-reaction
+bundle a transition state may also carry a `statmech` block, the same block a
+species carries, whose `source_calculations` and torsion scans must be the
+saddle point's own calculations. The standalone transition-state upload accepts
+`scan` calculations (with `scan_result`), `applied_energy_corrections`, and an
+`atom_map`; the map counts into a `geometry` given on each participant (named
+by the participant's `key`) and names the saddle-point geometry by the request's
+`geometry_key`.
+
+**Not stated is not false.** An IRC result's `direction`, `has_forward` and
+`has_reverse`, and an imaginary mode's `mode_displacement_agrees`, are each
+optional. Leave one out when your source does not say; it is stored as null and
+read back as null. Writing `false` is a claim ("there is no such branch", "the
+displacement disagrees"), and TCKDB keeps it apart from not knowing.
+
 **Idempotency keys.** Send an `Idempotency-Key` header on every deposit you
 might retry. A retry with the same key and the same body replays the stored
 response instead of depositing twice; the same key with a different body is

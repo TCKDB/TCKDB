@@ -33,6 +33,32 @@ describe("arrheniusTermK", () => {
     })
 })
 
+describe("arrheniusTermK with a reference temperature T0 (#620)", () => {
+    // A=1e10, n=2, Ea=0 (the exponential is exactly 1, so the ratio is pure
+    // algebra): k(T0=298) / k(T0=1) at 1000 K is [A (T/298)^2] / [A T^2] = 1/298^2.
+    // The expected value is derived here, not read back from the function.
+    it("k at T0 = 298 over k at T0 = 1 is 1/298^2 at 1000 K", () => {
+        const ratio = arrheniusTermK(1e10, 2, 0, 1000, 298) / arrheniusTermK(1e10, 2, 0, 1000, 1)
+        expect(ratio).toBeCloseTo(1 / (298 * 298), 12)
+    })
+
+    it("a missing T0 is 1 K: the plain A T^n form, so servers that predate the field are unchanged", () => {
+        expect(arrheniusTermK(A, n, Ea, 300)).toBe(arrheniusTermK(A, n, Ea, 300, 1))
+        expect(arrheniusTermK(A, n, Ea, 300, undefined)).toBe(arrheniusTermK(A, n, Ea, 300, 1))
+        expect(arrheniusTermK(A, n, Ea, 300, null)).toBe(arrheniusTermK(A, n, Ea, 300, 1))
+    })
+
+    it("the k(T) table uses the record's own T0, and T0 = 1 reproduces the pinned table", () => {
+        const at298 = computeKineticsTable(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, T0_k: 298 } }))!
+        const at1 = computeKineticsTable(record({ parameters: { A: 1e10, n: 2, Ea_kj_mol: 0, T0_k: 1 } }))!
+        const last = at298.length - 1
+        expect(at298[last].k / at1[last].k).toBeCloseTo(1 / (298 * 298), 12)
+        const unset = computeKineticsTable(record())!
+        const explicit = computeKineticsTable(record({ parameters: { A, n, Ea_kj_mol: Ea, T0_k: 1 } }))!
+        expect(unset.map((row) => row.k)).toEqual(explicit.map((row) => row.k))
+    })
+})
+
 describe("computeKineticsTable", () => {
     // The literal `12` here is deliberate, not `TABLE_POINT_COUNT` --
     // comparing the module's own output against its own (possibly

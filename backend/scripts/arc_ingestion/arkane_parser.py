@@ -27,6 +27,9 @@ class ArkaneKinetics:
     n_uncertainty: float | None = None    # additive uncertainty: n +/- n_uncertainty
     ea_uncertainty: float | None = None   # additive uncertainty: Ea +/- ea_uncertainty (same units as ea_units)
     comment: str | None = None
+    # Arkane's ``Arrhenius(T0=...)``: k = A (T/T0)^n exp(-Ea/RT). Forwarded as
+    # ``t0_k`` rather than folded into A, so what was fitted is kept.
+    t0_k: float = 1.0
 
 
 # Unit string → TCKDB ArrheniusAUnits token
@@ -109,6 +112,14 @@ def parse_arkane_kinetics(text: str) -> ArkaneKinetics:
         raise ValueError("Could not parse Ea parameter from kinetics block.")
     ea_val, ea_units = ea_parsed
 
+    # Extract T0 (reference temperature of the fit); Arkane writes it in K.
+    t0_parsed = _parse_tuple_param("T0")
+    t0_k = 1.0
+    if t0_parsed:
+        t0_k, t0_units = t0_parsed
+        if t0_units != "K":
+            raise ValueError(f"Arkane T0 must be in K, got {t0_units!r}.")
+
     # Extract Tmin / Tmax
     tmin_parsed = _parse_tuple_param("Tmin")
     tmin_k = tmin_parsed[0] if tmin_parsed else 300.0
@@ -147,6 +158,7 @@ def parse_arkane_kinetics(text: str) -> ArkaneKinetics:
         n_uncertainty=n_unc,
         ea_uncertainty=ea_unc,
         comment=comment,
+        t0_k=t0_k,
     )
 
 

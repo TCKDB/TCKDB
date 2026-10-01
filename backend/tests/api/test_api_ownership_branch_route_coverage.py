@@ -56,10 +56,9 @@ neither branch has quietly lost every route that exercises it.
 
 Not covered here, deliberately
 ------------------------------
-* ``transport_source_calculation_owner_mismatch`` is catalogued
-  ``Reach.guard`` — no write path can produce the condition, so no route
-  test can exist. It is excluded by reading the catalogue, not by name,
-  so promoting it to reachable makes this file demand a provocation.
+* Any code the catalogue marks ``Reach.guard`` would be excluded by
+  reading the catalogue, not by name, so promoting it to reachable makes
+  this file demand a provocation. None is a guard today.
 * The ``ValueError`` ``assert_owned_by`` raises when given neither owner
   is a programming-error guard with no code and no route; it is pinned in
   ``tests/invariants/test_structure_invariants.py``.
@@ -186,9 +185,9 @@ def test_every_reachable_ownership_code_is_asserted_by_a_route_test() -> None:
     # *absence* -- it passes perfectly against an empty ``reachable``, so
     # a catalogue edit marking every code ``Reach.guard`` would silence
     # it rather than fail it. Measured 2026-08-16: 8 codes, 1 guard.
-    assert len(reachable) >= 7, (
+    assert len(reachable) >= 9, (
         f"only {len(reachable)} ownership codes are reachable by a request; "
-        "7 were when this floor was measured. If a code genuinely became "
+        "9 were when this floor was measured. If a code genuinely became "
         "unreachable, lower the floor in the same change that says why."
     )
 
@@ -269,8 +268,12 @@ def test_the_scan_ignores_prose() -> None:
     assert "nested_owner_mismatch" not in literals
 
 
-def test_the_transport_guard_is_the_only_unreachable_ownership_code() -> None:
-    """The exemption is one named code, not an open category.
+#: The ownership codes deliberately unreachable by a request; see the test.
+_DELIBERATE_GUARDS = frozenset({"ts_validation_source_calculation_owner_mismatch"})
+
+
+def test_no_ownership_code_is_left_as_a_guard() -> None:
+    """The exemption list is short, and putting a code on it is deliberate.
 
     ``test_every_reachable_ownership_code_is_asserted_by_a_route_test``
     excuses whatever the catalogue marks ``Reach.guard``, which means a
@@ -278,12 +281,27 @@ def test_the_transport_guard_is_the_only_unreachable_ownership_code() -> None:
     catalogue alone. This pins the exemption list so that widening it is
     a deliberate, reviewable act rather than a way to make the check
     above go quiet.
+
+    It held one code, ``transport_source_calculation_owner_mismatch``, until
+    #622 gave transport a bundle block whose keys resolve across the
+    computed-reaction bundle; that code and the new stability-source code are
+    now reachable, and ``tests/api/test_api_bundle_extras_622.py`` provokes
+    both on the wire.
+
+    It holds one again, on purpose (#621):
+    ``ts_validation_source_calculation_owner_mismatch`` is the persistence
+    seam's backstop for a transition-state validation record citing a
+    calculation of something else. Every deposit path narrows the key to the
+    right owner in its request schema first, so a request is refused with
+    ``calculation_key_undeclared`` and never reaches the seam; the seam's
+    own refusal is tested directly in
+    ``tests/services/test_ts_validation_energy_ownership.py``. Keeping the
+    schema narrowing (which names the keys that would have worked) is worth
+    more than making the backstop reachable, and the catalogue note says so.
     """
     codes = _ownership_codes()
-    assert _guard_only(codes) == frozenset(
-        {"transport_source_calculation_owner_mismatch"}
-    ), (
-        "the set of ownership codes no request can produce has changed. If a "
-        "code became unreachable, say why in its catalogue note; if one became "
-        "reachable, it now needs a route test that provokes it."
+    assert _guard_only(codes) == _DELIBERATE_GUARDS, (
+        "an ownership code became unreachable by a request. Say why in its "
+        "catalogue note and list it here in the same change; if instead one "
+        "is reachable it needs a route test that provokes it."
     )

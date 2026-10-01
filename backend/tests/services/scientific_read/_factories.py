@@ -324,6 +324,8 @@ def make_lot(
     method: str = "wb97xd",
     basis: str | None = "def2tzvp",
     spin_treatment: SpinTreatment | None = None,
+    dispersion: str | None = None,
+    solvent: str | None = None,
 ) -> LevelOfTheory:
     """Create or fetch a LevelOfTheory row.
 
@@ -341,6 +343,9 @@ def make_lot(
 
     spin_key = spin_treatment.value if spin_treatment is not None else ""
     raw = f"{method}|{basis or ''}|{spin_key}".encode()
+    if dispersion is not None or solvent is not None:
+        # Only when given, so every existing caller keeps its hash.
+        raw += f"|{dispersion or ''}|{solvent or ''}".encode()
     lot_hash = hashlib.sha256(raw).hexdigest()
     existing = session.scalar(
         _select(LevelOfTheory).where(LevelOfTheory.lot_hash == lot_hash)
@@ -351,6 +356,8 @@ def make_lot(
         method=method,
         basis=basis,
         spin_treatment=spin_treatment,
+        dispersion=dispersion,
+        solvent=solvent,
         lot_hash=lot_hash,
     )
     session.add(lot)
@@ -549,6 +556,7 @@ def make_kinetics(
     a: float | None = 1.2e-12,
     a_units: ArrheniusAUnits | None = ArrheniusAUnits.cm3_molecule_s,
     n: float | None = 2.1,
+    t0_k: float = 1.0,
     ea_kj_mol: float | None = 15.4,
     tmin_k: float | None = 300.0,
     tmax_k: float | None = 2000.0,
@@ -572,6 +580,7 @@ def make_kinetics(
         a=a,
         a_units=a_units,
         n=n,
+        t0_k=t0_k,
         ea_kj_mol=ea_kj_mol,
         tmin_k=tmin_k,
         tmax_k=tmax_k,

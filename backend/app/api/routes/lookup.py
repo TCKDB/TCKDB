@@ -269,7 +269,17 @@ def _lot_match(
 
     if method is not None:
         if method_identity_key(lot.method) == method_identity_key(method):
-            mb.add(LOT_METHOD_EXACT, "method matched exactly")
+            # The code stays ``lot_method_exact`` (clients key on it); the
+            # message says when the match was by identity key, not spelling.
+            # Display only, on a value already in memory (not a filter).
+            stored = lot.method
+            if stored == method:
+                mb.add(LOT_METHOD_EXACT, "method matched exactly")
+            else:
+                mb.add(
+                    LOT_METHOD_EXACT,
+                    f"method matched by identity key (stored {stored!r}, requested {method!r})",
+                )
         else:
             mb.add(LOT_METHOD_MISMATCH, f"method mismatch: have {lot.method}, want {method}")
             lot_status = "partial"
@@ -475,6 +485,7 @@ def _kinetics_summary(kin: Kinetics) -> dict[str, Any]:
         summary["a_units"] = kin.a_units.value if hasattr(kin.a_units, "value") else str(kin.a_units)
     if kin.n is not None:
         summary["n"] = kin.n
+    summary["t0_k"] = kin.t0_k
     if kin.ea_kj_mol is not None:
         summary["ea_kj_mol"] = kin.ea_kj_mol
     if kin.tmin_k is not None:

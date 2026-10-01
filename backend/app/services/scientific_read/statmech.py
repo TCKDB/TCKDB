@@ -20,7 +20,11 @@ from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import not_found
-from app.db.models.calculation import Calculation
+from app.db.models.calculation import (
+    Calculation,
+    CalculationInputGeometry,
+    CalculationOutputGeometry,
+)
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
@@ -75,6 +79,9 @@ from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
     validate_includes,
+)
+from app.services.scientific_read.declared_levels import (
+    load_declared_energy_summaries,
 )
 from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
@@ -185,6 +192,16 @@ _TRUST_EAGER_LOADS = (
     selectinload(Statmech.source_calculations)
     .selectinload(StatmechSourceCalculation.calculation)
     .selectinload(Calculation.child_dependencies),
+    # The opt-source check asks whether a calculation is a single atom's
+    # (#610): its geometries' atom counts, loaded per page, not per record.
+    selectinload(Statmech.source_calculations)
+    .selectinload(StatmechSourceCalculation.calculation)
+    .selectinload(Calculation.input_geometries)
+    .selectinload(CalculationInputGeometry.geometry),
+    selectinload(Statmech.source_calculations)
+    .selectinload(StatmechSourceCalculation.calculation)
+    .selectinload(Calculation.output_geometries)
+    .selectinload(CalculationOutputGeometry.geometry),
 )
 
 # Public seam for consumers that must load the same evidence graph before
@@ -326,7 +343,7 @@ def build_statmech_record(
         has_conformer_context=has_conformer_context,
         sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
     )
-    levels = _build_levels(session, source_rows)
+    levels = _build_levels(session, source_rows, sm.energy_level_of_theory_id)
     available = AvailableStatmechSections(
         has_source_calculations=bool(source_rows),
         has_torsions=bool(torsion_rows),
@@ -470,7 +487,9 @@ _LEVELS_ROLES = ("opt", "freq", "sp", "composite", "imported")
 
 
 def _build_levels(
-    session: Session, source_rows: list[StatmechSourceCalculation]
+    session: Session,
+    source_rows: list[StatmechSourceCalculation],
+    declared_energy_lot_id: int | None = None,
 ) -> ScientificLevelsSummary:
     """R1: derive geometry/frequency/energy levels from this record's links.
 
@@ -487,8 +506,11 @@ def _build_levels(
         role = row.role.value
         if role in _LEVELS_ROLES:
             role_calc_ids.setdefault(role, []).append(row.calculation_id)
+    declared = load_declared_energy_summaries(session, [declared_energy_lot_id]).get(
+        declared_energy_lot_id
+    )
     if not role_calc_ids:
-        return ScientificLevelsSummary()
+        return ScientificLevelsSummary(declared_energy=declared)
 
     all_ids = {cid for ids in role_calc_ids.values() for cid in ids}
     calcs = {
@@ -521,6 +543,7 @@ def _build_levels(
         frequency=_build_lot_summary(session, derived.frequency_lot_id),
         energy=_build_lot_summary(session, derived.energy_lot_id),
         energy_source=derived.energy_source,
+        declared_energy=declared,
     )
 
 

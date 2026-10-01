@@ -229,6 +229,7 @@ def collect_provenance_warnings(
     freq_scale_factor: object | None = NOT_APPLICABLE,
     energy_level_of_theory: object | None = NOT_APPLICABLE,
     field_prefix: str = "",
+    software_release_field: str = "software_release",
 ) -> list[UploadWarning]:
     """Warn about provenance anchors a record could carry and does not.
 
@@ -251,6 +252,13 @@ def collect_provenance_warnings(
         names none of them; ``UploadWarning.field`` is already
         documented as a dot-path and already carries indexed paths from
         the standalone kinetics route, so this needs no new machinery.
+    :param software_release_field: Name of the field the software-release
+        warning points at, after ``field_prefix``. The reaction bundle's
+        kinetics take their software provenance from the bundle-root
+        ``analysis_software_release``. ``software_release`` is also a field
+        of ``ComputedReactionUploadRequest`` (the ESS software), so a
+        depositor told to fill it filled the wrong one and the warning
+        never cleared.
     :param freq_scale_factor: Statmech's extra anchor, or
         :data:`NOT_APPLICABLE` for record types that have none.
     :param energy_level_of_theory: Kinetics' extra anchor, or
@@ -260,7 +268,7 @@ def collect_provenance_warnings(
     if scientific_origin in _COMPUTATIONAL_ORIGINS:
         if software_release is None:
             warnings.append(
-                _software_release_warning(f"{field_prefix}software_release")
+                _software_release_warning(f"{field_prefix}{software_release_field}")
             )
         if workflow_tool_release is None:
             warnings.append(
@@ -312,7 +320,7 @@ def collect_statmech_content_warnings(
     *,
     scientific_origin: ScientificOriginKind,
     source_calculation_roles: set[str],
-    has_rotational_structure: bool = False,
+    is_polyatomic: bool = False,
     field: str = "statmech",
 ) -> list[UploadWarning]:
     """Report absent supporting evidence on a computed statmech record.
@@ -326,13 +334,15 @@ def collect_statmech_content_warnings(
     on the partition function, the kinetics interpretation seam enforces the
     source link as a hard requirement instead.
 
-    :param has_rotational_structure: True when the record itself shows the
-        subject has internal structure — any rotational constant, or declared
-        torsions. A monatomic species has neither, and its partition function
-        is analytic with no vibrational modes, so a missing ``freq`` source is
-        expected there and warning about it would fire on every atom in every
-        deposit. Scoping to polyatomics keeps the signal honest without that
-        noise.
+    :param is_polyatomic: True when the subject is known to have more than one
+        atom, as decided by
+        :func:`app.services.monatomic.statmech_subject_is_polyatomic` from a
+        geometry, ``rigid_rotor_kind`` or the species identity. A monatomic
+        species has no vibrational modes and an analytic partition function,
+        so a missing ``freq`` source is expected there and warning about it
+        would fire on every atom in every deposit. Scoping to polyatomics keeps
+        the signal honest without that noise. Absence of rotational constants
+        is deliberately not the test (#608).
     """
     if scientific_origin not in _COMPUTATIONAL_ORIGINS:
         return []
@@ -348,7 +358,7 @@ def collect_statmech_content_warnings(
                 ),
             )
         ]
-    if has_rotational_structure and "freq" not in source_calculation_roles:
+    if is_polyatomic and "freq" not in source_calculation_roles:
         return [
             UploadWarning(
                 field=f"{field}.source_calculations",
@@ -362,23 +372,6 @@ def collect_statmech_content_warnings(
             )
         ]
     return []
-
-
-def statmech_has_rotational_structure(statmech) -> bool:
-    """True when a statmech payload shows its subject is not a single atom.
-
-    Uses only evidence the record itself carries: a rotational constant or a
-    declared torsion. Both are absent for a monatomic species and present for
-    essentially any real polyatomic deposit. Deliberately conservative — a
-    polyatomic that reports neither simply produces no signal, which is the
-    right bias for a warning.
-    """
-    return (
-        getattr(statmech, "rotational_constant_a_cm1", None) is not None
-        or getattr(statmech, "rotational_constant_b_cm1", None) is not None
-        or getattr(statmech, "rotational_constant_c_cm1", None) is not None
-        or bool(getattr(statmech, "torsions", ()))
-    )
 
 
 def collect_statmech_provenance_warnings(
@@ -474,9 +467,10 @@ def collect_kinetics_content_warnings_for(
     is not asked about it, so a new caller cannot accidentally emit advice
     it has no field to act on.
 
-    That the bundle must pass all three sentinels is a statement about the
-    bundle's schema, not an endorsement of it — see ``BundleKineticsIn``'s
-    docstring for the drift this records.
+    ``BundleKineticsIn`` gained all three fields in #620, so a payload with a
+    field can now be judged on it. The reaction route still does not call this
+    collector: it would ask a bundle for refs to records the same request
+    cannot have created yet.
 
     :param interpretation_assignments: The assignment list, or
         :data:`NOT_APPLICABLE` where the payload has no such field.

@@ -18,6 +18,13 @@ from typing import Self
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
+from tckdb_schemas.bundle_source_rules import (
+    W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    find_scf_source_cycle,
+    owner_mismatch_error,
+    scf_source_geometry_error,
+)
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
     ActivationEnergyUnits,
@@ -44,6 +51,15 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
 )
 from tckdb_schemas.fragments.geometry import GeometryPayload
+from tckdb_schemas.fragments.kinetics_evidence import (
+    T0_K_DESCRIPTION,
+    T0_K_MAX,
+    KineticsInterpretationAssignmentUpload,
+    KineticsTunnelingApplicationUpload,
+    check_interpretation_set,
+    check_tunneling_declaration_agrees,
+    default_tunneling_model_from_application,
+)
 from tckdb_schemas.fragments.reaction_atom_map import (
     AtomMapParticipantGeometry,
     ReactionAtomMapIn,
@@ -91,11 +107,15 @@ from tckdb_schemas.stationary_point import (
 from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
 from tckdb_schemas.thermo import ThermoNASACreate, ThermoPointCreate, ThermoStateFields
 from tckdb_schemas.utils import normalize_optional_text, normalize_tunneling_model
+from tckdb_schemas.workflows.conformer_upload import ElectronicLevelIn
 from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
+    StatmechInBundle,
     StatmechSourceCalcInBundle,
     ThermoSourceCalcInBundle,
+    TransportInBundle,
+    require_opt_primary_unless_monatomic,
 )
 
 
@@ -278,11 +298,32 @@ class ConformerIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_calc_is_opt(self) -> Self:
-        if self.calculation.type != CalculationType.opt:
-            raise ValueError(
-                f"Conformer '{self.key}' primary calculation must be type 'opt', "
-                f"got '{self.calculation.type.value}'."
-            )
+        """Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
+
+        A species of two or more atoms sends the optimisation that produced
+        each conformer's geometry as that conformer's ``calculation`` with
+        ``type: "opt"``. Any other type is refused. A monatomic species has
+        no geometry to optimise (its geometry is a point), and the program
+        run on it is a single point: send that single point, once, as the
+        conformer's ``calculation`` with ``type: "sp"`` and
+        ``sp_electronic_energy_hartree``, and the atom's one-atom XYZ as the
+        conformer ``geometry``. Do not relabel it as an ``opt``: no
+        ``opt_converged``, and no second copy of the same log and energy
+        under another level of theory or program. Link the atom's statmech
+        source calculations to that ``sp`` with role ``sp``, and point any
+        applied energy correction's ``source_calculation_key`` at it; an
+        atom has no ``opt`` or ``freq`` to link. A further ``sp`` at another
+        level of theory goes in the species's ``calculations`` with a
+        ``conformer_key``, as for any species. A ``sp`` primary on a
+        geometry of two or more atoms, a geometry that cannot be counted, or
+        a primary of any type other than ``opt`` or ``sp`` is refused. A
+        relabelled ``opt`` on an atom is still accepted.
+        """
+        require_opt_primary_unless_monatomic(
+            self.calculation.type,
+            self.geometry.xyz_text,
+            subject=f"Conformer '{self.key}' primary calculation type",
+        )
         return self
 
 
@@ -331,7 +372,8 @@ class BundleThermoIn(ThermoStateFields):
         species entry; the workflow rejects both failures.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. Checked
-        against the resolved role links; never persisted.
+        against the resolved role links, then stored as declared and
+        read back as ``levels.declared_energy``.
     :param note: Optional note.
     """
 
@@ -354,7 +396,8 @@ class BundleThermoIn(ThermoStateFields):
     )
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 
@@ -420,6 +463,11 @@ class BundleStatmechTorsionIn(SchemaBase):
     :param treatment_kind: Optional torsion treatment.
     :param dimension: Number of coupled torsional coordinates.
     :param top_description: Optional description of the rotating top.
+    :param invalidated_reason: Optional reason the producer rejected this
+        rotor, for example that the scan was not a smooth periodic
+        potential. Same field, same meaning and same storage as
+        ``StatmechTorsionIn.invalidated_reason`` on the conformer route.
+        Absent means the rotor was not rejected; present records that it was.
     :param source_scan_calculation_key: Optional bundle-local calc key
         that produced the rotor scan. Must resolve to a calc of type
         ``scan`` declared elsewhere in the bundle.
@@ -435,6 +483,7 @@ class BundleStatmechTorsionIn(SchemaBase):
 
     dimension: int = Field(default=1, ge=1)
     top_description: str | None = None
+    invalidated_reason: str | None = None
     source_scan_calculation_key: str | None = None
 
     coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
@@ -518,11 +567,16 @@ class BundleStatmechIn(SchemaBase):
         calculation key. Each referenced key must resolve into the
         bundle's global calc-key namespace and must be owned by this
         species entry (workflow-layer ownership check).
+    :param electronic_levels: Ordered (energy, degeneracy) pairs for the
+        electronic partition function, same shape and validation as
+        ``/uploads/statmech`` (``ElectronicLevelIn``). Needed for atoms and
+        radicals whose ground term is not S (O, Cl, ...).
     :param torsions: Torsional modes.
     :param energy_level_of_theory: Optional depositor-declared level of
         theory the record's energy is claimed to stand at. See
         ``app.services.calculation_levels`` on the backend for the exact
-        rule; never persisted.
+        rule, then stored as declared and read back as
+        ``levels.declared_energy``.
     :param note: Optional note.
     """
 
@@ -547,15 +601,24 @@ class BundleStatmechIn(SchemaBase):
     uses_projected_frequencies: bool | None = None
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)
     torsions: list[BundleStatmechTorsionIn] = Field(default_factory=list)
+    electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
     # Depositor-declared level of theory the record's energy is claimed
     # to stand at. See ``app.services.calculation_levels`` on the backend
-    # for the exact rule; never persisted.
+    # for the exact rule. Stored as declared once it passes, and read back as
+    # ``levels.declared_energy``.
     energy_level_of_theory: LevelOfTheoryRef | None = None
     note: str | None = None
 
     @model_validator(mode="after")
     def normalize_point_group(self) -> Self:
         self.point_group = normalize_optional_text(self.point_group)
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_electronic_level_indices(self) -> Self:
+        indices = [lvl.level_index for lvl in self.electronic_levels]
+        if len(set(indices)) != len(indices):
+            raise ValueError("electronic_levels level_index values must be unique.")
         return self
 
     @model_validator(mode="after")
@@ -646,6 +709,13 @@ class BundleSpeciesIn(SchemaBase):
         ``conformer_key`` is absent, so payloads predating this field are
         unaffected.
     :param thermo: Optional thermochemistry data.
+    :param statmech: Optional statistical-mechanics data.
+    :param transport: Optional transport properties (Lennard-Jones
+        parameters, dipole, polarizability, rotational relaxation) for this
+        species's entry: the standalone transport upload's content plus
+        links to this bundle's calculations by local key. Provenance falls
+        back to the bundle's ``analysis_software_release`` and
+        ``workflow_tool_release`` exactly as thermo's does.
     """
 
     key: str = Field(min_length=1)
@@ -654,6 +724,7 @@ class BundleSpeciesIn(SchemaBase):
     calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
     thermo: BundleThermoIn | None = None
     statmech: BundleStatmechIn | None = None
+    transport: TransportInBundle | None = None
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,
         description=(
@@ -887,7 +958,15 @@ class BundleTransitionStateIn(SchemaBase):
     :param unmapped_smiles: Optional SMILES for the TS.
     :param geometry: Saddle-point geometry.
     :param calculation: Primary opt calculation.
-    :param calculations: Additional calculations (freq, sp, irc).
+    :param calculations: Additional calculations (freq, sp, irc, scan).
+    :param statmech: Optional statistical-mechanics interpretation of the
+        saddle point: the partition-function inputs a rate constant is
+        computed from. The same block a species carries on the computed-species
+        route, written through the same persistence, so every rule that governs
+        a species' statmech governs this one. ``source_calculations`` and
+        ``torsions[*].source_scan_calculation_key`` name calculations this
+        transition state owns. A saddle point is a polyatomic, so this block
+        never describes a single atom.
     :param label: Optional label.
     :param note: Optional note.
     """
@@ -898,6 +977,7 @@ class BundleTransitionStateIn(SchemaBase):
     geometry: GeometryIn
     calculation: ComputedReactionCalculationIn
     calculations: list[ComputedReactionCalculationIn] = Field(default_factory=list)
+    statmech: StatmechInBundle | None = None
     applied_energy_corrections: list[AppliedEnergyCorrectionInBundle] = Field(
         default_factory=list,
         description=(
@@ -916,12 +996,19 @@ class BundleTransitionStateIn(SchemaBase):
     validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
         default_factory=list,
         description=(
-            "Structured IRC evidence that this saddle point connects the "
-            "bundle's declared reactants and products. Optional but strongly "
-            "recommended: a deposit without it succeeds and returns a "
-            "'transition_state_missing_irc_evidence' upload warning. "
-            "``source_calculation_key`` names an irc calculation owned by this "
-            "transition state."
+            "Structured validation evidence for this saddle point, at most one "
+            "record per kind. kind='irc': the path connects the bundle's "
+            "declared reactants and products; ``source_calculation_key`` names "
+            "an irc calculation owned by this transition state. "
+            "kind='imaginary_mode': the frequency calculation found the "
+            "expected imaginary mode; ``source_calculation_key`` names a freq "
+            "calculation owned by this transition state. "
+            "kind='energy_ordering': the saddle point lies above both wells; "
+            "each compared energy names its own source calculation, owned by "
+            "the saddle point or by that participant's species. Optional but "
+            "strongly recommended: a deposit without a passing IRC record "
+            "succeeds and returns a 'transition_state_missing_irc_evidence' "
+            "upload warning; the other kinds do not silence it."
         ),
     )
     label: str | None = None
@@ -977,11 +1064,17 @@ class BundleTransitionStateIn(SchemaBase):
         return self
 
     @model_validator(mode="after")
-    def validate_evidence_source_is_a_ts_irc_calculation(self) -> Self:
-        """Evidence must name an ``irc`` calculation owned by this TS.
+    def validate_evidence_sources_are_this_ts_calculations(self) -> Self:
+        """Evidence must name calculations of the right kind owned by this TS.
 
+        ``irc`` needs an ``irc`` calculation and ``imaginary_mode`` a ``freq``
+        one: the record is a claim about what that job found. An
+        ``energy_ordering`` record names one calculation per energy, and the
+        saddle point's own energy must come from this saddle point; the
+        reactant and product energies come from the species, which this nested
+        model cannot see, so the enclosing request checks those.
         Participant/atom completeness needs the bundle's reaction, which this
-        nested model cannot see; the enclosing request validates that.
+        nested model cannot see either; the enclosing request validates that.
         """
         if not self.validation_evidence:
             return self
@@ -989,14 +1082,40 @@ class BundleTransitionStateIn(SchemaBase):
             self.calculation.key: self.calculation.type,
             **{calc.key: calc.type for calc in self.calculations},
         }
+        needed_type = {
+            "irc": CalculationType.irc,
+            "imaginary_mode": CalculationType.freq,
+        }
         for index, record in enumerate(self.validation_evidence):
+            base_field = f"transition_state.validation_evidence[{index}]"
+            if record.kind == "energy_ordering":
+                for energy_index, energy in enumerate(record.energies or []):
+                    if energy.participant != "ts":
+                        continue
+                    if energy.source_calculation_key not in own_types:
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
+                            f"{base_field}.energies[{energy_index}] references "
+                            f"calculation_key '{energy.source_calculation_key}', "
+                            "which is not one of this transition state's own "
+                            "calculations.",
+                            field=(
+                                f"{base_field}.energies[{energy_index}]."
+                                "source_calculation_key"
+                            ),
+                            key=energy.source_calculation_key,
+                            declared=own_types,
+                        )
+                continue
+
             # No key written at all: nothing to list alternatives against,
             # and a different repair. Keeps the generic code (ADR 0017
             # corollary 3).
             if record.source_calculation_key is None:
                 raise ValueError(
                     "transition_state.validation_evidence requires "
-                    "source_calculation_key naming its irc calculation."
+                    f"source_calculation_key naming its {needed_type[record.kind].value} "
+                    "calculation."
                 )
             calculation_type = own_types.get(record.source_calculation_key)
             if calculation_type is None:
@@ -1005,18 +1124,73 @@ class BundleTransitionStateIn(SchemaBase):
                     "transition_state.validation_evidence references "
                     f"calculation_key '{record.source_calculation_key}', which is "
                     "not one of this transition state's own calculations.",
-                    field=(
-                        f"transition_state.validation_evidence[{index}]."
-                        f"source_calculation_key"
-                    ),
+                    field=f"{base_field}.source_calculation_key",
                     key=record.source_calculation_key,
                     declared=own_types,
                 )
-            if calculation_type != CalculationType.irc:
+            if calculation_type != needed_type[record.kind]:
                 raise ValueError(
-                    "transition_state.validation_evidence requires an irc "
-                    f"calculation; '{record.source_calculation_key}' is "
+                    "transition_state.validation_evidence requires "
+                    f"{'an' if record.kind == 'irc' else 'a'} "
+                    f"{needed_type[record.kind].value} calculation for "
+                    f"kind='{record.kind}'; '{record.source_calculation_key}' is "
                     f"'{calculation_type.value}'."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_statmech_sources_are_this_ts_calculations(self) -> Self:
+        """The statmech block may cite only calculations this saddle point owns.
+
+        A saddle point's partition function is built from the saddle point's
+        own frequencies and energy. Resolving against the whole bundle's
+        namespace would let it cite a reactant's calculation, which the
+        persistence seam refuses at write time with an ownership error; saying
+        so here turns that into a refusal that lists the keys that would have
+        worked.
+        """
+        if self.statmech is None:
+            return self
+        own_types = {
+            self.calculation.key: self.calculation.type,
+            **{calc.key: calc.type for calc in self.calculations},
+        }
+        for index, source in enumerate(self.statmech.source_calculations):
+            if source.calculation_key not in own_types:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    "transition_state.statmech.source_calculations references "
+                    f"calculation_key '{source.calculation_key}', which is not "
+                    "one of this transition state's own calculations.",
+                    field=(
+                        f"transition_state.statmech.source_calculations[{index}]."
+                        "calculation_key"
+                    ),
+                    key=source.calculation_key,
+                    declared=own_types,
+                )
+        for index, torsion in enumerate(self.statmech.torsions):
+            scan_key = torsion.source_scan_calculation_key
+            if scan_key is None:
+                continue
+            if scan_key not in own_types:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"transition_state.statmech.torsions[{index}]."
+                    f"source_scan_calculation_key '{scan_key}' is not one of "
+                    "this transition state's own calculations.",
+                    field=(
+                        f"transition_state.statmech.torsions[{index}]."
+                        "source_scan_calculation_key"
+                    ),
+                    key=scan_key,
+                    declared=own_types,
+                )
+            if own_types[scan_key] != CalculationType.scan:
+                raise ValueError(
+                    f"transition_state.statmech.torsions[{index}]."
+                    f"source_scan_calculation_key '{scan_key}' must reference "
+                    "a scan-type calculation."
                 )
         return self
 
@@ -1068,46 +1242,24 @@ class BundleKineticsIn(SchemaBase):
         the reported rate. Defaults to ``unknown`` for legacy producers.
     :param note: Optional note.
 
-    **Three fields the standalone route has and this model does not.**
-    Recorded here because the gap was invisible: nothing in the tree
-    compared this model against ``KineticsUploadRequest``, and
-    ``test_bundle_root_model_symmetry`` explicitly excludes kinetics on the
-    grounds that it has no second spelling — true of the *species bundle*,
-    false of the standalone route.
+    :param t0_k: Reference temperature T0 in K, so that
+        ``k = A (T/T0)^n exp(-Ea/RT)``. Defaults to 1 K.
+    :param interpretation_assignments: Which statmech records the rate's
+        partition functions came from. The same model, validation and
+        persistence as ``KineticsUploadRequest``; every reference is a public
+        ref of a record deposited earlier (see
+        :mod:`tckdb_schemas.fragments.kinetics_evidence`).
+    :param tunneling_application: The typed, replayable tunneling evidence,
+        cross-checked against ``tunneling_model`` exactly as the standalone
+        route does.
+    :param network_kinetics_ref: Public ref of the master-equation solve a
+        fitted rate delegates its pressure dependence to.
 
-    * ``interpretation_assignments`` — which statmech records the rate's
-      partition functions came from.
-    * ``tunneling_application`` — the typed, replayable tunneling evidence.
-    * ``network_kinetics_ref`` — the master-equation solve a fitted rate
-      delegates its pressure dependence to.
-
-    The first two are **drift, not design**. Both were added to
-    ``KineticsUploadRequest`` by ``ee7377f5`` (#66), a commit that edited
-    *this file* in the same diff to close the analogous transition-state
-    evidence gap on parity grounds — and left kinetics one-sided with no
-    recorded reason. No commit message, comment or doc anywhere claims a
-    deliberately reduced kinetics shape. The consequence is concrete: this
-    model carries ``tunneling_model``, the *label*, so a bundle depositor
-    can claim Eckart tunneling was applied and has no way to attach the
-    evidence for it. The standalone route cross-checks the two
-    (``validate_tunneling_declaration_agrees``); here there is nothing to
-    check against.
-
-    ``network_kinetics_ref`` is **unaddressed rather than decided**.
-    ``2fb5c25b`` (#29) established that this model "carries only scalar
-    Arrhenius fields … and its workflow writes no kinetics child tables",
-    directing the pressure-dependent forms to the single-reaction endpoint.
-    That covers PLOG and Chebyshev child rows; ``network_kinetics_ref``
-    resolves to a nullable scalar column on ``kinetics`` itself, and this
-    model accepts ``pressure_context='pressure_dependent'`` — precisely the
-    state that handle exists to name — with no way to name it.
-
-    Closing any of the three means new bundle-local-key schemas plus
-    persistence in ``app.workflows.computed_reaction``, which is a feature
-    rather than a contract change and is deliberately not attempted here.
-    Until then ``collect_kinetics_content_warnings_for`` is passed
-    ``NOT_APPLICABLE`` for all three, so no depositor is advised to fill a
-    field this model does not have.
+    This model and ``KineticsUploadRequest`` share their kinetics-evidence
+    models and their cross-field checks (``kinetics_evidence``), so the two
+    routes refuse the same interpretation and tunneling mistakes. The
+    pressure-dependent child-row forms (PLOG, Chebyshev, falloff,
+    sum-of-Arrhenius) stay standalone-only.
     """
 
     reactant_keys: list[str] = Field(min_length=1)
@@ -1120,6 +1272,9 @@ class BundleKineticsIn(SchemaBase):
     a: float | None = None
     a_units: ArrheniusAUnits | None = None
     n: float | None = None
+    t0_k: float = Field(
+        default=1.0, gt=0, le=T0_K_MAX, allow_inf_nan=False, description=T0_K_DESCRIPTION
+    )
     reported_ea: float | None = None
     reported_ea_units: ActivationEnergyUnits | None = None
 
@@ -1136,6 +1291,13 @@ class BundleKineticsIn(SchemaBase):
         KineticsDegeneracyConvention.unknown
     )
     tunneling_model: TunnelingModel | None = None
+    interpretation_assignments: list[KineticsInterpretationAssignmentUpload] = Field(
+        default_factory=list
+    )
+    tunneling_application: KineticsTunnelingApplicationUpload | None = None
+    # Public, opaque handle for a pressure-dependent network counterpart
+    # (DR-0036); the workflow resolves it to its internal FK.
+    network_kinetics_ref: str | None = Field(default=None, min_length=1)
     pressure_context: PressureContext | None = None
     pressure_bar: float | None = Field(default=None, gt=0)
     note: str | None = None
@@ -1157,6 +1319,28 @@ class BundleKineticsIn(SchemaBase):
     @classmethod
     def _normalize_tunneling(cls, v):
         return normalize_tunneling_model(v)
+
+    @model_validator(mode="before")
+    @classmethod
+    def default_tunneling_model_from_application(cls, data):
+        return default_tunneling_model_from_application(data)
+
+    @model_validator(mode="after")
+    def validate_tunneling_declaration_agrees(self) -> Self:
+        check_tunneling_declaration_agrees(
+            self.tunneling_model, self.tunneling_application
+        )
+        return self
+
+    @model_validator(mode="after")
+    def validate_interpretation_content(self) -> Self:
+        check_interpretation_set(
+            self.interpretation_assignments,
+            n_reactants=len(self.reactant_keys),
+            n_products=len(self.product_keys),
+            has_tunneling_application=self.tunneling_application is not None,
+        )
+        return self
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
@@ -1489,6 +1673,53 @@ class ComputedReactionUploadRequest(SchemaBase):
         )
         return self
 
+    @model_validator(mode="after")
+    def validate_energy_ordering_sources_belong_to_their_participant(self) -> Self:
+        """A participant's compared energy must come from that participant.
+
+        ``reactant:2`` is the second entry of ``reactant_keys``; the energy
+        attributed to it has to be taken from that species' own calculations,
+        or the ordering compares the saddle point with some other molecule.
+        The persistence seam checks ownership against the stored rows as well;
+        this is the refusal that can name the keys that would have worked.
+        """
+        if self.transition_state is None:
+            return self
+        species_by_key = {species.key: species for species in self.species}
+        for index, record in enumerate(self.transition_state.validation_evidence):
+            for energy_index, energy in enumerate(record.energies or []):
+                if energy.participant == "ts":
+                    continue
+                side, _, position = energy.participant.partition(":")
+                keys = self.reactant_keys if side == "reactant" else self.product_keys
+                if not 1 <= int(position) <= len(keys):
+                    # An undeclared participant is validate_ts_evidence_set's to
+                    # report; do not pre-empt it with an IndexError.
+                    continue
+                species = species_by_key.get(keys[int(position) - 1])
+                if species is None:
+                    continue
+                own_keys = {
+                    **{conf.calculation.key: conf.calculation.type for conf in species.conformers},
+                    **{calc.key: calc.type for calc in species.calculations},
+                }
+                if energy.source_calculation_key not in own_keys:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        "transition_state.validation_evidence"
+                        f"[{index}].energies[{energy_index}] takes the energy of "
+                        f"'{energy.participant}' from calculation_key "
+                        f"'{energy.source_calculation_key}', which is not one of "
+                        f"species '{species.key}' own calculations.",
+                        field=(
+                            f"transition_state.validation_evidence[{index}]"
+                            f".energies[{energy_index}].source_calculation_key"
+                        ),
+                        key=energy.source_calculation_key,
+                        declared=own_keys,
+                    )
+        return self
+
     @field_validator("reaction_family", "reaction_family_source_note")
     @classmethod
     def normalize_family(cls, value: str | None) -> str | None:
@@ -1750,6 +1981,130 @@ class ComputedReactionUploadRequest(SchemaBase):
                         f"source_scan_calculation_key '{key}' must reference "
                         f"a scan-type calculation."
                     )
+
+        # Per-species transport source_calculation keys. Same contract as
+        # thermo's above, plus the owner rule the workflow also enforces:
+        # this bundle carries many species, so a key that exists is not
+        # yet a key that belongs to *this* species. The refusal is the
+        # coded one the workflow raises (ADR 0017).
+        owner_of_calc: dict[str, str] = {}
+        anchor_of_calc: dict[str, str | None] = {}
+        for sp in self.species:
+            geometry_to_conformer = {c.geometry.key: c.key for c in sp.conformers}
+            for conf in sp.conformers:
+                owner_of_calc[conf.calculation.key] = f"species[{sp.key!r}]"
+                anchor_of_calc[conf.calculation.key] = conf.key
+            for calc in sp.calculations:
+                owner_of_calc[calc.key] = f"species[{sp.key!r}]"
+                anchor_of_calc[calc.key] = calc.conformer_key or (
+                    geometry_to_conformer.get(calc.geometry_key)
+                    if calc.geometry_key is not None
+                    else None
+                )
+        if self.transition_state is not None:
+            owner_of_calc[self.transition_state.calculation.key] = (
+                "transition_state"
+            )
+            for calc in self.transition_state.calculations:
+                owner_of_calc[calc.key] = "transition_state"
+
+        for sp in self.species:
+            if sp.transport is None:
+                continue
+            for i, tsc in enumerate(sp.transport.source_calculations):
+                field_path = (
+                    f"species['{sp.key}'].transport.source_calculations"
+                    f"[{i}].calculation_key"
+                )
+                if tsc.calculation_key not in all_calc_keys:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        f"species[{sp.key!r}].transport.source_calculations[{i}]."
+                        f"calculation_key references undefined "
+                        f"calculation_key '{tsc.calculation_key}'.",
+                        field=field_path,
+                        key=tsc.calculation_key,
+                        declared=all_calc_keys,
+                    )
+                if owner_of_calc[tsc.calculation_key] != f"species[{sp.key!r}]":
+                    raise owner_mismatch_error(
+                        W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+                        context=f"{field_path}='{tsc.calculation_key}'",
+                        field=field_path,
+                        target="transport",
+                    )
+
+        # scf_stability.source_calculation_key: the job that measured a
+        # stability verdict must exist, belong to the same subject as the
+        # calculation carrying the verdict, sit on the same conformer, and
+        # not close a cycle with another block's key.
+        stability_carriers: list[tuple[str, ComputedReactionCalculationIn]] = []
+        for sp in self.species:
+            for conf in sp.conformers:
+                stability_carriers.append((f"species[{sp.key!r}]", conf.calculation))
+            for calc in sp.calculations:
+                stability_carriers.append((f"species[{sp.key!r}]", calc))
+        if self.transition_state is not None:
+            stability_carriers.append(
+                ("transition_state", self.transition_state.calculation)
+            )
+            for calc in self.transition_state.calculations:
+                stability_carriers.append(("transition_state", calc))
+        scf_links: dict[str, str] = {}
+        for owner, calc in stability_carriers:
+            stability = calc.scf_stability
+            if stability is None or stability.source_calculation_key is None:
+                continue
+            src_key = stability.source_calculation_key
+            field_path = (
+                f"calculations['{calc.key}'].scf_stability.source_calculation_key"
+            )
+            if src_key == calc.key:
+                raise ValueError(
+                    f"{field_path} names the calculation itself; omit it "
+                    f"when this calculation measured the stability."
+                )
+            if src_key not in all_calc_keys:
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
+                    f"calculation '{calc.key}' scf_stability."
+                    f"source_calculation_key references undefined "
+                    f"calculation_key '{src_key}'.",
+                    field=field_path,
+                    key=src_key,
+                    declared=all_calc_keys,
+                )
+            if owner_of_calc[src_key] != owner:
+                raise owner_mismatch_error(
+                    W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    context=f"{field_path}='{src_key}'",
+                    field=field_path,
+                    target="scf stability",
+                    owner_noun=(
+                        "transition state entry"
+                        if owner == "transition_state"
+                        else "species entry"
+                    ),
+                )
+            carrier_anchor = anchor_of_calc.get(calc.key)
+            source_anchor = anchor_of_calc.get(src_key)
+            if (
+                carrier_anchor is not None
+                and source_anchor is not None
+                and carrier_anchor != source_anchor
+            ):
+                raise scf_source_geometry_error(
+                    field=field_path, key=src_key, carrier_key=calc.key
+                )
+            scf_links[calc.key] = src_key
+        scf_cycle = find_scf_source_cycle(scf_links)
+        if scf_cycle is not None:
+            raise ValueError(
+                "scf_stability.source_calculation_key forms a cycle: "
+                + " -> ".join([*scf_cycle, scf_cycle[0]])
+                + ". A stability verdict cannot be measured by a job whose "
+                "own verdict it measures."
+            )
 
         # Applied-correction source_calculation_key references must
         # resolve into the bundle's calc namespace. The workflow layer

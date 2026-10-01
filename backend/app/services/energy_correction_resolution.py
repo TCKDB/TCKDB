@@ -23,7 +23,7 @@ from tckdb_schemas.local_key_codes import (
 from app.api.error_contract import CodedValueError
 from app.chemistry.species import species_smiles_has_any_bonds
 from app.chemistry.units import convert_energy_to_hartree
-from app.db.models.common import EnergyUnit
+from app.db.models.common import AtomParamApplication, EnergyUnit
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -144,11 +144,24 @@ def resolve_or_create_scheme(
 ) -> EnergyCorrectionScheme:
     """Resolve or create an energy correction scheme.
 
-    Dedup key: the full DB identity tuple ``(kind, name,
-    level_of_theory_id, version, units, source_literature_id,
-    software_release_id, workflow_tool_release_id)`` — matches
-    ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
-    plan v2 §3-§4). ``ref.software`` is a ``SoftwareReleaseRef`` (name,
+    Dedup key, in two forms selected by ``ref.data_revision`` (migration
+    ``f2c8a5d1e9b7``):
+
+    * **No data revision**: ``(kind, name, level_of_theory_id,
+      source_literature_id, software_release_id, workflow_tool_release_id)``
+      over rows whose own ``data_revision`` is NULL -- matches
+      ``uq_energy_correction_scheme_identity`` (correction-scheme-provenance
+      plan v2 §3-§4), unchanged, so a deposit that does not state a
+      revision behaves exactly as it did before the column existed.
+    * **A data revision**: ``(kind, name, level_of_theory_id,
+      source_literature_id, software_release_id, data_revision)`` over rows
+      that carry one -- matches ``uq_energy_correction_scheme_identity_
+      revised``. The workflow tool build is deliberately absent: it is
+      provenance, recorded from the first deposit, so two builds that read
+      the same revision's tables are one scheme. A deposit that states a
+      revision never matches a row that states none, and vice versa.
+
+    ``ref.software`` is a ``SoftwareReleaseRef`` (name,
     optionally version/revision/build): a depositor who names only the
     program resolves to the version-less release row for it (§3.2 --
     "program known, build not stated" is a first-class, complete value,
@@ -206,22 +219,27 @@ def resolve_or_create_scheme(
     def _match(col, val):
         return col == val if val is not None else col.is_(None)
 
-    existing = session.scalar(
-        select(EnergyCorrectionScheme).where(
-            EnergyCorrectionScheme.kind == ref.kind,
-            EnergyCorrectionScheme.name == ref.name,
-            _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
-            # Neither `version` (dropped) nor `units` is matched on: this
-            # chain must mirror uq_energy_correction_scheme_identity
-            # exactly (a7d4e2b9c351), or the index and the resolver
-            # disagree about what a duplicate is. A deposit in a second
-            # unit is meant to land on the existing row; the parameter
-            # comparison converts before it compares.
-            _match(EnergyCorrectionScheme.source_literature_id, lit_id),
-            _match(EnergyCorrectionScheme.software_release_id, software_release_id),
+    # Neither `version` (dropped) nor `units` is matched on: this chain must
+    # mirror the two identity indexes exactly (a7d4e2b9c351, f2c8a5d1e9b7),
+    # or the indexes and the resolver disagree about what a duplicate is. A
+    # deposit in a second unit is meant to land on the existing row; the
+    # parameter comparison converts before it compares.
+    identity = [
+        EnergyCorrectionScheme.kind == ref.kind,
+        EnergyCorrectionScheme.name == ref.name,
+        _match(EnergyCorrectionScheme.level_of_theory_id, lot_id),
+        _match(EnergyCorrectionScheme.source_literature_id, lit_id),
+        _match(EnergyCorrectionScheme.software_release_id, software_release_id),
+    ]
+    if ref.data_revision is None:
+        identity += [
+            EnergyCorrectionScheme.data_revision.is_(None),
             _match(EnergyCorrectionScheme.workflow_tool_release_id, wtr_id),
-        )
-    )
+        ]
+    else:
+        # The tool build is provenance here, not identity.
+        identity.append(EnergyCorrectionScheme.data_revision == ref.data_revision)
+    existing = session.scalar(select(EnergyCorrectionScheme).where(*identity))
     created = existing is None
     if existing is not None:
         scheme = existing
@@ -233,12 +251,19 @@ def resolve_or_create_scheme(
             source_literature_id=lit_id,
             software_release_id=software_release_id,
             workflow_tool_release_id=wtr_id,
+            data_revision=ref.data_revision,
+            atom_params_applied_as=(
+                AtomParamApplication(ref.atom_params_applied_as.value)
+                if ref.atom_params_applied_as is not None
+                else None
+            ),
             units=ref.units,
             note=ref.note,
             created_by=created_by,
         )
         session.add(scheme)
         session.flush()
+    _reconcile_atom_params_applied_as(scheme, ref)
 
     _merge_scheme_params(session, scheme, ref)
 
@@ -250,6 +275,32 @@ def resolve_or_create_scheme(
         )
 
     return scheme
+
+
+def _reconcile_atom_params_applied_as(
+    scheme: EnergyCorrectionScheme, ref: EnergyCorrectionSchemeRef
+) -> None:
+    """Fill a stated ``atom_params_applied_as`` the row lacks; refuse a different one.
+
+    An omitted value says nothing, so it neither fills nor conflicts. A
+    value sent for a row that has none only adds a fact no one had stated,
+    so it is stored (as a missing parameter key is). A value that differs
+    from the stored one is a disagreement about what the same library
+    means, refused like a differing parameter value.
+    """
+    if ref.atom_params_applied_as is None:
+        return
+    supplied = AtomParamApplication(ref.atom_params_applied_as.value)
+    if scheme.atom_params_applied_as is None:
+        scheme.atom_params_applied_as = supplied
+    elif scheme.atom_params_applied_as != supplied:
+        raise ValueError(
+            "Conflicting atom_params_applied_as for this correction "
+            f"scheme: existing={scheme.atom_params_applied_as.value!r}, "
+            f"supplied={supplied.value!r}. These are the same correction "
+            "library by identity, so they have to agree on whether the "
+            "atom parameters are subtracted or added."
+        )
 
 
 # Absolute tolerance for comparing scheme parameter values. Scheme params
@@ -324,8 +375,8 @@ def _assert_param_value_compatible(
         f"Conflicting {table_name} value for key='{key}': {detail}. "
         "These are the same correction library by identity, so the "
         "values have to agree. If they represent a different library, "
-        "give it a different citation or software release -- those are "
-        "what distinguish one library from another."
+        "give it a different citation, software release or data_revision "
+        "-- those are what distinguish one library from another."
     )
 
 

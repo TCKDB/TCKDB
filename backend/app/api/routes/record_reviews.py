@@ -252,7 +252,7 @@ def set_status(
     record_type: SubmissionRecordType,
     record_id: int,
     body: RecordReviewSetStatusRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     actor: AppUser = Depends(require_curator_or_admin),
 ) -> RecordReviewRead:
     """Curator/admin: manually transition a record's review status.

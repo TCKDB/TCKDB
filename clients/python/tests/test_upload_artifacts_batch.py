@@ -213,6 +213,40 @@ def test_batch_mode_returns_documented_result_shape(files):
     assert r.response["calculation_id"] == 10
 
 
+def test_batch_result_carries_status_request_id_replay_and_warnings(files):
+    """The HTTP answer is not thrown away: status, ``X-Request-ID``, the replay
+    flag and the body's warnings are on the result."""
+    warning = {"field": "artifacts[0]", "code": "sp_energy_mismatch", "message": "m"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            201,
+            headers={"X-Request-ID": "req-abc123", "Idempotency-Replayed": "true"},
+            json={"calculation_id": 10, "artifacts": [], "warnings": [warning]},
+        )
+
+    client, _ = make_client(handler)
+    plan = [_plan_item(key="a", calc_id=10, path=files["opt.log"])]
+    (r,) = client.upload_artifacts(plan, batch_by_calculation=True)
+    assert r.status_code == 201
+    assert r.request_id == "req-abc123"
+    assert r.replayed is True
+    assert r.warnings == (warning,)
+    # ``response`` is still the body, so existing callers are unaffected.
+    assert r.response["calculation_id"] == 10
+
+
+def test_batch_result_defaults_when_the_server_sends_no_extras(files):
+    captured: list = []
+    client, _ = make_client(_batch_handler(captured))
+    plan = [_plan_item(key="a", calc_id=10, path=files["opt.log"])]
+    (r,) = client.upload_artifacts(plan, batch_by_calculation=True)
+    assert r.status_code == 201
+    assert r.request_id is None
+    assert r.replayed is False
+    assert r.warnings == ()
+
+
 def test_batch_result_is_frozen(files):
     captured: list = []
     client, _ = make_client(_batch_handler(captured))

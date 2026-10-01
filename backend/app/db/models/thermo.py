@@ -146,6 +146,21 @@ class Thermo(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
     )
 
+    # The level of theory the depositor declared for this record's energy
+    # (``energy_level_of_theory`` on the upload). Stored as declared, after
+    # the upload's role-consistency check: it is the depositor's claim, not
+    # a derived value, and it is separate from the level the read layer
+    # derives from the linked calculations (``ScientificLevelsSummary``).
+    # NULL means nothing was declared (every row that predates the column,
+    # and any upload that omitted it); it is never back-filled from the
+    # linked calculations. Follows ``level_of_theory_merge`` at read time.
+    energy_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+
     enthalpy_reference_kind: Mapped[Optional[EnthalpyReferenceKind]] = mapped_column(
         SAEnum(EnthalpyReferenceKind, name="enthalpy_reference_kind"), nullable=True
     )

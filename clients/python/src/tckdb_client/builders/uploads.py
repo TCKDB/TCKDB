@@ -27,6 +27,27 @@ from tckdb_client.builders.validation import (
     ensure_optional_non_empty_str,
 )
 
+def _require_opt_primary_unless_monatomic(
+    primary: Calculation, geometry: Geometry, *, subject: str
+) -> None:
+    """Apply the server's primary-calculation rule to a resolved conformer geometry.
+
+    The rule is ``tckdb_schemas``' own (an ``opt``, except an ``sp`` on a
+    one-atom geometry), so the client refuses exactly what the server would.
+    """
+    from tckdb_schemas.enums import CalculationType
+    from tckdb_schemas.workflows.computed_species_upload import (
+        require_opt_primary_unless_monatomic,
+    )
+
+    try:
+        require_opt_primary_unless_monatomic(
+            CalculationType(primary.type), geometry.xyz_text, subject=subject
+        )
+    except ValueError as exc:
+        raise TCKDBBuilderValidationError(str(exc)) from exc
+
+
 if TYPE_CHECKING:  # pragma: no cover — type-only import
     from tckdb_client.builders.summary import UploadSummary
 
@@ -107,10 +128,12 @@ class ComputedSpeciesUpload:
                 "calculations."
             )
         if self.primary_calculation.type != "opt":
-            raise TCKDBBuilderValidationError(
-                "ComputedSpeciesUpload.primary_calculation.type must be "
-                f"'opt', got {self.primary_calculation.type!r}; the "
-                "bundle endpoint anchors each conformer on an opt."
+            # Only a one-atom geometry may anchor on an sp (#610); the
+            # geometry is the one ``to_payload`` will send.
+            _require_opt_primary_unless_monatomic(
+                self.primary_calculation,
+                self._conformer_geometry(),
+                subject="ComputedSpeciesUpload.primary_calculation.type",
             )
 
         # Every depends_on edge must resolve inside this upload.
@@ -393,7 +416,7 @@ class ComputedSpeciesUpload:
     # ------------------------------------------------------------------
 
     def _pick_primary_calculation(self) -> Calculation:
-        """Pick the first ``opt`` calculation when the caller omits one.
+        """Pick the first ``opt`` calculation (else the first ``sp``) when the caller omits one.
 
         Many producers think of "the calculations" and "the primary"
         as the same concept; the builder accepts that shorthand and
@@ -403,10 +426,16 @@ class ComputedSpeciesUpload:
         for calc in self.calculations:
             if calc.type == "opt":
                 return calc
+        # No opt: a single atom has none to give, and anchors on its sp. The
+        # choice is only a candidate; ``__post_init__`` refuses it unless the
+        # geometry really is one atom.
+        for calc in self.calculations:
+            if calc.type == "sp":
+                return calc
         raise TCKDBBuilderValidationError(
             "ComputedSpeciesUpload requires either an explicit "
             "primary_calculation=, or at least one opt calculation in "
-            "calculations."
+            "calculations (a single atom may use its sp)."
         )
 
     def _conformer_geometry(self) -> Geometry:
@@ -1295,6 +1324,12 @@ class ComputedReactionUpload:
         conformer_geom = self._resolve_species_geometry(
             sp_calcs, primary_opt, sp_label=sp_label,
         )
+        if primary_opt.type != "opt":
+            _require_opt_primary_unless_monatomic(
+                primary_opt,
+                conformer_geom,
+                subject=f"species_calculations[{sp_label!r}] primary calculation type",
+            )
         geom_key = geometry_keys.mint(conformer_geom, label=conformer_geom.label)
         conformer_key = conformer_keys.mint(primary_opt, label=primary_opt.label)
         primary_calc_key = calc_keys.lookup(primary_opt)
@@ -1339,11 +1374,17 @@ class ComputedReactionUpload:
         """
         opts = [c for c in sp_calcs if c.type == "opt"]
         if not opts:
+            # A single atom has no opt and anchors on its sp (#610). The sp
+            # is only a candidate here; the caller refuses it unless the
+            # resolved conformer geometry is one atom.
+            sps = [c for c in sp_calcs if c.type == "sp"]
+            if sps:
+                return sps[0]
             sp_label = sp.label or sp.smiles or "<species>"
             raise TCKDBBuilderValidationError(
                 f"species_calculations[{sp_label!r}] must contain at "
-                "least one opt calculation; non-opt calcs need an opt to "
-                "anchor a conformer."
+                "least one opt calculation (a single atom may use its sp); "
+                "other calcs need an opt to anchor a conformer."
             )
         # _normalise_species_calculations rejected >1 already.
         return opts[0]

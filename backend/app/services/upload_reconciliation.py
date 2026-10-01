@@ -24,7 +24,12 @@ from tckdb_schemas.stationary_point import (
     warning_findings,
 )
 
-from app.db.models.common import StationaryPointKind
+from app.chemistry.atomic_ground_terms import (
+    declared_term_multiplicity,
+    ground_term_for,
+    parse_atomic_term,
+)
+from app.db.models.common import SpeciesEntryStateKind, StationaryPointKind
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
     FreqResultPayload,
@@ -42,6 +47,7 @@ from app.services.ess_species_deduction import Deduction, deduce_all
 from app.services.frequency_geometry_linearity import (
     calculation_linearity_warnings,
 )
+from app.services.monatomic import single_atom_element
 
 # ---------------------------------------------------------------------------
 # Warning codes
@@ -87,6 +93,13 @@ W_FREQ_PARSED_NO_MODES = "freq_parser_extracted_but_modes_missing"
 # Layer 2: deduction-based
 W_ELECTRONIC_STATE_CONTRADICTS_METHOD = "electronic_state_contradicts_method"
 W_TERM_SYMBOL_MISMATCH = "term_symbol_mismatch"
+# A term symbol states its own spin multiplicity (the leading 2S+1), and the
+# same payload states one too. Not the same finding as W_TERM_SYMBOL_MISMATCH,
+# which compares the declared symbol against one *derived* from point group:
+# this is an internal contradiction, needs no evidence beyond the payload, and
+# is filtered by a reviewer separately. Also carries the single-atom check
+# against the NIST ground term.
+W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY = "term_symbol_contradicts_multiplicity"
 
 # Charge / multiplicity contradictions are detected against the *output log*
 # by :mod:`app.services.charge_multiplicity_reconciliation`, which is their
@@ -379,6 +392,73 @@ def _reconcile_deduction(
 
 
 # ---------------------------------------------------------------------------
+# Term symbol against the payload's own multiplicity (and, for atoms, NIST)
+# ---------------------------------------------------------------------------
+
+
+def term_symbol_warnings(payload: SpeciesEntryIdentityPayload) -> list[UploadWarning]:
+    """Check a declared ``term_symbol`` against the multiplicity beside it.
+
+    Tier (ADR 0008): warning. The leading digit of a term symbol *is* 2S+1,
+    so ``3P`` beside ``multiplicity=2`` is a contradiction no correct deposit
+    can contain, which the ADR would put at the blocking tier. It is a warning
+    here because the ADR's own audit ("promote the contradiction warnings")
+    is deliberately not performed yet, ``term_symbol`` is already a warning
+    tier field (``term_symbol_mismatch``), and a species-entry payload is
+    shared by every upload route; refusing on it is a migration with its own
+    evidence requirements. Only symbols that *start* with the multiplicity
+    digit are read; ``X2Pi`` or ``A1`` are ambiguous and stay silent.
+
+    For a neutral one-atom species in the NIST table, a declared term whose
+    multiplicity or L differs from the ground term is also flagged (ground
+    state only).
+    """
+    term = payload.term_symbol
+    if not term:
+        return []
+    warnings: list[UploadWarning] = []
+    stated = declared_term_multiplicity(term)
+    if stated is not None and stated != payload.multiplicity:
+        warnings.append(
+            UploadWarning(
+                field="species_entry.term_symbol",
+                code=W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
+                message=(
+                    f"Term symbol '{term}' states spin multiplicity {stated}, but "
+                    f"this species entry declares multiplicity {payload.multiplicity}."
+                ),
+            )
+        )
+        return warnings
+    atomic = parse_atomic_term(term)
+    element = single_atom_element(smiles=payload.smiles)
+    if (
+        atomic is not None
+        and element is not None
+        and payload.charge == 0
+        and payload.electronic_state_kind == SpeciesEntryStateKind.ground
+    ):
+        ground = ground_term_for(element)
+        if ground is not None and (
+            atomic.multiplicity != ground.multiplicity
+            or atomic.l != ground.l
+            or (atomic.two_j is not None and atomic.two_j != ground.levels[0][0])
+        ):
+            warnings.append(
+                UploadWarning(
+                    field="species_entry.term_symbol",
+                    code=W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY,
+                    message=(
+                        f"Term symbol '{term}' is not the NIST ground level of "
+                        f"neutral {element} ({ground.term_symbol}, ground "
+                        f"J={ground.levels[0][0] / 2:g}) for a ground-state entry."
+                    ),
+                )
+            )
+    return warnings
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -399,7 +479,7 @@ def reconcile_species_entry(
         ``vdw_complex``, to tell a soft intermolecular artifact from a
         mode too stiff to be anything but a reaction coordinate.
     """
-    warnings: list[UploadWarning] = []
+    warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
     if freq_n_imag is not None:
         warnings.extend(
             _check_n_imag(
@@ -435,7 +515,7 @@ def reconcile_species_entry_full(
         it ``None`` and the check stays silent.
     :returns: List of warnings (may be empty).
     """
-    warnings: list[UploadWarning] = []
+    warnings: list[UploadWarning] = list(term_symbol_warnings(payload))
     additional = additional_calcs or []
 
     # Layer 1: structural n_imag checks
@@ -526,6 +606,7 @@ __all__ = [
     "W_N_IMAG_CONTRADICTS_MINIMUM",
     "W_N_IMAG_HIGHER_ORDER_SADDLE",
     "W_N_IMAG_SUGGESTS_TS",
+    "W_TERM_SYMBOL_CONTRADICTS_MULTIPLICITY",
     "W_TERM_SYMBOL_MISMATCH",
     "W_TS_EXTRA_IMAGINARY_MODES_BELOW_TAU",
     "W_TS_EXTRA_IMAGINARY_MODES_NOT_ASSESSABLE",
@@ -538,4 +619,5 @@ __all__ = [
     "reconcile_species_entry",
     "reconcile_species_entry_full",
     "stationary_point_warnings",
+    "term_symbol_warnings",
 ]

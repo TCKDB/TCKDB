@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 208 | `backend/app/api/code_catalogue.py` |
-| **total** | **497** | |
+| Refusal codes a caller can receive | 211 | `backend/app/api/code_catalogue.py` |
+| **total** | **500** | |
 
 ## How a record is named
 
@@ -708,7 +708,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (155 codes)
+### HTTP 422 (158 codes)
 
 | Code | Names |
 | --- | --- |
@@ -815,6 +815,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `rights_basis_missing` | a relationship — read `context` |
 | `rights_license_blank` | a thing |
 | `rights_source_terms_required` | a thing |
+| `scf_stability_source_calculation_owner_mismatch` | a relationship — read `context` |
+| `scf_stability_source_geometry_mismatch` | a relationship — read `context` |
 | `selection_no_longer_approved` | a thing |
 | `smiles_too_long` | a relationship — read `context` |
 | `species_entry_handle_conflict` | a relationship — read `context` |
@@ -857,6 +859,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `transition_state_no_imaginary_mode` | a thing |
 | `transition_state_reaction_coordinate_ambiguous` | a relationship — read `context` |
 | `transition_state_reaction_coordinate_not_designated` | a thing |
+| `transport_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `unknown_element_symbol` | a thing |
 | `unknown_include_token` | a thing |
 | `unknown_record_type` | a thing |

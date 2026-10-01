@@ -491,6 +491,8 @@ def _build_kinetics_payload(
         "tmin_k": kinetics.tmin_k,
         "tmax_k": kinetics.tmax_k,
     }
+    if kinetics.t0_k != 1.0:
+        payload["t0_k"] = kinetics.t0_k
     if kinetics.a_uncertainty is not None:
         payload["a_uncertainty"] = kinetics.a_uncertainty
         # ARC/Arkane reports A-uncertainty as a multiplicative factor f

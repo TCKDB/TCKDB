@@ -20,7 +20,7 @@ from app.api.deps import get_current_user, get_write_db
 from app.api.idempotency import IdempotencyContext, idempotency_dependency
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
-from app.db.models.common import SubmissionKind
+from app.db.models.common import ScientificOriginKind, SubmissionKind
 from app.db.models.species import SpeciesEntry
 from app.importers.thermoml.archive import build_standalone_article
 from app.schemas.entities.calculation import CalculationUploadRef
@@ -36,6 +36,7 @@ from app.schemas.workflows.computed_species_upload import (
     ConformerUploadRefInBundle,
     StatmechUploadRefInBundle,
     ThermoUploadRefInBundle,
+    TransportUploadRefInBundle,
 )
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
@@ -53,6 +54,7 @@ from app.services.artifact_storage import (
     MAX_ARTIFACT_BYTES,
     MAX_ENCODED_ARTIFACT_LEN,
 )
+from app.services.atomic_electronic_warnings import collect_atomic_electronic_warnings
 from app.services.frequency_geometry_linearity import (
     computed_reaction_linearity_warnings,
     computed_species_linearity_warnings,
@@ -61,6 +63,7 @@ from app.services.frequency_geometry_linearity import (
     transition_state_upload_linearity_warnings,
 )
 from app.services.idempotency import IDEMPOTENCY_HEADER
+from app.services.monatomic import single_atom_element, statmech_subject_is_polyatomic
 from app.services.provenance_warnings import (
     collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
@@ -68,7 +71,6 @@ from app.services.provenance_warnings import (
     collect_statmech_provenance_warnings,
     collect_thermo_provenance_warnings,
     collect_transport_provenance_warnings,
-    statmech_has_rotational_structure,
 )
 from app.services.public_refs import public_refs_by_id
 from app.services.statmech_resolution import (
@@ -239,6 +241,18 @@ class ComputedReactionUploadResult(BaseModel):
     #: named; before, statmech had to be found by querying back through
     #: ``species_entry_ids``.
     statmech_ids: list[int] = Field(default_factory=list)
+    #: One id per ``transport`` row written for a species in this bundle.
+    transport_ids: list[int] = Field(default_factory=list)
+    #: The ``trn_`` ref of each record in ``transport_ids``, in the same order.
+    transport_refs: list[str] = Field(default_factory=list)
+    #: The ``statmech`` row written for the transition state, if the bundle's
+    #: ``transition_state`` carried a ``statmech`` block. Separate from
+    #: ``statmech_ids`` rather than appended to it: that list is one id per
+    #: species statmech, and a consumer that pairs it with ``species_entry_ids``
+    #: would be misled by an entry that belongs to no species.
+    transition_state_statmech_id: int | None = None
+    #: The ``sm_``-style public ref of the same record, for reads.
+    transition_state_statmech_ref: str | None = None
     species_entry_ids: list[int]
     species_count: int
     # Bundle-local calc key → assigned ``calculation.id`` for every
@@ -275,7 +289,7 @@ def _calculation_refs_by_key(
 @audit_sync_upload_failure(SubmissionKind.conformer)
 def upload_conformer(
     request: ConformerUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -353,7 +367,7 @@ def upload_conformer(
 @audit_sync_upload_failure(SubmissionKind.reaction)
 def upload_reaction(
     request: ReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -400,7 +414,7 @@ def upload_reaction(
 @audit_sync_upload_failure(SubmissionKind.kinetics)
 def upload_kinetics(
     request: KineticsUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -451,7 +465,7 @@ def upload_kinetics(
 @audit_sync_upload_failure(SubmissionKind.network)
 def upload_network(
     request: NetworkUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -490,7 +504,7 @@ def upload_network(
 @audit_sync_upload_failure(SubmissionKind.network_pdep)
 def upload_network_pdep(
     request: NetworkPDepUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -535,7 +549,7 @@ def upload_network_pdep(
 @audit_sync_upload_failure(SubmissionKind.statmech)
 def upload_statmech(
     request: StatmechUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -560,7 +574,22 @@ def upload_statmech(
             source_calculation_roles={
                 item.role.value for item in request.source_calculations
             },
-            has_rotational_structure=statmech_has_rotational_structure(request),
+            is_polyatomic=statmech_subject_is_polyatomic(
+                request, smiles=request.species_entry.smiles
+            ),
+        )
+    )
+    warnings.extend(
+        collect_atomic_electronic_warnings(
+            element=single_atom_element(smiles=request.species_entry.smiles),
+            charge=request.species_entry.charge,
+            multiplicity=request.species_entry.multiplicity,
+            electronic_state_kind=request.species_entry.electronic_state_kind,
+            term_symbol=request.species_entry.term_symbol,
+            electronic_levels=request.electronic_levels,
+            statmech_computed=request.scientific_origin == ScientificOriginKind.computed,
+            energy_is_computed=None,
+            has_soc_total=False,
         )
     )
     sub = open_upload_submission(
@@ -601,7 +630,7 @@ def upload_statmech(
 @audit_sync_upload_failure(SubmissionKind.thermo)
 def upload_thermo(
     request: ThermoUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -645,7 +674,7 @@ def upload_thermo(
 @audit_sync_upload_failure(SubmissionKind.transition_state)
 def upload_transition_state(
     request: TransitionStateUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -697,7 +726,7 @@ def upload_transition_state(
 @audit_sync_upload_failure(SubmissionKind.transport)
 def upload_transport(
     request: TransportUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -748,7 +777,7 @@ def upload_transport(
 @audit_sync_upload_failure(SubmissionKind.computed_species)
 def upload_computed_species(
     request: ComputedSpeciesUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -813,6 +842,14 @@ def upload_computed_species(
         if outcome.statmech is not None
         else None
     )
+    transport_ref = (
+        TransportUploadRefInBundle(
+            transport_id=outcome.transport.id,
+            transport_ref=outcome.transport.public_ref,
+        )
+        if outcome.transport is not None
+        else None
+    )
     result = ComputedSpeciesUploadResult(
         species_entry_id=outcome.species_entry_id,
         submission_id=sub.submission_id,
@@ -820,6 +857,7 @@ def upload_computed_species(
         conformers=conformer_refs,
         thermo=thermo_ref,
         statmech=statmech_ref,
+        transport=transport_ref,
         warnings=warnings,
     )
     mark_upload_ingested(session, sub)
@@ -835,7 +873,7 @@ def upload_computed_species(
 @audit_sync_upload_failure(SubmissionKind.computed_reaction)
 def upload_computed_reaction(
     request: ComputedReactionUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
 ):
@@ -950,7 +988,7 @@ def _thermoml_species_entry_ref(
 @audit_sync_upload_failure(SubmissionKind.other)
 def upload_thermoml(
     request: ThermoMLUploadRequest,
-    session: Session = Depends(get_write_db),
+    session: Session = Depends(get_write_db, scope="function"),
     current_user: AppUser = Depends(get_current_user),
     idem: IdempotencyContext = Depends(idempotency_dependency),
     # Required, unlike every sibling route's optional Idempotency-Key

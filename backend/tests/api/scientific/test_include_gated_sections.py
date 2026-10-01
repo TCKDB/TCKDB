@@ -281,7 +281,9 @@ def test_the_marker_registry_only_names_declared_sections():
     # and ScientificLevelOfTheoryRecord added three of its own
     # (correction_schemes, frequency_scale_factors, used_by). 105 after
     # ``include=software`` (methods-surface plan §5.3) added a fourth.
-    assert marked == 105, f"the marker registry names {marked} properties"
+    # 107 after ``include=statmech`` on the transition-state records (#621),
+    # which marks the field on both the entry record and the concept record.
+    assert marked == 107, f"the marker registry names {marked} properties"
 
 
 def test_the_hosted_document_marks_the_gated_properties(client):
@@ -301,8 +303,9 @@ def test_the_hosted_document_marks_the_gated_properties(client):
 
     # 104 since ``networks`` joined REACTION_FULL_SECTIONS, and
     # ScientificLevelOfTheoryRecord added three of its own. 105 after
-    # ``include=software`` added a fourth.
-    assert checked == 105, f"the hosted document carries {checked} markers"
+    # ``include=software`` added a fourth. 107 after ``include=statmech`` on the
+    # two transition-state records (#621).
+    assert checked == 107, f"the hosted document carries {checked} markers"
 
 
 def test_the_marker_is_not_stamped_on_ungated_properties():

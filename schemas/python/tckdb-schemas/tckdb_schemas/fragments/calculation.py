@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -33,6 +33,9 @@ from tckdb_schemas.stationary_point import (
     evaluate_transition_state_frequency,
     resolve_tau_from_parameters,
 )
+
+if TYPE_CHECKING:
+    from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 
 # ---------------------------------------------------------------------------
 # Constraint payload (lives in fragments so calculation upload payloads can
@@ -395,8 +398,8 @@ class SPResultPayload(SchemaBase):
     electronic_energy_hartree: float | None = None
 
 
-class SCFStabilityContent(SchemaBase):
-    """Optional inline SCF wavefunction stability evidence.
+class SCFStabilityBase(SchemaBase):
+    """The SCF wavefunction stability finding, with nothing that cites another row.
 
     Attaches to any calculation type — there is no calc_type restriction.
     Producers must only emit ``status = stable`` when an actual
@@ -416,12 +419,10 @@ class SCFStabilityContent(SchemaBase):
     :param reoptimized_wavefunction: Whether a stable wavefunction was
         obtained by stability optimisation / reoptimisation.
 
-    Holds the stability finding and nothing that names another database
-    row, which is what lets a bundle carry it. A bundle upload identifies
-    everything by local key; the two FK fields on
-    :class:`SCFStabilityPayload` below would put raw primary keys back on
-    a surface a depositor is meant to be able to write without ever
-    having queried TCKDB.
+    Holds the stability finding and nothing that names another row. The
+    two routes that cite the measuring job do it differently, each in its own
+    subclass: a bundle by local key (:class:`SCFStabilityContent`), the
+    primitive routes by id (:class:`SCFStabilityPayload`).
     """
 
     status: SCFStabilityStatus
@@ -477,7 +478,31 @@ class SCFStabilityContent(SchemaBase):
         return self
 
 
-class SCFStabilityPayload(SCFStabilityContent):
+class SCFStabilityContent(SCFStabilityBase):
+    """SCF stability evidence as a bundle carries it.
+
+    The finding of :class:`SCFStabilityBase` plus, optionally, the local key of
+    the job that measured it.
+
+    :param source_calculation_key: Optional local key of the calculation
+        (job) that measured this verdict, when that is a different job from
+        the one this block hangs off. Meaningful only inside a bundle, where
+        it must name a calculation the same bundle declares for the same
+        species entry (or transition state) and on the same conformer as the
+        calculation carrying the block. It may not name the carrier itself
+        or form a cycle with another block's key, and a level of theory that
+        differs from the carrier's is accepted with an upload warning. The
+        job that measured it keeps its own type; there is no separate stability
+        calculation type. The key is resolved after every calculation in the
+        bundle exists, so it may point at a calculation declared later in
+        the payload. Omit it when the calculation carrying the block is the
+        one that measured the stability.
+    """
+
+    source_calculation_key: str | None = Field(default=None, min_length=1)
+
+
+class SCFStabilityPayload(SCFStabilityBase):
     """SCF stability evidence that may cite rows outside its own record.
 
     The primitive upload routes take this shape. They already accept
@@ -485,15 +510,10 @@ class SCFStabilityPayload(SCFStabilityContent):
     naming the calculation or artifact that carries the stability log is
     the same kind of claim they already support.
 
-    Bundle roots take :class:`SCFStabilityContent` instead. Not because
-    the citation is unwanted there, but because a bundle has no way to
-    make it: a bundle names things by local key, and the calculation this
-    block hangs off is persisted before its siblings exist, so a key
-    pointing sideways could not be resolved at the moment it is read. A
-    depositor who needs the citation has the primitive routes; a
-    depositor who has only what a parser found — a status, an eigenvalue,
-    a count — can now say it from a bundle, which is what they could not
-    do at all before.
+    Bundle roots take :class:`SCFStabilityContent` instead, which names the
+    measuring job by local key rather than by id. Both share
+    :class:`SCFStabilityBase`, so neither route publishes the other's
+    citation field.
 
     :param source_calculation_id: Optional FK to the calculation whose
         log carries the stability evidence (when separate from the
@@ -672,9 +692,21 @@ class IRCPointPayload(SchemaBase):
 class IRCResultPayload(SchemaBase):
     """Upload-facing inline result for an IRC calculation.
 
-    :param direction: Overall run mode (forward / reverse / both).
-    :param has_forward: True when at least one forward-branch point is present.
-    :param has_reverse: True when at least one reverse-branch point is present.
+    ``direction``, ``has_forward`` and ``has_reverse`` are each optional, and
+    omitting one says "the producer did not state it". That is a real position
+    for a producer to be in: an IRC whose log does not record which way it ran
+    is still a path with points on it, and requiring the three to be written
+    made such a producer drop the whole result. A value that is not stated is
+    stored as NULL and read back as null, never as ``false``: ``has_forward``
+    false is a claim that no forward-branch point exists, which is a different
+    statement from not knowing.
+
+    :param direction: Overall run mode (forward / reverse / both). Omit when
+        the run mode is not stated.
+    :param has_forward: True when at least one forward-branch point is present,
+        false when none is. Omit when not stated.
+    :param has_reverse: True when at least one reverse-branch point is present,
+        false when none is. Omit when not stated.
     :param ts_point_index: Optional index of the point marked as TS.
     :param point_count: Optional total sampled-point count (consistency check).
     :param zero_energy_reference_hartree: Optional energy used as relative zero.
@@ -682,9 +714,9 @@ class IRCResultPayload(SchemaBase):
     :param points: Sampled IRC-path points attached to the result.
     """
 
-    direction: IRCDirection
-    has_forward: bool
-    has_reverse: bool
+    direction: IRCDirection | None = None
+    has_forward: bool | None = None
+    has_reverse: bool | None = None
     ts_point_index: int | None = Field(default=None, ge=0)
     point_count: int | None = Field(default=None, ge=0)
     zero_energy_reference_hartree: float | None = None
@@ -693,7 +725,12 @@ class IRCResultPayload(SchemaBase):
 
     @model_validator(mode="after")
     def validate_points(self) -> Self:
-        """Enforce unique indices, TS index consistency, and direction flags."""
+        """Enforce unique indices, TS index consistency, and direction flags.
+
+        A flag that is *stated false* contradicts a point in that direction; a
+        flag that is not stated contradicts nothing, and is left unstated
+        rather than inferred from the points.
+        """
 
         if not self.points:
             return self
@@ -716,11 +753,11 @@ class IRCResultPayload(SchemaBase):
         has_reverse_in_points = any(
             point.direction == IRCDirection.reverse for point in self.points
         )
-        if has_forward_in_points and not self.has_forward:
+        if has_forward_in_points and self.has_forward is False:
             raise ValueError(
                 "has_forward must be true when forward-direction points are provided."
             )
-        if has_reverse_in_points and not self.has_reverse:
+        if has_reverse_in_points and self.has_reverse is False:
             raise ValueError(
                 "has_reverse must be true when reverse-direction points are provided."
             )
@@ -743,7 +780,12 @@ class PathSearchPointPayload(SchemaBase):
     :param rms_gradient: RMS gradient at this point.
     :param is_ts_guess: Whether this point is the algorithm's TS guess.
     :param is_climbing_image: Whether this image was the climbing image
-        (NEB-CI specific; ignored by string-method outputs).
+        (NEB-CI specific; ignored by string-method outputs). ``false``
+        is the default and is stored exactly as sent, so ``false`` reads as
+        "not a climbing image" and as "not stated" alike: a producer that
+        does not know should name the climbing image through the result's
+        ``climbing_image_index`` or leave every point at the default. A
+        tri-state value would need a nullable column and is not offered yet.
     :param geometry: Optional inline geometry payload for this point.
     :param note: Optional free-text note.
     """
@@ -773,7 +815,24 @@ class PathSearchResultPayload(SchemaBase):
     :param method: The path-search algorithm used.
     :param is_double_ended: Whether the algorithm uses two endpoints
         (NEB, GSM) versus single-ended (growing string, freezing string).
-    :param converged: Whether the path search converged.
+    :param converged: Whether the path search met its own stopping
+        criteria. What that means depends on ``method``, and the producer
+        states the algorithm's verdict, not a proxy for it:
+
+        * ``neb``: the band's force (and, where used, step) thresholds were
+          satisfied, climbing image included for a climbing-image run, and
+          the run did not stop on its iteration limit.
+        * ``gsm``, ``growing_string``, ``freezing_string``: the string
+          finished growing (or freezing) and the program's own convergence
+          test on the path, or on the TS node it reports, passed.
+        * ``other``: the method's own convergence verdict; describe the
+          criterion in ``note``.
+
+        ``true`` means that verdict was observed. ``false`` means it was
+        observed to fail. Leave it absent when it was not observed: the
+        existence of an output file, a nonzero exit code or a parsed TS
+        guess is not a convergence verdict, so none of them justifies
+        ``true``.
     :param n_points: Total sampled-point count (consistency check).
     :param selected_ts_point_index: Index of the point selected as the
         TS guess (0-based). Must match a ``points[].point_index``.
@@ -883,8 +942,8 @@ class OutputGeometryEntry(SchemaBase):
 class CalculationWithResultsPayload(CalculationPayload):
     """A calculation with optional typed result blocks.
 
-    Extends ``CalculationPayload`` with opt/freq/sp/irc/path_search result
-    fields. Validation enforces that only the result type matching the
+    Extends ``CalculationPayload`` with opt/freq/sp/irc/path_search/scan
+    result fields. Validation enforces that only the result type matching the
     calculation type may be provided.
 
     :param opt_result: Inline optimisation result (type must be ``opt``).
@@ -894,6 +953,10 @@ class CalculationWithResultsPayload(CalculationPayload):
     :param path_search_result: Inline path-search result bundle (type
         must be ``path_search``). Carries NEB, GSM, and other path-based
         TS-search algorithms via ``path_search_result.method``.
+    :param scan_result: Inline scan result (type must be ``scan``): the
+        stepped coordinates and the points along them. Whether a route accepts
+        a ``scan`` calculation at all is that route's own allow-list; this
+        field is only where the points go when it does.
     :param parameters: Optional parsed execution-control parameter
         observations. Each becomes one ``calculation_parameter`` row.
     :param parameters_json: Optional JSON snapshot of the parser output
@@ -908,6 +971,9 @@ class CalculationWithResultsPayload(CalculationPayload):
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
+    # Resolved at the foot of this module: ``fragments.scan`` imports
+    # ``CalculationConstraintCreate`` from here, so it cannot be imported above.
+    scan_result: "CalculationScanResultCreate | None" = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     scf_stability: SCFStabilityPayload | None = None
@@ -1042,6 +1108,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             CalculationType.sp: "sp_result",
             CalculationType.irc: "irc_result",
             CalculationType.path_search: "path_search_result",
+            CalculationType.scan: "scan_result",
         }
         allowed_field = allowed.get(self.type)
         for field_name in (
@@ -1050,6 +1117,7 @@ class CalculationWithResultsPayload(CalculationPayload):
             "sp_result",
             "irc_result",
             "path_search_result",
+            "scan_result",
         ):
             value = getattr(self, field_name)
             if value is not None and field_name != allowed_field:
@@ -1074,3 +1142,11 @@ class CalculationWithResultsPayload(CalculationPayload):
             return self
         CalculationOriginMetadata.model_validate(origin_block)
         return self
+
+
+# ``fragments.scan`` needs ``CalculationConstraintCreate`` from this module, so
+# the scan result type cannot be named above. Importing the module (not a name
+# from it) is safe whichever of the two is imported first: if ``scan`` is the
+# one mid-import, this line finds it already in ``sys.modules`` and does
+# nothing, and ``scan`` finishes the job itself with the rebuild at its foot.
+import tckdb_schemas.fragments.scan  # noqa: E402,F401

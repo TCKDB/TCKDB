@@ -103,6 +103,7 @@ from tckdb_client.scientific_types import (
 API_KEY_HEADER = "X-API-Key"
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed"
+REQUEST_ID_HEADER = "X-Request-ID"
 
 # Sentinel used by :meth:`TCKDBClient.upload` to distinguish the
 # builder-form ``upload(builder)`` call from the legacy
@@ -205,6 +206,17 @@ class ArtifactUploadBatchResult:
     #: The ``calc_`` ref the batch was addressed by, or ``None`` when the plan
     #: carried none and the integer id was used.
     calculation_ref: str | None = None
+    #: HTTP status of the server's answer (201 for a stored batch, and the
+    #: original 201 again for a replay).
+    status_code: int | None = None
+    #: The server's ``X-Request-ID`` for this call, for quoting to an operator.
+    request_id: str | None = None
+    #: ``True`` when the server replayed a stored response for this
+    #: ``Idempotency-Key`` instead of storing the batch again.
+    replayed: bool = False
+    #: The ``warnings`` list from the response body (``UploadWarning`` dicts),
+    #: as a tuple; empty when the server sent none.
+    warnings: tuple[Any, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,6 +241,15 @@ class TCKDBResponse:
             if name.lower() == target:
                 return isinstance(value, str) and value.lower() == "true"
         return False
+
+    @property
+    def request_id(self) -> str | None:
+        """The server's ``X-Request-ID`` for this call, or ``None`` if absent."""
+        target = REQUEST_ID_HEADER.lower()
+        for name, value in self.headers.items():
+            if name.lower() == target:
+                return value if isinstance(value, str) and value else None
+        return None
 
 
 class TCKDBClient:
@@ -1151,18 +1172,27 @@ class TCKDBClient:
                     f"{idempotency_key_prefix}:{first_key}:artifact-batch"
                 )
 
-            response = self.post_json(
+            http = self.request_json(
+                "POST",
                 f"/calculations/{group_ref[calc_id] or calc_id}/artifacts",
-                {"artifacts": artifact_payloads},
+                json={"artifacts": artifact_payloads},
                 idempotency_key=idem,
+            )
+            body = http.data
+            body_warnings = (
+                body.get("warnings") if isinstance(body, dict) else None
             )
             results.append(
                 ArtifactUploadBatchResult(
                     calculation_id=calc_id,
                     calculation_keys=tuple(calc_keys),
                     artifact_count=len(artifact_payloads),
-                    response=response,
+                    response=body,
                     calculation_ref=group_ref[calc_id],
+                    status_code=http.status_code,
+                    request_id=http.request_id,
+                    replayed=http.idempotency_replayed,
+                    warnings=tuple(body_warnings or ()),
                 )
             )
         return results

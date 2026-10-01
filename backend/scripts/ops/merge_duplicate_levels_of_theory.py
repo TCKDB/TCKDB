@@ -1,5 +1,11 @@
 #!/usr/bin/env python
-"""Plan, and optionally merge, levels of theory split by basis spelling (#574).
+"""Plan, and optionally merge, levels of theory split by spelling (#574, #585, #618, #602).
+
+The same script joins every split the identity keys close: basis spelling
+(#574), method case (#585), curated method aliases such as ``wb97x-d`` /
+``wb97xd``, and dispersion / solvent / solvent-model case (#618, #602).
+Groups are found with the application's own hash formula, so it follows
+whichever keys the running code has.
 
 Before #574, ``level_of_theory.lot_hash`` hashed basis names byte for byte,
 so ``b3lyp/def2-tzvp`` (Psi4) and ``b3lyp/def2tzvp`` (Gaussian, ARC) were
@@ -49,7 +55,10 @@ is reported as blocked otherwise:
   holder already has. Every foreign key into ``level_of_theory`` is read at
   run time; only ``calculation.lot_id`` (repointed) and
   ``level_of_theory_merge`` (earlier merges, re-aimed at the holder) are
-  handled;
+  handled. That includes ``thermo.energy_level_of_theory_id`` and
+  ``statmech.energy_level_of_theory_id`` (#619): a declared energy level on a
+  duplicate blocks the group, because this script never rewrites accepted
+  science. New uploads resolve to the holder, and reads follow a merge;
 * **A holder exists**: a row whose ``lot_hash`` already equals the group's
   identity-keyed hash. If none does, ``38b06819f099`` has not run.
 

@@ -7,10 +7,12 @@ content (reactants/products + TS geometry + calculations).
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.common import CalculationType, SubmissionRecordType
+from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.transition_state import TransitionStateEntry
 from app.schemas.workflows.reaction_upload import (
     ReactionUploadRequest,
@@ -19,8 +21,15 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.calculation_resolution import collect_converged_opt_energy_warnings
+from app.services.energy_correction_resolution import (
+    assert_bac_total_has_required_components,
+    create_applied_energy_correction,
+)
 from app.services.geometry_resolution import resolve_geometry_payload
-from app.services.reaction_atom_map import persist_reaction_atom_map
+from app.services.reaction_atom_map import (
+    ResolvedAtomMapParticipant,
+    persist_reaction_atom_map,
+)
 from app.services.reaction_resolution import (
     validate_transition_state_composition,
 )
@@ -28,6 +37,10 @@ from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
     apply_review_policy,
+)
+from app.services.species_resolution import (
+    assert_geometry_composition_matches_identity,
+    assert_geometry_isotopes_match_identity,
 )
 from app.services.transition_state_resolution import (
     create_transition_state_and_entry,
@@ -42,18 +55,16 @@ from app.workflows.reaction import persist_reaction_upload
 #:
 #: A map indexes into a geometry per participant (ADR 0011: geometry-relative,
 #: with the geometries named explicitly), and this payload describes its
-#: reactants and products by *identity* alone -- a ``SpeciesEntryIdentityPayload``
-#: carries no coordinates. So there is nothing here for a participant leg to be
-#: written against, and the gap cannot be closed on this path, only reported.
-#: The wording follows ``network_pdep._PDEP_ABSENCE_REMEDY`` for the same
-#: reason it exists there: a remedy naming a field this schema does not have
-#: would send a depositor looking for somewhere to put the map that does not
-#: exist.
+#: reactants and products by *identity*, so a participant's geometry is
+#: optional and a map can only be written against the ones a depositor chose to
+#: send. The remedy therefore names every field the map needs, because
+#: 'atom_map' alone would send a depositor to write a map with nothing to count
+#: its indices into.
 _STANDALONE_TS_ABSENCE_REMEDY = (
-    "The standalone transition-state upload describes its reactants and "
-    "products by identity and carries no geometry for them, so it cannot "
-    "carry a map: to record one for this micro reaction, deposit it through "
-    "the computed-reaction upload, which accepts 'atom_map' (ADR 0011)."
+    "To record one for this micro reaction, supply 'atom_map' together with "
+    "'geometry_key' (naming the saddle-point geometry) and a 'key' and "
+    "'geometry' on each reaction participant it maps (ADR 0011); the "
+    "computed-reaction upload accepts the same map."
 )
 
 
@@ -73,15 +84,17 @@ def persist_transition_state_upload(
     3. Resolve the saddle-point geometry.
     4. Persist the primary opt calculation and additional calculations,
        linking output geometries and dependency edges.
-    5. Persist structured IRC validation evidence, or report its absence.
-    6. Report the absence of an atom map, which this path cannot carry.
+    5. Persist structured validation evidence, or report the absence of IRC
+       evidence.
+    6. Persist the applied energy corrections.
+    7. Persist the atom map, or report its absence.
 
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing transition-state payload.
     :param created_by: Optional application user id for newly created rows.
     :param warnings: Optional sink for non-blocking upload warnings: a TS
-        deposited without passing IRC validation evidence, and the atom map
-        this path can report the absence of but cannot carry.
+        deposited without passing IRC validation evidence, and a reaction
+        deposited without an atom map.
     :returns: Newly created ``TransitionStateEntry`` row.
     """
 
@@ -152,18 +165,26 @@ def persist_transition_state_upload(
 
     session.flush()
 
-    # 5. Structured IRC evidence, bound to the single irc calculation the
-    #    schema guarantees is present when evidence was supplied.
-    irc_calculation_ids = [
-        calc.id for calc in additional_calcs if calc.type == CalculationType.irc
-    ]
+    # 5. Structured evidence, each record bound to the single additional
+    #    calculation of the type it is about (irc for an irc record, freq for
+    #    an imaginary_mode record) -- the schema guarantees exactly one is
+    #    present when a record of that kind was supplied, and refuses
+    #    energy_ordering, which needs calculations this payload does not carry.
+    bound_calculation_id_by_kind = {
+        "irc": next(
+            (c.id for c in additional_calcs if c.type == CalculationType.irc), None
+        ),
+        "imaginary_mode": next(
+            (c.id for c in additional_calcs if c.type == CalculationType.freq), None
+        ),
+    }
     persist_transition_state_validation_evidence(
         session,
         request.validation_evidence,
         transition_state_entry_id=ts_entry.id,
         reconstruction_calculation_ids=[
-            irc_calculation_ids[0] if irc_calculation_ids else None
-            for _ in request.validation_evidence
+            bound_calculation_id_by_kind.get(record.kind)
+            for record in request.validation_evidence
         ],
         subject_label=request.label or "transition state",
         field_path="validation_evidence",
@@ -173,29 +194,75 @@ def persist_transition_state_upload(
         warnings=warnings,
     )
 
-    # 6. Atom map (ADR 0011). This path cannot carry one -- see
-    #    ``_STANDALONE_TS_ABSENCE_REMEDY`` -- so the call passes ``None``
-    #    unconditionally and exists to report the gap, exactly as the
-    #    pressure-dependent network bundle does. A saddle point deposited here
-    #    is as unmapped as one deposited anywhere else, and the ADR requires
-    #    the absence be loud enough that a depositor who *has* the mapping
-    #    notices they are being asked for it; reporting it on two of the three
-    #    paths that can carry a transition state would make the warning a
-    #    property of the route rather than of the record.
+    # 6. Applied energy corrections targeting this saddle point. The schema
+    #    has already refused every key this payload has no namespace for, so
+    #    there is no source calculation or conformer to resolve.
+    for index, correction in enumerate(request.applied_energy_corrections):
+        assert_bac_total_has_required_components(
+            session,
+            correction,
+            field=f"applied_energy_corrections[{index}]",
+            target_transition_state_entry_id=ts_entry.id,
+        )
+        create_applied_energy_correction(
+            session,
+            correction,
+            target_transition_state_entry_id=ts_entry.id,
+            source_conformer_observation_id=None,
+            source_calculation_id=None,
+            created_by=created_by,
+            warnings_out=warnings,
+        )
+
+    # 7. Atom map (ADR 0011). Participant geometries are stored as plain
+    #    geometries and checked against the species they claim to be: a map is
+    #    counted into them, so coordinates that are not the participant's own
+    #    would make every index in it point at the wrong atom.
+    geometry_id_by_key: dict[str, int] = {}
+    if request.geometry_key is not None:
+        geometry_id_by_key[request.geometry_key] = geometry.id
+    participant_keys: dict[tuple[str, int], str] = {}
+    for side, members in (("reactant", rxn.reactants), ("product", rxn.products)):
+        for position, member in enumerate(members, start=1):
+            if member.key is not None:
+                participant_keys[(side, position)] = member.key
+            if member.geometry is None:
+                continue
+            payload = member.geometry.to_payload()
+            assert_geometry_composition_matches_identity(member.species_entry, payload)
+            assert_geometry_isotopes_match_identity(member.species_entry, payload)
+            geometry_id_by_key[member.geometry.key] = resolve_geometry_payload(
+                session, payload
+            ).id
+    structure_participants = session.scalars(
+        select(ReactionEntryStructureParticipant).where(
+            ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry.id
+        )
+    ).all()
     persist_reaction_atom_map(
         session,
-        None,
+        request.atom_map,
         reaction_entry_id=reaction_entry.id,
         transition_state_entry_id=ts_entry.id,
         transition_state_geometry_id=geometry.id,
-        participants=(),
-        geometry_id_by_key={},
-        # The map belongs to the micro reaction (ADR 0011), and ``reaction``
-        # is the field on this payload that describes it. Naming a real field
-        # matters for a client that highlights ``field``; there is no
-        # ``atom_map`` here to point at.
-        field_path="reaction",
+        participants=[
+            ResolvedAtomMapParticipant(
+                side=row.role,
+                species_key=participant_keys[(row.role.value, row.participant_index)],
+                participant_index=row.participant_index,
+                structure_participant_id=row.id,
+            )
+            for row in structure_participants
+            # A participant with no key cannot be named by a map, and a request
+            # with a map refuses that at the schema. Without a map the list is
+            # only used to count what the absence warning reports, which needs
+            # none of them.
+            if (row.role.value, row.participant_index) in participant_keys
+        ],
+        geometry_id_by_key=geometry_id_by_key,
+        field_path="atom_map",
         absence_remedy=_STANDALONE_TS_ABSENCE_REMEDY,
+        subject_label=request.label or "transition state",
         created_by=created_by,
         warnings=warnings,
     )
