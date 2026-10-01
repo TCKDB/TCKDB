@@ -24,6 +24,11 @@ UNCHANGED_DEFAULTS: dict[tuple[str, str], Any] = {
     # kinetics.t0_k: a rate stored before the column existed was A * T**n,
     # which is T0 = 1 K (#620).
     ("kinetics", "t0_k"): 1.0,
+    # level_of_theory.core_treatment: a level stored before the column existed
+    # did not state it, which is NULL, and a NULL is not part of its hash
+    # either (ADR 0021). A level that states frozen_core or all_electron
+    # includes the column, so its digest differs, as its identity does.
+    ("level_of_theory", "core_treatment"): None,
 }
 
 

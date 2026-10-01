@@ -259,6 +259,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert "duplicate group(s)" in completed.stdout
 
     # The upload path now finds the existing rows under every spelling.
+    # The resolver is application code and reads the current ``level_of_theory``
+    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
+    # head schema before asking it a question (the revision under test has
+    # already been applied and checked above).
+    harness.run("upgrade", "head")
     with Session(harness.engine) as session:
         for method, basis, extra, key in (
             ("wb97x-d", _BASIS, {}, "wb97xd"),

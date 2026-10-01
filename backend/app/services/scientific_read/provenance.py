@@ -852,6 +852,7 @@ def _build_calculations_section(
             SoftwareRelease.version,
             CalculationGeometryValidation.validation_status,
             CalculationSCFStability.status,
+            LevelOfTheory.core_treatment,
         )
         .join(
             TransitionStateEntry,
@@ -906,6 +907,7 @@ def _build_calculations_section(
                     basis=row[6],
                     dispersion=row[7],
                     solvent=row[8],
+                    core_treatment=row[15],
                     label="/".join(p for p in (row[5] or "", row[6]) if p),
                     composite_scheme=schemes.get(row[3]),
                 )

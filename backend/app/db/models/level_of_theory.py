@@ -7,7 +7,7 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, PublicRefMixin, TimestampMixin
-from app.db.models.common import SpinTreatment
+from app.db.models.common import CoreTreatment, SpinTreatment
 
 if TYPE_CHECKING:
     from app.db.models.calculation import Calculation
@@ -32,6 +32,14 @@ class LevelOfTheory(Base, TimestampMixin, PublicRefMixin):
     # (DR-0034). NULL = unspecified (distinct from an explicit 'unknown').
     spin_treatment: Mapped[Optional[SpinTreatment]] = mapped_column(
         SAEnum(SpinTreatment, name="spin_treatment"),
+        nullable=True,
+    )
+
+    # Frozen-core vs all-electron (ADR 0021). NULL = not stated, and a NULL
+    # row hashes exactly as it did before the column existed: the key joins the
+    # hash only when set, so no existing row is re-keyed.
+    core_treatment: Mapped[Optional[CoreTreatment]] = mapped_column(
+        SAEnum(CoreTreatment, name="core_treatment"),
         nullable=True,
     )
 

@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.69.0 - 2026-10-01
+
+Composite levels of theory, phase P4 (ADR 0021): energy components on single
+points, and a core-treatment field on the level of theory. Both are additions;
+every payload accepted before is accepted unchanged and means the same thing.
+
+- **`sp_energy_components[]` on single points.** `CalculationWithResultsPayload`,
+  the computed-species `CalculationInBundle` and the flat `CalculationIn` (the
+  computed-reaction and network bundles) take a list of
+  `{component, value_hartree}`, where `component` is one of `total`,
+  `reference` (the SCF / HF energy), `correlation`, `triples`, `dboc` or
+  `scalar_relativistic`. The value is what the program printed. Five refusals,
+  each with a code and context:
+  - `sp_energy_component_not_on_sp`: the calculation is not a single point.
+  - `sp_energy_components_require_energy`: the single point's electronic energy
+    is not stated. The parts come from the same output as the energy, so state
+    it; a log can no longer fill the energy in after the parts were checked.
+  - `sp_energy_component_duplicate`: one value per component.
+  - `sp_energy_component_total_mismatch`: a `total` must equal the energy
+    within 1e-6 Eh.
+  - `sp_energy_components_do_not_sum`: `reference + correlation` must equal the
+    energy within 1e-6 Eh. When a `triples` component is also sent,
+    `reference + correlation + triples` may match instead (ORCA's correlation
+    energy already includes (T); Molpro prints CCSD and (T) separately). The
+    refusal reports both sums. On F12 methods, `reference` must include the
+    CABS-singles correction if the program's total does.
+
+  The server compares and never stores a value it computed. A single-point read
+  returns the components under `results.sp.energy_components`.
+- **`LevelOfTheoryRef.core_treatment`** (optional): `frozen_core` or
+  `all_electron`. State it only when the run says so. It is part of the level's
+  identity **only when stated**, so a payload that omits it resolves to exactly
+  the level it always did. Frozen-core and all-electron CCSD(T)/cc-pCVTZ are now
+  two levels instead of one. A partial treatment (an energy window, Gaussian's
+  `FC=1`) has no value yet; leave the field out and describe it in `keywords`.
+- New public enums `CoreTreatment` and `EnergyComponentKind`.
+- Reads: `LevelOfTheorySummary` and the level-of-theory detail carry
+  `core_treatment` (`null` = not stated).
+
 ## 0.68.0 - 2026-10-01
 
 Composite levels of theory, phase P2 (ADR 0021): the server now records the

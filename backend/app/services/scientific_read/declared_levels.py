@@ -59,6 +59,7 @@ def load_declared_energy_summaries(
             dispersion=lot.dispersion,
             solvent=lot.solvent,
             spin_treatment=lot.spin_treatment,
+            core_treatment=lot.core_treatment,
             label=None,
             composite_scheme=schemes.get(lot.id),
         )

@@ -36,6 +36,7 @@ from app.db.models.calculation import (
     CalculationScanPoint,
     CalculationScanResult,
     CalculationSCFStability,
+    CalculationSPEnergyComponent,
     CalculationSpinDiagnostic,
     CalculationSPResult,
     CalculationWavefunctionDiagnostic,
@@ -89,6 +90,7 @@ from app.schemas.reads.scientific_calculation import (
     CalculationScanResultSummary,
     CalculationScanSummary,
     CalculationSCFStabilitySummary,
+    CalculationSPEnergyComponentSummary,
     CalculationSpinDiagnosticSummary,
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
@@ -761,6 +763,7 @@ def _build_lot_summary(
         dispersion=lot.dispersion,
         solvent=lot.solvent,
         spin_treatment=lot.spin_treatment,
+        core_treatment=lot.core_treatment,
         label=None,
         composite_scheme=composite_scheme_summary(session, lot.id),
     )
@@ -1219,15 +1222,29 @@ def _build_sp_summary(
     session: Session, calculation_id: int
 ) -> CalculationResultSummary | None:
     row = session.get(CalculationSPResult, calculation_id)
-    if row is None:
+    components = session.execute(
+        select(
+            CalculationSPEnergyComponent.component,
+            CalculationSPEnergyComponent.value_hartree,
+        )
+        .where(CalculationSPEnergyComponent.calculation_id == calculation_id)
+        .order_by(CalculationSPEnergyComponent.component)
+    ).all()
+    if row is None and not components:
         return None
     return CalculationResultSummary(
         kind="sp",
         sp=CalculationSPResultSummary(
-            electronic_energy_hartree=row.electronic_energy_hartree,
-            electronic_energy_uncertainty_hartree=(
-                row.electronic_energy_uncertainty_hartree
+            electronic_energy_hartree=(
+                row.electronic_energy_hartree if row is not None else None
             ),
+            electronic_energy_uncertainty_hartree=(
+                row.electronic_energy_uncertainty_hartree if row is not None else None
+            ),
+            energy_components=[
+                CalculationSPEnergyComponentSummary(component=c, value_hartree=v)
+                for c, v in components
+            ],
         ),
     )
 

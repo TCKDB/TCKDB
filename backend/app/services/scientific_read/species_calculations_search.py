@@ -57,6 +57,7 @@ from app.db.models.common import (
     CalculationQuality,
     CalculationRecordKind,
     CalculationType,
+    CoreTreatment,
     SubmissionRecordType,
 )
 from app.db.models.geometry import Geometry
@@ -188,6 +189,7 @@ class _CalcRow:
     energy_hartree: float | None
     energy_kind: str | None  # "electronic_energy" | "final_energy" | None
     composite_scheme: CompositeSchemeSummary | None = None
+    lot_core_treatment: CoreTreatment | None = None
 
 
 def search_species_calculations(
@@ -631,6 +633,7 @@ def _query_candidate_calculations(
             Calculation.conformer_observation_id,
             CalculationSPResult.electronic_energy_hartree,
             CalculationOptResult.final_energy_hartree,
+            LevelOfTheory.core_treatment,
         )
         .join(LevelOfTheory, LevelOfTheory.id == Calculation.lot_id, isouter=True)
         .join(
@@ -732,6 +735,7 @@ def _query_candidate_calculations(
                 energy_hartree=energy_hartree,
                 energy_kind=energy_kind,
                 composite_scheme=schemes.get(row[6]),
+                lot_core_treatment=row[23],
             )
         )
     return out
@@ -1249,6 +1253,7 @@ def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:
         basis=row.lot_basis,
         dispersion=row.lot_dispersion,
         solvent=row.lot_solvent,
+        core_treatment=row.lot_core_treatment,
         label="/".join(p for p in label_parts if p),
         composite_scheme=row.composite_scheme,
     )

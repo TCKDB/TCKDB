@@ -137,6 +137,9 @@ _LOT_COLUMNS = (
     "solvent_model",
     "keywords",
     "spin_treatment",
+    # ADR 0021: part of the identity hash when set, so a regroup that left it
+    # out would merge a frozen-core level into an all-electron one.
+    "core_treatment",
 )
 
 
@@ -441,22 +444,43 @@ def _identity_hash(mapping) -> str:
 
     from app.services.calculation_resolution import _level_of_theory_hash
 
-    ref = LevelOfTheoryRef(**{column: mapping[column] for column in _LOT_COLUMNS})
+    # A mapping read from a database older than ``e5b2d8a4c613`` has no
+    # ``core_treatment`` key: every level there is NULL, which is the field's default.
+    ref = LevelOfTheoryRef(**{column: mapping[column] for column in _LOT_COLUMNS if column in mapping})
     return _level_of_theory_hash(ref)
 
 
 def _label(mapping) -> str:
     parts = [f"method={mapping['method']!r}", f"basis={mapping['basis']!r}"]
     for column in _LOT_COLUMNS[2:]:
-        if mapping[column] is not None:
+        if mapping.get(column) is not None:
             parts.append(f"{column}={mapping[column]!r}")
     return " ".join(parts)
+
+
+def _lot_columns_present(session: Session) -> tuple[str, ...]:
+    """The identity columns this database has.
+
+    The script runs after upgrades but is also run against a database that has
+    not reached ``e5b2d8a4c613`` yet (the migration tests stop at older
+    revisions); ``core_treatment`` is simply absent there and every level is
+    NULL for it.
+    """
+    present = set(
+        session.scalars(
+            text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name = 'level_of_theory'"
+            )
+        )
+    )
+    return tuple(column for column in _LOT_COLUMNS if column in present)
 
 
 def build_plan(session: Session, schema: Schema | None = None) -> Plan:
     """Group unmerged rows by identity-keyed hash; describe groups of two or more."""
     schema = schema or read_schema(session)
-    columns = ", ".join(_LOT_COLUMNS)
+    columns = ", ".join(_lot_columns_present(session))
     rows = session.execute(
         text(
             f"SELECT id, public_ref, lot_hash, {columns} "

@@ -191,6 +191,7 @@ def build_level_of_theory_record(
         solvent_model=lot.solvent_model,
         keywords=lot.keywords,
         spin_treatment=lot.spin_treatment,
+        core_treatment=lot.core_treatment,
         lot_hash=lot.lot_hash,
         composite_scheme=(
             composite_scheme_summary(session, lot.id)

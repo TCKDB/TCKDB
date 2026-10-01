@@ -42,7 +42,11 @@ _EVIDENCE_KINDS_REVISION = _VERSIONS / "a7d3f1c95e28_ts_evidence_kinds_and_unsta
 #: The revisions that extend ``c6f2a9d4e7b1``'s regime by adding guards under
 #: their own ``_trigger_name``. Both halves of this test iterate this list, so
 #: a fourth such revision is wired in by adding it here once.
-_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION, _EVIDENCE_KINDS_REVISION)
+#: ``e5b2d8a4c613`` adds ``calc_sp_energy_component``, an ownership child of
+#: ``calculation`` guarded like ``calc_sp_result``, with the TRUNCATE refusal.
+_SP_COMPONENT_REVISION = _VERSIONS / "e5b2d8a4c613_sp_energy_components_and_core_treatment.py"
+
+_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION, _EVIDENCE_KINDS_REVISION, _SP_COMPONENT_REVISION)
 
 #: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one
 #: registered column from ``c6f2a9d4e7b1``'s ``calc_scf_stability`` guard. It

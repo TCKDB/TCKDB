@@ -206,6 +206,11 @@ def test_upgrade_binds_catalogued_levels_and_leaves_the_rest(harness):
         assert i not in bindings
 
     # The upload path finds the very rows the backfill used: it creates nothing.
+    # The resolver is application code and reads the current ``level_of_theory``
+    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
+    # head schema before asking it a question (the revision under test has
+    # already been applied and checked above).
+    harness.run("upgrade", "head")
     with Session(harness.engine) as session:
         for method, basis in (("CBS-QB3", None), ("B3LYP", "CBSB7"), ("B3LYP", "6-31G(2df,p)"), ("G4(MP2)", None)):
             resolve_level_of_theory_ref(session, LevelOfTheoryRef(method=method, basis=basis))

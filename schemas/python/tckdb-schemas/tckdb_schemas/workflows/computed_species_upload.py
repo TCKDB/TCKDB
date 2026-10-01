@@ -44,11 +44,13 @@ from tckdb_schemas.fragments.calculation import (
     PathSearchResultPayload,
     SCFStabilityContent,
     SpinDiagnosticPayload,
+    SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
 from tckdb_schemas import frequency_completeness as _frequency_completeness
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.local_key_codes import (
@@ -164,6 +166,9 @@ class CalculationInBundle(SchemaBase):
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
     sp_result: SPResultPayload | None = None
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
     scan_result: CalculationScanResultCreate | None = None
@@ -247,6 +252,18 @@ class CalculationInBundle(SchemaBase):
                     f"calculation type '{self.type.value}'. "
                     f"Expected '{allowed_field}' or no result."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_sp_energy_components(self) -> Self:
+        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in self.sp_energy_components],
+            calculation_type=self.type,
+            electronic_energy_hartree=(
+                self.sp_result.electronic_energy_hartree if self.sp_result is not None else None
+            ),
+        )
         return self
 
     @model_validator(mode="after")

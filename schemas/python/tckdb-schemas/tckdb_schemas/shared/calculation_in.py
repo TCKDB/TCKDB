@@ -9,7 +9,9 @@ species, transition state, micro reactions) stay backend-side.
 
 from datetime import datetime
 
-from pydantic import Field, field_validator
+from typing import Self
+
+from pydantic import Field, field_validator, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
@@ -30,6 +32,7 @@ from tckdb_schemas.fragments.calculation import (
     SCFStabilityContent,
     SCFStabilityPayload,
     SpinDiagnosticPayload,
+    SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
@@ -40,6 +43,7 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.sp_energy_components import SP_ENERGY_COMPONENTS_DESCRIPTION, check_sp_energy_components
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_transition_state_frequency,
@@ -87,6 +91,8 @@ class CalculationIn(SchemaBase):
         depositor has not. Matches ``CalculationInBundle.literature`` on the
         species bundle, which took the inline fragment from the start.
     :param sp_electronic_energy_hartree: SP result (if type=sp).
+    :param sp_energy_components: The parts of the single point's electronic
+        energy (reference, correlation, ...), single points only (ADR 0021).
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
     :param opt_final_energy_hartree: Opt result (if type=opt).
@@ -120,6 +126,9 @@ class CalculationIn(SchemaBase):
 
     # Optional inline results (avoids separate result upload)
     sp_electronic_energy_hartree: float | None = None
+    sp_energy_components: list[SPEnergyComponentPayload] = Field(
+        default_factory=list, description=SP_ENERGY_COMPONENTS_DESCRIPTION
+    )
 
     opt_converged: bool | None = None
     opt_n_steps: int | None = Field(default=None, ge=0)
@@ -159,6 +168,16 @@ class CalculationIn(SchemaBase):
 
     # Optional file artifacts
     artifacts: list[ArtifactIn] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_sp_energy_components(self) -> Self:
+        """Components sit on a single point and agree with its energy (ADR 0021)."""
+        check_sp_energy_components(
+            [(c.component, c.value_hartree) for c in self.sp_energy_components],
+            calculation_type=self.type,
+            electronic_energy_hartree=self.sp_electronic_energy_hartree,
+        )
+        return self
 
 
 def freq_evidence(calc_in: "CalculationIn") -> tuple[int | None, float | None]:
@@ -352,6 +371,7 @@ def calculation_in_to_with_results_payload(
         opt_result=opt_result,
         freq_result=freq_result,
         sp_result=sp_result,
+        sp_energy_components=list(calc_in.sp_energy_components),
         hessian=calc_in.hessian,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,
