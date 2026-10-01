@@ -56,9 +56,9 @@ class TestNonFiniteAndImplausibleValues:
         response = _raw_post(client, payload)
         assert response.status_code == 422, (value, response.text[:500])
 
-    @pytest.mark.parametrize("value", [0.0, 0.5, 40.2])
-    def test_an_energy_at_or_above_zero_is_refused(self, client, value):
-        """Absolute energies of bound systems are negative; zero or above is a slip.
+    @pytest.mark.parametrize("value", [0.5, 40.2])
+    def test_a_positive_energy_is_refused(self, client, value):
+        """Absolute energies are not positive; a positive one is a slip.
 
         Sent on a record marked failed, so the ordering rule cannot be the
         thing that refuses it: a positive reactant energy would also make a
@@ -84,7 +84,7 @@ class TestNonFiniteAndImplausibleValues:
         calc_id = db_session.execute(
             text("SELECT source_calculation_id FROM transition_state_validation_energy LIMIT 1")
         ).scalar_one()
-        for bad in ("'NaN'::float8", "'Infinity'::float8", "'-Infinity'::float8", "0", "1.5"):
+        for bad in ("'NaN'::float8", "'Infinity'::float8", "'-Infinity'::float8", "1.5"):
             with pytest.raises(Exception), db_session.begin_nested():
                 db_session.execute(
                     text(
@@ -151,3 +151,29 @@ class TestMixedLevelsWarn:
         """An E0 group at DFT and an electronic group at CCSD(T) is not mixing."""
         result = _ok(_post_bundle(client, _bundle([_energy_ordering()])))
         assert _MIXED not in _codes(result)
+
+
+class TestTheBareProton:
+    def test_a_zero_energy_participant_can_be_part_of_a_passing_ordering(self, client):
+        """``[H+]`` has exactly zero energy, so zero must be depositable.
+
+        The saddle point is placed above the (zero-containing) reactant sum so
+        the ordering rule has nothing to object to.
+        """
+        record = _energy_ordering()
+        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
+        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
+        _ok(_post_bundle(client, _bundle([record])))
+
+    def test_the_database_stores_it(self, db_session, client):
+        record = _energy_ordering()
+        record["energies"][0] = _energy("ts", "electronic", -39.5, "ts-sp")
+        record["energies"][2] = _energy("reactant:2", "electronic", 0.0, "h-sp")
+        _ok(_post_bundle(client, _bundle([record])))
+        stored = db_session.execute(
+            text(
+                "SELECT energy_hartree FROM transition_state_validation_energy "
+                "WHERE participant = 'reactant:2' AND energy_kind = 'electronic'"
+            )
+        ).scalar_one()
+        assert stored == 0.0

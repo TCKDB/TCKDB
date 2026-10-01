@@ -70,11 +70,12 @@ class TransitionStateComparedEnergy(SchemaBase):
     :param energy_kind: ``"electronic"`` for the electronic energy, or ``"e0"``
         for the electronic energy plus the zero-point energy. They are
         different quantities and are never compared with each other.
-    :param energy_hartree: The absolute energy, in hartree: finite and
-        negative. A bound molecule's total energy is below the zero of
-        separated nuclei and electrons, so a value at or above zero is a
-        relative energy (or a unit slip) and is refused rather than stored
-        where a reader would take it for absolute. A side of the
+    :param energy_hartree: The absolute energy, in hartree: finite and not
+        positive. A bound system's total energy is below the zero of separated
+        nuclei and electrons, so a positive value is a relative energy (or a
+        unit slip) and is refused rather than stored where a reader would take
+        it for absolute. Zero is allowed because it is exact for the bare
+        proton (``[H+]``), a participant with atoms and no electrons. A side of the
         reaction with several participants is compared by the sum of their
         energies, so a participant is given its own and never a pre-summed
         total: a total has no single calculation to name.
@@ -87,7 +88,7 @@ class TransitionStateComparedEnergy(SchemaBase):
 
     participant: str = Field(pattern=_PARTICIPANT_KEY_PATTERN)
     energy_kind: Literal["electronic", "e0"]
-    energy_hartree: float = Field(lt=0, allow_inf_nan=False)
+    energy_hartree: float = Field(le=0, allow_inf_nan=False)
     source_calculation_key: str = Field(min_length=1)
 
 

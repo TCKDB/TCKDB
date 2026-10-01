@@ -1322,7 +1322,8 @@ three validation records, at most one per `kind`, every one optional:
   `electronic` energy comes from an `sp` or `opt`, an `e0` from a `freq`
   (which carries the zero-point energy); `irc`, `scan` and `path_search`
   report points along a path and are never a source. Energies are absolute,
-  finite and negative, in hartree; zero or above is refused as a slip. A
+  finite and not positive, in hartree (zero is allowed: it is exact for the
+  bare proton); a positive value is refused as a slip. A
   passing record whose *stated* numbers do not put the saddle point above each
   side is refused. That is all TCKDB checks: the numbers are compared with each
   other, not with the energies stored on the calculations they cite. Taking one

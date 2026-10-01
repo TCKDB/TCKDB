@@ -125,3 +125,16 @@ def test_a_failed_record_with_two_undesignated_modes_is_stored(db_session) -> No
     calc = _freq(db_session, ts, [-1500.0, -40.0, 100.0])
     (row,) = _persist(db_session, rxn, ts, calc, passed=False, imaginary_frequency_count=2)
     assert row.passed is False
+
+
+def test_the_frequency_comparison_is_by_magnitude_whatever_sign_was_stored(db_session) -> None:
+    """``imag_freq_cm1`` has no sign rule; the house reads it as a magnitude."""
+    rxn, ts = _ts(db_session, "IMAGSIGN")
+    calc = _freq(db_session, ts, [-1500.0, 100.0])
+    calc.freq_result.imag_freq_cm1 = 1500.0
+    db_session.flush()
+    # Agrees in magnitude with the stored +1500, so it is not refused ...
+    _persist(db_session, rxn, ts, calc, imaginary_frequency_cm1=-1500.0)
+    # ... and a different magnitude still is, whichever sign is stored.
+    with pytest.raises(ValueError, match="recorded 1500.0"):
+        _persist(db_session, rxn, ts, calc, imaginary_frequency_cm1=-900.0)

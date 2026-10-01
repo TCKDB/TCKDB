@@ -126,7 +126,8 @@ three validation records, at most one per `kind`, every one optional:
   `electronic` energy comes from an `sp` or `opt`, an `e0` from a `freq`
   (which carries the zero-point energy); `irc`, `scan` and `path_search`
   report points along a path and are never a source. Energies are absolute,
-  finite and negative, in hartree; zero or above is refused as a slip. A
+  finite and not positive, in hartree (zero is allowed: it is exact for the
+  bare proton); a positive value is refused as a slip. A
   passing record whose *stated* numbers do not put the saddle point above each
   side is refused. That is all TCKDB checks: the numbers are compared with each
   other, not with the energies stored on the calculations they cite. Taking one
@@ -219,8 +220,8 @@ every existing payload is unchanged.
   is accepted on the computed-reaction and pressure-dependent bundles and
   refused on the standalone transition-state upload, which has no
   calculations for the wells; `imaginary_mode` binds there to the single
-  `freq` additional calculation. Energies are finite and negative (absolute,
-  in hartree), `imaginary_frequency_cm1` is finite, and the database refuses
+  `freq` additional calculation. Energies are finite and not positive (absolute,
+  in hartree; zero is exact for the bare proton), `imaginary_frequency_cm1` is finite, and the database refuses
   NaN and infinities too. An `electronic` energy must come from an `sp` or
   `opt` calculation and an `e0` from a `freq`; one energy kind taken at more
   than one level of theory is accepted with a
@@ -7556,7 +7557,7 @@ Unknown keys are refused.
 |---|---|---|---|---|---|---|
 | `participant` | string | yes |  |  | pattern `^(ts\|reactant:[1-9][0-9]*\|product:[1-9][0-9]*)$` | Whose energy this is: ``"ts"`` for the saddle point, or ``"reactant:N"`` / ``"product:N"`` for the N-th declared participant of that side (1-based, in the order the reaction declares them). |
 | `energy_kind` | "electronic" \| "e0" | yes |  |  | `electronic`, `e0` | ``"electronic"`` for the electronic energy, or ``"e0"`` for the electronic energy plus the zero-point energy. They are different quantities and are never compared with each other. |
-| `energy_hartree` | number | yes |  | hartree | < 0 | The absolute energy, in hartree: finite and negative. A bound molecule's total energy is below the zero of separated nuclei and electrons, so a value at or above zero is a relative energy (or a unit slip) and is refused rather than stored where a reader would take it for absolute. A side of the reaction with several participants is compared by the sum of their energies, so a participant is given its own and never a pre-summed total: a total has no single calculation to name. |
+| `energy_hartree` | number | yes |  | hartree | <= 0 | The absolute energy, in hartree: finite and not positive. A bound system's total energy is below the zero of separated nuclei and electrons, so a positive value is a relative energy (or a unit slip) and is refused rather than stored where a reader would take it for absolute. Zero is allowed because it is exact for the bare proton (``[H+]``), a participant with atoms and no electrons. A side of the reaction with several participants is compared by the sum of their energies, so a participant is given its own and never a pre-summed total: a total has no single calculation to name. |
 | `source_calculation_key` | string | yes |  |  | length >= 1 | Local key of the calculation this energy was taken from, in the enclosing payload's calculation namespace. The calculation must belong to the thing the energy is of: the saddle point's own calculation for ``ts``, the participant species' own for a reactant or product. |
 
 <a id="m-transitionstatein"></a>

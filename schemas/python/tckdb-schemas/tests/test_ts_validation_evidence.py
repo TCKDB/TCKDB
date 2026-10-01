@@ -299,8 +299,8 @@ class TestFiniteAndPlausibleValues:
                 **_ordering(passed=False, energies=[_energy("ts", "electronic", value)])
             )
 
-    @pytest.mark.parametrize("value", [0.0, 1e-9, 12.5])
-    def test_an_energy_at_or_above_zero_is_refused(self, value):
+    @pytest.mark.parametrize("value", [1e-9, 12.5])
+    def test_a_positive_energy_is_refused(self, value):
         with pytest.raises(ValidationError, match="energy_hartree"):
             TransitionStateValidationEvidenceIn(
                 **_ordering(passed=False, energies=[_energy("ts", "electronic", value)])
@@ -310,3 +310,21 @@ class TestFiniteAndPlausibleValues:
     def test_a_non_finite_imaginary_frequency_is_refused(self, value):
         with pytest.raises(ValidationError, match="imaginary_frequency_cm1"):
             TransitionStateValidationEvidenceIn(**_mode(imaginary_frequency_cm1=value))
+
+    def test_zero_is_accepted_because_the_bare_proton_has_exactly_zero_energy(self):
+        """``[H+]`` has atoms and no electrons, so its energy is exactly 0 Eh."""
+        record = _ordering(
+            energies=[
+                _energy("ts", "electronic", -1.0),
+                _energy("reactant:1", "electronic", -1.5),
+                _energy("reactant:2", "electronic", 0.0),  # the proton
+                _energy("product:1", "electronic", -1.8),
+            ]
+        )
+        _set(record)  # a passing ordering with a zero-energy participant
+
+    def test_zero_does_not_open_the_door_to_non_finite_values(self):
+        with pytest.raises(ValidationError):
+            TransitionStateValidationEvidenceIn(
+                **_ordering(passed=False, energies=[_energy("ts", "electronic", float("-inf"))])
+            )

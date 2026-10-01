@@ -2983,7 +2983,7 @@ the gap.
 
 **Check constraints:**
 
-- `ck_transition_state_validation_energy_energy_finite_negative`: `energy_hartree < 0 AND energy_hartree > '-Infinity'::float8`
+- `ck_transition_state_validation_energy_energy_finite_le_zero`: `energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8`
 - `ck_transition_state_validation_energy_energy_kind`: `energy_kind IN ('electronic', 'e0')`
 - `ck_transition_state_validation_energy_participant_shape`: `participant ~ '^(ts|reactant:[1-9][0-9]*|product:[1-9][0-9]*)$'`
 

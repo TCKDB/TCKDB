@@ -182,8 +182,8 @@ def upgrade() -> None:
             name=op.f("ck_transition_state_validation_energy_energy_kind"),
         ),
         sa.CheckConstraint(
-            "energy_hartree < 0 AND energy_hartree > '-Infinity'::float8",
-            name=op.f("ck_transition_state_validation_energy_energy_finite_negative"),
+            "energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8",
+            name=op.f("ck_transition_state_validation_energy_energy_finite_le_zero"),
         ),
         sa.ForeignKeyConstraint(
             ["evidence_id"],

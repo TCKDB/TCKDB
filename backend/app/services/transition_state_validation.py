@@ -184,7 +184,11 @@ def _assert_imaginary_mode_matches_freq(
     if (
         value is not None
         and freq.imag_freq_cm1 is not None
-        and abs(value - freq.imag_freq_cm1) > _IMAGINARY_FREQUENCY_TOLERANCE_CM1
+        # Magnitudes: ``imag_freq_cm1`` has no sign rule on the payload, and
+        # the house reads it as a magnitude (``stationary_point`` takes its
+        # ``abs``), so a result stored as +1500 agrees with a record of -1500.
+        and abs(abs(value) - abs(freq.imag_freq_cm1))
+        > _IMAGINARY_FREQUENCY_TOLERANCE_CM1
     ):
         raise ValueError(
             f"Transition state '{subject_label}' imaginary_mode evidence states "

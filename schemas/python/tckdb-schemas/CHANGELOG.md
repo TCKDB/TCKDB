@@ -22,8 +22,8 @@ every existing payload is unchanged.
   is accepted on the computed-reaction and pressure-dependent bundles and
   refused on the standalone transition-state upload, which has no
   calculations for the wells; `imaginary_mode` binds there to the single
-  `freq` additional calculation. Energies are finite and negative (absolute,
-  in hartree), `imaginary_frequency_cm1` is finite, and the database refuses
+  `freq` additional calculation. Energies are finite and not positive (absolute,
+  in hartree; zero is exact for the bare proton), `imaginary_frequency_cm1` is finite, and the database refuses
   NaN and infinities too. An `electronic` energy must come from an `sp` or
   `opt` calculation and an `e0` from a `freq`; one energy kind taken at more
   than one level of theory is accepted with a

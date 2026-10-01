@@ -383,13 +383,14 @@ class TransitionStateValidationEnergy(Base):
             name="participant_shape",
         ),
         CheckConstraint("energy_kind IN ('electronic', 'e0')", name="energy_kind"),
-        # Finite and negative: PostgreSQL orders NaN above every number, so
-        # ``< 0`` refuses NaN as well as positive values, and the second arm
+        # Finite and not positive (zero is exact for the bare proton):
+        # PostgreSQL orders NaN above every number, so ``<= 0`` refuses NaN
+        # as well as positive values, and the second arm
         # refuses -Infinity. A stored NaN would make every read of the record
         # fail JSON serialisation, permanently once the entry is approved.
         CheckConstraint(
-            "energy_hartree < 0 AND energy_hartree > '-Infinity'::float8",
-            name="energy_finite_negative",
+            "energy_hartree <= 0 AND energy_hartree > '-Infinity'::float8",
+            name="energy_finite_le_zero",
         ),
         UniqueConstraint(
             "evidence_id",
