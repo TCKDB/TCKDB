@@ -21,12 +21,18 @@ beside far more selective predicates.
 
 from __future__ import annotations
 
-from sqlalchemy import case, false, func, literal
+from sqlalchemy import and_, case, false, func, literal, or_
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.chemistry.basis_set_names import HYPHEN_RULES, basis_identity_key
+from app.chemistry.dispersion_names import (
+    DISPERSION_RULES,
+    FOLDED_PATTERN,
+    dispersion_identity_key,
+    level_identity_keys,
+)
 from app.chemistry.lot_component_names import component_identity_key
-from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES, method_identity_key
+from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
 from app.db.models.level_of_theory import LevelOfTheory
 
 #: Edge whitespace, stripped in SQL to mirror ``str.strip`` in Python.
@@ -53,12 +59,22 @@ def _stripped_lower(column: ColumnElement) -> ColumnElement[str]:
     return func.lower(func.regexp_replace(column, _EDGE_WHITESPACE, "", "g"))
 
 
+def _name_aliased(key: ColumnElement[str]) -> ColumnElement[str]:
+    """Whole-name aliases (#618), decided on the stripped, lower-cased name."""
+    return case(
+        *[(key == alias.alias, alias.canonical) for alias in NAME_ALIASES],
+        else_=key,
+    )
+
+
 def method_key_sql(column: ColumnElement) -> ColumnElement[str]:
     """SQL twin of :func:`method_identity_key` over a stored method column.
 
     The curated aliases (#618) come from the same tables the Python key reads
     (``NAME_ALIASES`` and ``SUFFIX_RULES``), so the two cannot list different
-    aliases.
+    aliases. This is the method *alone*: the key a level of theory is hashed
+    under also moves a folded dispersion out (#630), see
+    :func:`level_keys_sql`.
     """
     key = _stripped_lower(column)
     for pattern, replacement in SUFFIX_RULES:
@@ -66,10 +82,7 @@ def method_key_sql(column: ColumnElement) -> ColumnElement[str]:
     # A whole-name alias is decided on the stripped name; no suffix rule
     # touches a name alias's spelling, so applying the suffix rules first
     # cannot change which one matches.
-    return case(
-        *[(key == alias.alias, alias.canonical) for alias in NAME_ALIASES],
-        else_=key,
-    )
+    return _name_aliased(key)
 
 
 def component_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
@@ -78,6 +91,40 @@ def component_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
     ``NULLIF`` makes a blank name key to ``NULL``, as the Python key does.
     """
     return func.nullif(_stripped_lower(column), "")
+
+
+def dispersion_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
+    """SQL twin of :func:`dispersion_identity_key` over a stored dispersion column (#630).
+
+    Built from the same ``DISPERSION_RULES`` the Python key uses.
+    """
+    key = component_key_sql(column)
+    for pattern, replacement in DISPERSION_RULES:
+        key = func.regexp_replace(key, pattern, replacement)
+    return key
+
+
+def level_keys_sql(
+    method_column: ColumnElement, dispersion_column: ColumnElement
+) -> tuple[ColumnElement[str], ColumnElement[str | None]]:
+    """SQL twin of :func:`level_identity_keys`: ``(method key, dispersion key)`` (#630).
+
+    A recognised dispersion folded into the method moves into the dispersion
+    key, under the same pattern (``FOLDED_PATTERN``) and the same condition
+    as the Python key: the column is blank or states that same dispersion.
+    """
+    method = method_key_sql(method_column)
+    dispersion = dispersion_key_sql(dispersion_column)
+    folds = and_(
+        method.op("~")(FOLDED_PATTERN),
+        or_(
+            dispersion.is_(None),
+            dispersion == func.regexp_replace(method, FOLDED_PATTERN, "\\2"),
+        ),
+    )
+    stem = _name_aliased(func.regexp_replace(method, FOLDED_PATTERN, "\\1"))
+    suffix = func.regexp_replace(method, FOLDED_PATTERN, "\\2")
+    return case((folds, stem), else_=method), case((folds, suffix), else_=dispersion)
 
 
 def basis_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
@@ -94,8 +141,19 @@ def basis_key_sql(column: ColumnElement) -> ColumnElement[str | None]:
 
 
 def method_matches(value: str) -> ColumnElement[bool]:
-    """``LevelOfTheory.method`` names the same method as ``value``, up to case."""
-    return method_key_sql(LevelOfTheory.method) == literal(method_identity_key(value))
+    """``LevelOfTheory.method`` names the same method as ``value``, up to case and aliases.
+
+    The comparison is on the level's identity key (#630): a stored
+    ``b3lyp-d3bj`` has method key ``b3lyp``, as ``b3lyp`` with
+    ``dispersion=d3bj`` does. A request that folds a dispersion in
+    (``b3lyp-d3bj``) also requires the level to have it.
+    """
+    want_method, want_dispersion = level_identity_keys(value, None)
+    method, dispersion = level_keys_sql(LevelOfTheory.method, LevelOfTheory.dispersion)
+    condition = method == literal(want_method)
+    if want_dispersion is not None:
+        condition = and_(condition, dispersion == literal(want_dispersion))
+    return condition
 
 
 def basis_matches(value: str) -> ColumnElement[bool]:
@@ -118,8 +176,15 @@ def _component_matches(column: ColumnElement, value: str) -> ColumnElement[bool]
 
 
 def dispersion_matches(value: str) -> ColumnElement[bool]:
-    """``LevelOfTheory.dispersion`` names the same dispersion as ``value``, up to case (#602)."""
-    return _component_matches(LevelOfTheory.dispersion, value)
+    """``LevelOfTheory`` has the same dispersion as ``value``, by identity key (#602, #630).
+
+    Includes a dispersion folded into the method (``b3lyp-d3bj`` has ``d3bj``).
+    """
+    key = dispersion_identity_key(value)
+    if key is None:
+        return false()
+    _method, dispersion = level_keys_sql(LevelOfTheory.method, LevelOfTheory.dispersion)
+    return dispersion == literal(key)
 
 
 def solvent_matches(value: str) -> ColumnElement[bool]:
@@ -131,7 +196,9 @@ __all__ = [
     "basis_key_sql",
     "basis_matches",
     "component_key_sql",
+    "dispersion_key_sql",
     "dispersion_matches",
+    "level_keys_sql",
     "method_key_sql",
     "method_matches",
     "solvent_matches",

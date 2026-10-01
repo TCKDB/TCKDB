@@ -11,10 +11,11 @@ and an uploaded ``d3bj`` were two levels of theory, as were ``Water`` and
 lower-cased, and a blank value has no key (``None``). The verbatim spelling is
 still what the row stores and what reads show.
 
-This is a case rule only. Solvent synonyms (``h2o`` for ``water``) and
-dispersion synonyms (``d3(bj)`` for ``d3bj``) would need a curated table with
-citations, as method names have (``method_names.py``); they are out of scope
-for #602.
+This is a case rule only. Solvent synonyms (``h2o`` for ``water``) would need
+a curated table with citations, as method names have (``method_names.py``);
+they are out of scope. Dispersion synonyms are not: the dispersion column is
+hashed through ``dispersion_names.dispersion_identity_key`` (#630), which
+applies this case rule first and then a cited alias table.
 
 ``keywords`` is the one hashed text field that is not keyed. It is free-form
 route or input text, not a name: quoted strings inside it (file names, custom

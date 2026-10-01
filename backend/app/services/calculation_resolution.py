@@ -13,8 +13,8 @@ from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.api.error_contract import CodedValueError
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.dispersion_names import level_identity_keys
 from app.chemistry.lot_component_names import component_identity_key
-from app.chemistry.method_names import method_identity_key
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -134,19 +134,23 @@ def _level_of_theory_hash(ref: LevelOfTheoryRef) -> str:
     ``ccsd(t)-f12`` are too, and so are ``wb97x-d`` and ``wb97xd``. Dispersion,
     solvent and solvent-model names go through
     :func:`~app.chemistry.lot_component_names.component_identity_key` (issue
-    #602), so ``D3BJ`` and ``d3bj`` are one. The row still stores every name
-    verbatim. ``keywords`` is free-form text and is hashed as written.
+    #602), so ``D3BJ`` and ``d3bj`` are one. The dispersion column has its own
+    curated aliases (``gd3bj``, ``EmpiricalDispersion=GD3BJ``), and a
+    recognised dispersion folded into the method (``b3lyp-d3bj``) moves into
+    the dispersion key (issue #630, :func:`~app.chemistry.dispersion_names.level_identity_keys`).
+    The row still stores every name verbatim. ``keywords`` is free-form text and is hashed as written.
 
     :param ref: Upload-facing level-of-theory reference.
     :returns: SHA-256 hash of the canonicalized level-of-theory payload.
     """
 
+    method_key, dispersion_key = level_identity_keys(ref.method, ref.dispersion)
     payload = {
-        "method": method_identity_key(ref.method),
+        "method": method_key,
         "basis": basis_identity_key(ref.basis),
         "aux_basis": basis_identity_key(ref.aux_basis),
         "cabs_basis": basis_identity_key(ref.cabs_basis),
-        "dispersion": component_identity_key(ref.dispersion),
+        "dispersion": dispersion_key,
         "solvent": component_identity_key(ref.solvent),
         "solvent_model": component_identity_key(ref.solvent_model),
         "keywords": ref.keywords,

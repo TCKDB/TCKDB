@@ -26,6 +26,7 @@ from sqlalchemy import Text, literal, select
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
+from app.chemistry.dispersion_names import level_identity_keys
 from app.chemistry.method_names import (
     NAME_ALIASES,
     SUFFIX_ALIASES,
@@ -255,15 +256,19 @@ def test_the_upload_path_keeps_gaussian_wb97xd_apart_from_orca_wb97x_d3(db_sessi
     assert a.id != b.id
 
 
-def test_the_upload_path_keeps_a_folded_dispersion_apart_from_the_dispersion_column(db_session):
+def test_the_upload_path_joins_a_folded_dispersion_to_the_dispersion_column(db_session):
+    """#630: ``b3lyp-d3(bj)`` and ``b3lyp`` + ``d3bj`` are one level (they were two in #627)."""
     folded = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="b3lyp-d3(bj)"))
     column = resolve_level_of_theory_ref(
         db_session, LevelOfTheoryRef(method="b3lyp", dispersion="d3bj")
     )
-    assert folded.id != column.id
+    assert folded.id == column.id
     assert resolve_level_of_theory_ref(
         db_session, LevelOfTheoryRef(method="B3LYP-GD3BJ")
     ).id == folded.id
+    # The bare functional is still another level.
+    bare = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="b3lyp"))
+    assert bare.id != folded.id
 
 
 # ---------------------------------------------------------------------------
@@ -371,11 +376,11 @@ def test_migration_hash_matches_the_case_only_formula(migration, method):
     }
     row = SimpleNamespace(_mapping=fields)
     app_hash = _level_of_theory_hash(LevelOfTheoryRef(**fields))
-    if method_identity_key(method) == _case_only(method):
+    if level_identity_keys(method, "d3bj") == (_case_only(method), "d3bj"):
         assert migration._lot_hash(row, keyed_method=True) == app_hash
     else:
         # An alias spelling: the application now keys it further than the
-        # case rule ``c8424fe82997`` ran (``d0a7c3b91e4f`` re-keys those rows).
+        # case rule ``c8424fe82997`` ran (``d0a7c3b91e4f`` re-keys those rows; ``f3b8d5a1c702`` also moves a folded dispersion).
         assert migration._lot_hash(row, keyed_method=True) != app_hash
 
 

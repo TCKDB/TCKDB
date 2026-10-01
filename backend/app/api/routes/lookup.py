@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.errors import NotFoundError
 from app.chemistry.basis_set_names import basis_identity_key
-from app.chemistry.method_names import method_identity_key
+from app.chemistry.dispersion_names import method_matches_level
 from app.chemistry.reaction_family_display import reaction_family_display_name
 from app.chemistry.species import canonical_species_identity
 from app.db.models.calculation import (
@@ -268,7 +268,7 @@ def _lot_match(
     lot_status: MatchStatus = "exact"
 
     if method is not None:
-        if method_identity_key(lot.method) == method_identity_key(method):
+        if method_matches_level(lot.method, lot.dispersion, method):
             # The code stays ``lot_method_exact`` (clients key on it); the
             # message says when the match was by identity key, not spelling.
             # Display only, on a value already in memory (not a filter).
