@@ -1163,6 +1163,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("enthalpy_reference_kind_unrecognized", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/enthalpy_reference.py",
             shape=Shape.relationship),
+    ApiCode("energy_correction_scheme_frequency_level_not_applicable", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",
+            shape=Shape.relationship,
+            note=(
+                "frequency_level_of_theory sent on a scheme kind Arkane does "
+                "not key on an energy//frequency pair (anything but "
+                "bac_petersson and bac_melius). context.scheme_kind names "
+                "the kind."
+            )),
+    ApiCode("energy_correction_scheme_frequency_level_without_energy_level", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/energy_correction.py",
+            shape=Shape.relationship,
+            note=(
+                "frequency_level_of_theory sent without level_of_theory: a "
+                "frequency half with no energy half is not a key."
+            )),
     ApiCode("energy_correction_scheme_identity_conflict", 409, Surface.message_prefix,
             "backend/app/api/routes/admin.py",
             shape=Shape.relationship,

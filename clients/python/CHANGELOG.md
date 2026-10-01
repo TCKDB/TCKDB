@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.103.0 - 2026-10-01
+
+`RejectionCode` gains `energy_correction_scheme_frequency_level_not_applicable`
+and `energy_correction_scheme_frequency_level_without_energy_level`, the two
+refusals for `EnergyCorrectionSchemeRef.frequency_level_of_theory`
+(`tckdb-schemas` 0.66.0). No client behaviour changed.
+
 ## 0.102.0 - 2026-09-30
 
 `Kinetics.modified_arrhenius(..., T0=...)` carries the Arrhenius reference

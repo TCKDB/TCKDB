@@ -151,6 +151,9 @@ class EnergyCorrectionSchemeRead(
 ):
     software_id: int | None = None
     workflow_tool_release_id: int | None = None
+    #: Frequency half of an ``energy//frequency`` key (``level_of_theory_id``
+    #: is the energy half); part of scheme identity.
+    frequency_level_of_theory_id: int | None = None
     data_revision: str | None = None
     atom_params_applied_as: AtomParamApplication | None = None
     atom_params: list[EnergyCorrectionSchemeAtomParamRead] = Field(default_factory=list)

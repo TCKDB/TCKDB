@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.common import (
+    EnergyCorrectionApplicationRole,
     EnergyCorrectionSchemeKind,
     NetworkEnergyTransferScope,
     NetworkSolveKind,
@@ -96,6 +97,11 @@ W_AMBIGUOUS_ENERGY_CORRECTION_SCHEME_WITHOUT_LITERATURE = (
 W_ENERGY_CORRECTION_SCHEME_LITERATURE_NOT_ATTACHED = (
     "energy_correction_scheme_literature_not_attached"
 )
+
+# An applied correction with ``application_role = composite_delta`` (owner
+# decision 9, composite-levels plan). Not a definition being violated, only a
+# modelling choice the schema is about to supersede, so it warns (ADR 0008).
+W_COMPOSITE_DELTA_PREFER_SCHEME_TERMS = "composite_delta_prefer_scheme_terms"
 
 # The three EnergyCorrectionSchemeKind values whose numeric parameters are
 # literally computed by a specific program at a specific level of theory
@@ -689,7 +695,7 @@ def collect_energy_correction_scheme_provenance_warnings(
        fully absent ``software_release_id`` does.
     3. **An ambiguous uncited sibling.** When this new scheme is *also*
        uncited, and another row already shares its ``(kind,
-       level_of_theory_id, software_release_id,
+       level_of_theory_id, frequency_level_of_theory_id, software_release_id,
        workflow_tool_release_id)`` and is *also* uncited, the two are
        indistinguishable by every axis this plan added (§2.4) — flagged
        by name, not resolved, because the archive genuinely does not know
@@ -724,6 +730,15 @@ def collect_energy_correction_scheme_provenance_warnings(
                     if scheme.level_of_theory_id is not None
                     else EnergyCorrectionScheme.level_of_theory_id.is_(None)
                 ),
+                # A different frequency level is a different scheme by
+                # identity (c5e1a8d3f6b9), so it is never the same
+                # correction deposited twice.
+                (
+                    EnergyCorrectionScheme.frequency_level_of_theory_id
+                    == scheme.frequency_level_of_theory_id
+                    if scheme.frequency_level_of_theory_id is not None
+                    else EnergyCorrectionScheme.frequency_level_of_theory_id.is_(None)
+                ),
                 (
                     EnergyCorrectionScheme.software_release_id
                     == scheme.software_release_id
@@ -746,6 +761,53 @@ def collect_energy_correction_scheme_provenance_warnings(
             )
 
     return warnings
+
+
+def collect_composite_delta_warnings(
+    role: EnergyCorrectionApplicationRole,
+    *,
+    field: str = "application_role",
+) -> list[UploadWarning]:
+    """Steer a new ``composite_delta`` correction toward composite-scheme terms.
+
+    A focal-point delta (core-valence, higher-order triples, relativistic,
+    DBOC) is a term of the recipe that produced the energy, not a correction
+    laid over it afterwards. As an applied correction it needs an invented
+    scheme, can cite only one source calculation (a core-valence delta needs
+    two), and targets the entry rather than the energy. Those deltas are
+    going to become composite-scheme terms.
+
+    Decided under ADR 0008 as a **warning**, not a refusal: the check
+    asserts a preference about where a number should live, not a
+    definition. A ``composite_delta`` record is ordinary, reproducible
+    science, and the composite-scheme shape it is meant to move to does not
+    exist yet, so blocking it would only keep correct data out. The row is
+    stored exactly as sent.
+
+    Fires once per *new* applied correction (the caller invokes it as the
+    row is created) and only for the ``composite_delta`` role.
+    """
+    # ``role`` is the wire enum on the upload path and this module's is the
+    # database enum: same tokens, different classes, so compare the value.
+    composite_delta = EnergyCorrectionApplicationRole.composite_delta.value
+    if getattr(role, "value", role) != composite_delta:
+        return []
+    return [
+        UploadWarning(
+            field=field,
+            code=W_COMPOSITE_DELTA_PREFER_SCHEME_TERMS,
+            message=(
+                "This correction has application_role=composite_delta. "
+                "Focal-point deltas (core-valence, higher-order triples, "
+                "relativistic, DBOC) will become composite-scheme terms, "
+                "which can name every calculation a delta is built from "
+                "and sit on the energy itself instead of on the species "
+                "entry. It was stored as sent; prefer describing the "
+                "recipe as a composite scheme once that shape is available "
+                "to you."
+            ),
+        )
+    ]
 
 
 def _energy_correction_scheme_literature_warning(
