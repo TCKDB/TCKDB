@@ -10,12 +10,13 @@ that revision's test pins hold here too, over rows that differ in the thing
 * **Exact round trip.** Upgrade then downgrade restores every hash, with or
   without merges in between.
 
-The generator builds states as they exist at ``d0a7c3b91e4f``: in each group of
+The generator builds states as they exist at ``f3b8d5a1c702``: in each group of
 rows sharing the previous hash, one row may hold it and the others carry a
 stale hash; the merge script may have merged some of the others.
 
 This file also holds the revision's frozen rules to the application and its
-``assign_hashes`` to the parent revision's.
+``assign_hashes`` to the parent revision's, and its previous formula to
+``f3b8d5a1c702``'s (dispersion synonyms and folded dispersion kept).
 """
 
 from __future__ import annotations
@@ -40,14 +41,19 @@ from tests.services.test_method_identity_key import SAME_METHOD, _all_methods
 
 _VERSIONS = pathlib.Path(__file__).parents[2] / "alembic" / "versions"
 _MIGRATION = _VERSIONS / "b9e4c2a7d153_key_level_of_theory_composite_method_aliases.py"
-_PARENT = _VERSIONS / "d0a7c3b91e4f_key_level_of_theory_method_aliases.py"
+_PARENT = _VERSIONS / "f3b8d5a1c702_key_level_of_theory_dispersion_synonyms.py"
 
 _METHODS = [
     "CBS-QB3", "cbsqb3", "CBSQB3", "cbs-qb3", "rocbsqb3", "ROCBS-QB3",
     "G4(MP2)", "g4mp2", "G4MP2", "g3(mp2)", "G3MP2", "g3(mp2)b3", "g3mp2b3",
     "W1BD", "W1-BD", "w1bd", "wb97xd", "wb97x-d", "MP2", "mp2",
+    "b3lyp", "B3LYP-GD3BJ", "b3lyp-d3(bj)", "b3lyp-d3bj", "cbsqb3-d3bj", "pbe0-d3zero",
 ]
-_DISPERSIONS = [None, "d3bj", "D3BJ"]
+#: Real dispersion spellings, so a partial re-freeze of #630's rules fails: the
+#: column synonyms, Gaussian's route form, the D3(BJ) form and zero-damping.
+_DISPERSIONS = [
+    None, "d3bj", "D3BJ", "GD3BJ", "EmpiricalDispersion=GD3BJ", "gd3", "D3(BJ)", "d30", "gd2",
+]
 
 
 def _load(name: str, path: pathlib.Path):
@@ -127,9 +133,20 @@ def test_the_previous_alias_table_is_the_parent_revisions(mig, parent):
     ]
 
 
+def test_the_frozen_dispersion_rules_are_the_parent_revisions_and_the_applications(mig, parent):
+    """Dropping #630 from the formula would silently revert it; both must hold."""
+    from app.chemistry.dispersion_names import DISPERSION_RULES, FOLDED_PATTERN
+
+    assert [(p.pattern, r) for p, r in mig._DISPERSION_RULES] == [
+        (p.pattern, r) for p, r in parent._DISPERSION_RULES
+    ]
+    assert [(p.pattern, r) for p, r in mig._DISPERSION_RULES] == list(DISPERSION_RULES)
+    assert mig._FOLDED_PATTERN.pattern == parent._FOLDED_PATTERN.pattern == FOLDED_PATTERN
+
+
 @pytest.mark.parametrize(
     ("method", "dispersion"),
-    [(m, d) for m in _all_methods() for d in (None, "D3BJ")],
+    [(m, d) for m in _all_methods() for d in _DISPERSIONS],
 )
 def test_frozen_hash_matches_the_application(mig, method, dispersion):
     fields = {
@@ -147,11 +164,27 @@ def test_frozen_hash_matches_the_application(mig, method, dispersion):
     assert mig._lot_hash(row, aliased=True) == _level_of_theory_hash(LevelOfTheoryRef(**fields))
 
 
-def test_frozen_previous_formula_is_the_parent_revisions(mig, parent):
-    """The downgrade target is exactly what ``d0a7c3b91e4f`` left."""
-    for method in _all_methods():
-        row = _row(1, method, "D3BJ", None)
-        assert mig._lot_hash(row, aliased=False) == parent._lot_hash(row, aliased=True)
+@pytest.mark.parametrize(
+    ("method", "dispersion"), [(m, d) for m in _all_methods() for d in _DISPERSIONS]
+)
+def test_frozen_previous_formula_is_the_parent_revisions(mig, parent, method, dispersion):
+    """The downgrade target is exactly what ``f3b8d5a1c702`` left (#630 included)."""
+    row = _row(1, method, dispersion, None)
+    assert mig._lot_hash(row, aliased=False) == parent._lot_hash(row, split=True)
+
+
+def test_the_downgrade_target_keeps_630_in_it(mig):
+    """The reviewer's regression: re-pointing only ``down_revision`` re-hashed these
+    three back to their pre-#630 hashes. They are one level, before and after."""
+    a = _row(1, "B3LYP", "GD3BJ", None)
+    b = _row(2, "b3lyp", "EmpiricalDispersion=GD3BJ", None)
+    c = _row(3, "b3lyp-gd3bj", None, None)
+    for aliased in (True, False):
+        assert (
+            mig._lot_hash(a, aliased=aliased)
+            == mig._lot_hash(b, aliased=aliased)
+            == mig._lot_hash(c, aliased=aliased)
+        )
 
 
 def test_the_composite_aliases_are_what_changes_the_hash(mig):
@@ -220,8 +253,10 @@ def test_assign_hashes_is_the_parent_revisions(mig, parent, holder_probability):
 
 
 def _parent_state(mig, rng, holder_probability):
-    """Rows and merged ids as they can exist at ``d0a7c3b91e4f``."""
-    combos = [(m, d) for m in _METHODS for d in _DISPERSIONS]
+    """Rows and merged ids as they can exist at ``f3b8d5a1c702``."""
+    # A few methods per state, so spellings of one recipe meet in a state often.
+    methods = rng.sample(_METHODS, k=4)
+    combos = [(m, d) for m in methods for d in _DISPERSIONS]
     picked = rng.sample(combos, k=rng.randint(2, 10))
     ids = rng.sample(range(1, 40), k=len(picked))
     rows = [_row(i, m, d, None) for i, (m, d) in zip(ids, picked, strict=True)]

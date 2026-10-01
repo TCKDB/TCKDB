@@ -94,35 +94,15 @@ def _stale(row_id):
 # ---------------------------------------------------------------------------
 
 
-def _d0a7_methods() -> list[str]:
-    """Methods whose key ``d0a7c3b91e4f`` still agrees with the application on.
-
-    ADR 0021 added the composite-method aliases after this revision ran; a
-    spelling they join (``cbsqb3``) is keyed further by the application than
-    by this revision's frozen rule, and ``b9e4c2a7d153`` is the revision that
-    says so (``test_level_of_theory_composite_alias_rekey_plan.py`` holds it
-    to the application).
-    """
-    return [s for s in _all_methods() if mig_key(s) == method_identity_key(s)]
-
-
-def mig_key(spelling: str) -> str:
-    """This revision's frozen method rule, loaded once for parametrisation."""
-    return _frozen()._method_identity_key(spelling)
-
-
-_FROZEN: list = []
-
-
-def _frozen():
-    if not _FROZEN:
-        _FROZEN.append(_load("_mig_d0a7c3b91e4f_collect", _MIGRATION))
-    return _FROZEN[0]
-
-
-@pytest.mark.parametrize("spelling", _d0a7_methods())
-def test_frozen_method_rule_matches_the_application(mig, spelling):
-    assert mig._method_identity_key(spelling) == method_identity_key(spelling)
+@pytest.mark.parametrize("spelling", _all_methods())
+def test_frozen_method_rule_is_the_next_revisions_previous_rule(mig, spelling):
+    """Chain parity. ``f3b8d5a1c702`` and ``b9e4c2a7d153`` froze the method rule
+    again after this revision ran; neither added an alias before ADR 0021, so
+    the successor's rule *without composite aliases* is this revision's.
+    ``test_level_of_theory_composite_alias_rekey_plan.py`` holds the newest
+    revision to the application, so the chain reaches it."""
+    successor = _load("_mig_f3b8_for_d0a7_rule", _SUCCESSOR)
+    assert mig._method_identity_key(spelling) == successor._method_identity_key(spelling)
 
 
 @pytest.mark.parametrize("spelling", [*_all_spellings()])
@@ -146,7 +126,8 @@ def test_the_frozen_alias_tables_are_the_application_table_as_this_revision_ran_
     from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
 
     application = {a.alias: a.canonical for a in NAME_ALIASES}
-    assert mig._NAME_ALIASES == {"wb97x-d": "wb97xd", "m06-2x": "m062x"}
+    successor = _load("_mig_f3b8_for_d0a7_tables", _SUCCESSOR)
+    assert mig._NAME_ALIASES == successor._NAME_ALIASES  # chain parity
     assert mig._NAME_ALIASES.items() <= application.items()
     assert [(p.pattern, r) for p, r in mig._SUFFIX_RULES] == list(SUFFIX_RULES)
 
@@ -155,7 +136,7 @@ def test_the_frozen_alias_tables_are_the_application_table_as_this_revision_ran_
     ("method", "dispersion", "solvent"),
     [
         (m, d, s)
-        for m in _d0a7_methods()[:40]
+        for m in _all_methods()[:40]
         for d, s in ((None, None), ("D3BJ", "Water"), ("gd3bj", None))
     ],
 )
@@ -359,8 +340,17 @@ def test_the_generator_makes_alias_and_case_duplicates(mig):
 
 
 def test_alias_spellings_of_the_table_are_joined_by_the_frozen_rule(mig):
+    successor = _load("_mig_f3b8_for_d0a7_same", _SUCCESSOR)
     for _method, spellings, key in SAME_METHOD:
         for _program, spelling in spellings:
-            if method_identity_key(spelling) != mig._method_identity_key(spelling):
-                continue  # a composite-method alias: b9e4c2a7d153's, not this revision's
-            assert mig._method_identity_key(spelling) == key
+            frozen = mig._method_identity_key(spelling)
+            assert frozen == successor._method_identity_key(spelling)  # chain parity
+            # What this revision ran joined the #618 spellings and nothing newer.
+            if frozen != key:
+                assert method_identity_key(spelling) == key  # a later revision's alias
+                assert frozen == spelling.strip().lower()  # which it left alone
+
+
+def test_this_revision_did_not_join_the_composite_aliases(mig):
+    assert mig._method_identity_key("cbsqb3") == "cbsqb3"
+    assert mig._method_identity_key("G4(MP2)") == "g4(mp2)"

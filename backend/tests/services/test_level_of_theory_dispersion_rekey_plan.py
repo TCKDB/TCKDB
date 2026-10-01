@@ -38,7 +38,7 @@ from app.chemistry.dispersion_names import (
     level_identity_keys,
 )
 from app.chemistry.lot_component_names import component_identity_key
-from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES, method_identity_key
+from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
 from app.services.calculation_resolution import _level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 from tests.services.test_dispersion_identity_key import _ALL_PAIRS, DISPERSION
@@ -47,6 +47,16 @@ from tests.services.test_method_identity_key import _all_methods
 _VERSIONS = pathlib.Path(__file__).parents[2] / "alembic" / "versions"
 _MIGRATION = _VERSIONS / "f3b8d5a1c702_key_level_of_theory_dispersion_synonyms.py"
 _PARENT = _VERSIONS / "d0a7c3b91e4f_key_level_of_theory_method_aliases.py"
+_SUCCESSOR = _VERSIONS / "b9e4c2a7d153_key_level_of_theory_composite_method_aliases.py"
+
+
+def _successor():
+    """ADR 0021 froze the whole formula again, with composite aliases on top."""
+    spec = importlib.util.spec_from_file_location("_mig_b9e4_for_f3b8", _SUCCESSOR)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 _METHODS = [
     "b3lyp", "b3lyp-d3bj", "b3lyp-d3(bj)", "B3LYP-GD3BJ", "wb97x-d3bj", "wb97x",
@@ -103,8 +113,13 @@ def _stale(row_id):
 
 
 @pytest.mark.parametrize("spelling", _all_methods())
-def test_frozen_method_rule_matches_the_application(mig, spelling):
-    assert mig._method_identity_key(spelling) == method_identity_key(spelling)
+def test_frozen_method_rule_is_the_successors_previous_rule(mig, spelling):
+    """Chain parity: this revision's method rule is the successor's without its
+    composite aliases. ``b9e4c2a7d153``'s test holds the successor to the
+    application, so the chain reaches it."""
+    assert mig._method_identity_key(spelling) == _successor()._method_identity_key(
+        spelling, composite_aliases=False
+    )
 
 
 @pytest.mark.parametrize("spelling", [*_all_spellings()])
@@ -127,11 +142,11 @@ def test_frozen_level_keys_match_the_application(mig, method, dispersion):
     assert mig._level_identity_keys(method, dispersion) == level_identity_keys(method, dispersion)
 
 
-@pytest.mark.parametrize("method", _all_methods()[:60])
-def test_frozen_level_keys_match_on_every_method_spelling(mig, method):
-    for dispersion in (None, "d3bj", "gd3"):
-        assert mig._level_identity_keys(method, dispersion) == level_identity_keys(
-            method, dispersion
+@pytest.mark.parametrize("method", _all_methods())
+def test_frozen_level_keys_are_the_successors_previous_keys_on_every_spelling(mig, method):
+    for dispersion in (None, "d3bj", "gd3", "EmpiricalDispersion=GD3BJ"):
+        assert mig._level_identity_keys(method, dispersion) == _successor()._level_identity_keys(
+            method, dispersion, composite_aliases=False
         )
 
 
@@ -140,13 +155,14 @@ def test_the_frozen_rule_tables_list_what_the_application_lists(mig):
     the deployed hashes from new uploads; this fails until a revision says so."""
     assert [(p.pattern, r) for p, r in mig._DISPERSION_RULES] == list(DISPERSION_RULES)
     assert mig._FOLDED_PATTERN.pattern == FOLDED_PATTERN
-    assert mig._NAME_ALIASES == {a.alias: a.canonical for a in NAME_ALIASES}
+    assert mig._NAME_ALIASES == _successor()._PRIOR_NAME_ALIASES  # chain parity
+    assert mig._NAME_ALIASES.items() <= {a.alias: a.canonical for a in NAME_ALIASES}.items()
     assert [(p.pattern, r) for p, r in mig._SUFFIX_RULES] == list(SUFFIX_RULES)
 
 
 @pytest.mark.parametrize(
     ("method", "dispersion"),
-    [(m, d) for m in [*_METHODS, *_all_methods()[:20]] for d in _DISPERSIONS],
+    [(m, d) for m in _METHODS for d in _DISPERSIONS],
 )
 def test_frozen_hash_matches_the_application(mig, method, dispersion):
     fields = {
@@ -162,6 +178,16 @@ def test_frozen_hash_matches_the_application(mig, method, dispersion):
     }
     row = SimpleNamespace(_mapping=fields)
     assert mig._lot_hash(row, split=True) == _level_of_theory_hash(LevelOfTheoryRef(**fields))
+
+
+@pytest.mark.parametrize(
+    ("method", "dispersion"),
+    [(m, d) for m in _all_methods() for d in (None, "D3BJ", "GD3BJ")],
+)
+def test_frozen_hash_is_the_successors_previous_formula(mig, method, dispersion):
+    """Every spelling, including the composite ones the application now aliases."""
+    row = _row(1, method, dispersion, "Water", None)
+    assert mig._lot_hash(row, split=True) == _successor()._lot_hash(row, aliased=False)
 
 
 @pytest.mark.parametrize(("method", "dispersion"), _ALL_PAIRS, ids=str)

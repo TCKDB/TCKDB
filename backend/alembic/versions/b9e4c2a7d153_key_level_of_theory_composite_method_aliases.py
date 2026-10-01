@@ -81,18 +81,21 @@ placeholder, then to its target, so no order can trip the unique constraint.
 Rules frozen here
 -----------------
 ``_HYPHEN_RULES``, ``_basis_identity_key``, ``_method_identity_key`` (with
-``_PRIOR_NAME_ALIASES``, ``_NAME_ALIASES`` and ``_SUFFIX_RULES``) and
-``_component_identity_key`` are a copy of the application rules as of this
+``_PRIOR_NAME_ALIASES``, ``_NAME_ALIASES`` and ``_SUFFIX_RULES``),
+``_component_identity_key``, ``_dispersion_identity_key`` (with
+``_DISPERSION_RULES``) and ``_level_identity_keys`` (with ``_FOLDED_PATTERN``) are a copy of the application rules as of this
 revision. A migration must describe what it ran, so it does not import
 application code that may change later; a test holds the two in agreement for
 as long as the rules are the same. ``assign_hashes`` is a copy of the one in
 ``d0a7c3b91e4f``, and a test holds the two in agreement too. The previous
-formula (``aliased=False``) is exactly ``d0a7c3b91e4f``'s, which a test holds.
+formula (``aliased=False``) is exactly ``f3b8d5a1c702``'s, which a test holds,
+so the dispersion-synonym and folded-dispersion keys of #630 are kept in both
+directions.
 
 Downgrade
 ---------
-Re-hashes rows with the previous formula (method through the two #618 aliases
-only). Every row whose stored hash came from this revision's formula gets its
+Re-hashes rows with the previous formula (``f3b8d5a1c702``'s: the two #618 aliases,
+dispersion synonyms and split folded dispersion, no composite aliases). Every row whose stored hash came from this revision's formula gets its
 previous hash back exactly. Rows whose previous hash is shared cannot all hold
 it: the holder is chosen by the rules above and the others keep their current,
 unique hash. Upgrade then downgrade restores every hash exactly, with or
@@ -101,7 +104,7 @@ without merges in between
 this over randomised lifecycles).
 
 Revision ID: b9e4c2a7d153
-Revises: a7d3f1c95e28
+Revises: f3b8d5a1c702
 Create Date: 2026-10-01
 """
 
@@ -118,7 +121,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "b9e4c2a7d153"
-down_revision: Union[str, Sequence[str], None] = "a7d3f1c95e28"
+down_revision: Union[str, Sequence[str], None] = "f3b8d5a1c702"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -128,7 +131,6 @@ _HASH_FIELDS = (
     "dispersion", "solvent", "solvent_model", "keywords",
 )
 _BASIS_FIELDS = ("basis", "aux_basis", "cabs_basis")
-_COMPONENT_FIELDS = ("dispersion", "solvent", "solvent_model")
 
 #: Frozen copy of ``app.chemistry.basis_set_names.HYPHEN_RULES``.
 _HYPHEN_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -136,7 +138,7 @@ _HYPHEN_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<![^-])ccp(?=(?:w?c)?v)"), "cc-p"),
 )
 
-#: The alias table as ``d0a7c3b91e4f`` left it (alias -> key): the previous
+#: The alias table as ``f3b8d5a1c702`` left it (alias -> key): the previous
 #: formula. Used for ``aliased=False``.
 _PRIOR_NAME_ALIASES = {
     "wb97x-d": "wb97xd",
@@ -156,10 +158,43 @@ _NAME_ALIASES = {
 }
 
 #: Frozen copy of ``app.chemistry.method_names.SUFFIX_RULES`` (unchanged by
-#: this revision).
+#: this revision, as are the dispersion rules and the folded pattern below).
 _SUFFIX_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"^(.+)-d3\(bj\)$", re.DOTALL), r"\1-d3bj"),
     (re.compile(r"^(.+)-gd3bj$", re.DOTALL), r"\1-d3bj"),
+)
+
+#: Frozen copy of ``app.chemistry.dispersion_names.DISPERSION_RULES``.
+_DISPERSION_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (re.compile(p), r)
+    for p, r in (
+        (
+            r"^(?:gd3bj|empiricaldispersion\s*(?:=\s*gd3bj|=\s*\(\s*gd3bj\s*\)|\(\s*gd3bj\s*\)))$",
+            "d3bj",
+        ),
+        (
+            r"^(?:d3\(bj\)|empiricaldispersion\s*(?:=\s*d3\(bj\)|=\s*\(\s*d3\(bj\)\s*\)|\(\s*d3\(bj\)\s*\)))$",
+            "d3bj",
+        ),
+        (
+            r"^(?:gd3|empiricaldispersion\s*(?:=\s*gd3|=\s*\(\s*gd3\s*\)|\(\s*gd3\s*\)))$",
+            "d3zero",
+        ),
+        (
+            r"^(?:gd2|empiricaldispersion\s*(?:=\s*gd2|=\s*\(\s*gd2\s*\)|\(\s*gd2\s*\)))$",
+            "d2",
+        ),
+        (
+            r"^(?:d30|empiricaldispersion\s*(?:=\s*d30|=\s*\(\s*d30\s*\)|\(\s*d30\s*\)))$",
+            "d3zero",
+        ),
+    )
+)
+
+#: Frozen copy of ``app.chemistry.dispersion_names.FOLDED_PATTERN``.
+_FOLDED_PATTERN = re.compile(
+    r"^(cam\-b3lyp|b2plyp|revpbe|b3pw91|m06\-2x|b3lyp|tpss0|bhlyp|m062x|pbe0|tpss|bp86|blyp|pbe|hf)"
+    r"-(d3bj|d3zero|d2)$"
 )
 
 _SELECT_ROWS = sa.text(
@@ -183,7 +218,7 @@ def _basis_identity_key(name: str | None) -> str | None:
 
 
 def _method_identity_key(name: str, *, composite_aliases: bool = True) -> str:
-    """The method key; ``composite_aliases=False`` is ``d0a7c3b91e4f``'s."""
+    """The method key; ``composite_aliases=False`` is ``f3b8d5a1c702``'s."""
     aliases = _NAME_ALIASES if composite_aliases else _PRIOR_NAME_ALIASES
     key = name.strip().lower()
     if key in aliases:
@@ -200,19 +235,46 @@ def _component_identity_key(name: str | None) -> str | None:
     return key or None
 
 
+def _dispersion_identity_key(name: str | None) -> str | None:
+    key = _component_identity_key(name)
+    if key is None:
+        return None
+    for pattern, replacement in _DISPERSION_RULES:
+        key = pattern.sub(replacement, key)
+    return key
+
+
+def _level_identity_keys(
+    method: str, dispersion: str | None, *, composite_aliases: bool = True
+) -> tuple[str, str | None]:
+    method_key = _method_identity_key(method, composite_aliases=composite_aliases)
+    dispersion_key = _dispersion_identity_key(dispersion)
+    hit = _FOLDED_PATTERN.match(method_key)
+    if hit is not None and dispersion_key in (None, hit.group(2)):
+        return (
+            _method_identity_key(hit.group(1), composite_aliases=composite_aliases),
+            hit.group(2),
+        )
+    return method_key, dispersion_key
+
+
 def _lot_hash(row, *, aliased: bool) -> str:
     """The application's hash formula.
 
-    ``aliased=False`` is the formula as ``d0a7c3b91e4f`` left it (the two #618
-    method aliases, no composite-method aliases).
+    ``aliased=False`` is the formula as ``f3b8d5a1c702`` left it (the two #618
+    method aliases, dispersion-column synonyms, a folded dispersion split out
+    of the method; no composite-method aliases). ``aliased=True`` adds the
+    composite-method aliases and nothing else.
     """
     mapping = row._mapping
     payload = {field: mapping[field] for field in _HASH_FIELDS}
     for field in _BASIS_FIELDS:
         payload[field] = _basis_identity_key(payload[field])
-    payload["method"] = _method_identity_key(payload["method"], composite_aliases=aliased)
-    for field in _COMPONENT_FIELDS:
+    for field in ("solvent", "solvent_model"):
         payload[field] = _component_identity_key(payload[field])
+    payload["method"], payload["dispersion"] = _level_identity_keys(
+        payload["method"], payload["dispersion"], composite_aliases=aliased
+    )
     payload["spin_treatment"] = mapping["spin_treatment"] or "unknown"
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")

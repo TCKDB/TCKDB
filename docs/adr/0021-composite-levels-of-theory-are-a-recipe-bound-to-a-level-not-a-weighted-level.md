@@ -184,6 +184,13 @@ definition hash, which cannot collide with the normal hash because that always
 has a `method`. A named method combined with an inline definition, and a nested
 composite, are refused.
 
+`G3//B3LYP` and `G3(MP2)//B3LYP` are the literature names of G3B3 and G3MP2B3
+(Baboul et al. 1999): one recipe that merely contains `//`. They are refused like
+any `//`, with a message that names the method to send (`G3B3`, `G3MP2B3`) and
+the context key `named_method`; they are not aliased, because an alias would
+store a `//` in a method name. Year suffixes and the `paraskevas` label are
+warned about after any known method stem (decision 12), not only composites.
+
 ## Rejected shapes
 
 - **Components with role and weight on `level_of_theory`.** See decision 1.

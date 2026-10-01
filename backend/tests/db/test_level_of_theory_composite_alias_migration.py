@@ -82,6 +82,10 @@ _SEED: dict[str, dict] = {
     "year": {"method": "cbsqb32023", "hash": "prior"},
     "cbs_basis": {"method": "cbsqb3", "basis": "cbsb7", "hash": "prior"},
     "wb97xd": {"method": "wb97x-d", "hash": "prior"},
+    # #630 (f3b8d5a1c702) already keyed these; this revision must keep them keyed.
+    "disp_gd3bj": {"method": "B3LYP", "dispersion": "GD3BJ", "hash": "prior"},
+    "disp_gd3": {"method": "b3lyp", "dispersion": "EmpiricalDispersion=GD3", "hash": "prior"},
+    "disp_folded": {"method": "PBE0-D3(BJ)", "hash": "prior"},
 }
 _DEFAULTS = {
     "basis": None, "aux_basis": None, "cabs_basis": None, "dispersion": None, "solvent": None,
@@ -231,6 +235,10 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert _keyed_hash("rocbsqb3") == _keyed_hash("rocbs_upper")
     assert hash_of("g3b3_kw") == old("g3b3_kw") == _keyed_hash("g3b3_kw")
     assert _keyed_hash("g3b3_paren") == _keyed_hash("g3b3_kw")
+    # #630's dispersion keys survive: re-pointing the chain without freezing them
+    # would re-hash these three back to their pre-#630 hashes.
+    for key in ("disp_gd3bj", "disp_gd3", "disp_folded"):
+        assert hash_of(key) == old(key) == _keyed_hash(key), key
     # The #618 aliases are untouched: wb97x-d was already keyed by the parent.
     assert hash_of("wb97xd") == old("wb97xd")
     # Never joined: the W1 recipes, W1-BD, ROCBS-QB3 vs CBS-QB3, the
@@ -262,7 +270,10 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
         holder_ref, dup_ref = before[ids[pair[0]]][0], before[ids[pair[1]]][0]
         assert f"{holder_ref} holds the key; also spelled as {dup_ref}" in completed.stdout, pair
     assert before[ids["alias"]][0] not in completed.stdout
-    for key in ("w1bd", "w1_bd", "w1u", "w1ro", "paraskevas", "year", "wb97xd"):
+    for key in (
+        "w1bd", "w1_bd", "w1u", "w1ro", "paraskevas", "year", "wb97xd",
+        "disp_gd3bj", "disp_gd3", "disp_folded",
+    ):
         assert before[ids[key]][0] not in completed.stdout, key
     assert "duplicate group(s)" in completed.stdout
 

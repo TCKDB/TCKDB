@@ -246,9 +246,10 @@ NAME_ALIASES: tuple[MethodAlias, ...] = (
             "frequencies [Baboul99] 'are requested with the G3B3 and G3MP2B3 keywords'; "
             "G3MP2 is the manual's gloss of G3(MP2), so G3(MP2)B3 is the same recipe "
             "with the parenthesis written. ARC data/ess_methods.yml writes 'g3mp2b3'.",
-            "Baboul et al., J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676. The "
-            "exact spelling 'G3(MP2)B3' was not found in a primary text that could be "
-            "retrieved; the entry rests on the manual's keyword gloss above.",
+            "Baboul et al., J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676.",
+            "secondary: the Zipse group's teaching pages (zipse.cup.uni-muenchen.de, "
+            "'Overview of Gaussian theories') write the method literally as 'G3(MP2)B3' "
+            "and describe it as G3(MP2) with Becke3LYP/6-31G(d) geometries and ZPE.",
         ),
     ),
 )

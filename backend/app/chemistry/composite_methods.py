@@ -31,15 +31,25 @@ scalar-relativistic correction). ``CBS-QB3`` and ``ROCBS-QB3`` are two keys
 Program scope
 -------------
 ``programs`` lists the programs whose manual, as held in the group knowledge
-base, documents the recipe as a keyword. Only Gaussian 09 does. The ORCA 5 / 6
-and Molpro 2024 / 2026 manuals in the knowledge base document no keyword for
-any of these methods (ORCA's "composite methods" chapter is the 3c family;
-Molpro's composite thermochemistry is a user procedure, not a method name), so
-nothing is claimed for them. An empty tuple means no program keyword is
-established (``W1`` and ``W2`` are the Martin-de Oliveira protocols; Gaussian
-implements the ``W1U`` / ``W1BD`` / ``W1RO`` variants, not a bare ``W1``).
+base, documents the recipe as a keyword. Only Gaussian 09 does. ORCA documents
+compound protocols of its own (ORCA 5, section 9.47: ``W2-2``, ``G2-MP2`` and
+its variants, the ``ccCA`` family; ORCA 6 adds the 3c methods and the Compound
+scripting facility), none of which is one of the methods below: ``W2-2`` is
+not ``W2`` and is not aliased to it. The Molpro 2024 / 2026 manuals document
+no composite method name (explicitly correlated composite thermochemistry is a
+user procedure). Nothing is claimed for ORCA or Molpro. An empty tuple means no
+program keyword is established (``W1`` and ``W2`` are the Martin-de Oliveira
+protocols; Gaussian implements the ``W1U`` / ``W1BD`` / ``W1RO`` variants, not a
+bare ``W1``).
 Gaussian 16's manual is not in the knowledge base; the Gaussian 09 manual is
 cited.
+
+Sources, in order of preference: the defining paper or its preprint, the
+open-access benchmark of Kesharwani, Brauer and Martin (JPCA 2015) which quotes
+each recipe's scale factor, the Gaussian manual, then the Zipse group's
+teaching pages. A value taken from the last is labelled ``secondary`` in its
+citation and names the paper it reports; the paper's own text was not
+retrievable (the publisher returns 403).
 
 This module is pure and is not yet read by the resolution path (that is plan
 phase P2); it is the data P2 will bind level-of-theory rows to.
@@ -53,6 +63,11 @@ from app.chemistry.method_names import method_identity_key
 
 _G09 = "Gaussian 09 manual, g09ur/k_cbs.htm (CBS Methods) and g09ur/k_g1.htm (G1-G4)"
 _G09_W1 = "Gaussian 09 manual, g09ur/k_w1u.htm (W1 methods)"
+_KESHARWANI = (
+    "Kesharwani, Brauer, Martin, J. Phys. Chem. A 119, 1701 (2015), doi:10.1021/jp508422u "
+    "(open-access reprint webhome.weizmann.ac.il/home/comartin/OAreprints/260.pdf)"
+)
+_ZIPSE = "secondary: Zipse group teaching pages, zipse.cup.uni-muenchen.de, 'Overview of Gaussian theories'"
 _ARC_METHODS = (
     "ARC data/ess_methods.yml (d9f47ab9), gaussian list: the spelling ARC writes for this method."
 )
@@ -117,6 +132,9 @@ _B3LYP_CBSB7 = InternalLevel(
         "by CBS-QB3 high accuracy energy method [Montgomery99]'.",
         "ARC arc/settings/settings.py:237-240 (d9f47ab9): 'B3LYP/CBSB7 ... the frequency "
         "level of CBS-QB3'.",
+        _KESHARWANI + ": 'The CBS-QB3 thermochemistry protocol specifies a B3LYP/CBSB7 ZPVE "
+        "scaled by 0.9900'; CBSB7 is 'effectively 6-311G(d) on first row and 6-311G(2d) on "
+        "second row'.",
     ),
 )
 
@@ -150,11 +168,25 @@ _G4_B3LYP = InternalLevel(
         "Curtiss, Redfern, Raghavachari, J. Chem. Phys. 126, 084108 (2007), "
         "doi:10.1063/1.2436888, abstract: 'optimized geometries and zero-point energies "
         "are obtained with the B3LYP density functional'.",
-        "secondary: the basis 6-31G(2df,p) is quoted from the Zipse group's G4 summary "
-        "(zipse.cup.uni-muenchen.de, 'G4 theory'), 'Geometries and thermochemical "
-        "corrections calculated at B3LYP/6-31G(2df,p) level'; the paper's own text was "
-        "not retrievable (publisher returns 403).",
+        _KESHARWANI + ": 'GTBas3 (effectively 6-31G(2df,p)) in G4 and G4MP2 theory'; "
+        "'the 0.9854 scale factor for B3LYP/6-31G(2df,p) specified in G4 and G4MP2 theory'.",
     ),
+)
+
+_G4_ZPE = (
+    _KESHARWANI + ": 'the 0.9854 scale factor for B3LYP/6-31G(2df,p) specified in G4 and "
+    "G4MP2 theory agrees almost perfectly with 0.9862' (their own fit).",
+)
+
+_G3B3_ZPE = (
+    _ZIPSE + ", G3B3 page: 'ZPE = 0.960 * ZPE[B3LYP/6-31G(d)]', citing Baboul et al., "
+    "J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676, whose text was not retrievable.",
+)
+
+_G3_ZPE = (
+    _ZIPSE + ": 'ZPE = 0.8929 * ZPE[HF/6-31G(d)]', citing the G3 paper "
+    "(J. Chem. Phys. 109, 7764 (1998), doi:10.1063/1.477422), whose text was not "
+    "retrievable.",
 )
 
 _NOT_STATED_SCALE = "recipe_zpe_scale_factor: not stated by a source cited here (abstract or manual)."
@@ -165,14 +197,18 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         name="CBS-QB3",
         paper_doi="10.1063/1.477924",
         paper="J. A. Montgomery Jr., M. J. Frisch, J. W. Ochterski, G. A. Petersson, "
-        "J. Chem. Phys. 110, 2822 (1999): A complete basis set model chemistry. VI.",
+        "J. Chem. Phys. 110, 2822 (1999): A complete basis set model chemistry. VI. "
+        "Gaussian's CBS-QB3 keyword is the later re-parametrisation of this recipe "
+        "(Montgomery, Ochterski, Petersson, J. Chem. Phys. 112, 6532 (2000), "
+        "doi:10.1063/1.481224); the 1999 parametrisation is the obsolete keyword CBS-QB3O.",
         geometry_level=_B3LYP_CBSB7,
         frequency_level=_B3LYP_CBSB7,
         recipe_zpe_scale_factor=0.99,
         zpe_citations=(
+            _KESHARWANI + ": 'The CBS-QB3 thermochemistry protocol specifies a B3LYP/CBSB7 "
+            "ZPVE scaled by 0.9900'.",
             "ARC data/freq_scale_factors.yml:174-178 (d9f47ab9), source 5 = "
-            "doi:10.1063/1.477924: '0.99 * 1.014, the 0.99 value is the ZPE scale factor "
-            "of CBS-QB3'. Cited through ARC; the paper's own text was not retrievable.",
+            "doi:10.1063/1.477924: 'the 0.99 value is the ZPE scale factor of CBS-QB3'.",
         ),
         programs=("gaussian",),
         not_stated=(),
@@ -181,6 +217,10 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
             _ARC_METHODS,
             "Gaussian 09 manual: 'CBS-QB3 (0 K)' is 'Zero-point-corrected electronic "
             "energy: E0 = Eelec + ZPE', so the printed number includes the recipe ZPE.",
+            "Gaussian 09 manual, Obsolete Keywords: 'CBS-QB3O: Uses the original "
+            "parametrization [Montgomery99]. It is obsolete'; so the current CBS-QB3 "
+            "keyword is the 2000 parametrisation (Montgomery 2000, "
+            "doi:10.1063/1.481224, 'incorporated into the CBS-QB3 ... model chemistries').",
         ),
     ),
     CompositeMethod(
@@ -278,10 +318,10 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
                 "energies from Hartree-Fock theory [HF/6-31G(d)]'.",
             ),
         ),
-        recipe_zpe_scale_factor=None,
-        zpe_citations=(),
+        recipe_zpe_scale_factor=0.8929,
+        zpe_citations=_G3_ZPE,
         programs=("gaussian",),
-        not_stated=(_NOT_STATED_SCALE,),
+        not_stated=(),
         citations=(_G09, _ARC_METHODS),
     ),
     CompositeMethod(
@@ -293,10 +333,10 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         "zero-point energies.",
         geometry_level=_B3LYP_631GD,
         frequency_level=_B3LYP_631GD,
-        recipe_zpe_scale_factor=None,
-        zpe_citations=(),
+        recipe_zpe_scale_factor=0.96,
+        zpe_citations=_G3B3_ZPE,
         programs=("gaussian",),
-        not_stated=(_NOT_STATED_SCALE,),
+        not_stated=(),
         citations=(
             _G09 + ": 'The G3 variants using B3LYP structures and frequencies [Baboul99] "
             "are requested with the G3B3 and G3MP2B3 keywords'.",
@@ -311,15 +351,25 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         "J. Chem. Phys. 110, 4703 (1999): Gaussian-3 theory using reduced Moller-Plesset "
         "order.",
         geometry_level=None,
-        frequency_level=None,
-        recipe_zpe_scale_factor=None,
-        zpe_citations=(),
+        frequency_level=InternalLevel(
+            method="HF",
+            basis="6-31G(d)",
+            citations=(
+                _ZIPSE + ", G3(MP2) page: 'Optimization and frequency calculation at the "
+                "HF/6-31G(d) level of theory'; 'ZPE = 0.8929 * ZPE[HF/6-31G(d)]', citing "
+                "Curtiss et al., J. Chem. Phys. 110, 4703 (1999), doi:10.1063/1.478385.",
+            ),
+        ),
+        recipe_zpe_scale_factor=0.8929,
+        zpe_citations=(
+            _ZIPSE + ", G3(MP2) page: 'ZPE = 0.8929 * ZPE[HF/6-31G(d)]', citing Curtiss "
+            "et al., J. Chem. Phys. 110, 4703 (1999), doi:10.1063/1.478385.",
+        ),
         programs=("gaussian",),
         not_stated=(
-            "geometry_level, frequency_level: the abstract says only that 'the basis set "
-            "extensions are obtained at the second-order Moller-Plesset level'; it does "
-            "not restate the geometry or frequency level.",
-            _NOT_STATED_SCALE,
+            "geometry_level: the G3(MP2) abstract does not state it, and the Zipse "
+            "G3(MP2) page says 'optimization ... at HF/6-31G(d)' where the G3 page says "
+            "MP2(FULL)/6-31G(d); the two are not reconciled here, so it is not filled.",
         ),
         citations=(
             _G09 + ": 'G3MP2 requests the similarly modified G3(MP2) method [Curtiss99]'.",
@@ -335,26 +385,36 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         "zero-point energies (the manual cites it for this keyword).",
         geometry_level=InternalLevel(
             method="B3LYP",
-            basis=None,
+            basis="6-31G(d)",
             citations=(
                 _G09 + ": the G3MP2B3 keyword uses 'B3LYP structures and frequencies "
-                "[Baboul99]'. The basis is not stated for this keyword here; the abstract "
-                "of Baboul 1999 gives 6-31G(d) for G3//B3LYP only.",
+                "[Baboul99]'.",
+                _ZIPSE + ", G3(MP2)B3 page: 'Optimization and frequency calculation at the "
+                "Becke3LYP/6-31G(d) level of theory'.",
             ),
         ),
         frequency_level=InternalLevel(
             method="B3LYP",
-            basis=None,
-            citations=(_G09 + ": 'B3LYP structures and frequencies [Baboul99]'.",),
+            basis="6-31G(d)",
+            citations=(
+                _G09 + ": 'B3LYP structures and frequencies [Baboul99]'.",
+                _ZIPSE + ", G3(MP2)B3 page: 'Optimization and frequency calculation at the "
+                "Becke3LYP/6-31G(d) level of theory'.",
+            ),
         ),
-        recipe_zpe_scale_factor=None,
-        zpe_citations=(),
+        recipe_zpe_scale_factor=0.96,
+        zpe_citations=(
+            _ZIPSE + ", G3(MP2)B3 page: 'ZPE = 0.960 * ZPE[B3LYP/6-31G(d)]', citing "
+            "Baboul et al., J. Chem. Phys. 110, 7650 (1999), doi:10.1063/1.478676.",
+        ),
         programs=("gaussian",),
-        not_stated=(
-            "geometry_level.basis, frequency_level.basis: see the level's citation.",
-            _NOT_STATED_SCALE,
+        not_stated=(),
+        citations=(
+            _G09,
+            _ARC_METHODS,
+            _ZIPSE + ": the page is titled and written 'G3(MP2)B3', the spelling the "
+            "parenthesised alias joins.",
         ),
-        citations=(_G09, _ARC_METHODS),
     ),
     CompositeMethod(
         key="g4",
@@ -365,12 +425,7 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         geometry_level=_G4_B3LYP,
         frequency_level=_G4_B3LYP,
         recipe_zpe_scale_factor=0.9854,
-        zpe_citations=(
-            "secondary: Zipse group's G4 summary (zipse.cup.uni-muenchen.de, 'G4 theory'): "
-            "'ZPE = ZPE[B3LYP/6-31G(2df,p)], scaling frequencies by 0.9854'. "
-            "The paper's own text was not retrievable (publisher returns 403); the paper "
-            "is the primary source to check.",
-        ),
+        zpe_citations=_G4_ZPE,
         programs=("gaussian",),
         not_stated=(),
         citations=(_G09, _ARC_METHODS),
@@ -381,17 +436,12 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         paper_doi="10.1063/1.2770701",
         paper="L. A. Curtiss, P. C. Redfern, K. Raghavachari, J. Chem. Phys. 127, 124105 "
         "(2007): Gaussian-4 theory using reduced order perturbation theory.",
-        geometry_level=None,
-        frequency_level=None,
-        recipe_zpe_scale_factor=None,
-        zpe_citations=(),
+        geometry_level=_G4_B3LYP,
+        frequency_level=_G4_B3LYP,
+        recipe_zpe_scale_factor=0.9854,
+        zpe_citations=_G4_ZPE,
         programs=("gaussian",),
-        not_stated=(
-            "geometry_level, frequency_level: the abstract says only that second-order "
-            "perturbation theory replaces fourth-order; it does not restate the geometry "
-            "or frequency level.",
-            _NOT_STATED_SCALE,
-        ),
+        not_stated=(),
         citations=(
             _G09 + ": 'G4 and G4MP2 request the fourth generation methods "
             "[Curtiss07, Curtiss07a]'.",
@@ -411,6 +461,10 @@ CATALOGUE: tuple[CompositeMethod, ...] = (
         zpe_citations=(
             "Martin, de Oliveira 1999, preprint arXiv:physics/9904038, W1 protocol: "
             "'harmonic frequencies scaled by 0.985'.",
+            _KESHARWANI + " restates it as 'The 0.985 scaling factor for B3LYP/cc-pV(T+d)Z "
+            "in W1 theory' and fits about 0.989; the recipe's own value is 0.985, and its "
+            "basis is cc-pVTZ+1 (cc-pVTZ with one high-exponent d function on second-row "
+            "atoms), not cc-pV(T+d)Z.",
         ),
         programs=(),
         not_stated=(),

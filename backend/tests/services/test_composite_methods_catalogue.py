@@ -97,6 +97,36 @@ def test_the_cited_values():
     )
 
 
+def test_the_values_the_review_asked_to_be_cited_from_kesharwani():
+    kesharwani = "10.1021/jp508422u"
+    for key, scale in (("cbs-qb3", 0.99), ("g4", 0.9854), ("g4mp2", 0.9854)):
+        entry = BY_KEY[key]
+        assert entry.recipe_zpe_scale_factor == scale
+        assert any(kesharwani in c for c in entry.zpe_citations), key
+    g4mp2 = BY_KEY["g4mp2"]
+    assert (g4mp2.geometry_level.method, g4mp2.geometry_level.basis) == ("B3LYP", "6-31G(2df,p)")
+    assert g4mp2.frequency_level == g4mp2.geometry_level
+    # The 2000 re-parametrisation is Gaussian's CBS-QB3; the 1999 one is CBS-QB3O.
+    cbs = BY_KEY["cbs-qb3"]
+    assert "10.1063/1.481224" in cbs.paper and "CBS-QB3O" in cbs.paper
+    assert "10.1063/1.477924" == cbs.paper_doi
+    # W1 keeps Martin's own basis, not Kesharwani's cc-pV(T+d)Z wording.
+    assert BY_KEY["w1"].geometry_level.basis == "cc-pVTZ+1"
+
+
+def test_secondary_sourced_values_say_so_and_name_the_paper_they_report():
+    secondary = {
+        "g3": 0.8929, "g3b3": 0.96, "g3mp2": 0.8929, "g3mp2b3": 0.96,
+    }
+    for key, scale in secondary.items():
+        entry = BY_KEY[key]
+        assert entry.recipe_zpe_scale_factor == scale
+        assert all("secondary" in c and "10.1063/" in c for c in entry.zpe_citations), key
+    # G3(MP2): the two Zipse pages disagree on the geometry level, so it stays NULL.
+    assert BY_KEY["g3mp2"].geometry_level is None
+    assert "geometry_level" in " ".join(BY_KEY["g3mp2"].not_stated)
+
+
 def test_the_lookalike_recipes_are_four_and_two_entries():
     assert {"w1", "w1u", "w1bd", "w1ro"} <= set(BY_KEY)
     assert {"cbs-qb3", "rocbs-qb3"} <= set(BY_KEY)

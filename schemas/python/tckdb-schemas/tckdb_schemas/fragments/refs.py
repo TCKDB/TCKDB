@@ -55,14 +55,43 @@ W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE = (
     "level_of_theory_method_names_correction_table"
 )
 
-#: A named composite method (any spelling the curated aliases join, or the
-#: hyphen-free one) immediately followed by ``-paraskevas`` or a four-digit
-#: year, with or without a hyphen. Matched against the lower-cased method.
+#: ``G3//B3LYP`` and ``G3(MP2)//B3LYP`` are the literature names (Baboul et al.,
+#: J. Chem. Phys. 110, 7650 (1999)) of the Gaussian keywords G3B3 and G3MP2B3: one
+#: recipe, not a pair of levels. They are refused like any ``//``, with advice
+#: that names the method to send, and are not aliased: an alias would store a
+#: ``//`` in a method name. Matched against the lower-cased, space-free name.
+_NAMED_METHODS_WRITTEN_AS_PAIRS = re.compile(
+    r"(?P<recipe>g3|g3mp2|g3\(mp2\))//b3(?:lyp)?(?:/6-31g\(d\))?"
+)
+
+
+def _named_method_written_as_pair(method: str) -> str | None:
+    """Return ``"G3B3"`` / ``"G3MP2B3"`` for the literature spellings, else ``None``."""
+    match = _NAMED_METHODS_WRITTEN_AS_PAIRS.fullmatch("".join(method.lower().split()))
+    if match is None:
+        return None
+    return "G3B3" if match.group("recipe") == "g3" else "G3MP2B3"
+
+
+#: Method names a correction-table label can follow: the named composite methods
+#: (any spelling the curated aliases join, or the hyphen-free one) and the
+#: ordinary methods Arkane keys corrections on. A fixed list on purpose: a
+#: pattern for "any name then a year" would warn on real names, and a stem the
+#: list does not name is left alone. Parentheses are balanced inside a stem.
+_CORRECTION_TABLE_STEMS = (
+    r"rocbs-?qb3|cbs-?qb3|cbs-?4m|cbs-?apno"
+    r"|g3(?:mp2|\(mp2\))?(?:b3)?|g4(?:mp2|\(mp2\))?"
+    r"|w1(?:u|bd|ro)?|w2"
+    r"|b3lyp|cam-?b3lyp|b2plyp(?:-?d3(?:bj)?)?|pbe0?|wb97x-?d3?|wb97xd|m06-?2x|m06l|m06hf"
+    r"|bp86|blyp|tpss|revpbe|hf|mp2|ccsd|ccsd\(t\)|ccsd\(t\)-?f12"
+    r"|dlpno-?ccsd\(t\)(?:-?f12)?"
+)
+
+#: A stem immediately followed by ``-paraskevas`` (``cbsqb3paraskevas`` once
+#: Arkane has stripped the hyphens) or a four-digit year, with or without a
+#: hyphen. Matched against the lower-cased method.
 _CORRECTION_TABLE_METHOD = re.compile(
-    r"(?P<stem>rocbs-?qb3|cbs-?qb3|cbs-?4m|cbs-?apno"
-    r"|g3(?:\(?mp2\)?)?(?:b3)?|g4(?:\(?mp2\)?)?"
-    r"|w1(?:u|bd|ro)?|w2)"
-    r"(?P<table>-paraskevas|-?(?:19|20)\d{2})"
+    rf"(?P<stem>{_CORRECTION_TABLE_STEMS})(?P<table>-?paraskevas|-?(?:19|20)\d{{2}})"
 )
 
 
@@ -481,6 +510,20 @@ class LevelOfTheoryRef(SchemaBase):
     def normalize_method(cls, value: str) -> str:
         value = normalize_required_text(value)
         if "//" in value:
+            named = _named_method_written_as_pair(value)
+            if named is not None:
+                raise CodedValidationError(
+                    LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
+                    (
+                        f"level_of_theory.method={value!r} is the literature name of the "
+                        f"named composite method {named!r}, which is one recipe run by one "
+                        f"program keyword, not an energy//geometry pair. Send method="
+                        f"{named!r}. (A genuine pair of levels is sent as separate "
+                        "calculations, each with its own level of theory.)"
+                    ),
+                    context={"field": "method", "value": value, "named_method": named},
+                    message_prefix=False,
+                )
             raise CodedValidationError(
                 LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
                 (
@@ -517,7 +560,7 @@ class LevelOfTheoryRef(SchemaBase):
         if stem is not None:
             self._method_warning_code = W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
             self._method_warning_message = (
-                f"level_of_theory.method={self.method!r} is the named method {stem!r} "
+                f"level_of_theory.method={self.method!r} is the method {stem!r} "
                 "followed by a label that selects an energy-correction table (a "
                 "correction-set name or a year), not a method. The calculation ran "
                 f"{stem!r}. Stored as sent, as a separate level of theory from "

@@ -57,13 +57,32 @@ def test_a_compound_method_is_refused_with_its_code(client, db_session, method):
     assert _lot_count(db_session) == before  # nothing was written
 
 
+@pytest.mark.parametrize(
+    ("method", "named"), [("G3//B3LYP", "G3B3"), ("G3(MP2)//B3LYP", "G3MP2B3")]
+)
+def test_the_literature_name_of_a_named_method_is_refused_with_advice_naming_it(
+    client, db_session, method, named
+):
+    before = _lot_count(db_session)
+    resp = client.post("/api/v1/uploads/conformers", json=_payload(method))
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    assert body["code"] == "level_of_theory_method_is_compound", body
+    assert body["context"]["named_method"] == named
+    assert f"method={named!r}" in body["detail"][0]["msg"]
+    assert _lot_count(db_session) == before
+
+
 def test_a_single_slash_is_not_compound(client):
     """Only ``//`` is refused; a lone slash is not an energy//geometry pair."""
     resp = client.post("/api/v1/uploads/conformers", json=_payload("b3lyp/6-31g"))
     assert resp.status_code == 201, resp.text[:800]
 
 
-@pytest.mark.parametrize("method", ["cbs-qb3-paraskevas", "CBS-QB3-Paraskevas", "cbsqb32023"])
+@pytest.mark.parametrize(
+    "method",
+    ["cbs-qb3-paraskevas", "CBS-QB3-Paraskevas", "cbsqb32023", "cbsqb3paraskevas", "b3lyp2023"],
+)
 def test_a_correction_table_name_warns_and_is_stored_as_sent(client, db_session, method):
     resp = client.post("/api/v1/uploads/conformers", json=_payload(method))
     assert resp.status_code == 201, resp.text[:800]
@@ -78,8 +97,9 @@ def test_a_correction_table_name_warns_and_is_stored_as_sent(client, db_session,
 
     stored = db_session.scalars(select(LevelOfTheory).where(LevelOfTheory.method == method)).all()
     assert len(stored) == 1  # kept as sent
-    cbs = db_session.scalars(select(LevelOfTheory).where(LevelOfTheory.method == "cbs-qb3")).all()
-    assert cbs == []  # and not aliased onto the method it is a table for
+    for stem in ("cbs-qb3", "cbsqb3", "b3lyp"):
+        rows = db_session.scalars(select(LevelOfTheory).where(LevelOfTheory.method == stem)).all()
+        assert rows == []  # and not aliased onto the method it is a table for
 
 
 @pytest.mark.parametrize("method", ["CBS-QB3", "cbsqb3", "G4(MP2)", "w1bd", "W1-BD", "b3lyp"])

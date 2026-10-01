@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.103.0 - 2026-10-01
+## 0.104.0 - 2026-10-01
 
 `RejectionCode` gains `level_of_theory_method_is_compound`, regenerated from the
 server's catalogue (ADR 0021, `tckdb-schemas` 0.66.0). A level of theory whose
