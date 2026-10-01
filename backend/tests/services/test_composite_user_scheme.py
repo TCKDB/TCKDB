@@ -448,7 +448,7 @@ def test_persist_composite_result_itself_refuses_an_assembled_block_at_a_named_l
 
 def test_an_unfinished_assembled_composite_cannot_be_committed(db_session):
     """The before-commit guard: a workflow that forgot ``finalize_composite_inputs`` fails loudly."""
-    from app.services.composite_input_resolution import _refuse_unfinished_composites
+    from app.db.composite_commit_guard import refuse_unfinished_composites as _refuse_unfinished_composites
 
     entry = _species_entry(db_session)
     sps = _sps(db_session, entry)

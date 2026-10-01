@@ -19,8 +19,8 @@ every workflow calls :func:`finalize_composite_inputs` once all of its
 calculations are persisted, next to the converged-opt and named-composite
 warnings. ``tests/invariants/test_composite_p5_invariants.py`` fails any workflow
 that reports named-composite deposits without finalising inputs, and a
-``before_commit`` hook refuses to commit a session that still holds an assembled
-composite with no inputs written: the one way for this to go silently wrong is a
+``before_commit`` hook (``app/db/composite_commit_guard.py``) refuses to commit a
+session that still holds an assembled composite with no inputs written: the one way for this to go silently wrong is a
 workflow that forgets, and neither a green suite nor a quiet log would show it.
 
 The checks (ADR 0008 tiers)
@@ -57,7 +57,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import event, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.composite_scheme_rules import MatchedInput, match_inputs_to_definition
 from tckdb_schemas.composite_total import (
@@ -71,6 +71,7 @@ from tckdb_schemas.enums import EnergyComponentKind as WireComponent
 from tckdb_schemas.fragments.calculation import CompositeResultPayload
 
 from app.api.error_contract import CodedValueError
+from app.db.composite_commit_guard import PENDING_COMPOSITE_KEY
 from app.db.models.calculation import (
     Calculation,
     CalculationCompositeInput,
@@ -124,8 +125,7 @@ W_COMPOSITE_INPUT_GEOMETRY_UNDECLARED = "composite_input_geometry_undeclared"
 #: The deposited total cannot be checked.
 W_COMPOSITE_TOTAL_UNVERIFIABLE = "composite_total_unverifiable"
 
-#: ``session.info`` key holding ``{composite calculation id: PendingComposite}``.
-_PENDING_KEY = "pending_composite_inputs"
+_PENDING_KEY = PENDING_COMPOSITE_KEY
 
 
 @dataclass(frozen=True)
@@ -153,24 +153,6 @@ def register_pending_composite(
     session.info.setdefault(_PENDING_KEY, {})[calculation.id] = PendingComposite(
         calculation_id=calculation.id, payload=payload, definition=definition
     )
-
-
-def _refuse_unfinished_composites(session: Session) -> None:
-    # A savepoint's release (``begin_nested().commit()``, which the best-effort
-    # enrichment hooks use mid-request) dispatches this event too; only the
-    # outermost commit is the point of no return.
-    if session.in_nested_transaction():
-        return
-    pending = session.info.get(_PENDING_KEY)
-    if pending:
-        raise RuntimeError(
-            f"{len(pending)} assembled composite calculation(s) were persisted but their inputs were "
-            "never written: a workflow that persists calculations must call finalize_composite_inputs "
-            "once they all exist. Refusing to commit evidence-free composites."
-        )
-
-
-event.listen(Session, "before_commit", _refuse_unfinished_composites)
 
 
 # ---------------------------------------------------------------------------
