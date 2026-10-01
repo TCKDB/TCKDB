@@ -9,9 +9,8 @@ Composition order (final response ordering):
    as ``search_species`` (AND-combined identifiers, default trust posture
    on the species entry).
 2. For each surviving species_entry, fetch thermo records using the same
-   per-record ordering as ``get_species_thermo`` (D8/L3: temperature
-   coverage, extrapolation distance, review_rank, evidence_completeness,
-   created_at, id).
+   per-record ordering as ``get_species_thermo`` (review_rank, created_at,
+   id; coverage and evidence are displayed, not ranked; #648).
 3. Group across species_entries deterministically: outer key is the
    species_entry's review rank then created_at then id; inner order is the
    thermo per-record ordering already applied above.

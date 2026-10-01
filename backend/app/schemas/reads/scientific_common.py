@@ -502,11 +502,12 @@ def simple_selection_sort_key(
     review_status_by_id: dict[int, RecordReviewStatus],
     created_at_by_id: dict[int, datetime],
 ) -> tuple:
-    """Ranking key for review/recency-only candidate sets (statmech / transport).
+    """Ranking key for review/recency-only candidate sets.
 
-    Used by the per-species statmech and transport reads, whose record shapes
-    share only review status, created_at, and id (no temperature coverage or
-    evidence score like thermo). ``latest`` ranks purely by recency;
+    Used by the per-species thermo, statmech and transport reads and by the
+    export, so the read and the export pick the same record. Temperature
+    coverage and evidence scores are displayed fields, not part of the key
+    (#648). ``latest`` ranks purely by recency;
     ``default`` and ``most_reviewed`` rank by review status first (the
     historical per-species order). All policies break ties by created_at DESC
     then id DESC so the order is total and deterministic.

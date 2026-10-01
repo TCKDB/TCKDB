@@ -15,6 +15,8 @@ exactly like a linked computed record (which feeds the default sort and
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from app.db.models.common import (
     CalculationType,
     SCFStabilityStatus,
@@ -120,10 +122,12 @@ def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
 
 
 def test_collapse_first_ignores_the_evidence_score(db_session):
-    """#648: the unlinked record is newer and has the same review status, so
-    it wins ``collapse=first`` even though the linked record scores higher.
-    The checklist is displayed, not ranked."""
+    """#648: the unlinked record has a later ``created_at`` and the same review
+    status, so it wins ``collapse=first`` even though the linked record scores
+    higher. The checklist is displayed, not ranked."""
     entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)
+    unlinked.created_at = linked.created_at + timedelta(days=1)
+    db_session.flush()
 
     response = get_species_thermo(
         db_session,

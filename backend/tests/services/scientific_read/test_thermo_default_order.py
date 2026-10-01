@@ -144,6 +144,22 @@ def test_requested_temperature_range_does_not_reorder(db_session):
     assert resp.records[0].thermo_id == newer.id
 
 
+def test_created_at_decides_not_id(db_session):
+    """The record with the HIGHER id has the OLDER ``created_at``: the newest
+    by ``created_at`` must win, in the read and in the export."""
+    entry = _entry(db_session)
+    newest_low_id = _thermo(
+        db_session, entry, origin=ScientificOriginKind.computed, age_days=1, nasa=True
+    )
+    older_high_id = _thermo(
+        db_session, entry, origin=ScientificOriginKind.experimental, age_days=20, nasa=True
+    )
+    assert older_high_id.id > newest_low_id.id
+
+    assert _read_first(db_session, entry) == newest_low_id.id
+    assert _export_first(db_session, entry) == newest_low_id.id
+
+
 @pytest.mark.parametrize("approve_old", [False, True])
 def test_read_and_export_pick_the_same_record(db_session, approve_old):
     entry = _entry(db_session)

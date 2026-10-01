@@ -399,6 +399,10 @@ deterministic backend ordering: best review status, then newest, then
 highest id. That is the same order the export uses. The client does not
 define "best thermo" — it only returns what the backend ranked first.
 `temperature_coverage` and `evidence_completeness` are displayed, not ranked.
+Experimental thermo scores low on `evidence_completeness` by construction
+(most predicates are calculation traceability), which is why the thermo order
+ignores the score. `temperature_min` / `temperature_max` are not filters on
+this read; they only fill each record's `temperature_coverage`.
 
 ## Reaction lookup (discovery-only)
 
@@ -669,9 +673,7 @@ present. They must not synthesize TS links from non-TS-backed records.
 And they should interpret the `evidence_completeness` checklist together
 with `scientific_origin`: a low score on a non-TS-backed record means
 the *computational* checklist does not apply, not that the record is
-invalid. The same holds for experimental thermo: its checklist score is
-low by construction, so thermo ordering ignores it (review status, then
-newest).
+invalid.
 
 ## Handling empty results
 

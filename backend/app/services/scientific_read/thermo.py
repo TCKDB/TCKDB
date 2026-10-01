@@ -194,9 +194,11 @@ def get_species_thermo(
     """Return thermo records for a species entry, sorted per spec L3.
 
     The species_entry_id path parameter is strictly ``species_entry.id``;
-    ``species.id`` is rejected with 404. Sort: covers_requested_temperature_range
-    DESC, extrapolation_distance_k ASC, review_rank ASC, evidence_completeness
-    DESC, created_at DESC, id DESC. Client-supplied sort= rejected (v0).
+    ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
+    DESC, id DESC (#648; the export's ``simple_selection_sort_key``).
+    ``temperature_min`` / ``temperature_max`` do not filter and do not affect
+    the order: they only fill each record's ``temperature_coverage`` field.
+    Client-supplied sort= rejected (v0).
 
     :raises NotFoundError: 404 when species_entry_id is unknown.
     :raises ValueError: 422 for sort/include/pagination/temperature validation.
@@ -413,7 +415,7 @@ def get_species_thermo(
         #     -> row-level Thermo.tmin_k / Thermo.tmax_k (may be NULL).
         # A nasa9-only / wilhoit record often has NULL row-level bounds because
         # a NASA-9 fit's real span lives in its per-interval bounds; deriving
-        # from the child rows keeps coverage ranking honest for those records.
+        # from the child rows keeps the reported coverage honest for those records.
         # Scalar records with no range produce covers=False whenever a bound
         # was requested (handled by the temperature_coverage helper).
         nasa_block = nasa_by_thermo.get(t.id)
@@ -567,13 +569,15 @@ def get_species_thermo(
     #   * ``evidence_completeness.score``: six of its eight predicates are
     #     calculation / statmech traceability, so an experimental record can
     #     score at most 2/8. It stays a displayed field, not a ranking input.
-    #   * temperature coverage: it is derived from T bounds only, but a scalar
-    #     (e.g. experimental 298 K) record carries no range and so counts as
-    #     "not covering" whenever a bound is requested, which pushes it below
-    #     every fitted record regardless of review status. The export has no
-    #     requested range, so keeping it would also re-open read/export drift.
-    #     Coverage is still returned per record; use the temperature filters
-    #     and ``collapse=all`` to inspect it.
+    #   * temperature coverage: ``temperature_min`` / ``temperature_max`` are
+    #     not filters; they only fill each record's ``temperature_coverage``
+    #     field. Ranking by it was dropped on the owner's decision (review
+    #     status, then newest), and because a scalar record (e.g. an
+    #     experimental 298 K value) carries no range, it counted as "not
+    #     covering" and sank below every fitted record whatever its review
+    #     status. Coverage is still reported per record; callers who need a
+    #     record spanning a window should read it from the response
+    #     (``collapse=all``).
     created_at = {t.id: t.created_at for t, _ in classified}
     review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.105.0 - 2026-10-01
+
+Docstring-only: the thermo search recipe in `examples/query_cookbook.py` now
+describes the server's thermo order (review status, then newest). No API change.
+
 ## 0.104.0 - 2026-10-01
 
 `RejectionCode` gains `level_of_theory_method_is_compound`, regenerated from the

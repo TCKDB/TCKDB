@@ -259,8 +259,9 @@ def recipe_thermo_search(
     requested temperature range.
 
     ``collapse="first"`` asks the backend to return the top record
-    under its locked sort order (temperature coverage → review rank →
-    evidence completeness → recency). Use the returned
+    under its locked sort order (review status, then newest). The
+    temperature window only fills each record's coverage field; it does
+    not filter or re-rank. Use the returned
     ``species_entry_ref`` for follow-up reads.
     """
     print(

@@ -422,9 +422,8 @@ returns 422 `unsupported_ranking_for_calculation_type` otherwise.
 
 Every other `/scientific/*` search endpoint relies on a *locked*
 deterministic L3-style ordering (e.g.
-`covers_requested_temperature_range, extrapolation_distance_k,
-review_rank, evidence_completeness, created_at, id` on
-`/species-entries/{id}/thermo`). Client `sort=` is always rejected
+`review_rank, created_at, id` on `/species-entries/{id}/thermo`; kinetics
+still uses a coverage and evidence chain). Client `sort=` is always rejected
 with 422 `client_sort_not_supported`. The semantics of "best" are
 therefore baked into the per-endpoint ordering, not chosen by the
 caller.
