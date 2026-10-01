@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.65.0 - 2026-10-01
+
+A single atom may be deposited with an `sp` primary on the pressure-dependent
+network bundle too (#615). Every existing payload is unchanged.
+
+- **`POST /uploads/networks/pdep`: a one-atom conformer may send its `sp` as
+  `calculation`.** The two other bundle routes accepted this already (#610);
+  the network route still required an `opt`, so the H atom of a hydrazine-style
+  network could not be sent honestly. The rule is the same one: a conformer
+  whose geometry is exactly one atom may carry `type: "sp"` as its primary, with
+  `sp_electronic_energy_hartree`; an `sp` on two or more atoms, an uncountable
+  geometry, or any type other than `opt`/`sp` is still refused with the same
+  message. The atom's statmech `source_calculations` link that `sp` with role
+  `sp`, and the solve's `source_calculations` and `state_energies` name it. A
+  relabelled `opt` on an atom is still accepted. Transition states still require
+  an `opt` primary. Only the producer contract's description of the network's
+  conformer changed; no field was added or removed.
+
 ## 0.64.0 - 2026-10-01
 
 Transition-state contract additions (#621). Every field is optional and

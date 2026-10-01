@@ -34,6 +34,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from tckdb_schemas.frequency_completeness import atom_count_of_xyz
+
 from scripts.arc_ingestion.arkane_parser import map_a_units
 
 from .arkane_pdep_parser import (
@@ -501,7 +503,18 @@ def build_network_pdep_payload(
                 art = _artifact(resolve_log_path(data.energy_log, run.run_dir))
                 if art:
                     sp_calc["artifacts"] = [art]
-            calculations.append(sp_calc)
+            if atom_count_of_xyz(info.xyz_text) == 1:
+                # An atom has no geometry to optimise; Arkane ran a single
+                # point on it. That single point is its honest conformer
+                # primary (#615): send it once, as the primary, and fabricate
+                # no optimisation. (An atom whose run carries no energy has no
+                # single point to send and keeps the legacy opt anchor above.)
+                # The primary needs no geometry_key: the conformer's own
+                # geometry is the atom.
+                sp_calc.pop("geometry_key")
+                conformer["calculation"] = sp_calc
+            else:
+                calculations.append(sp_calc)
 
         # Hindered-rotor scan calc (N2H4 only, from Data rotors + output.py).
         scan_key: str | None = None
@@ -708,7 +721,12 @@ def build_network_pdep_payload(
     # ------------------------------------------------------------------
     sp_energy_hartree: dict[str, float] = {}
     for species in species_payloads:
-        for calculation in species.get("calculations", []):
+        # A single atom's sp is its conformer primary, not a species calculation.
+        owned = [
+            *(c["calculation"] for c in species.get("conformers", [])),
+            *species.get("calculations", []),
+        ]
+        for calculation in owned:
             value = calculation.get("sp_electronic_energy_hartree")
             if value is not None:
                 sp_energy_hartree[species["key"]] = float(value)

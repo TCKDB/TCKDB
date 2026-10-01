@@ -861,3 +861,103 @@ def test_yml_species_dropped_is_named_fail_loud(tmp_path) -> None:
     skipped = dict(gap.species_skipped)
     assert "BB" in skipped
     assert ".yml" in skipped["BB"] or "yml" in skipped["BB"].lower()
+
+
+# ---------------------------------------------------------------------------
+# A single atom is deposited as its single point (#615)
+# ---------------------------------------------------------------------------
+
+
+def _run_with_hydrogen_atom(tmp_path: Path, *, energy_j_mol: str = "-1313000.0") -> Path:
+    """The hydrazine fixture plus a bare H atom Arkane ran a single point on.
+
+    The atom has an energy and a geometry and no frequencies, which is what an
+    Arkane run records for it. It is left out of the network topology: the test
+    reads what the builder emits for the species, not whether H belongs to the
+    fixture's mini-network.
+    """
+    import shutil
+
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_DIR, run)
+    (run / "input.py").write_text(
+        (run / "input.py").read_text().replace(
+            "transitionState('TS1'",
+            "species('H', 'Data/H.py',\n        structure = SMILES('[H]'),\n)\n"
+            "transitionState('TS1'",
+            1,
+        )
+    )
+    (run / "Data" / "H.py").write_text(
+        "bonds = {}\n\nexternalSymmetry = 1\n\nspinMultiplicity = 2\n\nopticalIsomers = 1\n"
+    )
+    with (run / "supporting_information.csv").open("a") as fh:
+        fh.write(f'H,1,1,,,,{energy_j_mol},{energy_j_mol},,"H    0.0    0.0    0.0",,\n')
+    return run
+
+
+def test_hydrogen_atom_is_sent_as_its_single_point_not_a_fabricated_opt(tmp_path) -> None:
+    payload, _gap = build_network_pdep_payload(_run_with_hydrogen_atom(tmp_path))
+    atom = next(s for s in payload["species"] if s["key"] == "H")
+    (conformer,) = atom["conformers"]
+    primary = conformer["calculation"]
+    # The honest shape: the single point, once, as the primary.
+    assert primary["type"] == "sp"
+    assert primary["key"] == "H_sp"
+    assert primary["sp_electronic_energy_hartree"] == pytest.approx(
+        j_mol_to_hartree(-1313000.0)
+    )
+    assert atom["calculations"] == []
+    assert "opt_converged" not in primary
+    assert atom["statmech"]["source_calculations"] == [
+        {"calculation_key": "H_sp", "role": "sp"}
+    ]
+    # The polyatomic species keep their opt primary and separate sp.
+    h2 = next(s for s in payload["species"] if s["key"] == "H2")
+    assert h2["conformers"][0]["calculation"]["type"] == "opt"
+    assert [c["type"] for c in h2["calculations"]] == ["freq", "sp"]
+    # The atom is schema-valid as a species of its own.
+    from app.schemas.workflows.network_pdep_upload import NetworkSpeciesIn
+
+    NetworkSpeciesIn.model_validate(atom)
+
+
+def test_atom_without_an_energy_keeps_the_legacy_opt_anchor(tmp_path) -> None:
+    """No single point to send means no honest primary: the old shape stays."""
+    run = _run_with_hydrogen_atom(tmp_path, energy_j_mol="")
+    payload, _gap = build_network_pdep_payload(run)
+    atom = next(s for s in payload["species"] if s["key"] == "H")
+    assert atom["conformers"][0]["calculation"]["type"] == "opt"
+
+
+def test_atom_in_the_network_still_supplies_the_solve_its_energy_and_source(tmp_path) -> None:
+    """An atom's sp is its conformer primary, and the solve must still find it.
+
+    The hydrazine fixture's H2 is turned into an atom (its row loses its
+    second atom and its frequency). The network topology is not meant to stay
+    chemically valid, so the payload is read without validation: what matters
+    is that the exit state's energy and the solve's source calculation come
+    from the atom's primary single point, not from a species calculation it
+    no longer has.
+    """
+    import shutil
+
+    run = tmp_path / "run"
+    shutil.copytree(FIXTURE_DIR, run)
+    csv_path = run / "supporting_information.csv"
+    lines = csv_path.read_text().splitlines()
+    atom_row = [
+        'H2,1,1,,,,-3078739.5575972195,-3052786.006271785,,"H    0.0    0.0    0.0",,'
+        if line.startswith("H2,")
+        else line
+        for line in lines
+    ]
+    csv_path.write_text("\n".join(atom_row) + "\n")
+
+    payload, _gap = build_network_pdep_payload(run)
+    atom = next(s for s in payload["species"] if s["key"] == "H2")
+    assert atom["conformers"][0]["calculation"]["key"] == "H2_sp"
+    assert atom["calculations"] == []
+    solve = payload["solve"]
+    assert {"calculation_key": "H2_sp", "role": "well_energy"} in solve["source_calculations"]
+    assert len(solve["state_energies"]) == 2
