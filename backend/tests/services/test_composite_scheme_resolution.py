@@ -280,6 +280,21 @@ def test_a_lost_binding_race_falls_back_to_the_winners_row(db_session, monkeypat
     assert _count(db_session, LevelOfTheoryComposite) == 1
 
 
+def test_a_summary_read_before_binding_does_not_hide_the_binding(db_session):
+    """The read memo remembers "unbound"; binding the level must clear it."""
+    from app.services.scientific_read.composite_binding import composite_scheme_summary
+
+    raw = LevelOfTheory(method="G4", lot_hash="a" * 64)
+    db_session.add(raw)
+    db_session.flush()
+    assert composite_scheme_summary(db_session, raw.id) is None  # memo now holds "unbound"
+
+    service.ensure_named_method_binding(db_session, raw)
+
+    summary = composite_scheme_summary(db_session, raw.id)
+    assert summary is not None and summary.name == "G4"
+
+
 # ---------------------------------------------------------------------------
 # Merged levels
 # ---------------------------------------------------------------------------
@@ -522,6 +537,29 @@ def test_migration_alias_copy_reaches_the_same_key_as_the_application():
         assert (mig._method_key(spelling) in mig._NAMED_METHODS) == (in_catalogue is not None), spelling
         if in_catalogue is not None:
             assert mig._method_key(spelling) == in_catalogue.key
+
+
+def test_catalogue_keys_equal_the_latest_backfill_revisions_frozen_keys():
+    """A catalogue entry cannot land without a revision that binds the levels already stored.
+
+    Binding is lazy, so a level stored before its method joined the catalogue reads
+    as "not composite" until a backfill binds it (see ``composite_methods``).
+    """
+    from tests.db._migration_chain import script_directory
+
+    frozen: set[str] | None = None
+    for revision in script_directory().walk_revisions():  # head first
+        spec = importlib.util.spec_from_file_location(f"_mig_{revision.revision}", revision.path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if hasattr(module, "_NAMED_METHODS"):
+            frozen = set(module._NAMED_METHODS)
+            break
+    assert frozen, "no revision freezes the named-method catalogue"
+    assert set(composite_methods.BY_KEY) == frozen, (
+        "the catalogue's keys differ from the latest backfill revision's: add a revision that "
+        "binds the levels of theory already stored, freezing the new key set"
+    )
 
 
 def test_internal_levels_are_never_composite():

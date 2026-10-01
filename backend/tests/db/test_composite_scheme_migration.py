@@ -15,8 +15,9 @@ seed row               what it pins
 ``merged``             a ``CBS-QB3`` row merged into ``kept``: never bound
 ``kept``               the row it was merged into: bound
 ``B3LYP`` / paraskevas  not catalogued: left alone
-``B3LYP/CBSB7``        already there: reused, not duplicated, as the
-                       scheme's internal level
+``B3LYP/CBSB7``        already there but itself merged into ``internal_kept``:
+                       the scheme's internal level is the row it was merged
+                       into, never the merged row
 =====================  =====================================================
 
 No ``lot_hash`` or ``public_ref`` of a seeded row changes. Downgrade drops the
@@ -67,9 +68,10 @@ _SEED: dict[str, tuple[str, str | None, str | None]] = {
     "b3lyp": ("B3LYP", "def2-tzvp", None),
     "paraskevas": ("cbs-qb3-paraskevas", None, None),
     "internal_b3lyp_cbsb7": ("B3LYP", "CBSB7", None),
+    "internal_kept": ("B3LYP", "cbsb7-kept", None),
 }
 _BOUND = {"cbs_qb3", "cbsqb3_stale", "g4mp2", "w1u", "kept"}
-_UNBOUND = {"merged", "b3lyp", "paraskevas", "internal_b3lyp_cbsb7"}
+_UNBOUND = {"merged", "b3lyp", "paraskevas", "internal_b3lyp_cbsb7", "internal_kept"}
 
 
 @pytest.fixture
@@ -93,6 +95,10 @@ def _seed(conn) -> dict[str, int]:
     conn.execute(
         text("INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) VALUES (:a, :b)"),
         {"a": ids["merged"], "b": ids["kept"]},
+    )
+    conn.execute(
+        text("INSERT INTO level_of_theory_merge (merged_lot_id, into_lot_id) VALUES (:a, :b)"),
+        {"a": ids["internal_b3lyp_cbsb7"], "b": ids["internal_kept"]},
     )
     return ids
 
@@ -184,9 +190,11 @@ def test_upgrade_binds_catalogued_levels_and_leaves_the_rest(harness):
         "csch", f"csch:definition_hash={named_method_definition_hash('cbs-qb3')}"
     )
     assert cbs[3] == 0.99 and cbs[4] is None
-    # The B3LYP/CBSB7 row that was already there is the internal level: reused.
-    assert cbs[5] == before[ids["internal_b3lyp_cbsb7"]][0]
-    assert (cbs[6], cbs[7], cbs[8], cbs[9]) == ("B3LYP", "CBSB7", "B3LYP", "CBSB7")
+    # The B3LYP/CBSB7 row that was already there was merged into another: the
+    # scheme names the row it was merged into, never the merged one.
+    assert cbs[5] == before[ids["internal_kept"]][0]
+    assert cbs[5] != before[ids["internal_b3lyp_cbsb7"]][0]
+    assert (cbs[6], cbs[7], cbs[8], cbs[9]) == ("B3LYP", "cbsb7-kept", "B3LYP", "cbsb7-kept")
     assert by_name["G4(MP2)"][3] == 0.9854 and by_name["G4(MP2)"][7] == "6-31G(2df,p)"
     # The catalogue states nothing for W1U: every recipe column is NULL.
     assert by_name["W1U"][3:] == (None, None, None, None, None, None, None)
@@ -263,6 +271,65 @@ def test_levels_with_no_catalogued_method_are_left_alone(harness):
     assert _levels(harness.engine) == before
     assert _bindings(harness.engine) == {}
     assert "0 level(s) of theory bound" in completed.stdout
+
+
+def _run_merge_script(harness):
+    out = None
+    for args in ((), ("--commit",)):
+        out = subprocess.run(
+            [
+                "conda", "run", "-n", "tckdb_env", "python",
+                str(Path("scripts") / "ops" / "merge_duplicate_levels_of_theory.py"), *args,
+            ],
+            cwd=harness.root, env=harness.env, capture_output=True, text=True, check=False,
+        )
+        assert out.returncode == 0, out.stderr[-3000:]
+    return out
+
+
+def test_merge_script_gives_the_holder_the_duplicates_binding_when_only_the_duplicate_is_bound(harness):
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM level_of_theory_composite WHERE level_of_theory_id = :h"), {"h": ids["cbs_qb3"]}
+        )
+    duplicate_binding = _bindings(harness.engine)[ids["cbsqb3_stale"]]
+
+    merged = _run_merge_script(harness)
+
+    with harness.engine.connect() as conn:
+        pairs = set(conn.execute(text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")).all())
+    assert (ids["cbsqb3_stale"], ids["cbs_qb3"]) in pairs, merged.stdout[-3000:]
+    bindings = _bindings(harness.engine)
+    assert ids["cbsqb3_stale"] not in bindings
+    assert bindings[ids["cbs_qb3"]] == duplicate_binding
+
+
+def test_merge_script_blocks_a_group_whose_levels_are_bound_to_different_schemes(harness):
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+    harness.run("upgrade", _MIGRATION.revision)
+    with harness.engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE level_of_theory_composite SET scheme_id = "
+                "(SELECT id FROM composite_scheme WHERE name = 'G4(MP2)') WHERE level_of_theory_id = :h"
+            ),
+            {"h": ids["cbs_qb3"]},
+        )
+    before = _bindings(harness.engine)
+
+    merged = _run_merge_script(harness)
+
+    with harness.engine.connect() as conn:
+        pairs = set(conn.execute(text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")).all())
+    assert (ids["cbsqb3_stale"], ids["cbs_qb3"]) not in pairs
+    assert "BLOCKED" in merged.stdout and "differs from the kept row" in merged.stdout
+    assert _bindings(harness.engine) == before
 
 
 def test_merge_script_moves_a_duplicates_binding_to_the_holder(harness):

@@ -29,7 +29,10 @@ of the catalogue's named composite methods (``CBS-QB3``, ``cbsqb3``, ``G4``,
   ZPE scale factor where one is cited, and its internal geometry and
   frequency levels where the catalogue states them. Those internal levels are
   ordinary ``level_of_theory`` rows found by their hash or created here (a
-  level created here has no calculations and appears on no read);
+  level created here has no calculations, so the usage-derived level-of-theory
+  reads and searches omit it, but ``GET /api/v1/levels-of-theory`` lists every
+  unmerged level and shows it). An internal level that was itself merged into
+  another is replaced by the row it was merged into;
 * insert the binding ``(level_of_theory_id, scheme_id,
   binding_source = 'named_method_catalogue')`` unless it exists.
 

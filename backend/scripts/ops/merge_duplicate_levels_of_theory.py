@@ -478,15 +478,31 @@ def build_plan(session: Session, schema: Schema | None = None) -> Plan:
         ]
         holder = next((r for r in lot_rows if r.lot_hash == identity_hash), None)
         duplicates = [
-            _describe_duplicate(session, schema, r) for r in lot_rows if r is not holder
+            _describe_duplicate(session, schema, r, holder) for r in lot_rows if r is not holder
         ]
         groups.append(Group(identity_hash, holder, duplicates))
     groups.sort(key=lambda g: g.holder.public_ref if g.holder else g.identity_hash)
     return Plan(schema=schema, groups=groups)
 
 
-def _describe_duplicate(session: Session, schema: Schema, row: LotRow) -> Duplicate:
+def _describe_duplicate(
+    session: Session, schema: Schema, row: LotRow, holder: LotRow | None = None
+) -> Duplicate:
     duplicate = Duplicate(row=row)
+    if holder is not None and ("level_of_theory_composite", "level_of_theory_id") in schema.lot_references:
+        # Two levels the merge would join are bound to different recipes: moving
+        # or dropping one binding would pick a recipe silently. Named methods
+        # cannot do this today (one key, one scheme); a declared scheme can.
+        differs = session.scalar(
+            text(
+                "SELECT count(*) FROM level_of_theory_composite d "
+                "JOIN level_of_theory_composite h ON h.level_of_theory_id = :holder "
+                "WHERE d.level_of_theory_id = :dup AND d.scheme_id <> h.scheme_id"
+            ),
+            {"holder": holder.row_id, "dup": row.row_id},
+        )
+        if differs:
+            duplicate.other_references["level_of_theory_composite.scheme_id (differs from the kept row)"] = differs
     for table, column in schema.lot_references:
         count = session.scalar(
             text(
@@ -519,7 +535,7 @@ def commit_plan(session: Session, plan: Plan) -> CommitResult:
         try:
             with session.begin_nested():
                 fresh = [
-                    _describe_duplicate(session, plan.schema, d.row)
+                    _describe_duplicate(session, plan.schema, d.row, group.holder)
                     for d in group.duplicates
                 ]
                 reasons = [r for d in fresh for r in d.blockers()]

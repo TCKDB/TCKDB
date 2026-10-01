@@ -19,20 +19,28 @@ import pytest
 from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.db.models.common import (
+    CalculationType,
     CompositeExtrapolationFormula,
     CompositeInputSlot,
     CompositeSchemeKind,
     CompositeTermOperation,
     EnergyComponentKind,
+    StatmechCalculationRole,
+    TransportCalculationRole,
 )
 from app.db.models.composite_scheme import CompositeScheme, CompositeSchemeTerm
 from app.services.calculation_resolution import resolve_level_of_theory_ref
 from app.services.composite_scheme_resolution import add_scheme_term_input, named_method_definition_hash
 from tests.services.scientific_read._factories import (
+    attach_statmech_source_calculation,
+    attach_transport_source_calculation,
     make_calculation,
+    make_frequency_scale_factor,
     make_lot,
     make_species,
     make_species_entry,
+    make_statmech,
+    make_transport,
     next_inchi_key,
 )
 
@@ -282,3 +290,59 @@ def test_summary_field_is_always_present(client, db_session, path):
     calc = _calc_on(db_session, lot)
     summary = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()["record"]["level_of_theory"]
     assert "composite_scheme" in summary
+
+
+# ---------------------------------------------------------------------------
+# Every read that builds a level summary reports the binding
+# ---------------------------------------------------------------------------
+
+
+def _expected(scheme):
+    return {"composite_scheme_ref": scheme.public_ref, "kind": "named_method", "name": "CBS-QB3"}
+
+
+def test_frequency_scale_factor_read_names_the_scheme_of_a_bound_level(client, db_session):
+    lot, scheme = _bound_cbs_qb3(db_session)
+    plain = resolve_level_of_theory_ref(db_session, LevelOfTheoryRef(method="B3LYP", basis="def2-tzvp"))
+    bound_fsf = make_frequency_scale_factor(db_session, lot=lot, value=0.99)
+    plain_fsf = make_frequency_scale_factor(db_session, lot=plain, value=0.97)
+
+    bound = client.get(f"/api/v1/scientific/frequency-scale-factors/{bound_fsf.public_ref}").json()
+    unbound = client.get(f"/api/v1/scientific/frequency-scale-factors/{plain_fsf.public_ref}").json()
+
+    assert bound["record"]["level_of_theory"]["composite_scheme"] == _expected(scheme)
+    assert unbound["record"]["level_of_theory"]["composite_scheme"] is None
+
+
+def test_transport_source_calculation_level_names_the_scheme(client, db_session):
+    lot, scheme = _bound_cbs_qb3(db_session)
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("CSCHT"))
+    entry = make_species_entry(db_session, species)
+    tr = make_transport(db_session, species_entry=entry)
+    calc = make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id)
+    attach_transport_source_calculation(
+        db_session, transport=tr, calculation=calc, role=TransportCalculationRole.full_transport
+    )
+
+    body = client.get(f"/api/v1/scientific/transport/{tr.public_ref}", params={"include": "source_calculations"}).json()
+
+    sources = body["record"]["source_calculations"]
+    assert [s["level_of_theory"]["composite_scheme"] for s in sources] == [_expected(scheme)]
+
+
+def test_statmech_levels_source_calculations_and_scale_factor_name_the_scheme(client, db_session):
+    lot, scheme = _bound_cbs_qb3(db_session)
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("CSCHM"))
+    entry = make_species_entry(db_session, species)
+    fsf = make_frequency_scale_factor(db_session, lot=lot, value=0.99)
+    sm = make_statmech(db_session, species_entry=entry, frequency_scale_factor_id=fsf.id)
+    calc = make_calculation(db_session, type=CalculationType.freq, species_entry_id=entry.id, lot_id=lot.id)
+    attach_statmech_source_calculation(db_session, statmech=sm, calculation=calc, role=StatmechCalculationRole.freq)
+
+    body = client.get(f"/api/v1/scientific/statmech/{sm.public_ref}", params={"include": "source_calculations"}).json()
+    record = body["record"]
+
+    # derived levels (the single-level builder), the bulk builder, and the scale factor's level
+    assert record["levels"]["frequency"]["composite_scheme"] == _expected(scheme)
+    assert record["source_calculations"][0]["level_of_theory"]["composite_scheme"] == _expected(scheme)
+    assert record["frequency_scale_factor"]["level_of_theory"]["composite_scheme"] == _expected(scheme)
