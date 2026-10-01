@@ -411,6 +411,10 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
     different fields, so a revised and an unrevised scheme can never share
     a ref.
 
+    **The frequency level** (``c5e1a8d3f6b9``) joins both forms, after
+    ``level_of_theory_id`` and only when set: a NULL one contributes
+    nothing, so every pre-existing row's string is unchanged.
+
     ``units`` and ``version`` were both here and are both gone.
     ``version`` no longer exists as a column at all: it was nullable
     free text, null on every live row, and versioned nothing.
@@ -424,6 +428,14 @@ def _canonical_energy_correction_scheme(obj: Any) -> str:
         f"ecs:kind={getattr(obj.kind, 'value', obj.kind)};"
         f"name={(obj.name or '').strip().lower()};"
         f"level_of_theory_id={obj.level_of_theory_id};"
+    )
+    frequency_level_id = getattr(obj, "frequency_level_of_theory_id", None)
+    if frequency_level_id is not None:
+        # Part of identity since ``c5e1a8d3f6b9``. A scheme with no frequency
+        # level adds nothing here, so its string is byte-for-byte what it
+        # was before the column existed and no existing ref changes.
+        head += f"frequency_level_of_theory_id={frequency_level_id};"
+    head += (
         f"source_literature_id={obj.source_literature_id};"
         f"software_release_id={obj.software_release_id};"
     )

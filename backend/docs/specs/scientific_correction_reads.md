@@ -46,7 +46,7 @@ prefixes registered in [`app/services/public_refs.py`](../../app/services/public
 | Class | Prefix | Identity |
 |------|--------|----------|
 | `FrequencyScaleFactor` | `fsf_` | `(level_of_theory_id, software_id, scale_kind, value, source_literature_id, workflow_tool_release_id)` |
-| `EnergyCorrectionScheme` | `ecs_` | `(kind, name, level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)` when `data_revision` is NULL; `(kind, name, level_of_theory_id, source_literature_id, software_release_id, data_revision)` when it is set |
+| `EnergyCorrectionScheme` | `ecs_` | `(kind, name, level_of_theory_id, frequency_level_of_theory_id, source_literature_id, software_release_id, workflow_tool_release_id)` when `data_revision` is NULL; `(kind, name, level_of_theory_id, frequency_level_of_theory_id, source_literature_id, software_release_id, data_revision)` when it is set; `frequency_level_of_theory_id` is NULL for a scheme keyed on one level and is then absent from the canonical ref string |
 
 **No schema migration is required.** Public refs are auto-populated by
 the `before_insert` listener installed in `app/services/public_refs.py`.
@@ -141,7 +141,8 @@ class EnergyCorrectionSchemeCoreBlock(BaseModel):
 ```
 ScientificEnergyCorrectionSchemeRecord
   energy_correction_scheme    (core)
-  level_of_theory             (summary)
+  level_of_theory             (summary; the energy half of an energy//frequency key)
+  frequency_level_of_theory   (summary; the frequency half, null when keyed on one level)
   literature                  (summary)
   evidence_summary
     atom_param_count

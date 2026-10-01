@@ -501,3 +501,38 @@ def test_a_declared_energy_level_on_a_duplicate_blocks_the_group(
 
     group = _group(merge.build_plan(db_session), holder)
     assert any(f"{product}.energy_level_of_theory_id" in b for b in group.blockers())
+
+
+def test_a_scheme_citing_a_duplicate_as_its_frequency_level_blocks_the_group(
+    merge, db_session
+):
+    """Composite-levels P6: ``energy_correction_scheme.frequency_level_of_theory_id``.
+
+    The script discovers foreign keys into ``level_of_theory`` at run time, so
+    the new column needs no change to it. It repoints neither the scheme nor
+    the identity indexes the column sits in, so a scheme that cites a duplicate
+    as its frequency level must block the group. The energy level here is an
+    unrelated row, so only the new column can be what blocks.
+    """
+    from app.db.models.energy_correction import EnergyCorrectionScheme
+
+    holder = _lot(db_session, "b3lyp-lotmp6", "def2-svp", holder=True)
+    duplicate = _lot(db_session, "b3lyp-lotmp6", "Def2SVP", holder=False)
+    energy = _lot(db_session, "ccsdt-lotmp6", "cc-pvtz", holder=True)
+    db_session.add(
+        EnergyCorrectionScheme(
+            kind="bac_petersson",
+            name="BAC citing a duplicate frequency level",
+            level_of_theory_id=energy.id,
+            frequency_level_of_theory_id=duplicate.id,
+        )
+    )
+    db_session.flush()
+
+    group = _group(merge.build_plan(db_session), holder)
+    blockers = group.blockers()
+    assert any(
+        "1 energy_correction_scheme.frequency_level_of_theory_id row(s)" in b
+        for b in blockers
+    ), blockers
+    assert not any("energy_correction_scheme.level_of_theory_id" in b for b in blockers)

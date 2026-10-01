@@ -65,6 +65,28 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
         ForeignKey("level_of_theory.id", deferrable=True, initially="IMMEDIATE"),
         nullable=True,
     )
+    #: The level of theory the *frequencies* were computed at, for a scheme
+    #: keyed on an ``energy//frequency`` pair. Arkane keys Petersson and
+    #: Melius BAC (only those; atom energies are keyed on the energy level
+    #: alone) on ``CompositeLevelOfTheory(freq=..., energy=...)``: the same energy level
+    #: with two different frequency levels is two parameter sets, because the
+    #: parameters were fitted to energies at geometries and ZPEs from that
+    #: frequency level. ``level_of_theory_id`` above is the energy half.
+    #:
+    #: Part of identity (migration ``c5e1a8d3f6b9``), under ``NULLS NOT
+    #: DISTINCT`` like every other nullable member: NULL is "no frequency
+    #: level stated", which is what every row that predates the column
+    #: holds, so those rows keep their identity and their public ref.
+    frequency_level_of_theory_id: Mapped[Optional[int]] = mapped_column(
+        BigInteger,
+        ForeignKey(
+            "level_of_theory.id",
+            deferrable=True,
+            initially="IMMEDIATE",
+            name="fk_energy_correction_scheme_frequency_level_of_theory_id",
+        ),
+        nullable=True,
+    )
     source_literature_id: Mapped[Optional[int]] = mapped_column(
         BigInteger,
         ForeignKey("literature.id", deferrable=True, initially="IMMEDIATE"),
@@ -143,7 +165,12 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
     note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationships
-    level_of_theory: Mapped[Optional["LevelOfTheory"]] = relationship()
+    level_of_theory: Mapped[Optional["LevelOfTheory"]] = relationship(
+        foreign_keys=[level_of_theory_id]
+    )
+    frequency_level_of_theory: Mapped[Optional["LevelOfTheory"]] = relationship(
+        foreign_keys=[frequency_level_of_theory_id]
+    )
     source_literature: Mapped[Optional["Literature"]] = relationship()
     software_release: Mapped[Optional["SoftwareRelease"]] = relationship()
     workflow_tool_release: Mapped[Optional["WorkflowToolRelease"]] = relationship()
@@ -169,6 +196,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "kind",
             "name",
             "level_of_theory_id",
+            "frequency_level_of_theory_id",
             "source_literature_id",
             "software_release_id",
             "workflow_tool_release_id",
@@ -184,6 +212,7 @@ class EnergyCorrectionScheme(Base, TimestampMixin, CreatedByMixin, PublicRefMixi
             "kind",
             "name",
             "level_of_theory_id",
+            "frequency_level_of_theory_id",
             "source_literature_id",
             "software_release_id",
             "data_revision",

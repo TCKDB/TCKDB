@@ -118,6 +118,8 @@ class RejectionCode(str, Enum):
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
     EMAIL_TAKEN = "email_taken"
+    ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE = "energy_correction_scheme_frequency_level_not_applicable"
+    ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL = "energy_correction_scheme_frequency_level_without_energy_level"
     ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT = "energy_correction_scheme_identity_conflict"
     ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET = "energy_correction_scheme_literature_already_set"
     ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET = "energy_correction_scheme_software_already_set"
@@ -329,6 +331,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE,
+        RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL,
         RejectionCode.ENTHALPY_DECLARATION_ABSENT,
         RejectionCode.ENTHALPY_DECLARATION_WITHOUT_CONTENT,
         RejectionCode.ENTHALPY_QUANTITY_NOT_STORABLE_HERE,
@@ -543,6 +547,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
     RejectionCode.EMAIL_TAKEN: frozenset({409}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_NOT_APPLICABLE: frozenset({422}),
+    RejectionCode.ENERGY_CORRECTION_SCHEME_FREQUENCY_LEVEL_WITHOUT_ENERGY_LEVEL: frozenset({422}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_IDENTITY_CONFLICT: frozenset({409}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_LITERATURE_ALREADY_SET: frozenset({409}),
     RejectionCode.ENERGY_CORRECTION_SCHEME_SOFTWARE_ALREADY_SET: frozenset({409}),

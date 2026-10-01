@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.66.0 - 2026-10-01
+
+Frequency level on correction schemes (composite-levels plan P6). One optional
+field, and one new warning. A payload written against 0.64.0 is still valid and
+means what it meant.
+
+- **`EnergyCorrectionSchemeRef.frequency_level_of_theory`**
+  (`LevelOfTheoryRef | null`). The level of theory the frequencies were computed
+  at, for a scheme keyed on an `energy//frequency` pair. Arkane keys Petersson
+  and Melius BAC (and only those; atom energies are keyed on the energy level
+  alone) on `CompositeLevelOfTheory(freq=..., energy=...)`; a scheme held only one level of
+  theory, so the frequency half was lost and two such schemes either collapsed
+  into one row (identical tables) or were refused as a value conflict (different
+  tables). Send the `energy` half in `level_of_theory` as before and the `freq`
+  half here. It joins scheme identity, in both identity forms (with and without
+  `data_revision`): the same energy level with two different frequency levels is
+  two schemes. An absent value is a value of its own: a scheme sent without it
+  never matches one that has it, keeps exactly the identity it had before the
+  field existed, and keeps its public ref byte for byte. It is resolved like
+  `level_of_theory`, so a level that was merged into another resolves to the one
+  that holds it. Adapters: for an Arkane `energy//freq`-keyed BAC, send both halves; for
+  an atom-energy scheme or a scheme keyed on one level, send nothing new.
+  Three rules, each stated where it applies: the field is **refused** on any
+  kind other than `bac_petersson` and `bac_melius`
+  (`energy_correction_scheme_frequency_level_not_applicable`) and without
+  `level_of_theory` (`energy_correction_scheme_frequency_level_without_energy_level`),
+  and a frequency level that resolves to the same level of theory as the energy
+  level is **stored as absent**, so one table cannot become two schemes by
+  spelling its level twice.
+- **`composite_delta_prefer_scheme_terms` warning.** A new applied correction
+  with `application_role = "composite_delta"` is stored as sent and answered
+  with this warning (field `application_role`). Focal-point deltas
+  (core-valence, higher-order triples, relativistic, DBOC) are going to become
+  composite-scheme terms, which can name every calculation a delta is built from
+  and sit on the energy instead of the species entry. It is a warning and not a
+  refusal; no payload that was accepted is refused.
+
+Scientific reads gain `frequency_level_of_theory` beside `level_of_theory` (a
+level-of-theory summary, `null` when the scheme is keyed on one level) on the
+scheme detail and search records.
+
 ## 0.65.0 - 2026-10-01
 
 A single atom may be deposited with an `sp` primary on the pressure-dependent
