@@ -18,6 +18,7 @@ from app.chemistry.units import convert_energy_to_hartree
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
+    CalculationCompositeInput,
     CalculationCompositeResult,
     CalculationCompositeTerm,
     CalculationConstraint,
@@ -70,6 +71,7 @@ from app.schemas.reads.scientific_calculation import (
     AppliedEnergyCorrectionSummary,
     AvailableCalculationSections,
     CalculationArtifactSummary,
+    CalculationCompositeInputSummary,
     CalculationCompositeResultSummary,
     CalculationCompositeTermSummary,
     CalculationConformerSummary,
@@ -1260,8 +1262,10 @@ def _build_composite_summary(
 ) -> CalculationResultSummary | None:
     """Project ``calc_composite_result`` and its terms (ADR 0021).
 
-    Two statements per record: the result row, and its terms, which are few
-    and read in position order.
+    Three statements per record: the result row, its terms (few, in position
+    order) and, for an assembled composite, its inputs with the input
+    calculations' public refs. Refs only: an input's integer id is never read
+    into the response.
     """
     row = session.get(CalculationCompositeResult, calculation_id)
     if row is None:
@@ -1270,6 +1274,21 @@ def _build_composite_summary(
         select(CalculationCompositeTerm)
         .where(CalculationCompositeTerm.calculation_id == calculation_id)
         .order_by(CalculationCompositeTerm.term_position)
+    ).all()
+    input_rows = session.execute(
+        select(
+            CalculationCompositeInput.term_position,
+            CalculationCompositeInput.slot,
+            CalculationCompositeInput.cardinal_number,
+            Calculation.public_ref,
+        )
+        .join(Calculation, Calculation.id == CalculationCompositeInput.input_calculation_id)
+        .where(CalculationCompositeInput.calculation_id == calculation_id)
+        .order_by(
+            CalculationCompositeInput.term_position,
+            CalculationCompositeInput.slot,
+            CalculationCompositeInput.cardinal_number,
+        )
     ).all()
     return CalculationResultSummary(
         kind="composite",
@@ -1283,6 +1302,15 @@ def _build_composite_summary(
                     term_position=term.term_position, value_hartree=term.value_hartree
                 )
                 for term in terms
+            ],
+            inputs=[
+                CalculationCompositeInputSummary(
+                    term_position=position,
+                    slot=slot.value,
+                    cardinal_number=cardinal,
+                    calculation_ref=ref,
+                )
+                for position, slot, cardinal, ref in input_rows
             ],
         ),
     )

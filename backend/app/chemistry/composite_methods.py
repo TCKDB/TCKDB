@@ -95,11 +95,16 @@ class InternalLevel:
     :param basis: Basis set as the source writes it, ``None`` when the source
         gives the method alone.
     :param citations: Where the source states it.
+    :param core_treatment: ``"frozen_core"`` / ``"all_electron"`` when the source
+        states which electrons the level correlates; ``None`` (the default, and
+        every catalogued level today) leaves it unstated, so the level resolves
+        exactly as it did before the field existed.
     """
 
     method: str
     basis: str | None
     citations: tuple[str, ...]
+    core_treatment: str | None = None
 
 
 @dataclass(frozen=True)

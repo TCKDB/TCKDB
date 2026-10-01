@@ -1541,6 +1541,23 @@ def json_schema_text(model: type[BaseModel]) -> str:
     return json.dumps(schema, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+def _compact_json(value: Any, indent: int = 0, width: int = 110) -> str:
+    """JSON with every object or list that fits in ``width`` columns written on one line.
+
+    The worked composite payloads are long; one line per input or per level keeps the
+    contract readable and small, and the text is still valid JSON.
+    """
+    flat = json.dumps(value, ensure_ascii=False)
+    if len(flat) + indent <= width or not isinstance(value, (dict, list)) or not value:
+        return flat
+    pad = " " * (indent + 2)
+    if isinstance(value, dict):
+        items = [f'{pad}{json.dumps(k, ensure_ascii=False)}: {_compact_json(v, indent + 2, width)}' for k, v in value.items()]
+        return "{\n" + ",\n".join(items) + "\n" + " " * indent + "}"
+    items = [f"{pad}{_compact_json(v, indent + 2, width)}" for v in value]
+    return "[\n" + ",\n".join(items) + "\n" + " " * indent + "]"
+
+
 class ContractBuilder:
     """Collects every fact once, then renders the markdown and the schemas."""
 
@@ -1797,6 +1814,7 @@ class ContractBuilder:
             "- [What changed](#what-changed)",
             "- [Every producer route](#every-producer-route)",
             "- [Checks several surfaces apply](#checks-several-surfaces-apply)",
+            "- [Worked payloads: user-built composite energies](#worked-payloads-user-built-composite-energies)",
             *[f"- [Surface `{surface.title}`](#{surface.anchor})" for surface in self.surfaces],
             "- [Model reference](#model-reference)",
             "- [Enums](#enums)",
@@ -1808,6 +1826,7 @@ class ContractBuilder:
         out += self._render_changes(entries)
         out += self._render_common()
         out += self._render_shared_checks()
+        out += self._render_composite_worked_payloads()
         for surface in self.surfaces:
             out += self._render_surface(surface)
         out += self._render_model_reference()
@@ -1892,6 +1911,57 @@ class ContractBuilder:
             *[self._refusal_line(code) for code in sorted(self.global_trace.code_sites)],
             "",
         ]
+        return out
+
+    def _render_composite_worked_payloads(self) -> list[str]:
+        """Two complete composite bundles, validated against the live model before they are printed."""
+        from tckdb_schemas.composite_worked_examples import worked_payload_b, worked_payload_c
+        from tckdb_schemas.workflows.computed_species_upload import ComputedSpeciesUploadRequest
+
+        out = [
+            "## Worked payloads: user-built composite energies",
+            "",
+            "A composite energy you build yourself (a CCSD(T)/CBS extrapolation, a focal-point sum) is sent as an"
+            " **assembled** composite: the other calculations are ordinary single points, and the composite is a"
+            " calculation of type `composite` whose `level_of_theory` carries the recipe inline as"
+            " `composite_scheme` (send `method` **or** `composite_scheme`, never both) and whose"
+            " `composite_result.inputs` name, by bundle-local `key` or by `calc_...` ref, the calculation that fills"
+            " each slot. The server names the level of theory itself and never stores a total it computed:"
+            " it recomputes `electronic_energy_hartree` from the stored energies of the inputs to **check** yours,"
+            " blocking beyond `max(1e-6, 5e-7 * n)` hartree (`composite_total_mismatch`) and warning"
+            " (`composite_total_unverifiable`) when an input energy or component is not stated.",
+            "",
+            "What a scheme says. The total is the sum of its terms in order. A `value` or `base` term reads one"
+            " input; an `extrapolation` term applies `formula` (`inverse_power` with `exponent`,"
+            " `inverse_power_shifted_half` with `exponent`, `karton_martin_scf`, `exponential_three_point`) to inputs"
+            " at declared `cardinal_number`s; a `difference` term is its `high` input minus its `low` input."
+            " `energy_component` says which part of the input's energy is read. A `correlation` term means the"
+            " whole correlation energy, (T) included: for an input whose stored `correlation` is the CCSD part"
+            " with `triples` separate (Molpro), the server reads `correlation + triples`; for one whose"
+            " `correlation` already includes (T) (ORCA), `correlation` alone. It decides by which sum equals the"
+            " stored energy, and warns rather than guesses when it cannot. Formula, exponent, cardinal numbers,"
+            " the input levels (including `core_treatment`) and the order of the terms are the scheme's identity;"
+            " the term `key`s and the literature are not. An input level is an ordinary level: a nested composite,"
+            " or a named composite method such as CBS-QB3, is refused (`composite_scheme_nested`).",
+            "",
+        ]
+        for title, build, note in (
+            (
+                "(b) CCSD(T)/CBS from a TZ/QZ pair",
+                worked_payload_b,
+                "Reference energy at QZ, correlation energy extrapolated over cardinal numbers 3 and 4 with an"
+                " inverse-power law of exponent 3. The energies are the water values printed in the ORCA 6.1 manual.",
+            ),
+            (
+                "(c) Focal-point additive",
+                worked_payload_c,
+                "A QZ base plus a core-valence difference (the same level, `all_electron` against `frozen_core`),"
+                " a higher-order difference, a relativistic difference and a DBOC value.",
+            ),
+        ):
+            payload = build()
+            ComputedSpeciesUploadRequest.model_validate(payload)
+            out += [f"### {title}", "", note, "", "```json", _compact_json(payload), "```", ""]
         return out
 
     def _render_shared_checks(self) -> list[str]:

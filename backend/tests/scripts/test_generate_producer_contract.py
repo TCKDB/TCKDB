@@ -332,7 +332,13 @@ def test_a_code_dropped_from_the_contract_is_reported_missing(committed_markdown
 
 #: The contract was ~1 MB before it was trimmed; an agent cannot read that
 #: whole. This is a ceiling to notice regrowth, not a target.
-MARKDOWN_BYTE_CEILING = 700_000
+#:
+#: Raised from 700_000 to 750_000 by the composite-scheme work (ADR 0021, P5), which
+#: added ~58 KB: ~15 KB of worked payloads and prose, ~10 KB each of new models and
+#: refusal-code reference, and ~2 KB on each of ten producer surfaces (every surface
+#: carries a ``level_of_theory`` and so every scheme rule). Nothing was duplicated;
+#: ``test_the_contract_stays_readable_in_pieces`` still bounds regrowth from here.
+MARKDOWN_BYTE_CEILING = 750_000
 
 
 def test_the_contract_stays_readable_in_pieces(committed_markdown: str) -> None:

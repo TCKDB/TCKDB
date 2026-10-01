@@ -75,6 +75,7 @@ enum CalculationDependencyRole {
   irc_start
   irc_followup
   scan_parent
+  composite_input
 }
 
 enum CalculationGeometryRole {
@@ -1065,6 +1066,30 @@ Table author {
   indexes {
     orcid [unique, name: 'uq_author_orcid']
   }
+}
+
+Table calc_composite_input {
+  calculation_id bigint [not null, ref: > calculation.id]
+  term_position int [not null]
+  slot CompositeInputSlot [not null]
+  input_calculation_id bigint [not null, ref: > calculation.id]
+  cardinal_number int
+
+  indexes {
+    (calculation_id, input_calculation_id, slot, term_position) [pk]
+    input_calculation_id [name: 'ix_calc_composite_input_input_calculation_id']
+    (calculation_id, term_position, slot, cardinal_number) [unique, name: 'uq_calc_composite_input_slot']
+  }
+
+  checks {
+    `cardinal_number IS NULL OR cardinal_number >= 1` [name: 'ck_calc_composite_input_cardinal_number_positive']
+    `slot = 'cardinal' OR cardinal_number IS NULL` [name: 'ck_calc_composite_input_cardinal_only_on_cardinal_slot']
+    `slot <> 'cardinal' OR cardinal_number IS NOT NULL` [name: 'ck_calc_composite_input_cardinal_slot_needs_number']
+    `input_calculation_id <> calculation_id` [name: 'ck_calc_composite_input_not_its_own_input']
+    `term_position >= 0` [name: 'ck_calc_composite_input_term_position_non_negative']
+  }
+
+  Note: 'One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).'
 }
 
 Table calc_composite_result {

@@ -21,6 +21,7 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.calculation_resolution import collect_converged_opt_energy_warnings
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.energy_correction_resolution import (
     assert_bac_total_has_required_components,
@@ -269,6 +270,15 @@ def persist_transition_state_upload(
     )
     session.flush()
 
+    # An assembled composite's inputs are written, and its total checked, now that
+    # every calculation it may name exists (ADR 0021, P5). Before the review
+    # policy, which can freeze them; and always run, whether or not the caller
+    # collects warnings.
+    composite_input_warnings = finalize_composite_inputs(
+        session,
+        [primary_calc.id, *(c.id for c in additional_calcs)],
+    )
+
     targets: list[RecordRef] = [
         RecordRef(SubmissionRecordType.transition_state_entry, ts_entry.id),
         RecordRef(
@@ -287,6 +297,7 @@ def persist_transition_state_upload(
     # opt + additional) is flushed, so an sp deposited later in
     # ``additional_calculations`` already counts (#292).
     if warnings is not None:
+        warnings.extend(composite_input_warnings)
         warnings.extend(
             collect_converged_opt_energy_warnings(
                 session,

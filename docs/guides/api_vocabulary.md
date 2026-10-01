@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 108 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 38 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 229 | `backend/app/api/code_catalogue.py` |
-| **total** | **520** | |
+| Refusal codes a caller can receive | 246 | `backend/app/api/code_catalogue.py` |
+| **total** | **537** | |
 
 ## How a record is named
 
@@ -710,7 +710,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (176 codes)
+### HTTP 422 (193 codes)
 
 | Code | Names |
 | --- | --- |
@@ -733,6 +733,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `calculation_handle_conflict` | a relationship — read `context` |
 | `calculation_key_undeclared` | a thing |
 | `calculation_software_is_workflow_tool` | a thing |
+| `calculation_software_release_required` | a thing |
 | `candidate_rights_basis_incompatible` | a relationship — read `context` |
 | `candidate_rights_basis_missing` | a relationship — read `context` |
 | `canonical_parameter_value_requires_key` | a thing |
@@ -743,11 +744,25 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `composed_search_pagination_stalled` | a relationship — read `context` |
 | `composite_assembled_not_accepted` | a thing |
 | `composite_e0_inconsistent` | a relationship — read `context` |
+| `composite_input_duplicate` | a relationship — read `context` |
+| `composite_input_edge_is_derived` | a thing |
+| `composite_input_geometry_mismatch` | a relationship — read `context` |
+| `composite_input_level_mismatch` | a relationship — read `context` |
+| `composite_input_missing` | a thing |
+| `composite_input_owner_mismatch` | a relationship — read `context` |
+| `composite_input_reference_invalid` | a thing |
+| `composite_input_slot_unknown` | a relationship — read `context` |
+| `composite_input_type_invalid` | a relationship — read `context` |
+| `composite_inputs_require_assembled` | a thing |
 | `composite_level_not_scheme_bound` | a thing |
 | `composite_program_run_requires_software` | a thing |
 | `composite_result_requires_composite_type` | a thing |
+| `composite_scheme_malformed` | a relationship — read `context` |
+| `composite_scheme_named_method_not_sendable` | a thing |
+| `composite_scheme_nested` | a relationship — read `context` |
 | `composite_term_position_unknown` | a relationship — read `context` |
 | `composite_terms_do_not_sum` | a relationship — read `context` |
+| `composite_total_mismatch` | a relationship — read `context` |
 | `composite_type_requires_composite_result` | a thing |
 | `conformer_key_undeclared` | a thing |
 | `cursor_offset_conflict` | a relationship — read `context` |
@@ -779,6 +794,8 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `kinetics_interpretation_statmech_owner_mismatch` | a relationship — read `context` |
 | `level_of_theory_handle_conflict` | a relationship — read `context` |
 | `level_of_theory_method_is_compound` | a thing |
+| `level_of_theory_method_with_composite_scheme` | a relationship — read `context` |
+| `level_of_theory_requires_method_or_composite_scheme` | a thing |
 | `limit_too_large` | a relationship — read `context` |
 | `lowest_energy_unavailable` | a thing |
 | `micro_reaction_key_undeclared` | a thing |

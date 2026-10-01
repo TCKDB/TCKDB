@@ -2569,13 +2569,15 @@ _TS_VALIDATED_STATUSES: frozenset[TransitionStateEntryStatus] = frozenset(
 _TS_CALC_IS_CHILD_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {
         CalculationDependencyRole.optimized_from,
+        CalculationDependencyRole.composite_input,
     }
 )
 """Roles where the TS-owned calc is the CHILD of the dependency edge, so
 the PARENT (reached via ``calc.child_dependencies[*].parent_calculation``)
-should be pulled into the source set. Today this is only
-``optimized_from``: a ``path_search`` (NEB/GSM/...) that produced the TS
-guess which the TS opt was then optimized from."""
+should be pulled into the source set: ``optimized_from`` (a ``path_search``
+(NEB/GSM/...) that produced the TS guess which the TS opt was then optimized
+from) and ``composite_input`` (the single points an assembled composite at the
+TS was built from, ADR 0021: they are the evidence for its energy)."""
 
 _TS_CALC_IS_PARENT_ROLES: frozenset[CalculationDependencyRole] = frozenset(
     {

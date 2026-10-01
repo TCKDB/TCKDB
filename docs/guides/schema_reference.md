@@ -127,6 +127,28 @@ the gap.
 
 ## Identity
 
+### `calc_composite_input`
+
+**Role:** identity
+
+**Purpose:** One input of an assembled composite: the calculation that fills a scheme slot (ADR 0021, P5).
+
+| Column | Type | Nullable | Default | Foreign key | Enum values | Meaning |
+|---|---|---|---|---|---|---|
+| `calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `term_position` | SMALLINT | no | — | — | — | not documented |
+| `slot` | CompositeInputSlot (enum) | no | — | — | `value`, `high`, `low`, `cardinal` | not documented |
+| `input_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
+| `cardinal_number` | INTEGER | yes | — | — | — | not documented |
+
+**Check constraints:**
+
+- `ck_calc_composite_input_cardinal_number_positive`: `cardinal_number IS NULL OR cardinal_number >= 1`
+- `ck_calc_composite_input_cardinal_only_on_cardinal_slot`: `slot = 'cardinal' OR cardinal_number IS NULL`
+- `ck_calc_composite_input_cardinal_slot_needs_number`: `slot <> 'cardinal' OR cardinal_number IS NOT NULL`
+- `ck_calc_composite_input_not_its_own_input`: `input_calculation_id <> calculation_id`
+- `ck_calc_composite_input_term_position_non_negative`: `term_position >= 0`
+
 ### `calculation_parameter`
 
 **Role:** identity
@@ -1426,7 +1448,7 @@ the gap.
 |---|---|---|---|---|---|---|
 | `parent_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
 | `child_calculation_id` | BIGINT | no | — | calculation.id | — | not documented |
-| `dependency_role` | CalculationDependencyRole (enum) | no | — | — | `optimized_from`, `freq_on`, `single_point_on`, `arkane_source`, `irc_start`, `irc_followup`, `scan_parent` | not documented |
+| `dependency_role` | CalculationDependencyRole (enum) | no | — | — | `optimized_from`, `freq_on`, `single_point_on`, `arkane_source`, `irc_start`, `irc_followup`, `scan_parent`, `composite_input` | not documented |
 
 **Check constraints:**
 

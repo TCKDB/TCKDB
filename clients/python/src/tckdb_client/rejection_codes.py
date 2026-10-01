@@ -103,6 +103,7 @@ class RejectionCode(str, Enum):
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
     CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
     CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL = "calculation_software_is_workflow_tool"
+    CALCULATION_SOFTWARE_RELEASE_REQUIRED = "calculation_software_release_required"
     CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE = "candidate_rights_basis_incompatible"
     CANDIDATE_RIGHTS_BASIS_MISSING = "candidate_rights_basis_missing"
     CANONICAL_PARAMETER_VALUE_REQUIRES_KEY = "canonical_parameter_value_requires_key"
@@ -113,11 +114,25 @@ class RejectionCode(str, Enum):
     COMPOSED_SEARCH_PAGINATION_STALLED = "composed_search_pagination_stalled"
     COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
     COMPOSITE_E0_INCONSISTENT = "composite_e0_inconsistent"
+    COMPOSITE_INPUT_DUPLICATE = "composite_input_duplicate"
+    COMPOSITE_INPUT_EDGE_IS_DERIVED = "composite_input_edge_is_derived"
+    COMPOSITE_INPUT_GEOMETRY_MISMATCH = "composite_input_geometry_mismatch"
+    COMPOSITE_INPUT_LEVEL_MISMATCH = "composite_input_level_mismatch"
+    COMPOSITE_INPUT_MISSING = "composite_input_missing"
+    COMPOSITE_INPUT_OWNER_MISMATCH = "composite_input_owner_mismatch"
+    COMPOSITE_INPUT_REFERENCE_INVALID = "composite_input_reference_invalid"
+    COMPOSITE_INPUT_SLOT_UNKNOWN = "composite_input_slot_unknown"
+    COMPOSITE_INPUT_TYPE_INVALID = "composite_input_type_invalid"
+    COMPOSITE_INPUTS_REQUIRE_ASSEMBLED = "composite_inputs_require_assembled"
     COMPOSITE_LEVEL_NOT_SCHEME_BOUND = "composite_level_not_scheme_bound"
     COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE = "composite_program_run_requires_software"
     COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE = "composite_result_requires_composite_type"
+    COMPOSITE_SCHEME_MALFORMED = "composite_scheme_malformed"
+    COMPOSITE_SCHEME_NAMED_METHOD_NOT_SENDABLE = "composite_scheme_named_method_not_sendable"
+    COMPOSITE_SCHEME_NESTED = "composite_scheme_nested"
     COMPOSITE_TERM_POSITION_UNKNOWN = "composite_term_position_unknown"
     COMPOSITE_TERMS_DO_NOT_SUM = "composite_terms_do_not_sum"
+    COMPOSITE_TOTAL_MISMATCH = "composite_total_mismatch"
     COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT = "composite_type_requires_composite_result"
     CONFORMER_KEY_UNDECLARED = "conformer_key_undeclared"
     CURATION_POLICY_VERSION_CONFLICT = "curation_policy_version_conflict"
@@ -164,6 +179,8 @@ class RejectionCode(str, Enum):
     LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
+    LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME = "level_of_theory_method_with_composite_scheme"
+    LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME = "level_of_theory_requires_method_or_composite_scheme"
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
@@ -336,6 +353,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
         RejectionCode.CALCULATION_KEY_UNDECLARED,
         RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL,
+        RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED,
         RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE,
         RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING,
         RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY,
@@ -346,11 +364,25 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED,
         RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
         RejectionCode.COMPOSITE_E0_INCONSISTENT,
+        RejectionCode.COMPOSITE_INPUT_DUPLICATE,
+        RejectionCode.COMPOSITE_INPUT_EDGE_IS_DERIVED,
+        RejectionCode.COMPOSITE_INPUT_GEOMETRY_MISMATCH,
+        RejectionCode.COMPOSITE_INPUT_LEVEL_MISMATCH,
+        RejectionCode.COMPOSITE_INPUT_MISSING,
+        RejectionCode.COMPOSITE_INPUT_OWNER_MISMATCH,
+        RejectionCode.COMPOSITE_INPUT_REFERENCE_INVALID,
+        RejectionCode.COMPOSITE_INPUT_SLOT_UNKNOWN,
+        RejectionCode.COMPOSITE_INPUT_TYPE_INVALID,
+        RejectionCode.COMPOSITE_INPUTS_REQUIRE_ASSEMBLED,
         RejectionCode.COMPOSITE_LEVEL_NOT_SCHEME_BOUND,
         RejectionCode.COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE,
         RejectionCode.COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE,
+        RejectionCode.COMPOSITE_SCHEME_MALFORMED,
+        RejectionCode.COMPOSITE_SCHEME_NAMED_METHOD_NOT_SENDABLE,
+        RejectionCode.COMPOSITE_SCHEME_NESTED,
         RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN,
         RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM,
+        RejectionCode.COMPOSITE_TOTAL_MISMATCH,
         RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT,
         RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
@@ -382,6 +414,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
+        RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME,
+        RejectionCode.LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME,
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
         RejectionCode.MICRO_REACTION_KEY_UNDECLARED,
@@ -564,6 +598,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CALCULATION_SOFTWARE_IS_WORKFLOW_TOOL: frozenset({422}),
+    RejectionCode.CALCULATION_SOFTWARE_RELEASE_REQUIRED: frozenset({422}),
     RejectionCode.CANDIDATE_RIGHTS_BASIS_INCOMPATIBLE: frozenset({422}),
     RejectionCode.CANDIDATE_RIGHTS_BASIS_MISSING: frozenset({422}),
     RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
@@ -574,11 +609,25 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED: frozenset({422}),
     RejectionCode.COMPOSITE_ASSEMBLED_NOT_ACCEPTED: frozenset({422}),
     RejectionCode.COMPOSITE_E0_INCONSISTENT: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_DUPLICATE: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_EDGE_IS_DERIVED: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_GEOMETRY_MISMATCH: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_LEVEL_MISMATCH: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_MISSING: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_REFERENCE_INVALID: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_SLOT_UNKNOWN: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUT_TYPE_INVALID: frozenset({422}),
+    RejectionCode.COMPOSITE_INPUTS_REQUIRE_ASSEMBLED: frozenset({422}),
     RejectionCode.COMPOSITE_LEVEL_NOT_SCHEME_BOUND: frozenset({422}),
     RejectionCode.COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE: frozenset({422}),
     RejectionCode.COMPOSITE_RESULT_REQUIRES_COMPOSITE_TYPE: frozenset({422}),
+    RejectionCode.COMPOSITE_SCHEME_MALFORMED: frozenset({422}),
+    RejectionCode.COMPOSITE_SCHEME_NAMED_METHOD_NOT_SENDABLE: frozenset({422}),
+    RejectionCode.COMPOSITE_SCHEME_NESTED: frozenset({422}),
     RejectionCode.COMPOSITE_TERM_POSITION_UNKNOWN: frozenset({422}),
     RejectionCode.COMPOSITE_TERMS_DO_NOT_SUM: frozenset({422}),
+    RejectionCode.COMPOSITE_TOTAL_MISMATCH: frozenset({422}),
     RejectionCode.COMPOSITE_TYPE_REQUIRES_COMPOSITE_RESULT: frozenset({422}),
     RejectionCode.CONFORMER_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CURATION_POLICY_VERSION_CONFLICT: frozenset({409}),
@@ -625,6 +674,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND: frozenset({422}),
+    RejectionCode.LEVEL_OF_THEORY_METHOD_WITH_COMPOSITE_SCHEME: frozenset({422}),
+    RejectionCode.LEVEL_OF_THEORY_REQUIRES_METHOD_OR_COMPOSITE_SCHEME: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),

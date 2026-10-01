@@ -76,6 +76,12 @@ W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = (
     "thermo_source_calculation_owner_mismatch"
 )
 
+#: An assembled composite's input names a calculation owned by another subject
+#: (ADR 0021, P5). Its own code: an input is evidence for one slot of a recipe,
+#: and "that single point is another molecule's" is repaired at the input, not
+#: at a thermo or statmech source link.
+W_COMPOSITE_INPUT_OWNER_MISMATCH = "composite_input_owner_mismatch"
+
 #: A statmech source link cites a calculation owned by another subject.
 W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
     "statmech_source_calculation_owner_mismatch"
@@ -359,6 +365,7 @@ def assert_statmech_owned_by(
 
 __all__ = [
     "W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH",
+    "W_COMPOSITE_INPUT_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH",
     "W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH",
     "W_SCF_STABILITY_SOURCE_CALCULATION_OWNER_MISMATCH",

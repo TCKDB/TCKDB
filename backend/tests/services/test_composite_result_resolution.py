@@ -116,12 +116,25 @@ def test_the_seam_refuses_a_composite_result_on_a_calculation_of_another_type_fi
         session.rollback()
 
 
-def test_an_assembled_composite_is_refused_until_user_schemes_exist(db_conn) -> None:
+def test_an_assembled_composite_at_a_named_method_is_not_accepted(db_conn) -> None:
+    """Since P5 an assembled composite is accepted, but only at a user-built scheme sent inline.
+
+    A named method is a program's own recipe: there is nothing to recompute it
+    from. The block is built with ``model_construct`` so it reaches the service
+    without the wire's own refusal of an assembled block with no inputs.
+    """
+    block = CompositeResultPayload.model_construct(
+        assembly=CompositeAssembly.assembled,
+        electronic_energy_hartree=_ELECTRONIC,
+        e0_hartree=None,
+        recipe_zpe_hartree=None,
+        terms=[],
+        inputs=[],
+    )
     with Session(db_conn) as session, session.begin():
-        with pytest.raises(CodedValueError) as err:
-            _persist(session, _block(assembly="assembled"))
+        with pytest.raises((CodedValueError, CodedValidationError)) as err:
+            _persist(session, block)
         assert err.value.code == "composite_assembled_not_accepted"
-        assert err.value.context["assembly"] == "assembled"
         session.rollback()
 
 

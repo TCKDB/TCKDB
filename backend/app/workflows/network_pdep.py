@@ -70,6 +70,7 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_anchoring import (
     anchor_species_calculation_to_observation,
@@ -627,6 +628,16 @@ def persist_network_pdep_upload(
             created_by=created_by,
             warnings=warning_sink,
         )
+
+    # An assembled composite's inputs are written, and its total checked, now that
+    # every calculation exists (ADR 0021, P5).
+    warning_sink.extend(
+        finalize_composite_inputs(
+            session,
+            calculation_key_to_id.values(),
+            calculations_by_key=calculation_key_to_calc,
+        )
+    )
 
     # Every calculation of the upload is flushed: an opt or sp at a named
     # composite method's level is reported once, as on every other route.

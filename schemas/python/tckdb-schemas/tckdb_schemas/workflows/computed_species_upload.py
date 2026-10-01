@@ -18,6 +18,7 @@ from tckdb_schemas.bundle_source_rules import (
     find_scf_source_cycle,
     scf_source_geometry_error,
 )
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.energy_correction import AppliedEnergyCorrectionUploadPayload
 from tckdb_schemas.enums import (
@@ -48,7 +49,7 @@ from tckdb_schemas.fragments.calculation import (
     SPEnergyComponentPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
-    assert_composite_result_matches_type,
+    assert_composite_calculation_shape,
 )
 from tckdb_schemas import frequency_completeness as _frequency_completeness
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
@@ -140,6 +141,23 @@ class CalculationDependencyInBundle(SchemaBase):
     parent_calculation_key: str = Field(min_length=1)
     role: CalculationDependencyRole
 
+    @model_validator(mode="after")
+    def refuse_derived_role(self) -> Self:
+        """``composite_input`` edges are written from ``composite_result.inputs``, never declared."""
+        if self.role == CalculationDependencyRole.composite_input:
+            raise CodedValidationError(
+                "composite_input_edge_is_derived",
+                (
+                    "depends_on cannot declare role 'composite_input'. The server writes that edge "
+                    "from the assembled composite's composite_result.inputs, one per slot, so an "
+                    "edge declared here would be evidence with no slot behind it. Name the "
+                    "calculation in composite_result.inputs instead."
+                ),
+                context={"field": "depends_on", "role": self.role.value},
+                message_prefix=False,
+            )
+        return self
+
 
 class CalculationInBundle(SchemaBase):
     """One calculation within a conformer's calc list.
@@ -154,7 +172,9 @@ class CalculationInBundle(SchemaBase):
     type: CalculationType
     quality: CalculationQuality = CalculationQuality.raw
 
-    software_release: SoftwareReleaseRef
+    #: Required, except on an ``assembled`` composite (arithmetic over other
+    #: calculations of this bundle, run by no program).
+    software_release: SoftwareReleaseRef | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
     literature: LiteratureUploadRequest | None = None
@@ -255,7 +275,12 @@ class CalculationInBundle(SchemaBase):
                     f"calculation type '{self.type.value}'. "
                     f"Expected '{allowed_field}' or no result."
                 )
-        assert_composite_result_matches_type(self.type, self.composite_result)
+        assert_composite_calculation_shape(
+            self.type,
+            self.composite_result,
+            level_of_theory=self.level_of_theory,
+            software_release=self.software_release,
+        )
         return self
 
     @model_validator(mode="after")

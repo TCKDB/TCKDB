@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.110.0 - 2026-10-02
+
+`RejectionCode` gains the codes of user-built composite schemes, regenerated from
+the server's catalogue (ADR 0021, `tckdb-schemas` 0.71.0):
+`calculation_software_release_required`, `composite_input_duplicate`,
+`composite_input_edge_is_derived`, `composite_input_geometry_mismatch`,
+`composite_input_level_mismatch`, `composite_input_missing`,
+`composite_input_owner_mismatch`, `composite_input_reference_invalid`,
+`composite_input_slot_unknown`, `composite_input_type_invalid`,
+`composite_inputs_require_assembled`, `composite_scheme_malformed`,
+`composite_scheme_named_method_not_sendable`, `composite_scheme_nested`,
+`composite_total_mismatch`, `level_of_theory_method_with_composite_scheme` and
+`level_of_theory_requires_method_or_composite_scheme`. They are the refusals of
+the new `composite_scheme` level of theory and the assembled composite, whose
+payload shapes ship in `tckdb-schemas`. Nothing else in the client changes: the
+typed builders still build only `opt`, `freq` and `sp` calculations, and a
+composite calculation is sent as a payload.
+
 ## 0.109.0 - 2026-10-01
 
 `RejectionCode` gains ten codes, regenerated from the server's catalogue

@@ -33,6 +33,16 @@ resolves a merged row's ref to the holder
 (``scientific_read.handles.canonical_level_of_theory_id`` and
 ``level_of_theory_ref_clause``). No calculation points at a merged row.
 
+**Declared composite schemes (ADR 0021, P5).** A level of theory that names a
+user-built recipe has ``method`` = a server-generated label and every other
+column ``NULL``, so its hash cannot be recomputed from its columns. The script
+recomputes it **from the bound scheme** instead
+(``composite_scheme_resolution.declared_scheme_lot_hash`` of the scheme's
+``definition_hash``): the same function the upload path writes it with, so the
+two cannot disagree. No declared level is skipped. In practice a declared level
+is alone in its group (the scheme is unique on its hash), so it is never merged
+with a plain level that happens to share its label.
+
 **What it refuses.** A group is merged only if every one of these holds, and
 is reported as blocked otherwise:
 
@@ -439,7 +449,23 @@ def accepted_science_on(
 # ---------------------------------------------------------------------------
 
 
-def _identity_hash(mapping) -> str:
+def _identity_hash(mapping, declared_definition_hash: str | None = None) -> str:
+    """The hash a level of theory should have, by the application's own formulas.
+
+    A level bound to a **declared** composite scheme (a user-built recipe, ADR
+    0021 P5) cannot be hashed from its columns: its ``method`` is only the label
+    the server generated and every other field is ``NULL``, so the columns hash to
+    a level that does not exist. Its identity is the scheme's definition, so such
+    a level is hashed from ``declared_definition_hash`` -- the same function the
+    upload path writes it with. Two rows bound to one scheme therefore group (and
+    one is the holder); a declared level and a plain level that merely shares its
+    label never do. No declared level is skipped: each is recomputed from its scheme.
+    """
+    if declared_definition_hash is not None:
+        from app.services.composite_scheme_resolution import declared_scheme_lot_hash
+
+        return declared_scheme_lot_hash(declared_definition_hash)
+
     from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
     from app.services.calculation_resolution import _level_of_theory_hash
@@ -477,9 +503,27 @@ def _lot_columns_present(session: Session) -> tuple[str, ...]:
     return tuple(column for column in _LOT_COLUMNS if column in present)
 
 
+def _declared_definition_hashes(session: Session, schema: Schema) -> dict[int, str]:
+    """``level id -> definition_hash`` for every level bound to a declared scheme.
+
+    Empty on a database older than ``d7a3f1b9c284`` (no binding table).
+    """
+    if ("level_of_theory_composite", "level_of_theory_id") not in schema.lot_references:
+        return {}
+    rows = session.execute(
+        text(
+            "SELECT c.level_of_theory_id, s.definition_hash "
+            "FROM level_of_theory_composite c JOIN composite_scheme s ON s.id = c.scheme_id "
+            "WHERE c.binding_source = 'declared'"
+        )
+    ).all()
+    return {level_id: definition_hash.strip() for level_id, definition_hash in rows}
+
+
 def build_plan(session: Session, schema: Schema | None = None) -> Plan:
     """Group unmerged rows by identity-keyed hash; describe groups of two or more."""
     schema = schema or read_schema(session)
+    declared = _declared_definition_hashes(session, schema)
     columns = ", ".join(_lot_columns_present(session))
     rows = session.execute(
         text(
@@ -491,7 +535,7 @@ def build_plan(session: Session, schema: Schema | None = None) -> Plan:
 
     by_hash: dict[str, list] = defaultdict(list)
     for mapping in rows:
-        by_hash[_identity_hash(mapping)].append(mapping)
+        by_hash[_identity_hash(mapping, declared.get(mapping["id"]))].append(mapping)
 
     groups: list[Group] = []
     for identity_hash, members in by_hash.items():

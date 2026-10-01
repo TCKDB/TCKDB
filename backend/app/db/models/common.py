@@ -453,6 +453,11 @@ class CalculationDependencyRole(str, Enum):
     - ``scan_parent``: parent ``opt`` -> child ``scan``.
     - ``arkane_source``: scientific metadata, not pinned to a specific
       parent ``CalculationType``.
+    - ``composite_input``: parent is an ``sp`` (or an ``opt``, whose final
+      energy is the single-point value at its own level) that an assembled
+      ``composite`` consumed -> child is that composite. Written by the server
+      from ``calc_composite_input``, one edge per input row; never declared
+      by a producer (ADR 0021, P5).
 
     Any consumer that buckets these roles by "which side of the edge is
     the calc of interest on" (e.g. the transition-state trust rubric's
@@ -469,6 +474,7 @@ class CalculationDependencyRole(str, Enum):
     irc_start = "irc_start"
     irc_followup = "irc_followup"
     scan_parent = "scan_parent"
+    composite_input = "composite_input"
 
 
 class ValidationStatus(str, Enum):

@@ -18,6 +18,7 @@ from app.services.calculation_resolution import (
     persist_additional_calculations,
     resolve_and_persist_calculation_with_results,
 )
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
@@ -299,6 +300,14 @@ def persist_conformer_upload(
 
     session.flush()
 
+    # An assembled composite's inputs are written, and its total checked, now that
+    # every calculation it may name exists (ADR 0021, P5). Before the review
+    # policy: a policy that accepts the composite freezes its inputs.
+    composite_input_warnings = finalize_composite_inputs(
+        session,
+        [calculation.id, *(c.id for c in additional_calcs)],
+    )
+
     review_targets: list[RecordRef] = [
         RecordRef(SubmissionRecordType.species_entry, species_entry.id),
         RecordRef(SubmissionRecordType.conformer_group, conformer_group.id),
@@ -334,6 +343,7 @@ def persist_conformer_upload(
         session,
         [calculation.id, *(c.id for c in additional_calcs)],
     )
+    energy_warnings.extend(composite_input_warnings)
     energy_warnings.extend(
         collect_named_composite_deposit_warnings(
             session,

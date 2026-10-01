@@ -1,5 +1,75 @@
 # Changelog
 
+## 0.71.0 - 2026-10-02
+
+Composite levels of theory, phase P5 (ADR 0021): a composite energy you build
+yourself, from your own recipe and the single points you ran, is deposited as an
+`assembled` composite. Every payload accepted before is accepted unchanged; this
+release only adds. See the "Worked payloads" section of the producer contract
+for two complete examples (CCSD(T)/CBS from a TZ/QZ pair, and a focal-point sum).
+
+- **`level_of_theory.composite_scheme`.** A level of theory now carries exactly
+  one of `method` and `composite_scheme`. `method` stays required whenever
+  `composite_scheme` is absent, so every existing payload is unchanged;
+  `method` is now optional in the schema only because the other member exists.
+  Both, or neither, is refused (`level_of_theory_method_with_composite_scheme`,
+  `level_of_theory_requires_method_or_composite_scheme`). The definition:
+  `kind` (`extrapolation` or `additive`; `named_method` is the server's own and
+  is refused with `composite_scheme_named_method_not_sendable`), `terms[]` and an
+  optional `literature`. A term has a local `key`, an `operation` (`base`,
+  `value`, `extrapolation`, `difference`; `empirical` is refused), an
+  `energy_component`, a `formula` and `exponent` on an extrapolation, and
+  `inputs[]`, each a `slot` (`value`, `high`, `low`, `cardinal`), an ordinary
+  `level_of_theory` and a declared `cardinal_number`. The total is the sum of the
+  terms. Formulas: `inverse_power` and `inverse_power_shifted_half` (with an
+  exponent), `karton_martin_scf` and `exponential_three_point` (without). Shape
+  mistakes are `composite_scheme_malformed` with `context.rule` naming which; a
+  nested composite, or a named composite method such as CBS-QB3 used as an input
+  level, is `composite_scheme_nested`.
+- **Identity.** The server resolves the input levels, hashes the definition and
+  names the level of theory itself (for example
+  `CBS[ref:CCSD(T)/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3; n=3,4]`).
+  Formula, exponent, cardinal numbers, the input levels (with `core_treatment`)
+  and the term order are identity; term keys and literature are not.
+- **Assembled composites.** `composite_result.assembly: "assembled"` is accepted
+  with `inputs[]`: each names a `term_key`, a `slot` (and `cardinal_number` on an
+  extrapolation) and the calculation by a bundle-local `calculation_key` or a
+  `calc_...` `calculation_ref`, never a database id. `inputs` on a `program_run`
+  is refused (`composite_inputs_require_assembled`); an assembled composite at a
+  level that carries no inline scheme keeps the code
+  `composite_assembled_not_accepted`, now meaning exactly that.
+  `software_release` is optional on an assembled composite and required on every
+  other calculation (`calculation_software_release_required`, a coded refusal in
+  place of the schema's missing-field error); a `program_run` composite still
+  needs it.
+- **Server-side refusals** (422): `composite_input_missing`,
+  `composite_input_slot_unknown`, `composite_input_duplicate`,
+  `composite_input_reference_invalid`, `composite_input_edge_is_derived` (the
+  `composite_input` dependency role is written by the server and cannot be
+  declared in `depends_on`), `composite_input_type_invalid` (an input is not a
+  single point or optimisation), `composite_input_level_mismatch`,
+  `composite_input_owner_mismatch`, `composite_input_geometry_mismatch` and
+  `composite_total_mismatch` (the deposited total is not what the scheme gives
+  for the inputs' stored energies, beyond `max(1e-6, 5e-7 * n)` hartree, `n`
+  counting the deposited total and every stored number consumed). TCKDB
+  recomputes the total only to check it; it never stores the recomputed value.
+  Warnings: `composite_input_geometry_undeclared` and
+  `composite_total_unverifiable` (a needed energy or component is not stated, the
+  correlation convention cannot be determined, or no total was deposited).
+- **Correlation and triples.** A `correlation` term reads the whole correlation
+  energy, (T) included. For an input whose stored `triples` is separate (Molpro,
+  `reference + correlation + triples` equals the energy) that is `correlation +
+  triples`; for one whose `correlation` already includes (T) (ORCA) it is
+  `correlation`. The convention is read off the stored row; an input where it
+  cannot be read makes the total unverifiable.
+- **New public modules.** `tckdb_schemas.composite_formulas` (the four formulas,
+  checked against the correlation energies printed in the ORCA manuals),
+  `composite_total` (the recomputation, pure arithmetic a producer can run before
+  sending) and `composite_worked_examples`.
+- **New enums mirrored from the server:** `CompositeSchemeKind`,
+  `CompositeTermOperation`, `CompositeExtrapolationFormula`,
+  `CompositeInputSlot`, and `CalculationDependencyRole.composite_input`.
+
 ## 0.70.0 - 2026-10-01
 
 Composite levels of theory, phase P3a (ADR 0021): a calculation of type

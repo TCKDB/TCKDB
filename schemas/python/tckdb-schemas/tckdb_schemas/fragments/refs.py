@@ -1,17 +1,29 @@
 import re
 from datetime import date
-from typing import TYPE_CHECKING, Self
+from typing import Self
 
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import CoreTreatment, FrequencyScaleKind, SpinTreatment
+from tckdb_schemas.composite_scheme_rules import (
+    COMPOSITE_SCHEME_NESTED,
+    assert_composite_scheme_definition,
+    assert_method_xor_composite_scheme,
+)
+from tckdb_schemas.enums import (
+    CompositeExtrapolationFormula,
+    CompositeInputSlot,
+    CompositeSchemeKind,
+    CompositeTermOperation,
+    CoreTreatment,
+    EnergyComponentKind,
+    FrequencyScaleKind,
+    SpinTreatment,
+)
+from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.upload_warning import UploadWarning
 from tckdb_schemas.utils import normalize_optional_text, normalize_required_text
-
-if TYPE_CHECKING:
-    from tckdb_schemas.literature import LiteratureUploadRequest
 
 
 #: A declared ``version`` that embeds a parsed ESS startup banner --
@@ -435,10 +447,17 @@ def _walk_for_software_release_warnings(
         if warning is not None:
             out.append(warning)
         return
-    if include_level_of_theory and isinstance(obj, LevelOfTheoryRef):
+    if include_level_of_theory and isinstance(obj, OrdinaryLevelOfTheoryRef):
         method_warning = obj.method_warning(field_prefix=prefix)
         if method_warning is not None:
             out.append(method_warning)
+        # A user-built scheme's input levels are ordinary levels with their own
+        # method warnings; the walk must not stop at the level that holds them.
+        definition = getattr(obj, "composite_scheme", None)
+        if definition is not None:
+            _walk_for_software_release_warnings(
+                definition, f"{prefix}composite_scheme.", out, include_level_of_theory=True
+            )
         return
     if isinstance(obj, BaseModel):
         for name in type(obj).model_fields:
@@ -487,8 +506,14 @@ class WorkflowToolReleaseRef(SchemaBase):
         return self
 
 
-class LevelOfTheoryRef(SchemaBase):
-    """Upload-facing reference to a level of theory."""
+class OrdinaryLevelOfTheoryRef(SchemaBase):
+    """Upload-facing reference to an ordinary level of theory: a method a program ran.
+
+    The fields and checks every level of theory has. :class:`LevelOfTheoryRef`
+    adds the one thing an *ordinary* level cannot be: a user-built composite
+    scheme. The input levels of such a scheme are ordinary (a composite is never
+    built from another composite), so they are typed as this class.
+    """
 
     method: str = Field(min_length=1)
     basis: str | None = None
@@ -511,7 +536,11 @@ class LevelOfTheoryRef(SchemaBase):
 
     @field_validator("method")
     @classmethod
-    def normalize_method(cls, value: str) -> str:
+    def normalize_method(cls, value: str | None) -> str | None:
+        if value is None:
+            # Only a ``LevelOfTheoryRef`` that names a ``composite_scheme`` instead
+            # reaches here with no method; an ordinary level's field is required.
+            return None
         value = normalize_required_text(value)
         if "//" in value:
             named = _named_method_written_as_pair(value)
@@ -560,7 +589,7 @@ class LevelOfTheoryRef(SchemaBase):
         Never refuses and never rewrites: the verbatim name is what is stored,
         and it is a different identity from the method it is a table for.
         """
-        stem = correction_table_method_stem(self.method)
+        stem = None if self.method is None else correction_table_method_stem(self.method)
         if stem is not None:
             self._method_warning_code = W_LEVEL_OF_THEORY_METHOD_NAMES_CORRECTION_TABLE
             self._method_warning_message = (
@@ -586,6 +615,167 @@ class LevelOfTheoryRef(SchemaBase):
             code=self._method_warning_code,
             message=self._method_warning_message or "",
         )
+
+
+class CompositeSchemeInputLevel(OrdinaryLevelOfTheoryRef):
+    """An input level of a user-built composite scheme: an ordinary level, never composite.
+
+    A composite is built from ordinary levels of theory. An input that itself
+    carries a ``composite_scheme`` is a nested composite and is refused with
+    ``composite_scheme_nested`` (a named composite method such as CBS-QB3 used as
+    an input is refused by the server, which holds the catalogue). State
+    ``core_treatment`` when a term depends on it: a core-valence difference is
+    the same level with ``all_electron`` against ``frozen_core``.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def refuse_nested_composite(cls, data: object) -> object:
+        if isinstance(data, dict) and "composite_scheme" in data:
+            raise CodedValidationError(
+                COMPOSITE_SCHEME_NESTED,
+                (
+                    "a composite scheme's input level carries its own composite_scheme. A "
+                    "composite is built from ordinary levels of theory (method, basis, ...); "
+                    "nesting composites is refused. Send the ordinary levels the inner recipe "
+                    "would read as separate terms of this scheme."
+                ),
+                context={"field": "level_of_theory.composite_scheme.terms[].inputs[].level_of_theory"},
+                message_prefix=False,
+            )
+        return data
+
+
+class CompositeSchemeTermInputIn(SchemaBase):
+    """One input of a scheme term: the level it reads, and which slot it fills.
+
+    :param slot: ``value`` (base / value term), ``high`` / ``low`` (difference),
+        or ``cardinal`` (one point of an extrapolation).
+    :param level_of_theory: The ordinary level the input calculation ran at.
+    :param cardinal_number: The declared cardinal number (2 for double-zeta, 3
+        for triple-zeta, ...). Required on a ``cardinal`` slot; never derived from
+        the basis name. Part of the scheme's identity.
+    """
+
+    slot: CompositeInputSlot
+    level_of_theory: CompositeSchemeInputLevel
+    cardinal_number: int | None = Field(default=None, ge=1, le=32767)
+
+
+class CompositeSchemeTermIn(SchemaBase):
+    """One term of a user-built scheme; the scheme's total is the sum of its terms.
+
+    :param key: Your name for the term (for example ``"corr"``, ``"dcv"``).
+        Local to this definition and **not part of the scheme's identity**: the
+        calculation's ``composite_result.inputs`` name terms by it, and two
+        depositors who key the same recipe differently get the same scheme.
+    :param operation: ``base`` / ``value`` (one input taken as it is),
+        ``extrapolation``, or ``difference`` (high minus low). ``empirical`` is
+        refused.
+    :param energy_component: Which part of the input energy the term reads:
+        ``total``, ``reference``, ``correlation`` (the whole correlation energy,
+        triples included), ``triples``, ``dboc``, ``scalar_relativistic``.
+    :param formula: The extrapolation formula (``extrapolation`` terms only).
+    :param exponent: The formula's exponent where it has one (``inverse_power``,
+        ``inverse_power_shifted_half``). Part of the identity: exponent 3 and 3.4
+        are two schemes.
+    :param inputs: The levels the term reads, each filling a slot.
+    """
+
+    key: str = Field(min_length=1)
+    operation: CompositeTermOperation
+    energy_component: EnergyComponentKind
+    formula: CompositeExtrapolationFormula | None = None
+    exponent: float | None = Field(default=None, allow_inf_nan=False)
+    inputs: list[CompositeSchemeTermInputIn] = Field(min_length=1)
+
+    @field_validator("key")
+    @classmethod
+    def normalize_key(cls, value: str) -> str:
+        return normalize_required_text(value)
+
+
+class CompositeSchemeDefinition(SchemaBase):
+    """A user-built composite scheme, sent inline as ``level_of_theory.composite_scheme``.
+
+    The server resolves each input level, canonicalises the definition and
+    names the level of theory itself (a readable label such as
+    ``CBS[ref:HF/cc-pVQZ + corr:CCSD(T)/cc-pV{T,Q}Z; inverse_power x=3 n=3,4]``);
+    you do not choose the name. Formula, exponent and cardinal numbers are part of
+    identity; ``key`` names, ``literature`` and order of the inputs within a term
+    are not.
+
+    :param kind: ``extrapolation`` (value and extrapolation terms) or
+        ``additive`` (at least one difference term). ``named_method`` is the
+        server's own kind and is refused.
+    :param terms: The terms, in order. The position of a term is its place in
+        this list.
+    :param literature: The paper that defines the recipe, when there is one.
+        Provenance only: it is not part of the scheme's identity.
+    """
+
+    kind: CompositeSchemeKind
+    terms: list[CompositeSchemeTermIn] = Field(min_length=1)
+    literature: LiteratureUploadRequest | None = None
+
+    @model_validator(mode="after")
+    def validate_shape(self) -> Self:
+        assert_composite_scheme_definition(self)
+        return self
+
+
+class LevelOfTheoryRef(OrdinaryLevelOfTheoryRef):
+    """Upload-facing reference to a level of theory: a program's method, or your own recipe.
+
+    Send exactly one of ``method`` and ``composite_scheme``. ``method`` is a
+    method a program ran (including a named composite method such as CBS-QB3,
+    sent by name alone). ``composite_scheme`` defines a recipe of your own
+    (a CCSD(T)/CBS extrapolation, a focal-point sum) from ordinary levels of
+    theory; the server names the resulting level of theory and binds it to the
+    recipe. Both, or neither, is refused. With ``composite_scheme`` the other
+    level fields (basis, dispersion, ...) are not sent: they belong to the
+    scheme's input levels.
+    """
+
+    method: str | None = Field(default=None, min_length=1)
+    composite_scheme: CompositeSchemeDefinition | None = None
+
+    @model_validator(mode="after")
+    def validate_method_xor_composite_scheme(self) -> Self:
+        assert_method_xor_composite_scheme(self.method, self.composite_scheme)
+        if self.composite_scheme is not None:
+            ordinary = {
+                name: getattr(self, name)
+                for name in (
+                    "basis",
+                    "aux_basis",
+                    "cabs_basis",
+                    "dispersion",
+                    "solvent",
+                    "solvent_model",
+                    "keywords",
+                    "spin_treatment",
+                    "core_treatment",
+                )
+                if getattr(self, name) is not None
+            }
+            if ordinary:
+                raise CodedValidationError(
+                    "composite_scheme_malformed",
+                    (
+                        "level_of_theory carries composite_scheme together with "
+                        f"{', '.join(sorted(ordinary))}. These describe a single method's run; a "
+                        "composite scheme's levels are stated on its inputs. Remove them from the "
+                        "level of theory and put them on the scheme's input levels."
+                    ),
+                    context={
+                        "field": "level_of_theory",
+                        "rule": "ordinary_fields_with_scheme",
+                        "fields": sorted(ordinary),
+                    },
+                    message_prefix=False,
+                )
+        return self
 
 
 class SoftwareRef(SchemaBase):
@@ -656,7 +846,7 @@ class FreqScaleFactorRef(SchemaBase):
     scale_kind: FrequencyScaleKind = FrequencyScaleKind.fundamental
     value: float = Field(gt=0)
     software: SoftwareReleaseRef | None = None
-    source_literature: "LiteratureUploadRequest | None" = None
+    source_literature: LiteratureUploadRequest | None = None
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     note: str | None = None
 
@@ -665,8 +855,5 @@ class FreqScaleFactorRef(SchemaBase):
         self.note = normalize_optional_text(self.note)
         return self
 
-
-# Resolve the forward ref now that the class body is closed.
-from tckdb_schemas.literature import LiteratureUploadRequest  # noqa: E402
 
 FreqScaleFactorRef.model_rebuild()

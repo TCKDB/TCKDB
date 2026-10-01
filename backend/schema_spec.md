@@ -896,7 +896,7 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 `calc_composite_result` fields (1:1 with a `calculation` of type `composite`; ADR 0021):
 
 - `calculation_id` (PK, FK)
-- `assembly` (`composite_assembly`: `program_run | assembled`; only `program_run` is accepted today)
+- `assembly` (`composite_assembly`: `program_run | assembled`; `assembled` is arithmetic over other deposited calculations and needs a user-built scheme, see `calc_composite_input`)
 - `electronic_energy_hartree` (nullable; ZPE-free, every term of the recipe included)
 - `e0_hartree` (nullable; 0 K, including the recipe's scaled zero-point energy)
 - `recipe_zpe_hartree` (nullable; at least 0)
@@ -907,8 +907,8 @@ non-conforming deposit is corrected by re-depositing, not by migrating.
 the numbers they relate are all present
 (`composite_e0_inconsistent`, `composite_terms_do_not_sum`). All three energies are
 finite-checked at the database. The level of theory of a composite calculation
-must be bound to a composite scheme (`composite_level_not_scheme_bound`); only a
-catalogued named method is bound in this release. Both composite tables carry the
+must be bound to a composite scheme (`composite_level_not_scheme_bound`): a
+catalogued named method or a user-built scheme sent inline. All composite result tables carry the
 accepted-science immutability guard `calc_sp_result` has (revision `f3b7d2a9c514`).
 
 `calc_composite_term` fields (the optional breakdown of the ZPE-free energy):
@@ -916,6 +916,30 @@ accepted-science immutability guard `calc_sp_result` has (revision `f3b7d2a9c514
 - `calculation_id` (PK part, FK)
 - `term_position` (PK part; at least 0; a `composite_scheme_term.position` of the calculation's scheme where the scheme has terms, otherwise the producer's own ordering)
 - `value_hartree`
+
+`calc_composite_input` fields (ADR 0021, P5; one row per slot an `assembled` composite filled):
+
+- `calculation_id` (PK part, FK: the composite)
+- `term_position` (PK part; at least 0; the term's place in the scheme's `terms`; the depositor's `term_key` is not stored)
+- `slot` (PK part; `composite_input_slot`: `value | high | low | cardinal`)
+- `input_calculation_id` (PK part, FK: the single point or optimisation that fills the slot; not the composite itself; indexed)
+- `cardinal_number` (nullable; set exactly on a `cardinal` slot, at least 1)
+
+Unique `(calculation_id, term_position, slot, cardinal_number)` with NULLs compared equal. Every row is mirrored by a
+`calculation_dependency` edge with the new role `composite_input` (parent = the input, child = the composite; the
+server writes both, and `depends_on` cannot declare the role). Checked when the inputs are written, after every
+calculation of the request exists: every slot of the scheme has exactly one input
+(`composite_input_missing` / `_slot_unknown` / `_duplicate`), the input is an `sp` or `opt`
+(`composite_input_type_invalid`), belongs to the composite's species or transition-state entry
+(`composite_input_owner_mismatch`), ran at the slot's level of theory with merges followed
+(`composite_input_level_mismatch`), and ran at one geometry when more than one declares it
+(`composite_input_geometry_mismatch`; an undeclared geometry warns, `composite_input_geometry_undeclared`).
+The deposited `electronic_energy_hartree` is then recomputed from the inputs' stored energies with the scheme's
+formulas and compared (`composite_total_mismatch`, tolerance `max(1e-6, 5e-7 * n)` hartree; `composite_total_unverifiable`
+warns when a needed energy or component is not stated). The recomputed value is never stored. A `correlation` term
+reads the whole correlation energy: `correlation` where it includes (T) (ORCA), `correlation + triples` where triples are
+separate (Molpro), whichever sum equals the stored energy. Guarded like `calc_composite_result` on `calculation_id`
+only: the cited calculation is a citation, not an owner (revision `b4d8e2f6a1c9`).
 
 The `calculation.type` enum (`calc_type`) gains `composite`. A `composite` calculation
 may be a conformer's primary calculation (it ran the optimisation that produced the

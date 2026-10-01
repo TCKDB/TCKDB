@@ -96,6 +96,7 @@ from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.composite_input_resolution import finalize_composite_inputs
 from app.services.composite_result_resolution import collect_named_composite_deposit_warnings
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
@@ -763,6 +764,19 @@ def persist_computed_species_upload(
                 )
                 if software_warning is not None:
                     upload_warnings.append(software_warning)
+
+        # An assembled composite's inputs are written, and its total checked,
+        # now that every calculation exists, every ``depends_on`` edge is wired
+        # and every artifact has had the chance to fill a single-point energy
+        # the payload left out (ADR 0021, P5). Before the review policy, which
+        # can freeze them.
+        upload_warnings.extend(
+            finalize_composite_inputs(
+                session,
+                [calc.id for calc in calc_keys_to_id.values()],
+                calculations_by_key=calc_keys_to_id,
+            )
+        )
 
         thermo_row, thermo_aec_ids = _persist_thermo_block(
             session,

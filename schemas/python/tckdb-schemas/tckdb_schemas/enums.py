@@ -187,6 +187,50 @@ class CompositeAssembly(str, Enum):
     assembled = "assembled"
 
 
+class CompositeSchemeKind(str, Enum):
+    # What sort of recipe a composite scheme is (ADR 0021). A producer sends
+    # ``extrapolation`` or ``additive``; ``named_method`` is the server's own
+    # kind for a catalogued program recipe (CBS-QB3, G4, ...) and is refused on
+    # the wire. A comment, not a docstring, for the reason given on
+    # ``CalculationType``.
+    named_method = "named_method"
+    extrapolation = "extrapolation"
+    additive = "additive"
+
+
+class CompositeTermOperation(str, Enum):
+    # What a scheme term does (ADR 0021). ``base`` / ``value``: one input taken
+    # as it is; ``extrapolation``: a basis-set limit from several cardinal
+    # numbers; ``difference``: high minus low; ``empirical``: a fitted term of a
+    # named method, which a producer cannot define (there is nothing to
+    # recompute it from).
+    base = "base"
+    extrapolation = "extrapolation"
+    difference = "difference"
+    value = "value"
+    empirical = "empirical"
+
+
+class CompositeExtrapolationFormula(str, Enum):
+    # The extrapolation formula of an extrapolation term (ADR 0021). The
+    # arithmetic is in ``tckdb_schemas.composite_formulas``.
+    inverse_power = "inverse_power"
+    inverse_power_shifted_half = "inverse_power_shifted_half"
+    karton_martin_scf = "karton_martin_scf"
+    exponential_three_point = "exponential_three_point"
+
+
+class CompositeInputSlot(str, Enum):
+    # The role of one input of a scheme term (ADR 0021). ``value``: the single
+    # input of a base or value term; ``high`` / ``low``: the two sides of a
+    # difference; ``cardinal``: one point of an extrapolation, told apart by
+    # its cardinal number.
+    value = "value"
+    high = "high"
+    low = "low"
+    cardinal = "cardinal"
+
+
 class PathSearchMethod(str, Enum):
     neb = "neb"
     gsm = "gsm"
@@ -218,6 +262,12 @@ class CalculationDependencyRole(str, Enum):
     irc_start = "irc_start"
     irc_followup = "irc_followup"
     scan_parent = "scan_parent"
+    # ``composite_input`` (ADR 0021, P5): parent is an ``sp`` (or an ``opt``
+    # whose final energy is the single-point value) that an assembled
+    # ``composite`` calculation consumed; child is that composite. Written by
+    # the server from ``composite_result.inputs``; never declared in
+    # ``depends_on``.
+    composite_input = "composite_input"
 
 
 class IRCDirection(str, Enum):
@@ -676,6 +726,10 @@ __all__ = (
     "CalculationQuality",
     "CalculationType",
     "CompositeAssembly",
+    "CompositeExtrapolationFormula",
+    "CompositeInputSlot",
+    "CompositeSchemeKind",
+    "CompositeTermOperation",
     "ConstraintKind",
     "CoordinateUnit",
     "CoreTreatment",

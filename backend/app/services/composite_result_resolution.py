@@ -12,18 +12,19 @@ Every refusal is a block-tier check under ADR 0008, because each asserts a
 definition rather than an expectation:
 
 * ``composite_assembled_not_accepted`` -- ``assembly = assembled`` means the
-  energy is arithmetic over other deposited calculations. That needs a
-  user-built scheme and its inputs, which arrive in a later phase (P5); until
-  then there is nothing to check an assembled total against, so it is refused
-  rather than stored unverifiable. The wire accepts the value so the refusal
-  can say what it is.
+  energy is arithmetic over other deposited calculations, which only a
+  user-built scheme (``extrapolation`` / ``additive``, ADR 0021 P5) can say. An
+  assembled composite at a named method, or at a level bound to no scheme, is
+  refused: there is no recipe to check its total against. (The wire refuses the
+  same shape earlier; this is the seam's own guard.)
 * ``composite_program_run_requires_software`` -- a program-run number is what a
-  program printed, so the program must be named.
+  program printed, so the program must be named. An assembled composite names no
+  software: no program ran it.
 * ``composite_level_not_scheme_bound`` -- a composite calculation is always at a
-  level of theory bound to a composite scheme. In this phase only a catalogued
-  named method (``CBS-QB3``, ``G4``, ...) is bound, and binding happens when
-  the level is resolved (``resolve_level_of_theory_ref``), so a level with no
-  binding is one the catalogue does not know.
+  level of theory bound to a composite scheme: a catalogued named method
+  (``CBS-QB3``, ``G4``, ...) or a user-built scheme sent inline. Binding happens
+  when the level is resolved (``resolve_level_of_theory_ref``), so a level with
+  no binding is one the catalogue does not know and no definition declared.
 * ``composite_e0_inconsistent`` / ``composite_terms_do_not_sum`` -- the stated
   numbers contradict each other beyond printed precision (``max(1e-6, 5e-7 * n)``
   hartree for ``n`` rounded quantities). The functions live in the
@@ -49,6 +50,9 @@ from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.calculation import (
+    COMPOSITE_ASSEMBLED_NOT_ACCEPTED as _WIRE_COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
+)
+from tckdb_schemas.fragments.calculation import (
     CompositeResultPayload,
     assert_composite_result_arithmetic,
 )
@@ -59,7 +63,12 @@ from app.db.models.calculation import (
     CalculationCompositeResult,
     CalculationCompositeTerm,
 )
-from app.db.models.common import CalculationType, CompositeAssembly, CompositeSchemeKind
+from app.db.models.common import (
+    CalculationType,
+    CompositeAssembly,
+    CompositeBindingSource,
+    CompositeSchemeKind,
+)
 from app.db.models.composite_scheme import (
     CompositeScheme,
     CompositeSchemeTerm,
@@ -67,10 +76,11 @@ from app.db.models.composite_scheme import (
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.schemas.upload_warning import UploadWarning
+from app.services.composite_input_resolution import register_pending_composite
 
-#: A composite calculation was sent with ``assembly = assembled``. Refused until
-#: user-built schemes exist; see the module docstring.
-COMPOSITE_ASSEMBLED_NOT_ACCEPTED = "composite_assembled_not_accepted"
+#: An assembled composite is not at a user-built scheme. Defined with the wire
+#: rule that raises it first (``tckdb_schemas.fragments.calculation``).
+COMPOSITE_ASSEMBLED_NOT_ACCEPTED = _WIRE_COMPOSITE_ASSEMBLED_NOT_ACCEPTED
 
 #: A ``program_run`` composite names no software.
 COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE = "composite_program_run_requires_software"
@@ -112,13 +122,23 @@ def persist_composite_result(
     session: Session,
     calculation: Calculation,
     payload: CompositeResultPayload,
+    *,
+    level_of_theory: object | None = None,
 ) -> CalculationCompositeResult:
     """Check and write a composite calculation's result and terms.
+
+    For an ``assembled`` composite this also *registers* it for
+    :func:`app.services.composite_input_resolution.finalize_composite_inputs`,
+    which writes its inputs and runs the input and total checks once every
+    calculation of the request exists.
 
     :param session: Active SQLAlchemy session.
     :param calculation: The composite calculation row, flushed, with its level
         of theory and software already resolved.
     :param payload: The ``composite_result`` block.
+    :param level_of_theory: The calculation's ``level_of_theory`` ref as sent. An
+        assembled composite needs its inline ``composite_scheme``: that is what
+        the inputs' ``term_key`` values are resolved against.
     :returns: The ``calc_composite_result`` row.
     :raises ValueError: when the calculation is not of type ``composite`` (the
         wire validators refuse this first; this is the seam's own guard).
@@ -129,18 +149,8 @@ def persist_composite_result(
             "composite_result is only allowed on composite calculations "
             f"(got type '{calculation.type.value}')."
         )
-    if payload.assembly == CompositeAssembly.assembled:
-        raise CodedValueError(
-            COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
-            "composite_result.assembly='assembled' is not accepted yet: an assembled composite is "
-            "arithmetic over other deposited calculations, which needs a user-built scheme and its "
-            "inputs, and those arrive in a later release. Until then deposit a composite that one "
-            "program run produced (assembly='program_run') at a catalogued named method such as "
-            "CBS-QB3 or G4.",
-            context={"field": "composite_result.assembly", "assembly": payload.assembly.value},
-            message_prefix=False,
-        )
-    if calculation.software_release_id is None:
+    assembled = payload.assembly == CompositeAssembly.assembled
+    if not assembled and calculation.software_release_id is None:
         raise CodedValueError(
             COMPOSITE_PROGRAM_RUN_REQUIRES_SOFTWARE,
             "a program-run composite needs the software that ran it: the number is what that "
@@ -154,14 +164,33 @@ def persist_composite_result(
         raise CodedValueError(
             COMPOSITE_LEVEL_NOT_SCHEME_BOUND,
             f"a composite calculation must be at a level of theory bound to a composite scheme, and "
-            f"{_lot_label(level)} is not: in this release only a catalogued named method (for example "
-            "CBS-QB3, CBS-4M, CBS-APNO, G3, G3B3, G3MP2, G4, G4MP2, W1U, W1BD) is bound. If one "
-            "program run of a named method produced this energy, send that method's name as the "
-            "level_of_theory method; if the energy is a plain single point or optimisation, send "
-            "type 'sp' or 'opt' instead.",
+            f"{_lot_label(level)} is not: only a catalogued named method (for example CBS-QB3, "
+            "CBS-4M, CBS-APNO, G3, G3B3, G3MP2, G4, G4MP2, W1U, W1BD) or a user-built scheme sent "
+            "inline as level_of_theory.composite_scheme is bound. If one program run of a named "
+            "method produced this energy, send that method's name as the level_of_theory method; if "
+            "the energy is a plain single point or optimisation, send type 'sp' or 'opt' instead.",
             context={"field": "level_of_theory", "level_of_theory": _lot_label(level)},
             message_prefix=False,
         )
+    definition = getattr(level_of_theory, "composite_scheme", None)
+    if assembled:
+        binding = session.get(LevelOfTheoryComposite, calculation.lot_id)
+        user_scheme = (
+            binding is not None
+            and binding.binding_source == CompositeBindingSource.declared
+            and scheme.kind != CompositeSchemeKind.named_method
+        )
+        if not user_scheme or definition is None:
+            raise CodedValueError(
+                COMPOSITE_ASSEMBLED_NOT_ACCEPTED,
+                "an assembled composite is arithmetic over other deposited calculations, which only a "
+                "user-built scheme sent inline (level_of_theory.composite_scheme, kind 'extrapolation' "
+                "or 'additive') can describe; "
+                f"{_lot_label(session.get(LevelOfTheory, calculation.lot_id))} is not one. A named "
+                "method such as CBS-QB3 is a program_run composite.",
+                context={"field": "composite_result.assembly", "assembly": payload.assembly.value},
+                message_prefix=False,
+            )
 
     # The wire validator ran these on parse; a payload built with model_copy skipped it.
     assert_composite_result_arithmetic(payload)
@@ -205,6 +234,10 @@ def persist_composite_result(
                 value_hartree=term.value_hartree,
             )
         )
+    if assembled:
+        # The inputs are written, and the total checked, by
+        # ``finalize_composite_inputs`` once every calculation of the request exists.
+        register_pending_composite(session, calculation, payload, definition)
     return result
 
 
