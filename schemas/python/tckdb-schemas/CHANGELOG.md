@@ -17,6 +17,16 @@ network bundle too (#615). Every existing payload is unchanged.
   relabelled `opt` on an atom is still accepted. Transition states still require
   an `opt` primary. Only the producer contract's description of the network's
   conformer changed; no field was added or removed.
+- **Duplicate single points are now refused when they declare output-only
+  geometry (shared rule, so `/uploads/statmech` and `/uploads/thermo` change
+  too).** With no `opt` linked, two `sp` links on one geometry are refused with
+  `statmech_role_duplicate` / `thermo_role_duplicate`. The rule used to read an
+  `sp`'s input geometry only; it now reads its input geometry, else its output
+  geometry. A deposit whose `sp` declares only an output geometry on the same
+  geometry as another linked `sp` therefore changes: the same level of theory
+  used to return 201 and now returns the `*_role_duplicate` refusal; a different
+  level used to return `*_energy_level_ambiguous` and now returns
+  `*_role_duplicate`. This is what two input-linked `sp`s already got.
 
 ## 0.64.0 - 2026-10-01
 
