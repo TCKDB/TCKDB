@@ -301,12 +301,23 @@ def test_the_merge_record_adds_no_column_to_level_of_theory():
     Consistency-check inputs (``consistency.core.snapshot``) and
     reproducibility context hashes (``reproducibility_rubric._mapped_columns``)
     snapshot every column of a level of theory. A new column would change
-    both for every row, re-keyed or not.
+    both for every row, re-keyed or not, unless it is listed in
+    ``snapshot_defaults.UNCHANGED_DEFAULTS`` (the digest then ignores it while
+    it holds the value every older row had). ``core_treatment`` (ADR 0021) is
+    the one column added since, and is listed there.
     """
     from app.db.models.level_of_theory import LevelOfTheory
+    from app.services.snapshot_defaults import UNCHANGED_DEFAULTS, is_unchanged_default
 
-    assert {c.key for c in LevelOfTheory.__table__.columns} == {
+    columns = {c.key for c in LevelOfTheory.__table__.columns}
+    assert columns == {
         "id", "method", "basis", "aux_basis", "cabs_basis", "dispersion",
-        "solvent", "solvent_model", "keywords", "spin_treatment", "lot_hash",
-        "created_at", "public_ref",
+        "solvent", "solvent_model", "keywords", "spin_treatment", "core_treatment",
+        "lot_hash", "created_at", "public_ref",
     }
+    assert ("level_of_theory", "core_treatment") in UNCHANGED_DEFAULTS
+    # A level that does not state it digests as it did before the column; one that
+    # states it digests differently, as its identity does.
+    assert is_unchanged_default("level_of_theory", "core_treatment", None)
+    assert not is_unchanged_default("level_of_theory", "core_treatment", "frozen_core")
+    assert not is_unchanged_default("level_of_theory", "core_treatment", "all_electron")

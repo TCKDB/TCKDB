@@ -235,6 +235,11 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     assert before[ids["gaussian"]][0] in completed.stdout
 
     # The upload path now finds the existing rows under any spelling.
+    # The resolver is application code and reads the current ``level_of_theory``
+    # columns, which ``e5b2d8a4c613`` extended; bring the scratch database to the
+    # head schema before asking it a question (the revision under test has
+    # already been applied and checked above).
+    harness.run("upgrade", "head")
     with Session(harness.engine) as session:
         for spelling, key in (
             ("Def2TZVP", "psi4"),
