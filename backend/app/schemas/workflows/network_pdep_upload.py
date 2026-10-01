@@ -87,7 +87,10 @@ from tckdb_schemas.stationary_point import (
     evaluate_species_entry_frequency,
     raise_for_blocking_findings,
 )
-from tckdb_schemas.workflows.computed_species_upload import StatmechInBundle
+from tckdb_schemas.workflows.computed_species_upload import (
+    StatmechInBundle,
+    require_opt_primary_unless_monatomic,
+)
 
 from app.schemas.utils import normalize_optional_text, normalize_required_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
@@ -104,7 +107,8 @@ class ConformerIn(SchemaBase):
     :param key: Local key for this conformer.
     :param geometry: Geometry payload with a reusable key.
     :param calculation: The optimization calculation that produced this conformer.
-        Must have ``type == "opt"``.
+        Must have ``type == "opt"``, except for a one-atom geometry, whose
+        primary may be its ``sp`` (#615).
     :param scientific_origin: Scientific origin for the conformer observation.
     :param label: Optional user hint carried with the upload; basin dedupe still
         happens at the conformer-group layer.
@@ -112,6 +116,19 @@ class ConformerIn(SchemaBase):
 
     Each payload item creates one new ``conformer_observation`` row. Matching an
     existing basin reuses the ``conformer_group`` only.
+
+    A species of two or more atoms sends the optimisation that produced the
+    geometry as ``calculation``, with ``type: "opt"``. A single atom has no
+    geometry to optimise: send the single point that ran, once, as
+    ``calculation`` with ``type: "sp"`` and ``sp_electronic_energy_hartree``,
+    with the atom's one-atom XYZ as ``geometry``. Do not relabel it as an
+    ``opt``, and do not send a second copy of the same log and energy. Link the
+    atom's statmech source calculations to that ``sp`` with role ``sp``, and
+    name it in the solve's ``source_calculations`` and ``state_energies``; an
+    atom has no ``opt`` or ``freq`` to link. A ``sp`` primary on a geometry of
+    two or more atoms, a geometry that cannot be counted, or a primary of any
+    type other than ``opt`` or ``sp`` is refused. A relabelled ``opt`` on an
+    atom is still accepted.
     """
 
     key: str = Field(min_length=1)
@@ -129,11 +146,21 @@ class ConformerIn(SchemaBase):
 
     @model_validator(mode="after")
     def validate_primary_calc_is_opt(self) -> Self:
-        if self.calculation.type != CalculationType.opt:
-            raise ValueError(
-                f"Conformer '{self.key}' primary calculation must be type 'opt', "
-                f"got '{self.calculation.type.value}'."
-            )
+        """Send an ``opt`` as a conformer's ``calculation``; a single atom sends its ``sp``.
+
+        The same rule as the computed-species and computed-reaction bundles
+        (#610, #615), taken from the one helper they share: an atom has no
+        geometry to optimise, so its honest primary is the single point that
+        ran, once, with the atom's one-atom XYZ as the conformer geometry. An
+        ``sp`` on two or more atoms, an uncountable geometry, or any type other
+        than ``opt``/``sp`` is refused. A relabelled ``opt`` on an atom is still
+        accepted.
+        """
+        require_opt_primary_unless_monatomic(
+            self.calculation.type,
+            self.geometry.xyz_text,
+            subject=f"Conformer '{self.key}' primary calculation type",
+        )
         return self
 
 

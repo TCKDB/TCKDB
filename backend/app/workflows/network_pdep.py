@@ -303,7 +303,11 @@ def persist_network_pdep_upload(
             geometry = resolve_geometry_payload(session, geom_payload)
             geometry_key_to_id[conf.geometry.key] = geometry.id
 
-            # Create opt calculation
+            # Create the conformer's primary calculation: an opt, or, for a
+            # one-atom geometry, the atom's sp (#615). Unlike the two other
+            # bundle routes, this seam links the conformer geometry as the
+            # calculation's final output for any type, so an atom's sp
+            # primary carries its geometry with no extra flag.
             calculation = _persist_calculation(
                 session,
                 conf.calculation,
