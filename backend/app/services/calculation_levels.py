@@ -405,7 +405,11 @@ def assert_role_consistency(
     if not opts:
         sps_by_geometry: dict[int, list[Calculation]] = {}
         for sp in sps:
-            for geometry_id in {row.geometry_id for row in sp.input_geometries}:
+            # The geometry an sp ran on: its input link, else (the network
+            # route links a geometry as a calculation's final output only)
+            # its output link.
+            links = sp.input_geometries or sp.output_geometries
+            for geometry_id in {row.geometry_id for row in links}:
                 sps_by_geometry.setdefault(geometry_id, []).append(sp)
         for claimants in sps_by_geometry.values():
             if len(claimants) > 1:
