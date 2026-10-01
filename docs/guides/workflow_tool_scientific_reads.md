@@ -395,8 +395,10 @@ Each record carries:
 - `review` — direct review badge for the thermo record
 
 `collapse="first"` returns at most one record using TCKDB's documented
-deterministic backend ordering. The client does not define "best
-thermo" — it only returns what the backend ranked first.
+deterministic backend ordering: best review status, then newest, then
+highest id. That is the same order the export uses. The client does not
+define "best thermo" — it only returns what the backend ranked first.
+`temperature_coverage` and `evidence_completeness` are displayed, not ranked.
 
 ## Reaction lookup (discovery-only)
 
@@ -489,7 +491,8 @@ Each record carries:
   kinetics* below)
 
 Temperature coverage, review rank, evidence completeness, and
-tie-breaking are all computed by TCKDB. The client only serializes the
+tie-breaking are all computed by TCKDB (for thermo only review rank and
+recency order the records; the other two are displayed). The client only serializes the
 request and returns the response — it never re-ranks records on the
 client side.
 
@@ -624,7 +627,8 @@ Important rules:
   client-supplied sort value with 422 (`client_sort_not_supported`).
 - **`collapse="first"` is not a "best" selector.** It returns the first
   record under TCKDB's documented deterministic backend ordering. The
-  ordering rules are spelled out in the spec (e.g. for kinetics, the
+  ordering rules are spelled out in the spec (for thermo: review rank, then
+  `created_at`, then `id`, matching the export; for kinetics, the
   D9 chain orders by temperature coverage first, then extrapolation
   distance, then review rank, then evidence completeness, then
   `created_at`, then `id`).
@@ -665,7 +669,9 @@ present. They must not synthesize TS links from non-TS-backed records.
 And they should interpret the `evidence_completeness` checklist together
 with `scientific_origin`: a low score on a non-TS-backed record means
 the *computational* checklist does not apply, not that the record is
-invalid.
+invalid. The same holds for experimental thermo: its checklist score is
+low by construction, so thermo ordering ignores it (review status, then
+newest).
 
 ## Handling empty results
 

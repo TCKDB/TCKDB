@@ -109,7 +109,7 @@ single record `collapse=first` returns — it never reorders the full
 
 | Policy | Selects |
 |--------|---------|
-| `default` | the endpoint's standard ranking — for thermo: temperature coverage → extrapolation distance → review rank → evidence completeness → recency → id; for statmech/transport: review rank → recency → id |
+| `default` | the endpoint's standard ranking — for thermo, statmech and transport: review rank → recency → id (thermo's temperature coverage and evidence score are displayed, not ranked; #648) |
 | `latest` | the most recently created candidate (recency → id) |
 | `most_reviewed` | best review status first, then recency → id |
 

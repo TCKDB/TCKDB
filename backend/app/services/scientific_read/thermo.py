@@ -45,7 +45,6 @@ from app.db.models.thermo import (
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     CalculationEvidenceSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
@@ -174,8 +173,7 @@ _TRUST_EAGER_LOADS = (
 THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 _DEFAULT_SORT_ECHO = (
-    "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
-    "evidence_completeness,created_at,id"
+    "review_rank,created_at,id"
 )
 
 # Priority order per Phase 2.3 spec: sp → composite → freq → opt → any.
@@ -561,21 +559,32 @@ def get_species_thermo(
 
     summary = review_summary(badges[t.id] for t, _ in classified)
 
-    # L3 thermo sort.
+    # L3 thermo sort (#648): review status, then newest -- the same key the
+    # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
+    # the read and the export cannot pick different "best" records.
+    #
+    # Deliberately NOT in the key:
+    #   * ``evidence_completeness.score``: six of its eight predicates are
+    #     calculation / statmech traceability, so an experimental record can
+    #     score at most 2/8. It stays a displayed field, not a ranking input.
+    #   * temperature coverage: it is derived from T bounds only, but a scalar
+    #     (e.g. experimental 298 K) record carries no range and so counts as
+    #     "not covering" whenever a bound is requested, which pushes it below
+    #     every fitted record regardless of review status. The export has no
+    #     requested range, so keeping it would also re-open read/export drift.
+    #     Coverage is still returned per record; use the temperature filters
+    #     and ``collapse=all`` to inspect it.
     created_at = {t.id: t.created_at for t, _ in classified}
+    review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
-    def sort_key(rec: ThermoRecord) -> tuple:
-        cov = rec.temperature_coverage
-        return (
-            -int(cov.covers_requested_range) if cov is not None else 0,
-            cov.extrapolation_distance_k if cov is not None else 0.0,
-            REVIEW_RANK[rec.review.status],
-            -rec.evidence_completeness.score,
-            -created_at[rec.thermo_id].timestamp(),
-            -rec.thermo_id,
+    records.sort(
+        key=lambda rec: simple_selection_sort_key(
+            rec.thermo_id,
+            policy=SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at,
         )
-
-    records.sort(key=sort_key)
+    )
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
@@ -583,7 +592,6 @@ def get_species_thermo(
     if collapse_first and request.selection_policy is not SelectionPolicy.default:
         # Named policy re-ranks the selected record only; the default candidate
         # order (collapse=all) is unaffected.
-        review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
         ordered_records = sorted(
             records,
             key=lambda rec: simple_selection_sort_key(
