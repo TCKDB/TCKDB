@@ -82,17 +82,24 @@ Coordinate payloads are fetched explicitly via
 ### `calculation`
 
 The hub table for any computed result — `sp`, `opt`, `freq`, `scan`,
-`irc`, `neb`, `composite`, … It records what was run, by which
+`irc`, `path_search`, `conf`. It records what was run, by which
 software at which level of theory, on which input geometry, with which
 parameters. Specific result rows (`calc_sp_result`, `calc_opt_result`,
 `calc_freq_result`, …) attach to the hub.
+
+A `composite` type (CBS-QB3, G4, W1BD and user-built extrapolations) is
+**planned, not built**: today a composite energy has no honest home and is
+deposited as an `sp` or `opt`. The decided model is in
+[ADR 0021](../adr/0021-composite-levels-of-theory-are-a-recipe-bound-to-a-level-not-a-weighted-level.md).
 
 ### Calculation dependencies
 
 Calculations are linked into a small **DAG** so a downstream result
 can point back at the upstream calculations it consumed. A frequency
 calculation cites the optimization that produced its geometry; a
-composite single-point cites the underlying sub-calculations.
+single-point cites the optimization whose geometry it ran on. (Once the
+planned `composite` type lands, a composite cites the single points it was
+assembled from; see ADR 0021.)
 Dependencies are opportunistic enrichment — they are not required for
 a calculation to be valid, but they are what makes a result
 **reproducible from inside the database**.

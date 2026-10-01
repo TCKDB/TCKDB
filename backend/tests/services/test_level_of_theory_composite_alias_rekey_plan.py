@@ -1,21 +1,22 @@
-"""Randomised lifecycles of ``d0a7c3b91e4f``'s hash assignment (#618, #602).
+"""Randomised lifecycles of ``b9e4c2a7d153``'s hash assignment (ADR 0021).
 
-The revision moves curated method aliases and dispersion/solvent/solvent-model
-case into the hash. Its holder choice follows ``c8424fe82997``'s exactly, and
-the two properties that revision's test pins hold here too, over rows that
-differ in the things *this* revision keys:
+The revision moves the named composite methods' alias spellings into the hash.
+Its holder choice follows ``d0a7c3b91e4f``'s exactly, and the two properties
+that revision's test pins hold here too, over rows that differ in the thing
+*this* revision keys:
 
 * **No crash.** After the merge script has merged duplicates (a merged row
   keeps its hash), the downgrade must never need a hash a merged row holds.
 * **Exact round trip.** Upgrade then downgrade restores every hash, with or
   without merges in between.
 
-The generator builds states as they exist at ``c8424fe82997``: in each group
-of rows sharing the pre-revision hash, one row may hold it and the others
-carry a stale hash; the merge script may have merged some of the others.
+The generator builds states as they exist at ``f3b8d5a1c702``: in each group of
+rows sharing the previous hash, one row may hold it and the others carry a
+stale hash; the merge script may have merged some of the others.
 
 This file also holds the revision's frozen rules to the application and its
-``assign_hashes`` to the parent revision's.
+``assign_hashes`` to the parent revision's, and its previous formula to
+``f3b8d5a1c702``'s (dispersion synonyms and folded dispersion kept).
 """
 
 from __future__ import annotations
@@ -32,20 +33,27 @@ from tckdb_schemas.fragments.refs import LevelOfTheoryRef
 
 from app.chemistry.basis_set_names import basis_identity_key
 from app.chemistry.lot_component_names import component_identity_key
-from app.chemistry.method_names import method_identity_key
+from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES, method_identity_key
 from app.services.calculation_resolution import _level_of_theory_hash
 from tests.services.test_basis_identity_key import _all_spellings
 from tests.services.test_lot_component_identity_key import _ALL as _COMPONENT_SPELLINGS
 from tests.services.test_method_identity_key import SAME_METHOD, _all_methods
 
 _VERSIONS = pathlib.Path(__file__).parents[2] / "alembic" / "versions"
-_MIGRATION = _VERSIONS / "d0a7c3b91e4f_key_level_of_theory_method_aliases.py"
-_PARENT = _VERSIONS / "c8424fe82997_key_level_of_theory_method_by_identity.py"
-_SUCCESSOR = _VERSIONS / "f3b8d5a1c702_key_level_of_theory_dispersion_synonyms.py"
+_MIGRATION = _VERSIONS / "b9e4c2a7d153_key_level_of_theory_composite_method_aliases.py"
+_PARENT = _VERSIONS / "f3b8d5a1c702_key_level_of_theory_dispersion_synonyms.py"
 
-_METHODS = ["wb97xd", "wb97x-d", "WB97XD", "m06-2x", "M062X", "b3lyp-d3(bj)", "b3lyp-gd3bj", "MP2", "mp2"]
-_DISPERSIONS = [None, "d3bj", "D3BJ"]
-_SOLVENTS = [None, "water", "Water"]
+_METHODS = [
+    "CBS-QB3", "cbsqb3", "CBSQB3", "cbs-qb3", "rocbsqb3", "ROCBS-QB3",
+    "G4(MP2)", "g4mp2", "G4MP2", "g3(mp2)", "G3MP2", "g3(mp2)b3", "g3mp2b3",
+    "W1BD", "W1-BD", "w1bd", "wb97xd", "wb97x-d", "MP2", "mp2",
+    "b3lyp", "B3LYP-GD3BJ", "b3lyp-d3(bj)", "b3lyp-d3bj", "cbsqb3-d3bj", "pbe0-d3zero",
+]
+#: Real dispersion spellings, so a partial re-freeze of #630's rules fails: the
+#: column synonyms, Gaussian's route form, the D3(BJ) form and zero-damping.
+_DISPERSIONS = [
+    None, "d3bj", "D3BJ", "GD3BJ", "EmpiricalDispersion=GD3BJ", "gd3", "D3(BJ)", "d30", "gd2",
+]
 
 
 def _load(name: str, path: pathlib.Path):
@@ -58,15 +66,15 @@ def _load(name: str, path: pathlib.Path):
 
 @pytest.fixture(scope="module")
 def mig():
-    return _load("_mig_d0a7c3b91e4f_plan", _MIGRATION)
+    return _load("_mig_b9e4c2a7d153_plan", _MIGRATION)
 
 
 @pytest.fixture(scope="module")
 def parent():
-    return _load("_mig_c8424fe82997_for_d0a7", _PARENT)
+    return _load("_mig_d0a7c3b91e4f_for_b9e4", _PARENT)
 
 
-def _row(row_id, method, dispersion, solvent, lot_hash, basis="def2-tzvp"):
+def _row(row_id, method, dispersion, lot_hash, basis="def2-tzvp"):
     return SimpleNamespace(
         _mapping={
             "id": row_id,
@@ -77,8 +85,8 @@ def _row(row_id, method, dispersion, solvent, lot_hash, basis="def2-tzvp"):
             "aux_basis": None,
             "cabs_basis": None,
             "dispersion": dispersion,
-            "solvent": solvent,
-            "solvent_model": "smd" if solvent else None,
+            "solvent": None,
+            "solvent_model": None,
             "keywords": None,
             "spin_treatment": None,
         }
@@ -95,14 +103,8 @@ def _stale(row_id):
 
 
 @pytest.mark.parametrize("spelling", _all_methods())
-def test_frozen_method_rule_is_the_next_revisions_previous_rule(mig, spelling):
-    """Chain parity. ``f3b8d5a1c702`` and ``b9e4c2a7d153`` froze the method rule
-    again after this revision ran; neither added an alias before ADR 0021, so
-    the successor's rule *without composite aliases* is this revision's.
-    ``test_level_of_theory_composite_alias_rekey_plan.py`` holds the newest
-    revision to the application, so the chain reaches it."""
-    successor = _load("_mig_f3b8_for_d0a7_rule", _SUCCESSOR)
-    assert mig._method_identity_key(spelling) == successor._method_identity_key(spelling)
+def test_frozen_method_rule_matches_the_application(mig, spelling):
+    assert mig._method_identity_key(spelling) == method_identity_key(spelling)
 
 
 @pytest.mark.parametrize("spelling", [*_all_spellings()])
@@ -117,66 +119,81 @@ def test_frozen_component_rule_matches_the_application(mig, spelling):
     assert mig._component_identity_key(spelling) == component_identity_key(spelling)
 
 
-def test_the_frozen_alias_tables_are_the_application_table_as_this_revision_ran_it(mig):
-    """This revision ran the two #618 aliases; later ones belong to later revisions.
-
-    ``b9e4c2a7d153`` (ADR 0021) holds the full current table to the
-    application, so an alias added without a revision still fails there.
-    """
-    from app.chemistry.method_names import NAME_ALIASES, SUFFIX_RULES
-
-    application = {a.alias: a.canonical for a in NAME_ALIASES}
-    successor = _load("_mig_f3b8_for_d0a7_tables", _SUCCESSOR)
-    assert mig._NAME_ALIASES == successor._NAME_ALIASES  # chain parity
-    assert mig._NAME_ALIASES.items() <= application.items()
+def test_the_frozen_alias_tables_list_what_the_application_lists(mig):
+    """A curated alias added to the application without a revision would split
+    the deployed hashes from new uploads; this fails until a revision says so."""
+    assert mig._NAME_ALIASES == {a.alias: a.canonical for a in NAME_ALIASES}
     assert [(p.pattern, r) for p, r in mig._SUFFIX_RULES] == list(SUFFIX_RULES)
 
 
+def test_the_previous_alias_table_is_the_parent_revisions(mig, parent):
+    assert mig._PRIOR_NAME_ALIASES == parent._NAME_ALIASES
+    assert [(p.pattern, r) for p, r in mig._SUFFIX_RULES] == [
+        (p.pattern, r) for p, r in parent._SUFFIX_RULES
+    ]
+
+
+def test_the_frozen_dispersion_rules_are_the_parent_revisions_and_the_applications(mig, parent):
+    """Dropping #630 from the formula would silently revert it; both must hold."""
+    from app.chemistry.dispersion_names import DISPERSION_RULES, FOLDED_PATTERN
+
+    assert [(p.pattern, r) for p, r in mig._DISPERSION_RULES] == [
+        (p.pattern, r) for p, r in parent._DISPERSION_RULES
+    ]
+    assert [(p.pattern, r) for p, r in mig._DISPERSION_RULES] == list(DISPERSION_RULES)
+    assert mig._FOLDED_PATTERN.pattern == parent._FOLDED_PATTERN.pattern == FOLDED_PATTERN
+
+
 @pytest.mark.parametrize(
-    ("method", "dispersion", "solvent"),
-    [
-        (m, d, s)
-        for m in _all_methods()[:40]
-        for d, s in ((None, None), ("D3BJ", "Water"), ("gd3bj", None))
-    ],
+    ("method", "dispersion"),
+    [(m, d) for m in _all_methods() for d in _DISPERSIONS],
 )
-def test_frozen_hash_is_what_the_next_revision_downgrades_to(mig, method, dispersion, solvent):
-    """This revision's formula is no longer the application's (#630 moved the
-    dispersion column and a folded dispersion into the key), so the frozen
-    formula is held to the revision that replaced it, whose downgrade target it
-    is. The application agrees with this revision only where #630 changes nothing:
-    ``test_frozen_hash_agrees_with_the_application_where_630_changes_nothing``."""
+def test_frozen_hash_matches_the_application(mig, method, dispersion):
     fields = {
         "method": method,
         "basis": "Def2TZVP",
         "aux_basis": "def2/J",
         "cabs_basis": None,
         "dispersion": dispersion,
-        "solvent": solvent,
-        "solvent_model": "SMD" if solvent else None,
+        "solvent": "Water" if dispersion else None,
+        "solvent_model": "SMD" if dispersion else None,
         "keywords": "Opt",
         "spin_treatment": "unrestricted",
-    }
-    row = SimpleNamespace(_mapping=fields)
-    successor = _load("_mig_f3b8_for_d0a7", _SUCCESSOR)
-    assert mig._lot_hash(row, aliased=True) == successor._lot_hash(row, split=False)
-
-
-def test_frozen_hash_agrees_with_the_application_where_630_changes_nothing(mig):
-    fields = {
-        "method": "WB97X-D", "basis": "Def2TZVP", "aux_basis": None, "cabs_basis": None,
-        "dispersion": "D3BJ", "solvent": "Water", "solvent_model": "SMD", "keywords": None,
-        "spin_treatment": None,
     }
     row = SimpleNamespace(_mapping=fields)
     assert mig._lot_hash(row, aliased=True) == _level_of_theory_hash(LevelOfTheoryRef(**fields))
 
 
-def test_frozen_pre_revision_formula_is_the_parent_revisions(mig, parent):
-    """The downgrade target is exactly what ``c8424fe82997`` left."""
-    for method in _all_methods():
-        row = _row(1, method, "D3BJ", "Water", None)
-        assert mig._lot_hash(row, aliased=False) == parent._lot_hash(row, keyed_method=True)
+@pytest.mark.parametrize(
+    ("method", "dispersion"), [(m, d) for m in _all_methods() for d in _DISPERSIONS]
+)
+def test_frozen_previous_formula_is_the_parent_revisions(mig, parent, method, dispersion):
+    """The downgrade target is exactly what ``f3b8d5a1c702`` left (#630 included)."""
+    row = _row(1, method, dispersion, None)
+    assert mig._lot_hash(row, aliased=False) == parent._lot_hash(row, split=True)
+
+
+def test_the_downgrade_target_keeps_630_in_it(mig):
+    """The reviewer's regression: re-pointing only ``down_revision`` re-hashed these
+    three back to their pre-#630 hashes. They are one level, before and after."""
+    a = _row(1, "B3LYP", "GD3BJ", None)
+    b = _row(2, "b3lyp", "EmpiricalDispersion=GD3BJ", None)
+    c = _row(3, "b3lyp-gd3bj", None, None)
+    for aliased in (True, False):
+        assert (
+            mig._lot_hash(a, aliased=aliased)
+            == mig._lot_hash(b, aliased=aliased)
+            == mig._lot_hash(c, aliased=aliased)
+        )
+
+
+def test_the_composite_aliases_are_what_changes_the_hash(mig):
+    for method in ("cbsqb3", "G4(MP2)", "g3(mp2)b3", "rocbsqb3", "cbs4m", "cbsapno", "g3(mp2)"):
+        row = _row(1, method, None, None)
+        assert mig._lot_hash(row, aliased=True) != mig._lot_hash(row, aliased=False), method
+    for method in ("cbs-qb3", "g4mp2", "W1-BD", "w1bd", "cbs-qb3-paraskevas", "wb97x-d", "b3lyp"):
+        row = _row(1, method, None, None)
+        assert mig._lot_hash(row, aliased=True) == mig._lot_hash(row, aliased=False), method
 
 
 def test_rule_three_smallest_unmerged_id_takes_the_key_when_nobody_holds_it(mig):
@@ -188,13 +205,13 @@ def test_rule_three_smallest_unmerged_id_takes_the_key_when_nobody_holds_it(mig)
     def prior(r):
         return mig._lot_hash(r, aliased=False)
 
-    rows = [_row(9, "wb97x-d", None, None, _stale(9)), _row(4, "WB97XD", None, None, _stale(4))]
+    rows = [_row(9, "cbsqb3", None, _stale(9)), _row(4, "CBS-QB3", None, _stale(4))]
     updates, groups, blocked = mig.assign_hashes(rows, key, prior, set())
     assert updates == {4: key(rows[1])}
     assert [(h._mapping["id"], [m._mapping["id"] for m in o]) for h, o in groups] == [(4, [9])]
     assert blocked == []
     # A merged smaller id is skipped: the next smallest unmerged row takes it.
-    rows = [_row(2, "wb97x-d", None, None, _stale(2)), *rows]
+    rows = [_row(2, "cbsqb3", None, _stale(2)), *rows]
     updates, _groups, _blocked = mig.assign_hashes(rows, key, prior, {2})
     assert list(updates) == [4]
 
@@ -202,7 +219,7 @@ def test_rule_three_smallest_unmerged_id_takes_the_key_when_nobody_holds_it(mig)
 @pytest.mark.parametrize("holder_probability", [1.0, 0.7])
 def test_assign_hashes_is_the_parent_revisions(mig, parent, holder_probability):
     """At 0.7 some groups have no holder, so the smallest-id fallback is reached."""
-    rng = random.Random(618)
+    rng = random.Random(2021)
     fallbacks = 0
     for _ in range(300):
         rows, merged = _parent_state(mig, rng, holder_probability)
@@ -236,11 +253,13 @@ def test_assign_hashes_is_the_parent_revisions(mig, parent, holder_probability):
 
 
 def _parent_state(mig, rng, holder_probability):
-    """Rows and merged ids as they can exist at ``c8424fe82997``."""
-    combos = [(m, d, s) for m in _METHODS for d in _DISPERSIONS for s in _SOLVENTS]
+    """Rows and merged ids as they can exist at ``f3b8d5a1c702``."""
+    # A few methods per state, so spellings of one recipe meet in a state often.
+    methods = rng.sample(_METHODS, k=4)
+    combos = [(m, d) for m in methods for d in _DISPERSIONS]
     picked = rng.sample(combos, k=rng.randint(2, 10))
     ids = rng.sample(range(1, 40), k=len(picked))
-    rows = [_row(i, m, d, s, None) for i, (m, d, s) in zip(ids, picked, strict=True)]
+    rows = [_row(i, m, d, None) for i, (m, d) in zip(ids, picked, strict=True)]
     by_prior = defaultdict(list)
     for row in rows:
         by_prior[mig._lot_hash(row, aliased=False)].append(row)
@@ -273,7 +292,7 @@ def _unique(rows):
 
 @pytest.mark.parametrize("holder_probability", [1.0, 0.7])
 def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probability):
-    rng = random.Random(618)
+    rng = random.Random(2021)
     with_merges = without_merges = rekeyed = blocked_total = down_blocked = 0
     joined_groups = 0
     for _ in range(4000):
@@ -310,7 +329,7 @@ def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probab
         if holder_probability == 1.0:
             assert _snapshot(rows) == original, "inexact round trip"
     # Not vacuous: the generator reaches the shapes the properties are about.
-    assert rekeyed > 2000
+    assert rekeyed > 1000
     assert joined_groups > 1000
     assert with_merges > 500
     assert without_merges > 500
@@ -318,9 +337,9 @@ def test_random_lifecycles_never_crash_and_round_trip_exactly(mig, holder_probab
     assert down_blocked > 0
 
 
-def test_the_generator_makes_alias_and_case_duplicates(mig):
-    """The seeds the lifecycle draws from must contain each kind of duplicate."""
-    kinds = set()
+def test_the_generator_makes_composite_alias_duplicates(mig):
+    """The seeds the lifecycle draws from must contain each kind of alias duplicate."""
+    families = set()
     rng = random.Random(1)
     for _ in range(500):
         rows, _merged = _parent_state(mig, rng, 1.0)
@@ -328,29 +347,12 @@ def test_the_generator_makes_alias_and_case_duplicates(mig):
         for row in rows:
             by_key[mig._lot_hash(row, aliased=True)].append(row._mapping)
         for members in by_key.values():
-            if len(members) < 2:
-                continue
             if len({m["method"].lower() for m in members}) > 1:
-                kinds.add("method alias")
-            if len({m["dispersion"] for m in members}) > 1:
-                kinds.add("dispersion case")
-            if len({m["solvent"] for m in members}) > 1:
-                kinds.add("solvent case")
-    assert kinds == {"method alias", "dispersion case", "solvent case"}
+                families.add(mig._method_identity_key(members[0]["method"]))
+    assert {"cbs-qb3", "g4mp2", "g3mp2b3"} <= families
 
 
 def test_alias_spellings_of_the_table_are_joined_by_the_frozen_rule(mig):
-    successor = _load("_mig_f3b8_for_d0a7_same", _SUCCESSOR)
     for _method, spellings, key in SAME_METHOD:
         for _program, spelling in spellings:
-            frozen = mig._method_identity_key(spelling)
-            assert frozen == successor._method_identity_key(spelling)  # chain parity
-            # What this revision ran joined the #618 spellings and nothing newer.
-            if frozen != key:
-                assert method_identity_key(spelling) == key  # a later revision's alias
-                assert frozen == spelling.strip().lower()  # which it left alone
-
-
-def test_this_revision_did_not_join_the_composite_aliases(mig):
-    assert mig._method_identity_key("cbsqb3") == "cbsqb3"
-    assert mig._method_identity_key("G4(MP2)") == "g4(mp2)"
+            assert mig._method_identity_key(spelling) == key

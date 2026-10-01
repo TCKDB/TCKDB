@@ -683,6 +683,42 @@ hash exactly.
 
 ---
 
+## Composite-method aliases re-key (revision `b9e4c2a7d153`)
+
+`b9e4c2a7d153` (ADR 0021) adds the named composite methods' spellings to the
+curated method aliases and re-keys the rows that already exist. Data only, no
+DDL; the same in-place re-hash, holder choice and `public_ref`-untouched rules
+as `d0a7c3b91e4f`, and the same randomised lifecycle test.
+
+- **Aliases** (cited in `app/chemistry/method_names.py`): `cbsqb3`, `rocbsqb3`,
+  `cbs4m`, `cbsapno` are keyed as the hyphenated forms; `g4(mp2)`, `g3(mp2)`,
+  `g3(mp2)b3` as `g4mp2`, `g3mp2`, `g3mp2b3`.
+- **Kept apart on purpose:** `w1` / `w1u` / `w1bd` / `w1ro`, `cbs-qb3` /
+  `rocbs-qb3`, `w1-bd`, and the correction-table names (`cbs-qb3-paraskevas`,
+  `cbsqb32023`).
+
+**What the upgrade prints.** `level_of_theory composite-method alias re-key: N
+row(s) re-hashed, M duplicate group(s) left for
+scripts/ops/merge_duplicate_levels_of_theory.py.`, one line per duplicate group
+(holder and other spellings by `public_ref`), and a `NOT re-hashed` line for any
+holder whose target a merged row already holds (expect none).
+
+**Deploy steps.**
+
+1. `pg_dump`, then `alembic upgrade head`. Note the printed groups. A database
+   with no row spelled with one of the aliases prints `0 row(s) re-hashed, 0
+   duplicate group(s)` (the Pi held none when this was written).
+2. If groups were printed: merge script dry run, read every group and every
+   `BLOCKED` reason, then `--commit --i-know-this-is-deployed`.
+3. Anything holding an old `lot_hash` for a re-keyed row (a client-side replica,
+   a saved query, an ML dataset export keyed on `lot_hash`) stops matching for
+   it. **The ARC adapter's test replica of the hash
+   (`tests/_backend_level_rules.py`) must adopt the new aliases** in step with
+   this deploy.
+4. No new environment variable. Downgrade restores every hash exactly.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

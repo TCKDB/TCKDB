@@ -155,6 +155,7 @@ class RejectionCode(str, Enum):
     KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
     LAST_ADMIN_DEMOTION = "last_admin_demotion"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
+    LEVEL_OF_THEORY_METHOD_IS_COMPOUND = "level_of_theory_method_is_compound"
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
@@ -357,6 +358,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
         RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
+        RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND,
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
         RejectionCode.MICRO_REACTION_KEY_UNDECLARED,
@@ -584,6 +586,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.LAST_ADMIN_DEMOTION: frozenset({409}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.LEVEL_OF_THEORY_METHOD_IS_COMPOUND: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),

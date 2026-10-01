@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 37 | `backend/app/services/public_refs.py` |
 | Trust check names | 145 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 213 | `backend/app/api/code_catalogue.py` |
-| **total** | **502** | |
+| Refusal codes a caller can receive | 214 | `backend/app/api/code_catalogue.py` |
+| **total** | **503** | |
 
 ## How a record is named
 
@@ -708,7 +708,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | --- | --- |
 | `bundle_too_large` | a relationship — read `context` |
 
-### HTTP 422 (160 codes)
+### HTTP 422 (161 codes)
 
 | Code | Names |
 | --- | --- |
@@ -768,6 +768,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `kinetics_interpretation_conformer_selection_owner_mismatch` | a relationship — read `context` |
 | `kinetics_interpretation_statmech_owner_mismatch` | a relationship — read `context` |
 | `level_of_theory_handle_conflict` | a relationship — read `context` |
+| `level_of_theory_method_is_compound` | a thing |
 | `limit_too_large` | a relationship — read `context` |
 | `lowest_energy_unavailable` | a thing |
 | `micro_reaction_key_undeclared` | a thing |
