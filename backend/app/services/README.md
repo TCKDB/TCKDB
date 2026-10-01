@@ -19,6 +19,8 @@ these; services never call routes. ~39 top-level modules + 4 subpackages.
 - **`*_extraction.py`** — best-effort hooks that re-read an uploaded ESS
   artifact and cross-check it against what the submitter declared:
   `sp_energy_extraction` (single-point energy),
+  `composite_energy_extraction` (a `composite` calculation's energy, read from
+  the Gaussian summary block; warns, never fills),
   `charge_multiplicity_extraction` (charge / spin multiplicity),
   `hessian_extraction`, `calculation_parameter_extraction`. All are
   banner-sniff dispatched per program, never fail an upload, and stay
