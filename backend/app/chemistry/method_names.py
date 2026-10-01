@@ -57,11 +57,13 @@ checked):
   ``wb97x-d3``, ``wb97x-d4`` and ``wb97x-d3bj``. A program-scoped entry needs
   the program in the hash first; a test refuses one until then.
 
-Method strings in which dispersion is folded in (``b3lyp-d3(bj)``) are not the
+Method strings in which dispersion is folded in (``b3lyp-d3(bj)``) are the
 same identity as a method with the dispersion in its own column
-(``b3lyp`` with ``dispersion=d3bj``): TCKDB keeps dispersion as a separate
-field, the hash keeps the two fields apart, and this table does not fold one
-into the other. It equates only spellings of the same folded name.
+(``b3lyp`` with ``dispersion=d3bj``), for the stems and suffixes listed in
+``dispersion_names.py`` (#630). That join is made by
+:func:`~app.chemistry.dispersion_names.level_identity_keys`, which needs both
+fields; this key is the method alone and equates only spellings of the same
+folded name.
 
 The table is deliberately small and stays out of anything it cannot cite:
 ``hf`` / ``rhf``, ``f12a`` / ``f12b``, ``b3lyp`` / ``ub3lyp``, ``b3lyp-d3``

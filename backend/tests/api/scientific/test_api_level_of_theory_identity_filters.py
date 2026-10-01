@@ -147,7 +147,8 @@ def test_method_alone_is_case_blind_but_still_exact_otherwise(client, seeded):
     ("stored_method", "stored_basis", "ask_method", "ask_basis", "why"),
     [
         ("wb97xd", "def2tzvp", "wB97X-D3", "def2tzvp", "Gaussian wB97XD is not ORCA wB97X-D3"),
-        ("b3lyp", "def2tzvp", "b3lyp-d3(bj)", "def2tzvp", "folded dispersion is not the bare functional"),
+        ("b3lyp", "def2tzvp", "b3lyp-d3(bj)", "def2tzvp", "a request that folds a dispersion in needs the level to have it"),
+        ("wb97x", "def2tzvp", "wb97x-d3bj", "def2tzvp", "wB97X-D3BJ is a refit functional, not wB97X plus D3BJ"),
         ("CCSD(T)-F12a", "cc-pVTZ", "CCSD(T)-F12b", "cc-pVTZ", "F12a is not F12b"),
         ("b3lyp", "6-31G*", "b3lyp", "6-31G**", "6-31G* is not 6-31G**"),
         ("b3lyp", "cc-pVTZ", "b3lyp", "aug-cc-pVTZ", "aug- prefix"),
@@ -183,6 +184,8 @@ def test_the_seeded_fixture_is_not_empty(db_session):
 SAME_COMPONENT = [
     ("dispersion", "GD3BJ", "gd3bj"),
     ("dispersion", "d3bj", "D3BJ"),
+    ("dispersion", "EmpiricalDispersion=GD3BJ", "d3bj"),
+    ("dispersion", "gd3bj", "D3(BJ)"),
     ("solvent", "Water", "water"),
     ("solvent", "acetonitrile", "ACETONITRILE"),
 ]
@@ -219,6 +222,40 @@ def test_lot_search_filters_dispersion_and_solvent_by_key(client, db_session, co
     lots = [r["level_of_theory"] for r in resp.json()["records"]]
     assert [lot["level_of_theory_ref"] for lot in lots] == [component["lot"].public_ref]
     assert lots[0][component["field"]] == component["stored"]
+
+
+def _search_refs(client, query: str) -> list[str]:
+    resp = client.get(f"/api/v1/scientific/level-of-theories/search?{query}")
+    assert resp.status_code == 200, resp.text
+    return [r["level_of_theory"]["level_of_theory_ref"] for r in resp.json()["records"]]
+
+
+def test_folded_dispersion_and_column_dispersion_are_one_level_in_every_filter(
+    client, db_session
+):
+    """#630: ``b3lyp-d3bj`` is ``b3lyp`` + ``d3bj``, so each filter finds it by
+    either spelling, and the other levels stay out."""
+    folded = make_lot(db_session, method="b3lyp-d3bj", basis="def2tzvp")
+    bare = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    refit = make_lot(db_session, method="wb97x-d3bj", basis="def2tzvp")
+    species = make_species(db_session, smiles="C", inchi_key=next_inchi_key("IDF2"))
+    entry = make_species_entry(db_session, species)
+    for lot in (folded, bare, refit):
+        make_calculation(
+            db_session, type=CalculationType.sp, species_entry_id=entry.id, lot_id=lot.id
+        )
+
+    # The request folds the dispersion in: the bare functional is excluded.
+    assert _search_refs(client, "method=b3lyp-d3%28bj%29") == [folded.public_ref]
+    # The dispersion filter sees the folded dispersion.
+    assert _search_refs(client, "dispersion=GD3BJ") == [folded.public_ref]
+    # Method alone is the method component: both b3lyp levels.
+    assert sorted(_search_refs(client, "method=B3LYP")) == sorted(
+        [folded.public_ref, bare.public_ref]
+    )
+    # A refit functional is not wb97x plus a dispersion.
+    assert _search_refs(client, "method=wb97x&dispersion=d3bj") == []
+    assert _search_refs(client, "method=wb97x-d3bj") == [refit.public_ref]
 
 
 def test_a_solvent_synonym_does_not_match(client, db_session):

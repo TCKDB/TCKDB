@@ -1,30 +1,31 @@
-"""Disposable-database contract for ``d0a7c3b91e4f`` (#618, #602).
+"""Disposable-database contract for ``f3b8d5a1c702`` (#630).
 
-The revision re-keys ``level_of_theory.lot_hash`` so curated method aliases
-and dispersion / solvent / solvent-model case hash by identity key. Seeded at
-its parent (``c8424fe82997``) with rows spelled the ways producers spell them:
+The revision re-keys ``level_of_theory.lot_hash`` so dispersion-column synonyms
+and a dispersion folded into the method hash by identity key. Seeded at its
+parent (``d0a7c3b91e4f``) with rows spelled the ways producers spell them:
 
 =====================  =====================================================
 seed row               what it pins
 =====================  =====================================================
-``wb97xd``             the ARC / Gaussian spelling; already the key, holds it
-``wb97x_d``            the second ARC corpus (#618); older than ``wb97xd``,
-                       keeps its old hash, and is a duplicate group
-``m062x_stale`` /      ``M06-2X`` and ``m06-2x`` were one level at the parent
-``m062x_holder``       (case), and neither holds ``m062x``: the row that held
-                       the parent's key takes it, although its id is larger
-``alias`` /            ``M06-2X`` merged into ``m06-2x`` by the parent's merge
-``alias_holder``       script: the alias has the smaller id and must NOT take
-                       the key
-``d3bj_upper`` /       #602: dispersion case; the row already holding the key
-``d3bj_lower``         keeps it
-``water_upper`` /      #602: solvent and solvent-model case; neither holds
-``water_lower``        the key
-``orca_d3``            ORCA ``wB97X-D3``: never joined to ``wb97xd``
-``folded_a`` /         ``b3lyp-d3(bj)`` and ``b3lyp-gd3bj``: one folded name
-``folded_b``
-``column``             ``b3lyp`` with ``dispersion=d3bj``: not the folded name
-``kw_a`` / ``kw_b``    ``keywords`` stay verbatim: two levels of theory
+``route``,             ``b3lyp`` with ``EmpiricalDispersion=GD3BJ`` and with
+``gd3bj``,             ``gd3bj`` (ARC's Gaussian route), and ``b3lyp-d3(bj)``
+``folded``             folded in: three older spellings of one level
+``column``             ``b3lyp`` + ``d3bj``: already the key form, holds it
+                       although its id is the largest
+``p_a`` / ``p_h`` /    ``pbe`` + ``gd3bj`` (a stale duplicate of ``p_h`` at the
+``p_b``                parent), ``pbe`` + ``GD3BJ`` and ``pbe-d3bj``: nobody
+                       holds the key; of the rows that held their previous
+                       formula's hash the smallest id takes it, so a stale
+                       smaller id does not
+``alias`` /            ``b3lyp-d3bj`` merged into a holder by an earlier merge
+``alias_holder``       script run: the alias has the smaller id and must NOT
+                       take the key
+``zero_a`` /           ``b3lyp`` + ``gd3`` and ``b3lyp-d3zero``: zero damping
+``zero_b``
+``bare_d3``            ``b3lyp`` + ``d3``: never joined
+``refit`` /            ``wb97x-d3bj`` (a refit functional) beside ``wb97x``
+``wb97x_col``          + ``d3bj``: never joined
+``contradict``         ``b3lyp-d3bj`` with ``dispersion=d3zero``: never split
 =====================  =====================================================
 
 Every row keeps its ``public_ref`` and its verbatim names; no calculation
@@ -53,34 +54,31 @@ from app.services.public_refs import make_content_ref
 from tests.db._migration_chain import revision_under_test
 from tests.db.test_level_of_theory_basis_identity_migration import _Harness
 
-_MIGRATION = revision_under_test("d0a7c3b91e4f")
+_MIGRATION = revision_under_test("f3b8d5a1c702")
 _MIGRATION_FILE = next(
-    (Path(__file__).resolve().parents[2] / "alembic" / "versions").glob("d0a7c3b91e4f_*.py")
+    (Path(__file__).resolve().parents[2] / "alembic" / "versions").glob("f3b8d5a1c702_*.py")
 )
 
 _BASIS = "def2-tzvp"
 
-#: key -> fields of the row. ``hash`` says how the parent left its hash:
-#: ``"prior"`` = it holds the parent's key; ``"stale"`` = it was a duplicate
-#: the parent left un-re-hashed.
+#: Insertion order is id order. ``hash``: ``"prior"`` = it holds the parent's
+#: key; ``"stale"`` = it was a duplicate the parent left un-re-hashed.
 _SEED: dict[str, dict] = {
-    # The older spelling is a duplicate; the newer one already holds the key.
-    "wb97x_d": {"method": "wb97x-d", "hash": "prior"},
-    "wb97xd": {"method": "wb97xd", "hash": "prior"},
-    "m062x_stale": {"method": "M06-2X", "hash": "stale"},
-    "m062x_holder": {"method": "m06-2x", "hash": "prior"},
-    "alias": {"method": "M06-2X", "basis": "def2-svp", "hash": "stale"},
-    "alias_holder": {"method": "m06-2x", "basis": "def2-svp", "hash": "prior"},
-    "d3bj_upper": {"method": "b3lyp", "dispersion": "D3BJ", "hash": "prior"},
-    "d3bj_lower": {"method": "b3lyp", "dispersion": "d3bj", "hash": "prior"},
-    "water_upper": {"method": "b3lyp", "solvent": "Water", "solvent_model": "SMD", "hash": "prior"},
-    "water_lower": {"method": "b3lyp", "solvent": "WATER", "solvent_model": "Smd", "hash": "prior"},
-    "orca_d3": {"method": "wB97X-D3", "hash": "prior"},
-    "folded_a": {"method": "b3lyp-d3(bj)", "hash": "prior"},
-    "folded_b": {"method": "b3lyp-gd3bj", "hash": "prior"},
-    "column": {"method": "b3lyp", "dispersion": "d3bj", "basis": "cc-pvdz", "hash": "prior"},
-    "kw_a": {"method": "hf", "keywords": "Opt", "hash": "prior"},
-    "kw_b": {"method": "hf", "keywords": "opt", "hash": "prior"},
+    "route": {"method": "b3lyp", "dispersion": "EmpiricalDispersion=GD3BJ", "hash": "prior"},
+    "gd3bj": {"method": "b3lyp", "dispersion": "gd3bj", "hash": "prior"},
+    "folded": {"method": "b3lyp-d3(bj)", "hash": "prior"},
+    "p_a": {"method": "pbe", "dispersion": "gd3bj", "hash": "stale"},
+    "p_h": {"method": "pbe", "dispersion": "GD3BJ", "hash": "prior"},
+    "p_b": {"method": "pbe-d3bj", "hash": "prior"},
+    "alias": {"method": "b3lyp-d3bj", "basis": "def2-svp", "hash": "stale"},
+    "alias_holder": {"method": "b3lyp", "dispersion": "d3bj", "basis": "def2-svp", "hash": "prior"},
+    "zero_a": {"method": "b3lyp", "dispersion": "gd3", "hash": "prior"},
+    "zero_b": {"method": "b3lyp-d3zero", "hash": "prior"},
+    "bare_d3": {"method": "b3lyp", "dispersion": "d3", "hash": "prior"},
+    "refit": {"method": "wb97x-d3bj", "hash": "prior"},
+    "wb97x_col": {"method": "wb97x", "dispersion": "d3bj", "hash": "prior"},
+    "contradict": {"method": "b3lyp-d3bj", "dispersion": "d3zero", "hash": "prior"},
+    "column": {"method": "b3lyp", "dispersion": "d3bj", "hash": "prior"},
 }
 _DEFAULTS = {
     "basis": _BASIS, "aux_basis": None, "cabs_basis": None, "dispersion": None, "solvent": None,
@@ -93,7 +91,7 @@ def _fields(key: str) -> dict:
 
 
 def _mig():
-    spec = importlib.util.spec_from_file_location("_mig_d0a7_db", _MIGRATION_FILE)
+    spec = importlib.util.spec_from_file_location("_mig_f3b8_db", _MIGRATION_FILE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -101,7 +99,7 @@ def _mig():
 
 def _parent_hash(key: str) -> str:
     """The hash the parent revision gives this row (its own formula)."""
-    return _mig()._lot_hash(SimpleNamespace(_mapping=_fields(key)), aliased=False)
+    return _mig()._lot_hash(SimpleNamespace(_mapping=_fields(key)), split=False)
 
 
 def _stale(key: str) -> str:
@@ -113,13 +111,12 @@ def _start_hash(key: str) -> str:
 
 
 def _keyed_hash(key: str) -> str:
-    """This revision's own formula (frozen): the application's has since moved on (#630)."""
-    return _mig()._lot_hash(SimpleNamespace(_mapping=_fields(key)), aliased=True)
+    return _level_of_theory_hash(LevelOfTheoryRef(**_fields(key)))
 
 
 @pytest.fixture
 def harness():
-    created = _Harness("lot_alias_key")
+    created = _Harness("lot_disp_key")
     yield created
     created.close()
 
@@ -161,7 +158,7 @@ def _seed(conn) -> dict[str, int]:
             ),
             {"e": entry_id, "l": ids[key]},
         )
-    # The parent's merge: the alias is kept, resolving to its holder, and its
+    # An earlier merge: the alias is kept, resolving to its holder, and its
     # calculation moved to the holder first, as the script does.
     conn.execute(
         text("UPDATE calculation SET lot_id = :h WHERE lot_id = :a"),
@@ -202,7 +199,6 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
 
     assert set(after) == set(before)
     for row_id, row in before.items():
-        # Everything but the hash: ref and every verbatim name.
         assert (after[row_id][0], *after[row_id][2:]) == (row[0], *row[2:])
     assert _calc_lots(harness.engine) == calcs_before
 
@@ -212,63 +208,65 @@ def test_upgrade_rekeys_without_touching_refs_names_or_calculations(harness):
     def old(key):
         return before[ids[key]][1]
 
-    # The older spelling keeps its hash; the newer one already held the key.
-    assert ids["wb97x_d"] < ids["wb97xd"]
-    assert hash_of("wb97xd") == old("wb97xd") == _keyed_hash("wb97xd")
-    assert hash_of("wb97x_d") == old("wb97x_d") != _keyed_hash("wb97x_d")
-    assert _keyed_hash("wb97x_d") == _keyed_hash("wb97xd")
-    # Neither holds the key: the row that held the parent's key takes it,
-    # although its id is larger. The stale row keeps its hash.
-    assert ids["m062x_stale"] < ids["m062x_holder"]
-    assert hash_of("m062x_holder") == _keyed_hash("m062x_holder") != old("m062x_holder")
-    assert hash_of("m062x_stale") == old("m062x_stale")
+    # The four spellings of #630 are one key; the column-form row has the
+    # largest id yet already holds it, so it keeps it and the others do not move.
+    group = ("route", "gd3bj", "folded", "column")
+    assert len({_keyed_hash(k) for k in group}) == 1
+    assert max(ids[k] for k in group) == ids["column"]
+    assert hash_of("column") == old("column") == _keyed_hash("column")
+    for key in ("route", "gd3bj", "folded"):
+        assert hash_of(key) == old(key) != _keyed_hash(key)
+    # Nobody holds the key: p_h and p_b held their previous hash, the smaller id
+    # takes it; the stale smaller id p_a does not.
+    assert ids["p_a"] < ids["p_h"] < ids["p_b"]
+    assert hash_of("p_h") == _keyed_hash("p_h") != old("p_h")
+    assert hash_of("p_a") == old("p_a")
+    assert hash_of("p_b") == old("p_b") != _keyed_hash("p_b")
+    assert _keyed_hash("p_a") == _keyed_hash("p_h") == _keyed_hash("p_b")
     # The merged alias has the smaller id but is never the holder, never moves.
     assert ids["alias"] < ids["alias_holder"]
     assert hash_of("alias") == old("alias")
-    assert hash_of("alias_holder") == _keyed_hash("alias_holder")
-    # #602: dispersion case (the lower-case row already holds the key), and
-    # solvent case (both held their own parent hash; the smaller id takes it).
-    assert hash_of("d3bj_lower") == old("d3bj_lower") == _keyed_hash("d3bj_lower")
-    assert hash_of("d3bj_upper") == old("d3bj_upper")
-    assert ids["water_upper"] < ids["water_lower"]
-    assert hash_of("water_upper") == _keyed_hash("water_upper") != old("water_upper")
-    assert hash_of("water_lower") == old("water_lower")
-    # The folded dispersion name: both spellings share the key.
-    assert _keyed_hash("folded_a") == _keyed_hash("folded_b")
-    assert {hash_of("folded_a"), hash_of("folded_b")} >= {_keyed_hash("folded_a")}
-    # Never joined: ORCA wB97X-D3, the dispersion column, and verbatim keywords.
-    distinct = {
-        hash_of(k) for k in ("wb97xd", "orca_d3", "folded_a", "column", "kw_a", "kw_b")
-    }
-    assert len(distinct) == 6
-    assert _keyed_hash("orca_d3") != _keyed_hash("wb97xd")
-    assert _keyed_hash("column") != _keyed_hash("folded_a")
-    assert hash_of("kw_a") == old("kw_a") and hash_of("kw_b") == old("kw_b")
+    assert hash_of("alias_holder") == old("alias_holder") == _keyed_hash("alias_holder")
+    # Zero damping: gd3 and a folded d3zero are one level.
+    assert _keyed_hash("zero_a") == _keyed_hash("zero_b")
+    assert hash_of("zero_a") == _keyed_hash("zero_a")  # smallest id, nobody holds the key
+    assert hash_of("zero_b") == old("zero_b")
+    # Never joined.
+    keys = ("column", "zero_a", "bare_d3", "refit", "wb97x_col", "contradict")
+    assert len({hash_of(k) for k in keys}) == len(keys)
+    assert len({_keyed_hash(k) for k in keys}) == len(keys)
+    for key in ("bare_d3", "refit", "wb97x_col", "contradict"):
+        assert hash_of(key) == old(key)
 
     # The operator is told which groups are left for the merge script.
-    for pair in (
-        ("wb97xd", "wb97x_d"),
-        ("m062x_holder", "m062x_stale"),
-        ("d3bj_lower", "d3bj_upper"),
-        ("water_upper", "water_lower"),
+    for holder, dups in (
+        ("column", ("route", "gd3bj", "folded")),
+        ("p_h", ("p_a", "p_b")),
+        ("zero_a", ("zero_b",)),
     ):
-        holder_ref, dup_ref = before[ids[pair[0]]][0], before[ids[pair[1]]][0]
-        assert f"{holder_ref} holds the key; also spelled as {dup_ref}" in completed.stdout, pair
+        for dup in dups:
+            holder_ref, dup_ref = before[ids[holder]][0], before[ids[dup]][0]
+            assert f"{holder_ref} holds the key; also spelled as" in completed.stdout, holder
+            assert dup_ref in completed.stdout, dup
     assert before[ids["alias"]][0] not in completed.stdout
-    assert before[ids["orca_d3"]][0] not in completed.stdout
+    for key in ("refit", "wb97x_col", "bare_d3", "contradict"):
+        assert before[ids[key]][0] not in completed.stdout
     assert "duplicate group(s)" in completed.stdout
 
     # The upload path now finds the existing rows under every spelling.
     with Session(harness.engine) as session:
-        for method, basis, extra, key in (
-            ("wb97x-d", _BASIS, {}, "wb97xd"),
-            ("WB97XD", _BASIS, {}, "wb97xd"),
-            ("m062x", _BASIS, {}, "m062x_holder"),
-            ("b3lyp", _BASIS, {"dispersion": "d3BJ"}, "d3bj_lower"),
-            ("b3lyp", _BASIS, {"solvent": "WATER", "solvent_model": "Smd"}, "water_upper"),
+        for method, extra, key in (
+            ("b3lyp", {"dispersion": "d3bj"}, "column"),
+            ("b3lyp", {"dispersion": "EmpiricalDispersion=(GD3BJ)"}, "column"),
+            ("B3LYP-GD3BJ", {}, "column"),
+            ("pbe", {"dispersion": "D3(BJ)"}, "p_h"),
+            ("b3lyp", {"dispersion": "GD3"}, "zero_a"),
+            ("b3lyp-d3zero", {}, "zero_a"),
+            ("b3lyp", {"dispersion": "d3"}, "bare_d3"),
+            ("wb97x-d3(bj)", {}, "refit"),
         ):
             lot = resolve_level_of_theory_ref(
-                session, LevelOfTheoryRef(method=method, basis=basis, **extra)
+                session, LevelOfTheoryRef(method=method, basis=_BASIS, **extra)
             )
             assert lot.id == ids[key], (method, extra)
         session.rollback()
@@ -302,14 +300,16 @@ def test_upgrade_on_an_empty_table_is_a_no_op(harness):
 def test_rows_already_in_key_form_are_left_alone(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
-        for method, basis in (("wb97xd", _BASIS), ("m062x", _BASIS), ("b3lyp", "cc-pvdz")):
-            h = _level_of_theory_hash(LevelOfTheoryRef(method=method, basis=basis))
+        for method, dispersion in (("b3lyp", "d3bj"), ("b3lyp", None), ("wb97x-d3bj", None)):
+            h = _level_of_theory_hash(
+                LevelOfTheoryRef(method=method, basis=_BASIS, dispersion=dispersion)
+            )
             conn.execute(
                 text(
-                    "INSERT INTO level_of_theory (method, basis, lot_hash, public_ref) "
-                    "VALUES (:m, :b, :h, :r)"
+                    "INSERT INTO level_of_theory (method, basis, dispersion, lot_hash, public_ref) "
+                    "VALUES (:m, :b, :d, :h, :r)"
                 ),
-                {"m": method, "b": basis, "h": h, "r": make_content_ref("lot", h)},
+                {"m": method, "b": _BASIS, "d": dispersion, "h": h, "r": make_content_ref("lot", h)},
             )
     before = _snapshot(harness.engine)
     completed = harness.run("upgrade", _MIGRATION.revision)
@@ -320,10 +320,10 @@ def test_rows_already_in_key_form_are_left_alone(harness):
 def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
     """Run the merge script end to end, as the deploy steps say.
 
-    ``wb97x-d`` (older, carrying an approved calculation) is a duplicate of
-    ``wb97xd``: the script must refuse to move approved science and leave the
-    group. ``D3BJ`` / ``d3bj`` carries none: it merges. The downgrade then
-    succeeds and restores every hash.
+    The ``pbe`` group carries an approved calculation on its duplicate, so the
+    script must refuse to move it and leave the group. The ``b3lyp`` group
+    (the #630 four) carries none: the three older spellings merge into the
+    column-form holder. The downgrade then succeeds and restores every hash.
     """
     from datetime import datetime
 
@@ -334,21 +334,15 @@ def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         ids = _seed(conn)
-        # The folded rows are a duplicate group under the application's current
-        # formula (#630) that this revision does not make; they belong to
-        # f3b8d5a1c702 (tests/db/test_level_of_theory_dispersion_migration.py).
-        for key in ("folded_a", "folded_b"):
-            conn.execute(text("DELETE FROM calculation WHERE lot_id = :l"), {"l": ids[key]})
-            conn.execute(text("DELETE FROM level_of_theory WHERE id = :l"), {"l": ids[key]})
     with Session(harness.engine) as session:
-        curator = AppUser(username="alias-curator", role=AppUserRole.curator)
+        curator = AppUser(username="disp-curator", role=AppUserRole.curator)
         session.add(curator)
         session.flush()
         when = datetime(2026, 9, 1)
         session.add(
             RecordReview(
                 record_type=SubmissionRecordType.calculation,
-                record_id=ids["calc_wb97x_d"],
+                record_id=ids["calc_p_a"],
                 status=RecordReviewStatus.approved,
                 reviewed_by=curator.id,
                 reviewed_at=when,
@@ -375,15 +369,14 @@ def test_upgrade_merge_script_then_downgrade_succeeds_and_is_exact(harness):
                 text("SELECT merged_lot_id, into_lot_id FROM level_of_theory_merge")
             ).all()
         )
-    # Pre-existing merge, plus the unblocked groups. The approved calculation
-    # blocks wb97x-d; the kw_a / kw_b and orca_d3 rows were never a group.
-    assert (ids["alias"], ids["alias_holder"]) in pairs
-    assert (ids["d3bj_upper"], ids["d3bj_lower"]) in pairs
-    assert (ids["m062x_stale"], ids["m062x_holder"]) in pairs
-    assert (ids["water_lower"], ids["water_upper"]) in pairs
-    assert (ids["wb97x_d"], ids["wb97xd"]) not in pairs, merged.stdout[-3000:]
-    assert all(ids["orca_d3"] not in pair for pair in pairs)
-    assert all(ids["kw_a"] not in pair and ids["kw_b"] not in pair for pair in pairs)
+    assert (ids["alias"], ids["alias_holder"]) in pairs  # pre-existing
+    for dup in ("route", "gd3bj", "folded"):
+        assert (ids[dup], ids["column"]) in pairs, (dup, merged.stdout[-3000:])
+    assert (ids["zero_b"], ids["zero_a"]) in pairs
+    assert (ids["p_a"], ids["p_h"]) not in pairs, merged.stdout[-3000:]
+    assert (ids["p_b"], ids["p_h"]) not in pairs
+    for key in ("bare_d3", "refit", "wb97x_col", "contradict"):
+        assert all(ids[key] not in pair for pair in pairs), key
     assert "BLOCKED" in merged.stdout
 
     harness.run("downgrade", _MIGRATION.parent)

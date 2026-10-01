@@ -647,6 +647,42 @@ merged row already holds (expect none).
 
 ---
 
+## Dispersion-column synonyms and folded dispersion re-key (revision `f3b8d5a1c702`)
+
+`f3b8d5a1c702` (#630) closes the two splits `d0a7c3b91e4f` left. Data only, no
+DDL; same in-place re-hash, same holder choice (`d0a7c3b91e4f`'s three rules,
+"merged-row hashes occupied" included) and `public_ref`-untouched rules.
+
+- **Dispersion column synonyms** (`app/chemistry/dispersion_names.py`, every
+  entry cited, none program-scoped): `gd3bj` and `d3(bj)` key as `d3bj`, `gd3`
+  and `d30` as `d3zero`, `gd2` as `d2`, also wrapped as Gaussian's route writes them
+  (`EmpiricalDispersion=GD3BJ`, `=(GD3BJ)`, `(GD3BJ)`). Bare `d3` stays its own
+  key (ORCA `D3` is BJ-damped, Psi4 `-d3` is zero-damped).
+- **Folded dispersion**: `b3lyp-d3bj` and `b3lyp` + `d3bj` are one level. A
+  trailing `-d3bj` / `-d3zero` / `-d2` moves into the dispersion key, only off
+  an allow-listed stem (`b3lyp`, `pbe`, `tpss`, ... , `m06-2x`; never
+  `wb97x-d3bj`, `wb97m-d3bj`, `b97-d3bj` or the refit double hybrids `dsd-*`
+  and `pwpb95`, which are separate functionals), and not when the column states a different dispersion.
+
+**What the upgrade prints.** One summary line
+(`level_of_theory dispersion re-key: N row(s) re-hashed, M duplicate
+group(s) left for scripts/ops/merge_duplicate_levels_of_theory.py.`), then one
+line per duplicate group naming the holder and the other spellings by
+`public_ref`, and a `NOT re-hashed` line for any holder whose target hash a
+merged row already holds (expect none). Rows already stored as a column-form
+`b3lyp` + `d3bj` keep their hash and are usually the holder.
+
+**Deploy steps.** As for `d0a7c3b91e4f`: `pg_dump`, `alembic upgrade head`,
+note the printed groups, run the merge script dry run and read every group and
+`BLOCKED` reason, then `--commit --i-know-this-is-deployed`. No new environment
+variable. Anything holding an old `lot_hash` (ML dataset exports keyed on it,
+a saved query) stops matching for re-keyed rows. **The ARC adapter's test
+replica of the hash (`tests/_backend_level_rules.py` in tckdb-adapters) must
+adopt the dispersion rules** in step with this deploy. Downgrade restores every
+hash exactly.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:

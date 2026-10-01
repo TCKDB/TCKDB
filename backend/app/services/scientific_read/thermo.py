@@ -386,8 +386,8 @@ def get_species_thermo(
     )
 
     # The declared energy level (#619): the thermo's own stored declaration,
-    # else the statmech basis's, the same inheritance the derived levels
-    # above use. Bulk-loaded for the whole page.
+    # else its linked statmech's, the same inheritance the derived levels
+    # use (#636). Bulk-loaded for the whole page.
     statmech_declared_lot_ids = dict(
         session.execute(
             select(Statmech.id, Statmech.energy_level_of_theory_id).where(
@@ -479,9 +479,20 @@ def get_species_thermo(
             ),
             conformer_links=conformer_links,
         )
+        # Derived levels (#636): the record's own source calculations, then
+        # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
+        # Never the entry-wide fallback ``picked_statmech_id`` that provenance
+        # and evidence still use for display: it would report an unrelated
+        # statmech's levels for an unlinked (say experimental) thermo. An
+        # unlinked thermo with no source calculations has no levels (null).
+        own_statmech_sources = (
+            statmech_sources_by_id.get(t.statmech_id, [])
+            if t.statmech_id is not None
+            else []
+        )
         levels = _build_levels_thermo(
             sources=sources,
-            statmech_sources=record_statmech_sources,
+            statmech_sources=own_statmech_sources,
             calc_meta=calc_meta,
             calc_meta_by_lot_id=calc_meta_by_lot_id,
             freq_calc_ids=freq_calc_ids,

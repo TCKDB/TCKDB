@@ -9,7 +9,7 @@ rows of ``level_of_theory``.
 
 Every case asserts the exact key. The negative table pins what stays apart:
 synonyms need a curated table and are out of scope (``h2o`` is not ``water``,
-``d3(bj)`` is not ``d3bj`` in the dispersion column).
+``d3`` is not ``d3bj``). Dispersion synonyms are #630's, and tested there.
 """
 
 from __future__ import annotations
@@ -80,8 +80,8 @@ def test_none_and_blank_have_no_key():
 #: Different components. Synonyms are an alias table's job, not a case rule's.
 DIFFERENT = [
     ("dispersion", "d3", "d3bj", "zero vs BJ damping"),
-    ("dispersion", "d3bj", "d3(bj)", "synonym, not a case rule"),
-    ("dispersion", "gd3bj", "d3bj", "synonym, not a case rule"),
+    # Dispersion synonyms are joined by ``dispersion_identity_key`` (#630,
+    # ``tests/services/test_dispersion_identity_key.py``), not by this case rule.
     ("solvent", "water", "h2o", "synonym, not a case rule"),
     ("solvent", "water", "heavywater", "different solvent"),
     ("solvent_model", "smd", "pcm", "different model"),
