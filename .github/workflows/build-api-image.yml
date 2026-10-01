@@ -195,7 +195,11 @@ jobs:
       # start. An import check under emulation is cheap and catches what
       # actually differs between architectures: a dependency with no arm64
       # build, or a shared library that fails to load.
+      # A healthy run takes about 6 minutes. QEMU emulation has hung twice
+      # with no output; without a limit the job only fails at GitHub's
+      # 6-hour default. Fail fast and re-run instead.
       - name: Smoke test — arm64 imports under emulation
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           docker buildx build --platform linux/arm64 \
