@@ -4,7 +4,12 @@ The rule is ``require_opt_primary_unless_monatomic``, reached through the
 species conformer, the reaction conformer and the pressure-dependent network's
 conformer (#615). Every way it could be too wide
 is a case here: a geometry that cannot be counted, two atoms, and every
-calculation type other than ``opt`` and ``sp``.
+calculation type other than ``opt``, ``sp`` and ``composite``.
+
+``composite`` is the one deliberate third exception (ADR 0021): a program-run
+named method (CBS-QB3, G4, ...) optimises the geometry as the first step of its
+recipe, so it may be the conformer's primary for any geometry, provided it
+carries its ``composite_result`` (the pairing rule refuses it without one).
 """
 
 from __future__ import annotations
@@ -23,7 +28,7 @@ _LOT = {"method": "wb97xd", "basis": "def2tzvp"}
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 
 
-def _species_conformer(calc_type: str, xyz: str) -> ConformerInBundle:
+def _species_conformer(calc_type: str, xyz: str, **extra) -> ConformerInBundle:
     return ConformerInBundle.model_validate(
         {
             "key": "c0",
@@ -33,12 +38,13 @@ def _species_conformer(calc_type: str, xyz: str) -> ConformerInBundle:
                 "type": calc_type,
                 "level_of_theory": _LOT,
                 "software_release": _SOFTWARE,
+                **extra,
             },
         }
     )
 
 
-def _reaction_conformer(calc_type: str, xyz: str) -> ConformerIn:
+def _reaction_conformer(calc_type: str, xyz: str, **extra) -> ConformerIn:
     return ConformerIn.model_validate(
         {
             "key": "c0",
@@ -48,12 +54,13 @@ def _reaction_conformer(calc_type: str, xyz: str) -> ConformerIn:
                 "type": calc_type,
                 "level_of_theory": _LOT,
                 "software_release": _SOFTWARE,
+                **extra,
             },
         }
     )
 
 
-def _pdep_conformer(calc_type: str, xyz: str) -> PDepConformerIn:
+def _pdep_conformer(calc_type: str, xyz: str, **extra) -> PDepConformerIn:
     return PDepConformerIn.model_validate(
         {
             "key": "c0",
@@ -63,6 +70,7 @@ def _pdep_conformer(calc_type: str, xyz: str) -> PDepConformerIn:
                 "type": calc_type,
                 "level_of_theory": _LOT,
                 "software_release": _SOFTWARE,
+                **extra,
             },
         }
     )
@@ -73,7 +81,12 @@ _BUILDERS = pytest.mark.parametrize(
     [_species_conformer, _reaction_conformer, _pdep_conformer],
     ids=["species", "reaction", "pdep"],
 )
-_OTHER_TYPES = [t.value for t in CalculationType if t not in (CalculationType.opt, CalculationType.sp)]
+_OTHER_TYPES = [
+    t.value
+    for t in CalculationType
+    if t not in (CalculationType.opt, CalculationType.sp, CalculationType.composite)
+]
+_COMPOSITE_RESULT = {"composite_result": {"assembly": "program_run", "electronic_energy_hartree": -1.0}}
 
 
 @_BUILDERS
@@ -124,6 +137,24 @@ def test_no_other_type_is_ever_exempt(build, calc_type, xyz):
     with pytest.raises(ValidationError) as exc:
         build(calc_type, xyz)
     assert f"got '{calc_type}'" in str(exc.value)
+
+
+@_BUILDERS
+@pytest.mark.parametrize("xyz", [_ATOM, _H2], ids=["one-atom", "two-atoms"])
+def test_a_composite_primary_with_its_result_is_accepted_for_any_geometry(build, xyz):
+    build("composite", xyz, **_COMPOSITE_RESULT)
+
+
+@_BUILDERS
+@pytest.mark.parametrize("xyz", [_ATOM, _H2], ids=["one-atom", "two-atoms"])
+def test_a_composite_primary_without_its_result_is_refused_by_the_pairing_rule(build, xyz):
+    from tckdb_schemas.coded_error import CodedValidationError
+
+    with pytest.raises(ValidationError) as exc:
+        build("composite", xyz)
+    original = exc.value.errors()[0]["ctx"]["error"]
+    assert isinstance(original, CodedValidationError)
+    assert original.code == "composite_type_requires_composite_result"
 
 
 @pytest.mark.parametrize("calc_type", ["sp", "freq", "scan", "irc"])

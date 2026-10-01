@@ -7,9 +7,11 @@ Composite levels of theory, phase P3a (ADR 0021): a calculation of type
 Every payload accepted before is accepted unchanged; this release only adds.
 
 - **New calculation type `composite`, with a `composite_result` block.**
-  `type: "composite"` is accepted wherever a calculation is (the conformer
-  upload, the computed-species and computed-reaction bundles, the network
-  upload's conformers). It carries `composite_result`: `assembly`
+  `type: "composite"` is accepted on the conformer upload, the thermo and
+  statmech uploads' inline calculations, and the computed-species and
+  computed-reaction bundles (the shared bundle-local calculation shape that the
+  network upload also uses carries the block too, but that route has no test
+  for it yet). It carries `composite_result`: `assembly`
   (`program_run`, or `assembled`, which the server refuses until user-built
   schemes arrive), the optional energies `electronic_energy_hartree` (ZPE-free,
   every recipe term included), `e0_hartree` (0 K, including the recipe's scaled
