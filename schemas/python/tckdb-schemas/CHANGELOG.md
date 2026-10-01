@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.67.0 - 2026-10-01
+
+`level_of_theory.method` guards for named composite methods (ADR 0021). Every
+payload that was accepted and meant one method is unchanged.
+
+- **`//` is refused in `method`.** `LevelOfTheoryRef.method` containing `//`
+  (ARC's `energy//geometry` shorthand, `"ccsd(t)-f12/cc-pvtz-f12//b3lyp/def2tzvp"`)
+  is refused with code `level_of_theory_method_is_compound` and `context`
+  `{field: "method", value}`. It is two levels of theory, not one method: send
+  the single-point and the optimization levels as separate calculations, each
+  with its own level of theory. A single `/` is still accepted.
+- **Correction-table names warn.** A named composite method followed by a
+  correction-table label or a year (`cbs-qb3-paraskevas`, `cbsqb32023`) is
+  accepted with an upload warning `level_of_theory_method_names_correction_table`
+  at `...level_of_theory.method`. These names select Arkane AEC/BAC parameters,
+  not a method: the calculation that ran is CBS-QB3. The name is stored as sent,
+  as a separate level of theory from the method, and is never aliased. Send the
+  method and name the table on the energy correction scheme. A later release
+  will refuse these once the producers send the method.
+- **New helpers.** `collect_ref_warnings` walks a validated request and returns
+  the software-release version warnings and these method warnings together;
+  `collect_software_release_version_warnings` is unchanged.
+  `correction_table_method_stem` recognises the shape.
+
+Server side, in the same change: `cbsqb3`, `rocbsqb3`, `cbs4m` and `cbsapno`
+now key to the hyphenated spellings, and `g4(mp2)`, `g3(mp2)` and `g3(mp2)b3`
+to `g4mp2`, `g3mp2` and `g3mp2b3`, so a level of theory written either way is
+one row. `W1`, `W1U`, `W1BD` and `W1RO` stay four methods and `CBS-QB3` and
+`ROCBS-QB3` stay two. A producer that hashes level-of-theory identity locally
+must adopt the same aliases to agree with the server.
+
 ## 0.66.0 - 2026-10-01
 
 Frequency level on correction schemes (composite-levels plan P6). One optional

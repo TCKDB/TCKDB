@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.104.0 - 2026-10-01
+
+`RejectionCode` gains `level_of_theory_method_is_compound`, regenerated from the
+server's catalogue (ADR 0021, `tckdb-schemas` 0.67.0). A level of theory whose
+`method` contains `//` (`"x//y"`, an energy level and a geometry level written as
+one name) is now refused: send the single-point and the optimization levels as
+separate calculations, each with its own level of theory. Nothing else in the
+client changes.
+
 ## 0.103.0 - 2026-10-01
 
 `RejectionCode` gains `energy_correction_scheme_frequency_level_not_applicable`

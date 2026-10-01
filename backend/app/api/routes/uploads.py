@@ -24,7 +24,7 @@ from app.db.models.common import ScientificOriginKind, SubmissionKind
 from app.db.models.species import SpeciesEntry
 from app.importers.thermoml.archive import build_standalone_article
 from app.schemas.entities.calculation import CalculationUploadRef
-from app.schemas.fragments.refs import collect_software_release_version_warnings
+from app.schemas.fragments.refs import collect_ref_warnings
 from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.computed_reaction_upload import ComputedReactionUploadRequest
 
@@ -309,7 +309,7 @@ def upload_conformer(
         statmech=request.statmech,
         reference_xyz_text=request.geometry.xyz_text,
     )
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -384,7 +384,7 @@ def upload_reaction(
             ws = reconcile_species_entry(p.species_entry)
             for w in ws:
                 warnings.append(w.model_copy(update={"field": f"products[{i}].{w.field}"}))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -431,7 +431,7 @@ def upload_kinetics(
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     warnings.extend(collect_kinetics_provenance_warnings(request))
     warnings.extend(collect_kinetics_content_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -471,7 +471,7 @@ def upload_network(
 ):
     if (replay := idem.maybe_replay()) is not None:
         return replay
-    warnings = collect_software_release_version_warnings(request)
+    warnings = collect_ref_warnings(request)
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -520,7 +520,7 @@ def upload_network_pdep(
         request.stationary_point_findings()
     )
     pdep_warnings.extend(network_pdep_linearity_warnings(request))
-    pdep_warnings.extend(collect_software_release_version_warnings(request))
+    pdep_warnings.extend(collect_ref_warnings(request))
     network = persist_network_pdep_upload(
         session,
         request,
@@ -567,7 +567,7 @@ def upload_statmech(
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_statmech_provenance_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     warnings.extend(
         collect_statmech_content_warnings(
             scientific_origin=request.scientific_origin,
@@ -640,7 +640,7 @@ def upload_thermo(
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_thermo_provenance_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -691,7 +691,7 @@ def upload_transition_state(
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(transition_state_upload_linearity_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -743,7 +743,7 @@ def upload_transport(
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
     warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_transport_provenance_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -791,7 +791,7 @@ def upload_computed_species(
     # geometry's coordinates and a collinearity tolerance and therefore
     # cannot live in the wire package alongside the ``3N - 6`` floor.
     warnings.extend(computed_species_linearity_warnings(request))
-    warnings.extend(collect_software_release_version_warnings(request))
+    warnings.extend(collect_ref_warnings(request))
     sub = open_upload_submission(
         session,
         created_by=current_user.id,
@@ -894,7 +894,7 @@ def upload_computed_reaction(
     result_dict["warnings"] = [
         *stationary_point_warnings(request.stationary_point_findings()),
         *computed_reaction_linearity_warnings(request),
-        *collect_software_release_version_warnings(request),
+        *collect_ref_warnings(request),
         *result_dict.get("warnings", []),
     ]
     result = ComputedReactionUploadResult(
