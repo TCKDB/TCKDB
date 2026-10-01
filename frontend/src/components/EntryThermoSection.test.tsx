@@ -790,6 +790,33 @@ describe("EntryThermoSection: provenance refs render as .data, like every other 
         expect(statmechDd.querySelector(".data")).not.toBeNull()
     })
 
+    it("shows 'none' for the statmech and every calculation ref of an UNLINKED record, in the card and in the table (#645)", async () => {
+        const [alpha] = mockRecords()
+        const unlinked = {
+            ...alpha,
+            thermo_ref: "thm_unlinked",
+            provenance: {
+                ...alpha.provenance,
+                statmech_id: null,
+                statmech_ref: null,
+                primary_calculation: null,
+                level_of_theory: null,
+                freq_calculation_ref: null,
+                sp_calculation_ref: null,
+            },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [unlinked] }))))
+        page()
+        await screen.findByText("thm_unlinked")
+        const card = screen.getByText("thm_unlinked").closest("article") as HTMLElement
+
+        expect(ddFor(card, "Statmech ref")).toBe("none")
+        expect(ddFor(card, "Primary calculation")).toBe("none")
+        expect(ddFor(card, "Frequency calculation")).toBe("none")
+        expect(ddFor(card, "Single-point calculation")).toBe("none")
+        expect(card.textContent).not.toContain("sm_alpha")
+    })
+
     it("renders plain 'not recorded' text (no empty .data span) when either ref is absent", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
@@ -1120,10 +1147,11 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
 
         // The sibling row's null Freq ref hits the cell's third branch --
-        // "not recorded", plain text, never a link and never confused with
-        // the "same as primary" collapse (a null ref is not a match).
+        // "none" (#645: an absent link reads "none", never a borrowed ref),
+        // plain text, never a link and never confused with the "same as
+        // primary" collapse (a null ref is not a match).
         const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement
-        expect(cellAt(plainRow, "Freq calculation")).toBe("not recorded")
+        expect(cellAt(plainRow, "Freq calculation")).toBe("none")
         const plainFreqCell = plainRow.querySelector('td[data-label="Freq calculation"]') as HTMLElement
         expect(within(plainFreqCell).queryByRole("link")).toBeNull()
     })

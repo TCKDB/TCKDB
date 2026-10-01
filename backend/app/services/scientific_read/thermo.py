@@ -245,22 +245,15 @@ def get_species_thermo(
     wilhoit_by_thermo = _load_wilhoit(session, [t.id for t in thermo_rows])
     points_by_thermo = _load_points(session, [t.id for t in thermo_rows])
     ga_by_thermo = _load_group_additivity(session, [t.id for t in thermo_rows])
-    statmech_ids_by_entry = _load_statmech_ids(session, species_entry_id)
-    statmech_refs = _load_statmech_refs(session, statmech_ids_by_entry)
-    # Phase 2 audit (read half, #3b): load source-calc rows for EVERY
-    # statmech of the entry so thermo provenance / evidence completeness can
-    # borrow the freq / SP / opt calcs from the statmech a record actually
-    # derives from. Each thermo record resolves its basis PER RECORD from its
-    # own ``thermo.statmech_id`` FK (populated by the write fix); the borrowed
-    # source calcs then come from that exact statmech, not an entry-wide pick.
-    statmech_sources_by_id = _load_statmech_sources_grouped(session, statmech_ids_by_entry)
-    # Fallback basis for records whose ``thermo.statmech_id`` is NULL
-    # (experimental thermo, or legacy computed rows written before the FK was
-    # populated): the lowest statmech id. ``min`` is deterministic and keeps
-    # the fallback reproducible. It does not imply the picked statmech is "the"
-    # statmech for the entry — it is only consulted when a record has no
-    # linked statmech of its own.
-    picked_statmech_id = min(statmech_ids_by_entry) if statmech_ids_by_entry else None
+    # Only the statmechs the thermo rows are LINKED to by ``thermo.statmech_id``
+    # are loaded. Never an entry-wide pick (#645): a thermo shows the statmech
+    # and calculations it links to, nothing else. A record with no link has no
+    # statmech provenance and no statmech evidence.
+    linked_statmech_ids = {
+        t.statmech_id for t in thermo_rows if t.statmech_id is not None
+    }
+    statmech_refs = _load_statmech_refs(session, linked_statmech_ids)
+    statmech_sources_by_id = _load_statmech_sources_grouped(session, linked_statmech_ids)
 
     # Determine model_kind per record from the stored thermo.model_kind
     # (falling back to child-row inference for legacy NULL rows) and filter.
@@ -329,8 +322,8 @@ def get_species_thermo(
     )
 
     # Pre-fetch validation/SCF data for ALL relevant source calcs. Phase 2
-    # audit: include statmech-linked source calcs in the lookup set so the
-    # fallback inside ``_build_provenance`` / ``_evidence_breakdown`` can
+    # audit: include the linked statmechs' source calcs in the lookup set so
+    # the statmech-derived roles inside ``_build_provenance`` / ``_evidence_breakdown`` can
     # render LoT, software, geom-validation, and SCF stability for them.
     all_source_calc_ids = {
         sc.calculation_id
@@ -391,7 +384,7 @@ def get_species_thermo(
     statmech_declared_lot_ids = dict(
         session.execute(
             select(Statmech.id, Statmech.energy_level_of_theory_id).where(
-                Statmech.id.in_(statmech_ids_by_entry)
+                Statmech.id.in_(linked_statmech_ids)
             )
         ).all()
     )
@@ -405,11 +398,9 @@ def get_species_thermo(
     for t, model_kind in classified:
         sources = sources_by_thermo.get(t.id, [])
 
-        # Per-record statmech resolution: prefer the record's own FK, falling
-        # back to the entry-min only when the thermo has no linked statmech.
-        record_statmech_id = (
-            t.statmech_id if t.statmech_id is not None else picked_statmech_id
-        )
+        # Per-record statmech: ONLY the record's own ``statmech_id`` link (#645).
+        # No entry-wide fallback; an unlinked record has no statmech sources.
+        record_statmech_id = t.statmech_id
         record_statmech_sources = (
             statmech_sources_by_id.get(record_statmech_id, [])
             if record_statmech_id is not None
@@ -449,7 +440,7 @@ def get_species_thermo(
         evidence = _evidence_breakdown(
             thermo=t,
             sources=sources,
-            statmech_ids_for_entry=statmech_ids_by_entry,
+            has_statmech_link=t.statmech_id is not None,
             statmech_sources=record_statmech_sources,
             nasa_present=nasa_block is not None,
             points_count=len(points_by_thermo.get(t.id, [])),
@@ -481,15 +472,8 @@ def get_species_thermo(
         )
         # Derived levels (#636): the record's own source calculations, then
         # (per role) the statmech it is LINKED to by ``thermo.statmech_id``.
-        # Never the entry-wide fallback ``picked_statmech_id`` that provenance
-        # and evidence still use for display: it would report an unrelated
-        # statmech's levels for an unlinked (say experimental) thermo. An
-        # unlinked thermo with no source calculations has no levels (null).
-        own_statmech_sources = (
-            statmech_sources_by_id.get(t.statmech_id, [])
-            if t.statmech_id is not None
-            else []
-        )
+        # An unlinked thermo with no source calculations has no levels (null).
+        own_statmech_sources = record_statmech_sources
         levels = _build_levels_thermo(
             sources=sources,
             statmech_sources=own_statmech_sources,
@@ -500,10 +484,7 @@ def get_species_thermo(
         declared_lot_id = (
             t.energy_level_of_theory_id
             if t.energy_level_of_theory_id is not None
-            # Only through the record's OWN statmech link. The entry-wide
-            # fallback (``picked_statmech_id``) is a display convenience for
-            # source calculations; using it here would lend an unlinked
-            # (say experimental) thermo an unrelated statmech's declaration.
+            # Only through the record's OWN statmech link.
             else statmech_declared_lot_ids.get(t.statmech_id)
         )
         if declared_lot_id is not None:
@@ -784,13 +765,6 @@ def _build_group_additivity_block(
     )
 
 
-def _load_statmech_ids(session: Session, species_entry_id: int) -> set[int]:
-    rows = session.scalars(
-        select(Statmech.id).where(Statmech.species_entry_id == species_entry_id)
-    ).all()
-    return set(rows)
-
-
 def _load_statmech_sources_grouped(
     session: Session, statmech_ids: set[int]
 ) -> dict[int, list[StatmechSourceCalculation]]:
@@ -798,10 +772,10 @@ def _load_statmech_sources_grouped(
 
     Each thermo record resolves its statmech basis PER RECORD from its own
     ``thermo.statmech_id``; the caller borrows the freq / SP / opt source
-    calcs from that exact statmech (falling back to an entry-wide statmech
-    only when the record has none of its own). This helper fetches the
-    ``StatmechSourceCalculation`` rows for *every* statmech id of the entry
-    in a single grouped ``SELECT`` and buckets them by ``statmech_id``.
+    calcs from that exact statmech (never an entry-wide pick; a record with
+    no link borrows nothing, #645). This helper fetches the
+    ``StatmechSourceCalculation`` rows for the requested statmech ids in a
+    single grouped ``SELECT`` and buckets them by ``statmech_id``.
 
     Every requested id is present in the returned mapping, keyed to a list
     that is empty when that statmech has no source-calc links, so callers can
@@ -1151,11 +1125,11 @@ def _build_provenance(
     that live on the statmech the thermo derives from, instead of
     coming back uniformly ``null``.
 
-    ``statmech_id`` is the record's already-resolved basis (its own
-    ``thermo.statmech_id`` FK, or the entry-min fallback for records with no
-    linked statmech). ``statmech_sources`` are that same statmech's source
-    calcs — so the surfaced ``statmech_ref`` and the borrowed source calcs
-    always come from the one statmech the record actually derives from.
+    ``statmech_id`` is the record's own ``thermo.statmech_id`` FK, or None
+    when it has none (#645: never an entry-wide pick). ``statmech_sources``
+    are that same statmech's source calcs (empty when unlinked) — so the
+    surfaced ``statmech_ref`` and the statmech-derived source calcs always
+    come from the one statmech the record actually links to.
 
     ``thermo_software`` / ``thermo_workflow_tool`` are the record's OWN
     software/tool provenance, already resolved by the caller from
@@ -1216,10 +1190,9 @@ def _build_provenance(
     else:
         conf_obs_id = conf_obs_ref = conf_group_id = conf_group_ref = None
 
-    # ``statmech_id`` is resolved per record by the caller: the thermo's own
-    # ``statmech_id`` FK when set, else the entry-min fallback. The surfaced
-    # ref and the borrowed source calcs above therefore come from the exact
-    # statmech this record derives from.
+    # ``statmech_id`` is the thermo's own FK (None when unlinked). The
+    # surfaced ref and the statmech-derived source calcs above therefore come
+    # from the exact statmech this record links to.
     return ThermoProvenance(
         primary_calculation=primary_calc_summary,
         level_of_theory=primary_lot,
@@ -1400,7 +1373,7 @@ def _evidence_breakdown(
     *,
     thermo: Thermo,
     sources: list[ThermoSourceCalculation],
-    statmech_ids_for_entry: set[int],
+    has_statmech_link: bool,
     statmech_sources: list[StatmechSourceCalculation],
     nasa_present: bool,
     points_count: int,
@@ -1415,12 +1388,14 @@ def _evidence_breakdown(
     that derives from a statmech without denormalized thermo-source
     rows, count the statmech's freq / SP / opt source calculations
     toward the checklist. Direct thermo source-calculation rows still
-    win when present; statmech-linked rows are a fallback. The
-    predicate names and the total ``max`` are unchanged.
+    win when present; the rows of the statmech the record is LINKED to
+    (``thermo.statmech_id``) fill the roles it lacks. A record with no
+    link counts only its own sources and ``has_statmech_source`` is false
+    (#645: never borrow). The predicate names and ``max`` are unchanged.
     """
     statmech_roles = {sc.role for sc in statmech_sources}
     has_sources = len(sources) > 0 or len(statmech_sources) > 0
-    has_statmech = len(statmech_ids_for_entry) > 0
+    has_statmech = has_statmech_link
 
     source_roles = {sc.role for sc in sources}
     has_freq_evidence = (

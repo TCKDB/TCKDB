@@ -405,8 +405,9 @@ def test_sort_is_deterministic(db_session):
 # (see docs/audits/thermo_provenance_geometry_audit.md).
 #
 # When a thermo's own ThermoSourceCalculation rows do not cover the freq /
-# SP / opt roles, the read service falls back to the picked statmech's
-# StatmechSourceCalculation rows so that ``provenance.freq_calculation_ref``,
+# SP / opt roles, the read service falls back to the StatmechSourceCalculation
+# rows of the statmech the thermo is LINKED to (``thermo.statmech_id``) --
+# never an entry-wide pick (#645) -- so that ``provenance.freq_calculation_ref``,
 # ``sp_calculation_ref``, ``primary_calculation``, ``level_of_theory``, and
 # ``software`` populate from real, persisted data — matching the actual
 # computed-thermo derivation path.
@@ -457,6 +458,11 @@ def _seed_thermo_with_statmech_sources(db_session, *, with_thermo_sources: bool)
     )
     db_session.add(statmech)
     db_session.flush()
+    # Changed for #645: the thermo is now LINKED to its statmech. These tests
+    # used to leave ``statmech_id`` NULL and pass only because the read
+    # borrowed the entry's lowest-id statmech; borrowing is gone, so the
+    # statmech-derived roles are exercised through the record's own link.
+    thermo.statmech_id = statmech.id
     db_session.add(
         StatmechSourceCalculation(
             statmech_id=statmech.id,
@@ -513,7 +519,7 @@ def test_provenance_falls_back_to_statmech_freq_sp_when_thermo_sources_empty(
     # Statmech-linked freq/SP calcs now surface in the thermo provenance.
     assert prov.freq_calculation_ref == freq_calc.public_ref
     assert prov.sp_calculation_ref == sp_calc.public_ref
-    # statmech_ref still points at the picked statmech.
+    # statmech_ref is the record's own linked statmech.
     assert prov.statmech_ref is not None
 
 
@@ -568,7 +574,7 @@ def test_evidence_completeness_counts_statmech_freq_sp_when_thermo_sources_empty
 
     assert checklist["has_statmech_source"] is True
     # Phase 2 audit: these used to be False because the predicates only
-    # looked at ThermoSourceCalculation. They now OR-in the picked
+    # looked at ThermoSourceCalculation. They now OR-in the LINKED
     # statmech's source roles.
     assert checklist["has_source_calculations"] is True
     assert checklist["has_frequency_evidence"] is True
@@ -624,17 +630,17 @@ def test_collapse_first_named_policy_selects_explicitly(db_session):
     assert latest_resp.request.selection_policy == SelectionPolicy.latest
 
 
-def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_session):
+def test_multiple_statmech_never_leak_into_an_unlinked_thermo(db_session):
     """Multiple coexisting statmech records on one species_entry are equal
-    candidates. The thermo provenance fallback must pick deterministically
-    (lowest statmech id) rather than depend on set-iteration order, so the
-    read never silently treats an arbitrary candidate as canonical and the
-    same response is reproducible across calls.
+    candidates, and none of them belongs to a thermo that does not link to
+    it: the unlinked thermo reports no statmech and no calculations, the
+    linked one reports exactly its own, and both answers are stable.
 
-    Regression for the product-selection audit: ``get_species_thermo`` and
-    ``_build_provenance`` previously both used ``next(iter(set))``, which could
-    surface one statmech's ref while borrowing a different statmech's source
-    calcs, non-deterministically.
+    Changed for #645 (owner decision: never borrow). This test used to pin
+    "the lowest-id statmech is the fallback" for the unlinked thermo; that
+    fallback showed a statmech the record never used. The original
+    determinism concern (the ``next(iter(set))`` bug) still holds for the
+    linked record, which this keeps asserting.
     """
     from app.db.models.common import (
         CalculationType,
@@ -648,8 +654,8 @@ def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_sessi
     )
 
     entry = _entry_with_smiles(db_session, smiles="C#CCNCNC")
-    # No ThermoSourceCalculation rows → provenance falls back to a statmech.
-    make_thermo_scalar(db_session, species_entry=entry)
+    # No ThermoSourceCalculation rows, no statmech link.
+    unlinked = make_thermo_scalar(db_session, species_entry=entry)
     lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
 
     def _add_statmech_with_freq() -> tuple[Statmech, object]:
@@ -678,19 +684,21 @@ def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_sessi
     first_stat, first_freq = _add_statmech_with_freq()
     second_stat, _second_freq = _add_statmech_with_freq()
     assert first_stat.id < second_stat.id
+    linked = make_thermo_scalar(db_session, species_entry=entry, statmech_id=second_stat.id)
 
-    # Call twice — the pick must be stable, not order-dependent.
+    # Call twice — the answer must be stable, not order-dependent.
     for _ in range(2):
-        prov = (
-            get_species_thermo(
+        by_ref = {
+            r.thermo_ref: r.provenance
+            for r in get_species_thermo(
                 db_session, species_entry_id=entry.id, request=ThermoReadRequest()
-            )
-            .records[0]
-            .provenance
-        )
-        # Lowest-id statmech is surfaced AND supplies the borrowed freq calc.
-        assert prov.statmech_ref == first_stat.public_ref
-        assert prov.freq_calculation_ref == first_freq.public_ref
+            ).records
+        }
+        assert by_ref[unlinked.public_ref].statmech_ref is None
+        assert by_ref[unlinked.public_ref].freq_calculation_ref is None
+        assert by_ref[linked.public_ref].statmech_ref == second_stat.public_ref
+        assert by_ref[linked.public_ref].freq_calculation_ref == _second_freq.public_ref
+        assert by_ref[linked.public_ref].freq_calculation_ref != first_freq.public_ref
 
 
 # ---------------------------------------------------------------------------
@@ -698,8 +706,8 @@ def test_statmech_fallback_pick_is_deterministic_with_multiple_statmech(db_sessi
 #
 # The read path must attribute a computed thermo's statmech basis from the
 # record's OWN ``thermo.statmech_id`` FK (populated by the write fix), not a
-# per-entry ``min(statmech_ids)`` fallback. The min is retained only as the
-# fallback for records whose ``statmech_id`` is NULL.
+# per-entry ``min(statmech_ids)`` fallback. The min fallback is gone (#645):
+# a record whose ``statmech_id`` is NULL shows no statmech at all.
 # ---------------------------------------------------------------------------
 
 
@@ -788,20 +796,23 @@ def test_provenance_uses_record_statmech_id_not_entry_min(db_session):
     assert prov.sp_calculation_ref != sp_a.public_ref
 
 
-def test_provenance_null_statmech_id_falls_back_to_entry_min(db_session):
+def test_provenance_null_statmech_id_borrows_nothing(db_session):
     """A thermo with ``statmech_id`` NULL on an entry with statmech A + B
-    still falls back to the entry-min (A) — unchanged legacy behavior.
+    reports no statmech, no freq/SP calculation and no level of theory.
+
+    Changed for #645 (owner decision: never borrow). This test used to be
+    ``..._falls_back_to_entry_min`` and asserted that the unlinked record
+    surfaced statmech A; showing a statmech the record never used is false.
     """
     from tests.services.scientific_read._factories import make_lot
 
     entry = _entry_with_smiles(db_session, smiles="C#CCNCNCCC")
     lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
 
-    stat_a, freq_a, _sp_a = _add_statmech_with_freq_sp(db_session, entry, lot)
+    stat_a, _freq_a, _sp_a = _add_statmech_with_freq_sp(db_session, entry, lot)
     stat_b, _freq_b, _sp_b = _add_statmech_with_freq_sp(db_session, entry, lot)
     assert stat_a.id < stat_b.id
 
-    # No statmech_id on the thermo → NULL → fall back to min (A).
     thermo = make_thermo_scalar(db_session, species_entry=entry)
     assert thermo.statmech_id is None
 
@@ -813,8 +824,12 @@ def test_provenance_null_statmech_id_falls_back_to_entry_min(db_session):
         .provenance
     )
 
-    assert prov.statmech_ref == stat_a.public_ref
-    assert prov.freq_calculation_ref == freq_a.public_ref
+    assert prov.statmech_id is None
+    assert prov.statmech_ref is None
+    assert prov.freq_calculation_ref is None
+    assert prov.sp_calculation_ref is None
+    assert prov.primary_calculation is None
+    assert prov.level_of_theory is None
 
 
 def test_provenance_single_statmech_linked_surfaces_it(db_session):

@@ -122,27 +122,33 @@ Any "this is *the* species thermo" decision is therefore a **read-time
 selection** concern (an explicit, named, non-persisted policy), not a property
 of the stored record.
 
-## Implementation note: deterministic provenance fallback
+## Implementation note: thermo provenance never borrows
 
-When a `thermo` record declares no `ThermoSourceCalculation` rows of its own,
-the read service borrows source calcs from a statmech on the same
-`species_entry` to populate provenance/evidence display (freq / SP / LoT /
-software). When several statmech records coexist, this borrow now picks the
-**lowest statmech id deterministically** (previously `next(iter(set))`, which
-depended on set-iteration order). This is a reproducibility guarantee for the
-provenance *display* only — it does not designate a canonical statmech or
-thermo. See `backend/app/services/scientific_read/thermo.py`
-(`get_species_thermo`, `_build_provenance`) and
-`backend/tests/services/scientific_read/test_get_species_thermo.py::test_statmech_fallback_pick_is_deterministic_with_multiple_statmech`.
+A `thermo` record shows only the statmech and calculations it actually links
+to: its own `thermo.statmech_id` and its own `ThermoSourceCalculation` rows
+(#645, owner decision 2026-10-01: never borrow, no exception for legacy rows).
 
-**The derived `levels.*` do not use this fallback (#636).** A thermo's
-geometry / frequency / energy levels come from its own source calculations
-(per role), then from the statmech it is linked to by `thermo.statmech_id`;
-otherwise they are `null`. The entry-wide pick would report an unrelated
-statmech's levels for an unlinked (say experimental) thermo. The same
-own-link-only rule governs `levels.declared_energy` (#633). Provenance and the
-evidence checklist still use the display fallback described above.
-Test: `backend/tests/services/scientific_read/test_thermo_levels_linkage.py`.
+- The roles its own source calculations do not cover (freq / SP / opt, hence
+  primary calculation, level of theory, software) are filled from the
+  statmech it is **linked** to, and only that one.
+- A record with no `statmech_id` and no source calculations shows
+  `statmech_ref`, primary calculation, freq/SP calculations and level of
+  theory as `null`.
+- The evidence checklist and score count only the record's own links:
+  `has_statmech_source` means `thermo.statmech_id` is set, and
+  `has_source_calculations` / `has_frequency_evidence` /
+  `has_sp_or_energy_evidence` count the record's own sources plus its linked
+  statmech's. The score feeds the default sort and `collapse=first`, so an
+  unlinked (say experimental) value no longer ranks like a linked computed one.
+- The derived `levels.*` (#636) and `levels.declared_energy` (#633) follow the
+  same rule.
+
+Earlier versions picked the lowest statmech id of the species entry as a
+display fallback; that is removed. Species-level facts read from any statmech
+of the entry (for example linearity in the CHEMKIN export) are not thermo
+provenance and are unaffected.
+Tests: `backend/tests/services/scientific_read/test_thermo_provenance_never_borrows.py`,
+`test_thermo_levels_linkage.py`.
 
 ## Resolved: product-level curated selection (Stage 3)
 

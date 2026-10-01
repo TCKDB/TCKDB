@@ -102,6 +102,14 @@ describe("thermoRecordFingerprint", () => {
         expect(thermoRecordFingerprint(a)).not.toBe(thermoRecordFingerprint(b))
     })
 
+    it("treats a null level of theory (an unlinked record, #645) as its own value: same as another null, different from any real level", () => {
+        const withLot = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp" } } })
+        const none1 = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: null } })
+        const none2 = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: null } })
+        expect(thermoRecordFingerprint(none1)).toBe(thermoRecordFingerprint(none2))
+        expect(thermoRecordFingerprint(none1)).not.toBe(thermoRecordFingerprint(withLot))
+    })
+
     it("gives two records a DIFFERENT fingerprint when the level of theory differs only in dispersion treatment, even with the same display text", () => {
         const a = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: null } } })
         const b = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: "d3bj" } } })
