@@ -105,7 +105,7 @@ Common gotchas:
 
 ## Recipe 2 — Thermo search by species
 
-**Q:** Give me the best thermo record for this species, scoped to the temperature window I care about.
+**Q:** Give me the top thermo record for this species, and tell me whether it covers the temperature window I care about.
 
 ```python
 thermo = client.search_thermo(
@@ -126,13 +126,13 @@ print("H298 =", rec["thermo"]["h298_kj_mol"], "kJ/mol")
 print("S298 =", rec["thermo"]["s298_j_mol_k"], "J/mol/K")
 ```
 
-The backend's locked sort order for thermo (`covers_requested_temperature_range DESC, extrapolation_distance_k ASC, review_rank ASC, evidence_completeness DESC, created_at DESC, id DESC`) decides who wins for `collapse="first"`. The client does not re-rank.
+The backend's locked sort order for thermo (`review_rank ASC, created_at DESC, id DESC`: best review status, then newest) decides who wins for `collapse="first"`. It is the same order the export, CHEMKIN and ML selection use, so the website and an export pick the same record. Origin does not matter: a newer experimental record beats an older computed one with the same review status. The client does not re-rank.
 
 Useful fields:
 
 - `records[*].thermo.model_kind` — `nasa` (polynomial coefficients in `records[*].thermo.nasa`), `points` (in `records[*].thermo.points`), or `scalar` (just `h298` / `s298`).
-- `records[*].thermo.temperature_coverage` — `covers_requested_range`, `extrapolation_distance_k`. Diagnostic only; not for client-side scoring.
-- `records[*].thermo.evidence_completeness` — score + per-predicate checklist. Same warning: not a "best" selector.
+- `records[*].thermo.temperature_coverage` — `covers_requested_range`, `extrapolation_distance_k`. Reported per record. `temperature_min` / `temperature_max` do not filter and do not affect which record is first: selection is review status, then newest. Check this field yourself if you need a record that spans your window (a scalar record has no range and reports `covers_requested_range: false`).
+- `records[*].thermo.evidence_completeness` — score + per-predicate checklist. Displayed only, not part of the order. Most predicates are calculation traceability, so an experimental record scores low by construction; read it together with `scientific_origin`.
 
 ---
 

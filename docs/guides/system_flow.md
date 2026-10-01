@@ -194,9 +194,9 @@ There is no "preferred" flag in the database. When a client reads, e.g.,
 `/scientific/species-entries/{ref}/thermo`, the read service *sorts*
 candidate records and returns the top one (`collapse=first`) or the full
 list (`collapse=all`). The thermo sort key (`scientific_read/thermo.py`)
-is, in order: covers the requested temperature range → smaller
-extrapolation distance → higher review status → higher evidence
-completeness → newer → higher id. `ConformerSelection` rows exist for
+is, in order: higher review status → newer → higher id (the same
+`simple_selection_sort_key` the export uses; temperature coverage and the
+evidence score are displayed on each record but do not order them). `ConformerSelection` rows exist for
 curator-pinned display defaults but are currently *advisory*; the
 read-time sort is primary.
 

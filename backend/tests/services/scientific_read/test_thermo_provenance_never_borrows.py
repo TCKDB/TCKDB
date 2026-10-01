@@ -15,6 +15,8 @@ exactly like a linked computed record (which feeds the default sort and
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from app.db.models.common import (
     CalculationType,
     SCFStabilityStatus,
@@ -119,17 +121,26 @@ def test_unlinked_thermo_evidence_counts_only_its_own_links(db_session):
     assert full.score == 6
 
 
-def test_collapse_first_prefers_the_linked_record(db_session):
-    """The unlinked record is newer, so it only loses on evidence score."""
-    entry, _lot, _stat, _freq, _sp, linked, _unlinked = _linked_and_unlinked(db_session)
+def test_collapse_first_ignores_the_evidence_score(db_session):
+    """#648: the unlinked record has a later ``created_at`` and the same review
+    status, so it wins ``collapse=first`` even though the linked record scores
+    higher. The checklist is displayed, not ranked."""
+    entry, _lot, _stat, _freq, _sp, linked, unlinked = _linked_and_unlinked(db_session)
+    unlinked.created_at = linked.created_at + timedelta(days=1)
+    db_session.flush()
 
     response = get_species_thermo(
         db_session,
         species_entry_id=entry.id,
         request=ThermoReadRequest(collapse=CollapseMode.first),
     )
+    assert [r.thermo_ref for r in response.records] == [unlinked.public_ref]
 
-    assert [r.thermo_ref for r in response.records] == [linked.public_ref]
+    scores = {
+        r.thermo_ref: r.evidence_completeness.score
+        for r in _records(db_session, entry).values()
+    }
+    assert scores[linked.public_ref] > scores[unlinked.public_ref]
 
 
 def test_linked_thermo_shows_its_own_statmech(db_session):

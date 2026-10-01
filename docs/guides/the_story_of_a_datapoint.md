@@ -367,9 +367,9 @@ What happens next is the design's quietest radical choice. The
 database does **not** look up a stored "preferred value" — no such
 flag exists anywhere. Instead, the read service gathers every
 candidate thermo record for that species entry and *sorts* them, at
-query time, by an explicit, documented policy: covers the requested
-temperature range → smallest extrapolation → highest review status →
-most complete evidence → newest. `collapse=first` returns the winner;
+query time, by an explicit, documented policy: highest review status →
+newest (the temperature window and the evidence checklist are reported on
+each record but do not order them). `collapse=first` returns the winner;
 `collapse=all` returns the whole ranked field, so Idris can see the
 runners-up and disagree with the ranking if his use case warrants it.
 

@@ -9,9 +9,8 @@ Composition order (final response ordering):
    as ``search_species`` (AND-combined identifiers, default trust posture
    on the species entry).
 2. For each surviving species_entry, fetch thermo records using the same
-   per-record ordering as ``get_species_thermo`` (D8/L3: temperature
-   coverage, extrapolation distance, review_rank, evidence_completeness,
-   created_at, id).
+   per-record ordering as ``get_species_thermo`` (review_rank, created_at,
+   id; coverage and evidence are displayed, not ranked; #648).
 3. Group across species_entries deterministically: outer key is the
    species_entry's review rank then created_at then id; inner order is the
    thermo per-record ordering already applied above.
@@ -91,8 +90,7 @@ _THERMO_LEGAL_INCLUDES_PASSTHROUGH = {"provenance", "calculations", "review", "a
 
 _DEFAULT_SORT_ECHO = (
     "species_review_rank,species_created_at,species_id;"
-    "covers_requested_temperature_range,extrapolation_distance_k,"
-    "review_rank,evidence_completeness,created_at,id"
+    "review_rank,created_at,id"
 )
 
 
@@ -238,24 +236,13 @@ def search_thermo(
     # species_entry's review rank, then a stable falling-id tiebreaker —
     # we don't have created_at on the species record here, so id desc is
     # the documented L3 fallback already used elsewhere. Inner thermo
-    # ordering is already applied by ``get_species_thermo``.
+    # ordering (review status, then newest; #648) is already applied by
+    # ``get_species_thermo`` and is preserved here because ``list.sort`` is
+    # stable and the key below only compares species-level fields.
     def sort_key(rec: ThermoSearchRecord) -> tuple:
         return (
             REVIEW_RANK[rec.species.species_entry_review.status],
             -rec.species.species_entry_id,
-            # Inner thermo ordering — keep the per-entry order from the
-            # detail call by stable-sorting on the per-record sort keys.
-            -int(
-                rec.thermo.temperature_coverage.covers_requested_range
-                if rec.thermo.temperature_coverage is not None
-                else 0
-            ),
-            rec.thermo.temperature_coverage.extrapolation_distance_k
-            if rec.thermo.temperature_coverage is not None
-            else 0.0,
-            REVIEW_RANK[rec.thermo.review.status],
-            -rec.thermo.evidence_completeness.score,
-            -rec.thermo.thermo_id,
         )
 
     flat.sort(key=sort_key)

@@ -45,7 +45,6 @@ from app.db.models.thermo import (
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
-    REVIEW_RANK,
     CalculationEvidenceSummary,
     EvidenceCompletenessBreakdown,
     LevelOfTheorySummary,
@@ -174,8 +173,7 @@ _TRUST_EAGER_LOADS = (
 THERMO_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
 
 _DEFAULT_SORT_ECHO = (
-    "covers_requested_temperature_range,extrapolation_distance_k,review_rank,"
-    "evidence_completeness,created_at,id"
+    "review_rank,created_at,id"
 )
 
 # Priority order per Phase 2.3 spec: sp → composite → freq → opt → any.
@@ -196,9 +194,11 @@ def get_species_thermo(
     """Return thermo records for a species entry, sorted per spec L3.
 
     The species_entry_id path parameter is strictly ``species_entry.id``;
-    ``species.id`` is rejected with 404. Sort: covers_requested_temperature_range
-    DESC, extrapolation_distance_k ASC, review_rank ASC, evidence_completeness
-    DESC, created_at DESC, id DESC. Client-supplied sort= rejected (v0).
+    ``species.id`` is rejected with 404. Sort: review_rank ASC, created_at
+    DESC, id DESC (#648; the export's ``simple_selection_sort_key``).
+    ``temperature_min`` / ``temperature_max`` do not filter and do not affect
+    the order: they only fill each record's ``temperature_coverage`` field.
+    Client-supplied sort= rejected (v0).
 
     :raises NotFoundError: 404 when species_entry_id is unknown.
     :raises ValueError: 422 for sort/include/pagination/temperature validation.
@@ -415,7 +415,7 @@ def get_species_thermo(
         #     -> row-level Thermo.tmin_k / Thermo.tmax_k (may be NULL).
         # A nasa9-only / wilhoit record often has NULL row-level bounds because
         # a NASA-9 fit's real span lives in its per-interval bounds; deriving
-        # from the child rows keeps coverage ranking honest for those records.
+        # from the child rows keeps the reported coverage honest for those records.
         # Scalar records with no range produce covers=False whenever a bound
         # was requested (handled by the temperature_coverage helper).
         nasa_block = nasa_by_thermo.get(t.id)
@@ -561,21 +561,34 @@ def get_species_thermo(
 
     summary = review_summary(badges[t.id] for t, _ in classified)
 
-    # L3 thermo sort.
+    # L3 thermo sort (#648): review status, then newest -- the same key the
+    # export, CHEMKIN and ML selection use (``simple_selection_sort_key``), so
+    # the read and the export cannot pick different "best" records.
+    #
+    # Deliberately NOT in the key:
+    #   * ``evidence_completeness.score``: six of its eight predicates are
+    #     calculation / statmech traceability, so an experimental record can
+    #     score at most 2/8. It stays a displayed field, not a ranking input.
+    #   * temperature coverage: ``temperature_min`` / ``temperature_max`` are
+    #     not filters; they only fill each record's ``temperature_coverage``
+    #     field. Ranking by it was dropped on the owner's decision (review
+    #     status, then newest), and because a scalar record (e.g. an
+    #     experimental 298 K value) carries no range, it counted as "not
+    #     covering" and sank below every fitted record whatever its review
+    #     status. Coverage is still reported per record; callers who need a
+    #     record spanning a window should read it from the response
+    #     (``collapse=all``).
     created_at = {t.id: t.created_at for t, _ in classified}
+    review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
 
-    def sort_key(rec: ThermoRecord) -> tuple:
-        cov = rec.temperature_coverage
-        return (
-            -int(cov.covers_requested_range) if cov is not None else 0,
-            cov.extrapolation_distance_k if cov is not None else 0.0,
-            REVIEW_RANK[rec.review.status],
-            -rec.evidence_completeness.score,
-            -created_at[rec.thermo_id].timestamp(),
-            -rec.thermo_id,
+    records.sort(
+        key=lambda rec: simple_selection_sort_key(
+            rec.thermo_id,
+            policy=SelectionPolicy.default,
+            review_status_by_id=review_status_by_id,
+            created_at_by_id=created_at,
         )
-
-    records.sort(key=sort_key)
+    )
 
     pre_collapse_total = len(records)
     collapse_first = request.collapse.value == "first"
@@ -583,7 +596,6 @@ def get_species_thermo(
     if collapse_first and request.selection_policy is not SelectionPolicy.default:
         # Named policy re-ranks the selected record only; the default candidate
         # order (collapse=all) is unaffected.
-        review_status_by_id = {t.id: badges[t.id].status for t, _ in classified}
         ordered_records = sorted(
             records,
             key=lambda rec: simple_selection_sort_key(
