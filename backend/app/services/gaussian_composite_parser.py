@@ -235,7 +235,7 @@ def _parse_terms(
     return tuple(terms)
 
 
-def _archive_value(lines: list[str], after: int, archive_key: str) -> float | None | bool:
+def _archive_value(lines: list[str], after: int, archive_key: str) -> float | bool | None:
     """The archive entry ``\\<archive_key>=value`` following a block.
 
     :returns: the value; ``None`` when there is no archive entry or it does not
