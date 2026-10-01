@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.71.0 - 2026-10-02
+## 0.72.0 - 2026-10-02
 
 Composite levels of theory, phase P5 (ADR 0021): a composite energy you build
 yourself, from your own recipe and the single points you ran, is deposited as an
@@ -69,6 +69,33 @@ for two complete examples (CCSD(T)/CBS from a TZ/QZ pair, and a focal-point sum)
 - **New enums mirrored from the server:** `CompositeSchemeKind`,
   `CompositeTermOperation`, `CompositeExtrapolationFormula`,
   `CompositeInputSlot`, and `CalculationDependencyRole.composite_input`.
+## 0.71.0 - 2026-10-01
+
+Composite levels of theory, phase P3b (ADR 0021): a `composite` calculation's
+deposited energy is compared with the Gaussian output log attached to it. No
+payload field changes and every payload accepted before is accepted unchanged;
+this release only adds three warnings to upload responses.
+
+- **New warning `composite_energy_log_available`** (informational): the
+  `composite_result` stated no energy and the attached log's summary block
+  states E0 and the recipe ZPE. Nothing is filled; the message carries the
+  numbers so the producer can send them.
+- **New warnings** (the upload is accepted; the deposited values are kept
+  exactly as sent, and nothing is filled from the log):
+  `composite_energy_log_mismatch` (an attached Gaussian output log's summary
+  block states a different `e0_hartree`, `recipe_zpe_hartree` or
+  `electronic_energy_hartree` than the `composite_result`, beyond printed
+  precision, `max(1e-6, 5e-7 * n)` hartree) and `composite_log_method_mismatch`
+  (the log is a different composite method from the calculation's level of
+  theory; the energies are then not compared).
+- **What ARC (or any producer) must attach:** the Gaussian output log of the
+  composite run as an `output_log` artifact on the `composite` calculation.
+  Logs of CBS-QB3, ROCBS-QB3, CBS-4M and G3 are read; other composite methods,
+  G4 and G4MP2 included, are not compared (no warning either way). G4 and G4MP2
+  are declined because the Gaussian 16 Rev A.03 summary labels are shifted by one
+  pair, so the number under `G4(0 K)` is not E0.
+- An `sp` at a composite level whose attached log is a composite job still gets
+  no single-point energy, as before.
 
 ## 0.70.0 - 2026-10-01
 

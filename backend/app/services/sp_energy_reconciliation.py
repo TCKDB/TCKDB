@@ -75,6 +75,25 @@ class SpEnergyReconciliation:
     log_energy_hartree: float | None
     resolved_energy_hartree: float | None
     warning: UploadWarning | None = None
+    #: Why no single-point energy could be read from the log, when that is known
+    #: (``UNVERIFIABLE_GAUSSIAN_COMPOSITE_JOB``); ``None`` otherwise.
+    unverifiable_reason: str | None = None
+
+
+#: The log is a Gaussian composite job (CBS-*, Gn, Wn). Its intermediate
+#: ``SCF Done`` / ``EUMP2`` lines are sub-steps, not the method's energy, so no
+#: single-point energy is read from it; the method's own energy is the summary
+#: block, which ``gaussian_composite_parser`` reads for ``composite`` calculations.
+UNVERIFIABLE_GAUSSIAN_COMPOSITE_JOB = "gaussian_composite_job"
+
+
+def sp_energy_unverifiable_reason(text: str | None) -> str | None:
+    """Why ``text`` yields no single-point energy, where that is a known refusal."""
+    if not text or detect_software_from_text(text) != "gaussian":
+        return None
+    from app.services.gaussian_parameter_parser import is_composite_gaussian_log
+
+    return UNVERIFIABLE_GAUSSIAN_COMPOSITE_JOB if is_composite_gaussian_log(text) else None
 
 
 def parse_sp_energy_from_log(text: str | None) -> float | None:
@@ -198,6 +217,7 @@ def reconcile_sp_energy(
             payload_energy_hartree=payload_energy_hartree,
             log_energy_hartree=None,
             resolved_energy_hartree=payload_energy_hartree,
+            unverifiable_reason=sp_energy_unverifiable_reason(log_text),
         )
 
     return SpEnergyReconciliation(
@@ -205,4 +225,5 @@ def reconcile_sp_energy(
         payload_energy_hartree=None,
         log_energy_hartree=None,
         resolved_energy_hartree=None,
+        unverifiable_reason=sp_energy_unverifiable_reason(log_text),
     )

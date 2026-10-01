@@ -697,6 +697,15 @@ def _is_composite_gaussian(text: str, route: str) -> bool:
     return any(marker in text for marker in _COMPOSITE_RESULT_MARKERS)
 
 
+def is_composite_gaussian_log(text: str) -> bool:
+    """Public form of :func:`_is_composite_gaussian`, deriving the route itself.
+
+    Used to *record why* a Gaussian log yields no single-point energy. A
+    composite job's energy is read by ``gaussian_composite_parser``, not here.
+    """
+    return _is_composite_gaussian(text, extract_gaussian_route_text(text) or "")
+
+
 def _sp_float_at_index(line: str, idx: int) -> float | None:
     parts = line.split()
     if len(parts) > idx:

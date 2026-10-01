@@ -3,7 +3,7 @@
 ## 0.110.0 - 2026-10-02
 
 `RejectionCode` gains the codes of user-built composite schemes, regenerated from
-the server's catalogue (ADR 0021, `tckdb-schemas` 0.71.0):
+the server's catalogue (ADR 0021, `tckdb-schemas` 0.72.0):
 `calculation_software_release_required`, `composite_input_duplicate`,
 `composite_input_edge_is_derived`, `composite_input_geometry_mismatch`,
 `composite_input_level_mismatch`, `composite_input_missing`,
